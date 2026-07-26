@@ -20,7 +20,7 @@ pub(super) fn ascii_isident(mut c: ::core::ffi::c_int) -> bool {
         && c as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
         || c as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
             && c as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-        || ascii_isdigit(c) as ::core::ffi::c_int != 0
+        || ascii_isdigit(c)
         || c == '_' as ::core::ffi::c_int;
 }
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
@@ -68,11 +68,11 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
         ret.type_0 = kExprLexEOC;
         return ret;
     };
-    if pline.size <= 0 as size_t {
-        ret.len = 0 as size_t;
+    if pline.size == 0 {
+        ret.len = 0;
         ret.type_0 = kExprLexEOC;
     } else {
-        ret.len = 1 as size_t;
+        ret.len = 1;
         schar = *pline.data.offset(0 as ::core::ffi::c_int as isize) as uint8_t;
         match schar as ::core::ffi::c_int {
             40 | 41 => {
@@ -112,8 +112,6 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                 ret.type_0 = kExprLexSpacing;
                 while ret.len < pline.size
                     && ascii_iswhite(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
-                        as ::core::ffi::c_int
-                        != 0
                 {
                     ret.len = ret.len.wrapping_add(1);
                 }
@@ -135,80 +133,62 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                 );
             }
             48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 => {
-                ret.data.num.is_float = false_0 != 0;
+                ret.data.num.is_float = false;
                 ret.data.num.base = 10 as uint8_t;
-                let mut frac_start: size_t = 0 as size_t;
-                let mut exp_start: size_t = 0 as size_t;
-                let mut frac_end: size_t = 0 as size_t;
-                let mut exp_negative: bool = false_0 != 0;
+                let mut frac_start: size_t = 0;
+                let mut exp_start: size_t = 0;
+                let mut frac_end: size_t = 0;
+                let mut exp_negative: bool = false;
                 ret.type_0 = kExprLexNumber;
                 while ret.len < pline.size
                     && ascii_isdigit(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
-                        as ::core::ffi::c_int
-                        != 0
                 {
                     ret.len = ret.len.wrapping_add(1);
                 }
                 if flags & kELFlagAllowFloat as ::core::ffi::c_int != 0 {
                     let non_float_ret: LexExprToken = ret;
-                    if pline.size > ret.len.wrapping_add(1 as size_t)
+                    if pline.size > ret.len.wrapping_add(1)
                         && *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                             == '.' as ::core::ffi::c_int
-                        && ascii_isdigit(
-                            *pline
-                                .data
-                                .offset(ret.len.wrapping_add(1 as size_t) as isize)
-                                as ::core::ffi::c_int,
-                        ) as ::core::ffi::c_int
-                            != 0
+                        && ascii_isdigit(*pline.data.offset(ret.len.wrapping_add(1) as isize)
+                            as ::core::ffi::c_int)
                     {
                         ret.len = ret.len.wrapping_add(1);
                         frac_start = ret.len;
                         frac_end = ret.len;
-                        ret.data.num.is_float = true_0 != 0;
+                        ret.data.num.is_float = true;
                         while ret.len < pline.size
                             && ascii_isdigit(
                                 *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
-                            ) as ::core::ffi::c_int
-                                != 0
+                            )
                         {
                             if *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                                 != '0' as ::core::ffi::c_int
                             {
-                                frac_end = ret.len.wrapping_add(1 as size_t);
+                                frac_end = ret.len.wrapping_add(1);
                             }
                             ret.len = ret.len.wrapping_add(1);
                         }
-                        if pline.size > ret.len.wrapping_add(1 as size_t)
+                        if pline.size > ret.len.wrapping_add(1)
                             && (*pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                                 == 'e' as ::core::ffi::c_int
                                 || *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                                     == 'E' as ::core::ffi::c_int)
-                            && (pline.size > ret.len.wrapping_add(2 as size_t)
-                                && (*pline
-                                    .data
-                                    .offset(ret.len.wrapping_add(1 as size_t) as isize)
+                            && (pline.size > ret.len.wrapping_add(2)
+                                && (*pline.data.offset(ret.len.wrapping_add(1) as isize)
                                     as ::core::ffi::c_int
                                     == '+' as ::core::ffi::c_int
-                                    || *pline
-                                        .data
-                                        .offset(ret.len.wrapping_add(1 as size_t) as isize)
+                                    || *pline.data.offset(ret.len.wrapping_add(1) as isize)
                                         as ::core::ffi::c_int
                                         == '-' as ::core::ffi::c_int)
                                 && ascii_isdigit(
-                                    *pline
-                                        .data
-                                        .offset(ret.len.wrapping_add(2 as size_t) as isize)
+                                    *pline.data.offset(ret.len.wrapping_add(2) as isize)
                                         as ::core::ffi::c_int,
-                                ) as ::core::ffi::c_int
-                                    != 0
+                                )
                                 || ascii_isdigit(
-                                    *pline
-                                        .data
-                                        .offset(ret.len.wrapping_add(1 as size_t) as isize)
+                                    *pline.data.offset(ret.len.wrapping_add(1) as isize)
                                         as ::core::ffi::c_int,
-                                ) as ::core::ffi::c_int
-                                    != 0)
+                                ))
                         {
                             ret.len = ret.len.wrapping_add(1);
                             if *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
@@ -217,7 +197,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                                     exp_negative = *pline.data.offset(ret.len as isize)
                                         as ::core::ffi::c_int
                                         == '-' as ::core::ffi::c_int;
-                                    exp_negative as ::core::ffi::c_int != 0
+                                    exp_negative
                                 }
                             {
                                 ret.len = ret.len.wrapping_add(1);
@@ -227,8 +207,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                             while ret.len < pline.size
                                 && ascii_isdigit(
                                     *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
-                                ) as ::core::ffi::c_int
-                                    != 0
+                                )
                             {
                                 ret.len = ret.len.wrapping_add(1);
                             }
@@ -253,9 +232,9 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     let mut significand_part: float_T = 0 as ::core::ffi::c_int as float_T;
                     let mut exp_part: uvarnumber_T = 0 as uvarnumber_T;
                     let frac_size: size_t = frac_end.wrapping_sub(frac_start);
-                    let mut i: size_t = 0 as size_t;
+                    let mut i: size_t = 0;
                     while i < frac_end {
-                        if i != frac_start.wrapping_sub(1 as size_t) {
+                        if i != frac_start.wrapping_sub(1) {
                             significand_part = significand_part
                                 * 10 as ::core::ffi::c_int as float_T
                                 + (*pline.data.offset(i as isize) as ::core::ffi::c_int
@@ -273,7 +252,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                             ::core::ptr::null_mut::<varnumber_T>(),
                             &raw mut exp_part,
                             ret.len.wrapping_sub(exp_start) as ::core::ffi::c_int,
-                            false_0 != 0,
+                            false,
                             ::core::ptr::null_mut::<bool>(),
                         );
                     }
@@ -282,7 +261,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                             .wrapping_add(frac_size as ::core::ffi::c_ulong)
                             as uvarnumber_T;
                     } else if exp_part < frac_size as uvarnumber_T {
-                        exp_negative = true_0 != 0;
+                        exp_negative = true;
                         exp_part = frac_size.wrapping_sub(exp_part as size_t) as uvarnumber_T;
                     } else {
                         exp_part = (exp_part as ::core::ffi::c_ulong)
@@ -302,7 +281,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                         ::core::ptr::null_mut::<varnumber_T>(),
                         &raw mut ret.data.num.val.integer,
                         pline.size as ::core::ffi::c_int,
-                        false_0 != 0,
+                        false,
                         ::core::ptr::null_mut::<bool>(),
                     );
                     ret.len = len as size_t;
@@ -436,8 +415,6 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                 ret.type_0 = kExprLexEnv;
                 while ret.len < pline.size
                     && ascii_isident(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
-                        as ::core::ffi::c_int
-                        != 0
                 {
                     ret.len = ret.len.wrapping_add(1);
                 }
@@ -447,34 +424,32 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82
             | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 95 => {
                 ret.data.var.scope = kExprVarScopeMissing;
-                ret.data.var.autoload = false_0 != 0;
+                ret.data.var.autoload = false;
                 ret.type_0 = kExprLexPlainIdentifier;
                 while ret.len < pline.size
                     && ascii_isident(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
-                        as ::core::ffi::c_int
-                        != 0
                 {
                     ret.len = ret.len.wrapping_add(1);
                 }
                 if flags & kELFlagIsNotCmp as ::core::ffi::c_int == 0
-                    && (ret.len == 2 as size_t
+                    && (ret.len == 2
                         && memcmp(
                             pline.data as *const ::core::ffi::c_void,
                             b"is\0".as_ptr() as *const ::core::ffi::c_char
                                 as *const ::core::ffi::c_void,
-                            2 as size_t,
+                            2,
                         ) == 0 as ::core::ffi::c_int
-                        || ret.len == 5 as size_t
+                        || ret.len == 5
                             && memcmp(
                                 pline.data as *const ::core::ffi::c_void,
                                 b"isnot\0".as_ptr() as *const ::core::ffi::c_char
                                     as *const ::core::ffi::c_void,
-                                5 as size_t,
+                                5,
                             ) == 0 as ::core::ffi::c_int)
                 {
                     ret.type_0 = kExprLexComparison;
                     ret.data.cmp.type_0 = kExprCmpIdentical;
-                    ret.data.cmp.inv = ret.len == 5 as size_t;
+                    ret.data.cmp.inv = ret.len == 5;
                     if ret.len < pline.size
                         && !strchr(
                             b"?#\0".as_ptr() as *const ::core::ffi::c_char,
@@ -488,8 +463,8 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     } else {
                         ret.data.cmp.ccs = kCCStrategyUseOption;
                     }
-                } else if ret.len == 1 as size_t
-                    && pline.size > 1 as size_t
+                } else if ret.len == 1
+                    && pline.size > 1
                     && {
                         let mut c2rust_lvalue: [::core::ffi::c_char; 9] = [
                             kExprVarScopeScript as ::core::ffi::c_int as ::core::ffi::c_char,
@@ -518,11 +493,10 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     ret.data.var.scope = schar as ExprVarScope;
                     ret.type_0 = kExprLexPlainIdentifier;
                     while ret.len < pline.size
-                        && (ascii_isident(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
-                            as ::core::ffi::c_int
-                            != 0
-                            || *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
-                                == AUTOLOAD_CHAR)
+                        && (ascii_isident(
+                            *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
+                        ) || *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
+                            == AUTOLOAD_CHAR)
                     {
                         ret.len = ret.len.wrapping_add(1);
                     }
@@ -530,33 +504,32 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                         pline.data.offset(2 as ::core::ffi::c_int as isize)
                             as *const ::core::ffi::c_void,
                         AUTOLOAD_CHAR,
-                        ret.len.wrapping_sub(2 as size_t),
+                        ret.len.wrapping_sub(2),
                     )
                     .is_null();
                 } else if pline.size > ret.len
                     && *pline.data.offset(ret.len as isize) as ::core::ffi::c_int == AUTOLOAD_CHAR
                 {
-                    ret.data.var.autoload = true_0 != 0;
+                    ret.data.var.autoload = true;
                     ret.type_0 = kExprLexPlainIdentifier;
                     while ret.len < pline.size
-                        && (ascii_isident(*pline.data.offset(ret.len as isize) as ::core::ffi::c_int)
-                            as ::core::ffi::c_int
-                            != 0
-                            || *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
-                                == AUTOLOAD_CHAR)
+                        && (ascii_isident(
+                            *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
+                        ) || *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
+                            == AUTOLOAD_CHAR)
                     {
                         ret.len = ret.len.wrapping_add(1);
                     }
                 }
             }
             38 => {
-                if pline.size > 1 as size_t
+                if pline.size > 1
                     && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '&' as ::core::ffi::c_int
                 {
                     ret.type_0 = kExprLexAnd;
                     ret.len = ret.len.wrapping_add(1);
-                } else if pline.size == 1 as size_t
+                } else if pline.size == 1
                     || !(*pline.data.offset(1 as ::core::ffi::c_int as isize)
                         as ::core::ffi::c_uint
                         >= 'A' as ::core::ffi::c_uint
@@ -577,7 +550,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                             as *const ::core::ffi::c_char);
                 } else {
                     ret.type_0 = kExprLexOption;
-                    if pline.size > 2 as size_t
+                    if pline.size > 2
                         && *pline.data.offset(2 as ::core::ffi::c_int as isize)
                             as ::core::ffi::c_int
                             == ':' as ::core::ffi::c_int
@@ -596,7 +569,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                             .is_null()
                         }
                     {
-                        ret.len = ret.len.wrapping_add(2 as size_t);
+                        ret.len = ret.len.wrapping_add(2);
                         ret.data.opt.scope =
                             *pline.data.offset(1 as ::core::ffi::c_int as isize) as ExprOptScope;
                         ret.data.opt.name = pline.data.offset(3 as ::core::ffi::c_int as isize);
@@ -612,8 +585,8 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                         && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                             == '_' as ::core::ffi::c_int
                     {
-                        ret.data.opt.len = 4 as size_t;
-                        ret.len = ret.len.wrapping_add(4 as size_t);
+                        ret.data.opt.len = 4;
+                        ret.len = ret.len.wrapping_add(4);
                     } else {
                         while p < e
                             && (*p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
@@ -624,7 +597,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                             p = p.offset(1);
                         }
                         ret.data.opt.len = p.offset_from(ret.data.opt.name) as size_t;
-                        if ret.data.opt.len == 0 as size_t {
+                        if ret.data.opt.len == 0 {
                             ret.type_0 = kExprLexInvalid;
                             ret.data.err.type_0 = kExprLexOption;
                             ret.data.err.msg =
@@ -638,7 +611,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             }
             64 => {
                 ret.type_0 = kExprLexRegister;
-                if pline.size > 1 as size_t {
+                if pline.size > 1 {
                     ret.len = ret.len.wrapping_add(1);
                     ret.data.reg.name = *pline.data.offset(1 as ::core::ffi::c_int as isize)
                         as uint8_t as ::core::ffi::c_int;
@@ -648,21 +621,19 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             }
             39 => {
                 ret.type_0 = kExprLexSingleQuotedString;
-                ret.data.str.closed = false_0 != 0;
+                ret.data.str.closed = false;
                 while ret.len < pline.size && !ret.data.str.closed {
                     if *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                         == '\'' as ::core::ffi::c_int
                     {
-                        if ret.len.wrapping_add(1 as size_t) < pline.size
-                            && *pline
-                                .data
-                                .offset(ret.len.wrapping_add(1 as size_t) as isize)
+                        if ret.len.wrapping_add(1) < pline.size
+                            && *pline.data.offset(ret.len.wrapping_add(1) as isize)
                                 as ::core::ffi::c_int
                                 == '\'' as ::core::ffi::c_int
                         {
                             ret.len = ret.len.wrapping_add(1);
                         } else {
-                            ret.data.str.closed = true_0 != 0;
+                            ret.data.str.closed = true;
                         }
                     }
                     ret.len = ret.len.wrapping_add(1);
@@ -670,24 +641,24 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             }
             34 => {
                 ret.type_0 = kExprLexDoubleQuotedString;
-                ret.data.str.closed = false_0 != 0;
+                ret.data.str.closed = false;
                 while ret.len < pline.size && !ret.data.str.closed {
                     if *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                         == '\\' as ::core::ffi::c_int
                     {
-                        if ret.len.wrapping_add(1 as size_t) < pline.size {
+                        if ret.len.wrapping_add(1) < pline.size {
                             ret.len = ret.len.wrapping_add(1);
                         }
                     } else if *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                         == '"' as ::core::ffi::c_int
                     {
-                        ret.data.str.closed = true_0 != 0;
+                        ret.data.str.closed = true;
                     }
                     ret.len = ret.len.wrapping_add(1);
                 }
             }
             33 | 61 => {
-                if pline.size == 1 as size_t {
+                if pline.size == 1 {
                     ret.type_0 = (if schar as ::core::ffi::c_int == '!' as ::core::ffi::c_int {
                         kExprLexNot as ::core::ffi::c_int
                     } else {
@@ -731,7 +702,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
             }
             62 | 60 => {
                 ret.type_0 = kExprLexComparison;
-                let haseqsign: bool = pline.size > 1 as size_t
+                let haseqsign: bool = pline.size > 1
                     && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '=' as ::core::ffi::c_int;
                 if haseqsign {
@@ -751,23 +722,20 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                     ret.data.cmp.ccs = kCCStrategyUseOption;
                 }
                 ret.data.cmp.inv = schar as ::core::ffi::c_int == '<' as ::core::ffi::c_int;
-                ret.data.cmp.type_0 = (if ret.data.cmp.inv as ::core::ffi::c_int
-                    ^ haseqsign as ::core::ffi::c_int
-                    != 0
-                {
+                ret.data.cmp.type_0 = (if ret.data.cmp.inv ^ haseqsign {
                     kExprCmpGreaterOrEqual as ::core::ffi::c_int
                 } else {
                     kExprCmpGreater as ::core::ffi::c_int
                 }) as ExprComparisonType;
             }
             45 => {
-                if pline.size > 1 as size_t
+                if pline.size > 1
                     && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '>' as ::core::ffi::c_int
                 {
                     ret.len = ret.len.wrapping_add(1);
                     ret.type_0 = kExprLexArrow;
-                } else if pline.size > 1 as size_t
+                } else if pline.size > 1
                     && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '=' as ::core::ffi::c_int
                 {
@@ -779,7 +747,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                 }
             }
             43 => {
-                if pline.size > 1 as size_t
+                if pline.size > 1
                     && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '=' as ::core::ffi::c_int
                 {
@@ -791,7 +759,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                 }
             }
             46 => {
-                if pline.size > 1 as size_t
+                if pline.size > 1
                     && *pline.data.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                         == '=' as ::core::ffi::c_int
                 {
@@ -813,7 +781,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
                 }
             }
             124 => {
-                if pline.size >= 2 as size_t
+                if pline.size >= 2
                     && *pline.data.offset(ret.len as isize) as ::core::ffi::c_int
                         == '|' as ::core::ffi::c_int
                 {

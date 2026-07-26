@@ -218,7 +218,7 @@
     "crates/nvim/src/nvim/version.rs": {"lines": 2024, "unsafe": 17},
     "crates/nvim/src/nvim/viml/parser/expressions/ast.rs": {"no_mangle": 5, "unsafe": 4},
     "crates/nvim/src/nvim/viml/parser/expressions/lexer.rs": {"no_mangle": 1, "unsafe": 1},
-    "crates/nvim/src/nvim/viml/parser/expressions/parse.rs": {"lines": 4243, "no_mangle": 1, "unsafe": 1},
+    "crates/nvim/src/nvim/viml/parser/expressions/parse.rs": {"lines": 3578, "no_mangle": 1, "unsafe": 1},
     "crates/nvim/src/nvim/viml/parser/expressions/strings.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/viml/parser/parser.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/vterm/encoding.rs": {"no_mangle": 1, "unsafe": 2},

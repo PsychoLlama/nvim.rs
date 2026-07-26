@@ -171,8 +171,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
     ast_stack.push(&raw mut ast.root);
     while ast_stack.len() != 0 {
         let cur_node: *mut *mut ExprASTNode = stack_top(&ast_stack, 0);
-        let mut i: size_t = 0 as size_t;
-        while i < ast_stack.len().wrapping_sub(1 as size_t) {
+        let mut i: size_t = 0;
+        while i < ast_stack.len().wrapping_sub(1) {
             assert!(
                 *ast_stack[i] != *cur_node,
                 "*kv_A(ast_stack, i) != *cur_node"
@@ -180,8 +180,8 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
             i = i.wrapping_add(1);
         }
         if (*cur_node).is_null() {
-            assert!(ast_stack.len() == 1 as size_t, "kv_size(ast_stack) == 1");
-            ast_stack.truncate(ast_stack.len() - 1 as size_t);
+            assert!(ast_stack.len() == 1, "kv_size(ast_stack) == 1");
+            ast_stack.truncate(ast_stack.len() - 1);
         } else if !(**cur_node).children.is_null() {
             let maxchildren: uint8_t = node_maxchildren[(**cur_node).type_0 as usize];
             assert!(
@@ -206,14 +206,12 @@ pub unsafe extern "C" fn viml_pexpr_free_ast(mut ast: ExprAST) {
         } else if !(**cur_node).next.is_null() {
             ast_stack.push(&raw mut (**cur_node).next);
         } else if !(*cur_node).is_null() {
-            ast_stack.truncate(ast_stack.len() - 1 as size_t);
-            match (**cur_node).type_0 as ::core::ffi::c_uint {
-                27 | 26 => {
+            ast_stack.truncate(ast_stack.len() - 1);
+            match (**cur_node).type_0 {
+                kExprNodeDoubleQuotedString | kExprNodeSingleQuotedString => {
                     xfree((**cur_node).data.str.value as *mut ::core::ffi::c_void);
                 }
-                0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17
-                | 38 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 28 | 29 | 30 | 31 | 32 | 33 | 34
-                | 35 | 36 | 37 | _ => {}
+                _ => {}
             }
             xfree(*cur_node as *mut ::core::ffi::c_void);
             *cur_node = ::core::ptr::null_mut::<ExprASTNode>();
@@ -402,21 +400,18 @@ pub(super) unsafe extern "C" fn viml_pexpr_handle_bop(
     want_node_p: *mut ExprASTWantedNode,
     ast_err: *mut ExprASTError,
 ) -> bool {
-    let mut ret: bool = true_0 != 0;
+    let mut ret: bool = true;
     let mut top_node_p: *mut *mut ExprASTNode = ::core::ptr::null_mut::<*mut ExprASTNode>();
     let mut top_node: *mut ExprASTNode = ::core::ptr::null_mut::<ExprASTNode>();
     let mut top_node_lvl: ExprOpLvl = kEOpLvlInvalid;
     let mut top_node_ass: ExprOpAssociativity = 0 as ExprOpAssociativity;
     assert!(ast_stack.len() != 0, "kv_size(*ast_stack)");
-    let bop_node_lvl: ExprOpLvl = (if (*bop_node).type_0 as ::core::ffi::c_uint
-        == kExprNodeCall as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*bop_node).type_0 as ::core::ffi::c_uint
-            == kExprNodeSubscript as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        kEOpLvlSubscript as ::core::ffi::c_int as ::core::ffi::c_uint
-    } else {
-        node_lvl(*bop_node) as ::core::ffi::c_uint
-    }) as ExprOpLvl;
+    let bop_node_lvl: ExprOpLvl =
+        (if (*bop_node).type_0 == kExprNodeCall || (*bop_node).type_0 == kExprNodeSubscript {
+            kEOpLvlSubscript
+        } else {
+            node_lvl(*bop_node) as ::core::ffi::c_uint
+        }) as ExprOpLvl;
     loop {
         let mut new_top_node_p: *mut *mut ExprASTNode = stack_top(&ast_stack, 0);
         let mut new_top_node: *mut ExprASTNode = *new_top_node_p;
@@ -426,19 +421,17 @@ pub(super) unsafe extern "C" fn viml_pexpr_handle_bop(
         if !top_node_p.is_null()
             && (bop_node_lvl as ::core::ffi::c_uint > new_top_node_lvl as ::core::ffi::c_uint
                 || bop_node_lvl as ::core::ffi::c_uint == new_top_node_lvl as ::core::ffi::c_uint
-                    && new_top_node_ass as ::core::ffi::c_uint
-                        == kEOpAssNo as ::core::ffi::c_int as ::core::ffi::c_uint)
+                    && new_top_node_ass == kEOpAssNo)
         {
             break;
         }
-        ast_stack.truncate(ast_stack.len() - 1 as size_t);
+        ast_stack.truncate(ast_stack.len() - 1);
         top_node_p = new_top_node_p;
         top_node = new_top_node;
         top_node_lvl = new_top_node_lvl;
         top_node_ass = new_top_node_ass;
         if bop_node_lvl as ::core::ffi::c_uint == top_node_lvl as ::core::ffi::c_uint
-            && top_node_ass as ::core::ffi::c_uint
-                == kEOpAssRight as ::core::ffi::c_int as ::core::ffi::c_uint
+            && top_node_ass == kEOpAssRight
         {
             break;
         }
@@ -446,8 +439,7 @@ pub(super) unsafe extern "C" fn viml_pexpr_handle_bop(
             break;
         }
     }
-    if top_node_ass as ::core::ffi::c_uint
-        == kEOpAssLeft as ::core::ffi::c_int as ::core::ffi::c_uint
+    if top_node_ass == kEOpAssLeft
         || top_node_lvl as ::core::ffi::c_uint != bop_node_lvl as ::core::ffi::c_uint
     {
         *top_node_p = bop_node;
@@ -461,8 +453,7 @@ pub(super) unsafe extern "C" fn viml_pexpr_handle_bop(
     } else {
         assert!(
             top_node_lvl as ::core::ffi::c_uint == bop_node_lvl as ::core::ffi::c_uint
-                && top_node_ass as ::core::ffi::c_uint
-                    == kEOpAssRight as ::core::ffi::c_int as ::core::ffi::c_uint,
+                && top_node_ass == kEOpAssRight,
             "top_node_lvl == bop_node_lvl && top_node_ass == kEOpAssRight"
         );
         assert!(
@@ -478,9 +469,7 @@ pub(super) unsafe extern "C" fn viml_pexpr_handle_bop(
         ast_stack.push(top_node_p);
         ast_stack.push(&raw mut (*(*top_node).children).next);
         ast_stack.push(&raw mut (*(*bop_node).children).next);
-        if (*bop_node).type_0 as ::core::ffi::c_uint
-            == kExprNodeComparison as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if (*bop_node).type_0 == kExprNodeComparison {
             east_set_error(
                 pstate,
                 ast_err,
@@ -488,7 +477,7 @@ pub(super) unsafe extern "C" fn viml_pexpr_handle_bop(
                     as *const ::core::ffi::c_char),
                 (*bop_node).start,
             );
-            ret = false_0 != 0;
+            ret = false;
         }
     }
     *want_node_p = kENodeValue;

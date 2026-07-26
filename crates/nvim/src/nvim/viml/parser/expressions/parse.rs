@@ -2,10 +2,7 @@ use super::*;
 
 #[inline(always)]
 pub(super) fn pt_is_assignment(pt: ExprASTParseType) -> bool {
-    return pt as ::core::ffi::c_uint
-        == kEPTAssignment as ::core::ffi::c_int as ::core::ffi::c_uint
-        || pt as ::core::ffi::c_uint
-            == kEPTSingleAssignment as ::core::ffi::c_int as ::core::ffi::c_uint;
+    return pt == kEPTAssignment || pt == kEPTSingleAssignment;
 }
 
 static want_node_to_lexer_flags: [::core::ffi::c_int; 2] = [
@@ -81,29 +78,23 @@ pub unsafe extern "C" fn viml_pexpr_parse(
             },
         },
     };
-    let mut highlighted_prev_spacing: bool = false_0 != 0;
+    let mut highlighted_prev_spacing: bool = false;
     let mut lambda_node: *mut ExprASTNode = ::core::ptr::null_mut::<ExprASTNode>();
-    let mut asgn_level: size_t = 0 as size_t;
+    let mut asgn_level: size_t = 0;
     '_viml_pexpr_parse_end: loop {
-        let is_concat_or_subscript: bool = want_node as ::core::ffi::c_uint
-            == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-            && ast_stack.len() > 1 as size_t
-            && (**stack_top(&ast_stack, 1)).type_0 as ::core::ffi::c_uint
-                == kExprNodeConcatOrSubscript as ::core::ffi::c_int as ::core::ffi::c_uint;
+        let is_concat_or_subscript: bool = want_node == kENodeValue
+            && ast_stack.len() > 1
+            && (**stack_top(&ast_stack, 1)).type_0 == kExprNodeConcatOrSubscript;
         let lexer_additional_flags: ::core::ffi::c_int = kELFlagPeek as ::core::ffi::c_int
             | (if flags & kExprFlagsDisallowEOC as ::core::ffi::c_int != 0 {
                 kELFlagForbidEOC as ::core::ffi::c_int
             } else {
                 0 as ::core::ffi::c_int
             })
-            | (if want_node as ::core::ffi::c_uint
-                == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (ast_stack.len() == 1 as size_t
-                    || (**stack_top(&ast_stack, 1)).type_0 as ::core::ffi::c_uint
-                        != kExprNodeConcat as ::core::ffi::c_int as ::core::ffi::c_uint
-                        && (**stack_top(&ast_stack, 1)).type_0 as ::core::ffi::c_uint
-                            != kExprNodeConcatOrSubscript as ::core::ffi::c_int
-                                as ::core::ffi::c_uint)
+            | (if want_node == kENodeValue
+                && (ast_stack.len() == 1
+                    || (**stack_top(&ast_stack, 1)).type_0 != kExprNodeConcat
+                        && (**stack_top(&ast_stack, 1)).type_0 != kExprNodeConcatOrSubscript)
             {
                 kELFlagAllowFloat as ::core::ffi::c_int
             } else {
@@ -113,14 +104,11 @@ pub unsafe extern "C" fn viml_pexpr_parse(
             pstate,
             want_node_to_lexer_flags[want_node as usize] | lexer_additional_flags,
         );
-        if cur_token.type_0 as ::core::ffi::c_uint
-            == kExprLexEOC as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if cur_token.type_0 == kExprLexEOC {
             break;
         }
         let mut tok_type: LexExprTokenType = cur_token.type_0;
-        let token_invalid: bool = tok_type as ::core::ffi::c_uint
-            == kExprLexInvalid as ::core::ffi::c_int as ::core::ffi::c_uint;
+        let token_invalid: bool = tok_type == kExprLexInvalid;
         let mut is_invalid: bool = token_invalid;
         '_viml_pexpr_parse_cycle_end: {
             's_6212: {
@@ -130,15 +118,13 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                             pstate,
                             want_node_to_lexer_flags[want_node as usize] | lexer_additional_flags,
                         );
-                        if tok_type as ::core::ffi::c_uint
-                            == kExprLexSpacing as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
+                        if tok_type == kExprLexSpacing {
                             if is_invalid {
                                 viml_parser_highlight(
                                     pstate,
                                     cur_token.start,
                                     cur_token.len,
-                                    if is_invalid as ::core::ffi::c_int != 0 {
+                                    if is_invalid {
                                         b"NvimInvalidSpacing\0".as_ptr()
                                             as *const ::core::ffi::c_char
                                     } else {
@@ -148,24 +134,23 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                             }
                             break '_viml_pexpr_parse_cycle_end;
                         } else {
-                            if is_invalid as ::core::ffi::c_int != 0
-                                && prev_token.type_0 as ::core::ffi::c_uint
-                                    == kExprLexSpacing as ::core::ffi::c_int as ::core::ffi::c_uint
+                            if is_invalid
+                                && prev_token.type_0 == kExprLexSpacing
                                 && !highlighted_prev_spacing
                             {
                                 viml_parser_highlight(
                                     pstate,
                                     prev_token.start,
                                     prev_token.len,
-                                    if is_invalid as ::core::ffi::c_int != 0 {
+                                    if is_invalid {
                                         b"NvimInvalidSpacing\0".as_ptr()
                                             as *const ::core::ffi::c_char
                                     } else {
                                         b"NvimSpacing\0".as_ptr() as *const ::core::ffi::c_char
                                     },
                                 );
-                                is_invalid = false_0 != 0;
-                                highlighted_prev_spacing = true_0 != 0;
+                                is_invalid = false;
+                                highlighted_prev_spacing = true;
                             }
                             pline = *(*pstate)
                                 .reader
@@ -173,10 +158,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                 .items
                                 .offset(cur_token.start.line as isize);
                             top_node_p = stack_top(&ast_stack, 0);
-                            assert!(ast_stack.len() >= 1 as size_t, "kv_size(ast_stack) >= 1");
+                            assert!(ast_stack.len() >= 1, "kv_size(ast_stack) >= 1");
                             cur_node = ::core::ptr::null_mut::<ExprASTNode>();
-                            want_value = want_node as ::core::ffi::c_uint
-                                == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint;
+                            want_value = want_node == kENodeValue;
                             assert!(
                                 want_value as ::core::ffi::c_int
                                     == (*top_node_p).is_null() as ::core::ffi::c_int,
@@ -186,14 +170,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                 ast_stack[0] == &raw mut ast.root,
                                 "kv_A(ast_stack, 0) == &ast.root"
                             );
-                            let mut i: size_t = 0 as size_t;
-                            while i.wrapping_add(1 as size_t) < ast_stack.len() {
-                                let item_null: bool = want_value as ::core::ffi::c_int != 0
-                                    && i.wrapping_add(2 as size_t) == ast_stack.len();
+                            let mut i: size_t = 0;
+                            while i.wrapping_add(1) < ast_stack.len() {
+                                let item_null: bool =
+                                    want_value && i.wrapping_add(2) == ast_stack.len();
                                 assert!(
                                     &raw mut (**ast_stack[i]).children
                                         == ast_stack[i.wrapping_add(1)]
-                                        && (if item_null as ::core::ffi::c_int != 0 {
+                                        && (if item_null {
                                             (**ast_stack[i]).children.is_null()
                                                 as ::core::ffi::c_int
                                         } else {
@@ -202,7 +186,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         }) != 0
                                         || &raw mut (*(**ast_stack[i]).children).next
                                             == ast_stack[i.wrapping_add(1)]
-                                            && (if item_null as ::core::ffi::c_int != 0 {
+                                            && (if item_null {
                                                 (*(**ast_stack[i]).children).next.is_null()
                                                     as ::core::ffi::c_int
                                             } else {
@@ -213,65 +197,36 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                 );
                                 i = i.wrapping_add(1);
                             }
-                            node_is_key = is_concat_or_subscript as ::core::ffi::c_int != 0
-                                && (if cur_token.type_0 as ::core::ffi::c_uint
-                                    == kExprLexPlainIdentifier as ::core::ffi::c_int
-                                        as ::core::ffi::c_uint
-                                {
+                            node_is_key = is_concat_or_subscript
+                                && (if cur_token.type_0 == kExprLexPlainIdentifier {
                                     (!cur_token.data.var.autoload
-                                        && cur_token.data.var.scope as ::core::ffi::c_uint
-                                            == kExprVarScopeMissing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint)
+                                        && cur_token.data.var.scope == kExprVarScopeMissing)
                                         as ::core::ffi::c_int
                                 } else {
-                                    (cur_token.type_0 as ::core::ffi::c_uint
-                                        == kExprLexNumber as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint)
-                                        as ::core::ffi::c_int
+                                    (cur_token.type_0 == kExprLexNumber) as ::core::ffi::c_int
                                 }) != 0
-                                && prev_token.type_0 as ::core::ffi::c_uint
-                                    != kExprLexSpacing as ::core::ffi::c_int as ::core::ffi::c_uint;
-                            if is_concat_or_subscript as ::core::ffi::c_int != 0 && !node_is_key {
+                                && prev_token.type_0 != kExprLexSpacing;
+                            if is_concat_or_subscript && !node_is_key {
                                 (**stack_top(&ast_stack, 1)).type_0 = kExprNodeConcat;
                             }
-                            is_single_assignment = pt_stack[pt_stack.len() - 1]
-                                as ::core::ffi::c_uint
-                                == kEPTSingleAssignment as ::core::ffi::c_int
-                                    as ::core::ffi::c_uint;
-                            match pt_stack[pt_stack.len() - 1] as ::core::ffi::c_uint {
-                                1 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeOperator as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                        && tok_type as ::core::ffi::c_uint
-                                            != kExprLexComma as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        && tok_type as ::core::ffi::c_uint
-                                            != kExprLexArrow as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        || want_node as ::core::ffi::c_uint
-                                            == kENodeValue as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                            && !(cur_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexPlainIdentifier as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                                && cur_token.data.var.scope as ::core::ffi::c_uint
-                                                    == kExprVarScopeMissing as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
+                            is_single_assignment =
+                                pt_stack[pt_stack.len() - 1] == kEPTSingleAssignment;
+                            match pt_stack[pt_stack.len() - 1] {
+                                kEPTLambdaArguments => {
+                                    if want_node == kENodeOperator
+                                        && tok_type != kExprLexComma
+                                        && tok_type != kExprLexArrow
+                                        || want_node == kENodeValue
+                                            && !(cur_token.type_0 == kExprLexPlainIdentifier
+                                                && cur_token.data.var.scope == kExprVarScopeMissing
                                                 && !cur_token.data.var.autoload)
-                                            && tok_type as ::core::ffi::c_uint
-                                                != kExprLexArrow as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
+                                            && tok_type != kExprLexArrow
                                     {
-                                        (*lambda_node).data.fig.type_guesses.allow_lambda =
-                                            false_0 != 0;
+                                        (*lambda_node).data.fig.type_guesses.allow_lambda = false;
                                         if !(*lambda_node).children.is_null()
-                                            && (*(*lambda_node).children).type_0
-                                                as ::core::ffi::c_uint
-                                                == kExprNodeComma as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
+                                            && (*(*lambda_node).children).type_0 == kExprNodeComma
                                         {
-                                            is_invalid = true_0 != 0;
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -283,39 +238,22 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             );
                                         } else {
                                             lambda_node = ::core::ptr::null_mut::<ExprASTNode>();
-                                            pt_stack.truncate(pt_stack.len() - 1 as size_t);
+                                            pt_stack.truncate(pt_stack.len() - 1);
                                         }
                                     }
                                 }
-                                3 | 2 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                        && tok_type as ::core::ffi::c_uint
-                                            != kExprLexBracket as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        && tok_type as ::core::ffi::c_uint
-                                            != kExprLexPlainIdentifier as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        && (tok_type as ::core::ffi::c_uint
-                                            != kExprLexFigureBrace as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                            || cur_token.data.brc.closing as ::core::ffi::c_int
-                                                != 0)
-                                        && !(node_is_key as ::core::ffi::c_int != 0
-                                            && tok_type as ::core::ffi::c_uint
-                                                == kExprLexNumber as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint)
-                                        && tok_type as ::core::ffi::c_uint
-                                            != kExprLexEnv as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        && tok_type as ::core::ffi::c_uint
-                                            != kExprLexOption as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        && tok_type as ::core::ffi::c_uint
-                                            != kExprLexRegister as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
+                                kEPTSingleAssignment | kEPTAssignment => {
+                                    if want_node == kENodeValue
+                                        && tok_type != kExprLexBracket
+                                        && tok_type != kExprLexPlainIdentifier
+                                        && (tok_type != kExprLexFigureBrace
+                                            || cur_token.data.brc.closing)
+                                        && !(node_is_key && tok_type == kExprLexNumber)
+                                        && tok_type != kExprLexEnv
+                                        && tok_type != kExprLexOption
+                                        && tok_type != kExprLexRegister
                                     {
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -325,45 +263,25 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             ),
                                             cur_token.start,
                                         );
-                                        pt_stack.truncate(pt_stack.len() - 1 as size_t);
-                                    } else if want_node as ::core::ffi::c_uint
-                                        == kENodeOperator as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                        && tok_type as ::core::ffi::c_uint
-                                            != kExprLexBracket as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        && (tok_type as ::core::ffi::c_uint
-                                            != kExprLexFigureBrace as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                            || cur_token.data.brc.closing as ::core::ffi::c_int
-                                                != 0)
-                                        && tok_type as ::core::ffi::c_uint
-                                            != kExprLexDot as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        && (tok_type as ::core::ffi::c_uint
-                                            != kExprLexComma as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                            || !is_single_assignment)
-                                        && tok_type as ::core::ffi::c_uint
-                                            != kExprLexAssignment as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        && !((tok_type as ::core::ffi::c_uint
-                                            == kExprLexPlainIdentifier as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                            || tok_type as ::core::ffi::c_uint
-                                                == kExprLexFigureBrace as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
+                                        pt_stack.truncate(pt_stack.len() - 1);
+                                    } else if want_node == kENodeOperator
+                                        && tok_type != kExprLexBracket
+                                        && (tok_type != kExprLexFigureBrace
+                                            || cur_token.data.brc.closing)
+                                        && tok_type != kExprLexDot
+                                        && (tok_type != kExprLexComma || !is_single_assignment)
+                                        && tok_type != kExprLexAssignment
+                                        && !((tok_type == kExprLexPlainIdentifier
+                                            || tok_type == kExprLexFigureBrace
                                                 && !cur_token.data.brc.closing)
-                                            && prev_token.type_0 as ::core::ffi::c_uint
-                                                != kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint)
+                                            && prev_token.type_0 != kExprLexSpacing)
                                     {
                                         if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
-                                            && ast_stack.len() == 1 as size_t
+                                            && ast_stack.len() == 1
                                         {
                                             break '_viml_pexpr_parse_end;
                                         }
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -373,27 +291,24 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             ),
                                             cur_token.start,
                                         );
-                                        pt_stack.truncate(pt_stack.len() - 1 as size_t);
+                                        pt_stack.truncate(pt_stack.len() - 1);
                                     }
                                     assert!(pt_stack.len() != 0, "kv_size(pt_stack)");
                                 }
-                                0 | _ => {}
+                                _ => {}
                             }
                             assert!(pt_stack.len() != 0, "kv_size(pt_stack)");
                             cur_pt = pt_stack[pt_stack.len() - 1];
                             assert!(
-                                lambda_node.is_null()
-                                    || cur_pt as ::core::ffi::c_uint
-                                        == kEPTLambdaArguments as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint,
+                                lambda_node.is_null() || cur_pt == kEPTLambdaArguments,
                                 "lambda_node == NULL || cur_pt == kEPTLambdaArguments"
                             );
-                            match tok_type as ::core::ffi::c_uint {
-                                1 | 2 | 3 => {
+                            match tok_type {
+                                kExprLexMissing | kExprLexSpacing | kExprLexEOC => {
                                     abort();
                                 }
-                                0 => {
-                                    is_invalid = true_0 != 0;
+                                kExprLexInvalid => {
+                                    is_invalid = true;
                                     east_set_error(
                                         pstate,
                                         &raw mut ast.err,
@@ -402,18 +317,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     );
                                     tok_type = cur_token.data.err.type_0;
                                 }
-                                18 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeOperator as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                kExprLexRegister => {
+                                    if want_node == kENodeOperator {
                                         if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
-                                            && ast_stack.len() == 1 as size_t
+                                            && ast_stack.len() == 1
                                         {
                                             break '_viml_pexpr_parse_end;
                                         }
                                         assert!(!(*top_node_p).is_null(), "*top_node_p != NULL");
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -424,33 +336,25 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        (*cur_node).len = 0 as size_t;
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        (*cur_node).len = 0;
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                     } else {
                                         cur_node = viml_pexpr_new_node(kExprNodeRegister);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
@@ -462,7 +366,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidRegister\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -473,17 +377,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         break '_viml_pexpr_parse_cycle_end;
                                     }
                                 }
-                                9 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
+                                kExprLexPlus => {
+                                    if want_node == kENodeValue {
                                         cur_node = viml_pexpr_new_node(kExprNodeUnaryPlus);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
@@ -494,7 +393,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidUnaryPlus\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -506,29 +405,24 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeBinaryPlus);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                         viml_parser_highlight(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidBinaryPlus\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -540,17 +434,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     want_node = kENodeValue;
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
-                                10 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
+                                kExprLexMinus => {
+                                    if want_node == kENodeValue {
                                         cur_node = viml_pexpr_new_node(kExprNodeUnaryMinus);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
@@ -561,7 +450,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidUnaryMinus\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -573,29 +462,24 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeBinaryMinus);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                         viml_parser_highlight(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidBinaryMinus\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -607,11 +491,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     want_node = kENodeValue;
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
-                                6 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        is_invalid = true_0 != 0;
+                                kExprLexOr => {
+                                    if want_node == kENodeValue {
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -624,24 +506,18 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
                                         (**top_node_p).start = cur_token.start;
                                         (**top_node_p).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (**top_node_p).start = prev_token.start;
                                             (**top_node_p).len =
                                                 (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
-                                        (**top_node_p).len = 0 as size_t;
+                                        (**top_node_p).len = 0;
                                         want_node = kENodeOperator;
                                     }
                                     cur_node = viml_pexpr_new_node(kExprNodeOr);
                                     (*cur_node).start = cur_token.start;
                                     (*cur_node).len = cur_token.len;
-                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                        == kExprLexSpacing as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    if prev_token.type_0 == kExprLexSpacing {
                                         (*cur_node).start = prev_token.start;
                                         (*cur_node).len =
                                             (*cur_node).len.wrapping_add(prev_token.len);
@@ -650,30 +526,26 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         pstate,
                                         cur_token.start,
                                         cur_token.len,
-                                        if is_invalid as ::core::ffi::c_int != 0 {
+                                        if is_invalid {
                                             b"NvimInvalidOr\0".as_ptr()
                                                 as *const ::core::ffi::c_char
                                         } else {
                                             b"NvimOr\0".as_ptr() as *const ::core::ffi::c_char
                                         },
                                     );
-                                    is_invalid = is_invalid as ::core::ffi::c_int
+                                    is_invalid = is_invalid
                                         | !viml_pexpr_handle_bop(
                                             pstate,
                                             &mut ast_stack,
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        )
-                                            as ::core::ffi::c_int
-                                        != 0;
+                                        );
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
-                                7 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        is_invalid = true_0 != 0;
+                                kExprLexAnd => {
+                                    if want_node == kENodeValue {
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -686,24 +558,18 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
                                         (**top_node_p).start = cur_token.start;
                                         (**top_node_p).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (**top_node_p).start = prev_token.start;
                                             (**top_node_p).len =
                                                 (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
-                                        (**top_node_p).len = 0 as size_t;
+                                        (**top_node_p).len = 0;
                                         want_node = kENodeOperator;
                                     }
                                     cur_node = viml_pexpr_new_node(kExprNodeAnd);
                                     (*cur_node).start = cur_token.start;
                                     (*cur_node).len = cur_token.len;
-                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                        == kExprLexSpacing as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    if prev_token.type_0 == kExprLexSpacing {
                                         (*cur_node).start = prev_token.start;
                                         (*cur_node).len =
                                             (*cur_node).len.wrapping_add(prev_token.len);
@@ -712,30 +578,26 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         pstate,
                                         cur_token.start,
                                         cur_token.len,
-                                        if is_invalid as ::core::ffi::c_int != 0 {
+                                        if is_invalid {
                                             b"NvimInvalidAnd\0".as_ptr()
                                                 as *const ::core::ffi::c_char
                                         } else {
                                             b"NvimAnd\0".as_ptr() as *const ::core::ffi::c_char
                                         },
                                     );
-                                    is_invalid = is_invalid as ::core::ffi::c_int
+                                    is_invalid = is_invalid
                                         | !viml_pexpr_handle_bop(
                                             pstate,
                                             &mut ast_stack,
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        )
-                                            as ::core::ffi::c_int
-                                        != 0;
+                                        );
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
-                                12 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        is_invalid = true_0 != 0;
+                                kExprLexMultiplication => {
+                                    if want_node == kENodeValue {
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -748,26 +610,20 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
                                         (**top_node_p).start = cur_token.start;
                                         (**top_node_p).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (**top_node_p).start = prev_token.start;
                                             (**top_node_p).len =
                                                 (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
-                                        (**top_node_p).len = 0 as size_t;
+                                        (**top_node_p).len = 0;
                                         want_node = kENodeOperator;
                                     }
-                                    match cur_token.data.mul.type_0 as ::core::ffi::c_uint {
-                                        0 => {
+                                    match cur_token.data.mul.type_0 {
+                                        kExprLexMulMul => {
                                             cur_node = viml_pexpr_new_node(kExprNodeMultiplication);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (*cur_node).start = prev_token.start;
                                                 (*cur_node).len =
                                                     (*cur_node).len.wrapping_add(prev_token.len);
@@ -776,7 +632,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidMultiplication\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -785,14 +641,11 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 },
                                             );
                                         }
-                                        1 => {
+                                        kExprLexMulDiv => {
                                             cur_node = viml_pexpr_new_node(kExprNodeDivision);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (*cur_node).start = prev_token.start;
                                                 (*cur_node).len =
                                                     (*cur_node).len.wrapping_add(prev_token.len);
@@ -801,7 +654,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidDivision\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -810,14 +663,11 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 },
                                             );
                                         }
-                                        2 => {
+                                        kExprLexMulMod => {
                                             cur_node = viml_pexpr_new_node(kExprNodeMod);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (*cur_node).start = prev_token.start;
                                                 (*cur_node).len =
                                                     (*cur_node).len.wrapping_add(prev_token.len);
@@ -826,7 +676,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidMod\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -837,30 +687,25 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         }
                                         _ => {}
                                     }
-                                    is_invalid = is_invalid as ::core::ffi::c_int
+                                    is_invalid = is_invalid
                                         | !viml_pexpr_handle_bop(
                                             pstate,
                                             &mut ast_stack,
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        )
-                                            as ::core::ffi::c_int
-                                        != 0;
+                                        );
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
-                                17 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeOperator as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                kExprLexOption => {
+                                    if want_node == kENodeOperator {
                                         if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
-                                            && ast_stack.len() == 1 as size_t
+                                            && ast_stack.len() == 1
                                         {
                                             break '_viml_pexpr_parse_end;
                                         }
                                         assert!(!(*top_node_p).is_null(), "*top_node_p != NULL");
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -871,49 +716,35 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        (*cur_node).len = 0 as size_t;
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        (*cur_node).len = 0;
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                     } else {
                                         cur_node = viml_pexpr_new_node(kExprNodeOption);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        if cur_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexInvalid as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if cur_token.type_0 == kExprLexInvalid {
                                             assert!(
-                                                cur_token.len == 1 as size_t
-                                                    || cur_token.len == 3 as size_t
+                                                cur_token.len == 1
+                                                    || cur_token.len == 3
                                                         && *pline.data.offset(
-                                                            cur_token
-                                                                .start
-                                                                .col
-                                                                .wrapping_add(2 as size_t)
+                                                            cur_token.start.col.wrapping_add(2)
                                                                 as isize,
                                                         )
                                                             as ::core::ffi::c_int
@@ -924,19 +755,16 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 .data
                                                 .offset(cur_token.start.col as isize)
                                                 .offset(cur_token.len as isize);
-                                            (*cur_node).data.opt.ident_len = 0 as size_t;
-                                            (*cur_node).data.opt.scope = (if cur_token.len
-                                                == 3 as size_t
-                                            {
-                                                *pline.data.offset(
-                                                    cur_token.start.col.wrapping_add(1 as size_t)
-                                                        as isize,
-                                                )
+                                            (*cur_node).data.opt.ident_len = 0;
+                                            (*cur_node).data.opt.scope = (if cur_token.len == 3 {
+                                                *pline
+                                                    .data
+                                                    .offset(cur_token.start.col.wrapping_add(1)
+                                                        as isize)
                                                     as ExprOptScope
                                                     as ::core::ffi::c_uint
                                             } else {
-                                                kExprOptScopeUnspecified as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
+                                                kExprOptScopeUnspecified
                                             })
                                                 as ExprOptScope;
                                         } else {
@@ -949,8 +777,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         viml_parser_highlight(
                                             pstate,
                                             cur_token.start,
-                                            1 as size_t,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            1,
+                                            if is_invalid {
                                                 b"NvimInvalidOptionSigil\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -959,9 +787,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             },
                                         );
                                         let scope_shift: size_t = (if cur_token.data.opt.scope
-                                            as ::core::ffi::c_uint
-                                            == kExprOptScopeUnspecified as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
+                                            == kExprOptScopeUnspecified
                                         {
                                             0 as ::core::ffi::c_int
                                         } else {
@@ -971,9 +797,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         if scope_shift != 0 {
                                             viml_parser_highlight(
                                                 pstate,
-                                                shifted_pos(cur_token.start, 1 as size_t),
-                                                1 as size_t,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                shifted_pos(cur_token.start, 1),
+                                                1,
+                                                if is_invalid {
                                                     b"NvimInvalidOptionScope\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -983,9 +809,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             );
                                             viml_parser_highlight(
                                                 pstate,
-                                                shifted_pos(cur_token.start, 2 as size_t),
-                                                1 as size_t,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                shifted_pos(cur_token.start, 2),
+                                                1,
+                                                if is_invalid {
                                                     b"NvimInvalidOptionScopeDelimiter\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -998,12 +824,10 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             shifted_pos(
                                                 cur_token.start,
-                                                scope_shift.wrapping_add(1 as size_t),
+                                                scope_shift.wrapping_add(1),
                                             ),
-                                            cur_token.len.wrapping_sub(
-                                                scope_shift.wrapping_add(1 as size_t),
-                                            ),
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            cur_token.len.wrapping_sub(scope_shift.wrapping_add(1)),
+                                            if is_invalid {
                                                 b"NvimInvalidOptionName\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -1014,18 +838,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         break '_viml_pexpr_parse_cycle_end;
                                     }
                                 }
-                                19 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeOperator as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                kExprLexEnv => {
+                                    if want_node == kENodeOperator {
                                         if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
-                                            && ast_stack.len() == 1 as size_t
+                                            && ast_stack.len() == 1
                                         {
                                             break '_viml_pexpr_parse_end;
                                         }
                                         assert!(!(*top_node_p).is_null(), "*top_node_p != NULL");
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -1036,33 +857,25 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        (*cur_node).len = 0 as size_t;
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        (*cur_node).len = 0;
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                     } else {
                                         cur_node = viml_pexpr_new_node(kExprNodeEnvironment);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
@@ -1072,9 +885,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             .offset(cur_token.start.col as isize)
                                             .offset(1 as ::core::ffi::c_int as isize);
                                         (*cur_node).data.env.ident_len =
-                                            cur_token.len.wrapping_sub(1 as size_t);
-                                        if (*cur_node).data.env.ident_len == 0 as size_t {
-                                            is_invalid = true_0 != 0;
+                                            cur_token.len.wrapping_sub(1);
+                                        if (*cur_node).data.env.ident_len == 0 {
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -1091,8 +904,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         viml_parser_highlight(
                                             pstate,
                                             cur_token.start,
-                                            1 as size_t,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            1,
+                                            if is_invalid {
                                                 b"NvimInvalidEnvironmentSigil\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -1102,9 +915,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         );
                                         viml_parser_highlight(
                                             pstate,
-                                            shifted_pos(cur_token.start, 1 as size_t),
-                                            cur_token.len.wrapping_sub(1 as size_t),
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            shifted_pos(cur_token.start, 1),
+                                            cur_token.len.wrapping_sub(1),
+                                            if is_invalid {
                                                 b"NvimInvalidEnvironmentName\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -1115,18 +928,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         break '_viml_pexpr_parse_cycle_end;
                                     }
                                 }
-                                13 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeOperator as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                kExprLexNot => {
+                                    if want_node == kENodeOperator {
                                         if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
-                                            && ast_stack.len() == 1 as size_t
+                                            && ast_stack.len() == 1
                                         {
                                             break '_viml_pexpr_parse_end;
                                         }
                                         assert!(!(*top_node_p).is_null(), "*top_node_p != NULL");
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -1137,33 +947,25 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        (*cur_node).len = 0 as size_t;
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        (*cur_node).len = 0;
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                     } else {
                                         cur_node = viml_pexpr_new_node(kExprNodeNot);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
@@ -1174,7 +976,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidNot\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -1184,11 +986,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         break '_viml_pexpr_parse_cycle_end;
                                     }
                                 }
-                                8 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        is_invalid = true_0 != 0;
+                                kExprLexComparison => {
+                                    if want_node == kENodeValue {
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -1201,59 +1001,45 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
                                         (**top_node_p).start = cur_token.start;
                                         (**top_node_p).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (**top_node_p).start = prev_token.start;
                                             (**top_node_p).len =
                                                 (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
-                                        (**top_node_p).len = 0 as size_t;
+                                        (**top_node_p).len = 0;
                                         want_node = kENodeOperator;
                                     }
                                     cur_node = viml_pexpr_new_node(kExprNodeComparison);
                                     (*cur_node).start = cur_token.start;
                                     (*cur_node).len = cur_token.len;
-                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                        == kExprLexSpacing as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    if prev_token.type_0 == kExprLexSpacing {
                                         (*cur_node).start = prev_token.start;
                                         (*cur_node).len =
                                             (*cur_node).len.wrapping_add(prev_token.len);
                                     }
-                                    if cur_token.type_0 as ::core::ffi::c_uint
-                                        == kExprLexInvalid as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    if cur_token.type_0 == kExprLexInvalid {
                                         (*cur_node).data.cmp.ccs = kCCStrategyUseOption;
                                         (*cur_node).data.cmp.type_0 = kExprCmpEqual;
-                                        (*cur_node).data.cmp.inv = false_0 != 0;
+                                        (*cur_node).data.cmp.inv = false;
                                     } else {
                                         (*cur_node).data.cmp.ccs = cur_token.data.cmp.ccs;
                                         (*cur_node).data.cmp.type_0 = cur_token.data.cmp.type_0;
                                         (*cur_node).data.cmp.inv = cur_token.data.cmp.inv;
                                     }
-                                    is_invalid = is_invalid as ::core::ffi::c_int
+                                    is_invalid = is_invalid
                                         | !viml_pexpr_handle_bop(
                                             pstate,
                                             &mut ast_stack,
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        )
-                                            as ::core::ffi::c_int
-                                        != 0;
-                                    if cur_token.data.cmp.ccs as ::core::ffi::c_uint
-                                        != kCCStrategyUseOption as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                        );
+                                    if cur_token.data.cmp.ccs != kCCStrategyUseOption {
                                         viml_parser_highlight(
                                             pstate,
                                             cur_token.start,
-                                            cur_token.len.wrapping_sub(1 as size_t),
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            cur_token.len.wrapping_sub(1),
+                                            if is_invalid {
                                                 b"NvimInvalidComparison\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -1265,10 +1051,10 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             shifted_pos(
                                                 cur_token.start,
-                                                cur_token.len.wrapping_sub(1 as size_t),
+                                                cur_token.len.wrapping_sub(1),
                                             ),
-                                            1 as size_t,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            1,
+                                            if is_invalid {
                                                 b"NvimInvalidComparisonModifier\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -1281,7 +1067,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidComparison\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -1293,20 +1079,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     want_node = kENodeValue;
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
-                                24 => {
+                                kExprLexComma => {
                                     assert!(
-                                        !(want_node as ::core::ffi::c_uint
-                                            == kENodeValue as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                            && cur_pt as ::core::ffi::c_uint
-                                                == kEPTLambdaArguments as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint),
+                                        !(want_node == kENodeValue
+                                            && cur_pt == kEPTLambdaArguments),
                                         "!(want_node == kENodeValue && cur_pt == kEPTLambdaArguments)"
                                     );
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        is_invalid = true_0 != 0;
+                                    if want_node == kENodeValue {
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -1319,22 +1099,16 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeMissing);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        (*cur_node).len = 0 as size_t;
+                                        (*cur_node).len = 0;
                                         *top_node_p = cur_node;
                                         want_node = kENodeOperator;
                                     }
-                                    if cur_pt as ::core::ffi::c_uint
-                                        == kEPTLambdaArguments as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    if cur_pt == kEPTLambdaArguments {
                                         assert!(!lambda_node.is_null(), "lambda_node != NULL");
                                         assert!(
                                             (*lambda_node).data.fig.type_guesses.allow_lambda,
@@ -1342,12 +1116,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         );
                                         let node_: *mut ExprASTNode = lambda_node;
                                         assert!(
-                                            (*node_).type_0 as ::core::ffi::c_uint
-                                                == kExprNodeUnknownFigure as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                                || (*node_).type_0 as ::core::ffi::c_uint
-                                                    == kExprNodeLambda as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint,
+                                            (*node_).type_0 == kExprNodeUnknownFigure
+                                                || (*node_).type_0 == kExprNodeLambda,
                                             "node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeLambda"
                                         );
                                         (*node_).type_0 = kExprNodeLambda;
@@ -1355,7 +1125,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             (*(*(*pstate).colors).items.offset(
                                                 (*node_).data.fig.opening_hl_idx as isize,
                                             ))
-                                            .group = if is_invalid as ::core::ffi::c_int != 0 {
+                                            .group = if is_invalid {
                                                 b"NvimInvalidLambda\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -1366,8 +1136,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     }
                                     's_2222: {
                                         '_viml_pexpr_parse_invalid_comma: {
-                                            if ast_stack.len() >= 2 as size_t {
-                                                i_0 = 1 as size_t;
+                                            if ast_stack.len() >= 2 {
+                                                i_0 = 1;
                                                 loop {
                                                     if i_0 >= ast_stack.len() {
                                                         break 's_2222;
@@ -1377,56 +1147,28 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         as *const *mut ExprASTNode;
                                                     eastnode_type = (**eastnode_p).type_0;
                                                     eastnode_lvl = node_lvl(**eastnode_p);
-                                                    if eastnode_type as ::core::ffi::c_uint
-                                                        == kExprNodeLambda as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
-                                                    {
+                                                    if eastnode_type == kExprNodeLambda {
                                                         assert!(
-                                                            cur_pt as ::core::ffi::c_uint
-                                                                == kEPTLambdaArguments
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
-                                                                && want_node as ::core::ffi::c_uint
-                                                                    == kENodeOperator
-                                                                        as ::core::ffi::c_int
-                                                                        as ::core::ffi::c_uint,
+                                                            cur_pt == kEPTLambdaArguments
+                                                                && want_node == kENodeOperator,
                                                             "cur_pt == kEPTLambdaArguments && want_node == kENodeOperator"
                                                         );
                                                         break 's_2222;
                                                     } else {
-                                                        if eastnode_type as ::core::ffi::c_uint
-                                                            == kExprNodeDictLiteral
-                                                                as ::core::ffi::c_int
-                                                                as ::core::ffi::c_uint
-                                                            || eastnode_type as ::core::ffi::c_uint
-                                                                == kExprNodeListLiteral
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
-                                                            || eastnode_type as ::core::ffi::c_uint
-                                                                == kExprNodeCall
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
+                                                        if eastnode_type == kExprNodeDictLiteral
+                                                            || eastnode_type == kExprNodeListLiteral
+                                                            || eastnode_type == kExprNodeCall
                                                         {
                                                             break 's_2222;
                                                         }
-                                                        if !(eastnode_type as ::core::ffi::c_uint
-                                                            == kExprNodeComma as ::core::ffi::c_int
-                                                                as ::core::ffi::c_uint
-                                                            || eastnode_type as ::core::ffi::c_uint
-                                                                == kExprNodeColon
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
+                                                        if !(eastnode_type == kExprNodeComma
+                                                            || eastnode_type == kExprNodeColon
                                                             || eastnode_lvl as ::core::ffi::c_uint
-                                                                > kEOpLvlComma as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint)
+                                                                > kEOpLvlComma)
                                                         {
                                                             break '_viml_pexpr_parse_invalid_comma;
                                                         }
-                                                        if i_0
-                                                            == ast_stack
-                                                                .len()
-                                                                .wrapping_sub(1 as size_t)
-                                                        {
+                                                        if i_0 == ast_stack.len().wrapping_sub(1) {
                                                             break '_viml_pexpr_parse_invalid_comma;
                                                         }
                                                         i_0 = i_0.wrapping_add(1);
@@ -1434,7 +1176,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 }
                                             }
                                         }
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -1448,29 +1190,24 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     cur_node = viml_pexpr_new_node(kExprNodeComma);
                                     (*cur_node).start = cur_token.start;
                                     (*cur_node).len = cur_token.len;
-                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                        == kExprLexSpacing as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    if prev_token.type_0 == kExprLexSpacing {
                                         (*cur_node).start = prev_token.start;
                                         (*cur_node).len =
                                             (*cur_node).len.wrapping_add(prev_token.len);
                                     }
-                                    is_invalid = is_invalid as ::core::ffi::c_int
+                                    is_invalid = is_invalid
                                         | !viml_pexpr_handle_bop(
                                             pstate,
                                             &mut ast_stack,
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        )
-                                            as ::core::ffi::c_int
-                                        != 0;
+                                        );
                                     viml_parser_highlight(
                                         pstate,
                                         cur_token.start,
                                         cur_token.len,
-                                        if is_invalid as ::core::ffi::c_int != 0 {
+                                        if is_invalid {
                                             b"NvimInvalidComma\0".as_ptr()
                                                 as *const ::core::ffi::c_char
                                         } else {
@@ -1479,15 +1216,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     );
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
-                                5 => {
-                                    let mut is_ternary: bool = false_0 != 0;
+                                kExprLexColon => {
+                                    let mut is_ternary: bool = false;
                                     's_2937: {
                                         '_viml_pexpr_parse_valid_colon: {
                                             '_viml_pexpr_parse_invalid_colon: {
-                                                if ast_stack.len() >= 2 as size_t {
-                                                    can_be_ternary = true_0 != 0;
-                                                    is_subscript = false_0 != 0;
-                                                    let mut i_1: size_t = 1 as size_t;
+                                                if ast_stack.len() >= 2 {
+                                                    can_be_ternary = true;
+                                                    is_subscript = false;
+                                                    let mut i_1: size_t = 1;
                                                     while i_1 < ast_stack.len() {
                                                         let eastnode_p_0: *const *mut ExprASTNode =
                                                             ast_stack[ast_stack.len() - i_1 - 1]
@@ -1496,12 +1233,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             (**eastnode_p_0).type_0;
                                                         let eastnode_lvl_0: ExprOpLvl =
                                                             node_lvl(**eastnode_p_0);
-                                                        if can_be_ternary as ::core::ffi::c_int != 0
+                                                        if can_be_ternary
                                                             && eastnode_type_0
-                                                                as ::core::ffi::c_uint
                                                                 == kExprNodeTernaryValue
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
                                                             && !(**eastnode_p_0).data.ter.got_colon
                                                         {
                                                             ast_stack
@@ -1509,11 +1243,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             (**eastnode_p_0).start =
                                                                 cur_token.start;
                                                             (**eastnode_p_0).len = cur_token.len;
-                                                            if prev_token.type_0
-                                                                as ::core::ffi::c_uint
-                                                                == kExprLexSpacing
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
+                                                            if prev_token.type_0 == kExprLexSpacing
                                                             {
                                                                 (**eastnode_p_0).start =
                                                                     prev_token.start;
@@ -1524,14 +1254,11 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                             prev_token.len,
                                                                         );
                                                             }
-                                                            is_ternary = true_0 != 0;
+                                                            is_ternary = true;
                                                             (**eastnode_p_0).data.ter.got_colon =
-                                                                true_0 != 0;
-                                                            if want_node as ::core::ffi::c_uint
-                                                                == kENodeValue as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
-                                                            {
-                                                                is_invalid = true_0 != 0;
+                                                                true;
+                                                            if want_node == kENodeValue {
+                                                                is_invalid = true;
                                                                 east_set_error(
                                                                     pstate,
                                                                     &raw mut ast.err,
@@ -1548,10 +1275,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     cur_token.start;
                                                                 (**top_node_p).len = cur_token.len;
                                                                 if prev_token.type_0
-                                                                    as ::core::ffi::c_uint
                                                                     == kExprLexSpacing
-                                                                        as ::core::ffi::c_int
-                                                                        as ::core::ffi::c_uint
                                                                 {
                                                                     (**top_node_p).start =
                                                                         prev_token.start;
@@ -1562,7 +1286,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                                 prev_token.len,
                                                                             );
                                                                 }
-                                                                (**top_node_p).len = 0 as size_t;
+                                                                (**top_node_p).len = 0;
                                                                 want_node = kENodeOperator;
                                                             }
                                                             assert!(
@@ -1584,24 +1308,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             );
                                                             break;
                                                         } else if eastnode_type_0
-                                                            as ::core::ffi::c_uint
                                                             == kExprNodeUnknownFigure
-                                                                as ::core::ffi::c_int
-                                                                as ::core::ffi::c_uint
                                                         {
                                                             let node__0: *mut ExprASTNode =
                                                                 *eastnode_p_0;
                                                             assert!(
                                                                 (*node__0).type_0
-                                                                    as ::core::ffi::c_uint
                                                                     == kExprNodeUnknownFigure
-                                                                        as ::core::ffi::c_int
-                                                                        as ::core::ffi::c_uint
                                                                     || (*node__0).type_0
-                                                                        as ::core::ffi::c_uint
-                                                                        == kExprNodeDictLiteral
-                                                                            as ::core::ffi::c_int
-                                                                            as ::core::ffi::c_uint,
+                                                                        == kExprNodeDictLiteral,
                                                                 "node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeDictLiteral"
                                                             );
                                                             (*node__0).type_0 =
@@ -1616,10 +1331,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                             .opening_hl_idx
                                                                             as isize,
                                                                     ))
-                                                                .group = if is_invalid
-                                                                    as ::core::ffi::c_int
-                                                                    != 0
-                                                                {
+                                                                .group = if is_invalid {
                                                                     b"NvimInvalidDict\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimDict\0".as_ptr() as *const ::core::ffi::c_char
@@ -1628,51 +1340,36 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             break;
                                                         } else {
                                                             if eastnode_type_0
-                                                                as ::core::ffi::c_uint
                                                                 == kExprNodeDictLiteral
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
                                                             {
                                                                 break;
                                                             }
-                                                            if eastnode_type_0
-                                                                as ::core::ffi::c_uint
-                                                                == kExprNodeSubscript
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
+                                                            if eastnode_type_0 == kExprNodeSubscript
                                                             {
-                                                                is_subscript = true_0 != 0;
+                                                                is_subscript = true;
                                                                 assert!(!is_ternary, "!is_ternary");
                                                                 break;
                                                             } else {
-                                                                if eastnode_type_0
-                                                                    as ::core::ffi::c_uint
-                                                                    == kExprNodeColon
-                                                                        as ::core::ffi::c_int
-                                                                        as ::core::ffi::c_uint
+                                                                if eastnode_type_0 == kExprNodeColon
                                                                 {
                                                                     break '_viml_pexpr_parse_invalid_colon;
                                                                 }
                                                                 if (eastnode_lvl_0
                                                                     as ::core::ffi::c_uint)
                                                                     < kEOpLvlTernaryValue
-                                                                        as ::core::ffi::c_int
-                                                                        as ::core::ffi::c_uint
                                                                 {
                                                                     if (eastnode_lvl_0
                                                                         as ::core::ffi::c_uint)
                                                                         < kEOpLvlComma
-                                                                            as ::core::ffi::c_int
-                                                                            as ::core::ffi::c_uint
                                                                     {
                                                                         break '_viml_pexpr_parse_invalid_colon;
                                                                     }
-                                                                    can_be_ternary = false_0 != 0;
+                                                                    can_be_ternary = false;
                                                                 }
                                                                 if i_1
                                                                     == ast_stack
                                                                         .len()
-                                                                        .wrapping_sub(1 as size_t)
+                                                                        .wrapping_sub(1)
                                                                 {
                                                                     break '_viml_pexpr_parse_invalid_colon;
                                                                 }
@@ -1682,28 +1379,19 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     }
                                                     if is_subscript {
                                                         assert!(
-                                                            ast_stack.len() > 1 as size_t,
+                                                            ast_stack.len() > 1,
                                                             "kv_size(ast_stack) > 1"
                                                         );
-                                                        if want_node as ::core::ffi::c_uint
-                                                            == kENodeValue as ::core::ffi::c_int
-                                                                as ::core::ffi::c_uint
+                                                        if want_node == kENodeValue
                                                             && (**stack_top(&ast_stack, 1)).type_0
-                                                                as ::core::ffi::c_uint
                                                                 == kExprNodeSubscript
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
                                                         {
                                                             *top_node_p = viml_pexpr_new_node(
                                                                 kExprNodeMissing,
                                                             );
                                                             (**top_node_p).start = cur_token.start;
                                                             (**top_node_p).len = cur_token.len;
-                                                            if prev_token.type_0
-                                                                as ::core::ffi::c_uint
-                                                                == kExprLexSpacing
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
+                                                            if prev_token.type_0 == kExprLexSpacing
                                                             {
                                                                 (**top_node_p).start =
                                                                     prev_token.start;
@@ -1711,13 +1399,10 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     .len
                                                                     .wrapping_add(prev_token.len);
                                                             }
-                                                            (**top_node_p).len = 0 as size_t;
+                                                            (**top_node_p).len = 0;
                                                             want_node = kENodeOperator;
-                                                        } else if want_node as ::core::ffi::c_uint
-                                                            == kENodeValue as ::core::ffi::c_int
-                                                                as ::core::ffi::c_uint
-                                                        {
-                                                            is_invalid = true_0 != 0;
+                                                        } else if want_node == kENodeValue {
+                                                            is_invalid = true;
                                                             east_set_error(
                                                                 pstate,
                                                                 &raw mut ast.err,
@@ -1732,11 +1417,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             );
                                                             (**top_node_p).start = cur_token.start;
                                                             (**top_node_p).len = cur_token.len;
-                                                            if prev_token.type_0
-                                                                as ::core::ffi::c_uint
-                                                                == kExprLexSpacing
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
+                                                            if prev_token.type_0 == kExprLexSpacing
                                                             {
                                                                 (**top_node_p).start =
                                                                     prev_token.start;
@@ -1744,39 +1425,32 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                     .len
                                                                     .wrapping_add(prev_token.len);
                                                             }
-                                                            (**top_node_p).len = 0 as size_t;
+                                                            (**top_node_p).len = 0;
                                                             want_node = kENodeOperator;
                                                         }
                                                         cur_node =
                                                             viml_pexpr_new_node(kExprNodeColon);
                                                         (*cur_node).start = cur_token.start;
                                                         (*cur_node).len = cur_token.len;
-                                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                                as ::core::ffi::c_uint
-                                                        {
+                                                        if prev_token.type_0 == kExprLexSpacing {
                                                             (*cur_node).start = prev_token.start;
                                                             (*cur_node).len = (*cur_node)
                                                                 .len
                                                                 .wrapping_add(prev_token.len);
                                                         }
                                                         is_invalid = is_invalid
-                                                            as ::core::ffi::c_int
                                                             | !viml_pexpr_handle_bop(
                                                                 pstate,
                                                                 &mut ast_stack,
                                                                 cur_node,
                                                                 &raw mut want_node,
                                                                 &raw mut ast.err,
-                                                            )
-                                                                as ::core::ffi::c_int
-                                                            != 0;
+                                                            );
                                                         viml_parser_highlight(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0
-                                                            {
+                                                            if is_invalid {
                                                                 b"NvimInvalidSubscriptColon\0"
                                                                     .as_ptr()
                                                                     as *const ::core::ffi::c_char
@@ -1791,7 +1465,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     }
                                                 }
                                             }
-                                            is_invalid = true_0 != 0;
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -1802,11 +1476,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_token.start,
                                             );
                                         }
-                                        if want_node as ::core::ffi::c_uint
-                                            == kENodeValue as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
-                                            is_invalid = true_0 != 0;
+                                        if want_node == kENodeValue {
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -1820,15 +1491,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
                                             (**top_node_p).start = cur_token.start;
                                             (**top_node_p).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (**top_node_p).start = prev_token.start;
                                                 (**top_node_p).len =
                                                     (**top_node_p).len.wrapping_add(prev_token.len);
                                             }
-                                            (**top_node_p).len = 0 as size_t;
+                                            (**top_node_p).len = 0;
                                             want_node = kENodeOperator;
                                         }
                                         if is_ternary {
@@ -1836,7 +1504,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidTernaryColon\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -1848,29 +1516,24 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node = viml_pexpr_new_node(kExprNodeColon);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (*cur_node).start = prev_token.start;
                                                 (*cur_node).len =
                                                     (*cur_node).len.wrapping_add(prev_token.len);
                                             }
-                                            is_invalid = is_invalid as ::core::ffi::c_int
+                                            is_invalid = is_invalid
                                                 | !viml_pexpr_handle_bop(
                                                     pstate,
                                                     &mut ast_stack,
                                                     cur_node,
                                                     &raw mut want_node,
                                                     &raw mut ast.err,
-                                                )
-                                                    as ::core::ffi::c_int
-                                                != 0;
+                                                );
                                             viml_parser_highlight(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidColon\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -1883,57 +1546,41 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     want_node = kENodeValue;
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
-                                21 => {
+                                kExprLexBracket => {
                                     if cur_token.data.brc.closing {
                                         let mut new_top_node: *mut ExprASTNode =
                                             ::core::ptr::null_mut::<ExprASTNode>();
                                         let mut new_top_node_p: *mut *mut ExprASTNode =
                                             ::core::ptr::null_mut::<*mut ExprASTNode>();
-                                        ast_stack.truncate(ast_stack.len() - 1 as size_t);
+                                        ast_stack.truncate(ast_stack.len() - 1);
                                         's_3146: {
                                             if ast_stack.len() == 0 {
                                                 cur_node =
                                                     viml_pexpr_new_node(kExprNodeListLiteral);
                                                 (*cur_node).start = cur_token.start;
                                                 (*cur_node).len = cur_token.len;
-                                                if prev_token.type_0 as ::core::ffi::c_uint
-                                                    == kExprLexSpacing as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
+                                                if prev_token.type_0 == kExprLexSpacing {
                                                     (*cur_node).start = prev_token.start;
                                                     (*cur_node).len = (*cur_node)
                                                         .len
                                                         .wrapping_add(prev_token.len);
                                                 }
-                                                (*cur_node).len = 0 as size_t;
-                                                if want_node as ::core::ffi::c_uint
-                                                    != kENodeValue as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
+                                                (*cur_node).len = 0;
+                                                if want_node != kENodeValue {
                                                     (*cur_node).children = *top_node_p;
                                                 }
                                                 *top_node_p = cur_node;
                                                 new_top_node_p = top_node_p;
                                             } else {
-                                                if want_node as ::core::ffi::c_uint
-                                                    == kENodeValue as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
+                                                if want_node == kENodeValue {
                                                     if (**stack_top(&ast_stack, 0)).type_0
-                                                        as ::core::ffi::c_uint
                                                         != kExprNodeListLiteral
-                                                            as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
                                                         && (**stack_top(&ast_stack, 0)).type_0
-                                                            as ::core::ffi::c_uint
-                                                            != kExprNodeComma as ::core::ffi::c_int
-                                                                as ::core::ffi::c_uint
+                                                            != kExprNodeComma
                                                         && (**stack_top(&ast_stack, 0)).type_0
-                                                            as ::core::ffi::c_uint
-                                                            != kExprNodeColon as ::core::ffi::c_int
-                                                                as ::core::ffi::c_uint
+                                                            != kExprNodeColon
                                                     {
-                                                        is_invalid = true_0 != 0;
+                                                        is_invalid = true;
                                                         east_set_error(
                                                             pstate,
                                                             &raw mut ast.err,
@@ -1952,29 +1599,20 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     if !(ast_stack.len() != 0
                                                         && (new_top_node_p.is_null()
                                                             || (**new_top_node_p).type_0
-                                                                as ::core::ffi::c_uint
                                                                 != kExprNodeListLiteral
-                                                                    as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
                                                                 && (**new_top_node_p).type_0
-                                                                    as ::core::ffi::c_uint
-                                                                    != kExprNodeSubscript
-                                                                        as ::core::ffi::c_int
-                                                                        as ::core::ffi::c_uint))
+                                                                    != kExprNodeSubscript))
                                                     {
                                                         break;
                                                     }
                                                 }
                                                 new_top_node = *new_top_node_p;
-                                                match (*new_top_node).type_0 as ::core::ffi::c_uint
-                                                {
-                                                    6 => {
+                                                match (*new_top_node).type_0 {
+                                                    kExprNodeListLiteral => {
                                                         if pt_is_assignment(cur_pt)
-                                                            as ::core::ffi::c_int
-                                                            != 0
                                                             && (*new_top_node).children.is_null()
                                                         {
-                                                            is_invalid = true_0 != 0;
+                                                            is_invalid = true;
                                                             east_set_error(
                                                                 pstate,
                                                                 &raw mut ast.err,
@@ -1989,8 +1627,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0
-                                                            {
+                                                            if is_invalid {
                                                                 b"NvimInvalidList\0".as_ptr()
                                                                     as *const ::core::ffi::c_char
                                                             } else {
@@ -2000,13 +1637,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         );
                                                         break 's_3146;
                                                     }
-                                                    5 => {
+                                                    kExprNodeSubscript => {
                                                         viml_parser_highlight(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0
-                                                            {
+                                                            if is_invalid {
                                                                 b"NvimInvalidSubscriptBracket\0"
                                                                     .as_ptr()
                                                                     as *const ::core::ffi::c_char
@@ -2021,7 +1657,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 }
                                             }
                                             assert!(ast_stack.len() == 0, "!kv_size(ast_stack)");
-                                            is_invalid = true_0 != 0;
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -2036,7 +1672,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidList\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -2052,59 +1688,37 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 ast_stack.len() == asgn_level,
                                                 "kv_size(ast_stack) == asgn_level"
                                             );
-                                            asgn_level = 0 as size_t;
-                                            if cur_pt as ::core::ffi::c_uint
-                                                == kEPTAssignment as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            asgn_level = 0;
+                                            if cur_pt == kEPTAssignment {
                                                 assert!(!ast.err.msg.is_null(), "ast.err.msg");
-                                            } else if cur_pt as ::core::ffi::c_uint
-                                                == kEPTExpr as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                                && pt_stack.len() > 1 as size_t
+                                            } else if cur_pt == kEPTExpr
+                                                && pt_stack.len() > 1
                                                 && pt_is_assignment(
                                                     pt_stack[pt_stack.len() - 1 - 1],
                                                 )
-                                                    as ::core::ffi::c_int
-                                                    != 0
                                             {
-                                                pt_stack.truncate(pt_stack.len() - 1 as size_t);
+                                                pt_stack.truncate(pt_stack.len() - 1);
                                             }
                                         }
-                                        if cur_pt as ::core::ffi::c_uint
-                                            == kEPTSingleAssignment as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                            && ast_stack.len() == 1 as size_t
-                                        {
-                                            pt_stack.truncate(pt_stack.len() - 1 as size_t);
+                                        if cur_pt == kEPTSingleAssignment && ast_stack.len() == 1 {
+                                            pt_stack.truncate(pt_stack.len() - 1);
                                         }
                                         break '_viml_pexpr_parse_cycle_end;
-                                    } else if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
+                                    } else if want_node == kENodeValue {
                                         cur_node = viml_pexpr_new_node(kExprNodeListLiteral);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         *top_node_p = cur_node;
                                         ast_stack.push(&raw mut (*cur_node).children);
-                                        if cur_pt as ::core::ffi::c_uint
-                                            == kEPTAssignment as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if cur_pt == kEPTAssignment {
                                             pt_stack.push(kEPTSingleAssignment);
-                                        } else if cur_pt as ::core::ffi::c_uint
-                                            == kEPTSingleAssignment as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
-                                            is_invalid = true_0 != 0;
+                                        } else if cur_pt == kEPTSingleAssignment {
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -2119,7 +1733,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidList\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -2127,17 +1741,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             },
                                         );
                                         break '_viml_pexpr_parse_cycle_end;
-                                    } else if prev_token.type_0 as ::core::ffi::c_uint
-                                        == kExprLexSpacing as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    } else if prev_token.type_0 == kExprLexSpacing {
                                         if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
-                                            && ast_stack.len() == 1 as size_t
+                                            && ast_stack.len() == 1
                                         {
                                             break '_viml_pexpr_parse_end;
                                         }
                                         assert!(!(*top_node_p).is_null(), "*top_node_p != NULL");
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -2148,52 +1759,42 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        (*cur_node).len = 0 as size_t;
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        (*cur_node).len = 0;
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                     } else {
                                         cur_node = viml_pexpr_new_node(kExprNodeSubscript);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                         viml_parser_highlight(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidSubscriptBracket\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -2203,70 +1804,54 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         );
                                         if pt_is_assignment(cur_pt) {
                                             assert!(
-                                                want_node as ::core::ffi::c_uint
-                                                    == kENodeValue as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint,
+                                                want_node == kENodeValue,
                                                 "want_node == kENodeValue"
                                             );
-                                            asgn_level = ast_stack.len().wrapping_sub(1 as size_t);
+                                            asgn_level = ast_stack.len().wrapping_sub(1);
                                             pt_stack.push(kEPTExpr);
                                         }
                                         break '_viml_pexpr_parse_cycle_end;
                                     }
                                 }
-                                22 => {
+                                kExprLexFigureBrace => {
                                     if cur_token.data.brc.closing {
                                         let mut new_top_node_0: *mut ExprASTNode =
                                             ::core::ptr::null_mut::<ExprASTNode>();
                                         let mut new_top_node_p_0: *mut *mut ExprASTNode =
                                             ::core::ptr::null_mut::<*mut ExprASTNode>();
-                                        ast_stack.truncate(ast_stack.len() - 1 as size_t);
+                                        ast_stack.truncate(ast_stack.len() - 1);
                                         's_3806: {
                                             if ast_stack.len() == 0 {
                                                 cur_node =
                                                     viml_pexpr_new_node(kExprNodeUnknownFigure);
                                                 (*cur_node).start = cur_token.start;
                                                 (*cur_node).len = cur_token.len;
-                                                if prev_token.type_0 as ::core::ffi::c_uint
-                                                    == kExprLexSpacing as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
+                                                if prev_token.type_0 == kExprLexSpacing {
                                                     (*cur_node).start = prev_token.start;
                                                     (*cur_node).len = (*cur_node)
                                                         .len
                                                         .wrapping_add(prev_token.len);
                                                 }
                                                 (*cur_node).data.fig.type_guesses.allow_lambda =
-                                                    false_0 != 0;
+                                                    false;
                                                 (*cur_node).data.fig.type_guesses.allow_dict =
-                                                    false_0 != 0;
+                                                    false;
                                                 (*cur_node).data.fig.type_guesses.allow_ident =
-                                                    false_0 != 0;
-                                                (*cur_node).len = 0 as size_t;
-                                                if want_node as ::core::ffi::c_uint
-                                                    != kENodeValue as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
+                                                    false;
+                                                (*cur_node).len = 0;
+                                                if want_node != kENodeValue {
                                                     (*cur_node).children = *top_node_p;
                                                 }
                                                 *top_node_p = cur_node;
                                                 new_top_node_p_0 = top_node_p;
                                             } else {
-                                                if want_node as ::core::ffi::c_uint
-                                                    == kENodeValue as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
+                                                if want_node == kENodeValue {
                                                     if (**stack_top(&ast_stack, 0)).type_0
-                                                        as ::core::ffi::c_uint
                                                         != kExprNodeUnknownFigure
-                                                            as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
                                                         && (**stack_top(&ast_stack, 0)).type_0
-                                                            as ::core::ffi::c_uint
-                                                            != kExprNodeComma as ::core::ffi::c_int
-                                                                as ::core::ffi::c_uint
+                                                            != kExprNodeComma
                                                     {
-                                                        is_invalid = true_0 != 0;
+                                                        is_invalid = true;
                                                         east_set_error(
                                                             pstate,
                                                             &raw mut ast.err,
@@ -2284,33 +1869,24 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         .expect("the stack is not empty");
                                                     if !(ast_stack.len() != 0
                                                         && (new_top_node_p_0.is_null()
-                                                            || (**new_top_node_p_0).type_0 as ::core::ffi::c_uint
-                                                                != kExprNodeUnknownFigure as ::core::ffi::c_int
-                                                                    as ::core::ffi::c_uint
-                                                                && (**new_top_node_p_0).type_0 as ::core::ffi::c_uint
-                                                                    != kExprNodeDictLiteral as ::core::ffi::c_int
-                                                                        as ::core::ffi::c_uint
-                                                                && (**new_top_node_p_0).type_0 as ::core::ffi::c_uint
-                                                                    != kExprNodeCurlyBracesIdentifier as ::core::ffi::c_int
-                                                                        as ::core::ffi::c_uint
-                                                                && (**new_top_node_p_0).type_0 as ::core::ffi::c_uint
-                                                                    != kExprNodeLambda as ::core::ffi::c_int
-                                                                        as ::core::ffi::c_uint))
+                                                            || (**new_top_node_p_0).type_0
+                                                                != kExprNodeUnknownFigure
+                                                                && (**new_top_node_p_0).type_0
+                                                                    != kExprNodeDictLiteral
+                                                                && (**new_top_node_p_0).type_0
+                                                                    != kExprNodeCurlyBracesIdentifier
+                                                                && (**new_top_node_p_0).type_0
+                                                                    != kExprNodeLambda))
                                                     {
                                                         break;
                                                     }
                                                 }
                                                 new_top_node_0 = *new_top_node_p_0;
-                                                match (*new_top_node_0).type_0
-                                                    as ::core::ffi::c_uint
-                                                {
-                                                    14 => {
+                                                match (*new_top_node_0).type_0 {
+                                                    kExprNodeUnknownFigure => {
                                                         if (*new_top_node_0).children.is_null() {
                                                             assert!(
-                                                                want_node as ::core::ffi::c_uint
-                                                                    == kENodeValue
-                                                                        as ::core::ffi::c_int
-                                                                        as ::core::ffi::c_uint,
+                                                                want_node == kENodeValue,
                                                                 "want_node == kENodeValue"
                                                             );
                                                             assert!(
@@ -2325,15 +1901,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 new_top_node_0;
                                                             assert!(
                                                                 (*node__1).type_0
-                                                                    as ::core::ffi::c_uint
                                                                     == kExprNodeUnknownFigure
-                                                                        as ::core::ffi::c_int
-                                                                        as ::core::ffi::c_uint
                                                                     || (*node__1).type_0
-                                                                        as ::core::ffi::c_uint
-                                                                        == kExprNodeDictLiteral
-                                                                            as ::core::ffi::c_int
-                                                                            as ::core::ffi::c_uint,
+                                                                        == kExprNodeDictLiteral,
                                                                 "node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeDictLiteral"
                                                             );
                                                             (*node__1).type_0 =
@@ -2348,10 +1918,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                             .opening_hl_idx
                                                                             as isize,
                                                                     ))
-                                                                .group = if is_invalid
-                                                                    as ::core::ffi::c_int
-                                                                    != 0
-                                                                {
+                                                                .group = if is_invalid {
                                                                     b"NvimInvalidDict\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimDict\0".as_ptr() as *const ::core::ffi::c_char
@@ -2361,9 +1928,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 pstate,
                                                                 cur_token.start,
                                                                 cur_token.len,
-                                                                if is_invalid as ::core::ffi::c_int
-                                                                    != 0
-                                                                {
+                                                                if is_invalid {
                                                                     b"NvimInvalidDict\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimDict\0".as_ptr() as *const ::core::ffi::c_char
@@ -2377,7 +1942,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         {
                                                             let node__2: *mut ExprASTNode =
                                                                 new_top_node_0;
-                                                            assert!((*node__2).type_0 as ::core::ffi::c_uint == kExprNodeUnknownFigure as ::core::ffi::c_int as ::core::ffi::c_uint || (*node__2).type_0 as ::core::ffi::c_uint == kExprNodeCurlyBracesIdentifier as ::core::ffi::c_int as ::core::ffi::c_uint, "node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeCurlyBracesIdentifier");
+                                                            assert!((*node__2).type_0 == kExprNodeUnknownFigure || (*node__2).type_0 == kExprNodeCurlyBracesIdentifier, "node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeCurlyBracesIdentifier");
                                                             (*node__2).type_0 =
                                                                 kExprNodeCurlyBracesIdentifier;
                                                             if !(*pstate).colors.is_null() {
@@ -2390,10 +1955,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                             .opening_hl_idx
                                                                             as isize,
                                                                     ))
-                                                                .group = if is_invalid
-                                                                    as ::core::ffi::c_int
-                                                                    != 0
-                                                                {
+                                                                .group = if is_invalid {
                                                                     b"NvimInvalidCurly\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimCurly\0".as_ptr() as *const ::core::ffi::c_char
@@ -2403,16 +1965,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 pstate,
                                                                 cur_token.start,
                                                                 cur_token.len,
-                                                                if is_invalid as ::core::ffi::c_int
-                                                                    != 0
-                                                                {
+                                                                if is_invalid {
                                                                     b"NvimInvalidCurly\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimCurly\0".as_ptr() as *const ::core::ffi::c_char
                                                                 },
                                                             );
                                                         } else {
-                                                            is_invalid = true_0 != 0;
+                                                            is_invalid = true;
                                                             east_set_error(
                                                                 pstate,
                                                                 &raw mut ast.err,
@@ -2432,10 +1992,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                             .opening_hl_idx
                                                                             as isize,
                                                                     ))
-                                                                .group = if is_invalid
-                                                                    as ::core::ffi::c_int
-                                                                    != 0
-                                                                {
+                                                                .group = if is_invalid {
                                                                     b"NvimInvalidFigureBrace\0".as_ptr()
                                                                         as *const ::core::ffi::c_char
                                                                 } else {
@@ -2446,9 +2003,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 pstate,
                                                                 cur_token.start,
                                                                 cur_token.len,
-                                                                if is_invalid as ::core::ffi::c_int
-                                                                    != 0
-                                                                {
+                                                                if is_invalid {
                                                                     b"NvimInvalidFigureBrace\0".as_ptr()
                                                                         as *const ::core::ffi::c_char
                                                                 } else {
@@ -2458,13 +2013,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         }
                                                         break 's_3806;
                                                     }
-                                                    16 => {
+                                                    kExprNodeDictLiteral => {
                                                         viml_parser_highlight(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0
-                                                            {
+                                                            if is_invalid {
                                                                 b"NvimInvalidDict\0".as_ptr()
                                                                     as *const ::core::ffi::c_char
                                                             } else {
@@ -2474,13 +2028,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         );
                                                         break 's_3806;
                                                     }
-                                                    17 => {
+                                                    kExprNodeCurlyBracesIdentifier => {
                                                         viml_parser_highlight(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0
-                                                            {
+                                                            if is_invalid {
                                                                 b"NvimInvalidCurly\0".as_ptr()
                                                                     as *const ::core::ffi::c_char
                                                             } else {
@@ -2490,13 +2043,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         );
                                                         break 's_3806;
                                                     }
-                                                    15 => {
+                                                    kExprNodeLambda => {
                                                         viml_parser_highlight(
                                                             pstate,
                                                             cur_token.start,
                                                             cur_token.len,
-                                                            if is_invalid as ::core::ffi::c_int != 0
-                                                            {
+                                                            if is_invalid {
                                                                 b"NvimInvalidLambda\0".as_ptr()
                                                                     as *const ::core::ffi::c_char
                                                             } else {
@@ -2510,7 +2062,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 }
                                             }
                                             assert!(ast_stack.len() == 0, "!kv_size(ast_stack)");
-                                            is_invalid = true_0 != 0;
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -2525,7 +2077,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidFigureBrace\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -2541,29 +2093,23 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 ast_stack.len() == asgn_level,
                                                 "kv_size(ast_stack) == asgn_level"
                                             );
-                                            if cur_pt as ::core::ffi::c_uint
-                                                == kEPTExpr as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                                && pt_stack.len() > 1 as size_t
+                                            if cur_pt == kEPTExpr
+                                                && pt_stack.len() > 1
                                                 && pt_is_assignment(
                                                     pt_stack[pt_stack.len() - 1 - 1],
                                                 )
-                                                    as ::core::ffi::c_int
-                                                    != 0
                                             {
-                                                pt_stack.truncate(pt_stack.len() - 1 as size_t);
-                                                asgn_level = 0 as size_t;
+                                                pt_stack.truncate(pt_stack.len() - 1);
+                                                asgn_level = 0;
                                             }
                                         }
                                         break '_viml_pexpr_parse_cycle_end;
-                                    } else if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
+                                    } else if want_node == kENodeValue {
                                         viml_parser_highlight(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidFigureBrace\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -2576,43 +2122,31 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 viml_pexpr_new_node(kExprNodeCurlyBracesIdentifier);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (*cur_node).start = prev_token.start;
                                                 (*cur_node).len =
                                                     (*cur_node).len.wrapping_add(prev_token.len);
                                             }
-                                            (*cur_node).data.fig.type_guesses.allow_lambda =
-                                                false_0 != 0;
-                                            (*cur_node).data.fig.type_guesses.allow_dict =
-                                                false_0 != 0;
-                                            (*cur_node).data.fig.type_guesses.allow_ident =
-                                                true_0 != 0;
+                                            (*cur_node).data.fig.type_guesses.allow_lambda = false;
+                                            (*cur_node).data.fig.type_guesses.allow_dict = false;
+                                            (*cur_node).data.fig.type_guesses.allow_ident = true;
                                             pt_stack.push(kEPTExpr);
                                         } else {
                                             cur_node = viml_pexpr_new_node(kExprNodeUnknownFigure);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (*cur_node).start = prev_token.start;
                                                 (*cur_node).len =
                                                     (*cur_node).len.wrapping_add(prev_token.len);
                                             }
-                                            (*cur_node).data.fig.type_guesses.allow_lambda =
-                                                true_0 != 0;
-                                            (*cur_node).data.fig.type_guesses.allow_dict =
-                                                true_0 != 0;
-                                            (*cur_node).data.fig.type_guesses.allow_ident =
-                                                true_0 != 0;
+                                            (*cur_node).data.fig.type_guesses.allow_lambda = true;
+                                            (*cur_node).data.fig.type_guesses.allow_dict = true;
+                                            (*cur_node).data.fig.type_guesses.allow_ident = true;
                                         }
                                         if !(*pstate).colors.is_null() {
                                             (*cur_node).data.fig.opening_hl_idx =
-                                                (*(*pstate).colors).size.wrapping_sub(1 as size_t);
+                                                (*(*pstate).colors).size.wrapping_sub(1);
                                         }
                                         *top_node_p = cur_node;
                                         ast_stack.push(&raw mut (*cur_node).children);
@@ -2621,17 +2155,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         break 's_4376;
                                     } else {
                                         assert!(
-                                            want_node as ::core::ffi::c_uint
-                                                == kENodeOperator as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint,
+                                            want_node == kENodeOperator,
                                             "want_node == kENodeOperator"
                                         );
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
-                                                && ast_stack.len() == 1 as size_t
+                                                && ast_stack.len() == 1
                                             {
                                                 break '_viml_pexpr_parse_end;
                                             }
@@ -2639,7 +2168,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 !(*top_node_p).is_null(),
                                                 "*top_node_p != NULL"
                                             );
-                                            is_invalid = true_0 != 0;
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -2650,43 +2179,37 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (*cur_node).start = prev_token.start;
                                                 (*cur_node).len =
                                                     (*cur_node).len.wrapping_add(prev_token.len);
                                             }
-                                            (*cur_node).len = 0 as size_t;
-                                            is_invalid = is_invalid as ::core::ffi::c_int
+                                            (*cur_node).len = 0;
+                                            is_invalid = is_invalid
                                                 | !viml_pexpr_handle_bop(
                                                     pstate,
                                                     &mut ast_stack,
                                                     cur_node,
                                                     &raw mut want_node,
                                                     &raw mut ast.err,
-                                                )
-                                                    as ::core::ffi::c_int
-                                                != 0;
+                                                );
                                         } else {
-                                            match (**top_node_p).type_0 as ::core::ffi::c_uint {
-                                                13 | 11 | 17 => {
+                                            match (**top_node_p).type_0 {
+                                                kExprNodeComplexIdentifier
+                                                | kExprNodePlainIdentifier
+                                                | kExprNodeCurlyBracesIdentifier => {
                                                     cur_node = viml_pexpr_new_node(
                                                         kExprNodeComplexIdentifier,
                                                     );
                                                     (*cur_node).start = cur_token.start;
                                                     (*cur_node).len = cur_token.len;
-                                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                                        == kExprLexSpacing as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
-                                                    {
+                                                    if prev_token.type_0 == kExprLexSpacing {
                                                         (*cur_node).start = prev_token.start;
                                                         (*cur_node).len = (*cur_node)
                                                             .len
                                                             .wrapping_add(prev_token.len);
                                                     }
-                                                    (*cur_node).len = 0 as size_t;
+                                                    (*cur_node).len = 0;
                                                     (*cur_node).children = *top_node_p;
                                                     *top_node_p = cur_node;
                                                     ast_stack.push(
@@ -2703,10 +2226,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     );
                                                     (*cur_node).start = cur_token.start;
                                                     (*cur_node).len = cur_token.len;
-                                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                                        == kExprLexSpacing as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
-                                                    {
+                                                    if prev_token.type_0 == kExprLexSpacing {
                                                         (*cur_node).start = prev_token.start;
                                                         (*cur_node).len = (*cur_node)
                                                             .len
@@ -2735,7 +2255,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         pstate,
                                                         cur_token.start,
                                                         cur_token.len,
-                                                        if is_invalid as ::core::ffi::c_int != 0 {
+                                                        if is_invalid {
                                                             b"NvimInvalidCurly\0".as_ptr()
                                                                 as *const ::core::ffi::c_char
                                                         } else {
@@ -2748,7 +2268,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 _ => {
                                                     if flags & kExprFlagsMulti as ::core::ffi::c_int
                                                         != 0
-                                                        && ast_stack.len() == 1 as size_t
+                                                        && ast_stack.len() == 1
                                                     {
                                                         break '_viml_pexpr_parse_end;
                                                     }
@@ -2756,7 +2276,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         !(*top_node_p).is_null(),
                                                         "*top_node_p != NULL"
                                                     );
-                                                    is_invalid = true_0 != 0;
+                                                    is_invalid = true;
                                                     east_set_error(
                                                         pstate,
                                                         &raw mut ast.err,
@@ -2771,58 +2291,39 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         viml_pexpr_new_node(kExprNodeOpMissing);
                                                     (*cur_node).start = cur_token.start;
                                                     (*cur_node).len = cur_token.len;
-                                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                                        == kExprLexSpacing as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
-                                                    {
+                                                    if prev_token.type_0 == kExprLexSpacing {
                                                         (*cur_node).start = prev_token.start;
                                                         (*cur_node).len = (*cur_node)
                                                             .len
                                                             .wrapping_add(prev_token.len);
                                                     }
-                                                    (*cur_node).len = 0 as size_t;
-                                                    is_invalid = is_invalid as ::core::ffi::c_int
+                                                    (*cur_node).len = 0;
+                                                    is_invalid = is_invalid
                                                         | !viml_pexpr_handle_bop(
                                                             pstate,
                                                             &mut ast_stack,
                                                             cur_node,
                                                             &raw mut want_node,
                                                             &raw mut ast.err,
-                                                        )
-                                                            as ::core::ffi::c_int
-                                                        != 0;
+                                                        );
                                                 }
                                             }
                                         }
                                     }
                                 }
-                                25 => {
-                                    if cur_pt as ::core::ffi::c_uint
-                                        == kEPTLambdaArguments as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
-                                        pt_stack.truncate(pt_stack.len() - 1 as size_t);
+                                kExprLexArrow => {
+                                    if cur_pt == kEPTLambdaArguments {
+                                        pt_stack.truncate(pt_stack.len() - 1);
                                         assert!(pt_stack.len() != 0, "kv_size(pt_stack)");
-                                        if want_node as ::core::ffi::c_uint
-                                            == kENodeValue as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
-                                            ast_stack.truncate(ast_stack.len() - 1 as size_t);
+                                        if want_node == kENodeValue {
+                                            ast_stack.truncate(ast_stack.len() - 1);
                                         }
-                                        assert!(
-                                            ast_stack.len() >= 1 as size_t,
-                                            "kv_size(ast_stack) >= 1"
-                                        );
-                                        while (**stack_top(&ast_stack, 0)).type_0
-                                            as ::core::ffi::c_uint
-                                            != kExprNodeLambda as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
+                                        assert!(ast_stack.len() >= 1, "kv_size(ast_stack) >= 1");
+                                        while (**stack_top(&ast_stack, 0)).type_0 != kExprNodeLambda
                                             && (**stack_top(&ast_stack, 0)).type_0
-                                                as ::core::ffi::c_uint
-                                                != kExprNodeUnknownFigure as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
+                                                != kExprNodeUnknownFigure
                                         {
-                                            ast_stack.truncate(ast_stack.len() - 1 as size_t);
+                                            ast_stack.truncate(ast_stack.len() - 1);
                                         }
                                         assert!(
                                             *stack_top(&ast_stack, 0) == lambda_node,
@@ -2830,12 +2331,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         );
                                         let node__3: *mut ExprASTNode = lambda_node;
                                         assert!(
-                                            (*node__3).type_0 as ::core::ffi::c_uint
-                                                == kExprNodeUnknownFigure as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                                || (*node__3).type_0 as ::core::ffi::c_uint
-                                                    == kExprNodeLambda as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint,
+                                            (*node__3).type_0 == kExprNodeUnknownFigure
+                                                || (*node__3).type_0 == kExprNodeLambda,
                                             "node_->type == kExprNodeUnknownFigure || node_->type == kExprNodeLambda"
                                         );
                                         (*node__3).type_0 = kExprNodeLambda;
@@ -2843,7 +2340,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             (*(*(*pstate).colors).items.offset(
                                                 (*node__3).data.fig.opening_hl_idx as isize,
                                             ))
-                                            .group = if is_invalid as ::core::ffi::c_int != 0 {
+                                            .group = if is_invalid {
                                                 b"NvimInvalidLambda\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -2854,19 +2351,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeArrow);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         if (*lambda_node).children.is_null() {
                                             assert!(
-                                                want_node as ::core::ffi::c_uint
-                                                    == kENodeValue as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint,
+                                                want_node == kENodeValue,
                                                 "want_node == kENodeValue"
                                             );
                                             (*lambda_node).children = cur_node;
@@ -2883,11 +2375,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         ast_stack.push(&raw mut (*cur_node).children);
                                         lambda_node = ::core::ptr::null_mut::<ExprASTNode>();
                                     } else {
-                                        if want_node as ::core::ffi::c_uint
-                                            == kENodeValue as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
-                                            is_invalid = true_0 != 0;
+                                        if want_node == kENodeValue {
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -2898,18 +2387,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
                                             (**top_node_p).start = cur_token.start;
                                             (**top_node_p).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (**top_node_p).start = prev_token.start;
                                                 (**top_node_p).len =
                                                     (**top_node_p).len.wrapping_add(prev_token.len);
                                             }
-                                            (**top_node_p).len = 0 as size_t;
+                                            (**top_node_p).len = 0;
                                             want_node = kENodeOperator;
                                         }
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -2922,31 +2408,26 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeArrow);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                     }
                                     want_node = kENodeValue;
                                     viml_parser_highlight(
                                         pstate,
                                         cur_token.start,
                                         cur_token.len,
-                                        if is_invalid as ::core::ffi::c_int != 0 {
+                                        if is_invalid {
                                             b"NvimInvalidArrow\0".as_ptr()
                                                 as *const ::core::ffi::c_char
                                         } else {
@@ -2955,23 +2436,17 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     );
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
-                                20 => {
+                                kExprLexPlainIdentifier => {
                                     let scope: ExprVarScope =
-                                        (if cur_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexInvalid as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
-                                            kExprVarScopeMissing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
+                                        (if cur_token.type_0 == kExprLexInvalid {
+                                            kExprVarScopeMissing
                                         } else {
                                             cur_token.data.var.scope as ::core::ffi::c_uint
                                         }) as ExprVarScope;
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
+                                    if want_node == kENodeValue {
                                         want_node = kENodeOperator;
                                         cur_node = viml_pexpr_new_node(
-                                            (if node_is_key as ::core::ffi::c_int != 0 {
+                                            (if node_is_key {
                                                 kExprNodePlainKey as ::core::ffi::c_int
                                             } else {
                                                 kExprNodePlainIdentifier as ::core::ffi::c_int
@@ -2980,24 +2455,19 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         );
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         (*cur_node).data.var.scope = scope;
-                                        let scope_shift_0: size_t = (if scope as ::core::ffi::c_uint
-                                            == kExprVarScopeMissing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
-                                            0 as ::core::ffi::c_int
-                                        } else {
-                                            2 as ::core::ffi::c_int
-                                        })
-                                            as size_t;
+                                        let scope_shift_0: size_t =
+                                            (if scope == kExprVarScopeMissing {
+                                                0 as ::core::ffi::c_int
+                                            } else {
+                                                2 as ::core::ffi::c_int
+                                            })
+                                                as size_t;
                                         (*cur_node).data.var.ident = pline
                                             .data
                                             .offset(cur_token.start.col as isize)
@@ -3010,8 +2480,8 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             viml_parser_highlight(
                                                 pstate,
                                                 cur_token.start,
-                                                1 as size_t,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                1,
+                                                if is_invalid {
                                                     b"NvimInvalidIdentifierScope\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -3021,9 +2491,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             );
                                             viml_parser_highlight(
                                                 pstate,
-                                                shifted_pos(cur_token.start, 1 as size_t),
-                                                1 as size_t,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                shifted_pos(cur_token.start, 1),
+                                                1,
+                                                if is_invalid {
                                                     b"NvimInvalidIdentifierScopeDelimiter\0"
                                                         .as_ptr()
                                                         as *const ::core::ffi::c_char
@@ -3037,15 +2507,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             shifted_pos(cur_token.start, scope_shift_0),
                                             cur_token.len.wrapping_sub(scope_shift_0),
-                                            if node_is_key as ::core::ffi::c_int != 0 {
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                            if node_is_key {
+                                                if is_invalid {
                                                     b"NvimInvalidIdentifierKey\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
                                                     b"NvimIdentifierKey\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 }
-                                            } else if is_invalid as ::core::ffi::c_int != 0 {
+                                            } else if is_invalid {
                                                 b"NvimInvalidIdentifierName\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -3054,22 +2524,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             },
                                         );
                                         break '_viml_pexpr_parse_cycle_end;
-                                    } else if scope as ::core::ffi::c_uint
-                                        == kExprVarScopeMissing as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    } else if scope == kExprVarScopeMissing {
                                         assert!(
-                                            want_node as ::core::ffi::c_uint
-                                                == kENodeOperator as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint,
+                                            want_node == kENodeOperator,
                                             "want_node == kENodeOperator"
                                         );
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
-                                                && ast_stack.len() == 1 as size_t
+                                                && ast_stack.len() == 1
                                             {
                                                 break '_viml_pexpr_parse_end;
                                             }
@@ -3077,7 +2539,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 !(*top_node_p).is_null(),
                                                 "*top_node_p != NULL"
                                             );
-                                            is_invalid = true_0 != 0;
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -3088,43 +2550,37 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (*cur_node).start = prev_token.start;
                                                 (*cur_node).len =
                                                     (*cur_node).len.wrapping_add(prev_token.len);
                                             }
-                                            (*cur_node).len = 0 as size_t;
-                                            is_invalid = is_invalid as ::core::ffi::c_int
+                                            (*cur_node).len = 0;
+                                            is_invalid = is_invalid
                                                 | !viml_pexpr_handle_bop(
                                                     pstate,
                                                     &mut ast_stack,
                                                     cur_node,
                                                     &raw mut want_node,
                                                     &raw mut ast.err,
-                                                )
-                                                    as ::core::ffi::c_int
-                                                != 0;
+                                                );
                                         } else {
-                                            match (**top_node_p).type_0 as ::core::ffi::c_uint {
-                                                13 | 11 | 17 => {
+                                            match (**top_node_p).type_0 {
+                                                kExprNodeComplexIdentifier
+                                                | kExprNodePlainIdentifier
+                                                | kExprNodeCurlyBracesIdentifier => {
                                                     cur_node = viml_pexpr_new_node(
                                                         kExprNodeComplexIdentifier,
                                                     );
                                                     (*cur_node).start = cur_token.start;
                                                     (*cur_node).len = cur_token.len;
-                                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                                        == kExprLexSpacing as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
-                                                    {
+                                                    if prev_token.type_0 == kExprLexSpacing {
                                                         (*cur_node).start = prev_token.start;
                                                         (*cur_node).len = (*cur_node)
                                                             .len
                                                             .wrapping_add(prev_token.len);
                                                     }
-                                                    (*cur_node).len = 0 as size_t;
+                                                    (*cur_node).len = 0;
                                                     (*cur_node).children = *top_node_p;
                                                     *top_node_p = cur_node;
                                                     ast_stack.push(
@@ -3141,10 +2597,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     );
                                                     (*cur_node).start = cur_token.start;
                                                     (*cur_node).len = cur_token.len;
-                                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                                        == kExprLexSpacing as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
-                                                    {
+                                                    if prev_token.type_0 == kExprLexSpacing {
                                                         (*cur_node).start = prev_token.start;
                                                         (*cur_node).len = (*cur_node)
                                                             .len
@@ -3161,7 +2614,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         pstate,
                                                         cur_token.start,
                                                         cur_token.len,
-                                                        if is_invalid as ::core::ffi::c_int != 0 {
+                                                        if is_invalid {
                                                             b"NvimInvalidIdentifierName\0".as_ptr()
                                                                 as *const ::core::ffi::c_char
                                                         } else {
@@ -3174,7 +2627,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 _ => {
                                                     if flags & kExprFlagsMulti as ::core::ffi::c_int
                                                         != 0
-                                                        && ast_stack.len() == 1 as size_t
+                                                        && ast_stack.len() == 1
                                                     {
                                                         break '_viml_pexpr_parse_end;
                                                     }
@@ -3182,7 +2635,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         !(*top_node_p).is_null(),
                                                         "*top_node_p != NULL"
                                                     );
-                                                    is_invalid = true_0 != 0;
+                                                    is_invalid = true;
                                                     east_set_error(
                                                         pstate,
                                                         &raw mut ast.err,
@@ -3197,37 +2650,32 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                         viml_pexpr_new_node(kExprNodeOpMissing);
                                                     (*cur_node).start = cur_token.start;
                                                     (*cur_node).len = cur_token.len;
-                                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                                        == kExprLexSpacing as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
-                                                    {
+                                                    if prev_token.type_0 == kExprLexSpacing {
                                                         (*cur_node).start = prev_token.start;
                                                         (*cur_node).len = (*cur_node)
                                                             .len
                                                             .wrapping_add(prev_token.len);
                                                     }
-                                                    (*cur_node).len = 0 as size_t;
-                                                    is_invalid = is_invalid as ::core::ffi::c_int
+                                                    (*cur_node).len = 0;
+                                                    is_invalid = is_invalid
                                                         | !viml_pexpr_handle_bop(
                                                             pstate,
                                                             &mut ast_stack,
                                                             cur_node,
                                                             &raw mut want_node,
                                                             &raw mut ast.err,
-                                                        )
-                                                            as ::core::ffi::c_int
-                                                        != 0;
+                                                        );
                                                 }
                                             }
                                         }
                                     } else {
                                         if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
-                                            && ast_stack.len() == 1 as size_t
+                                            && ast_stack.len() == 1
                                         {
                                             break '_viml_pexpr_parse_end;
                                         }
                                         assert!(!(*top_node_p).is_null(), "*top_node_p != NULL");
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -3238,38 +2686,31 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        (*cur_node).len = 0 as size_t;
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        (*cur_node).len = 0;
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                     }
                                 }
-                                14 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        != kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
+                                kExprLexNumber => {
+                                    if want_node != kENodeValue {
                                         if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
-                                            && ast_stack.len() == 1 as size_t
+                                            && ast_stack.len() == 1
                                         {
                                             break '_viml_pexpr_parse_end;
                                         }
                                         assert!(!(*top_node_p).is_null(), "*top_node_p != NULL");
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -3280,34 +2721,26 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        (*cur_node).len = 0 as size_t;
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        (*cur_node).len = 0;
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                     } else {
                                         if node_is_key {
                                             cur_node = viml_pexpr_new_node(kExprNodePlainKey);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (*cur_node).start = prev_token.start;
                                                 (*cur_node).len =
                                                     (*cur_node).len.wrapping_add(prev_token.len);
@@ -3319,7 +2752,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidIdentifierKey\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -3331,10 +2764,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node = viml_pexpr_new_node(kExprNodeFloat);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (*cur_node).start = prev_token.start;
                                                 (*cur_node).len =
                                                     (*cur_node).len.wrapping_add(prev_token.len);
@@ -3345,7 +2775,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidFloat\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -3357,10 +2787,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_node = viml_pexpr_new_node(kExprNodeInteger);
                                             (*cur_node).start = cur_token.start;
                                             (*cur_node).len = cur_token.len;
-                                            if prev_token.type_0 as ::core::ffi::c_uint
-                                                == kExprLexSpacing as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if prev_token.type_0 == kExprLexSpacing {
                                                 (*cur_node).start = prev_token.start;
                                                 (*cur_node).len =
                                                     (*cur_node).len.wrapping_add(prev_token.len);
@@ -3373,7 +2800,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 cur_token.start,
                                                 prefix_length as size_t,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidNumberPrefix\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -3388,7 +2815,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     prefix_length as size_t,
                                                 ),
                                                 cur_token.len.wrapping_sub(prefix_length as size_t),
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidNumber\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -3402,11 +2829,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         break '_viml_pexpr_parse_cycle_end;
                                     }
                                 }
-                                11 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        is_invalid = true_0 != 0;
+                                kExprLexDot => {
+                                    if want_node == kENodeValue {
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -3417,26 +2842,17 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
                                         (**top_node_p).start = cur_token.start;
                                         (**top_node_p).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (**top_node_p).start = prev_token.start;
                                             (**top_node_p).len =
                                                 (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
-                                        (**top_node_p).len = 0 as size_t;
+                                        (**top_node_p).len = 0;
                                         want_node = kENodeOperator;
                                     }
-                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                        == kExprLexSpacing as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
-                                        if cur_pt as ::core::ffi::c_uint
-                                            == kEPTAssignment as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
-                                            is_invalid = true_0 != 0;
+                                    if prev_token.type_0 == kExprLexSpacing {
+                                        if cur_pt == kEPTAssignment {
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -3450,10 +2866,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeConcat);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
@@ -3462,7 +2875,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidConcat\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -3474,10 +2887,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeConcatOrSubscript);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
@@ -3486,7 +2896,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             pstate,
                                             cur_token.start,
                                             cur_token.len,
-                                            if is_invalid as ::core::ffi::c_int != 0 {
+                                            if is_invalid {
                                                 b"NvimInvalidConcatOrSubscript\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -3495,38 +2905,29 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             },
                                         );
                                     }
-                                    is_invalid = is_invalid as ::core::ffi::c_int
+                                    is_invalid = is_invalid
                                         | !viml_pexpr_handle_bop(
                                             pstate,
                                             &mut ast_stack,
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        )
-                                            as ::core::ffi::c_int
-                                        != 0;
+                                        );
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
-                                23 => {
+                                kExprLexParenthesis => {
                                     if cur_token.data.brc.closing {
                                         's_5886: {
-                                            if want_node as ::core::ffi::c_uint
-                                                == kENodeValue as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
-                                                if ast_stack.len() > 1 as size_t {
+                                            if want_node == kENodeValue {
+                                                if ast_stack.len() > 1 {
                                                     let prev_top_node: *const ExprASTNode =
                                                         *stack_top(&ast_stack, 1);
-                                                    if (*prev_top_node).type_0
-                                                        as ::core::ffi::c_uint
-                                                        == kExprNodeCall as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
-                                                    {
+                                                    if (*prev_top_node).type_0 == kExprNodeCall {
                                                         ast_stack.truncate(ast_stack.len() - 1);
                                                         break 's_5886;
                                                     }
                                                 }
-                                                is_invalid = true_0 != 0;
+                                                is_invalid = true;
                                                 east_set_error(
                                                     pstate,
                                                     &raw mut ast.err,
@@ -3539,55 +2940,38 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node = viml_pexpr_new_node(kExprNodeMissing);
                                                 (*cur_node).start = cur_token.start;
                                                 (*cur_node).len = cur_token.len;
-                                                if prev_token.type_0 as ::core::ffi::c_uint
-                                                    == kExprLexSpacing as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
+                                                if prev_token.type_0 == kExprLexSpacing {
                                                     (*cur_node).start = prev_token.start;
                                                     (*cur_node).len = (*cur_node)
                                                         .len
                                                         .wrapping_add(prev_token.len);
                                                 }
-                                                (*cur_node).len = 0 as size_t;
+                                                (*cur_node).len = 0;
                                                 *top_node_p = cur_node;
                                             } else {
-                                                ast_stack.truncate(ast_stack.len() - 1 as size_t);
+                                                ast_stack.truncate(ast_stack.len() - 1);
                                             }
                                         }
                                         let mut new_top_node_p_3: *mut *mut ExprASTNode =
                                             ::core::ptr::null_mut::<*mut ExprASTNode>();
                                         while ast_stack.len() != 0
                                             && (new_top_node_p_3.is_null()
-                                                || (**new_top_node_p_3).type_0
-                                                    as ::core::ffi::c_uint
-                                                    != kExprNodeNested as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                    && (**new_top_node_p_3).type_0
-                                                        as ::core::ffi::c_uint
-                                                        != kExprNodeCall as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint)
+                                                || (**new_top_node_p_3).type_0 != kExprNodeNested
+                                                    && (**new_top_node_p_3).type_0 != kExprNodeCall)
                                         {
                                             new_top_node_p_3 =
                                                 ast_stack.pop().expect("the stack is not empty");
                                         }
                                         if !new_top_node_p_3.is_null()
-                                            && ((**new_top_node_p_3).type_0 as ::core::ffi::c_uint
-                                                == kExprNodeNested as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                                || (**new_top_node_p_3).type_0
-                                                    as ::core::ffi::c_uint
-                                                    == kExprNodeCall as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint)
+                                            && ((**new_top_node_p_3).type_0 == kExprNodeNested
+                                                || (**new_top_node_p_3).type_0 == kExprNodeCall)
                                         {
-                                            if (**new_top_node_p_3).type_0 as ::core::ffi::c_uint
-                                                == kExprNodeNested as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
+                                            if (**new_top_node_p_3).type_0 == kExprNodeNested {
                                                 viml_parser_highlight(
                                                     pstate,
                                                     cur_token.start,
                                                     cur_token.len,
-                                                    if is_invalid as ::core::ffi::c_int != 0 {
+                                                    if is_invalid {
                                                         b"NvimInvalidNestingParenthesis\0".as_ptr()
                                                             as *const ::core::ffi::c_char
                                                     } else {
@@ -3600,7 +2984,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     pstate,
                                                     cur_token.start,
                                                     cur_token.len,
-                                                    if is_invalid as ::core::ffi::c_int != 0 {
+                                                    if is_invalid {
                                                         b"NvimInvalidCallingParenthesis\0".as_ptr()
                                                             as *const ::core::ffi::c_char
                                                     } else {
@@ -3613,7 +2997,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             if new_top_node_p_3.is_null() {
                                                 new_top_node_p_3 = top_node_p;
                                             }
-                                            is_invalid = true_0 != 0;
+                                            is_invalid = true;
                                             east_set_error(
                                                 pstate,
                                                 &raw mut ast.err,
@@ -3628,7 +3012,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidNestingParenthesis\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -3638,7 +3022,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             );
                                             cur_node = viml_pexpr_new_node(kExprNodeNested);
                                             (*cur_node).start = cur_token.start;
-                                            (*cur_node).len = 0 as size_t;
+                                            (*cur_node).len = 0;
                                             (*cur_node).children = *new_top_node_p_3;
                                             *new_top_node_p_3 = cur_node;
                                             assert!(
@@ -3650,15 +3034,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         want_node = kENodeOperator;
                                         break '_viml_pexpr_parse_cycle_end;
                                     } else {
-                                        match want_node as ::core::ffi::c_uint {
-                                            1 => {
+                                        match want_node {
+                                            kENodeValue => {
                                                 cur_node = viml_pexpr_new_node(kExprNodeNested);
                                                 (*cur_node).start = cur_token.start;
                                                 (*cur_node).len = cur_token.len;
-                                                if prev_token.type_0 as ::core::ffi::c_uint
-                                                    == kExprLexSpacing as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
+                                                if prev_token.type_0 == kExprLexSpacing {
                                                     (*cur_node).start = prev_token.start;
                                                     (*cur_node).len = (*cur_node)
                                                         .len
@@ -3670,7 +3051,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     pstate,
                                                     cur_token.start,
                                                     cur_token.len,
-                                                    if is_invalid as ::core::ffi::c_int != 0 {
+                                                    if is_invalid {
                                                         b"NvimInvalidNestingParenthesis\0".as_ptr()
                                                             as *const ::core::ffi::c_char
                                                     } else {
@@ -3680,31 +3061,22 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 );
                                                 break 's_6212;
                                             }
-                                            0 => {
-                                                if prev_token.type_0 as ::core::ffi::c_uint
-                                                    != kExprLexSpacing as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
+                                            kENodeOperator => {
+                                                if prev_token.type_0 != kExprLexSpacing {
                                                     break;
                                                 }
-                                                if !((**top_node_p).type_0 as ::core::ffi::c_uint
+                                                if !((**top_node_p).type_0
                                                     != kExprNodePlainIdentifier
-                                                        as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                    && (**top_node_p).type_0 as ::core::ffi::c_uint
+                                                    && (**top_node_p).type_0
                                                         != kExprNodeComplexIdentifier
-                                                            as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
-                                                    && (**top_node_p).type_0 as ::core::ffi::c_uint
-                                                        != kExprNodeCurlyBracesIdentifier
-                                                            as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint)
+                                                    && (**top_node_p).type_0
+                                                        != kExprNodeCurlyBracesIdentifier)
                                                 {
                                                     break;
                                                 }
                                                 if flags & kExprFlagsMulti as ::core::ffi::c_int
                                                     != 0
-                                                    && ast_stack.len() == 1 as size_t
+                                                    && ast_stack.len() == 1
                                                 {
                                                     break '_viml_pexpr_parse_end;
                                                 }
@@ -3712,7 +3084,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     !(*top_node_p).is_null(),
                                                     "*top_node_p != NULL"
                                                 );
-                                                is_invalid = true_0 != 0;
+                                                is_invalid = true;
                                                 east_set_error(
                                                     pstate,
                                                     &raw mut ast.err,
@@ -3725,26 +3097,21 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
                                                 (*cur_node).start = cur_token.start;
                                                 (*cur_node).len = cur_token.len;
-                                                if prev_token.type_0 as ::core::ffi::c_uint
-                                                    == kExprLexSpacing as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
+                                                if prev_token.type_0 == kExprLexSpacing {
                                                     (*cur_node).start = prev_token.start;
                                                     (*cur_node).len = (*cur_node)
                                                         .len
                                                         .wrapping_add(prev_token.len);
                                                 }
-                                                (*cur_node).len = 0 as size_t;
-                                                is_invalid = is_invalid as ::core::ffi::c_int
+                                                (*cur_node).len = 0;
+                                                is_invalid = is_invalid
                                                     | !viml_pexpr_handle_bop(
                                                         pstate,
                                                         &mut ast_stack,
                                                         cur_node,
                                                         &raw mut want_node,
                                                         &raw mut ast.err,
-                                                    )
-                                                        as ::core::ffi::c_int
-                                                    != 0;
+                                                    );
                                             }
                                             _ => {
                                                 break 's_6212;
@@ -3752,11 +3119,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         }
                                     }
                                 }
-                                4 => {
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        is_invalid = true_0 != 0;
+                                kExprLexQuestion => {
+                                    if want_node == kENodeValue {
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -3770,43 +3135,35 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
                                         (**top_node_p).start = cur_token.start;
                                         (**top_node_p).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (**top_node_p).start = prev_token.start;
                                             (**top_node_p).len =
                                                 (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
-                                        (**top_node_p).len = 0 as size_t;
+                                        (**top_node_p).len = 0;
                                         want_node = kENodeOperator;
                                     }
                                     cur_node = viml_pexpr_new_node(kExprNodeTernary);
                                     (*cur_node).start = cur_token.start;
                                     (*cur_node).len = cur_token.len;
-                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                        == kExprLexSpacing as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    if prev_token.type_0 == kExprLexSpacing {
                                         (*cur_node).start = prev_token.start;
                                         (*cur_node).len =
                                             (*cur_node).len.wrapping_add(prev_token.len);
                                     }
-                                    is_invalid = is_invalid as ::core::ffi::c_int
+                                    is_invalid = is_invalid
                                         | !viml_pexpr_handle_bop(
                                             pstate,
                                             &mut ast_stack,
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        )
-                                            as ::core::ffi::c_int
-                                        != 0;
+                                        );
                                     viml_parser_highlight(
                                         pstate,
                                         cur_token.start,
                                         cur_token.len,
-                                        if is_invalid as ::core::ffi::c_int != 0 {
+                                        if is_invalid {
                                             b"NvimInvalidTernary\0".as_ptr()
                                                 as *const ::core::ffi::c_char
                                         } else {
@@ -3818,15 +3175,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     ter_val_node = viml_pexpr_new_node(kExprNodeTernaryValue);
                                     (*ter_val_node).start = cur_token.start;
                                     (*ter_val_node).len = cur_token.len;
-                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                        == kExprLexSpacing as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    if prev_token.type_0 == kExprLexSpacing {
                                         (*ter_val_node).start = prev_token.start;
                                         (*ter_val_node).len =
                                             (*ter_val_node).len.wrapping_add(prev_token.len);
                                     }
-                                    (*ter_val_node).data.ter.got_colon = false_0 != 0;
+                                    (*ter_val_node).data.ter.got_colon = false;
                                     assert!(
                                         !(*cur_node).children.is_null(),
                                         "cur_node->children != NULL"
@@ -3844,16 +3198,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     ast_stack.push(&raw mut (*ter_val_node).children);
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
-                                16 | 15 => {
-                                    let is_double: bool = tok_type as ::core::ffi::c_uint
-                                        == kExprLexDoubleQuotedString as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint;
+                                kExprLexDoubleQuotedString | kExprLexSingleQuotedString => {
+                                    let is_double: bool = tok_type == kExprLexDoubleQuotedString;
                                     if !cur_token.data.str.closed {
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
-                                            if is_double as ::core::ffi::c_int != 0 {
+                                            if is_double {
                                                 gettext(
                                                     b"E114: Missing double quote: %.*s\0".as_ptr()
                                                         as *const ::core::ffi::c_char,
@@ -3867,17 +3219,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_token.start,
                                         );
                                     }
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeOperator as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    if want_node == kENodeOperator {
                                         if flags & kExprFlagsMulti as ::core::ffi::c_int != 0
-                                            && ast_stack.len() == 1 as size_t
+                                            && ast_stack.len() == 1
                                         {
                                             break '_viml_pexpr_parse_end;
                                         }
                                         assert!(!(*top_node_p).is_null(), "*top_node_p != NULL");
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -3888,28 +3237,23 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         cur_node = viml_pexpr_new_node(kExprNodeOpMissing);
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
-                                        (*cur_node).len = 0 as size_t;
-                                        is_invalid = is_invalid as ::core::ffi::c_int
+                                        (*cur_node).len = 0;
+                                        is_invalid = is_invalid
                                             | !viml_pexpr_handle_bop(
                                                 pstate,
                                                 &mut ast_stack,
                                                 cur_node,
                                                 &raw mut want_node,
                                                 &raw mut ast.err,
-                                            )
-                                                as ::core::ffi::c_int
-                                            != 0;
+                                            );
                                     } else {
                                         cur_node = viml_pexpr_new_node(
-                                            (if is_double as ::core::ffi::c_int != 0 {
+                                            (if is_double {
                                                 kExprNodeDoubleQuotedString as ::core::ffi::c_int
                                             } else {
                                                 kExprNodeSingleQuotedString as ::core::ffi::c_int
@@ -3918,10 +3262,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         );
                                         (*cur_node).start = cur_token.start;
                                         (*cur_node).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (*cur_node).start = prev_token.start;
                                             (*cur_node).len =
                                                 (*cur_node).len.wrapping_add(prev_token.len);
@@ -3934,18 +3275,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         break '_viml_pexpr_parse_cycle_end;
                                     }
                                 }
-                                26 => {
-                                    if cur_pt as ::core::ffi::c_uint
-                                        == kEPTAssignment as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
-                                        pt_stack.truncate(pt_stack.len() - 1 as size_t);
-                                    } else if cur_pt as ::core::ffi::c_uint
-                                        == kEPTSingleAssignment as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
-                                        pt_stack.truncate(pt_stack.len() - 2 as size_t);
-                                        is_invalid = true_0 != 0;
+                                kExprLexAssignment => {
+                                    if cur_pt == kEPTAssignment {
+                                        pt_stack.truncate(pt_stack.len() - 1);
+                                    } else if cur_pt == kEPTSingleAssignment {
+                                        pt_stack.truncate(pt_stack.len() - 2);
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -3956,7 +3291,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             cur_token.start,
                                         );
                                     } else {
-                                        is_invalid = true_0 != 0;
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -3967,15 +3302,11 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     }
                                     assert!(pt_stack.len() != 0, "kv_size(pt_stack)");
                                     assert!(
-                                        pt_stack[pt_stack.len() - 1] as ::core::ffi::c_uint
-                                            == kEPTExpr as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint,
+                                        pt_stack[pt_stack.len() - 1] == kEPTExpr,
                                         "kv_last(pt_stack) == kEPTExpr"
                                     );
-                                    if want_node as ::core::ffi::c_uint
-                                        == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        is_invalid = true_0 != 0;
+                                    if want_node == kENodeValue {
+                                        is_invalid = true;
                                         east_set_error(
                                             pstate,
                                             &raw mut ast.err,
@@ -3986,36 +3317,30 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         *top_node_p = viml_pexpr_new_node(kExprNodeMissing);
                                         (**top_node_p).start = cur_token.start;
                                         (**top_node_p).len = cur_token.len;
-                                        if prev_token.type_0 as ::core::ffi::c_uint
-                                            == kExprLexSpacing as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                        {
+                                        if prev_token.type_0 == kExprLexSpacing {
                                             (**top_node_p).start = prev_token.start;
                                             (**top_node_p).len =
                                                 (**top_node_p).len.wrapping_add(prev_token.len);
                                         }
-                                        (**top_node_p).len = 0 as size_t;
+                                        (**top_node_p).len = 0;
                                         want_node = kENodeOperator;
                                     }
                                     cur_node = viml_pexpr_new_node(kExprNodeAssignment);
                                     (*cur_node).start = cur_token.start;
                                     (*cur_node).len = cur_token.len;
-                                    if prev_token.type_0 as ::core::ffi::c_uint
-                                        == kExprLexSpacing as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
+                                    if prev_token.type_0 == kExprLexSpacing {
                                         (*cur_node).start = prev_token.start;
                                         (*cur_node).len =
                                             (*cur_node).len.wrapping_add(prev_token.len);
                                     }
                                     (*cur_node).data.ass.type_0 = cur_token.data.ass.type_0;
-                                    match cur_token.data.ass.type_0 as ::core::ffi::c_uint {
-                                        0 => {
+                                    match cur_token.data.ass.type_0 {
+                                        kExprAsgnPlain => {
                                             viml_parser_highlight(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidPlainAssignment\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -4024,12 +3349,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 },
                                             );
                                         }
-                                        1 => {
+                                        kExprAsgnAdd => {
                                             viml_parser_highlight(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidAssignmentWithAddition\0".as_ptr()
                                                         as *const ::core::ffi::c_char
                                                 } else {
@@ -4038,12 +3363,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 },
                                             );
                                         }
-                                        2 => {
+                                        kExprAsgnSubtract => {
                                             viml_parser_highlight(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidAssignmentWithSubtraction\0"
                                                         .as_ptr()
                                                         as *const ::core::ffi::c_char
@@ -4053,12 +3378,12 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 },
                                             );
                                         }
-                                        3 => {
+                                        kExprAsgnConcat => {
                                             viml_parser_highlight(
                                                 pstate,
                                                 cur_token.start,
                                                 cur_token.len,
-                                                if is_invalid as ::core::ffi::c_int != 0 {
+                                                if is_invalid {
                                                     b"NvimInvalidAssignmentWithConcatenation\0"
                                                         .as_ptr()
                                                         as *const ::core::ffi::c_char
@@ -4070,16 +3395,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         }
                                         _ => {}
                                     }
-                                    is_invalid = is_invalid as ::core::ffi::c_int
+                                    is_invalid = is_invalid
                                         | !viml_pexpr_handle_bop(
                                             pstate,
                                             &mut ast_stack,
                                             cur_node,
                                             &raw mut want_node,
                                             &raw mut ast.err,
-                                        )
-                                            as ::core::ffi::c_int
-                                        != 0;
+                                        );
                                     break '_viml_pexpr_parse_cycle_end;
                                 }
                                 _ => {
@@ -4091,26 +3414,23 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     cur_node = viml_pexpr_new_node(kExprNodeCall);
                     (*cur_node).start = cur_token.start;
                     (*cur_node).len = cur_token.len;
-                    if prev_token.type_0 as ::core::ffi::c_uint
-                        == kExprLexSpacing as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
+                    if prev_token.type_0 == kExprLexSpacing {
                         (*cur_node).start = prev_token.start;
                         (*cur_node).len = (*cur_node).len.wrapping_add(prev_token.len);
                     }
-                    is_invalid = is_invalid as ::core::ffi::c_int
+                    is_invalid = is_invalid
                         | !viml_pexpr_handle_bop(
                             pstate,
                             &mut ast_stack,
                             cur_node,
                             &raw mut want_node,
                             &raw mut ast.err,
-                        ) as ::core::ffi::c_int
-                        != 0;
+                        );
                     viml_parser_highlight(
                         pstate,
                         cur_token.start,
                         cur_token.len,
-                        if is_invalid as ::core::ffi::c_int != 0 {
+                        if is_invalid {
                             b"NvimInvalidCallingParenthesis\0".as_ptr()
                                 as *const ::core::ffi::c_char
                         } else {
@@ -4119,44 +3439,35 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                     );
                     break 's_6212;
                 }
-                if pt_is_assignment(cur_pt) as ::core::ffi::c_int != 0
-                    && !pt_is_assignment(pt_stack[pt_stack.len() - 1])
-                {
-                    assert!(
-                        want_node as ::core::ffi::c_uint
-                            == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint,
-                        "want_node == kENodeValue"
-                    );
-                    asgn_level = ast_stack.len().wrapping_sub(1 as size_t);
+                if pt_is_assignment(cur_pt) && !pt_is_assignment(pt_stack[pt_stack.len() - 1]) {
+                    assert!(want_node == kENodeValue, "want_node == kENodeValue");
+                    asgn_level = ast_stack.len().wrapping_sub(1);
                 }
                 break '_viml_pexpr_parse_cycle_end;
             }
             want_node = kENodeValue;
         }
         prev_token = cur_token;
-        highlighted_prev_spacing = false_0 != 0;
+        highlighted_prev_spacing = false;
         viml_parser_advance(&mut (*pstate).pos, &mut (*pstate).reader, cur_token.len);
     }
     assert!(pt_stack.len() != 0, "kv_size(pt_stack)");
     assert!(ast_stack.len() != 0, "kv_size(ast_stack)");
-    if want_node as ::core::ffi::c_uint == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
-        && pt_stack[pt_stack.len() - 1] as ::core::ffi::c_uint
-            != kEPTLambdaArguments as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if want_node == kENodeValue && pt_stack[pt_stack.len() - 1] != kEPTLambdaArguments {
         east_set_error(
             pstate,
             &raw mut ast.err,
             gettext(b"E15: Expected value, got EOC: %.*s\0".as_ptr() as *const ::core::ffi::c_char),
             (*pstate).pos,
         );
-    } else if ast_stack.len() != 1 as size_t {
+    } else if ast_stack.len() != 1 {
         assert!(ast_stack.len() != 0, "kv_size(ast_stack)");
-        ast_stack.truncate(ast_stack.len() - 1 as size_t);
+        ast_stack.truncate(ast_stack.len() - 1);
         while ast.err.msg.is_null() && ast_stack.len() != 0 {
             let cur_node_0: *const ExprASTNode = *ast_stack.pop().expect("the stack is not empty");
             assert!(!cur_node_0.is_null(), "cur_node != NULL");
-            match (*cur_node_0).type_0 as ::core::ffi::c_uint {
-                10 => {
+            match (*cur_node_0).type_0 {
+                kExprNodeCall => {
                     east_set_error(
                         pstate,
                         &raw mut ast.err,
@@ -4167,7 +3478,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         (*cur_node_0).start,
                     );
                 }
-                9 => {
+                kExprNodeNested => {
                     east_set_error(
                         pstate,
                         &raw mut ast.err,
@@ -4178,7 +3489,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         (*cur_node_0).start,
                     );
                 }
-                6 => {
+                kExprNodeListLiteral => {
                     east_set_error(
                         pstate,
                         &raw mut ast.err,
@@ -4187,7 +3498,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         (*cur_node_0).start,
                     );
                 }
-                16 => {
+                kExprNodeDictLiteral => {
                     east_set_error(
                         pstate,
                         &raw mut ast.err,
@@ -4196,7 +3507,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         (*cur_node_0).start,
                     );
                 }
-                14 => {
+                kExprNodeUnknownFigure => {
                     east_set_error(
                         pstate,
                         &raw mut ast.err,
@@ -4205,7 +3516,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         (*cur_node_0).start,
                     );
                 }
-                15 => {
+                kExprNodeLambda => {
                     east_set_error(
                         pstate,
                         &raw mut ast.err,
@@ -4216,15 +3527,39 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         (*cur_node_0).start,
                     );
                 }
-                17 => {
+                kExprNodeCurlyBracesIdentifier => {
                     abort();
                 }
-                24 | 25 | 26 | 27 | 36 | 37 | 4 | 11 | 12 => {
+                kExprNodeInteger
+                | kExprNodeFloat
+                | kExprNodeSingleQuotedString
+                | kExprNodeDoubleQuotedString
+                | kExprNodeOption
+                | kExprNodeEnvironment
+                | kExprNodeRegister
+                | kExprNodePlainIdentifier
+                | kExprNodePlainKey => {
                     abort();
                 }
-                18 | 19 | 20 => {}
-                5 | 23 | 13 | 38 | 35 | 34 | 33 | 32 | 29 | 28 | 22 | 21 | 30 | 7 | 31 | 2 | 8 => {}
-                3 => {
+                kExprNodeComma | kExprNodeColon | kExprNodeArrow => {}
+                kExprNodeSubscript
+                | kExprNodeConcatOrSubscript
+                | kExprNodeComplexIdentifier
+                | kExprNodeAssignment
+                | kExprNodeMod
+                | kExprNodeDivision
+                | kExprNodeMultiplication
+                | kExprNodeNot
+                | kExprNodeAnd
+                | kExprNodeOr
+                | kExprNodeConcat
+                | kExprNodeComparison
+                | kExprNodeUnaryMinus
+                | kExprNodeUnaryPlus
+                | kExprNodeBinaryMinus
+                | kExprNodeTernary
+                | kExprNodeBinaryPlus => {}
+                kExprNodeTernaryValue => {
                     if !(*cur_node_0).data.ter.got_colon {
                         east_set_error(
                             pstate,
@@ -4235,7 +3570,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         );
                     }
                 }
-                1 | 0 | _ => {}
+                _ => {}
             }
         }
     }
