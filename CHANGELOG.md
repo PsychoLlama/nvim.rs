@@ -13,6 +13,10 @@ and this project adheres to [CalVer](https://calver.org/).
   transpiled form into safe, idiomatic Rust, and split along the lines of the
   protocol it implements. Several latent crashes and hangs reachable from any
   program running under `:terminal` went with it.
+- The terminal key-input library (`src/nvim/tui/termkey`) likewise: its key
+  parsing, tables and formatting are now safe modules, and the plugin
+  machinery it carried for drivers this editor never had is gone. Four
+  out-of-bounds writes and reads reachable from terminal input went with it.
 
 ## [2026.07.26-d0c5cf2147]
 
