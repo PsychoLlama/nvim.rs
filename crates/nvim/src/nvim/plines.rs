@@ -8,6 +8,7 @@ use crate::src::nvim::main::{
     State, VIsual, VIsual_active, breakat_flags, curwin, namespace_localscope, p_sel,
 };
 use crate::src::nvim::map::mh_get_uint32_t;
+use crate::src::nvim::marktree::key::{kMTFilterSelect, mt_decor, mt_invalid, mt_right};
 use crate::src::nvim::marktree::{
     marktree_itr_current, marktree_itr_get_filter, marktree_itr_next_filter,
 };
@@ -180,28 +181,6 @@ unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> ui
 #[inline(always)]
 unsafe extern "C" fn vim_isbreak(mut c: ::core::ffi::c_int) -> bool {
     return (*breakat_flags.ptr())[c as uint8_t as usize] != 0;
-}
-pub const kMTFilterSelect: uint32_t = -1 as ::core::ffi::c_int as uint32_t;
-pub const MT_FLAG_INVALID: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
-pub const MT_FLAG_RIGHT_GRAVITY: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn mt_right(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_RIGHT_GRAVITY != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_invalid(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_INVALID != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_decor(mut key: MTKey) -> DecorInline {
-    return DecorInline {
-        ext: key.flags as ::core::ffi::c_int & MT_FLAG_DECOR_EXT != 0,
-        data: key.decor_data,
-    };
 }
 #[inline(always)]
 unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharInfo {

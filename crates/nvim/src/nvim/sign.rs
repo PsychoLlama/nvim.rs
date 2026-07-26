@@ -29,6 +29,9 @@ use crate::src::nvim::main::{
 use crate::src::nvim::map::{
     map_del_cstr_t_ptr_t, map_put_ref_cstr_t_ptr_t, mh_get_String, mh_get_cstr_t,
 };
+use crate::src::nvim::marktree::key::{
+    MT_FLAG_DECOR_SIGNHL, MT_FLAG_DECOR_SIGNTEXT, mt_decor, mt_decor_sign, mt_end,
+};
 use crate::src::nvim::marktree::{
     marktree_itr_current, marktree_itr_get, marktree_itr_get_overlap, marktree_itr_next,
     marktree_itr_step_overlap, marktree_lookup_ns,
@@ -1039,29 +1042,6 @@ unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> ui
     return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
 }
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
-pub const MT_FLAG_END: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 9 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn mt_end(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_END != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_decor_sign(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & (MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL) != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_decor(mut key: MTKey) -> DecorInline {
-    return DecorInline {
-        ext: key.flags as ::core::ffi::c_int & MT_FLAG_DECOR_EXT != 0,
-        data: key.decor_data,
-    };
-}
 static sign_map: GlobalCell<Map_cstr_t_ptr_t> = GlobalCell::new(MAP_INIT);
 static sign_ns: GlobalCell<C2Rust_Unnamed_24> = GlobalCell::new(C2Rust_Unnamed_24 {
     size: 0 as size_t,

@@ -23,6 +23,11 @@ use crate::src::nvim::map::{
     map_put_ref_String_int, mh_delete_uint32_t, mh_get_String, mh_get_ptr_t, mh_get_uint32_t,
     mh_put_ptr_t, mh_put_uint32_t,
 };
+use crate::src::nvim::marktree::key::{
+    MT_FLAG_DECOR_CONCEAL_LINES, MT_FLAG_DECOR_HL, MT_FLAG_DECOR_SIGNHL, MT_FLAG_DECOR_SIGNTEXT,
+    MT_FLAG_DECOR_VIRT_LINES, MT_FLAG_DECOR_VIRT_TEXT_INLINE, mt_decor, mt_invalid, mt_invalidate,
+    mt_no_undo, mt_paired, mt_right,
+};
 use crate::src::nvim::marktree::mt_inspect;
 use crate::src::nvim::mbyte::{mb_string2cells, utfc_ptr2schar};
 use crate::src::nvim::memline::ml_get_buf_len;
@@ -2392,56 +2397,5 @@ pub const KEYDICT_INIT: KeyDict_ns_opts = KeyDict_ns_opts {
         items: ::core::ptr::null_mut::<Object>(),
     },
 };
-pub const MT_FLAG_PAIRED: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 2 as ::core::ffi::c_int;
-pub const MT_FLAG_NO_UNDO: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 4 as ::core::ffi::c_int;
-pub const MT_FLAG_INVALIDATE: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 5 as ::core::ffi::c_int;
-pub const MT_FLAG_INVALID: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 8 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 9 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_LINES: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 11 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_TEXT_INLINE: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 12 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_CONCEAL_LINES: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 13 as ::core::ffi::c_int;
-pub const MT_FLAG_RIGHT_GRAVITY: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 14 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn mt_paired(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_PAIRED != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_right(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_RIGHT_GRAVITY != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_no_undo(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_NO_UNDO != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_invalidate(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_INVALIDATE != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_invalid(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_INVALID != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_decor(mut key: MTKey) -> DecorInline {
-    return DecorInline {
-        ext: key.flags as ::core::ffi::c_int & MT_FLAG_DECOR_EXT != 0,
-        data: key.decor_data,
-    };
-}
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

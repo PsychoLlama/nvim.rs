@@ -16,6 +16,10 @@ use crate::src::nvim::main::{
     virt_text_pos_str,
 };
 use crate::src::nvim::map::mh_get_uint32_t;
+use crate::src::nvim::marktree::key::{
+    MT_FLAG_DECOR_EXT, MT_FLAG_DECOR_HL, MT_FLAG_DECOR_SIGNTEXT, kMTFilterSelect, mt_conceal_lines,
+    mt_decor, mt_decor_any, mt_decor_sign, mt_end, mt_invalid,
+};
 use crate::src::nvim::marktree::{
     marktree_get_altpos, marktree_itr_current, marktree_itr_get, marktree_itr_get_filter,
     marktree_itr_get_overlap, marktree_itr_next, marktree_itr_next_filter,
@@ -235,7 +239,6 @@ pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 unsafe extern "C" fn set_has_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> bool {
     return mh_get_uint32_t(set, key) != MH_TOMBSTONE as uint32_t;
 }
-pub const kMTFilterSelect: uint32_t = -1 as ::core::ffi::c_int as uint32_t;
 #[inline]
 unsafe extern "C" fn ns_in_win(mut ns_id: uint32_t, mut wp: *mut win_T) -> bool {
     if !set_has_uint32_t(namespace_localscope.ptr(), ns_id) {
@@ -2551,57 +2554,6 @@ unsafe extern "C" fn decor_redraw_col(
     return decor_redraw_col_impl(wp, col, win_col, hidden, state, max_col_last);
 }
 pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const MT_FLAG_END: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 1 as ::core::ffi::c_int;
-pub const MT_FLAG_INVALID: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 6 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 7 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 8 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 9 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 10 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_LINES: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 11 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_VIRT_TEXT_INLINE: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 12 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_CONCEAL_LINES: ::core::ffi::c_int =
-    (1 as ::core::ffi::c_int as uint16_t as ::core::ffi::c_int) << 13 as ::core::ffi::c_int;
-pub const MT_FLAG_DECOR_MASK: ::core::ffi::c_int = MT_FLAG_DECOR_EXT
-    | MT_FLAG_DECOR_HL
-    | MT_FLAG_DECOR_SIGNTEXT
-    | MT_FLAG_DECOR_SIGNHL
-    | MT_FLAG_DECOR_VIRT_LINES
-    | MT_FLAG_DECOR_VIRT_TEXT_INLINE;
-#[inline]
-unsafe extern "C" fn mt_end(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_END != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_invalid(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_INVALID != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_decor_any(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_DECOR_MASK != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_decor_sign(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & (MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL) != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_conceal_lines(mut key: MTKey) -> bool {
-    return key.flags as ::core::ffi::c_int & MT_FLAG_DECOR_CONCEAL_LINES != 0;
-}
-#[inline]
-unsafe extern "C" fn mt_decor(mut key: MTKey) -> DecorInline {
-    return DecorInline {
-        ext: key.flags as ::core::ffi::c_int & MT_FLAG_DECOR_EXT != 0,
-        data: key.decor_data,
-    };
-}
 #[inline]
 unsafe extern "C" fn mt_decor_virt(mut mark: MTKey) -> *mut DecorVirtText {
     return if mark.flags as ::core::ffi::c_int & MT_FLAG_DECOR_EXT != 0 {
