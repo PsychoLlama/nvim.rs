@@ -3,20 +3,16 @@
 //! The transpiled tree stores C bitfields as little `[u8; N]` arrays inside
 //! `repr(C)` structs, with numbered bits (bit `i` lives in byte `i / 8` at
 //! bit `i % 8` — LSB-first, matching C bitfield layout on little-endian
-//! targets). The accessor methods over those arrays used to come from the
-//! `c2rust-bitfields` derive (a pinned git fork, the crate's only external
-//! dependency besides libc); [`bitfield_accessors!`] generates the same
-//! `name()`/`set_name()` method surface from the same bit ranges, so the
-//! storage layout and call sites are untouched and the fork is retired.
+//! targets). [`bitfield_accessors!`] generates the `name()`/`set_name()`
+//! methods that read and write those bit ranges.
 //!
-//! Semantics match the derive exactly:
+//! Semantics match what a C compiler does with the original bitfields:
 //! - Getters read bits `lo..=hi` into the low bits of the value type;
 //!   `bool` reads as "any bit in the range set".
 //! - Setters write the low bits of the value into `lo..=hi`, ignoring
 //!   higher bits; `bool` fills the whole range with the flag.
-//! - Only unsigned value types are supported. The derive sign-extended
-//!   signed fields, but no signed bitfield exists in the tree; add the
-//!   sign-extension here if one ever appears.
+//! - Only unsigned value types are supported. No signed bitfield exists in
+//!   the tree; add the sign-extension here if one ever appears.
 #![forbid(unsafe_code)]
 
 /// Marker for types a bitfield range can be read as / written from.
@@ -45,7 +41,7 @@ impl FieldValue for bool {
         bits != 0
     }
     // All-ones so the setter fills every bit of the range, matching how C
-    // (and the retired derive) assign a flag to a multi-bit range.
+    // assigns a flag to a multi-bit range.
     fn to_bits(self) -> u64 {
         if self { u64::MAX } else { 0 }
     }
@@ -75,19 +71,6 @@ pub fn set_bits(storage: &mut [u8], lo: u32, hi: u32, bits: u64) {
     }
 }
 
-/// Generate `name()`/`set_name()` accessors for bit ranges of one `[u8; N]`
-/// storage field, mirroring the method surface the `c2rust-bitfields`
-/// derive used to generate:
-///
-/// ```ignore
-/// crate::bitfield_accessors! {
-///     impl VTermGlyphInfo.protected_cell_dwl_dhl {
-///         0..=0 => protected_cell, set_protected_cell: ::core::ffi::c_uint;
-///         1..=1 => dwl, set_dwl: ::core::ffi::c_uint;
-///         2..=3 => dhl, set_dhl: ::core::ffi::c_uint;
-///     }
-/// }
-/// ```
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,6 +124,18 @@ mod tests {
     }
 }
 
+/// Generate `name()`/`set_name()` accessors for bit ranges of one `[u8; N]`
+/// storage field:
+///
+/// ```ignore
+/// crate::bitfield_accessors! {
+///     impl VTermGlyphInfo.protected_cell_dwl_dhl {
+///         0..=0 => protected_cell, set_protected_cell: ::core::ffi::c_uint;
+///         1..=1 => dwl, set_dwl: ::core::ffi::c_uint;
+///         2..=3 => dhl, set_dhl: ::core::ffi::c_uint;
+///     }
+/// }
+/// ```
 #[macro_export]
 macro_rules! bitfield_accessors {
     (

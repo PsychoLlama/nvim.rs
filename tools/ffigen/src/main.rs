@@ -44,14 +44,14 @@ struct Def {
 struct Field {
     name: String,
     ty: syn::Type,
-    bits: Vec<BitSpec>, // non-empty: this is a c2rust bitfield storage unit
-    padding: bool,      // #[bitfield(padding)]: emit nothing
+    bits: Vec<BitSpec>, // non-empty: this is a bitfield storage unit
+    padding: bool,      // storage-unit padding: emit nothing
 }
 
 #[derive(Clone, Debug)]
 struct BitSpec {
     name: String,
-    ty: String, // c2rust `ty = "..."` string
+    ty: String, // the accessor's value type, by last path segment
     width: u64,
 }
 
@@ -314,10 +314,10 @@ fn named_fields(fields: &syn::FieldsNamed, bits: Option<&BitfieldAccessors>) -> 
         .map(|f| {
             let name = f.ident.as_ref().unwrap().to_string();
             // In a bitfield struct the storage array expands to C bitfield
-            // members, and the `c2rust_padding` arrays c2rust added after
-            // them disappear: C's own storage-unit rounding provides those
-            // bytes (this mirrors the retired #[bitfield(padding)] marker,
-            // which c2rust only ever put on fields with exactly that name).
+            // members, and the `c2rust_padding` arrays that follow them
+            // disappear: C's own storage-unit rounding provides those bytes.
+            // `c2rust_padding` is the only name the transpiler ever gave
+            // them, so matching on it is exact.
             let (bits, padding) = match bits {
                 Some(acc) if name == acc.storage => (acc.specs.clone(), false),
                 Some(_) if name == "c2rust_padding" => (Vec::new(), true),

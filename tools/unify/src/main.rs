@@ -214,71 +214,22 @@ impl<'a> Ser<'a> {
     }
 }
 
+/// Field-attribute skeleton: like `attr_skeleton`, but fields carry no
+/// derives, so there is nothing to split out.
+fn field_attrs(attrs: &[syn::Attribute]) -> String {
+    let mut skel = String::new();
+    for attr in attrs {
+        if attr.path().is_ident("doc") {
+            continue;
+        }
+        skel.push_str(&attr.to_token_stream().to_string());
+        skel.push(';');
+    }
+    skel
+}
+
 /// Layout-relevant attributes (everything except derives and docs), as a
 /// deterministic string. Derives are compared separately.
-/// Iterate a `#[bitfield(...)]` attribute's tokens, calling `f` with each
-/// string literal that is the value of `ty = "..."`. c2rust names the
-/// bitfield's logical type there — as a *string* — so it references types
-/// outside the syntactic type graph.
-fn visit_bitfield_ty_lits(attr: &syn::Attribute, mut f: impl FnMut(&proc_macro2::Literal)) {
-    if !attr.path().is_ident("bitfield") {
-        return;
-    }
-    let syn::Meta::List(ml) = &attr.meta else {
-        return;
-    };
-    let mut state = 0u8; // 1 = saw `ty`, 2 = saw `ty =`
-    for tt in ml.tokens.clone() {
-        state = match (&tt, state) {
-            (proc_macro2::TokenTree::Ident(id), _) if id == "ty" => 1,
-            (proc_macro2::TokenTree::Punct(p), 1) if p.as_char() == '=' => 2,
-            (proc_macro2::TokenTree::Literal(lit), 2) => {
-                f(lit);
-                0
-            }
-            _ => 0,
-        };
-    }
-}
-
-impl<'a> Ser<'a> {
-    /// Field-attribute skeleton: like `attr_skeleton`, but a bitfield `ty`
-    /// string naming a module-local type becomes an edge placeholder so the
-    /// reference participates in equality, closure, and renaming.
-    fn field_attrs(&mut self, attrs: &[syn::Attribute]) -> String {
-        let mut skel = String::new();
-        for attr in attrs {
-            if attr.path().is_ident("doc") {
-                continue;
-            }
-            if attr.path().is_ident("bitfield") {
-                let mut tokens = attr.to_token_stream().to_string();
-                let mut hits: Vec<String> = Vec::new();
-                visit_bitfield_ty_lits(attr, |lit| {
-                    let s = lit.to_string();
-                    let inner = s.trim_matches('"');
-                    if self.env.contains_key(inner) {
-                        hits.push(s.clone());
-                    }
-                });
-                for s in hits {
-                    let inner = s.trim_matches('"');
-                    let target = self.env[inner];
-                    self.edges.push(target);
-                    self.edge_labels.push(self.label.clone());
-                    tokens = tokens.replacen(&s, "\"\u{0}\"", 1);
-                }
-                skel.push_str(&tokens);
-                skel.push(';');
-                continue;
-            }
-            skel.push_str(&attr.to_token_stream().to_string());
-            skel.push(';');
-        }
-        skel
-    }
-}
-
 fn attr_skeleton(attrs: &[syn::Attribute]) -> (String, BTreeSet<String>) {
     let mut skel = String::new();
     let mut derives = BTreeSet::new();
@@ -438,7 +389,7 @@ fn collect_defs(files: &[FileData]) -> Vec<Def> {
                         continue;
                     };
                     ser.label = id.to_string();
-                    let fa = ser.field_attrs(&f.attrs);
+                    let fa = field_attrs(&f.attrs);
                     let _ = write!(ser.out, "{}:{}:{}:", id, f.vis.to_token_stream(), fa);
                     ser.ty(&f.ty);
                     ser.out.push(';');
@@ -464,7 +415,7 @@ fn collect_defs(files: &[FileData]) -> Vec<Def> {
                 for f in &u.fields.named {
                     let id = f.ident.as_ref().unwrap();
                     ser.label = id.to_string();
-                    let fa = ser.field_attrs(&f.attrs);
+                    let fa = field_attrs(&f.attrs);
                     let _ = write!(ser.out, "{}:{}:{}:", id, f.vis.to_token_stream(), fa);
                     ser.ty(&f.ty);
                     ser.out.push(';');
@@ -647,18 +598,6 @@ impl<'a, 'ast> syn::visit::Visit<'ast> for RenameVisitor<'a> {
             }
         }
         syn::visit::visit_path(self, path);
-    }
-
-    fn visit_attribute(&mut self, attr: &'ast syn::Attribute) {
-        // bitfield `ty = "..."` strings name types too.
-        visit_bitfield_ty_lits(attr, |lit| {
-            let s = lit.to_string();
-            if let Some(new) = self.map.get(s.trim_matches('"')) {
-                self.edits
-                    .push((lit.span().byte_range(), format!("\"{new}\"")));
-            }
-        });
-        syn::visit::visit_attribute(self, attr);
     }
 }
 

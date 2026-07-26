@@ -18,16 +18,9 @@ rustPlatform.buildRustPackage {
 
   inherit src;
 
-  cargoLock = {
-    lockFile = ../Cargo.lock;
-
-    # `c2rust-bitfields` (and its derive macro) are a git dependency on the
-    # c2rust fork; buildRustPackage needs the vendored-source hash to fetch it in
-    # the sandbox. One entry covers every crate from that git source.
-    outputHashes = {
-      "c2rust-bitfields-0.22.1" = "sha256-ZUPK27at1YQwN8nSO+Alxs+vAXH7u+RAc0PgSZ3BLh0=";
-    };
-  };
+  # Every dependency comes from crates.io, so the lock file alone is enough:
+  # no `outputHashes` entries for vendored git sources.
+  cargoLock.lockFile = ../Cargo.lock;
 
   # Link against the prebuilt C deps instead of building them via cmake.deps.
   env.NVIM_DEPS_PREFIX = "${nvim-deps}";
