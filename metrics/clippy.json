@@ -154,7 +154,6 @@
     "crates/nvim/src/nvim/textobject.rs": 16,
     "crates/nvim/src/nvim/tui/input.rs": 210,
     "crates/nvim/src/nvim/tui/terminfo.rs": 1659,
-    "crates/nvim/src/nvim/tui/termkey/termkey.rs": 145,
     "crates/nvim/src/nvim/tui/tui.rs": 291,
     "crates/nvim/src/nvim/tui/ugrid.rs": 2,
     "crates/nvim/src/nvim/tui/unibi.rs": 3,

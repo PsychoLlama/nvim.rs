@@ -1,924 +1,427 @@
-use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::mbyte::{utf_char2bytes, utf_char2len};
+//! libtermkey's core: the input buffer, the two drivers, and the translation
+//! of a byte run into a key.
+
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
-use crate::src::nvim::os::libc::{
-    __ctype_b_loc, __errno_location, memcpy, memmove, snprintf, strlen, strncmp, tcgetattr,
-    tcsetattr, tolower,
-};
 use crate::src::nvim::tui::termkey::driver_csi::{
     self, termkey_interpret_modereport, termkey_interpret_mouse,
 };
 use crate::src::nvim::tui::termkey::driver_ti;
-
+use crate::src::nvim::tui::termkey::format::{self, KeyBody};
+use crate::src::nvim::tui::termkey::keynames;
+use crate::src::nvim::tui::termkey::report;
+use crate::src::nvim::tui::termkey::utf8::{self, Decoded, UNICODE_INVALID};
 pub use crate::src::nvim::types::{
     TermKey, TermKey_Terminfo_Getstr_Hook, TermKeyCsi, TermKeyEvent, TermKeyFormat, TermKeyKey,
-    TermKeyKey_code as C2Rust_Unnamed_2, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType,
-    TerminfoEntry, cc_t, keyinfo, size_t, speed_t, tcflag_t, termios,
+    TermKeyKey_code, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry,
+    size_t,
 };
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISalnum: C2Rust_Unnamed = 8;
-pub const _ISpunct: C2Rust_Unnamed = 4;
-pub const _IScntrl: C2Rust_Unnamed = 2;
-pub const _ISblank: C2Rust_Unnamed = 1;
-pub const _ISgraph: C2Rust_Unnamed = 32768;
-pub const _ISprint: C2Rust_Unnamed = 16384;
-pub const _ISspace: C2Rust_Unnamed = 8192;
-pub const _ISxdigit: C2Rust_Unnamed = 4096;
-pub const _ISdigit: C2Rust_Unnamed = 2048;
-pub const _ISalpha: C2Rust_Unnamed = 1024;
-pub const _ISlower: C2Rust_Unnamed = 512;
-pub const _ISupper: C2Rust_Unnamed = 256;
-pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const UNICODE_INVALID: C2Rust_Unnamed_0 = 65533;
-pub const TERMKEY_EVENT_RELEASE: TermKeyEvent = 3;
-pub const TERMKEY_EVENT_REPEAT: TermKeyEvent = 2;
-pub const TERMKEY_EVENT_PRESS: TermKeyEvent = 1;
+use core::ffi::{CStr, c_char, c_int, c_uchar, c_void};
+
 pub const TERMKEY_EVENT_UNKNOWN: TermKeyEvent = 0;
-pub const TERMKEY_N_SYMS: TermKeySym = 60;
-pub const TERMKEY_SYM_KPEQUALS: TermKeySym = 59;
-pub const TERMKEY_SYM_KPPERIOD: TermKeySym = 58;
-pub const TERMKEY_SYM_KPCOMMA: TermKeySym = 57;
-pub const TERMKEY_SYM_KPDIV: TermKeySym = 56;
-pub const TERMKEY_SYM_KPMULT: TermKeySym = 55;
-pub const TERMKEY_SYM_KPMINUS: TermKeySym = 54;
-pub const TERMKEY_SYM_KPPLUS: TermKeySym = 53;
-pub const TERMKEY_SYM_KPENTER: TermKeySym = 52;
-pub const TERMKEY_SYM_KP9: TermKeySym = 51;
-pub const TERMKEY_SYM_KP8: TermKeySym = 50;
-pub const TERMKEY_SYM_KP7: TermKeySym = 49;
-pub const TERMKEY_SYM_KP6: TermKeySym = 48;
-pub const TERMKEY_SYM_KP5: TermKeySym = 47;
-pub const TERMKEY_SYM_KP4: TermKeySym = 46;
-pub const TERMKEY_SYM_KP3: TermKeySym = 45;
-pub const TERMKEY_SYM_KP2: TermKeySym = 44;
-pub const TERMKEY_SYM_KP1: TermKeySym = 43;
-pub const TERMKEY_SYM_KP0: TermKeySym = 42;
-pub const TERMKEY_SYM_UNDO: TermKeySym = 41;
-pub const TERMKEY_SYM_SUSPEND: TermKeySym = 40;
-pub const TERMKEY_SYM_SAVE: TermKeySym = 39;
-pub const TERMKEY_SYM_RESUME: TermKeySym = 38;
-pub const TERMKEY_SYM_RESTART: TermKeySym = 37;
-pub const TERMKEY_SYM_REPLACE: TermKeySym = 36;
-pub const TERMKEY_SYM_REFRESH: TermKeySym = 35;
-pub const TERMKEY_SYM_REFERENCE: TermKeySym = 34;
-pub const TERMKEY_SYM_REDO: TermKeySym = 33;
-pub const TERMKEY_SYM_PRINT: TermKeySym = 32;
-pub const TERMKEY_SYM_OPTIONS: TermKeySym = 31;
-pub const TERMKEY_SYM_OPEN: TermKeySym = 30;
-pub const TERMKEY_SYM_MOVE: TermKeySym = 29;
-pub const TERMKEY_SYM_MESSAGE: TermKeySym = 28;
-pub const TERMKEY_SYM_MARK: TermKeySym = 27;
-pub const TERMKEY_SYM_HELP: TermKeySym = 26;
-pub const TERMKEY_SYM_EXIT: TermKeySym = 25;
-pub const TERMKEY_SYM_COPY: TermKeySym = 24;
-pub const TERMKEY_SYM_COMMAND: TermKeySym = 23;
-pub const TERMKEY_SYM_CLOSE: TermKeySym = 22;
-pub const TERMKEY_SYM_CLEAR: TermKeySym = 21;
-pub const TERMKEY_SYM_CANCEL: TermKeySym = 20;
-pub const TERMKEY_SYM_END: TermKeySym = 19;
-pub const TERMKEY_SYM_HOME: TermKeySym = 18;
-pub const TERMKEY_SYM_PAGEDOWN: TermKeySym = 17;
-pub const TERMKEY_SYM_PAGEUP: TermKeySym = 16;
-pub const TERMKEY_SYM_SELECT: TermKeySym = 15;
-pub const TERMKEY_SYM_DELETE: TermKeySym = 14;
-pub const TERMKEY_SYM_INSERT: TermKeySym = 13;
-pub const TERMKEY_SYM_FIND: TermKeySym = 12;
-pub const TERMKEY_SYM_BEGIN: TermKeySym = 11;
-pub const TERMKEY_SYM_RIGHT: TermKeySym = 10;
-pub const TERMKEY_SYM_LEFT: TermKeySym = 9;
-pub const TERMKEY_SYM_DOWN: TermKeySym = 8;
-pub const TERMKEY_SYM_UP: TermKeySym = 7;
-pub const TERMKEY_SYM_DEL: TermKeySym = 6;
-pub const TERMKEY_SYM_SPACE: TermKeySym = 5;
-pub const TERMKEY_SYM_ESCAPE: TermKeySym = 4;
-pub const TERMKEY_SYM_ENTER: TermKeySym = 3;
-pub const TERMKEY_SYM_TAB: TermKeySym = 2;
-pub const TERMKEY_SYM_BACKSPACE: TermKeySym = 1;
-pub const TERMKEY_SYM_NONE: TermKeySym = 0;
+pub const TERMKEY_EVENT_PRESS: TermKeyEvent = 1;
+pub const TERMKEY_EVENT_REPEAT: TermKeyEvent = 2;
+pub const TERMKEY_EVENT_RELEASE: TermKeyEvent = 3;
+
 pub const TERMKEY_SYM_UNKNOWN: TermKeySym = -1;
+pub const TERMKEY_SYM_NONE: TermKeySym = 0;
+pub const TERMKEY_SYM_BACKSPACE: TermKeySym = 1;
+pub const TERMKEY_SYM_TAB: TermKeySym = 2;
+pub const TERMKEY_SYM_ENTER: TermKeySym = 3;
+pub const TERMKEY_SYM_ESCAPE: TermKeySym = 4;
+pub const TERMKEY_SYM_SPACE: TermKeySym = 5;
+pub const TERMKEY_SYM_DEL: TermKeySym = 6;
+pub const TERMKEY_SYM_UP: TermKeySym = 7;
+pub const TERMKEY_SYM_DOWN: TermKeySym = 8;
+pub const TERMKEY_SYM_LEFT: TermKeySym = 9;
+pub const TERMKEY_SYM_RIGHT: TermKeySym = 10;
+pub const TERMKEY_SYM_BEGIN: TermKeySym = 11;
+pub const TERMKEY_SYM_FIND: TermKeySym = 12;
+pub const TERMKEY_SYM_INSERT: TermKeySym = 13;
+pub const TERMKEY_SYM_DELETE: TermKeySym = 14;
+pub const TERMKEY_SYM_SELECT: TermKeySym = 15;
+pub const TERMKEY_SYM_PAGEUP: TermKeySym = 16;
+pub const TERMKEY_SYM_PAGEDOWN: TermKeySym = 17;
+pub const TERMKEY_SYM_HOME: TermKeySym = 18;
+pub const TERMKEY_SYM_END: TermKeySym = 19;
+pub const TERMKEY_SYM_CANCEL: TermKeySym = 20;
+pub const TERMKEY_SYM_CLEAR: TermKeySym = 21;
+pub const TERMKEY_SYM_CLOSE: TermKeySym = 22;
+pub const TERMKEY_SYM_COMMAND: TermKeySym = 23;
+pub const TERMKEY_SYM_COPY: TermKeySym = 24;
+pub const TERMKEY_SYM_EXIT: TermKeySym = 25;
+pub const TERMKEY_SYM_HELP: TermKeySym = 26;
+pub const TERMKEY_SYM_MARK: TermKeySym = 27;
+pub const TERMKEY_SYM_MESSAGE: TermKeySym = 28;
+pub const TERMKEY_SYM_MOVE: TermKeySym = 29;
+pub const TERMKEY_SYM_OPEN: TermKeySym = 30;
+pub const TERMKEY_SYM_OPTIONS: TermKeySym = 31;
+pub const TERMKEY_SYM_PRINT: TermKeySym = 32;
+pub const TERMKEY_SYM_REDO: TermKeySym = 33;
+pub const TERMKEY_SYM_REFERENCE: TermKeySym = 34;
+pub const TERMKEY_SYM_REFRESH: TermKeySym = 35;
+pub const TERMKEY_SYM_REPLACE: TermKeySym = 36;
+pub const TERMKEY_SYM_RESTART: TermKeySym = 37;
+pub const TERMKEY_SYM_RESUME: TermKeySym = 38;
+pub const TERMKEY_SYM_SAVE: TermKeySym = 39;
+pub const TERMKEY_SYM_SUSPEND: TermKeySym = 40;
+pub const TERMKEY_SYM_UNDO: TermKeySym = 41;
+pub const TERMKEY_SYM_KP0: TermKeySym = 42;
+pub const TERMKEY_SYM_KP1: TermKeySym = 43;
+pub const TERMKEY_SYM_KP2: TermKeySym = 44;
+pub const TERMKEY_SYM_KP3: TermKeySym = 45;
+pub const TERMKEY_SYM_KP4: TermKeySym = 46;
+pub const TERMKEY_SYM_KP5: TermKeySym = 47;
+pub const TERMKEY_SYM_KP6: TermKeySym = 48;
+pub const TERMKEY_SYM_KP7: TermKeySym = 49;
+pub const TERMKEY_SYM_KP8: TermKeySym = 50;
+pub const TERMKEY_SYM_KP9: TermKeySym = 51;
+pub const TERMKEY_SYM_KPENTER: TermKeySym = 52;
+pub const TERMKEY_SYM_KPPLUS: TermKeySym = 53;
+pub const TERMKEY_SYM_KPMINUS: TermKeySym = 54;
+pub const TERMKEY_SYM_KPMULT: TermKeySym = 55;
+pub const TERMKEY_SYM_KPDIV: TermKeySym = 56;
+pub const TERMKEY_SYM_KPCOMMA: TermKeySym = 57;
+pub const TERMKEY_SYM_KPPERIOD: TermKeySym = 58;
+pub const TERMKEY_SYM_KPEQUALS: TermKeySym = 59;
+pub const TERMKEY_N_SYMS: TermKeySym = 60;
+
 pub const TERMKEY_TYPE_UNKNOWN_CSI: TermKeyType = -1;
-pub const TERMKEY_TYPE_APC: TermKeyType = 8;
-pub const TERMKEY_TYPE_OSC: TermKeyType = 7;
-pub const TERMKEY_TYPE_DCS: TermKeyType = 6;
-pub const TERMKEY_TYPE_MODEREPORT: TermKeyType = 5;
-pub const TERMKEY_TYPE_POSITION: TermKeyType = 4;
-pub const TERMKEY_TYPE_MOUSE: TermKeyType = 3;
-pub const TERMKEY_TYPE_KEYSYM: TermKeyType = 2;
-pub const TERMKEY_TYPE_FUNCTION: TermKeyType = 1;
 pub const TERMKEY_TYPE_UNICODE: TermKeyType = 0;
-pub const TERMKEY_RES_ERROR: TermKeyResult = 4;
-pub const TERMKEY_RES_AGAIN: TermKeyResult = 3;
-pub const TERMKEY_RES_EOF: TermKeyResult = 2;
-pub const TERMKEY_RES_KEY: TermKeyResult = 1;
+pub const TERMKEY_TYPE_FUNCTION: TermKeyType = 1;
+pub const TERMKEY_TYPE_KEYSYM: TermKeyType = 2;
+pub const TERMKEY_TYPE_MOUSE: TermKeyType = 3;
+pub const TERMKEY_TYPE_POSITION: TermKeyType = 4;
+pub const TERMKEY_TYPE_MODEREPORT: TermKeyType = 5;
+pub const TERMKEY_TYPE_DCS: TermKeyType = 6;
+pub const TERMKEY_TYPE_OSC: TermKeyType = 7;
+pub const TERMKEY_TYPE_APC: TermKeyType = 8;
+
 pub const TERMKEY_RES_NONE: TermKeyResult = 0;
-pub const TERMKEY_MOUSE_RELEASE: TermKeyMouseEvent = 3;
-pub const TERMKEY_MOUSE_DRAG: TermKeyMouseEvent = 2;
-pub const TERMKEY_MOUSE_PRESS: TermKeyMouseEvent = 1;
+pub const TERMKEY_RES_KEY: TermKeyResult = 1;
+pub const TERMKEY_RES_EOF: TermKeyResult = 2;
+pub const TERMKEY_RES_AGAIN: TermKeyResult = 3;
+pub const TERMKEY_RES_ERROR: TermKeyResult = 4;
+
 pub const TERMKEY_MOUSE_UNKNOWN: TermKeyMouseEvent = 0;
-pub type C2Rust_Unnamed_3 = ::core::ffi::c_uint;
-pub const TERMKEY_KEYMOD_CTRL: C2Rust_Unnamed_3 = 4;
-pub const TERMKEY_KEYMOD_ALT: C2Rust_Unnamed_3 = 2;
-pub const TERMKEY_KEYMOD_SHIFT: C2Rust_Unnamed_3 = 1;
-pub type C2Rust_Unnamed_4 = ::core::ffi::c_uint;
-pub const TERMKEY_FLAG_KEEPC0: C2Rust_Unnamed_4 = 512;
-pub const TERMKEY_FLAG_NOSTART: C2Rust_Unnamed_4 = 256;
-pub const TERMKEY_FLAG_EINTR: C2Rust_Unnamed_4 = 128;
-pub const TERMKEY_FLAG_CTRLC: C2Rust_Unnamed_4 = 64;
-pub const TERMKEY_FLAG_SPACESYMBOL: C2Rust_Unnamed_4 = 32;
-pub const TERMKEY_FLAG_NOTERMIOS: C2Rust_Unnamed_4 = 16;
-pub const TERMKEY_FLAG_UTF8: C2Rust_Unnamed_4 = 8;
-pub const TERMKEY_FLAG_RAW: C2Rust_Unnamed_4 = 4;
-pub const TERMKEY_FLAG_CONVERTKP: C2Rust_Unnamed_4 = 2;
-pub const TERMKEY_FLAG_NOINTERPRET: C2Rust_Unnamed_4 = 1;
-pub type C2Rust_Unnamed_5 = ::core::ffi::c_uint;
-pub const TERMKEY_CANON_DELBS: C2Rust_Unnamed_5 = 2;
-pub const TERMKEY_CANON_SPACESYMBOL: C2Rust_Unnamed_5 = 1;
-pub const TERMKEY_FORMAT_MOUSE_POS: TermKeyFormat = 256;
-pub const TERMKEY_FORMAT_LOWERSPACE: TermKeyFormat = 64;
-pub const TERMKEY_FORMAT_LOWERMOD: TermKeyFormat = 32;
-pub const TERMKEY_FORMAT_SPACEMOD: TermKeyFormat = 16;
-pub const TERMKEY_FORMAT_WRAPBRACKET: TermKeyFormat = 8;
-pub const TERMKEY_FORMAT_ALTISMETA: TermKeyFormat = 4;
-pub const TERMKEY_FORMAT_CARETCTRL: TermKeyFormat = 2;
+pub const TERMKEY_MOUSE_PRESS: TermKeyMouseEvent = 1;
+pub const TERMKEY_MOUSE_DRAG: TermKeyMouseEvent = 2;
+pub const TERMKEY_MOUSE_RELEASE: TermKeyMouseEvent = 3;
+
+pub type TermKeyModifier = ::core::ffi::c_uint;
+pub const TERMKEY_KEYMOD_SHIFT: TermKeyModifier = 1;
+pub const TERMKEY_KEYMOD_ALT: TermKeyModifier = 2;
+pub const TERMKEY_KEYMOD_CTRL: TermKeyModifier = 4;
+
+pub type TermKeyFlag = ::core::ffi::c_uint;
+pub const TERMKEY_FLAG_NOINTERPRET: TermKeyFlag = 1;
+pub const TERMKEY_FLAG_CONVERTKP: TermKeyFlag = 2;
+pub const TERMKEY_FLAG_UTF8: TermKeyFlag = 8;
+pub const TERMKEY_FLAG_SPACESYMBOL: TermKeyFlag = 32;
+pub const TERMKEY_FLAG_NOSTART: TermKeyFlag = 256;
+pub const TERMKEY_FLAG_KEEPC0: TermKeyFlag = 512;
+
+pub type TermKeyCanon = ::core::ffi::c_uint;
+pub const TERMKEY_CANON_SPACESYMBOL: TermKeyCanon = 1;
+pub const TERMKEY_CANON_DELBS: TermKeyCanon = 2;
+
 pub const TERMKEY_FORMAT_LONGMOD: TermKeyFormat = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_6 {
-    pub sym: TermKeySym,
-    pub name: *const ::core::ffi::c_char,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct modnames {
-    pub shift: *const ::core::ffi::c_char,
-    pub alt: *const ::core::ffi::c_char,
-    pub ctrl: *const ::core::ffi::c_char,
-}
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-static keynames: GlobalCell<[C2Rust_Unnamed_6; 61]> = GlobalCell::new([
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_NONE,
-        name: b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_BACKSPACE,
-        name: b"Backspace\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_TAB,
-        name: b"Tab\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_ENTER,
-        name: b"Enter\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_ESCAPE,
-        name: b"Escape\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_SPACE,
-        name: b"Space\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_DEL,
-        name: b"DEL\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_UP,
-        name: b"Up\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_DOWN,
-        name: b"Down\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_LEFT,
-        name: b"Left\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_RIGHT,
-        name: b"Right\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_BEGIN,
-        name: b"Begin\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_FIND,
-        name: b"Find\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_INSERT,
-        name: b"Insert\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_DELETE,
-        name: b"Delete\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_SELECT,
-        name: b"Select\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_PAGEUP,
-        name: b"PageUp\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_PAGEDOWN,
-        name: b"PageDown\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_HOME,
-        name: b"Home\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_END,
-        name: b"End\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_CANCEL,
-        name: b"Cancel\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_CLEAR,
-        name: b"Clear\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_CLOSE,
-        name: b"Close\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_COMMAND,
-        name: b"Command\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_COPY,
-        name: b"Copy\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_EXIT,
-        name: b"Exit\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_HELP,
-        name: b"Help\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_MARK,
-        name: b"Mark\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_MESSAGE,
-        name: b"Message\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_MOVE,
-        name: b"Move\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_OPEN,
-        name: b"Open\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_OPTIONS,
-        name: b"Options\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_PRINT,
-        name: b"Print\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_REDO,
-        name: b"Redo\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_REFERENCE,
-        name: b"Reference\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_REFRESH,
-        name: b"Refresh\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_REPLACE,
-        name: b"Replace\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_RESTART,
-        name: b"Restart\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_RESUME,
-        name: b"Resume\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_SAVE,
-        name: b"Save\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_SUSPEND,
-        name: b"Suspend\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_UNDO,
-        name: b"Undo\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KP0,
-        name: b"KP0\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KP1,
-        name: b"KP1\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KP2,
-        name: b"KP2\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KP3,
-        name: b"KP3\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KP4,
-        name: b"KP4\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KP5,
-        name: b"KP5\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KP6,
-        name: b"KP6\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KP7,
-        name: b"KP7\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KP8,
-        name: b"KP8\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KP9,
-        name: b"KP9\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KPENTER,
-        name: b"KPEnter\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KPPLUS,
-        name: b"KPPlus\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KPMINUS,
-        name: b"KPMinus\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KPMULT,
-        name: b"KPMult\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KPDIV,
-        name: b"KPDiv\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KPCOMMA,
-        name: b"KPComma\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KPPERIOD,
-        name: b"KPPeriod\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_KPEQUALS,
-        name: b"KPEquals\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    C2Rust_Unnamed_6 {
-        sym: TERMKEY_SYM_NONE,
-        name: ::core::ptr::null::<::core::ffi::c_char>(),
-    },
-]);
-static evnames: GlobalCell<[*const ::core::ffi::c_char; 4]> = GlobalCell::new([
-    b"Unknown\0".as_ptr() as *const ::core::ffi::c_char,
-    b"Press\0".as_ptr() as *const ::core::ffi::c_char,
-    b"Drag\0".as_ptr() as *const ::core::ffi::c_char,
-    b"Release\0".as_ptr() as *const ::core::ffi::c_char,
-]);
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_interpret_string(
-    mut tk: *mut TermKey,
-    mut key: *const TermKeyKey,
-    mut strp: *mut *const ::core::ffi::c_char,
-) -> TermKeyResult {
-    if (*key).type_0 as ::core::ffi::c_int != TERMKEY_TYPE_DCS as ::core::ffi::c_int
-        && (*key).type_0 as ::core::ffi::c_int != TERMKEY_TYPE_OSC as ::core::ffi::c_int
-        && (*key).type_0 as ::core::ffi::c_int != TERMKEY_TYPE_APC as ::core::ffi::c_int
-    {
-        return TERMKEY_RES_NONE;
-    }
-    let csi: *mut TermKeyCsi = (*tk).csi;
-    if (*csi).saved_string_id != (*key).code.number {
-        return TERMKEY_RES_NONE;
-    }
-    *strp = (*csi).saved_string;
-    return TERMKEY_RES_KEY;
-}
-unsafe extern "C" fn snprint_cameltospaces(
-    mut str: *mut ::core::ffi::c_char,
-    mut size: size_t,
-    mut src: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut prev_lower: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut l: size_t = 0 as size_t;
-    while *src as ::core::ffi::c_int != 0 && l < size.wrapping_sub(1 as size_t) {
-        if *(*__ctype_b_loc()).offset(*src as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-            != 0
-            && prev_lower != 0
-        {
-            if !str.is_null() {
-                let c2rust_fresh0 = l;
-                l = l.wrapping_add(1);
-                *str.offset(c2rust_fresh0 as isize) = ' ' as ::core::ffi::c_char;
-            }
-            if l >= size.wrapping_sub(1 as size_t) {
-                break;
-            }
-        }
-        prev_lower = *(*__ctype_b_loc()).offset(*src as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int
-            & _ISlower as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int;
-        let c2rust_fresh1 = src;
-        src = src.offset(1);
-        let c2rust_fresh2 = l;
-        l = l.wrapping_add(1);
-        *str.offset(c2rust_fresh2 as isize) =
-            tolower(*c2rust_fresh1 as ::core::ffi::c_int) as ::core::ffi::c_char;
-    }
-    *str.offset(l as isize) = 0 as ::core::ffi::c_char;
-    while *src != 0 {
-        if *(*__ctype_b_loc()).offset(*src as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-            != 0
-            && prev_lower != 0
-        {
-            l = l.wrapping_add(1);
-        }
-        prev_lower = *(*__ctype_b_loc()).offset(*src as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int
-            & _ISlower as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int;
-        src = src.offset(1);
-        l = l.wrapping_add(1);
-    }
-    return l as ::core::ffi::c_int;
-}
-unsafe extern "C" fn strpncmp_camel(
-    mut strp: *mut *const ::core::ffi::c_char,
-    mut strcamelp: *mut *const ::core::ffi::c_char,
-    mut n: size_t,
-) -> ::core::ffi::c_int {
-    let mut str: *const ::core::ffi::c_char = *strp;
-    let mut strcamel: *const ::core::ffi::c_char = *strcamelp;
-    let mut prev_lower: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while (*str as ::core::ffi::c_int != 0 || *strcamel as ::core::ffi::c_int != 0) && n != 0 {
-        let mut b: ::core::ffi::c_char =
-            tolower(*strcamel as ::core::ffi::c_int) as ::core::ffi::c_char;
-        if *(*__ctype_b_loc()).offset(*strcamel as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int
-            & _ISupper as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-            != 0
-            && prev_lower != 0
-        {
-            if *str as ::core::ffi::c_int != ' ' as ::core::ffi::c_int {
-                break;
-            }
-            str = str.offset(1);
-            if *str as ::core::ffi::c_int != b as ::core::ffi::c_int {
-                break;
-            }
-        } else if *str as ::core::ffi::c_int != b as ::core::ffi::c_int {
-            break;
-        }
-        prev_lower = *(*__ctype_b_loc()).offset(*strcamel as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int
-            & _ISlower as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int;
-        str = str.offset(1);
-        strcamel = strcamel.offset(1);
-        n = n.wrapping_sub(1);
-    }
-    *strp = str;
-    *strcamelp = strcamel;
-    return *str as ::core::ffi::c_int - *strcamel as ::core::ffi::c_int;
-}
-unsafe extern "C" fn termkey_alloc() -> *mut TermKey {
-    let mut tk: *mut TermKey = xmalloc(::core::mem::size_of::<TermKey>()) as *mut TermKey;
-    (*tk).fd = -1 as ::core::ffi::c_int;
-    (*tk).flags = 0 as ::core::ffi::c_int;
-    (*tk).canonflags = 0 as ::core::ffi::c_int;
-    (*tk).buffer = ::core::ptr::null_mut::<::core::ffi::c_uchar>();
-    (*tk).buffstart = 0 as size_t;
-    (*tk).buffcount = 0 as size_t;
-    (*tk).buffsize = 256 as size_t;
-    (*tk).hightide = 0 as size_t;
-    (*tk).restore_termios_valid = 0 as ::core::ffi::c_char;
-    (*tk).ti_getstr_hook = None;
-    (*tk).ti_getstr_hook_data = NULL;
-    (*tk).waittime = 50 as ::core::ffi::c_int;
-    (*tk).is_closed = 0 as ::core::ffi::c_char;
-    (*tk).is_started = 0 as ::core::ffi::c_char;
-    (*tk).nkeynames = 64 as ::core::ffi::c_int;
-    (*tk).keynames = ::core::ptr::null_mut::<*const ::core::ffi::c_char>();
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < 32 as ::core::ffi::c_int {
-        (*tk).c0[i as usize].sym = TERMKEY_SYM_NONE;
-        i += 1;
-    }
-    (*tk).ti = NULL;
-    (*tk).csi = ::core::ptr::null_mut::<TermKeyCsi>();
-    return tk;
-}
-unsafe extern "C" fn termkey_init(
-    mut tk: *mut TermKey,
-    mut term: *mut TerminfoEntry,
-) -> ::core::ffi::c_int {
-    (*tk).buffer = xmalloc((*tk).buffsize) as *mut ::core::ffi::c_uchar;
-    (*tk).keynames = xmalloc(
-        ::core::mem::size_of::<*const ::core::ffi::c_char>()
-            .wrapping_mul((*tk).nkeynames as size_t),
-    ) as *mut *const ::core::ffi::c_char;
-    let mut i: ::core::ffi::c_int = 0;
-    i = 0 as ::core::ffi::c_int;
-    while i < (*tk).nkeynames {
-        *(*tk).keynames.offset(i as isize) = ::core::ptr::null::<::core::ffi::c_char>();
-        i += 1;
-    }
-    i = 0 as ::core::ffi::c_int;
-    while !(*keynames.ptr())[i as usize].name.is_null() {
-        termkey_register_keyname(
-            tk,
-            (*keynames.ptr())[i as usize].sym,
-            (*keynames.ptr())[i as usize].name,
-        );
-        i += 1;
-    }
-    register_c0(
-        tk,
-        TERMKEY_SYM_TAB,
-        0x9 as ::core::ffi::c_uchar,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-    );
-    register_c0(
-        tk,
-        TERMKEY_SYM_ENTER,
-        0xd as ::core::ffi::c_uchar,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-    );
-    register_c0(
-        tk,
-        TERMKEY_SYM_ESCAPE,
-        0x1b as ::core::ffi::c_uchar,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-    );
-    (*tk).ti = driver_ti::new_driver(term);
-    (*tk).csi = driver_csi::new_driver();
-    return 1 as ::core::ffi::c_int;
-}
+pub const TERMKEY_FORMAT_CARETCTRL: TermKeyFormat = 2;
+pub const TERMKEY_FORMAT_ALTISMETA: TermKeyFormat = 4;
+pub const TERMKEY_FORMAT_WRAPBRACKET: TermKeyFormat = 8;
+pub const TERMKEY_FORMAT_SPACEMOD: TermKeyFormat = 16;
+pub const TERMKEY_FORMAT_LOWERMOD: TermKeyFormat = 32;
+pub const TERMKEY_FORMAT_LOWERSPACE: TermKeyFormat = 64;
+pub const TERMKEY_FORMAT_MOUSE_POS: TermKeyFormat = 256;
+
+/// How much input is held before `termkey_push_bytes` starts refusing it.
+const TERMKEY_DEFAULT_BUFFER_SIZE: size_t = 256;
+
+/// The symbol each C0 control byte stands for, or `TERMKEY_SYM_NONE` where it
+/// has none and the Ctrl-letter reading applies instead.
+///
+/// Upstream registered these three at construction time into a per-`TermKey`
+/// array, with room for a modifier mask and set that every registration left at
+/// zero and nothing else ever wrote.
+static C0_SYMS: [TermKeySym; 32] = {
+    let mut table = [TERMKEY_SYM_NONE; 32];
+    table[0x09] = TERMKEY_SYM_TAB;
+    table[0x0d] = TERMKEY_SYM_ENTER;
+    table[0x1b] = TERMKEY_SYM_ESCAPE;
+    table
+};
+
+/// Create a key reader. `term` is the terminal's description, which may be null
+/// when nothing is known about it.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_new_abstract(
-    mut term: *mut TerminfoEntry,
-    mut flags: ::core::ffi::c_int,
+    term: *mut TerminfoEntry,
+    flags: c_int,
 ) -> *mut TermKey {
-    let mut tk: *mut TermKey = termkey_alloc();
-    if tk.is_null() {
-        return ::core::ptr::null_mut::<TermKey>();
-    }
-    (*tk).fd = -1 as ::core::ffi::c_int;
+    let tk: *mut TermKey = xmalloc(size_of::<TermKey>()) as *mut TermKey;
+    (*tk).canonflags = 0;
+    (*tk).buffsize = TERMKEY_DEFAULT_BUFFER_SIZE;
+    (*tk).buffer = xmalloc((*tk).buffsize) as *mut c_uchar;
+    (*tk).buffstart = 0;
+    (*tk).buffcount = 0;
+    (*tk).hightide = 0;
+    (*tk).ti_getstr_hook = None;
+    (*tk).ti_getstr_hook_data = core::ptr::null_mut();
+    (*tk).is_started = 0;
+    (*tk).ti = driver_ti::new_driver(term);
+    (*tk).csi = driver_csi::new_driver();
     termkey_set_flags(tk, flags);
-    if termkey_init(tk, term) == 0 {
-        xfree(tk as *mut ::core::ffi::c_void);
-        return ::core::ptr::null_mut::<TermKey>();
+    if flags & TERMKEY_FLAG_NOSTART as c_int == 0 {
+        termkey_start(tk);
     }
-    if flags & TERMKEY_FLAG_NOSTART as ::core::ffi::c_int == 0 && termkey_start(tk) == 0 {
-        xfree(tk as *mut ::core::ffi::c_void);
-        return ::core::ptr::null_mut::<TermKey>();
-    } else {
-        return tk;
-    };
+    tk
 }
-pub unsafe extern "C" fn termkey_free(mut tk: *mut TermKey) {
-    xfree((*tk).buffer as *mut ::core::ffi::c_void);
-    (*tk).buffer = ::core::ptr::null_mut::<::core::ffi::c_uchar>();
-    xfree((*tk).keynames as *mut ::core::ffi::c_void);
-    (*tk).keynames = ::core::ptr::null_mut::<*const ::core::ffi::c_char>();
+
+pub unsafe fn termkey_free(tk: *mut TermKey) {
+    xfree((*tk).buffer as *mut c_void);
+    (*tk).buffer = core::ptr::null_mut();
     driver_ti::free_driver((*tk).ti);
     driver_csi::free_driver((*tk).csi);
-    xfree(tk as *mut ::core::ffi::c_void);
+    xfree(tk as *mut c_void);
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_destroy(mut tk: *mut TermKey) {
+pub unsafe extern "C" fn termkey_destroy(tk: *mut TermKey) {
     if (*tk).is_started != 0 {
         termkey_stop(tk);
     }
     termkey_free(tk);
 }
-pub unsafe extern "C" fn termkey_hook_terminfo_getstr(
-    mut tk: *mut TermKey,
-    mut hookfn: Option<TermKey_Terminfo_Getstr_Hook>,
-    mut data: *mut ::core::ffi::c_void,
+
+/// Install nvim's override for terminfo capability lookups, so it can supply
+/// key sequences the terminal's description does not name.
+pub unsafe fn termkey_hook_terminfo_getstr(
+    tk: *mut TermKey,
+    hookfn: Option<TermKey_Terminfo_Getstr_Hook>,
+    data: *mut c_void,
 ) {
     (*tk).ti_getstr_hook = hookfn;
     (*tk).ti_getstr_hook_data = data;
 }
+
+/// Begin reading keys. Upstream also put the terminal into raw mode here and
+/// restored it on stop, but that was guarded on a file descriptor this tree
+/// never gives it — nvim owns the terminal and feeds bytes in by hand.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_start(mut tk: *mut TermKey) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn termkey_start(tk: *mut TermKey) -> c_int {
     if (*tk).is_started != 0 {
-        return 1 as ::core::ffi::c_int;
-    }
-    if (*tk).fd != -1 as ::core::ffi::c_int
-        && (*tk).flags & TERMKEY_FLAG_NOTERMIOS as ::core::ffi::c_int == 0
-    {
-        let mut termios: termios = termios {
-            c_iflag: 0,
-            c_oflag: 0,
-            c_cflag: 0,
-            c_lflag: 0,
-            c_line: 0,
-            c_cc: [0; 32],
-            c_ispeed: 0,
-            c_ospeed: 0,
-        };
-        if tcgetattr((*tk).fd, &raw mut termios) == 0 as ::core::ffi::c_int {
-            (*tk).restore_termios = termios;
-            (*tk).restore_termios_valid = 1 as ::core::ffi::c_char;
-            termios.c_iflag &= !(IXON | INLCR | ICRNL) as tcflag_t;
-            termios.c_lflag &= !(ICANON | ECHO | IEXTEN) as tcflag_t;
-            termios.c_cc[VMIN as usize] = 1 as cc_t;
-            termios.c_cc[VTIME as usize] = 0 as cc_t;
-            if (*tk).flags & TERMKEY_FLAG_CTRLC as ::core::ffi::c_int != 0 {
-                termios.c_lflag &= !ISIG as tcflag_t;
-            } else {
-                termios.c_cc[VQUIT as usize] = _POSIX_VDISABLE as cc_t;
-                termios.c_cc[VSUSP as usize] = _POSIX_VDISABLE as cc_t;
-            }
-            tcsetattr((*tk).fd, TCSANOW, &raw mut termios);
-        }
+        return 1;
     }
     driver_ti::load_keys(tk);
-    (*tk).is_started = 1 as ::core::ffi::c_char;
-    return 1 as ::core::ffi::c_int;
+    (*tk).is_started = 1;
+    1
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_stop(mut tk: *mut TermKey) -> ::core::ffi::c_int {
-    if (*tk).is_started == 0 {
-        return 1 as ::core::ffi::c_int;
-    }
-    if (*tk).restore_termios_valid != 0 {
-        tcsetattr((*tk).fd, TCSANOW, &raw mut (*tk).restore_termios);
-    }
-    (*tk).is_started = 0 as ::core::ffi::c_char;
-    return 1 as ::core::ffi::c_int;
+pub unsafe extern "C" fn termkey_stop(tk: *mut TermKey) -> c_int {
+    (*tk).is_started = 0;
+    1
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_set_flags(mut tk: *mut TermKey, mut newflags: ::core::ffi::c_int) {
+pub unsafe extern "C" fn termkey_set_flags(tk: *mut TermKey, newflags: c_int) {
     (*tk).flags = newflags;
-    if (*tk).flags & TERMKEY_FLAG_SPACESYMBOL as ::core::ffi::c_int != 0 {
-        (*tk).canonflags |= TERMKEY_CANON_SPACESYMBOL as ::core::ffi::c_int;
+    // The two spellings of "a space is a symbol, not a character" are kept in
+    // step in both directions.
+    if (*tk).flags & TERMKEY_FLAG_SPACESYMBOL as c_int != 0 {
+        (*tk).canonflags |= TERMKEY_CANON_SPACESYMBOL as c_int;
     } else {
-        (*tk).canonflags &= !(TERMKEY_CANON_SPACESYMBOL as ::core::ffi::c_int);
-    };
+        (*tk).canonflags &= !(TERMKEY_CANON_SPACESYMBOL as c_int);
+    }
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_get_canonflags(mut tk: *mut TermKey) -> ::core::ffi::c_int {
-    return (*tk).canonflags;
+pub unsafe extern "C" fn termkey_get_canonflags(tk: *mut TermKey) -> c_int {
+    (*tk).canonflags
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_set_canonflags(
-    mut tk: *mut TermKey,
-    mut flags: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn termkey_set_canonflags(tk: *mut TermKey, flags: c_int) {
     (*tk).canonflags = flags;
-    if (*tk).canonflags & TERMKEY_CANON_SPACESYMBOL as ::core::ffi::c_int != 0 {
-        (*tk).flags |= TERMKEY_FLAG_SPACESYMBOL as ::core::ffi::c_int;
+    if (*tk).canonflags & TERMKEY_CANON_SPACESYMBOL as c_int != 0 {
+        (*tk).flags |= TERMKEY_FLAG_SPACESYMBOL as c_int;
     } else {
-        (*tk).flags &= !(TERMKEY_FLAG_SPACESYMBOL as ::core::ffi::c_int);
-    };
+        (*tk).flags &= !(TERMKEY_FLAG_SPACESYMBOL as c_int);
+    }
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_get_buffer_size(mut tk: *mut TermKey) -> size_t {
-    return (*tk).buffsize;
+pub unsafe extern "C" fn termkey_get_buffer_size(tk: *mut TermKey) -> size_t {
+    (*tk).buffsize
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_set_buffer_size(
-    mut tk: *mut TermKey,
-    mut size: size_t,
-) -> ::core::ffi::c_int {
-    let mut buffer: *mut ::core::ffi::c_uchar =
-        xrealloc((*tk).buffer as *mut ::core::ffi::c_void, size) as *mut ::core::ffi::c_uchar;
-    (*tk).buffer = buffer;
+pub unsafe extern "C" fn termkey_set_buffer_size(tk: *mut TermKey, size: size_t) -> c_int {
+    (*tk).buffer = xrealloc((*tk).buffer as *mut c_void, size) as *mut c_uchar;
     (*tk).buffsize = size;
-    return 1 as ::core::ffi::c_int;
+    1
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_get_buffer_remaining(mut tk: *mut TermKey) -> size_t {
-    return (*tk).buffsize.wrapping_sub((*tk).buffcount);
+pub unsafe extern "C" fn termkey_get_buffer_remaining(tk: *mut TermKey) -> size_t {
+    (*tk).buffsize - (*tk).buffcount
 }
-unsafe extern "C" fn eat_bytes(mut tk: *mut TermKey, mut count: size_t) {
+
+/// Hand more input to the reader. Returns how much of it was taken, or `-1` as
+/// a `size_t` when the buffer was already full.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn termkey_push_bytes(
+    tk: *mut TermKey,
+    bytes: *const c_char,
+    len: size_t,
+) -> size_t {
+    if (*tk).buffstart != 0 {
+        // Slide what is left of the previous read back to the front.
+        core::ptr::copy(
+            (*tk).buffer.add((*tk).buffstart),
+            (*tk).buffer,
+            (*tk).buffcount,
+        );
+        (*tk).buffstart = 0;
+    }
+    if (*tk).buffcount >= (*tk).buffsize {
+        return -1i32 as size_t;
+    }
+    let len = len.min((*tk).buffsize - (*tk).buffcount);
+    core::ptr::copy_nonoverlapping(bytes as *const u8, (*tk).buffer.add((*tk).buffcount), len);
+    (*tk).buffcount += len;
+    len
+}
+
+unsafe fn eat_bytes(tk: *mut TermKey, count: size_t) {
     if count >= (*tk).buffcount {
-        (*tk).buffstart = 0 as size_t;
-        (*tk).buffcount = 0 as size_t;
-        return;
-    }
-    (*tk).buffstart = (*tk).buffstart.wrapping_add(count);
-    (*tk).buffcount = (*tk).buffcount.wrapping_sub(count);
-}
-pub unsafe extern "C" fn fill_utf8(
-    mut codepoint: ::core::ffi::c_int,
-    mut str: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut nbytes: ::core::ffi::c_int = utf_char2bytes(codepoint, str);
-    *str.offset(nbytes as isize) = 0 as ::core::ffi::c_char;
-    return nbytes;
-}
-unsafe extern "C" fn parse_utf8(
-    mut bytes: *const ::core::ffi::c_uchar,
-    mut len: size_t,
-    mut cp: *mut ::core::ffi::c_int,
-    mut nbytep: *mut size_t,
-) -> TermKeyResult {
-    let mut nbytes: ::core::ffi::c_uint = 0;
-    let mut b0: ::core::ffi::c_uchar = *bytes.offset(0 as ::core::ffi::c_int as isize);
-    if (b0 as ::core::ffi::c_int) < 0x80 as ::core::ffi::c_int {
-        *cp = b0 as ::core::ffi::c_int;
-        *nbytep = 1 as size_t;
-        return TERMKEY_RES_KEY;
-    } else if (b0 as ::core::ffi::c_int) < 0xc0 as ::core::ffi::c_int {
-        *cp = UNICODE_INVALID as ::core::ffi::c_int;
-        *nbytep = 1 as size_t;
-        return TERMKEY_RES_KEY;
-    } else if (b0 as ::core::ffi::c_int) < 0xe0 as ::core::ffi::c_int {
-        nbytes = 2 as ::core::ffi::c_uint;
-        *cp = b0 as ::core::ffi::c_int & 0x1f as ::core::ffi::c_int;
-    } else if (b0 as ::core::ffi::c_int) < 0xf0 as ::core::ffi::c_int {
-        nbytes = 3 as ::core::ffi::c_uint;
-        *cp = b0 as ::core::ffi::c_int & 0xf as ::core::ffi::c_int;
-    } else if (b0 as ::core::ffi::c_int) < 0xf8 as ::core::ffi::c_int {
-        nbytes = 4 as ::core::ffi::c_uint;
-        *cp = b0 as ::core::ffi::c_int & 0x7 as ::core::ffi::c_int;
-    } else if (b0 as ::core::ffi::c_int) < 0xfc as ::core::ffi::c_int {
-        nbytes = 5 as ::core::ffi::c_uint;
-        *cp = b0 as ::core::ffi::c_int & 0x3 as ::core::ffi::c_int;
-    } else if (b0 as ::core::ffi::c_int) < 0xfe as ::core::ffi::c_int {
-        nbytes = 6 as ::core::ffi::c_uint;
-        *cp = b0 as ::core::ffi::c_int & 0x1 as ::core::ffi::c_int;
+        (*tk).buffstart = 0;
+        (*tk).buffcount = 0;
     } else {
-        *cp = UNICODE_INVALID as ::core::ffi::c_int;
-        *nbytep = 1 as size_t;
-        return TERMKEY_RES_KEY;
+        (*tk).buffstart += count;
+        (*tk).buffcount -= count;
     }
-    let mut b: ::core::ffi::c_uint = 1 as ::core::ffi::c_uint;
-    while b < nbytes {
-        let mut cb: ::core::ffi::c_uchar = 0;
-        if b as size_t >= len {
-            return TERMKEY_RES_AGAIN;
-        }
-        cb = *bytes.offset(b as isize);
-        if (cb as ::core::ffi::c_int) < 0x80 as ::core::ffi::c_int
-            || cb as ::core::ffi::c_int >= 0xc0 as ::core::ffi::c_int
-        {
-            *cp = UNICODE_INVALID as ::core::ffi::c_int;
-            *nbytep = b as size_t;
-            return TERMKEY_RES_KEY;
-        }
-        *cp <<= 6 as ::core::ffi::c_int;
-        *cp |= cb as ::core::ffi::c_int & 0x3f as ::core::ffi::c_int;
-        b = b.wrapping_add(1);
-    }
-    if nbytes as ::core::ffi::c_int > utf_char2len(*cp) {
-        *cp = UNICODE_INVALID as ::core::ffi::c_int;
-    }
-    if *cp >= 0xd800 as ::core::ffi::c_int && *cp <= 0xdfff as ::core::ffi::c_int
-        || *cp == 0xfffe as ::core::ffi::c_int
-        || *cp == 0xffff as ::core::ffi::c_int
-    {
-        *cp = UNICODE_INVALID as ::core::ffi::c_int;
-    }
-    *nbytep = nbytes as size_t;
-    return TERMKEY_RES_KEY;
 }
-pub unsafe extern "C" fn emit_codepoint(
-    mut tk: *mut TermKey,
-    mut codepoint: ::core::ffi::c_int,
-    mut key: *mut TermKeyKey,
-) {
-    if codepoint == 0 as ::core::ffi::c_int {
+
+/// Write a codepoint's UTF-8 into a key's `utf8` field, which is exactly wide
+/// enough for the longest encoding plus its terminator.
+fn fill_utf8(codepoint: c_int, out: &mut [c_char; 7]) {
+    let (bytes, len) = utf8::encode(codepoint);
+    for (slot, byte) in out.iter_mut().zip(bytes[..len].iter()) {
+        *slot = *byte as c_char;
+    }
+    out[len] = 0;
+}
+
+/// Turn a codepoint into a key, applying the C0 and C1 readings.
+pub unsafe fn emit_codepoint(tk: *mut TermKey, codepoint: c_int, key: *mut TermKeyKey) {
+    let flags = (*tk).flags;
+    let interpret = flags & TERMKEY_FLAG_NOINTERPRET as c_int == 0;
+    if codepoint == 0 {
+        // NUL is Ctrl-Space, which has no character of its own.
         (*key).type_0 = TERMKEY_TYPE_KEYSYM;
-        (*key).code.sym = TERMKEY_SYM_SPACE;
-        (*key).modifiers = TERMKEY_KEYMOD_CTRL as ::core::ffi::c_int;
-    } else if codepoint < 0x20 as ::core::ffi::c_int
-        && (*tk).flags & TERMKEY_FLAG_KEEPC0 as ::core::ffi::c_int == 0
-    {
-        (*key).code.codepoint = 0 as ::core::ffi::c_int;
-        (*key).modifiers = 0 as ::core::ffi::c_int;
-        if (*tk).flags & TERMKEY_FLAG_NOINTERPRET as ::core::ffi::c_int == 0
-            && (*tk).c0[codepoint as usize].sym as ::core::ffi::c_int
-                != TERMKEY_SYM_UNKNOWN as ::core::ffi::c_int
-        {
-            (*key).code.sym = (*tk).c0[codepoint as usize].sym;
-            (*key).modifiers |= (*tk).c0[codepoint as usize].modifier_set;
-        }
-        if (*key).code.sym as u64 == 0 {
+        (*key).code = TermKeyKey_code {
+            sym: TERMKEY_SYM_SPACE,
+        };
+        (*key).modifiers = TERMKEY_KEYMOD_CTRL as c_int;
+    } else if codepoint < 0x20 && flags & TERMKEY_FLAG_KEEPC0 as c_int == 0 {
+        let sym = if interpret {
+            C0_SYMS[codepoint as usize]
+        } else {
+            TERMKEY_SYM_NONE
+        };
+        if sym == TERMKEY_SYM_NONE {
+            // Ctrl-letter: C0 codes map onto '@' through '_', but the
+            // lower-case letter is the friendlier name for A-Z.
             (*key).type_0 = TERMKEY_TYPE_UNICODE;
-            if codepoint + 0x40 as ::core::ffi::c_int >= 'A' as ::core::ffi::c_int
-                && codepoint + 0x40 as ::core::ffi::c_int <= 'Z' as ::core::ffi::c_int
-            {
-                (*key).code.codepoint = codepoint + 0x60 as ::core::ffi::c_int;
+            let base = if (b'A' as c_int..=b'Z' as c_int).contains(&(codepoint + 0x40)) {
+                0x60
             } else {
-                (*key).code.codepoint = codepoint + 0x40 as ::core::ffi::c_int;
-            }
-            (*key).modifiers = TERMKEY_KEYMOD_CTRL as ::core::ffi::c_int;
+                0x40
+            };
+            (*key).code = TermKeyKey_code {
+                codepoint: codepoint + base,
+            };
+            (*key).modifiers = TERMKEY_KEYMOD_CTRL as c_int;
         } else {
             (*key).type_0 = TERMKEY_TYPE_KEYSYM;
+            (*key).code = TermKeyKey_code { sym };
+            (*key).modifiers = 0;
         }
-    } else if codepoint == 0x7f as ::core::ffi::c_int
-        && (*tk).flags & TERMKEY_FLAG_NOINTERPRET as ::core::ffi::c_int == 0
-    {
+    } else if codepoint == 0x7f && interpret {
         (*key).type_0 = TERMKEY_TYPE_KEYSYM;
-        (*key).code.sym = TERMKEY_SYM_DEL;
-        (*key).modifiers = 0 as ::core::ffi::c_int;
-    } else if codepoint > 0 as ::core::ffi::c_int && codepoint < 0x80 as ::core::ffi::c_int {
+        (*key).code = TermKeyKey_code {
+            sym: TERMKEY_SYM_DEL,
+        };
+        (*key).modifiers = 0;
+    } else if (0x80..0xa0).contains(&codepoint) {
+        // The C1 controls are Alt-Ctrl-letter.
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
-        (*key).code.codepoint = codepoint;
-        (*key).modifiers = 0 as ::core::ffi::c_int;
-    } else if codepoint >= 0x80 as ::core::ffi::c_int && codepoint < 0xa0 as ::core::ffi::c_int {
-        (*key).type_0 = TERMKEY_TYPE_UNICODE;
-        (*key).code.codepoint = codepoint - 0x40 as ::core::ffi::c_int;
-        (*key).modifiers =
-            TERMKEY_KEYMOD_CTRL as ::core::ffi::c_int | TERMKEY_KEYMOD_ALT as ::core::ffi::c_int;
+        (*key).code = TermKeyKey_code {
+            codepoint: codepoint - 0x40,
+        };
+        (*key).modifiers = (TERMKEY_KEYMOD_CTRL | TERMKEY_KEYMOD_ALT) as c_int;
     } else {
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
-        (*key).code.codepoint = codepoint;
-        (*key).modifiers = 0 as ::core::ffi::c_int;
+        (*key).code = TermKeyKey_code { codepoint };
+        (*key).modifiers = 0;
     }
     termkey_canonicalise(tk, key);
-    if (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_UNICODE as ::core::ffi::c_int {
-        fill_utf8(
-            (*key).code.codepoint,
-            &raw mut (*key).utf8 as *mut ::core::ffi::c_char,
-        );
+    if (*key).type_0 == TERMKEY_TYPE_UNICODE {
+        fill_utf8((*key).code.codepoint, &mut (*key).utf8);
     }
 }
+
+/// Apply the consumer's preferences about which of two equivalent spellings a
+/// key gets: space as a symbol or a character, and DEL as backspace.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_canonicalise(mut tk: *mut TermKey, mut key: *mut TermKeyKey) {
-    let mut flags: ::core::ffi::c_int = (*tk).canonflags;
-    if flags & TERMKEY_CANON_SPACESYMBOL as ::core::ffi::c_int != 0 {
-        if (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
-            && (*key).code.codepoint == 0x20 as ::core::ffi::c_int
-        {
+pub unsafe extern "C" fn termkey_canonicalise(tk: *mut TermKey, key: *mut TermKeyKey) {
+    let flags = (*tk).canonflags;
+    if flags & TERMKEY_CANON_SPACESYMBOL as c_int != 0 {
+        if (*key).type_0 == TERMKEY_TYPE_UNICODE && (*key).code.codepoint == 0x20 {
             (*key).type_0 = TERMKEY_TYPE_KEYSYM;
-            (*key).code.sym = TERMKEY_SYM_SPACE;
+            (*key).code = TermKeyKey_code {
+                sym: TERMKEY_SYM_SPACE,
+            };
         }
-    } else if (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_KEYSYM as ::core::ffi::c_int
-        && (*key).code.sym as ::core::ffi::c_int == TERMKEY_SYM_SPACE as ::core::ffi::c_int
-    {
+    } else if (*key).type_0 == TERMKEY_TYPE_KEYSYM && (*key).code.sym == TERMKEY_SYM_SPACE {
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
-        (*key).code.codepoint = 0x20 as ::core::ffi::c_int;
-        fill_utf8(
-            (*key).code.codepoint,
-            &raw mut (*key).utf8 as *mut ::core::ffi::c_char,
-        );
+        (*key).code = TermKeyKey_code { codepoint: 0x20 };
+        fill_utf8(0x20, &mut (*key).utf8);
     }
-    if flags & TERMKEY_CANON_DELBS as ::core::ffi::c_int != 0 {
-        if (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_KEYSYM as ::core::ffi::c_int
-            && (*key).code.sym as ::core::ffi::c_int == TERMKEY_SYM_DEL as ::core::ffi::c_int
-        {
-            (*key).code.sym = TERMKEY_SYM_BACKSPACE;
-        }
+    if flags & TERMKEY_CANON_DELBS as c_int != 0
+        && (*key).type_0 == TERMKEY_TYPE_KEYSYM
+        && (*key).code.sym == TERMKEY_SYM_DEL
+    {
+        (*key).code = TermKeyKey_code {
+            sym: TERMKEY_SYM_BACKSPACE,
+        };
     }
 }
-unsafe extern "C" fn peekkey(
-    mut tk: *mut TermKey,
-    mut key: *mut TermKeyKey,
-    mut force: ::core::ffi::c_int,
-    mut nbytep: *mut size_t,
+
+/// Read the next key without consuming it. `force` means "decide now": a
+/// sequence that could still grow is taken as complete instead of waiting.
+unsafe fn peekkey(
+    tk: *mut TermKey,
+    key: *mut TermKeyKey,
+    force: c_int,
+    nbytep: *mut size_t,
 ) -> TermKeyResult {
-    let mut again: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if (*tk).is_started == 0 {
-        *__errno_location() = EINVAL;
         return TERMKEY_RES_ERROR;
     }
     (*key).event = TERMKEY_EVENT_PRESS;
     if (*tk).hightide != 0 {
-        (*tk).buffstart = (*tk).buffstart.wrapping_add((*tk).hightide);
-        (*tk).buffcount = (*tk).buffcount.wrapping_sub((*tk).hightide);
-        (*tk).hightide = 0 as size_t;
+        // The tail of an unrecognised control sequence, held back so the
+        // consumer could re-read it with `termkey_interpret_csi`.
+        (*tk).buffstart += (*tk).hightide;
+        (*tk).buffcount -= (*tk).hightide;
+        (*tk).hightide = 0;
     }
-    // The terminfo driver has first refusal (its key sequences come from the
+    let mut again = false;
+    // The terminfo driver has first refusal (its sequences come from the
     // terminal's own description), then the CSI driver's generic parsing.
-    for probe in 0..2 as ::core::ffi::c_int {
-        let ret: TermKeyResult = if probe == 0 {
+    for probe in 0..2 {
+        let ret = if probe == 0 {
             driver_ti::peek_key(tk, key, force, nbytep)
         } else {
             driver_csi::peek_key(tk, (*tk).csi, key, force, nbytep)
@@ -926,660 +429,284 @@ unsafe extern "C" fn peekkey(
         match ret {
             TERMKEY_RES_KEY => {
                 // Reclaim the front half of the buffer once reads have walked
-                // past its midpoint, so long runs don't push buffstart off the
-                // end. Only worth doing when a key was actually consumed.
-                let halfsize: size_t = (*tk).buffsize.wrapping_div(2 as size_t);
+                // past its midpoint, so a long run does not push buffstart off
+                // the end. Only worth doing when a key was actually consumed.
+                let halfsize = (*tk).buffsize / 2;
                 if (*tk).buffstart > halfsize {
-                    memcpy(
-                        (*tk).buffer as *mut ::core::ffi::c_void,
-                        (*tk).buffer.offset(halfsize as isize) as *const ::core::ffi::c_void,
+                    core::ptr::copy_nonoverlapping(
+                        (*tk).buffer.add(halfsize),
+                        (*tk).buffer,
                         halfsize,
                     );
-                    (*tk).buffstart = (*tk).buffstart.wrapping_sub(halfsize);
+                    (*tk).buffstart -= halfsize;
                 }
                 return ret;
             }
             TERMKEY_RES_EOF | TERMKEY_RES_ERROR => return ret,
-            TERMKEY_RES_AGAIN => {
-                if force == 0 {
-                    again = 1 as ::core::ffi::c_int;
-                }
-            }
+            TERMKEY_RES_AGAIN => again |= force == 0,
             _ => {}
         }
     }
-    if again != 0 {
+    if again {
         return TERMKEY_RES_AGAIN;
     }
-    return peekkey_simple(tk, key, force, nbytep);
+    peekkey_simple(tk, key, force, nbytep)
 }
-unsafe extern "C" fn peekkey_simple(
-    mut tk: *mut TermKey,
-    mut key: *mut TermKeyKey,
-    mut force: ::core::ffi::c_int,
-    mut nbytep: *mut size_t,
+
+/// Whatever neither driver claimed: a plain character, or an escape prefix that
+/// makes the key after it an Alt- key.
+unsafe fn peekkey_simple(
+    tk: *mut TermKey,
+    key: *mut TermKeyKey,
+    force: c_int,
+    nbytep: *mut size_t,
 ) -> TermKeyResult {
-    if (*tk).buffcount == 0 as size_t {
-        return (if (*tk).is_closed as ::core::ffi::c_int != 0 {
-            TERMKEY_RES_EOF as ::core::ffi::c_int
-        } else {
-            TERMKEY_RES_NONE as ::core::ffi::c_int
-        }) as TermKeyResult;
+    if (*tk).buffcount == 0 {
+        return TERMKEY_RES_NONE;
     }
-    let mut b0: ::core::ffi::c_uchar = *(*tk)
-        .buffer
-        .offset((*tk).buffstart.wrapping_add(0 as size_t) as isize);
-    if b0 as ::core::ffi::c_int == 0x1b as ::core::ffi::c_int {
-        if (*tk).buffcount == 1 as size_t {
+    let first = *(*tk).buffer.add((*tk).buffstart);
+    if first == 0x1b {
+        if (*tk).buffcount == 1 {
             if force == 0 {
                 return TERMKEY_RES_AGAIN;
             }
-            emit_codepoint(tk, b0 as ::core::ffi::c_int, key);
-            *nbytep = 1 as size_t;
+            // Nothing followed it, so it was the escape key itself.
+            emit_codepoint(tk, first as c_int, key);
+            *nbytep = 1;
             return TERMKEY_RES_KEY;
         }
-        (*tk).buffstart = (*tk).buffstart.wrapping_add(1);
-        (*tk).buffcount = (*tk).buffcount.wrapping_sub(1);
-        let mut metakey_result: TermKeyResult = peekkey(tk, key, force, nbytep);
-        (*tk).buffstart = (*tk).buffstart.wrapping_sub(1);
-        (*tk).buffcount = (*tk).buffcount.wrapping_add(1);
-        match metakey_result as ::core::ffi::c_uint {
-            1 => {
-                (*key).modifiers |= TERMKEY_KEYMOD_ALT as ::core::ffi::c_int;
-                *nbytep = (*nbytep).wrapping_add(1);
+        // Read what follows as its own key, then add the Alt modifier.
+        (*tk).buffstart += 1;
+        (*tk).buffcount -= 1;
+        let result = peekkey(tk, key, force, nbytep);
+        (*tk).buffstart -= 1;
+        (*tk).buffcount += 1;
+        if result == TERMKEY_RES_KEY {
+            (*key).modifiers |= TERMKEY_KEYMOD_ALT as c_int;
+            *nbytep += 1;
+        }
+        return result;
+    }
+    if first < 0xa0 {
+        emit_codepoint(tk, first as c_int, key);
+        *nbytep = 1;
+        return TERMKEY_RES_KEY;
+    }
+    if (*tk).flags & TERMKEY_FLAG_UTF8 as c_int != 0 {
+        let bytes = core::slice::from_raw_parts((*tk).buffer.add((*tk).buffstart), (*tk).buffcount);
+        let (codepoint, len, result) = match utf8::decode(bytes) {
+            Decoded::Char { codepoint, len } => (codepoint, len, TERMKEY_RES_KEY),
+            Decoded::Incomplete if force != 0 => {
+                // Out of patience: take what there is as one bad character.
+                (UNICODE_INVALID, bytes.len(), TERMKEY_RES_KEY)
             }
-            0 | 2 | 3 | 4 | _ => {}
+            Decoded::Incomplete => (UNICODE_INVALID, 0, TERMKEY_RES_AGAIN),
+        };
+        if result == TERMKEY_RES_KEY {
+            *nbytep = len;
         }
-        return metakey_result;
-    } else if (b0 as ::core::ffi::c_int) < 0xa0 as ::core::ffi::c_int {
-        emit_codepoint(tk, b0 as ::core::ffi::c_int, key);
-        *nbytep = 1 as size_t;
-        return TERMKEY_RES_KEY;
-    } else if (*tk).flags & TERMKEY_FLAG_UTF8 as ::core::ffi::c_int != 0 {
-        let mut codepoint: ::core::ffi::c_int = 0;
-        let mut res: TermKeyResult = parse_utf8(
-            (*tk).buffer.offset((*tk).buffstart as isize),
-            (*tk).buffcount,
-            &raw mut codepoint,
-            nbytep,
-        );
-        if res as ::core::ffi::c_uint
-            == TERMKEY_RES_AGAIN as ::core::ffi::c_int as ::core::ffi::c_uint
-            && force != 0
-        {
-            codepoint = UNICODE_INVALID as ::core::ffi::c_int;
-            *nbytep = (*tk).buffcount;
-            res = TERMKEY_RES_KEY;
-        }
+        // Upstream fills the key in even when it is about to report AGAIN, and
+        // the caller re-reads with force set rather than trusting it.
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
-        (*key).modifiers = 0 as ::core::ffi::c_int;
+        (*key).modifiers = 0;
         emit_codepoint(tk, codepoint, key);
-        return res;
-    } else {
-        (*key).type_0 = TERMKEY_TYPE_UNICODE;
-        (*key).code.codepoint = b0 as ::core::ffi::c_int;
-        (*key).modifiers = 0 as ::core::ffi::c_int;
-        (*key).utf8[0 as ::core::ffi::c_int as usize] =
-            (*key).code.codepoint as ::core::ffi::c_char;
-        (*key).utf8[1 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_char;
-        *nbytep = 1 as size_t;
-        return TERMKEY_RES_KEY;
+        return result;
+    }
+    // No UTF-8: every byte is its own character.
+    (*key).type_0 = TERMKEY_TYPE_UNICODE;
+    (*key).code = TermKeyKey_code {
+        codepoint: first as c_int,
     };
+    (*key).modifiers = 0;
+    (*key).utf8[0] = first as c_char;
+    (*key).utf8[1] = 0;
+    *nbytep = 1;
+    TERMKEY_RES_KEY
 }
-pub unsafe extern "C" fn peekkey_mouse(
-    mut tk: *mut TermKey,
-    mut key: *mut TermKeyKey,
-    mut nbytep: *mut size_t,
+
+/// Decode an X10 mouse report: three bytes of button-and-modifiers, column and
+/// line, each offset by a space so they stay printable.
+pub unsafe fn peekkey_mouse(
+    tk: *mut TermKey,
+    key: *mut TermKeyKey,
+    nbytep: *mut size_t,
 ) -> TermKeyResult {
-    if (*tk).buffcount < 3 as size_t {
+    if (*tk).buffcount < 3 {
         return TERMKEY_RES_AGAIN;
     }
+    let bytes = core::slice::from_raw_parts((*tk).buffer.add((*tk).buffstart), 3);
     (*key).type_0 = TERMKEY_TYPE_MOUSE;
-    (*key).code.mouse[0 as ::core::ffi::c_int as usize] =
-        (*(*tk)
-            .buffer
-            .offset((*tk).buffstart.wrapping_add(0 as size_t) as isize)
-            as ::core::ffi::c_char as ::core::ffi::c_int
-            - 0x20 as ::core::ffi::c_int) as ::core::ffi::c_char;
-    (*key).code.mouse[1 as ::core::ffi::c_int as usize] =
-        (*(*tk)
-            .buffer
-            .offset((*tk).buffstart.wrapping_add(1 as size_t) as isize)
-            as ::core::ffi::c_char as ::core::ffi::c_int
-            - 0x20 as ::core::ffi::c_int) as ::core::ffi::c_char;
-    (*key).code.mouse[2 as ::core::ffi::c_int as usize] =
-        (*(*tk)
-            .buffer
-            .offset((*tk).buffstart.wrapping_add(2 as size_t) as isize)
-            as ::core::ffi::c_char as ::core::ffi::c_int
-            - 0x20 as ::core::ffi::c_int) as ::core::ffi::c_char;
-    (*key).code.mouse[3 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_char;
-    (*key).modifiers = ((*key).code.mouse[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-        & 0x1c as ::core::ffi::c_int)
-        >> 2 as ::core::ffi::c_int;
-    (*key).code.mouse[0 as ::core::ffi::c_int as usize] =
-        ((*key).code.mouse[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-            & !(0x1c as ::core::ffi::c_int)) as ::core::ffi::c_char;
-    *nbytep = 3 as size_t;
-    return TERMKEY_RES_KEY;
+    let mut payload: report::Payload = [0; 4];
+    for (slot, byte) in payload.iter_mut().zip(bytes) {
+        *slot = (*byte as c_char as c_int - 0x20) as c_char;
+    }
+    // Bits 2-4 of the button code are the modifiers; lift them out of it.
+    (*key).modifiers = (payload[0] as c_int & 0x1c) >> 2;
+    payload[0] = (payload[0] as c_int & !0x1c) as c_char;
+    (*key).code = TermKeyKey_code { mouse: payload };
+    *nbytep = 3;
+    TERMKEY_RES_KEY
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_getkey(
-    mut tk: *mut TermKey,
-    mut key: *mut TermKeyKey,
-) -> TermKeyResult {
-    let mut nbytes: size_t = 0 as size_t;
-    let mut ret: TermKeyResult = peekkey(tk, key, 0 as ::core::ffi::c_int, &raw mut nbytes);
-    if ret as ::core::ffi::c_uint == TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint {
+pub unsafe extern "C" fn termkey_getkey(tk: *mut TermKey, key: *mut TermKeyKey) -> TermKeyResult {
+    let mut nbytes: size_t = 0;
+    let ret = peekkey(tk, key, 0, &raw mut nbytes);
+    if ret == TERMKEY_RES_KEY {
         eat_bytes(tk, nbytes);
     }
-    if ret as ::core::ffi::c_uint == TERMKEY_RES_AGAIN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        peekkey(tk, key, 1 as ::core::ffi::c_int, &raw mut nbytes);
+    if ret == TERMKEY_RES_AGAIN {
+        // Fill the key in anyway, so a caller that gives up waiting has
+        // something to report. The bytes stay in the buffer.
+        peekkey(tk, key, 1, &raw mut nbytes);
     }
-    return ret;
+    ret
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_getkey_force(
-    mut tk: *mut TermKey,
-    mut key: *mut TermKeyKey,
+    tk: *mut TermKey,
+    key: *mut TermKeyKey,
 ) -> TermKeyResult {
-    let mut nbytes: size_t = 0 as size_t;
-    let mut ret: TermKeyResult = peekkey(tk, key, 1 as ::core::ffi::c_int, &raw mut nbytes);
-    if ret as ::core::ffi::c_uint == TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint {
+    let mut nbytes: size_t = 0;
+    let ret = peekkey(tk, key, 1, &raw mut nbytes);
+    if ret == TERMKEY_RES_KEY {
         eat_bytes(tk, nbytes);
     }
-    return ret;
+    ret
 }
+
+/// The name of a symbolic key, or "UNKNOWN".
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_push_bytes(
-    mut tk: *mut TermKey,
-    mut bytes: *const ::core::ffi::c_char,
-    mut len: size_t,
-) -> size_t {
-    if (*tk).buffstart != 0 {
-        memmove(
-            (*tk).buffer as *mut ::core::ffi::c_void,
-            (*tk).buffer.offset((*tk).buffstart as isize) as *const ::core::ffi::c_void,
-            (*tk).buffcount,
-        );
-        (*tk).buffstart = 0 as size_t;
-    }
-    if (*tk).buffcount >= (*tk).buffsize {
-        *__errno_location() = ENOMEM;
-        return -1 as ::core::ffi::c_int as size_t;
-    }
-    if len > (*tk).buffsize.wrapping_sub((*tk).buffcount) {
-        len = (*tk).buffsize.wrapping_sub((*tk).buffcount);
-    }
-    memcpy(
-        (*tk).buffer.offset((*tk).buffcount as isize) as *mut ::core::ffi::c_void,
-        bytes as *const ::core::ffi::c_void,
-        len,
-    );
-    (*tk).buffcount = (*tk).buffcount.wrapping_add(len);
-    return len;
+pub unsafe extern "C" fn termkey_get_keyname(_tk: *mut TermKey, sym: TermKeySym) -> *const c_char {
+    keynames::name(sym).as_ptr()
 }
-pub unsafe extern "C" fn termkey_register_keyname(
-    mut tk: *mut TermKey,
-    mut sym: TermKeySym,
-    mut name: *const ::core::ffi::c_char,
-) -> TermKeySym {
-    if sym as u64 == 0 {
-        sym = (*tk).nkeynames as TermKeySym;
-    }
-    if sym as ::core::ffi::c_int >= (*tk).nkeynames {
-        let mut new_keynames: *mut *const ::core::ffi::c_char = xrealloc(
-            (*tk).keynames as *mut ::core::ffi::c_void,
-            ::core::mem::size_of::<*const ::core::ffi::c_char>()
-                .wrapping_mul((sym as size_t).wrapping_add(1 as size_t)),
-        )
-            as *mut *const ::core::ffi::c_char;
-        (*tk).keynames = new_keynames;
-        let mut i: ::core::ffi::c_int = (*tk).nkeynames;
-        while i < sym as ::core::ffi::c_int {
-            *(*tk).keynames.offset(i as isize) = ::core::ptr::null::<::core::ffi::c_char>();
-            i += 1;
-        }
-        (*tk).nkeynames = sym as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-    }
-    *(*tk).keynames.offset(sym as isize) = name;
-    return sym;
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn termkey_get_keyname(
-    mut tk: *mut TermKey,
-    mut sym: TermKeySym,
-) -> *const ::core::ffi::c_char {
-    if sym as ::core::ffi::c_int == TERMKEY_SYM_UNKNOWN as ::core::ffi::c_int {
-        return b"UNKNOWN\0".as_ptr() as *const ::core::ffi::c_char;
-    }
-    if (sym as ::core::ffi::c_int) < (*tk).nkeynames {
-        return *(*tk).keynames.offset(sym as isize);
-    }
-    return b"UNKNOWN\0".as_ptr() as *const ::core::ffi::c_char;
-}
-unsafe extern "C" fn termkey_lookup_keyname_format(
-    mut tk: *mut TermKey,
-    mut str: *const ::core::ffi::c_char,
-    mut sym: *mut TermKeySym,
-    mut format: TermKeyFormat,
-) -> *const ::core::ffi::c_char {
-    *sym = TERMKEY_SYM_NONE;
-    while (*sym as ::core::ffi::c_int) < (*tk).nkeynames {
-        let mut thiskey: *const ::core::ffi::c_char = *(*tk).keynames.offset(*sym as isize);
-        if !thiskey.is_null() {
-            let mut len: size_t = strlen(thiskey);
-            if format as ::core::ffi::c_uint
-                & TERMKEY_FORMAT_LOWERSPACE as ::core::ffi::c_int as ::core::ffi::c_uint
-                != 0
-            {
-                let mut thisstr: *const ::core::ffi::c_char = str;
-                if strpncmp_camel(&raw mut thisstr, &raw mut thiskey, len)
-                    == 0 as ::core::ffi::c_int
-                {
-                    return thisstr;
-                }
-            } else if strncmp(str, thiskey, len) == 0 as ::core::ffi::c_int {
-                return (str as *mut ::core::ffi::c_char).offset(len as isize);
-            }
-        }
-        *sym += 1;
-    }
-    return ::core::ptr::null::<::core::ffi::c_char>();
-}
+
+/// Find the symbol named at the head of `str`, and where its name ends.
+///
+/// Returns null when nothing matches. On a match `*symp` is the symbol and the
+/// return value points at the rest of `str`, so "DownMore" yields Down and
+/// "More".
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_lookup_keyname(
-    mut tk: *mut TermKey,
-    mut str: *const ::core::ffi::c_char,
-    mut sym: *mut TermKeySym,
-) -> *const ::core::ffi::c_char {
-    return termkey_lookup_keyname_format(tk, str, sym, 0 as TermKeyFormat);
-}
-unsafe extern "C" fn register_c0(
-    mut tk: *mut TermKey,
-    mut sym: TermKeySym,
-    mut ctrl: ::core::ffi::c_uchar,
-    mut name: *const ::core::ffi::c_char,
-) -> TermKeySym {
-    return register_c0_full(
-        tk,
-        sym,
-        0 as ::core::ffi::c_int,
-        0 as ::core::ffi::c_int,
-        ctrl,
-        name,
-    );
-}
-unsafe extern "C" fn register_c0_full(
-    mut tk: *mut TermKey,
-    mut sym: TermKeySym,
-    mut modifier_set: ::core::ffi::c_int,
-    mut modifier_mask: ::core::ffi::c_int,
-    mut ctrl: ::core::ffi::c_uchar,
-    mut name: *const ::core::ffi::c_char,
-) -> TermKeySym {
-    if ctrl as ::core::ffi::c_int >= 0x20 as ::core::ffi::c_int {
-        *__errno_location() = EINVAL;
-        return TERMKEY_SYM_UNKNOWN;
+    _tk: *mut TermKey,
+    text: *const c_char,
+    symp: *mut TermKeySym,
+) -> *const c_char {
+    match keynames::lookup(CStr::from_ptr(text).to_bytes()) {
+        Some((sym, len)) => {
+            *symp = sym;
+            text.add(len)
+        }
+        None => core::ptr::null(),
     }
-    if !name.is_null() {
-        sym = termkey_register_keyname(tk, sym, name);
-    }
-    (*tk).c0[ctrl as usize].sym = sym;
-    (*tk).c0[ctrl as usize].modifier_set = modifier_set;
-    (*tk).c0[ctrl as usize].modifier_mask = modifier_mask;
-    return sym;
 }
-static modnames: GlobalCell<[modnames; 8]> = GlobalCell::new([
-    modnames {
-        shift: b"S\0".as_ptr() as *const ::core::ffi::c_char,
-        alt: b"A\0".as_ptr() as *const ::core::ffi::c_char,
-        ctrl: b"C\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    modnames {
-        shift: b"Shift\0".as_ptr() as *const ::core::ffi::c_char,
-        alt: b"Alt\0".as_ptr() as *const ::core::ffi::c_char,
-        ctrl: b"Ctrl\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    modnames {
-        shift: b"S\0".as_ptr() as *const ::core::ffi::c_char,
-        alt: b"M\0".as_ptr() as *const ::core::ffi::c_char,
-        ctrl: b"C\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    modnames {
-        shift: b"Shift\0".as_ptr() as *const ::core::ffi::c_char,
-        alt: b"Meta\0".as_ptr() as *const ::core::ffi::c_char,
-        ctrl: b"Ctrl\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    modnames {
-        shift: b"s\0".as_ptr() as *const ::core::ffi::c_char,
-        alt: b"a\0".as_ptr() as *const ::core::ffi::c_char,
-        ctrl: b"c\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    modnames {
-        shift: b"shift\0".as_ptr() as *const ::core::ffi::c_char,
-        alt: b"alt\0".as_ptr() as *const ::core::ffi::c_char,
-        ctrl: b"ctrl\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    modnames {
-        shift: b"s\0".as_ptr() as *const ::core::ffi::c_char,
-        alt: b"m\0".as_ptr() as *const ::core::ffi::c_char,
-        ctrl: b"c\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-    modnames {
-        shift: b"shift\0".as_ptr() as *const ::core::ffi::c_char,
-        alt: b"meta\0".as_ptr() as *const ::core::ffi::c_char,
-        ctrl: b"ctrl\0".as_ptr() as *const ::core::ffi::c_char,
-    },
-]);
+
+/// Render a key as text, in the manner of `snprintf`: at most `len - 1` bytes
+/// plus a terminator are written, and the return value is the length the whole
+/// rendering would have taken.
+///
+/// Upstream built the text with a series of `snprintf`s into `buffer + pos`
+/// with a remaining size of `len - pos`. Once `pos` passed `len` — a key whose
+/// modifiers alone overflowed the buffer, which `TERMKEY_FORMAT_MOUSE_POS`
+/// makes easy — that subtraction wrapped to a size_t of about 2^64 and the next
+/// write ran off the end of the caller's buffer. Rendering once and copying
+/// what fits has no such edge.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_strfkey(
-    mut tk: *mut TermKey,
-    mut buffer: *mut ::core::ffi::c_char,
-    mut len: size_t,
-    mut key: *mut TermKeyKey,
-    mut format: TermKeyFormat,
+    tk: *mut TermKey,
+    buffer: *mut c_char,
+    len: size_t,
+    key: *mut TermKeyKey,
+    format: TermKeyFormat,
 ) -> size_t {
-    let mut pos: size_t = 0 as size_t;
-    let mut l: size_t = 0 as size_t;
-    let mut mods: *mut modnames = (modnames.ptr() as *mut modnames).offset(
-        ((format as ::core::ffi::c_uint
-            & TERMKEY_FORMAT_LONGMOD as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0) as ::core::ffi::c_int
-            + (format as ::core::ffi::c_uint
-                & TERMKEY_FORMAT_ALTISMETA as ::core::ffi::c_int as ::core::ffi::c_uint
-                != 0) as ::core::ffi::c_int
-                * 2 as ::core::ffi::c_int
-            + (format as ::core::ffi::c_uint
-                & TERMKEY_FORMAT_LOWERMOD as ::core::ffi::c_int as ::core::ffi::c_uint
-                != 0) as ::core::ffi::c_int
-                * 4 as ::core::ffi::c_int) as isize,
-    ) as *mut modnames;
-    let mut wrapbracket: ::core::ffi::c_int = (format as ::core::ffi::c_uint
-        & TERMKEY_FORMAT_WRAPBRACKET as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0
-        && ((*key).type_0 as ::core::ffi::c_int != TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
-            || (*key).modifiers != 0 as ::core::ffi::c_int))
-        as ::core::ffi::c_int;
-    let mut sep: ::core::ffi::c_char = (if format as ::core::ffi::c_uint
-        & TERMKEY_FORMAT_SPACEMOD as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0
-    {
-        ' ' as ::core::ffi::c_int
+    // A key whose UTF-8 was never filled in — one the consumer built itself —
+    // gets it derived from the codepoint.
+    let mut encoded = [0 as c_char; 7];
+    let utf8: &[u8] = if (*key).type_0 == TERMKEY_TYPE_UNICODE {
+        let source = if (*key).utf8[0] == 0 {
+            fill_utf8((*key).code.codepoint, &mut encoded);
+            &encoded
+        } else {
+            &(*key).utf8
+        };
+        let raw = &*(source as *const [c_char; 7] as *const [u8; 7]);
+        // Bounded, unlike upstream's `%s`: a key the consumer built itself need
+        // not have terminated the field.
+        &raw[..raw.iter().position(|&byte| byte == 0).unwrap_or(raw.len())]
     } else {
-        '-' as ::core::ffi::c_int
-    }) as ::core::ffi::c_char;
-    if format as ::core::ffi::c_uint
-        & TERMKEY_FORMAT_CARETCTRL as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0
-        && (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
-        && (*key).modifiers == TERMKEY_KEYMOD_CTRL as ::core::ffi::c_int
-    {
-        let mut codepoint: ::core::ffi::c_long = (*key).code.codepoint as ::core::ffi::c_long;
-        if codepoint >= 'a' as ::core::ffi::c_long && codepoint <= 'z' as ::core::ffi::c_long {
-            l = snprintf(
-                buffer.offset(pos as isize),
-                len.wrapping_sub(pos),
-                if wrapbracket != 0 {
-                    b"<^%c>\0".as_ptr() as *const ::core::ffi::c_char
-                } else {
-                    b"^%c\0".as_ptr() as *const ::core::ffi::c_char
-                },
-                codepoint as ::core::ffi::c_char as ::core::ffi::c_int - 0x20 as ::core::ffi::c_int,
-            ) as size_t;
-            if l <= 0 as size_t {
-                return pos;
-            }
-            pos = pos.wrapping_add(l);
-            return pos;
-        } else if codepoint >= '@' as ::core::ffi::c_long && codepoint < 'A' as ::core::ffi::c_long
-            || codepoint > 'Z' as ::core::ffi::c_long && codepoint <= '_' as ::core::ffi::c_long
-        {
-            l = snprintf(
-                buffer.offset(pos as isize),
-                len.wrapping_sub(pos),
-                if wrapbracket != 0 {
-                    b"<^%c>\0".as_ptr() as *const ::core::ffi::c_char
-                } else {
-                    b"^%c\0".as_ptr() as *const ::core::ffi::c_char
-                },
-                codepoint as ::core::ffi::c_char as ::core::ffi::c_int,
-            ) as size_t;
-            if l <= 0 as size_t {
-                return pos;
-            }
-            pos = pos.wrapping_add(l);
-            return pos;
-        }
-    }
-    if wrapbracket != 0 {
-        l = snprintf(
-            buffer.offset(pos as isize),
-            len.wrapping_sub(pos),
-            b"<\0".as_ptr() as *const ::core::ffi::c_char,
-        ) as size_t;
-        if l <= 0 as size_t {
-            return pos;
-        }
-        pos = pos.wrapping_add(l);
-    }
-    if (*key).modifiers & TERMKEY_KEYMOD_ALT as ::core::ffi::c_int != 0 {
-        l = snprintf(
-            buffer.offset(pos as isize),
-            len.wrapping_sub(pos),
-            b"%s%c\0".as_ptr() as *const ::core::ffi::c_char,
-            (*mods).alt,
-            sep as ::core::ffi::c_int,
-        ) as size_t;
-        if l <= 0 as size_t {
-            return pos;
-        }
-        pos = pos.wrapping_add(l);
-    }
-    if (*key).modifiers & TERMKEY_KEYMOD_CTRL as ::core::ffi::c_int != 0 {
-        l = snprintf(
-            buffer.offset(pos as isize),
-            len.wrapping_sub(pos),
-            b"%s%c\0".as_ptr() as *const ::core::ffi::c_char,
-            (*mods).ctrl,
-            sep as ::core::ffi::c_int,
-        ) as size_t;
-        if l <= 0 as size_t {
-            return pos;
-        }
-        pos = pos.wrapping_add(l);
-    }
-    if (*key).modifiers & TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int != 0 {
-        l = snprintf(
-            buffer.offset(pos as isize),
-            len.wrapping_sub(pos),
-            b"%s%c\0".as_ptr() as *const ::core::ffi::c_char,
-            (*mods).shift,
-            sep as ::core::ffi::c_int,
-        ) as size_t;
-        if l <= 0 as size_t {
-            return pos;
-        }
-        pos = pos.wrapping_add(l);
-    }
-    match (*key).type_0 as ::core::ffi::c_int {
-        0 => {
-            if (*key).utf8[0 as ::core::ffi::c_int as usize] == 0 {
-                fill_utf8(
-                    (*key).code.codepoint,
-                    &raw mut (*key).utf8 as *mut ::core::ffi::c_char,
-                );
-            }
-            l = snprintf(
-                buffer.offset(pos as isize),
-                len.wrapping_sub(pos),
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                &raw mut (*key).utf8 as *mut ::core::ffi::c_char,
-            ) as size_t;
-        }
-        2 => {
-            let mut name: *const ::core::ffi::c_char = termkey_get_keyname(tk, (*key).code.sym);
-            if format as ::core::ffi::c_uint
-                & TERMKEY_FORMAT_LOWERSPACE as ::core::ffi::c_int as ::core::ffi::c_uint
-                != 0
-            {
-                l = snprint_cameltospaces(buffer.offset(pos as isize), len.wrapping_sub(pos), name)
-                    as size_t;
-            } else {
-                l = snprintf(
-                    buffer.offset(pos as isize),
-                    len.wrapping_sub(pos),
-                    b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    name,
-                ) as size_t;
-            }
-        }
-        1 => {
-            l = snprintf(
-                buffer.offset(pos as isize),
-                len.wrapping_sub(pos),
-                b"%c%d\0".as_ptr() as *const ::core::ffi::c_char,
-                if format as ::core::ffi::c_uint
-                    & TERMKEY_FORMAT_LOWERSPACE as ::core::ffi::c_int as ::core::ffi::c_uint
-                    != 0
-                {
-                    'f' as ::core::ffi::c_int
-                } else {
-                    'F' as ::core::ffi::c_int
-                },
-                (*key).code.number,
-            ) as size_t;
-        }
-        3 => {
-            let mut ev: TermKeyMouseEvent = TERMKEY_MOUSE_UNKNOWN;
-            let mut button: ::core::ffi::c_int = 0;
-            let mut line: ::core::ffi::c_int = 0;
-            let mut col: ::core::ffi::c_int = 0;
+        b""
+    };
+
+    let mut mouse_event: TermKeyMouseEvent = TERMKEY_MOUSE_UNKNOWN;
+    let (mut button, mut line, mut col) = (0, 0, 0);
+    let (mut initial, mut mode, mut value) = (0, 0, 0);
+    let body = match (*key).type_0 {
+        TERMKEY_TYPE_UNICODE => KeyBody::Unicode {
+            codepoint: (*key).code.codepoint,
+            utf8,
+        },
+        TERMKEY_TYPE_KEYSYM => KeyBody::Sym((*key).code.sym),
+        TERMKEY_TYPE_FUNCTION => KeyBody::Function((*key).code.number),
+        TERMKEY_TYPE_MOUSE => {
             termkey_interpret_mouse(
                 tk,
                 key,
-                &raw mut ev,
+                &raw mut mouse_event,
                 &raw mut button,
                 &raw mut line,
                 &raw mut col,
             );
-            l = snprintf(
-                buffer.offset(pos as isize),
-                len.wrapping_sub(pos),
-                b"Mouse%s(%d)\0".as_ptr() as *const ::core::ffi::c_char,
-                (*evnames.ptr())[ev as usize],
+            KeyBody::Mouse {
+                event: mouse_event,
                 button,
-            ) as size_t;
-            if format as ::core::ffi::c_uint
-                & TERMKEY_FORMAT_MOUSE_POS as ::core::ffi::c_int as ::core::ffi::c_uint
-                != 0
-            {
-                if l <= 0 as size_t {
-                    return pos;
-                }
-                pos = pos.wrapping_add(l);
-                l = snprintf(
-                    buffer.offset(pos as isize),
-                    len.wrapping_sub(pos),
-                    b" @ (%u,%u)\0".as_ptr() as *const ::core::ffi::c_char,
-                    col,
-                    line,
-                ) as size_t;
+                line,
+                col,
             }
         }
-        4 => {
-            l = snprintf(
-                buffer.offset(pos as isize),
-                len.wrapping_sub(pos),
-                b"Position\0".as_ptr() as *const ::core::ffi::c_char,
-            ) as size_t;
-        }
-        5 => {
-            let mut initial: ::core::ffi::c_int = 0;
-            let mut mode: ::core::ffi::c_int = 0;
-            let mut value: ::core::ffi::c_int = 0;
+        TERMKEY_TYPE_POSITION => KeyBody::Position,
+        TERMKEY_TYPE_MODEREPORT => {
             termkey_interpret_modereport(tk, key, &raw mut initial, &raw mut mode, &raw mut value);
-            if initial != 0 {
-                l = snprintf(
-                    buffer.offset(pos as isize),
-                    len.wrapping_sub(pos),
-                    b"Mode(%c%d=%d)\0".as_ptr() as *const ::core::ffi::c_char,
-                    initial,
-                    mode,
-                    value,
-                ) as size_t;
-            } else {
-                l = snprintf(
-                    buffer.offset(pos as isize),
-                    len.wrapping_sub(pos),
-                    b"Mode(%d=%d)\0".as_ptr() as *const ::core::ffi::c_char,
-                    mode,
-                    value,
-                ) as size_t;
+            KeyBody::Mode {
+                initial,
+                mode,
+                value,
             }
         }
-        6 => {
-            l = snprintf(
-                buffer.offset(pos as isize),
-                len.wrapping_sub(pos),
-                b"DCS\0".as_ptr() as *const ::core::ffi::c_char,
-            ) as size_t;
-        }
-        7 => {
-            l = snprintf(
-                buffer.offset(pos as isize),
-                len.wrapping_sub(pos),
-                b"OSC\0".as_ptr() as *const ::core::ffi::c_char,
-            ) as size_t;
-        }
-        8 => {
-            l = snprintf(
-                buffer.offset(pos as isize),
-                len.wrapping_sub(pos),
-                b"APC\0".as_ptr() as *const ::core::ffi::c_char,
-            ) as size_t;
-        }
-        -1 => {
-            l = snprintf(
-                buffer.offset(pos as isize),
-                len.wrapping_sub(pos),
-                b"CSI %c\0".as_ptr() as *const ::core::ffi::c_char,
-                (*key).code.number & 0xff as ::core::ffi::c_int,
-            ) as size_t;
-        }
-        _ => {}
+        TERMKEY_TYPE_DCS => KeyBody::Dcs,
+        TERMKEY_TYPE_OSC => KeyBody::Osc,
+        TERMKEY_TYPE_APC => KeyBody::Apc,
+        TERMKEY_TYPE_UNKNOWN_CSI => KeyBody::UnknownCsi((*key).code.number),
+        _ => KeyBody::Unrecognised,
+    };
+
+    let text = format::render(&body, (*key).modifiers, format);
+    if len > 0 {
+        let written = text.len().min(len - 1);
+        core::ptr::copy_nonoverlapping(text.as_ptr(), buffer as *mut u8, written);
+        *buffer.add(written) = 0;
     }
-    if l <= 0 as size_t {
-        return pos;
-    }
-    pos = pos.wrapping_add(l);
-    if wrapbracket != 0 {
-        l = snprintf(
-            buffer.offset(pos as isize),
-            len.wrapping_sub(pos),
-            b">\0".as_ptr() as *const ::core::ffi::c_char,
-        ) as size_t;
-        if l <= 0 as size_t {
-            return pos;
-        }
-        pos = pos.wrapping_add(l);
-    }
-    return pos;
+    text.len()
 }
-pub const ENOENT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const ENOMEM: ::core::ffi::c_int = 12 as ::core::ffi::c_int;
-pub const EINVAL: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const VQUIT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const VTIME: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-pub const VMIN: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-pub const VSUSP: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-pub const INLCR: ::core::ffi::c_int = 0o100 as ::core::ffi::c_int;
-pub const ICRNL: ::core::ffi::c_int = 0o400 as ::core::ffi::c_int;
-pub const IXON: ::core::ffi::c_int = 0o2000 as ::core::ffi::c_int;
-pub const ISIG: ::core::ffi::c_int = 0o1 as ::core::ffi::c_int;
-pub const ICANON: ::core::ffi::c_int = 0o2 as ::core::ffi::c_int;
-pub const ECHO: ::core::ffi::c_int = 0o10 as ::core::ffi::c_int;
-pub const IEXTEN: ::core::ffi::c_int = 0o100000 as ::core::ffi::c_int;
-pub const TCSANOW: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const _POSIX_VDISABLE: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
+
+/// The payload of the last DCS, OSC or APC string, if `key` is still the one
+/// that reported it.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn termkey_interpret_string(
+    tk: *mut TermKey,
+    key: *const TermKeyKey,
+    strp: *mut *const c_char,
+) -> TermKeyResult {
+    let kind = (*key).type_0;
+    if kind != TERMKEY_TYPE_DCS && kind != TERMKEY_TYPE_OSC && kind != TERMKEY_TYPE_APC {
+        return TERMKEY_RES_NONE;
+    }
+    let csi: *mut TermKeyCsi = (*tk).csi;
+    // Each string gets a serial number, so a key held past the next one cannot
+    // read a payload that is no longer its own.
+    if (*csi).saved_string_id != (*key).code.number {
+        return TERMKEY_RES_NONE;
+    }
+    *strp = (*csi).saved_string;
+    TERMKEY_RES_KEY
+}

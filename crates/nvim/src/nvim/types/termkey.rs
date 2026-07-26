@@ -7,25 +7,22 @@ use super::*;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TermKey {
-    pub fd: ::core::ffi::c_int,
     pub flags: ::core::ffi::c_int,
     pub canonflags: ::core::ffi::c_int,
     pub buffer: *mut ::core::ffi::c_uchar,
+    /// Where the unread input starts, and how much of it there is. The pair
+    /// walks forward through `buffer` until a read compacts it.
     pub buffstart: size_t,
     pub buffcount: size_t,
     pub buffsize: size_t,
+    /// Bytes of an unrecognised control sequence held back so the consumer can
+    /// re-read them, and discarded at the start of the next read.
     pub hightide: size_t,
-    pub restore_termios: termios,
-    pub restore_termios_valid: ::core::ffi::c_char,
     pub ti_getstr_hook: Option<TermKey_Terminfo_Getstr_Hook>,
     pub ti_getstr_hook_data: *mut ::core::ffi::c_void,
-    pub waittime: ::core::ffi::c_int,
-    pub is_closed: ::core::ffi::c_char,
     pub is_started: ::core::ffi::c_char,
-    pub nkeynames: ::core::ffi::c_int,
-    pub keynames: *mut *const ::core::ffi::c_char,
-    pub c0: [keyinfo; 32],
-    /// Terminfo driver state (`TermKeyTI`), opaque outside `tui::termkey::driver_ti`.
+    /// Terminfo driver state (`TerminfoDriver`), opaque outside
+    /// `tui::termkey::driver_ti`.
     pub ti: *mut ::core::ffi::c_void,
     pub csi: *mut TermKeyCsi,
 }

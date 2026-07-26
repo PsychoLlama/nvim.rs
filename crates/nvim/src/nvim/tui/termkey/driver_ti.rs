@@ -6,7 +6,7 @@
 //! before the generic CSI driver gets a look.
 
 use crate::src::nvim::tui::termkey::termkey::{
-    TERMKEY_KEYMOD_SHIFT, TERMKEY_RES_AGAIN, TERMKEY_RES_EOF, TERMKEY_RES_KEY, TERMKEY_RES_NONE,
+    TERMKEY_KEYMOD_SHIFT, TERMKEY_RES_AGAIN, TERMKEY_RES_KEY, TERMKEY_RES_NONE,
     TERMKEY_SYM_BACKSPACE, TERMKEY_SYM_BEGIN, TERMKEY_SYM_CLEAR, TERMKEY_SYM_DELETE,
     TERMKEY_SYM_END, TERMKEY_SYM_FIND, TERMKEY_SYM_HOME, TERMKEY_SYM_INSERT, TERMKEY_SYM_LEFT,
     TERMKEY_SYM_PAGEDOWN, TERMKEY_SYM_PAGEUP, TERMKEY_SYM_RIGHT, TERMKEY_SYM_SELECT,
@@ -234,11 +234,7 @@ pub unsafe fn peek_key(
     nbytep: *mut size_t,
 ) -> TermKeyResult {
     if (*tk).buffcount == 0 {
-        return if (*tk).is_closed != 0 {
-            TERMKEY_RES_EOF
-        } else {
-            TERMKEY_RES_NONE
-        };
+        return TERMKEY_RES_NONE;
     }
     let driver = &*((*tk).ti as *mut TerminfoDriver);
     let bytes = core::slice::from_raw_parts((*tk).buffer.add((*tk).buffstart), (*tk).buffcount);

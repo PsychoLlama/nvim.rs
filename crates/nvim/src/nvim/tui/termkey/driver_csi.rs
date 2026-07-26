@@ -13,10 +13,10 @@ use crate::src::nvim::tui::termkey::keytables::{
 use crate::src::nvim::tui::termkey::report::{self, Payload};
 use crate::src::nvim::tui::termkey::termkey::{
     TERMKEY_EVENT_UNKNOWN, TERMKEY_FLAG_CONVERTKP, TERMKEY_KEYMOD_ALT, TERMKEY_RES_AGAIN,
-    TERMKEY_RES_EOF, TERMKEY_RES_KEY, TERMKEY_RES_NONE, TERMKEY_SYM_UNKNOWN, TERMKEY_TYPE_APC,
-    TERMKEY_TYPE_DCS, TERMKEY_TYPE_KEYSYM, TERMKEY_TYPE_MODEREPORT, TERMKEY_TYPE_MOUSE,
-    TERMKEY_TYPE_OSC, TERMKEY_TYPE_POSITION, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI,
-    emit_codepoint, peekkey_mouse,
+    TERMKEY_RES_KEY, TERMKEY_RES_NONE, TERMKEY_SYM_UNKNOWN, TERMKEY_TYPE_APC, TERMKEY_TYPE_DCS,
+    TERMKEY_TYPE_KEYSYM, TERMKEY_TYPE_MODEREPORT, TERMKEY_TYPE_MOUSE, TERMKEY_TYPE_OSC,
+    TERMKEY_TYPE_POSITION, TERMKEY_TYPE_UNICODE, TERMKEY_TYPE_UNKNOWN_CSI, emit_codepoint,
+    peekkey_mouse,
 };
 pub use crate::src::nvim::types::{
     TermKey, TermKeyCsi, TermKeyCsiParam, TermKeyKey, TermKeyKey_code, TermKeyMouseEvent,
@@ -596,11 +596,7 @@ pub unsafe fn peek_key(
     nbytep: *mut size_t,
 ) -> TermKeyResult {
     if (*tk).buffcount == 0 {
-        return if (*tk).is_closed != 0 {
-            TERMKEY_RES_EOF
-        } else {
-            TERMKEY_RES_NONE
-        };
+        return TERMKEY_RES_NONE;
     }
     let bytes = buffered(tk);
     match bytes[0] {
