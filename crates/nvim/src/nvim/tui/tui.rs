@@ -36,9 +36,6 @@ use crate::src::nvim::tui::terminfo::{
     terminfo_fmt, terminfo_from_builtin, terminfo_from_database, terminfo_info_msg,
     terminfo_is_bsd_console, terminfo_is_term_family,
 };
-use crate::src::nvim::tui::ugrid::{
-    ugrid_clear, ugrid_clear_chunk, ugrid_goto, ugrid_init, ugrid_resize, ugrid_scroll,
-};
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __pid_t, __pthread_internal_list,
     __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __va_list_tag, _IO_FILE,
@@ -367,8 +364,6 @@ pub const kTerm_clr_eol: TerminfoDef = 3;
 pub const kTerm_clear_screen: TerminfoDef = 2;
 pub const kTerm_change_scroll_region: TerminfoDef = 1;
 pub const kTerm_carriage_return: TerminfoDef = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct TUIData {
     pub loop_0: *mut Loop,
     pub buf: [::core::ffi::c_char; 65535],
@@ -632,7 +627,6 @@ pub unsafe extern "C" fn tui_start(
                 *mut ::core::ffi::c_void,
             ) -> *const ::core::ffi::c_char,
     ) as Option<TermKey_Terminfo_Getstr_Hook>;
-    ugrid_init(&raw mut (*tui).grid);
     tui_terminal_start(tui);
     uv_timer_init(
         &raw mut (*(*tui).loop_0).uv,
@@ -1663,13 +1657,12 @@ unsafe extern "C" fn cheap_to_print(
     mut col: ::core::ffi::c_int,
     mut next: ::core::ffi::c_int,
 ) -> bool {
-    let mut grid: *mut UGrid = &raw mut (*tui).grid;
-    let mut cell: *mut UCell = (*(*grid).cells.offset(row as isize)).offset(col as isize);
-    while next != 0 {
-        next -= 1;
+    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    while i < next {
+        let cell: UCell = (*tui).grid.cell(row, col + i);
         if attrs_differ(
             tui,
-            (*cell).attr as ::core::ffi::c_int,
+            cell.attr as ::core::ffi::c_int,
             (*tui).print_attr_id,
             (*tui).rgb,
         ) {
@@ -1677,10 +1670,10 @@ unsafe extern "C" fn cheap_to_print(
                 return false_0 != 0;
             }
         }
-        if schar_get_ascii((*cell).data) as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+        if schar_get_ascii(cell.data) as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
             return false_0 != 0;
         }
-        cell = cell.offset(1);
+        i += 1;
     }
     return true_0 != 0;
 }
@@ -1704,7 +1697,7 @@ unsafe extern "C" fn cursor_goto(
     }
     if 0 as ::core::ffi::c_int == row && 0 as ::core::ffi::c_int == col {
         terminfo_out(tui, kTerm_cursor_home);
-        ugrid_goto(grid, row, col);
+        (*grid).goto(row, col);
         return;
     }
     if (*grid).row != -1 as ::core::ffi::c_int {
@@ -1727,7 +1720,7 @@ unsafe extern "C" fn cursor_goto(
         } != 0
         {
             terminfo_out(tui, kTerm_carriage_return);
-            ugrid_goto(grid, (*grid).row, 0 as ::core::ffi::c_int);
+            (*grid).goto((*grid).row, 0 as ::core::ffi::c_int);
         }
         if row == (*grid).row {
             if col < (*grid).col
@@ -1753,7 +1746,7 @@ unsafe extern "C" fn cursor_goto(
                         0 as ::core::ffi::c_int,
                     );
                 }
-                ugrid_goto(grid, row, col);
+                (*grid).goto(row, col);
                 return;
             } else if col > (*grid).col {
                 let mut n_0: ::core::ffi::c_int = col - (*grid).col;
@@ -1775,7 +1768,7 @@ unsafe extern "C" fn cursor_goto(
                         0 as ::core::ffi::c_int,
                     );
                 }
-                ugrid_goto(grid, row, col);
+                (*grid).goto(row, col);
                 return;
             }
         }
@@ -1800,7 +1793,7 @@ unsafe extern "C" fn cursor_goto(
                         0 as ::core::ffi::c_int,
                     );
                 }
-                ugrid_goto(grid, row, col);
+                (*grid).goto(row, col);
                 return;
             } else if row < (*grid).row {
                 let mut n_2: ::core::ffi::c_int = (*grid).row - row;
@@ -1822,13 +1815,13 @@ unsafe extern "C" fn cursor_goto(
                         0 as ::core::ffi::c_int,
                     );
                 }
-                ugrid_goto(grid, row, col);
+                (*grid).goto(row, col);
                 return;
             }
         }
     }
     terminfo_print_num(tui, kTerm_cursor_address, row, col, 0 as ::core::ffi::c_int);
-    ugrid_goto(grid, row, col);
+    (*grid).goto(row, col);
 }
 unsafe extern "C" fn print_spaces(mut tui: *mut TUIData, mut width: ::core::ffi::c_int) {
     let mut grid: *mut UGrid = &raw mut (*tui).grid;
@@ -1860,31 +1853,31 @@ unsafe extern "C" fn print_spaces(mut tui: *mut TUIData, mut width: ::core::ffi:
         final_column_wrap(tui);
     }
 }
-unsafe extern "C" fn print_cell_at_pos(
+unsafe fn print_cell_at_pos(
     mut tui: *mut TUIData,
     mut row: ::core::ffi::c_int,
     mut col: ::core::ffi::c_int,
-    mut cell: *mut UCell,
+    cell: UCell,
     mut is_doublewidth: bool,
 ) {
     let mut grid: *mut UGrid = &raw mut (*tui).grid;
-    if (*grid).row == -1 as ::core::ffi::c_int && (*cell).data == NUL as schar_T {
+    if (*grid).row == -1 as ::core::ffi::c_int && cell.data == NUL as schar_T {
         return;
     }
     cursor_goto(tui, row, col);
     let mut buf: [::core::ffi::c_char; 32] = [0; 32];
-    schar_get(&raw mut buf as *mut ::core::ffi::c_char, (*cell).data);
+    schar_get(&raw mut buf as *mut ::core::ffi::c_char, cell.data);
     let mut c: ::core::ffi::c_int = utf_ptr2char(&raw mut buf as *mut ::core::ffi::c_char);
     let mut is_ambiwidth: bool = utf_ambiguous_width(&raw mut buf as *mut ::core::ffi::c_char);
     if is_doublewidth as ::core::ffi::c_int != 0
         && (is_ambiwidth as ::core::ffi::c_int != 0 || utf_char2cells(c) == 1 as ::core::ffi::c_int)
     {
         is_ambiwidth = true_0 != 0;
-        update_attrs(tui, (*cell).attr as ::core::ffi::c_int);
+        update_attrs(tui, cell.attr as ::core::ffi::c_int);
         print_spaces(tui, 2 as ::core::ffi::c_int);
         cursor_goto(tui, row, col);
     }
-    print_cell(tui, &raw mut buf as *mut ::core::ffi::c_char, (*cell).attr);
+    print_cell(tui, &raw mut buf as *mut ::core::ffi::c_char, cell.attr);
     if is_ambiwidth {
         (*grid).row = -1 as ::core::ffi::c_int;
     }
@@ -1910,7 +1903,7 @@ unsafe extern "C" fn clear_region(
     {
         if top == 0 as ::core::ffi::c_int {
             terminfo_out(tui, kTerm_clear_screen);
-            ugrid_goto(grid, top, left);
+            (*grid).goto(top, left);
         } else {
             cursor_goto(tui, top, 0 as ::core::ffi::c_int);
             terminfo_out(tui, kTerm_clr_eos);
@@ -2000,11 +1993,7 @@ pub unsafe extern "C" fn tui_grid_resize(
     mut height: Integer,
 ) {
     let mut grid: *mut UGrid = &raw mut (*tui).grid;
-    ugrid_resize(
-        grid,
-        width as ::core::ffi::c_int,
-        height as ::core::ffi::c_int,
-    );
+    (*grid).resize(width as ::core::ffi::c_int, height as ::core::ffi::c_int);
     let mut i: size_t = 0 as size_t;
     while i < (*tui).invalid_regions.size {
         let mut r: *mut Rect = (*tui).invalid_regions.items.offset(i as isize);
@@ -2040,7 +2029,7 @@ pub unsafe extern "C" fn tui_grid_resize(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tui_grid_clear(mut tui: *mut TUIData, mut _g: Integer) {
     let mut grid: *mut UGrid = &raw mut (*tui).grid;
-    ugrid_clear(grid);
+    (*grid).clear();
     schar_cache_clear_if_full();
     (*tui).invalid_regions.size = 0 as size_t;
     clear_region(
@@ -2365,7 +2354,7 @@ pub unsafe extern "C" fn tui_grid_scroll(
     let mut full_screen_scroll: bool = fullwidth as ::core::ffi::c_int != 0
         && top == 0 as ::core::ffi::c_int
         && bot == (*tui).height - 1 as ::core::ffi::c_int;
-    ugrid_scroll(grid, top, bot, left, right, rows as ::core::ffi::c_int);
+    (*grid).scroll(top, bot, left, right, rows as ::core::ffi::c_int);
     let mut has_lr_margins: bool = (*tui).has_left_and_right_margin_mode as ::core::ffi::c_int != 0
         && (*tui).can_set_lr_margin as ::core::ffi::c_int != 0;
     let mut can_scroll: bool = (*tui).can_scroll as ::core::ffi::c_int != 0
@@ -2609,32 +2598,29 @@ pub unsafe extern "C" fn tui_flush(mut tui: *mut TUIData) {
         };
         let mut row: ::core::ffi::c_int = r.top;
         while row < r.bot {
-            let mut clear_attr: ::core::ffi::c_int = (*(*(*grid).cells.offset(row as isize))
-                .offset((r.right - 1 as ::core::ffi::c_int) as isize))
-            .attr as ::core::ffi::c_int;
+            let mut clear_attr: ::core::ffi::c_int =
+                (*grid).cell(row, r.right - 1 as ::core::ffi::c_int).attr as ::core::ffi::c_int;
             let mut clear_col: ::core::ffi::c_int = 0;
             clear_col = r.right;
             while clear_col > 0 as ::core::ffi::c_int {
-                let mut cell: *mut UCell = (*(*grid).cells.offset(row as isize))
-                    .offset((clear_col - 1 as ::core::ffi::c_int) as isize);
-                if !((*cell).data == ' ' as ::core::ffi::c_int as schar_T
-                    && (*cell).attr == clear_attr as sattr_T)
+                let cell: UCell = (*grid).cell(row, clear_col - 1 as ::core::ffi::c_int);
+                if !(cell.data == ' ' as ::core::ffi::c_int as schar_T
+                    && cell.attr == clear_attr as sattr_T)
                 {
                     break;
                 }
                 clear_col -= 1;
             }
-            let mut row_cells: *mut UCell = *(*grid).cells.offset(row as isize);
             let mut curcol: ::core::ffi::c_int = r.left;
             while curcol < clear_col {
-                let mut cell_0: *mut UCell = row_cells.offset(curcol as isize);
+                let cell_0: UCell = (*grid).cell(row, curcol);
                 print_cell_at_pos(
                     tui,
                     row,
                     curcol,
                     cell_0,
                     curcol < clear_col - 1 as ::core::ffi::c_int
-                        && (*cell_0.offset(1 as ::core::ffi::c_int as isize)).data
+                        && (*grid).cell(row, curcol + 1 as ::core::ffi::c_int).data
                             == '\0' as schar_T,
                 );
                 curcol += 1;
@@ -2914,7 +2900,7 @@ pub unsafe extern "C" fn tui_screenshot(mut tui: *mut TUIData, mut path: String_
         cursor_goto(tui, i, 0 as ::core::ffi::c_int);
         let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while j < (*grid).width {
-            let mut cell: UCell = *(*(*grid).cells.offset(i as isize)).offset(j as isize);
+            let cell: UCell = (*grid).cell(i, j);
             let mut buf: [::core::ffi::c_char; 32] = [0; 32];
             schar_get(&raw mut buf as *mut ::core::ffi::c_char, cell.data);
             print_cell(tui, &raw mut buf as *mut ::core::ffi::c_char, cell.attr);
@@ -3048,8 +3034,8 @@ pub unsafe extern "C" fn tui_raw_line(
     let mut grid: *mut UGrid = &raw mut (*tui).grid;
     let mut c: Integer = startcol;
     while c < endcol {
-        (*(*(*grid).cells.offset(linerow as isize)).offset(c as isize)).data =
-            *chunk.offset((c - startcol) as isize);
+        let mut cell: UCell = (*grid).cell(linerow as ::core::ffi::c_int, c as ::core::ffi::c_int);
+        cell.data = *chunk.offset((c - startcol) as isize);
         '_c2rust_label: {
             if (*attrs.offset((c - startcol) as isize) as size_t) < (*tui).attrs.size {
             } else {
@@ -3064,27 +3050,31 @@ pub unsafe extern "C" fn tui_raw_line(
                 );
             }
         };
-        (*(*(*grid).cells.offset(linerow as isize)).offset(c as isize)).attr =
-            *attrs.offset((c - startcol) as isize);
+        cell.attr = *attrs.offset((c - startcol) as isize);
+        (*grid).set_cell(linerow as ::core::ffi::c_int, c as ::core::ffi::c_int, cell);
         c += 1;
     }
-    let mut row_cells: *mut UCell = *(*grid).cells.offset(linerow as ::core::ffi::c_int as isize);
     let mut curcol: ::core::ffi::c_int = startcol as ::core::ffi::c_int;
     while curcol < endcol as ::core::ffi::c_int {
-        let mut cell: *mut UCell = row_cells.offset(curcol as isize);
+        let cell_0: UCell = (*grid).cell(linerow as ::core::ffi::c_int, curcol);
         print_cell_at_pos(
             tui,
             linerow as ::core::ffi::c_int,
             curcol,
-            cell,
+            cell_0,
             (curcol as Integer) < endcol - 1 as Integer
-                && (*cell.offset(1 as ::core::ffi::c_int as isize)).data == '\0' as schar_T,
+                && (*grid)
+                    .cell(
+                        linerow as ::core::ffi::c_int,
+                        curcol + 1 as ::core::ffi::c_int,
+                    )
+                    .data
+                    == '\0' as schar_T,
         );
         curcol += 1;
     }
     if clearcol > endcol {
-        ugrid_clear_chunk(
-            grid,
+        (*grid).clear_chunk(
             linerow as ::core::ffi::c_int,
             endcol as ::core::ffi::c_int,
             clearcol as ::core::ffi::c_int,
@@ -3104,9 +3094,12 @@ pub unsafe extern "C" fn tui_raw_line(
         && (linerow + 1 as Integer) < (*grid).height as Integer
     {
         if endcol != (*grid).width as Integer {
-            let mut size: ::core::ffi::c_int = if (*(*(*grid).cells.offset(linerow as isize))
-                .offset(((*grid).width - 1 as ::core::ffi::c_int) as isize))
-            .data
+            let mut size: ::core::ffi::c_int = if (*grid)
+                .cell(
+                    linerow as ::core::ffi::c_int,
+                    (*grid).width - 1 as ::core::ffi::c_int,
+                )
+                .data
                 == NUL as schar_T
             {
                 2 as ::core::ffi::c_int
@@ -3117,7 +3110,7 @@ pub unsafe extern "C" fn tui_raw_line(
                 tui,
                 linerow as ::core::ffi::c_int,
                 (*grid).width - size,
-                (*(*grid).cells.offset(linerow as isize)).offset(((*grid).width - size) as isize),
+                (*grid).cell(linerow as ::core::ffi::c_int, (*grid).width - size),
                 size == 2 as ::core::ffi::c_int,
             );
         }

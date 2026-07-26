@@ -71,10 +71,15 @@ struct __pthread_rwlock_arch_t {
   unsigned int __flags;
 };
 
+// `FILE` is opaque here -- the fixtures only ever pass pointers around. It
+// used to arrive with the chunk, back when a crate type still spelled it out
+// in a field; the chunk is not obliged to keep doing that.
+typedef struct _IO_FILE FILE;
+
 #include "unit-cdefs.h"
 
-// libc calls the fixtures make; FILE is the chunk's typedef, the symbols
-// resolve from the process like everything else.
+// libc calls the fixtures make; the symbols resolve from the process like
+// everything else.
 FILE *fopen(const char *, const char *);
 int fclose(FILE *);
 int fprintf(FILE *, const char *, ...);
