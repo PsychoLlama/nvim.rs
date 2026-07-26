@@ -123,6 +123,7 @@ pub mod src {
         pub mod input;
         pub mod insexpand;
         pub mod keycodes;
+        pub mod kvec;
         pub mod linematch;
         pub mod log;
         pub mod lua {

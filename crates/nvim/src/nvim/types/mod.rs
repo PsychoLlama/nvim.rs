@@ -1,4 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 // Canonical homes for the types c2rust duplicated into every module.
 // Every name is unique crate-wide and glob-re-exported so sibling

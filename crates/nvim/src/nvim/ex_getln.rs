@@ -187,7 +187,9 @@ use crate::src::nvim::ui::{
 use crate::src::nvim::undo::{u_blockfree, u_clearall, u_sync, u_undo_and_forget};
 use crate::src::nvim::usercmd::{cmdcomplete_type_to_str, parse_compl_arg};
 use crate::src::nvim::viml::parser::expressions::{viml_pexpr_free_ast, viml_pexpr_parse};
-use crate::src::nvim::viml::parser::parser::{parser_simple_get_line, viml_parser_destroy};
+use crate::src::nvim::viml::parser::parser::{
+    parser_simple_get_line, viml_parser_destroy, viml_parser_init,
+};
 use crate::src::nvim::window::{
     close_windows, global_stl_height, last_window, lastwin_nofloating, win_close, win_enter,
     win_goto, win_size_restore, win_size_save, win_split, win_valid,
@@ -6264,66 +6266,19 @@ unsafe extern "C" fn color_expr_cmdline(
             group: ::core::ptr::null::<::core::ffi::c_char>(),
         }; 16],
     };
-    colors.capacity = ::core::mem::size_of::<[ParserHighlightChunk; 16]>()
-        .wrapping_div(::core::mem::size_of::<ParserHighlightChunk>())
-        .wrapping_div(
-            (::core::mem::size_of::<[ParserHighlightChunk; 16]>()
-                .wrapping_rem(::core::mem::size_of::<ParserHighlightChunk>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
-    colors.size = 0 as size_t;
-    colors.items = &raw mut colors.init_array as *mut ParserHighlightChunk;
-    let mut pstate: ParserState = ParserState {
-        reader: ParserInputReader {
-            get_line: None,
-            cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            lines: C2Rust_Unnamed_35 {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut::<ParserLine>(),
-                init_array: [ParserLine {
-                    data: ::core::ptr::null::<::core::ffi::c_char>(),
-                    size: 0,
-                    allocated: false,
-                }; 4],
-            },
-            conv: vimconv_T {
-                vc_type: 0,
-                vc_factor: 0,
-                vc_fd: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                vc_fail: false,
-            },
-        },
-        pos: ParserPosition { line: 0, col: 0 },
-        stack: C2Rust_Unnamed_30 {
-            size: 0,
-            capacity: 0,
-            items: ::core::ptr::null_mut::<ParserStateItem>(),
-            init_array: [ParserStateItem {
-                type_0: kPTopStateParsingCommand,
-                data: C2Rust_Unnamed_31 {
-                    expr: C2Rust_Unnamed_32 {
-                        type_0: kExprUnknown,
-                    },
-                },
-            }; 16],
-        },
-        colors: ::core::ptr::null_mut::<ParserHighlight>(),
-        can_continuate: false,
-    };
+    colors.capacity = colors.init_array.len();
+    colors.items = colors.init_array.as_mut_ptr();
+    let mut pstate: ParserState = ::core::mem::zeroed();
     viml_parser_init(
-        &raw mut pstate,
-        Some(
-            parser_simple_get_line
-                as unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ParserLine) -> (),
-        ),
+        &mut pstate,
+        Some(parser_simple_get_line),
         &raw mut plines_p as *mut ::core::ffi::c_void,
         &raw mut colors,
     );
     let mut east: ExprAST =
         viml_pexpr_parse(&raw mut pstate, kExprFlagsDisallowEOC as ::core::ffi::c_int);
     viml_pexpr_free_ast(east);
-    viml_parser_destroy(&raw mut pstate);
+    viml_parser_destroy(&mut pstate);
     (*ret_ccline_colors).colors.capacity = colors.size;
     (*ret_ccline_colors).colors.items = xrealloc(
         (*ret_ccline_colors).colors.items as *mut ::core::ffi::c_void,
@@ -8858,74 +8813,6 @@ unsafe extern "C" fn is_literal_register(regname: ::core::ffi::c_int) -> bool {
             || regname as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
                 && regname as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
             || ascii_isdigit(regname) as ::core::ffi::c_int != 0);
-}
-#[inline(always)]
-unsafe extern "C" fn viml_parser_init(
-    ret_pstate: *mut ParserState,
-    get_line: ParserLineGetter,
-    cookie: *mut ::core::ffi::c_void,
-    colors: *mut ParserHighlight,
-) {
-    *ret_pstate = ParserState {
-        reader: ParserInputReader {
-            get_line: get_line,
-            cookie: cookie,
-            lines: C2Rust_Unnamed_35 {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut::<ParserLine>(),
-                init_array: [ParserLine {
-                    data: ::core::ptr::null::<::core::ffi::c_char>(),
-                    size: 0,
-                    allocated: false,
-                }; 4],
-            },
-            conv: vimconv_T {
-                vc_type: CONV_NONE as ::core::ffi::c_int,
-                vc_factor: 1 as ::core::ffi::c_int,
-                vc_fd: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                vc_fail: false_0 != 0,
-            },
-        },
-        pos: ParserPosition {
-            line: 0 as size_t,
-            col: 0 as size_t,
-        },
-        stack: C2Rust_Unnamed_30 {
-            size: 0,
-            capacity: 0,
-            items: ::core::ptr::null_mut::<ParserStateItem>(),
-            init_array: [ParserStateItem {
-                type_0: kPTopStateParsingCommand,
-                data: C2Rust_Unnamed_31 {
-                    expr: C2Rust_Unnamed_32 {
-                        type_0: kExprUnknown,
-                    },
-                },
-            }; 16],
-        },
-        colors: colors,
-        can_continuate: false_0 != 0,
-    };
-    (*ret_pstate).reader.lines.capacity = ::core::mem::size_of::<[ParserLine; 4]>()
-        .wrapping_div(::core::mem::size_of::<ParserLine>())
-        .wrapping_div(
-            (::core::mem::size_of::<[ParserLine; 4]>()
-                .wrapping_rem(::core::mem::size_of::<ParserLine>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
-    (*ret_pstate).reader.lines.size = 0 as size_t;
-    (*ret_pstate).reader.lines.items =
-        &raw mut (*ret_pstate).reader.lines.init_array as *mut ParserLine;
-    (*ret_pstate).stack.capacity = ::core::mem::size_of::<[ParserStateItem; 16]>()
-        .wrapping_div(::core::mem::size_of::<ParserStateItem>())
-        .wrapping_div(
-            (::core::mem::size_of::<[ParserStateItem; 16]>()
-                .wrapping_rem(::core::mem::size_of::<ParserStateItem>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
-    (*ret_pstate).stack.size = 0 as size_t;
-    (*ret_pstate).stack.items = &raw mut (*ret_pstate).stack.init_array as *mut ParserStateItem;
 }
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)
