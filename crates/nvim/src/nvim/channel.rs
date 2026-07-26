@@ -37,17 +37,14 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::src::nvim::memory::{
-    ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xcalloc, xfree, xmemdup, xrealloc,
-    xstrdup,
+    ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree, xmemdup, xrealloc, xstrdup,
 };
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::msgpack_rpc::channel::rpc_init;
 use crate::src::nvim::msgpack_rpc::channel::{rpc_close, rpc_free, rpc_start};
 use crate::src::nvim::msgpack_rpc::server::server_owns_pipe_address;
 use crate::src::nvim::os::fs::os_write;
-use crate::src::nvim::os::libc::{
-    __assert_fail, abort, dup2, fcntl, freopen, gettext, qsort, stderr, strlen,
-};
+use crate::src::nvim::os::libc::{abort, dup2, fcntl, freopen, gettext, qsort, stderr, strlen};
 use crate::src::nvim::os::pty_proc_unix::{
     pty_proc_close_master, pty_proc_init, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
 };
@@ -70,16 +67,15 @@ pub use crate::src::nvim::types::{
     MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
     Map_uint64_t_ptr_t, MapHash, MarkTree, MultiQueue, Object, ObjectType, OptInt, PackerBuffer,
     PackerBufferFlush, Proc, ProcType, PtyProc, QUEUE, RStream, RemoteUI, RpcState,
-    RpcState_call_stack as C2Rust_Unnamed_32, ScopeDictDictItem, ScopeType, ScreenGrid,
-    Set_int64_t, Set_uint32_t, Set_uint64_t, SocketWatcher, SpecialVarValue, StderrState,
-    StdioPair, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, Stream,
-    String_0, Terminal, TerminalOptions, Timestamp, Unpacker, VarLockStatus, VarType, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, WBuffer, WinConfig, WinInfo, WinSplit, WinStyle, Window,
-    addrinfo, alist_T, argv_callback, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T,
-    bufstate_T, chunksize_T, colnr_T, consumed_blk, dict_T, dictitem_T, dictvar_S, disptick_T,
-    event_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
-    file_buffer_update_callbacks as C2Rust_Unnamed_0,
+    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
+    SocketWatcher, SpecialVarValue, StderrState, StdioPair, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_12, Stream, String_0, Terminal, TerminalOptions,
+    Timestamp, Unpacker, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
+    WBuffer, WinConfig, WinInfo, WinSplit, WinStyle, Window, addrinfo, alist_T, argv_callback,
+    auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T,
+    consumed_blk, dict_T, dictitem_T, dictvar_S, disptick_T, event_T, extmark_undo_vec_t,
+    fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
+    file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, gid_t, handle_T,
     hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, internal_proc_cb,
@@ -622,41 +618,55 @@ pub unsafe extern "C" fn channel_init() {
     channel_alloc(kChannelStreamStderr);
     rpc_init();
 }
-pub unsafe fn channel_alloc(mut type_0: ChannelStreamType) -> *mut Channel {
-    let mut chan: *mut Channel =
-        xcalloc(1 as size_t, ::core::mem::size_of::<Channel>()) as *mut Channel;
-    if type_0 as ::core::ffi::c_uint
-        == kChannelStreamStdio as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        (*chan).id = CHAN_STDIO as uint64_t;
-    } else if type_0 as ::core::ffi::c_uint
-        == kChannelStreamStderr as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        (*chan).id = CHAN_STDERR as uint64_t;
-    } else {
-        let c2rust_fresh0 = next_chan_id.get();
-        next_chan_id.set((*next_chan_id.ptr()).wrapping_add(1));
-        (*chan).id = c2rust_fresh0;
-    }
-    (*chan).events = multiqueue_new_child((*main_loop.ptr()).events);
-    (*chan).refcount = 1 as size_t;
-    (*chan).exit_status = -1 as ::core::ffi::c_int;
-    (*chan).streamtype = type_0;
-    (*chan).detach = false_0 != 0;
-    '_c2rust_label: {
-        if (*chan).id <= 9223372036854775807 as uint64_t {
-        } else {
-            __assert_fail(
-                b"chan->id <= VARNUMBER_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/channel.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                230 as ::core::ffi::c_uint,
-                b"Channel *channel_alloc(ChannelStreamType)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
+/// Registers a new channel of `type_0` and hands out the caller's reference.
+///
+/// The stdio and stderr channels have fixed ids; everything else takes the
+/// next one. `Channel` owns heap state now (the RPC call stack), so it is a
+/// real allocation rather than a zeroed block — the union is still zeroed,
+/// because each transport's setup writes it whole.
+pub unsafe fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel {
+    let id = match type_0 {
+        kChannelStreamStdio => CHAN_STDIO as uint64_t,
+        kChannelStreamStderr => CHAN_STDERR as uint64_t,
+        _ => {
+            let id = next_chan_id.get();
+            next_chan_id.set(id.wrapping_add(1));
+            id
         }
     };
-    map_put_uint64_t_ptr_t(channels.ptr(), (*chan).id, chan as ptr_t);
-    return chan;
+    // Channel ids are handed to Vimscript as numbers.
+    assert!(id <= i64::MAX as uint64_t);
+    let chan = Box::into_raw(Box::new(Channel {
+        id,
+        refcount: 1,
+        events: multiqueue_new_child((*main_loop.ptr()).events),
+        streamtype: type_0,
+        stream: ::core::mem::zeroed(),
+        is_rpc: false,
+        detach: false,
+        rpc: RpcState {
+            closed: false,
+            unpacker: ::core::ptr::null_mut(),
+            ui: ::core::ptr::null_mut(),
+            next_request_id: 0,
+            call_stack: Default::default(),
+            info: Dict {
+                size: 0,
+                capacity: 0,
+                items: ::core::ptr::null_mut(),
+            },
+            client_type: 0,
+        },
+        term: ::core::ptr::null_mut(),
+        on_data: ::core::mem::zeroed(),
+        on_stderr: ::core::mem::zeroed(),
+        on_exit: ::core::mem::zeroed(),
+        exit_status: -1,
+        callback_busy: false,
+        callback_scheduled: false,
+    }));
+    map_put_uint64_t_ptr_t(channels.ptr(), id, chan as ptr_t);
+    chan
 }
 pub unsafe extern "C" fn channel_create_event(
     mut chan: *mut Channel,
@@ -672,18 +682,7 @@ pub unsafe extern "C" fn channel_create_event(
         );
         source = IObuff.ptr() as *mut ::core::ffi::c_char;
     }
-    '_c2rust_label: {
-        if (*chan).id <= 9223372036854775807 as uint64_t {
-        } else {
-            __assert_fail(
-                b"chan->id <= VARNUMBER_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/channel.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                249 as ::core::ffi::c_uint,
-                b"void channel_create_event(Channel *, const char *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!((*chan).id <= i64::MAX as uint64_t);
     let mut arena: Arena = ARENA_EMPTY;
     let mut info: Dict = channel_info((*chan).id, &raw mut arena);
     let mut tv: typval_T = typval_T {
@@ -699,19 +698,9 @@ pub unsafe extern "C" fn channel_create_event(
         &raw mut tv,
         ::core::ptr::null_mut::<Error>(),
     );
-    '_c2rust_label_0: {
-        if tv.v_type as ::core::ffi::c_uint == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-        } else {
-            __assert_fail(
-                b"tv.v_type == VAR_DICT\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/channel.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                256 as ::core::ffi::c_uint,
-                b"void channel_create_event(Channel *, const char *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(
+        tv.v_type as ::core::ffi::c_uint == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
+    );
     let mut str: *mut ::core::ffi::c_char =
         encode_tv2json(&raw mut tv, ::core::ptr::null_mut::<size_t>());
     logmsg(
@@ -785,7 +774,7 @@ unsafe extern "C" fn channel_destroy(mut chan: *mut Channel) {
     callback_reader_free(&raw mut (*chan).on_stderr);
     callback_free(&raw mut (*chan).on_exit);
     multiqueue_free((*chan).events);
-    xfree(chan as *mut ::core::ffi::c_void);
+    drop(Box::from_raw(chan));
 }
 unsafe extern "C" fn free_channel_event(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut chan: *mut Channel = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Channel;
@@ -1656,19 +1645,7 @@ unsafe extern "C" fn set_info_event(mut argv: *mut *mut ::core::ffi::c_void) {
         &raw mut retval,
         ::core::ptr::null_mut::<Error>(),
     );
-    '_c2rust_label: {
-        if retval.v_type as ::core::ffi::c_uint
-            == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-        } else {
-            __assert_fail(
-                b"retval.v_type == VAR_DICT\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/channel.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                978 as ::core::ffi::c_uint,
-                b"void set_info_event(void **)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(retval.v_type as ::core::ffi::c_uint == VAR_DICT as ::core::ffi::c_uint);
     tv_dict_add_dict(
         dict,
         b"info\0".as_ptr() as *const ::core::ffi::c_char,

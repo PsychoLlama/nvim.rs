@@ -4,6 +4,8 @@
 // emitted. One definition per logical type; every module re-exports here.
 use core::ffi::{c_char, c_int};
 
+pub use crate::src::nvim::msgpack_rpc::channel::call_stack::CallStack;
+
 use super::*;
 
 /// A channel's decoder. Zero-initialised by its owner, so every field has to
@@ -47,8 +49,6 @@ pub struct CallbackReader {
     pub fwd_err: bool,
     pub type_0: *const ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Channel {
     pub id: uint64_t,
     pub refcount: size_t,
@@ -96,23 +96,15 @@ pub struct InternalState {
     pub cb: LuaRef,
     pub closed: bool,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct RpcState {
     pub closed: bool,
     pub unpacker: *mut Unpacker,
     pub ui: *mut RemoteUI,
     pub next_request_id: uint32_t,
-    pub call_stack: RpcState_call_stack,
+    /// Requests this editor has sent and is still waiting on.
+    pub call_stack: CallStack,
     pub info: Dict,
     pub client_type: ClientType,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct RpcState_call_stack {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut *mut ChannelCallFrame,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
