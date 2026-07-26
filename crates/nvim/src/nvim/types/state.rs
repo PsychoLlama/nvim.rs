@@ -1,7 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-// Canonical type definitions extracted by tools/unify (phase 5a).
-// One definition per logical type; every module re-exports from here.
+// Canonical type definitions, hoisted out of the per-module copies c2rust
+// emitted. One definition per logical type; every module re-exports here.
 
 pub type VimState = vim_state;
 pub type state_check_callback = Option<unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int>;
