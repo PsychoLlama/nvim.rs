@@ -127,7 +127,6 @@
     "crates/nvim/src/nvim/option.rs": 1873,
     "crates/nvim/src/nvim/optionstr.rs": 129,
     "crates/nvim/src/nvim/os/env.rs": 90,
-    "crates/nvim/src/nvim/os/fileio.rs": 38,
     "crates/nvim/src/nvim/os/fs.rs": 34,
     "crates/nvim/src/nvim/os/input.rs": 29,
     "crates/nvim/src/nvim/os/lang.rs": 32,

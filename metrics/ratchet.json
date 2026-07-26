@@ -138,7 +138,7 @@
     "crates/nvim/src/nvim/optionstr.rs": {"lines": 4437, "no_mangle": 1, "unsafe": 155},
     "crates/nvim/src/nvim/os/dl.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/os/env.rs": {"lines": 1719, "no_mangle": 12, "static_mut": 3, "unsafe": 39},
-    "crates/nvim/src/nvim/os/fileio.rs": {"no_mangle": 8, "unsafe": 12},
+    "crates/nvim/src/nvim/os/fileio.rs": {"no_mangle": 8, "unsafe": 11},
     "crates/nvim/src/nvim/os/fs.rs": {"lines": 2886, "no_mangle": 34, "unsafe": 60},
     "crates/nvim/src/nvim/os/input.rs": {"lines": 1267, "unsafe": 29},
     "crates/nvim/src/nvim/os/lang.rs": {"lines": 5119, "static_mut": 1, "unsafe": 15},
