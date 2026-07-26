@@ -64,7 +64,7 @@
     "crates/nvim/src/nvim/event/libuv_proc.rs": 2,
     "crates/nvim/src/nvim/event/loop.rs": 2,
     "crates/nvim/src/nvim/event/proc.rs": 24,
-    "crates/nvim/src/nvim/event/rstream.rs": 14,
+    "crates/nvim/src/nvim/event/rstream.rs": 1,
     "crates/nvim/src/nvim/event/socket.rs": 19,
     "crates/nvim/src/nvim/ex_cmds.rs": 123,
     "crates/nvim/src/nvim/ex_cmds2.rs": 48,

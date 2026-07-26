@@ -70,7 +70,7 @@
     "crates/nvim/src/nvim/event/loop.rs": {"unsafe": 22},
     "crates/nvim/src/nvim/event/multiqueue.rs": {"no_mangle": 6, "unsafe": 15},
     "crates/nvim/src/nvim/event/proc.rs": {"unsafe": 31},
-    "crates/nvim/src/nvim/event/rstream.rs": {"unsafe": 21},
+    "crates/nvim/src/nvim/event/rstream.rs": {"unsafe": 16},
     "crates/nvim/src/nvim/event/signal.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/event/socket.rs": {"lines": 1062, "unsafe": 25},
     "crates/nvim/src/nvim/event/stream.rs": {"unsafe": 5},
