@@ -102,7 +102,7 @@
     "crates/nvim/src/nvim/input.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/insexpand.rs": {"lines": 8696, "unsafe": 224},
     "crates/nvim/src/nvim/keycodes.rs": {"lines": 3845, "unsafe": 19},
-    "crates/nvim/src/nvim/kvec.rs": {"unsafe": 4},
+    "crates/nvim/src/nvim/kvec.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/log.rs": {"lines": 4675, "unsafe": 13, "variadic": 1},
     "crates/nvim/src/nvim/lua/api_wrappers.rs": {"lines": 18140, "unsafe": 407},
     "crates/nvim/src/nvim/lua/base64.rs": {"unsafe": 4},

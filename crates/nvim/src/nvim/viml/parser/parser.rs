@@ -1,5 +1,3 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-
 //! Scaffolding shared by the VimL parsers: the reader that feeds them lines,
 //! the cursor over those lines, and the highlight log they append to.
 //!
@@ -7,6 +5,13 @@
 //! `expressions.rs`, `api/vimscript.rs` and `ex_getln.rs` all read the fields
 //! directly, and the three collections inside it are `kvec_withinit_t`s
 //! (see `kvec::InitVec`).
+//!
+//! The entry points take `*mut ParserState` rather than `&mut ParserState`
+//! deliberately. Two of the collections point at arrays inside the state, and
+//! `expressions.rs` pushes onto the stack through the raw pointer it holds;
+//! a `&mut` to the whole state invalidates those self-pointers, which Miri
+//! reports as soon as the parser is driven end to end. Reborrows here are
+//! narrowed to the one collection being touched.
 
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -105,8 +110,8 @@ pub fn highlight_vec(colors: &mut ParserHighlight) -> InitVec<'_, ParserHighligh
 
 /// Start a parser over the lines `get_line` yields. `colors` may be null when
 /// the caller does not want highlighting.
-pub fn viml_parser_init(
-    pstate: &mut ParserState,
+pub unsafe fn viml_parser_init(
+    pstate: *mut ParserState,
     get_line: ParserLineGetter,
     cookie: *mut c_void,
     colors: *mut ParserHighlight,
@@ -120,87 +125,89 @@ pub fn viml_parser_init(
         colors,
         ..PARSER_STATE_INIT
     };
-    pstate.reader.lines.capacity = pstate.reader.lines.init_array.len();
-    pstate.reader.lines.items = pstate.reader.lines.init_array.as_mut_ptr();
-    pstate.stack.capacity = pstate.stack.init_array.len();
-    pstate.stack.items = pstate.stack.init_array.as_mut_ptr();
-}
-
-/// Pull the next line from the getter, converting it to the parser's encoding
-/// if the reader carries a conversion, and remember it: every line the parser
-/// has seen stays in `reader.lines` for the duration, because tokens point
-/// into them.
-fn preader_get_line(preader: &mut ParserInputReader) -> ParserLine {
-    let mut pline = EMPTY_LINE;
-    let get_line = preader.get_line.expect("parser has no line getter");
-    unsafe {
-        get_line(preader.cookie, &raw mut pline);
-        if preader.conv.vc_type != CONV_NONE && pline.size != 0 {
-            let mut converted = ParserLine {
-                data: ptr::null(),
-                size: pline.size,
-                allocated: true,
-            };
-            converted.data = string_convert(
-                &raw mut preader.conv,
-                pline.data as *mut c_char,
-                &raw mut converted.size,
-            );
-            if pline.allocated {
-                xfree(pline.data as *mut c_void);
-            }
-            pline = converted;
-        }
-    }
-    lines_vec(&mut preader.lines).push(pline);
-    pline
+    let lines = &raw mut (*pstate).reader.lines;
+    (*lines).capacity = (*lines).init_array.len();
+    (*lines).items = (&raw mut (*lines).init_array).cast::<ParserLine>();
+    let stack = &raw mut (*pstate).stack;
+    (*stack).capacity = (*stack).init_array.len();
+    (*stack).items = (&raw mut (*stack).init_array).cast::<ParserStateItem>();
 }
 
 /// The rest of the current line, from the cursor on, reading one more line
 /// from the input if the cursor just walked off the end of the last one.
 /// `None` at end of input.
-pub fn viml_parser_get_remaining_line(pstate: &mut ParserState) -> Option<ParserLine> {
-    let mut pline = if pstate.pos.line == pstate.reader.lines.size {
-        preader_get_line(&mut pstate.reader)
+pub unsafe fn viml_parser_get_remaining_line(pstate: *mut ParserState) -> Option<ParserLine> {
+    let pos = (*pstate).pos;
+    let reader = &raw mut (*pstate).reader;
+    let mut pline = if pos.line == (*reader).lines.size {
+        // Pull the next line from the getter, converting it if the reader
+        // carries a conversion, and remember it: every line the parser has
+        // seen stays in `lines` for the duration, because tokens point into
+        // them.
+        let mut fresh = EMPTY_LINE;
+        let get_line = (*reader).get_line.expect("parser has no line getter");
+        get_line((*reader).cookie, &raw mut fresh);
+        if (*reader).conv.vc_type != CONV_NONE && fresh.size != 0 {
+            let mut converted = ParserLine {
+                data: ptr::null(),
+                size: fresh.size,
+                allocated: true,
+            };
+            converted.data = string_convert(
+                &raw mut (*reader).conv,
+                fresh.data as *mut c_char,
+                &raw mut converted.size,
+            );
+            if fresh.allocated {
+                xfree(fresh.data as *mut c_void);
+            }
+            fresh = converted;
+        }
+        lines_vec(&mut (*reader).lines).push(fresh);
+        fresh
     } else {
-        lines_vec(&mut pstate.reader.lines).last()
+        lines_vec(&mut (*reader).lines).last()
     };
-    assert!(pstate.pos.line == pstate.reader.lines.size - 1);
+    assert!(pos.line == (*reader).lines.size - 1);
     if pline.data.is_null() {
         return None;
     }
     // `wrapping_*` because the C did: the cursor is never past the line's end
     // (`viml_parser_advance` wraps to the next line first), so this is exact.
-    pline.data = pline.data.wrapping_add(pstate.pos.col);
-    pline.size = pline.size.wrapping_sub(pstate.pos.col);
+    pline.data = pline.data.wrapping_add(pos.col);
+    pline.size = pline.size.wrapping_sub(pos.col);
     Some(pline)
 }
 
 /// Advance the cursor by `len` bytes, at most to the start of the next line.
-pub fn viml_parser_advance(pstate: &mut ParserState, len: usize) {
-    assert!(pstate.pos.line == pstate.reader.lines.size - 1);
-    let pline = lines_vec(&mut pstate.reader.lines).last();
-    if pstate.pos.col.wrapping_add(len) >= pline.size {
-        pstate.pos.line += 1;
-        pstate.pos.col = 0;
+///
+/// Takes the cursor and the reader rather than the whole `ParserState`, so
+/// that the reborrow does not reach the stack the caller is pushing onto.
+pub fn viml_parser_advance(pos: &mut ParserPosition, reader: &mut ParserInputReader, len: usize) {
+    assert!(pos.line == reader.lines.size - 1);
+    let pline = lines_vec(&mut reader.lines).last();
+    if pos.col.wrapping_add(len) >= pline.size {
+        pos.line += 1;
+        pos.col = 0;
     } else {
-        pstate.pos.col = pstate.pos.col.wrapping_add(len);
+        pos.col = pos.col.wrapping_add(len);
     }
 }
 
 /// Record the highlighting of `len` bytes at `start`. A no-op when the caller
 /// asked for no highlighting. Chunks must arrive in order and must not
 /// overlap.
-pub fn viml_parser_highlight(
-    pstate: &mut ParserState,
+pub unsafe fn viml_parser_highlight(
+    pstate: *mut ParserState,
     start: ParserPosition,
     len: usize,
     group: *const c_char,
 ) {
-    if pstate.colors.is_null() || len == 0 {
+    if (*pstate).colors.is_null() || len == 0 {
         return;
     }
-    let mut colors = highlight_vec(unsafe { &mut *pstate.colors });
+    // `colors` is the caller's own collection, not one embedded in the state.
+    let mut colors = highlight_vec(&mut *(*pstate).colors);
     debug_assert!(
         colors.is_empty() || {
             let last = colors.last();
@@ -233,16 +240,18 @@ pub fn viml_parser_destroy(pstate: &mut ParserState) {
 /// A `ParserLineGetter` over a null-terminated array of ready-made lines; the
 /// cookie is a cursor into it and is advanced past each line handed out.
 pub unsafe extern "C" fn parser_simple_get_line(cookie: *mut c_void, ret_pline: *mut ParserLine) {
-    unsafe {
-        let plines = cookie as *mut *mut ParserLine;
-        *ret_pline = **plines;
-        *plines = (*plines).add(1);
-    }
+    let plines = cookie as *mut *mut ParserLine;
+    *ret_pline = **plines;
+    *plines = (*plines).add(1);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn advance(pstate: &mut ParserState, len: usize) {
+        viml_parser_advance(&mut pstate.pos, &mut pstate.reader, len);
+    }
 
     /// The cursor stops at the start of the next line rather than running off
     /// the end of this one, and a `len` that lands exactly on the end still
@@ -260,114 +269,9 @@ mod tests {
         pstate.reader.lines.size = 1;
         pstate.reader.lines.capacity = 1;
 
-        viml_parser_advance(&mut pstate, 2);
+        advance(&mut pstate, 2);
         assert_eq!((pstate.pos.line, pstate.pos.col), (0, 2));
-        viml_parser_advance(&mut pstate, 2);
+        advance(&mut pstate, 2);
         assert_eq!((pstate.pos.line, pstate.pos.col), (1, 0));
-    }
-
-    /// The whole loop `expressions.rs` runs: pull lines through the getter,
-    /// walk the cursor across them, and tear the state down. The terminating
-    /// entry of a `parser_simple_get_line` array is a null line.
-    #[test]
-    fn reads_lines_through_the_getter_until_the_null_terminator() {
-        let mut input = [
-            ParserLine {
-                data: c"ab".as_ptr(),
-                size: 2,
-                allocated: false,
-            },
-            ParserLine {
-                data: c"cde".as_ptr(),
-                size: 3,
-                allocated: false,
-            },
-            EMPTY_LINE,
-        ];
-        let mut cursor = input.as_mut_ptr();
-        let mut pstate = PARSER_STATE_INIT;
-        viml_parser_init(
-            &mut pstate,
-            Some(parser_simple_get_line),
-            &raw mut cursor as *mut c_void,
-            ptr::null_mut(),
-        );
-
-        let first = viml_parser_get_remaining_line(&mut pstate).expect("first line");
-        assert_eq!(first.size, 2);
-        viml_parser_advance(&mut pstate, 1);
-        // Still on the same line, one byte in: the remainder is shorter and
-        // starts later, but it is the same buffer.
-        let rest = viml_parser_get_remaining_line(&mut pstate).expect("rest of the first line");
-        assert_eq!(rest.size, 1);
-        assert_eq!(rest.data, first.data.wrapping_add(1));
-
-        viml_parser_advance(&mut pstate, 1);
-        assert_eq!(pstate.pos.line, 1);
-        assert_eq!(
-            viml_parser_get_remaining_line(&mut pstate)
-                .expect("second line")
-                .size,
-            3
-        );
-        viml_parser_advance(&mut pstate, 3);
-        assert!(viml_parser_get_remaining_line(&mut pstate).is_none());
-
-        assert_eq!(pstate.reader.lines.size, 3);
-        viml_parser_destroy(&mut pstate);
-    }
-
-    /// Highlighting is off unless the caller supplies a chunk log, and chunks
-    /// accumulate in the order they are recorded.
-    #[test]
-    fn highlight_appends_only_when_colors_were_requested() {
-        let mut colors = ParserHighlight {
-            size: 0,
-            capacity: 0,
-            items: ptr::null_mut(),
-            init_array: [ParserHighlightChunk {
-                start: ParserPosition { line: 0, col: 0 },
-                end_col: 0,
-                group: ptr::null(),
-            }; 16],
-        };
-        colors.capacity = colors.init_array.len();
-        colors.items = colors.init_array.as_mut_ptr();
-
-        let mut pstate = PARSER_STATE_INIT;
-        viml_parser_init(&mut pstate, None, ptr::null_mut(), ptr::null_mut());
-        viml_parser_highlight(
-            &mut pstate,
-            ParserPosition { line: 0, col: 0 },
-            3,
-            c"A".as_ptr(),
-        );
-        assert_eq!(colors.size, 0);
-
-        pstate.colors = &raw mut colors;
-        viml_parser_highlight(
-            &mut pstate,
-            ParserPosition { line: 0, col: 0 },
-            3,
-            c"A".as_ptr(),
-        );
-        // A zero-length chunk is dropped rather than recorded.
-        viml_parser_highlight(
-            &mut pstate,
-            ParserPosition { line: 0, col: 3 },
-            0,
-            c"B".as_ptr(),
-        );
-        viml_parser_highlight(
-            &mut pstate,
-            ParserPosition { line: 0, col: 3 },
-            2,
-            c"C".as_ptr(),
-        );
-        let recorded = highlight_vec(&mut colors);
-        assert_eq!(recorded.len(), 2);
-        assert_eq!(recorded.as_slice()[0].end_col, 3);
-        assert_eq!(recorded.as_slice()[1].start.col, 3);
-        assert_eq!(recorded.as_slice()[1].end_col, 5);
     }
 }

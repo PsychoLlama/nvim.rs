@@ -6270,7 +6270,7 @@ unsafe extern "C" fn color_expr_cmdline(
     colors.items = colors.init_array.as_mut_ptr();
     let mut pstate: ParserState = ::core::mem::zeroed();
     viml_parser_init(
-        &mut pstate,
+        &raw mut pstate,
         Some(parser_simple_get_line),
         &raw mut plines_p as *mut ::core::ffi::c_void,
         &raw mut colors,

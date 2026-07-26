@@ -1315,7 +1315,7 @@ pub unsafe extern "C" fn nvim_parse_expression(
     };
     let mut pstate: ParserState = ::core::mem::zeroed();
     viml_parser_init(
-        &mut pstate,
+        &raw mut pstate,
         Some(parser_simple_get_line),
         &raw mut plines_p as *mut ::core::ffi::c_void,
         colors_p,

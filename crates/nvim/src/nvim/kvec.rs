@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 //! A borrowed view of klib's `kvec_withinit_t`.
 //!
 //! The C macros spell the same four fields out at every use site, and c2rust
@@ -44,6 +46,22 @@ impl<'a, T: Copy> InitVec<'a, T> {
         *self.items == self.init
     }
 
+    /// The buffer to read and write through.
+    ///
+    /// While the collection is inline, `items` names the struct's own
+    /// `init_array` — and the pointer stored there was derived from whatever
+    /// borrow ran `kvi_init`, which this view's borrow of `init_array` has
+    /// since invalidated. So re-derive it: same address, live provenance.
+    /// Once the collection is on the heap, `items` carries the allocation's
+    /// own provenance and is used as it stands.
+    fn base(&self) -> *mut T {
+        if self.is_inline() {
+            self.init
+        } else {
+            *self.items
+        }
+    }
+
     pub fn len(&self) -> usize {
         *self.size
     }
@@ -59,7 +77,7 @@ impl<'a, T: Copy> InitVec<'a, T> {
         if *self.size == 0 {
             return &[];
         }
-        unsafe { slice::from_raw_parts(*self.items, *self.size) }
+        unsafe { slice::from_raw_parts(self.base(), *self.size) }
     }
 
     /// The last element. Panics where `kv_last` on an empty vector read one
@@ -74,7 +92,7 @@ impl<'a, T: Copy> InitVec<'a, T> {
             if *self.size == capacity {
                 self.grow(capacity);
             }
-            self.items.add(*self.size).write(value);
+            self.base().add(*self.size).write(value);
         }
         *self.size += 1;
     }
@@ -88,24 +106,27 @@ impl<'a, T: Copy> InitVec<'a, T> {
     /// `items` must be the inline array or a live allocation of `capacity`
     /// elements.
     unsafe fn grow(&mut self, capacity: usize) {
-        let filled = *self.size;
-        let grown = (capacity * 2).max(self.init_capacity);
-        let bytes = grown * mem::size_of::<T>();
-        *self.items = match (grown == self.init_capacity, self.is_inline()) {
-            (true, true) => self.init,
-            (true, false) => {
-                ptr::copy_nonoverlapping(*self.items, self.init, filled);
-                xfree(*self.items as *mut c_void);
-                self.init
-            }
-            (false, true) => {
-                let heap = xmalloc(bytes) as *mut T;
-                ptr::copy_nonoverlapping(self.init, heap, filled);
-                heap
-            }
-            (false, false) => xrealloc(*self.items as *mut c_void, bytes) as *mut T,
-        };
-        *self.capacity = grown;
+        unsafe {
+            let filled = *self.size;
+            let grown = (capacity * 2).max(self.init_capacity);
+            let bytes = grown * mem::size_of::<T>();
+            let base = self.base();
+            *self.items = match (grown == self.init_capacity, self.is_inline()) {
+                (true, true) => self.init,
+                (true, false) => {
+                    ptr::copy_nonoverlapping(base, self.init, filled);
+                    xfree(base as *mut c_void);
+                    self.init
+                }
+                (false, true) => {
+                    let heap = xmalloc(bytes) as *mut T;
+                    ptr::copy_nonoverlapping(base, heap, filled);
+                    heap
+                }
+                (false, false) => xrealloc(base as *mut c_void, bytes) as *mut T,
+            };
+            *self.capacity = grown;
+        }
     }
 
     /// Hand back the heap buffer, if the collection ever left the inline

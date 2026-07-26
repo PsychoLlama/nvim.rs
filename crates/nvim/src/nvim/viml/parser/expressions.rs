@@ -422,7 +422,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
     let mut ret: LexExprToken = ::core::mem::zeroed();
     ret.start = (*pstate).pos;
     ret.type_0 = kExprLexInvalid;
-    let Some(pline) = viml_parser_get_remaining_line(&mut *pstate) else {
+    let Some(pline) = viml_parser_get_remaining_line(pstate) else {
         ret.type_0 = kExprLexEOC;
         return ret;
     };
@@ -1197,7 +1197,7 @@ pub unsafe extern "C" fn viml_pexpr_next_token(
         }
     }
     if flags & kELFlagPeek as ::core::ffi::c_int == 0 {
-        viml_parser_advance(&mut *pstate, ret.len);
+        viml_parser_advance(&mut (*pstate).pos, &mut (*pstate).reader, ret.len);
     }
     return ret;
 }
@@ -2650,7 +2650,7 @@ unsafe extern "C" fn parse_quoted_string(
     shifts.items = &raw mut shifts.init_array as *mut StringShift;
     if !is_double {
         viml_parser_highlight(
-            &mut *pstate,
+            pstate,
             token.start,
             1 as size_t,
             if is_invalid as ::core::ffi::c_int != 0 {
@@ -2788,7 +2788,7 @@ unsafe extern "C" fn parse_quoted_string(
         }
     } else {
         viml_parser_highlight(
-            &mut *pstate,
+            pstate,
             token.start,
             1 as size_t,
             if is_invalid as ::core::ffi::c_int != 0 {
@@ -3225,14 +3225,14 @@ unsafe extern "C" fn parse_quoted_string(
             let cur_shift: StringShift = *shifts.items.offset(i as isize);
             if cur_shift.start > next_col {
                 viml_parser_highlight(
-                    &mut *pstate,
+                    pstate,
                     recol_pos(token.start, next_col),
                     cur_shift.start.wrapping_sub(next_col),
                     body_str,
                 );
             }
             viml_parser_highlight(
-                &mut *pstate,
+                pstate,
                 recol_pos(token.start, cur_shift.start),
                 cur_shift.orig_len,
                 if cur_shift.escape_not_known as ::core::ffi::c_int != 0 {
@@ -3248,7 +3248,7 @@ unsafe extern "C" fn parse_quoted_string(
             < token.len.wrapping_sub(token.data.str.closed as size_t)
         {
             viml_parser_highlight(
-                &mut *pstate,
+                pstate,
                 recol_pos(token.start, next_col),
                 token
                     .start
@@ -3263,7 +3263,7 @@ unsafe extern "C" fn parse_quoted_string(
     if token.data.str.closed {
         if is_double {
             viml_parser_highlight(
-                &mut *pstate,
+                pstate,
                 shifted_pos(token.start, token.len.wrapping_sub(1 as size_t)),
                 1 as size_t,
                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -3274,7 +3274,7 @@ unsafe extern "C" fn parse_quoted_string(
             );
         } else {
             viml_parser_highlight(
-                &mut *pstate,
+                pstate,
                 shifted_pos(token.start, token.len.wrapping_sub(1 as size_t)),
                 1 as size_t,
                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -3663,7 +3663,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         {
                             if is_invalid {
                                 viml_parser_highlight(
-                                    &mut *pstate,
+                                    pstate,
                                     cur_token.start,
                                     cur_token.len,
                                     if is_invalid as ::core::ffi::c_int != 0 {
@@ -3682,7 +3682,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                 && !highlighted_prev_spacing
                             {
                                 viml_parser_highlight(
-                                    &mut *pstate,
+                                    pstate,
                                     prev_token.start,
                                     prev_token.len,
                                     if is_invalid as ::core::ffi::c_int != 0 {
@@ -4138,7 +4138,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         *top_node_p = cur_node;
                                         want_node = kENodeOperator;
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -4304,7 +4304,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             .offset(c2rust_fresh7 as isize);
                                         *c2rust_lvalue_ptr_0 = &raw mut (*cur_node).children;
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -4338,7 +4338,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_int
                                             != 0;
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -4505,7 +4505,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             .offset(c2rust_fresh8 as isize);
                                         *c2rust_lvalue_ptr_1 = &raw mut (*cur_node).children;
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -4539,7 +4539,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_int
                                             != 0;
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -4594,7 +4594,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             (*cur_node).len.wrapping_add(prev_token.len);
                                     }
                                     viml_parser_highlight(
-                                        &mut *pstate,
+                                        pstate,
                                         cur_token.start,
                                         cur_token.len,
                                         if is_invalid as ::core::ffi::c_int != 0 {
@@ -4656,7 +4656,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             (*cur_node).len.wrapping_add(prev_token.len);
                                     }
                                     viml_parser_highlight(
-                                        &mut *pstate,
+                                        pstate,
                                         cur_token.start,
                                         cur_token.len,
                                         if is_invalid as ::core::ffi::c_int != 0 {
@@ -4720,7 +4720,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     (*cur_node).len.wrapping_add(prev_token.len);
                                             }
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -4745,7 +4745,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     (*cur_node).len.wrapping_add(prev_token.len);
                                             }
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -4770,7 +4770,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     (*cur_node).len.wrapping_add(prev_token.len);
                                             }
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -4918,7 +4918,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         *top_node_p = cur_node;
                                         want_node = kENodeOperator;
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             1 as size_t,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -4941,7 +4941,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as size_t;
                                         if scope_shift != 0 {
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 shifted_pos(cur_token.start, 1 as size_t),
                                                 1 as size_t,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -4953,7 +4953,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 },
                                             );
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 shifted_pos(cur_token.start, 2 as size_t),
                                                 1 as size_t,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -4966,7 +4966,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             );
                                         }
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             shifted_pos(
                                                 cur_token.start,
                                                 scope_shift.wrapping_add(1 as size_t),
@@ -5073,7 +5073,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         *top_node_p = cur_node;
                                         want_node = kENodeOperator;
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             1 as size_t,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -5085,7 +5085,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             },
                                         );
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             shifted_pos(cur_token.start, 1 as size_t),
                                             cur_token.len.wrapping_sub(1 as size_t),
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -5302,7 +5302,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             .offset(c2rust_fresh9 as isize);
                                         *c2rust_lvalue_ptr_2 = &raw mut (*cur_node).children;
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -5381,7 +5381,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as ::core::ffi::c_uint
                                     {
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len.wrapping_sub(1 as size_t),
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -5393,7 +5393,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             },
                                         );
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             shifted_pos(
                                                 cur_token.start,
                                                 cur_token.len.wrapping_sub(1 as size_t),
@@ -5409,7 +5409,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         );
                                     } else {
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -5659,7 +5659,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as ::core::ffi::c_int
                                         != 0;
                                     viml_parser_highlight(
-                                        &mut *pstate,
+                                        pstate,
                                         cur_token.start,
                                         cur_token.len,
                                         if is_invalid as ::core::ffi::c_int != 0 {
@@ -6128,7 +6128,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 as ::core::ffi::c_int
                                                             != 0;
                                                         viml_parser_highlight(
-                                                            &mut *pstate,
+                                                            pstate,
                                                             cur_token.start,
                                                             cur_token.len,
                                                             if is_invalid as ::core::ffi::c_int != 0
@@ -6189,7 +6189,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         }
                                         if is_ternary {
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -6223,7 +6223,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_int
                                                 != 0;
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -6364,7 +6364,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             );
                                                         }
                                                         viml_parser_highlight(
-                                                            &mut *pstate,
+                                                            pstate,
                                                             cur_token.start,
                                                             cur_token.len,
                                                             if is_invalid as ::core::ffi::c_int != 0
@@ -6380,7 +6380,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     }
                                                     5 => {
                                                         viml_parser_highlight(
-                                                            &mut *pstate,
+                                                            pstate,
                                                             cur_token.start,
                                                             cur_token.len,
                                                             if is_invalid as ::core::ffi::c_int != 0
@@ -6424,7 +6424,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_token.start,
                                             );
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -6931,7 +6931,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             );
                                         }
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -7018,7 +7018,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 as ::core::ffi::c_int
                                             != 0;
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -7372,7 +7372,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 };
                                                             }
                                                             viml_parser_highlight(
-                                                                &mut *pstate,
+                                                                pstate,
                                                                 cur_token.start,
                                                                 cur_token.len,
                                                                 if is_invalid as ::core::ffi::c_int
@@ -7432,7 +7432,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 };
                                                             }
                                                             viml_parser_highlight(
-                                                                &mut *pstate,
+                                                                pstate,
                                                                 cur_token.start,
                                                                 cur_token.len,
                                                                 if is_invalid as ::core::ffi::c_int
@@ -7475,7 +7475,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 };
                                                             }
                                                             viml_parser_highlight(
-                                                                &mut *pstate,
+                                                                pstate,
                                                                 cur_token.start,
                                                                 cur_token.len,
                                                                 if is_invalid as ::core::ffi::c_int
@@ -7492,7 +7492,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     }
                                                     16 => {
                                                         viml_parser_highlight(
-                                                            &mut *pstate,
+                                                            pstate,
                                                             cur_token.start,
                                                             cur_token.len,
                                                             if is_invalid as ::core::ffi::c_int != 0
@@ -7508,7 +7508,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     }
                                                     17 => {
                                                         viml_parser_highlight(
-                                                            &mut *pstate,
+                                                            pstate,
                                                             cur_token.start,
                                                             cur_token.len,
                                                             if is_invalid as ::core::ffi::c_int != 0
@@ -7524,7 +7524,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     }
                                                     15 => {
                                                         viml_parser_highlight(
-                                                            &mut *pstate,
+                                                            pstate,
                                                             cur_token.start,
                                                             cur_token.len,
                                                             if is_invalid as ::core::ffi::c_int != 0
@@ -7567,7 +7567,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_token.start,
                                             );
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -7756,7 +7756,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         == kENodeValue as ::core::ffi::c_int as ::core::ffi::c_uint
                                     {
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -8730,7 +8730,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     want_node = kENodeValue;
                                                     *new_top_node_p_1 = cur_node;
                                                     viml_parser_highlight(
-                                                        &mut *pstate,
+                                                        pstate,
                                                         cur_token.start,
                                                         cur_token.len,
                                                         if is_invalid as ::core::ffi::c_int != 0 {
@@ -9436,7 +9436,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     }
                                     want_node = kENodeValue;
                                     viml_parser_highlight(
-                                        &mut *pstate,
+                                        pstate,
                                         cur_token.start,
                                         cur_token.len,
                                         if is_invalid as ::core::ffi::c_int != 0 {
@@ -9513,7 +9513,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 }
                                             };
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 1 as size_t,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -9525,7 +9525,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 },
                                             );
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 shifted_pos(cur_token.start, 1 as size_t),
                                                 1 as size_t,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -9539,7 +9539,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             );
                                         }
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             shifted_pos(cur_token.start, scope_shift_0),
                                             cur_token.len.wrapping_sub(scope_shift_0),
                                             if node_is_key as ::core::ffi::c_int != 0 {
@@ -9834,7 +9834,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     want_node = kENodeOperator;
                                                     *new_top_node_p_2 = cur_node;
                                                     viml_parser_highlight(
-                                                        &mut *pstate,
+                                                        pstate,
                                                         cur_token.start,
                                                         cur_token.len,
                                                         if is_invalid as ::core::ffi::c_int != 0 {
@@ -10028,7 +10028,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 pline.data.offset(cur_token.start.col as isize);
                                             (*cur_node).data.var.ident_len = cur_token.len;
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -10054,7 +10054,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             (*cur_node).data.flt.value =
                                                 cur_token.data.num.val.floating;
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -10083,7 +10083,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 .ptr())
                                                 [cur_token.data.num.base as usize];
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 prefix_length as size_t,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -10095,7 +10095,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 },
                                             );
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 shifted_pos(
                                                     cur_token.start,
                                                     prefix_length as size_t,
@@ -10172,7 +10172,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -10196,7 +10196,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 (*cur_node).len.wrapping_add(prev_token.len);
                                         }
                                         viml_parser_highlight(
-                                            &mut *pstate,
+                                            pstate,
                                             cur_token.start,
                                             cur_token.len,
                                             if is_invalid as ::core::ffi::c_int != 0 {
@@ -10307,7 +10307,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                     as ::core::ffi::c_uint
                                             {
                                                 viml_parser_highlight(
-                                                    &mut *pstate,
+                                                    pstate,
                                                     cur_token.start,
                                                     cur_token.len,
                                                     if is_invalid as ::core::ffi::c_int != 0 {
@@ -10320,7 +10320,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 );
                                             } else {
                                                 viml_parser_highlight(
-                                                    &mut *pstate,
+                                                    pstate,
                                                     cur_token.start,
                                                     cur_token.len,
                                                     if is_invalid as ::core::ffi::c_int != 0 {
@@ -10348,7 +10348,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 cur_token.start,
                                             );
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -10670,7 +10670,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                 *c2rust_lvalue_ptr_15 =
                                                     &raw mut (*cur_node).children;
                                                 viml_parser_highlight(
-                                                    &mut *pstate,
+                                                    pstate,
                                                     cur_token.start,
                                                     cur_token.len,
                                                     if is_invalid as ::core::ffi::c_int != 0 {
@@ -10816,7 +10816,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                             as ::core::ffi::c_int
                                         != 0;
                                     viml_parser_highlight(
-                                        &mut *pstate,
+                                        pstate,
                                         cur_token.start,
                                         cur_token.len,
                                         if is_invalid as ::core::ffi::c_int != 0 {
@@ -11227,7 +11227,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                     match cur_token.data.ass.type_0 as ::core::ffi::c_uint {
                                         0 => {
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -11241,7 +11241,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         }
                                         1 => {
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -11255,7 +11255,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         }
                                         2 => {
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -11270,7 +11270,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         }
                                         3 => {
                                             viml_parser_highlight(
-                                                &mut *pstate,
+                                                pstate,
                                                 cur_token.start,
                                                 cur_token.len,
                                                 if is_invalid as ::core::ffi::c_int != 0 {
@@ -11322,7 +11322,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                         ) as ::core::ffi::c_int
                         != 0;
                     viml_parser_highlight(
-                        &mut *pstate,
+                        pstate,
                         cur_token.start,
                         cur_token.len,
                         if is_invalid as ::core::ffi::c_int != 0 {
@@ -11369,7 +11369,7 @@ pub unsafe extern "C" fn viml_pexpr_parse(
         }
         prev_token = cur_token;
         highlighted_prev_spacing = false_0 != 0;
-        viml_parser_advance(&mut *pstate, cur_token.len);
+        viml_parser_advance(&mut (*pstate).pos, &mut (*pstate).reader, cur_token.len);
     }
     '_c2rust_label_58: {
         if pt_stack.size != 0 {

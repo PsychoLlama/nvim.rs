@@ -16,6 +16,7 @@ mod map;
 mod memory;
 mod multiqueue;
 mod packer;
+mod parser;
 mod profile;
 mod sha256;
 mod strings;
