@@ -2,11 +2,39 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
+use core::ffi::{c_char, c_int};
+
 use super::*;
 
-// Owned by the msgpack-rpc unpacker; re-exported so `RpcState` and its
-// consumers all name the same type.
-pub use crate::src::nvim::msgpack_rpc::unpacker::Unpacker;
+/// A channel's decoder. Zero-initialised by its owner, so every field has to
+/// mean something sensible as all-zero bytes.
+///
+/// The layout is pinned: `test/unit/msgpack_spec.lua` allocates one with
+/// `ffi.sizeof` and drives it by writing `read_ptr`/`read_size` directly.
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct Unpacker {
+    pub parser: mpack_parser_t,
+    pub reader: mpack_tokbuf_t,
+    pub read_ptr: *const c_char,
+    pub read_size: size_t,
+    /// Accumulates an extension object's payload, which arrives in chunks.
+    pub ext_buf: [c_char; 9],
+    pub state: c_int,
+    pub type_0: MessageType,
+    pub request_id: uint32_t,
+    pub method_name_len: size_t,
+    pub handler: MsgpackRpcRequestHandler,
+    pub error: Object,
+    pub result: Object,
+    pub unpack_error: Error,
+    pub arena: Arena,
+    pub nevents: c_int,
+    pub ncalls: c_int,
+    pub ui_handler: UIClientHandler,
+    pub grid_line_event: GridLineEvent,
+    pub has_grid_line_event: bool,
+}
 
 #[derive(Copy, Clone)]
 #[repr(C)]
