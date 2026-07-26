@@ -27,6 +27,12 @@ and this project adheres to [CalVer](https://calver.org/).
   sockets and child processes are safe Rust above a single set of foreign
   declarations, and the loop's intrusive lists and hand-rolled vectors are now
   owned Rust collections.
+- msgpack-rpc and channels (`src/nvim/msgpack_rpc`, `src/nvim/channel`) were
+  rewritten: the wire format, the request/response dispatch and the channel
+  lifecycle are now safe Rust with tested pure cores, and the transpiler's
+  per-translation-unit copies of `Channel`, `Terminal`, `Unpacker` and
+  `TermInput` were folded onto single definitions, so the two halves of a
+  boundary can no longer disagree about a layout.
 
 ## [2026.07.26-d0c5cf2147]
 
