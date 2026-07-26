@@ -16,6 +16,7 @@ use crate::src::nvim::buffer::{
     no_write_message, otherfile, set_bufref, setaltfname, setfname,
 };
 use crate::src::nvim::change::deleted_lines_mark;
+use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::channel::{channel_close, channel_job_start};
 use crate::src::nvim::charset::{
     backslash_halve, getdigits, getdigits_int, getdigits_int32, skipdigits, skiptowhite_esc,
@@ -103,11 +104,11 @@ use crate::src::nvim::lua::secure::ex_trust;
 use crate::src::nvim::main::{
     Columns, IObuff, KeyTyped, NameBuff, RedrawingDisabled, Rows, State, VIsual_active,
     arg_had_last, autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, caught_stack,
-    channels, check_cstack, cmdline_row, cmdpreview, cmdwin_result, cmdwin_type, curbuf,
-    current_exception, current_sctx, current_ui, curtab, curwin, debug_break_level, debug_tick,
-    did_emsg, did_emsg_syntax, did_endif, did_syncbind, did_throw, do_profiling, e_argreq,
-    e_autocmd_close, e_backslash, e_cant_find_file_str_in_path, e_cmdwin, e_command_too_recursive,
-    e_curdir, e_empty_buffer, e_endfor, e_endif, e_endtry, e_endwhile, e_failed,
+    check_cstack, cmdline_row, cmdpreview, cmdwin_result, cmdwin_type, curbuf, current_exception,
+    current_sctx, current_ui, curtab, curwin, debug_break_level, debug_tick, did_emsg,
+    did_emsg_syntax, did_endif, did_syncbind, did_throw, do_profiling, e_argreq, e_autocmd_close,
+    e_backslash, e_cant_find_file_str_in_path, e_cmdwin, e_command_too_recursive, e_curdir,
+    e_empty_buffer, e_endfor, e_endif, e_endtry, e_endwhile, e_failed,
     e_invalid_return_type_from_findfunc, e_invarg, e_invarg2, e_invargval, e_invchan, e_invcmd,
     e_invrange, e_isadir2, e_line_number_out_of_range, e_mkdir, e_modifiable, e_no_errors,
     e_no_more_file_str_found_in_path, e_nobang, e_norange, e_notopen, e_sandbox, e_screenmode,
@@ -126,7 +127,6 @@ use crate::src::nvim::main::{
     searchcmdlen, secure, stop_insert_mode, suppress_errthrow, textlock, topframe, trylevel,
     typebuf, virtual_op,
 };
-use crate::src::nvim::map::mh_get_uint64_t;
 use crate::src::nvim::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::src::nvim::mark::{
     checkpcmark, ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks, mark_check, mark_get,
@@ -2332,20 +2332,6 @@ pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const BF_DUMMY: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe extern "C" fn map_get_uint64_t_ptr_t(
-    mut map: *mut Map_uint64_t_ptr_t,
-    mut key: uint64_t,
-) -> ptr_t {
-    let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
-    return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t.get()
-    } else {
-        *(*map).values.offset(k as isize)
-    };
-}
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,
@@ -2428,10 +2414,6 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
-}
-#[inline]
-unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
 }
 pub const CPO_ALTREAD: ::core::ffi::c_int = 'a' as ::core::ffi::c_int;
 pub const CPO_BAR: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;

@@ -15,6 +15,7 @@ use crate::src::nvim::buffer::{
     buf_close_terminal, buflist_new, buflist_nr2name, bufref_valid, do_buffer, read_buffer_into,
     set_bufref,
 };
+use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::channel::{channel_all_info, channel_info, channel_send};
 use crate::src::nvim::channel::{channel_alloc, channel_decref, channel_incref};
 use crate::src::nvim::context::{
@@ -51,14 +52,13 @@ use crate::src::nvim::lua::executor::{
     api_free_luaref, nlua_call_ref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
 };
 use crate::src::nvim::main::{
-    Columns, RedrawingDisabled, VIsual_active, arena_alloc_count, channels, cmdpreview, cmdwin_buf,
-    curbuf, current_sctx, curtab, curwin, default_grid, did_emsg, e_cmdwin, e_invchan,
-    ex_normal_busy, first_tabpage, firstbuf, firstwin, g_stats, lines_left, msg_didany,
-    msg_no_more, msg_scroll, msg_silent, must_redraw, need_wait_return, no_wait_return, ns_hl_fast,
-    ns_hl_global, p_cpo, p_lz, pum_grid, redraw_tabline, textlock, tslua_query_parse_count,
-    typebuf, typebuf_was_filled, vgetc_busy,
+    Columns, RedrawingDisabled, VIsual_active, arena_alloc_count, cmdpreview, cmdwin_buf, curbuf,
+    current_sctx, curtab, curwin, default_grid, did_emsg, e_cmdwin, e_invchan, ex_normal_busy,
+    first_tabpage, firstbuf, firstwin, g_stats, lines_left, msg_didany, msg_no_more, msg_scroll,
+    msg_silent, must_redraw, need_wait_return, no_wait_return, ns_hl_fast, ns_hl_global, p_cpo,
+    p_lz, pum_grid, redraw_tabline, textlock, tslua_query_parse_count, typebuf, typebuf_was_filled,
+    vgetc_busy,
 };
-use crate::src::nvim::map::mh_get_uint64_t;
 use crate::src::nvim::mapping::{keymap_array, modify_keymap};
 use crate::src::nvim::mark::mark_get_global;
 use crate::src::nvim::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};
@@ -1316,20 +1316,6 @@ pub const KEYSET_OPTIDX_redraw__flush: ::core::ffi::c_int = 3 as ::core::ffi::c_
 pub const KEYSET_OPTIDX_redraw__range: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_redraw__valid: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe extern "C" fn map_get_uint64_t_ptr_t(
-    mut map: *mut Map_uint64_t_ptr_t,
-    mut key: uint64_t,
-) -> ptr_t {
-    let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
-    return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t.get()
-    } else {
-        *(*map).values.offset(k as isize)
-    };
-}
 pub const NULL_STRING: String_0 = STRING_INIT;
 pub unsafe extern "C" fn nvim_get_hl_id_by_name(mut name: String_0) -> Integer {
     return syn_check_group(name.data, name.size) as Integer;
@@ -4564,10 +4550,6 @@ unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
 #[inline(always)]
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
-}
-#[inline]
-unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
 }
 pub const CONTEXT_INIT: Context = Context {
     regs: STRING_INIT,

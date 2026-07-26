@@ -17,6 +17,7 @@ use crate::src::nvim::event::multiqueue::{
     multiqueue_free, multiqueue_new_child, multiqueue_put_event,
 };
 use crate::src::nvim::event::proc::{exit_on_closed_chan, proc_free, proc_spawn, proc_stop};
+use crate::src::nvim::event::proc::{proc_get_exepath, proc_is_stopped};
 use crate::src::nvim::event::rstream::{
     rstream_init, rstream_init_fd, rstream_may_close, rstream_start, rstream_start_inner,
     rstream_stop_inner,
@@ -444,9 +445,9 @@ unsafe extern "C" fn callback_reader_set(mut reader: CallbackReader) -> bool {
         != kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
         || !reader.self_0.is_null();
 }
-#[inline]
-unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
+/// The channel registered under `id`, or null.
+pub unsafe fn find_channel(id: uint64_t) -> *mut Channel {
+    map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel
 }
 #[inline]
 unsafe extern "C" fn channel_instream(mut chan: *mut Channel) -> *mut Stream {
@@ -1691,7 +1692,7 @@ pub unsafe extern "C" fn channel_job_running(mut id: uint64_t) -> bool {
     return !chan.is_null()
         && (*chan).streamtype as ::core::ffi::c_uint
             == kChannelStreamProc as ::core::ffi::c_int as ::core::ffi::c_uint
-        && !proc_is_stopped(&raw mut (*chan).stream.proc);
+        && !proc_is_stopped(&(*chan).stream.proc);
 }
 pub unsafe extern "C" fn channel_info(mut id: uint64_t, mut arena: *mut Arena) -> Dict {
     let mut chan: *mut Channel = find_channel(id);
@@ -1956,19 +1957,6 @@ unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
         return;
     }
     (*l).lv_refcount += 1;
-}
-#[inline]
-unsafe extern "C" fn proc_get_exepath(mut proc: *mut Proc) -> *const ::core::ffi::c_char {
-    return if !(*proc).exepath.is_null() {
-        (*proc).exepath
-    } else {
-        *(*proc).argv.offset(0 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_char
-    };
-}
-#[inline]
-unsafe extern "C" fn proc_is_stopped(mut proc: *mut Proc) -> bool {
-    let mut exited: bool = (*proc).status >= 0 as ::core::ffi::c_int;
-    return exited as ::core::ffi::c_int != 0 || (*proc).stopped_time != 0 as uint64_t;
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

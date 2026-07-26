@@ -3,6 +3,7 @@ use crate::src::nvim::api::private::helpers::{cstr_as_string, cstr_to_string};
 use crate::src::nvim::buffer::{bt_prompt, buflist_findnr};
 use crate::src::nvim::change::appended_lines_mark;
 use crate::src::nvim::channel::callback_reader_free;
+use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::charset::{
     hex2nr, skipdigits, skiptowhite, skipwhite, vim_isIDc, vim_str2nr,
 };
@@ -40,6 +41,7 @@ use crate::src::nvim::eval::vars::{
     var_wrong_func_name,
 };
 use crate::src::nvim::event::multiqueue::{multiqueue_free, multiqueue_new_child};
+use crate::src::nvim::event::proc::proc_is_stopped;
 use crate::src::nvim::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
 };
@@ -2054,10 +2056,6 @@ unsafe extern "C" fn ascii_isxdigit(mut c: ::core::ffi::c_int) -> bool {
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
-}
 pub const COPYID_INC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const COPYID_MASK: ::core::ffi::c_int = !(0x1 as ::core::ffi::c_int);
 pub const FNE_INCL_BR: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -9527,7 +9525,7 @@ pub unsafe extern "C" fn find_job(mut id: uint64_t, mut show_error: bool) -> *mu
     if data.is_null()
         || (*data).streamtype as ::core::ffi::c_uint
             != kChannelStreamProc as ::core::ffi::c_int as ::core::ffi::c_uint
-        || proc_is_stopped(&raw mut (*data).stream.proc) as ::core::ffi::c_int != 0
+        || proc_is_stopped(&(*data).stream.proc) as ::core::ffi::c_int != 0
     {
         if show_error {
             if !data.is_null()
@@ -10374,11 +10372,6 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_basetv: ::core::ptr::null_mut::<typval_T>(),
     fe_found_var: false_0 != 0,
 };
-#[inline]
-unsafe extern "C" fn proc_is_stopped(mut proc: *mut Proc) -> bool {
-    let mut exited: bool = (*proc).status >= 0 as ::core::ffi::c_int;
-    return exited as ::core::ffi::c_int != 0 || (*proc).stopped_time != 0 as uint64_t;
-}
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;

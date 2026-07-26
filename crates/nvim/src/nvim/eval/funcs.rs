@@ -13,6 +13,7 @@ use crate::src::nvim::autocmd::{apply_autocmds, au_exists, autocmd_supported};
 use crate::src::nvim::buffer::{
     bt_prompt, buf_close_terminal, buflist_findnr, buflist_findpat, setfname,
 };
+use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::channel::{
     channel_close, channel_connect, channel_create_event, channel_decref, channel_from_stdio,
     channel_incref, channel_job_start, channel_send, channel_terminal_alloc,
@@ -110,6 +111,7 @@ use crate::src::nvim::event::r#loop::{loop_on_put, process_events_until};
 use crate::src::nvim::event::multiqueue::{
     multiqueue_free, multiqueue_new, multiqueue_process_events, multiqueue_replace_parent,
 };
+use crate::src::nvim::event::proc::proc_is_stopped;
 use crate::src::nvim::event::proc::{proc_stop, proc_wait};
 use crate::src::nvim::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
@@ -154,12 +156,12 @@ use crate::src::nvim::lua::executor::{
 };
 use crate::src::nvim::main::{
     EVALARG_EVALUATE, IObuff, NameBuff, Rows, State, autocmd_bufnr, autocmd_busy, autocmd_fname,
-    autocmd_fname_full, autocmd_match, called_emsg, capture_ga, channels, cmdline_row,
-    cmdline_star, curbuf, current_sctx, curtab, curwin, did_emsg, e_api_error,
-    e_buffer_is_not_loaded, e_cannot_change_readonly_variable_str, e_channotpty, e_dictkey,
-    e_invalid_buffer_name_str, e_invalid_column_number_nr, e_invalid_line_number_nr, e_invalwindow,
-    e_invarg, e_invarg2, e_invargNval, e_invargval, e_invexpr2, e_libcall, e_listarg,
-    e_listblobarg, e_listblobreq, e_listdictarg, e_listdictblobarg, e_no_spell, e_number_exp,
+    autocmd_fname_full, autocmd_match, called_emsg, capture_ga, cmdline_row, cmdline_star, curbuf,
+    current_sctx, curtab, curwin, did_emsg, e_api_error, e_buffer_is_not_loaded,
+    e_cannot_change_readonly_variable_str, e_channotpty, e_dictkey, e_invalid_buffer_name_str,
+    e_invalid_column_number_nr, e_invalid_line_number_nr, e_invalwindow, e_invarg, e_invarg2,
+    e_invargNval, e_invargval, e_invexpr2, e_libcall, e_listarg, e_listblobarg, e_listblobreq,
+    e_listdictarg, e_listdictblobarg, e_no_spell, e_number_exp,
     e_reduce_of_an_empty_str_with_no_initial_value, e_stdiochan2, e_toofewarg, e_toomanyarg,
     e_trailing_arg, e_unknown_function_str, empty_string_option, emsg_noredir, emsg_off,
     emsg_silent, firstwin, garbage_collect_at_exit, got_int, lastbuf, lines_left, main_loop,
@@ -169,7 +171,6 @@ use crate::src::nvim::main::{
     reg_recording, skip_update_topline, starting, stdin_isatty, stdout_isatty, typebuf, vgetc_busy,
     vim_ignored, virtual_op, want_garbage_collect, wild_menu_showing, windowsVersion,
 };
-use crate::src::nvim::map::mh_get_uint64_t;
 use crate::src::nvim::mapping::{f_hasmapto, f_maparg, f_mapcheck, f_maplist, f_mapset};
 use crate::src::nvim::mark::{
     cleanup_jumplist, get_buf_local_marks, get_global_marks, setmark_pos, setpcmark,
@@ -2253,20 +2254,6 @@ pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
         .wrapping_sub(1 as usize);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe extern "C" fn map_get_uint64_t_ptr_t(
-    mut map: *mut Map_uint64_t_ptr_t,
-    mut key: uint64_t,
-) -> ptr_t {
-    let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
-    return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t.get()
-    } else {
-        *(*map).values.offset(k as isize)
-    };
-}
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
@@ -2306,10 +2293,6 @@ pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const EX_NOSPC: ::core::ffi::c_uint = 0x10 as ::core::ffi::c_uint;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
-}
 pub const CONTEXT_INIT: Context = Context {
     regs: STRING_INIT,
     jumps: STRING_INIT,
@@ -7746,7 +7729,7 @@ unsafe extern "C" fn f_jobwait(
                     != kChannelStreamProc as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 *jobs.offset(i as isize) = ::core::ptr::null_mut::<Channel>();
-            } else if proc_is_stopped(&raw mut (*chan).stream.proc) {
+            } else if proc_is_stopped(&(*chan).stream.proc) {
                 proc_wait(
                     &raw mut (*chan).stream.proc,
                     -1 as ::core::ffi::c_int,
@@ -13696,11 +13679,6 @@ unsafe extern "C" fn tv_is_func(tv: typval_T) -> bool {
             == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint;
 }
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
-#[inline]
-unsafe extern "C" fn proc_is_stopped(mut proc: *mut Proc) -> bool {
-    let mut exited: bool = (*proc).status >= 0 as ::core::ffi::c_int;
-    return exited as ::core::ffi::c_int != 0 || (*proc).stopped_time != 0 as uint64_t;
-}
 #[inline]
 unsafe extern "C" fn get_register_name(mut num: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if num == -1 as ::core::ffi::c_int {

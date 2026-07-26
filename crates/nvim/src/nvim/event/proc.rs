@@ -102,6 +102,11 @@ pub fn proc_init(uv_loop: *mut Loop, kind: ProcType, data: *mut c_void) -> Proc 
     proc
 }
 
+/// Whether a child has exited, or has been asked to and is being waited out.
+pub fn proc_is_stopped(proc: &Proc) -> bool {
+    proc.status >= 0 || proc.stopped_time != 0
+}
+
 /// The executable a child was (or is about to be) started from.
 ///
 /// `exepath` is set when the caller resolved the program itself; otherwise

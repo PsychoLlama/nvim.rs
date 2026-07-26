@@ -3,14 +3,15 @@ use crate::src::nvim::api::private::helpers::{
 };
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
+use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::event::r#loop::process_events_until;
 use crate::src::nvim::event::wstream::wstream_new_buffer;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{schar_get, schar_get_adv};
 use crate::src::nvim::highlight::{hl_get_url, hlattrs2dict, syn_attr2entry};
 use crate::src::nvim::main::{
-    Columns, channels, current_ui, main_loop, noargs, p_bg, starting, stdin_fd, stdin_isatty,
-    stdout_isatty, t_colors, ui_ext_names,
+    Columns, current_ui, main_loop, noargs, p_bg, starting, stdin_fd, stdin_isatty, stdout_isatty,
+    t_colors, ui_ext_names,
 };
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::src::nvim::mbyte::utf_ambiguous_width;
@@ -2619,7 +2620,3 @@ pub const CHAN_STDIO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
-}

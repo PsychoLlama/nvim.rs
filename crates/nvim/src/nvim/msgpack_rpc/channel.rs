@@ -6,6 +6,7 @@ use crate::src::nvim::api::private::helpers::{
 };
 use crate::src::nvim::api::ui::{remote_ui_disconnect, remote_ui_flush_pending_data};
 use crate::src::nvim::channel::channel_close;
+use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::channel::{channel_decref, channel_incref, channel_info_changed};
 use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::event::r#loop::process_events_until;
@@ -17,13 +18,11 @@ use crate::src::nvim::event::rstream::rstream_start;
 use crate::src::nvim::event::wstream::{
     wstream_new_buffer, wstream_release_wbuffer, wstream_write,
 };
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::{
     ch_before_blocking_events, channels, main_loop, resize_events, ui_client_attached,
     ui_client_channel_id, ui_client_error_exit,
 };
-use crate::src::nvim::map::mh_get_uint64_t;
 use crate::src::nvim::memory::{
     ARENA_EMPTY, alloc_block, arena_finish, arena_mem_free, free_block, strequal, xcalloc, xfree,
     xmalloc, xrealloc,
@@ -295,27 +294,9 @@ pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe extern "C" fn map_get_uint64_t_ptr_t(
-    mut map: *mut Map_uint64_t_ptr_t,
-    mut key: uint64_t,
-) -> ptr_t {
-    let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
-    return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t.get()
-    } else {
-        *(*map).values.offset(k as isize)
-    };
-}
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn find_channel(mut id: uint64_t) -> *mut Channel {
-    return map_get_uint64_t_ptr_t(channels.ptr(), id) as *mut Channel;
-}
 #[inline]
 unsafe extern "C" fn channel_instream(mut chan: *mut Channel) -> *mut Stream {
     match (*chan).streamtype as ::core::ffi::c_uint {
