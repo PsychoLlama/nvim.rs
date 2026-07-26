@@ -22,7 +22,7 @@ use crate::src::nvim::log::{log_uv_handles, logmsg};
 use crate::src::nvim::os::libc::abort;
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::types::{
-    Event, Loop, MultiQueue, Proc, uv_async_t, uv_handle_t, uv_run_mode, uv_timer_t,
+    Event, Loop, MultiQueue, Proc, argv_callback, uv_async_t, uv_handle_t, uv_run_mode, uv_timer_t,
 };
 
 const LOGLVL_ERR: c_int = 4;
@@ -270,6 +270,13 @@ unsafe extern "C" fn timer_close_cb(handle: *mut uv_handle_t) {
 // ---------------------------------------------------------------------------
 // Posting events
 // ---------------------------------------------------------------------------
+
+/// An [`Event`] carrying a single argument, which is all most handlers take.
+pub fn one_arg_event(handler: argv_callback, arg: *mut c_void) -> Event {
+    let mut argv = [ptr::null_mut::<c_void>(); 10];
+    argv[0] = arg;
+    Event { handler, argv }
+}
 
 /// Post `event` to the fast queue from any thread.
 pub unsafe fn loop_schedule_fast(uv_loop: *mut Loop, event: Event) {

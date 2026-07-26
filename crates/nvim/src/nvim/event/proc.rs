@@ -30,7 +30,7 @@ use crate::src::nvim::event::libuv::{
 };
 use crate::src::nvim::event::libuv_proc::{libuv_proc_close, libuv_proc_spawn};
 use crate::src::nvim::event::r#loop::{
-    loop_children, loop_poll_events, process_events, process_events_until,
+    loop_children, loop_poll_events, one_arg_event, process_events, process_events_until,
 };
 use crate::src::nvim::event::multiqueue::{
     multiqueue_empty, multiqueue_process_events, multiqueue_put_event,
@@ -51,8 +51,8 @@ use crate::src::nvim::os::shell::shell_free_argv;
 use crate::src::nvim::os::signal::{SIGHUP, SIGKILL, SIGTERM};
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::types::{
-    Event, LibuvProc, Loop, MultiQueue, Proc, ProcType, PtyProc, RStream, Stream, argv_callback,
-    uv_handle_t, uv_stream_t, uv_timer_t,
+    LibuvProc, Loop, MultiQueue, Proc, ProcType, PtyProc, RStream, Stream, uv_handle_t,
+    uv_stream_t, uv_timer_t,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -355,14 +355,6 @@ unsafe fn remove_child(uv_loop: *mut Loop, proc: *mut Proc) {
 // ---------------------------------------------------------------------------
 // Event-loop plumbing
 // ---------------------------------------------------------------------------
-
-/// An [`Event`] carrying a single argument, which is all any handler here
-/// takes.
-fn one_arg_event(handler: argv_callback, arg: *mut c_void) -> Event {
-    let mut argv = [ptr::null_mut::<c_void>(); 10];
-    argv[0] = arg;
-    Event { handler, argv }
-}
 
 /// Queue `handler` on `queue`, or run it immediately if there is no queue.
 ///

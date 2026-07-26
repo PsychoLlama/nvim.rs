@@ -1,144 +1,78 @@
+//! Signal watchers: a libuv signal handle whose deliveries become events.
+//!
+//! Like the timer watchers, the owner's callback runs from a queue rather
+//! than from libuv's stack. The close notification is the exception — it is
+//! delivered directly, see [`close_cb`].
+
+use core::ffi::{c_int, c_void};
+
 use crate::src::nvim::event::libuv::{uv_close, uv_signal_init, uv_signal_start, uv_signal_stop};
+use crate::src::nvim::event::r#loop::one_arg_event;
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
-pub use crate::src::nvim::types::{
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, Event,
-    Loop, LuaRef, MultiQueue, Proc, ProcType, QUEUE, RStream, ScopeType, SignalWatcher, Stream,
-    VarLockStatus, argv_callback, dict_T, dictvar_S, hash_T, hashitem_T, hashtab_T, int64_t,
-    internal_proc_cb, loop_0, multiqueue, proc, proc_exit_cb, proc_state_cb, pthread_mutex_t,
-    pthread_rwlock_t, queue, rstream, signal_cb, signal_close_cb, signal_watcher, size_t, ssize_t,
-    stream, stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_12, stream_write_cb,
-    uint8_t, uint64_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb,
-    uv_async_s, uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
-    uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
-    uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
-    uv_idle_s_u as C2Rust_Unnamed_10, uv_idle_t, uv_loop_s,
-    uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2, uv_loop_t,
-    uv_mutex_t, uv_pipe_s, uv_pipe_s_u as C2Rust_Unnamed_7, uv_pipe_t, uv_read_cb, uv_req_type,
-    uv_rwlock_t, uv_shutdown_cb, uv_shutdown_s, uv_shutdown_t, uv_signal_cb, uv_signal_s,
-    uv_signal_s_tree_entry as C2Rust_Unnamed, uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t,
-    uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_5, uv_stream_t, uv_tcp_s,
-    uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
-    uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t,
+use crate::src::nvim::types::{
+    Loop, SignalWatcher, signal_cb, signal_close_cb, uv_handle_t, uv_signal_t,
 };
-pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
-pub const UV_FILE: uv_handle_type = 17;
-pub const UV_SIGNAL: uv_handle_type = 16;
-pub const UV_UDP: uv_handle_type = 15;
-pub const UV_TTY: uv_handle_type = 14;
-pub const UV_TIMER: uv_handle_type = 13;
-pub const UV_TCP: uv_handle_type = 12;
-pub const UV_STREAM: uv_handle_type = 11;
-pub const UV_PROCESS: uv_handle_type = 10;
-pub const UV_PREPARE: uv_handle_type = 9;
-pub const UV_POLL: uv_handle_type = 8;
-pub const UV_NAMED_PIPE: uv_handle_type = 7;
-pub const UV_IDLE: uv_handle_type = 6;
-pub const UV_HANDLE: uv_handle_type = 5;
-pub const UV_FS_POLL: uv_handle_type = 4;
-pub const UV_FS_EVENT: uv_handle_type = 3;
-pub const UV_CHECK: uv_handle_type = 2;
-pub const UV_ASYNC: uv_handle_type = 1;
-pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
-pub const UV_RANDOM: uv_req_type = 10;
-pub const UV_GETNAMEINFO: uv_req_type = 9;
-pub const UV_GETADDRINFO: uv_req_type = 8;
-pub const UV_WORK: uv_req_type = 7;
-pub const UV_FS: uv_req_type = 6;
-pub const UV_UDP_SEND: uv_req_type = 5;
-pub const UV_SHUTDOWN: uv_req_type = 4;
-pub const UV_WRITE: uv_req_type = 3;
-pub const UV_CONNECT: uv_req_type = 2;
-pub const UV_REQ: uv_req_type = 1;
-pub const UV_UNKNOWN_REQ: uv_req_type = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const kProcTypePty: ProcType = 1;
-pub const kProcTypeUv: ProcType = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub unsafe extern "C" fn signal_watcher_init(
-    mut loop_0: *mut Loop,
-    mut watcher: *mut SignalWatcher,
-    mut data: *mut ::core::ffi::c_void,
+
+/// Attach `watcher` to `uv_loop`, delivering its events on the fast queue.
+pub unsafe fn signal_watcher_init(
+    uv_loop: *mut Loop,
+    watcher: *mut SignalWatcher,
+    data: *mut c_void,
 ) {
-    uv_signal_init(&raw mut (*loop_0).uv, &raw mut (*watcher).uv);
-    (*watcher).uv.data = watcher as *mut ::core::ffi::c_void;
+    uv_signal_init(&raw mut (*uv_loop).uv, &raw mut (*watcher).uv);
+    (*watcher).uv.data = watcher.cast();
     (*watcher).data = data;
     (*watcher).cb = None;
-    (*watcher).events = (*loop_0).fast_events;
+    (*watcher).events = (*uv_loop).fast_events;
 }
-pub unsafe extern "C" fn signal_watcher_start(
-    mut watcher: *mut SignalWatcher,
-    mut cb: signal_cb,
-    mut signum: ::core::ffi::c_int,
-) {
+
+/// Listen for `signum`, reporting each delivery to `cb`.
+pub unsafe fn signal_watcher_start(watcher: *mut SignalWatcher, cb: signal_cb, signum: c_int) {
     (*watcher).cb = cb;
-    uv_signal_start(
-        &raw mut (*watcher).uv,
-        Some(signal_watcher_cb as unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()),
-        signum,
-    );
+    uv_signal_start(&raw mut (*watcher).uv, Some(signal_watcher_cb), signum);
 }
-pub unsafe extern "C" fn signal_watcher_stop(mut watcher: *mut SignalWatcher) {
+
+pub unsafe fn signal_watcher_stop(watcher: *mut SignalWatcher) {
     uv_signal_stop(&raw mut (*watcher).uv);
 }
-pub unsafe extern "C" fn signal_watcher_close(
-    mut watcher: *mut SignalWatcher,
-    mut cb: signal_close_cb,
-) {
+
+/// Close the watcher's handle; `cb` is told once libuv is done with it.
+pub unsafe fn signal_watcher_close(watcher: *mut SignalWatcher, cb: signal_close_cb) {
     (*watcher).close_cb = cb;
-    uv_close(
-        &raw mut (*watcher).uv as *mut uv_handle_t,
-        Some(close_cb as unsafe extern "C" fn(*mut uv_handle_t) -> ()),
-    );
+    uv_close((&raw mut (*watcher).uv).cast(), Some(close_cb));
 }
-unsafe extern "C" fn signal_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut watcher: *mut SignalWatcher =
-        *argv.offset(0 as ::core::ffi::c_int as isize) as *mut SignalWatcher;
-    (*watcher).cb.expect("non-null function pointer")(
-        watcher,
-        (*watcher).uv.signum,
-        (*watcher).data,
-    );
-}
-unsafe extern "C" fn signal_watcher_cb(
-    mut handle: *mut uv_signal_t,
-    mut _signum: ::core::ffi::c_int,
-) {
-    let mut watcher: *mut SignalWatcher = (*handle).data as *mut SignalWatcher;
-    if !(*watcher).events.is_null() {
+
+/// libuv: the signal arrived. The number is read back off the handle rather
+/// than taken from the argument, so a watcher restarted on a different signal
+/// between delivery and processing reports the one it is watching now.
+unsafe extern "C" fn signal_watcher_cb(handle: *mut uv_signal_t, _signum: c_int) {
+    let watcher: *mut SignalWatcher = (*handle).data.cast();
+    if (*watcher).events.is_null() {
+        let mut argv = [watcher.cast::<c_void>()];
+        signal_event(argv.as_mut_ptr());
+    } else {
         multiqueue_put_event(
             (*watcher).events,
-            Event {
-                handler: Some(
-                    signal_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-                ),
-                argv: [
-                    watcher as *mut ::core::ffi::c_void,
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ],
-            },
+            one_arg_event(Some(signal_event), watcher.cast()),
         );
-    } else {
-        let mut argv: [*mut ::core::ffi::c_void; 1] = [watcher as *mut ::core::ffi::c_void];
-        signal_event(&raw mut argv as *mut *mut ::core::ffi::c_void);
-    };
+    }
 }
-unsafe extern "C" fn close_cb(mut handle: *mut uv_handle_t) {
-    let mut watcher: *mut SignalWatcher = (*handle).data as *mut SignalWatcher;
-    if (*watcher).close_cb.is_some() {
-        (*watcher).close_cb.expect("non-null function pointer")(watcher, (*watcher).data);
+
+unsafe extern "C" fn signal_event(argv: *mut *mut c_void) {
+    let watcher: *mut SignalWatcher = (*argv).cast();
+    let notify = (*watcher).cb.expect("a started watcher has a callback");
+    notify(watcher, (*watcher).uv.signum, (*watcher).data);
+}
+
+/// libuv: the handle is closed.
+///
+/// Unlike the timer watchers, this notification is *not* queued: upstream
+/// calls the owner's callback straight from libuv's stack. Preserved —
+/// `os/signal.rs` and `tui/tui.rs` both act on the watcher from here, and a
+/// queued close would land after the loop has already been torn down.
+unsafe extern "C" fn close_cb(handle: *mut uv_handle_t) {
+    let watcher: *mut SignalWatcher = (*handle).data.cast();
+    if let Some(notify) = (*watcher).close_cb {
+        notify(watcher, (*watcher).data);
     }
 }
