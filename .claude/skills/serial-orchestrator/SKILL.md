@@ -13,7 +13,7 @@ arguments:
 ## Steps
 
 - Read $migration_plan to understand your slice of work.
-- Don't implement changes yourself; delegate work to subagents (model=fable).
+- Don't implement changes yourself; delegate work to subagents (model=opus, not your default).
 - Don't try to multi-task subagents - one at a time, all on the current branch.
 - Carry learnings from one subagent to the next using a scratchpad.
 
