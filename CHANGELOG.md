@@ -10,8 +10,7 @@ and this project adheres to [CalVer](https://calver.org/).
 ### Changed
 
 - Rust toolchain bumped forward by 3 years.
-- Shed the last unstable language features; the crate now builds on the
-  stable language (the pin stays on nightly only until Rust 1.99 releases).
+- Migrate fully off unstable language features.
 
 ### Fixed
 
