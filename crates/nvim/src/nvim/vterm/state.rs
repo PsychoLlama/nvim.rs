@@ -23,8 +23,7 @@ pub use crate::src::nvim::types::{
 use crate::src::nvim::vterm::encoding::vterm_lookup_encoding;
 use crate::src::nvim::vterm::parser::vterm_parser_set_callbacks;
 use crate::src::nvim::vterm::pen::{
-    vterm_state_getpen, vterm_state_newpen, vterm_state_resetpen, vterm_state_savepen,
-    vterm_state_setpen,
+    apply_sgr, init_pen, pen_sgr_params, reset_pen, restore_pen, save_pen,
 };
 use crate::src::nvim::vterm::vterm::{
     vterm_allocator_free, vterm_allocator_malloc, vterm_push_output_bytes,
@@ -235,7 +234,7 @@ unsafe extern "C" fn vterm_state_new(mut vt: *mut VTerm) -> *mut VTermState {
     (*state).selection.callbacks = ::core::ptr::null::<VTermSelectionCallbacks>();
     (*state).selection.user = NULL;
     (*state).selection.buffer = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    vterm_state_newpen(state);
+    init_pen(&mut *state);
     (*state).bold_is_highbright = 0 as ::core::ffi::c_int;
     (*state).combine_pos.row = -1 as ::core::ffi::c_int;
     (*state).tabstops = vterm_allocator_malloc(
@@ -913,7 +912,7 @@ unsafe extern "C" fn savecursor(mut state: *mut VTermState, mut save: ::core::ff
             .saved
             .mode
             .set_cursor_shape((*state).mode.cursor_shape() as ::core::ffi::c_uint);
-        vterm_state_savepen(state, 1 as ::core::ffi::c_int);
+        save_pen(&mut *state);
     } else {
         let mut oldpos: VTermPos = (*state).pos;
         (*state).pos = (*state).saved.pos;
@@ -932,7 +931,7 @@ unsafe extern "C" fn savecursor(mut state: *mut VTermState, mut save: ::core::ff
             VTERM_PROP_CURSORSHAPE,
             (*state).saved.mode.cursor_shape() as ::core::ffi::c_int,
         );
-        vterm_state_savepen(state, 0 as ::core::ffi::c_int);
+        restore_pen(&mut *state);
         updatecursor(state, &raw mut oldpos, 1 as ::core::ffi::c_int);
     };
 }
@@ -2406,7 +2405,10 @@ unsafe extern "C" fn on_csi(
             }
         }
         109 => {
-            vterm_state_setpen(state, args, argcount);
+            apply_sgr(
+                &mut *state,
+                ::core::slice::from_raw_parts(args, argcount as usize),
+            );
         }
         16237 => {
             let mut argi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -2416,27 +2418,15 @@ unsafe extern "C" fn on_csi(
                 match arg {
                     4 => {
                         arg = 73 as ::core::ffi::c_long;
-                        vterm_state_setpen(
-                            state,
-                            &raw mut arg as *const ::core::ffi::c_long,
-                            1 as ::core::ffi::c_int,
-                        );
+                        apply_sgr(&mut *state, &[arg]);
                     }
                     5 => {
                         arg = 74 as ::core::ffi::c_long;
-                        vterm_state_setpen(
-                            state,
-                            &raw mut arg as *const ::core::ffi::c_long,
-                            1 as ::core::ffi::c_int,
-                        );
+                        apply_sgr(&mut *state, &[arg]);
                     }
                     24 => {
                         arg = 75 as ::core::ffi::c_long;
-                        vterm_state_setpen(
-                            state,
-                            &raw mut arg as *const ::core::ffi::c_long,
-                            1 as ::core::ffi::c_int,
-                        );
+                        apply_sgr(&mut *state, &[arg]);
                     }
                     _ => {}
                 }
@@ -3287,14 +3277,8 @@ unsafe extern "C" fn request_status_string(
             << 16 as ::core::ffi::c_int
     {
         109 => {
-            let mut args: [::core::ffi::c_long; 20] = [0; 20];
-            let mut argc: ::core::ffi::c_int = vterm_state_getpen(
-                state,
-                &raw mut args as *mut ::core::ffi::c_long,
-                ::core::mem::size_of::<[::core::ffi::c_long; 20]>()
-                    .wrapping_div(::core::mem::size_of::<::core::ffi::c_long>())
-                    as ::core::ffi::c_int,
-            );
+            let args = pen_sgr_params(&(*state).pen);
+            let argc: ::core::ffi::c_int = args.len() as ::core::ffi::c_int;
             let mut cur: size_t = 0 as size_t;
             cur = cur.wrapping_add(snprintf(
                 (*vt).tmpbuffer.offset(cur as isize),
@@ -3817,7 +3801,7 @@ pub unsafe extern "C" fn vterm_state_reset(
         )
         .expect("non-null function pointer")((*state).cbdata);
     }
-    vterm_state_resetpen(state);
+    reset_pen(&mut *state);
     let mut default_enc: *mut VTermEncoding =
         if (*(*state).vt).mode.utf8() as ::core::ffi::c_int != 0 {
             vterm_lookup_encoding(ENC_UTF8, 'u' as ::core::ffi::c_char)

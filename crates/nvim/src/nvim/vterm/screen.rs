@@ -19,7 +19,7 @@ pub use crate::src::nvim::types::{
     VTermStateFields, VTermStringFragment, VTermTerminator, VTermValue, int32_t, schar_T, size_t,
     uint8_t, uint16_t, uint32_t, utf8proc_int32_t,
 };
-use crate::src::nvim::vterm::pen::vterm_state_convert_color_to_rgb;
+use crate::src::nvim::vterm::pen::convert_color_to_rgb;
 use crate::src::nvim::vterm::state::{
     vterm_obtain_state, vterm_state_get_lineinfo, vterm_state_reset, vterm_state_set_callbacks,
     vterm_state_set_unrecognised_fallbacks,
@@ -1516,7 +1516,7 @@ pub unsafe extern "C" fn vterm_screen_convert_color_to_rgb(
     mut screen: *const VTermScreen,
     mut col: *mut VTermColor,
 ) {
-    vterm_state_convert_color_to_rgb((*screen).state, col);
+    convert_color_to_rgb(&*(*screen).state, &mut *col);
 }
 pub unsafe extern "C" fn rect_expand(mut dst: *mut VTermRect, mut src: *mut VTermRect) {
     if (*dst).start_row > (*src).start_row {

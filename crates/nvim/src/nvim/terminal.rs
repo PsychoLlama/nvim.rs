@@ -112,9 +112,7 @@ use crate::src::nvim::vterm::keyboard::{
 };
 use crate::src::nvim::vterm::mouse::{vterm_mouse_button, vterm_mouse_move};
 use crate::src::nvim::vterm::parser::vterm_input_write;
-use crate::src::nvim::vterm::pen::{
-    vterm_state_convert_color_to_rgb, vterm_state_set_palette_color, vterm_state_set_penattr,
-};
+use crate::src::nvim::vterm::pen::{convert_color_to_rgb, set_palette_color, set_pen_attr};
 use crate::src::nvim::vterm::screen::{
     vterm_obtain_screen, vterm_screen_enable_altscreen, vterm_screen_enable_reflow,
     vterm_screen_flush_damage, vterm_screen_get_cell, vterm_screen_reset,
@@ -3047,7 +3045,7 @@ unsafe extern "C" fn on_osc(
             {
                 let mut state: *mut VTermState = vterm_obtain_state((*term).vt);
                 let mut value: VTermValue = VTermValue { number: attr };
-                vterm_state_set_penattr(state, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &raw mut value);
+                set_pen_attr(&mut *state, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &value);
             }
         }
     }
@@ -3484,7 +3482,7 @@ pub unsafe extern "C" fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: 
                     (color_val >> 8 as ::core::ffi::c_int & 0xff as RgbValue) as uint8_t,
                     (color_val >> 0 as ::core::ffi::c_int & 0xff as RgbValue) as uint8_t,
                 );
-                vterm_state_set_palette_color(state, i, &raw mut color);
+                set_palette_color(&mut *state, i, &color);
                 (*term).color_set[i as usize] = true_0 != 0;
             }
         }
@@ -4537,7 +4535,7 @@ unsafe extern "C" fn get_rgb(
     mut state: *mut VTermState,
     mut color: VTermColor,
 ) -> ::core::ffi::c_int {
-    vterm_state_convert_color_to_rgb(state, &raw mut color);
+    convert_color_to_rgb(&*state, &mut color);
     return (color.rgb.red as ::core::ffi::c_int) << 16 as ::core::ffi::c_int
         | (color.rgb.green as ::core::ffi::c_int) << 8 as ::core::ffi::c_int
         | color.rgb.blue as ::core::ffi::c_int;

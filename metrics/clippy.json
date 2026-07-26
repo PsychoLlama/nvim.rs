@@ -168,7 +168,6 @@
     "crates/nvim/src/nvim/version.rs": 66,
     "crates/nvim/src/nvim/viml/parser/expressions.rs": 697,
     "crates/nvim/src/nvim/viml/parser/parser.rs": 7,
-    "crates/nvim/src/nvim/vterm/pen.rs": 7,
     "crates/nvim/src/nvim/vterm/screen.rs": 10,
     "crates/nvim/src/nvim/vterm/state.rs": 92,
     "crates/nvim/src/nvim/vterm/vterm.rs": 18,
