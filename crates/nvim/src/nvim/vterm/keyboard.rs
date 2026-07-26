@@ -1,834 +1,584 @@
-use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::os::libc::__assert_fail;
-use crate::src::nvim::tui::termkey::termkey::fill_utf8;
-pub use crate::src::nvim::types::{
-    GraphemeState, ScreenCell, ScreenPen, VTerm, VTerm_mode as C2Rust_Unnamed_14,
-    VTerm_parser as C2Rust_Unnamed_9, VTerm_parser_v as C2Rust_Unnamed_10,
-    VTerm_parser_v_csi as C2Rust_Unnamed_13, VTerm_parser_v_dcs as C2Rust_Unnamed_11,
-    VTerm_parser_v_osc as C2Rust_Unnamed_12, VTermAllocatorFunctions, VTermAttr, VTermColor,
-    VTermColor_indexed as C2Rust_Unnamed, VTermColor_rgb as C2Rust_Unnamed_0, VTermDamageSize,
-    VTermEncoding, VTermEncodingInstance, VTermGlyphInfo, VTermKey, VTermKeyEncodingFlags,
-    VTermKeyEncodingStack, VTermLineInfo, VTermModifier, VTermOutputCallback, VTermParserCallbacks,
-    VTermParserState, VTermPen, VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks,
-    VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks, VTermSelectionMask, VTermState,
-    VTermState_mode as C2Rust_Unnamed_7, VTermState_mouse_protocol as C2Rust_Unnamed_8,
-    VTermState_saved as C2Rust_Unnamed_5, VTermState_saved_mode as C2Rust_Unnamed_6,
-    VTermState_selection as C2Rust_Unnamed_1, VTermState_tmp as C2Rust_Unnamed_2,
-    VTermState_tmp_selection as C2Rust_Unnamed_3,
-    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStateCallbacks, VTermStateFallbacks,
-    VTermStateFields, VTermStringFragment, VTermTerminator, VTermValue, int32_t, schar_T, size_t,
-    uint8_t, uint16_t, uint32_t, utf8proc_int32_t,
-};
-use crate::src::nvim::vterm::vterm::{
-    vterm_push_output_bytes, vterm_push_output_sprintf, vterm_push_output_sprintf_ctrl,
-};
+//! Keyboard input: turning key presses into the bytes the host expects.
+//!
+//! Three things decide the spelling of a key. The terminal modes DECCKM,
+//! DECKPAM and LNM pick between the legacy cursor/keypad/Enter forms; whether
+//! the host accepts 8-bit C1 controls picks between `CSI` and `ESC [`; and the
+//! Kitty keyboard protocol's disambiguation level, when the host has pushed it
+//! onto the key-encoding stack, replaces almost everything with `CSI <code>;<mod>u`.
+//!
+//! The four entry points keep their C ABI — the unit specs call them through
+//! LuaJIT's FFI — but the encoding itself is pure and pointer-free.
 
-pub const VTERM_N_DAMAGES: VTermDamageSize = 4;
-pub const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
-pub const VTERM_DAMAGE_SCREEN: VTermDamageSize = 2;
-pub const VTERM_DAMAGE_ROW: VTermDamageSize = 1;
-pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
-pub const VTERM_TERMINATOR_ST: VTermTerminator = 1;
-pub const VTERM_TERMINATOR_BEL: VTermTerminator = 0;
-pub const VTERM_N_PROPS: VTermProp = 12;
-pub const VTERM_PROP_SYNCOUTPUT: VTermProp = 11;
-pub const VTERM_PROP_THEMEUPDATES: VTermProp = 10;
-pub const VTERM_PROP_FOCUSREPORT: VTermProp = 9;
-pub const VTERM_PROP_MOUSE: VTermProp = 8;
-pub const VTERM_PROP_CURSORSHAPE: VTermProp = 7;
-pub const VTERM_PROP_REVERSE: VTermProp = 6;
-pub const VTERM_PROP_ICONNAME: VTermProp = 5;
-pub const VTERM_PROP_TITLE: VTermProp = 4;
-pub const VTERM_PROP_ALTSCREEN: VTermProp = 3;
-pub const VTERM_PROP_CURSORBLINK: VTermProp = 2;
-pub const VTERM_PROP_CURSORVISIBLE: VTermProp = 1;
-pub const VTERM_SELECTION_CUT0: VTermSelectionMask = 16;
-pub const VTERM_SELECTION_SELECT: VTermSelectionMask = 8;
-pub const VTERM_SELECTION_SECONDARY: VTermSelectionMask = 4;
-pub const VTERM_SELECTION_PRIMARY: VTermSelectionMask = 2;
-pub const VTERM_SELECTION_CLIPBOARD: VTermSelectionMask = 1;
-pub const SELECTION_INVALID: C2Rust_Unnamed_4 = 5;
-pub const SELECTION_SET: C2Rust_Unnamed_4 = 4;
-pub const SELECTION_SET_INITIAL: C2Rust_Unnamed_4 = 3;
-pub const SELECTION_QUERY: C2Rust_Unnamed_4 = 2;
-pub const SELECTION_SELECTED: C2Rust_Unnamed_4 = 1;
-pub const SELECTION_INITIAL: C2Rust_Unnamed_4 = 0;
-pub const MOUSE_RXVT: C2Rust_Unnamed_8 = 3;
-pub const MOUSE_SGR: C2Rust_Unnamed_8 = 2;
-pub const MOUSE_UTF8: C2Rust_Unnamed_8 = 1;
-pub const MOUSE_X10: C2Rust_Unnamed_8 = 0;
-pub const VTERM_N_ATTRS: VTermAttr = 16;
-pub const VTERM_ATTR_OVERLINE: VTermAttr = 15;
-pub const VTERM_ATTR_DIM: VTermAttr = 14;
-pub const VTERM_ATTR_URI: VTermAttr = 13;
-pub const VTERM_ATTR_BASELINE: VTermAttr = 12;
-pub const VTERM_ATTR_SMALL: VTermAttr = 11;
-pub const VTERM_ATTR_BACKGROUND: VTermAttr = 10;
-pub const VTERM_ATTR_FOREGROUND: VTermAttr = 9;
-pub const VTERM_ATTR_FONT: VTermAttr = 8;
-pub const VTERM_ATTR_STRIKE: VTermAttr = 7;
-pub const VTERM_ATTR_CONCEAL: VTermAttr = 6;
-pub const VTERM_ATTR_REVERSE: VTermAttr = 5;
-pub const VTERM_ATTR_BLINK: VTermAttr = 4;
-pub const VTERM_ATTR_ITALIC: VTermAttr = 3;
-pub const VTERM_ATTR_UNDERLINE: VTermAttr = 2;
-pub const VTERM_ATTR_BOLD: VTermAttr = 1;
-pub const SOS: VTermParserState = 10;
-pub const PM: VTermParserState = 9;
-pub const APC: VTermParserState = 8;
-pub const DCS_VTERM: VTermParserState = 7;
-pub const OSC: VTermParserState = 6;
-pub const OSC_COMMAND: VTermParserState = 5;
-pub const DCS_COMMAND: VTermParserState = 4;
-pub const CSI_INTERMED: VTermParserState = 3;
-pub const CSI_ARGS: VTermParserState = 2;
-pub const CSI_LEADER: VTermParserState = 1;
-pub const NORMAL: VTermParserState = 0;
-pub const VTERM_ALL_MODS_MASK: VTermModifier = 7;
-pub const VTERM_MOD_CTRL: VTermModifier = 4;
-pub const VTERM_MOD_ALT: VTermModifier = 2;
-pub const VTERM_MOD_SHIFT: VTermModifier = 1;
-pub const VTERM_MOD_NONE: VTermModifier = 0;
-pub const VTERM_N_KEYS: VTermKey = 530;
-pub const VTERM_KEY_MAX: VTermKey = 530;
-pub const VTERM_KEY_KP_EQUAL: VTermKey = 529;
-pub const VTERM_KEY_KP_ENTER: VTermKey = 528;
-pub const VTERM_KEY_KP_DIVIDE: VTermKey = 527;
-pub const VTERM_KEY_KP_PERIOD: VTermKey = 526;
-pub const VTERM_KEY_KP_MINUS: VTermKey = 525;
-pub const VTERM_KEY_KP_COMMA: VTermKey = 524;
-pub const VTERM_KEY_KP_PLUS: VTermKey = 523;
-pub const VTERM_KEY_KP_MULT: VTermKey = 522;
-pub const VTERM_KEY_KP_9: VTermKey = 521;
-pub const VTERM_KEY_KP_8: VTermKey = 520;
-pub const VTERM_KEY_KP_7: VTermKey = 519;
-pub const VTERM_KEY_KP_6: VTermKey = 518;
-pub const VTERM_KEY_KP_5: VTermKey = 517;
-pub const VTERM_KEY_KP_4: VTermKey = 516;
-pub const VTERM_KEY_KP_3: VTermKey = 515;
-pub const VTERM_KEY_KP_2: VTermKey = 514;
-pub const VTERM_KEY_KP_1: VTermKey = 513;
-pub const VTERM_KEY_KP_0: VTermKey = 512;
-pub const VTERM_KEY_FUNCTION_MAX: VTermKey = 511;
-pub const VTERM_KEY_FUNCTION_0: VTermKey = 256;
-pub const VTERM_KEY_PAGEDOWN: VTermKey = 14;
-pub const VTERM_KEY_PAGEUP: VTermKey = 13;
-pub const VTERM_KEY_END: VTermKey = 12;
-pub const VTERM_KEY_HOME: VTermKey = 11;
-pub const VTERM_KEY_DEL: VTermKey = 10;
-pub const VTERM_KEY_INS: VTermKey = 9;
-pub const VTERM_KEY_RIGHT: VTermKey = 8;
-pub const VTERM_KEY_LEFT: VTermKey = 7;
-pub const VTERM_KEY_DOWN: VTermKey = 6;
-pub const VTERM_KEY_UP: VTermKey = 5;
-pub const VTERM_KEY_ESCAPE: VTermKey = 4;
-pub const VTERM_KEY_BACKSPACE: VTermKey = 3;
-pub const VTERM_KEY_TAB: VTermKey = 2;
-pub const VTERM_KEY_ENTER: VTermKey = 1;
-pub const VTERM_KEY_NONE: VTermKey = 0;
-pub const C1_CSI: C2Rust_Unnamed_16 = 155;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct keycodes_s {
-    pub type_0: C2Rust_Unnamed_15,
-    pub literal: ::core::ffi::c_int,
-    pub csinum: ::core::ffi::c_int,
-}
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const KEYCODE_KEYPAD: C2Rust_Unnamed_15 = 8;
-pub const KEYCODE_CSINUM: C2Rust_Unnamed_15 = 7;
-pub const KEYCODE_CSI_CURSOR: C2Rust_Unnamed_15 = 6;
-pub const KEYCODE_CSI: C2Rust_Unnamed_15 = 5;
-pub const KEYCODE_SS3: C2Rust_Unnamed_15 = 4;
-pub const KEYCODE_ENTER: C2Rust_Unnamed_15 = 3;
-pub const KEYCODE_TAB: C2Rust_Unnamed_15 = 2;
-pub const KEYCODE_LITERAL: C2Rust_Unnamed_15 = 1;
-pub const KEYCODE_NONE: C2Rust_Unnamed_15 = 0;
-pub const C1_SS3: C2Rust_Unnamed_16 = 143;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const C1_OSC: C2Rust_Unnamed_16 = 157;
-pub const C1_ST: C2Rust_Unnamed_16 = 156;
-pub const C1_DCS: C2Rust_Unnamed_16 = 144;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 77] = unsafe {
-    ::core::mem::transmute::<[u8; 77], [::core::ffi::c_char; 77]>(
-        *b"VTermKeyEncodingFlags vterm_state_get_key_encoding_flags(const VTermState *)\0",
-    )
+use crate::src::nvim::types::{
+    VTerm, VTermKey, VTermKeyEncodingFlags, VTermModifier, VTermState, uint32_t,
 };
-pub const ESC_S: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\x1B\0") };
-pub const BUFIDX_PRIMARY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const BUFIDX_ALTSCREEN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-unsafe extern "C" fn vterm_state_get_key_encoding_flags(
-    mut state: *const VTermState,
-) -> VTermKeyEncodingFlags {
-    let mut screen: ::core::ffi::c_int = if (*state).mode.alt_screen() as ::core::ffi::c_int != 0 {
-        BUFIDX_ALTSCREEN
-    } else {
-        BUFIDX_PRIMARY
-    };
-    let mut stack: *const VTermKeyEncodingStack = (&raw const (*state).key_encoding_stacks
-        as *const VTermKeyEncodingStack)
-        .offset(screen as isize);
-    '_c2rust_label: {
-        if (*stack).size as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"stack->size > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/vterm/keyboard.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                15 as ::core::ffi::c_uint,
-                __ASSERT_FUNCTION.as_ptr(),
-            );
-        }
-    };
-    return (*stack).items
-        [((*stack).size as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize];
+use crate::src::nvim::vterm::output::EscapeSeq;
+use crate::src::nvim::vterm::vterm::vterm_push_output_bytes;
+use core::ffi::{c_char, c_int};
+use core::fmt::Write;
+
+const VTERM_MOD_NONE: VTermModifier = 0;
+const VTERM_MOD_SHIFT: VTermModifier = 1;
+const VTERM_MOD_ALT: VTermModifier = 2;
+const VTERM_MOD_CTRL: VTermModifier = 4;
+
+const VTERM_KEY_NONE: VTermKey = 0;
+const VTERM_KEY_ENTER: VTermKey = 1;
+const VTERM_KEY_TAB: VTermKey = 2;
+const VTERM_KEY_BACKSPACE: VTermKey = 3;
+const VTERM_KEY_FUNCTION_0: VTermKey = 256;
+const VTERM_KEY_FUNCTION_MAX: VTermKey = 511;
+const VTERM_KEY_KP_0: VTermKey = 512;
+
+/// How a special key is spelled on the wire.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum KeyForm {
+    /// No key at this slot.
+    Absent,
+    /// The literal byte in `literal`.
+    Literal,
+    /// Literal, except that Shift-Tab has a CSI form of its own.
+    Tab,
+    /// Literal, unless LNM asked for CR LF.
+    Enter,
+    /// `SS3 <literal>`, or the CSI form once modifiers are involved.
+    Ss3,
+    /// `CSI <literal>`.
+    Csi,
+    /// SS3 or CSI, depending on DECCKM.
+    CsiCursor,
+    /// `CSI <csinum> <literal>`, where `literal` is the final `~`.
+    CsiNum,
+    /// Literal, or the application-keypad form, depending on DECKPAM.
+    Keypad,
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_keyboard_unichar(
-    mut vt: *mut VTerm,
-    mut c: uint32_t,
-    mut mod_0: VTermModifier,
-) {
-    let mut passthru: bool = false_0 != 0;
-    if c == ' ' as uint32_t {
-        passthru = mod_0 as ::core::ffi::c_uint
-            == VTERM_MOD_NONE as ::core::ffi::c_int as ::core::ffi::c_uint;
-    } else {
-        passthru = mod_0 as ::core::ffi::c_uint
-            & !(VTERM_MOD_SHIFT as ::core::ffi::c_int) as ::core::ffi::c_uint
-            == 0 as ::core::ffi::c_uint;
-    }
-    if passthru {
-        let mut str: [::core::ffi::c_char; 6] = [0; 6];
-        let mut seqlen: ::core::ffi::c_int = fill_utf8(
-            c as ::core::ffi::c_int,
-            &raw mut str as *mut ::core::ffi::c_char,
-        );
-        vterm_push_output_bytes(
-            vt,
-            &raw mut str as *mut ::core::ffi::c_char,
-            seqlen as size_t,
-        );
-        return;
-    }
-    let mut flags: VTermKeyEncodingFlags = vterm_state_get_key_encoding_flags((*vt).state);
-    if flags.disambiguate() {
-        if c >= 'A' as uint32_t && c <= 'Z' as uint32_t {
-            c = c.wrapping_add(('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int) as uint32_t);
-            mod_0 = (mod_0 as ::core::ffi::c_uint
-                | VTERM_MOD_SHIFT as ::core::ffi::c_int as ::core::ffi::c_uint)
-                as VTermModifier;
-        }
-        vterm_push_output_sprintf_ctrl(
-            vt,
-            C1_CSI as ::core::ffi::c_int as uint8_t,
-            b"%d;%du\0".as_ptr() as *const ::core::ffi::c_char,
-            c,
-            (mod_0 as ::core::ffi::c_uint).wrapping_add(1 as ::core::ffi::c_uint),
-        );
-        return;
-    }
-    if mod_0 as ::core::ffi::c_uint & VTERM_MOD_CTRL as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0
-    {
-        match c {
-            50 | 32 => {
-                c = 0 as uint32_t;
-            }
-            51 | 52 | 53 | 54 | 55 => {
-                c = (0x1b as uint32_t)
-                    .wrapping_add(c)
-                    .wrapping_sub('3' as uint32_t);
-            }
-            56 => {
-                c = 0x7f as uint32_t;
-            }
-            47 => {
-                c = 0x1f as uint32_t;
-            }
-            _ => {
-                if c >= '@' as uint32_t && c <= 0x7f as uint32_t {
-                    c &= 0x1f as uint32_t;
-                }
-            }
-        }
-    }
-    vterm_push_output_sprintf(
-        vt,
-        b"%s%c\0".as_ptr() as *const ::core::ffi::c_char,
-        if mod_0 as ::core::ffi::c_uint & VTERM_MOD_ALT as ::core::ffi::c_int as ::core::ffi::c_uint
-            != 0
-        {
-            ESC_S.as_ptr()
-        } else {
-            b"\0".as_ptr() as *const ::core::ffi::c_char
-        },
-        c,
-    );
+
+#[derive(Clone, Copy)]
+struct Keycode {
+    form: KeyForm,
+    literal: c_int,
+    csinum: c_int,
 }
-static keycodes: GlobalCell<[keycodes_s; 15]> = GlobalCell::new([
-    keycodes_s {
-        type_0: KEYCODE_NONE,
-        literal: NUL,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_ENTER,
-        literal: '\r' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_TAB,
-        literal: '\t' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_LITERAL,
-        literal: '\u{7f}' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_LITERAL,
-        literal: '\u{1b}' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSI_CURSOR,
-        literal: 'A' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSI_CURSOR,
-        literal: 'B' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSI_CURSOR,
-        literal: 'D' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSI_CURSOR,
-        literal: 'C' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 2 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 3 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSI_CURSOR,
-        literal: 'H' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSI_CURSOR,
-        literal: 'F' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 5 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 6 as ::core::ffi::c_int,
-    },
-]);
-static keycodes_fn: GlobalCell<[keycodes_s; 13]> = GlobalCell::new([
-    keycodes_s {
-        type_0: KEYCODE_NONE,
-        literal: NUL,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_SS3,
-        literal: 'P' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_SS3,
-        literal: 'Q' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_SS3,
-        literal: 'R' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_SS3,
-        literal: 'S' as ::core::ffi::c_int,
-        csinum: 0 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 15 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 17 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 18 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 19 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 20 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 21 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 23 as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_CSINUM,
-        literal: '~' as ::core::ffi::c_int,
-        csinum: 24 as ::core::ffi::c_int,
-    },
-]);
-static keycodes_kp: GlobalCell<[keycodes_s; 18]> = GlobalCell::new([
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '0' as ::core::ffi::c_int,
-        csinum: 'p' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '1' as ::core::ffi::c_int,
-        csinum: 'q' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '2' as ::core::ffi::c_int,
-        csinum: 'r' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '3' as ::core::ffi::c_int,
-        csinum: 's' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '4' as ::core::ffi::c_int,
-        csinum: 't' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '5' as ::core::ffi::c_int,
-        csinum: 'u' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '6' as ::core::ffi::c_int,
-        csinum: 'v' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '7' as ::core::ffi::c_int,
-        csinum: 'w' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '8' as ::core::ffi::c_int,
-        csinum: 'x' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '9' as ::core::ffi::c_int,
-        csinum: 'y' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '*' as ::core::ffi::c_int,
-        csinum: 'j' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '+' as ::core::ffi::c_int,
-        csinum: 'k' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: ',' as ::core::ffi::c_int,
-        csinum: 'l' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '-' as ::core::ffi::c_int,
-        csinum: 'm' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '.' as ::core::ffi::c_int,
-        csinum: 'n' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '/' as ::core::ffi::c_int,
-        csinum: 'o' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '\n' as ::core::ffi::c_int,
-        csinum: 'M' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: '=' as ::core::ffi::c_int,
-        csinum: 'X' as ::core::ffi::c_int,
-    },
-]);
-static keycodes_kp_csiu: GlobalCell<[keycodes_s; 18]> = GlobalCell::new([
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57399 as ::core::ffi::c_int,
-        csinum: 'p' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57400 as ::core::ffi::c_int,
-        csinum: 'q' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57401 as ::core::ffi::c_int,
-        csinum: 'r' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57402 as ::core::ffi::c_int,
-        csinum: 's' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57403 as ::core::ffi::c_int,
-        csinum: 't' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57404 as ::core::ffi::c_int,
-        csinum: 'u' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57405 as ::core::ffi::c_int,
-        csinum: 'v' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57406 as ::core::ffi::c_int,
-        csinum: 'w' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57407 as ::core::ffi::c_int,
-        csinum: 'x' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57408 as ::core::ffi::c_int,
-        csinum: 'y' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57411 as ::core::ffi::c_int,
-        csinum: 'j' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57413 as ::core::ffi::c_int,
-        csinum: 'k' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57416 as ::core::ffi::c_int,
-        csinum: 'l' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57412 as ::core::ffi::c_int,
-        csinum: 'm' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57409 as ::core::ffi::c_int,
-        csinum: 'n' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57410 as ::core::ffi::c_int,
-        csinum: 'o' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57414 as ::core::ffi::c_int,
-        csinum: 'M' as ::core::ffi::c_int,
-    },
-    keycodes_s {
-        type_0: KEYCODE_KEYPAD,
-        literal: 57415 as ::core::ffi::c_int,
-        csinum: 'X' as ::core::ffi::c_int,
-    },
-]);
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_keyboard_key(
-    mut vt: *mut VTerm,
-    mut key: VTermKey,
-    mut mod_0: VTermModifier,
-) {
-    if key as ::core::ffi::c_uint == VTERM_KEY_NONE as ::core::ffi::c_int as ::core::ffi::c_uint {
-        return;
+
+const fn key(form: KeyForm, literal: u8, csinum: c_int) -> Keycode {
+    Keycode {
+        form,
+        literal: literal as c_int,
+        csinum,
     }
-    let mut flags: VTermKeyEncodingFlags = vterm_state_get_key_encoding_flags((*vt).state);
-    let mut k: keycodes_s = keycodes_s {
-        type_0: KEYCODE_NONE,
-        literal: 0,
-        csinum: 0,
-    };
-    if (key as ::core::ffi::c_uint)
-        < VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        if key as usize
-            >= ::core::mem::size_of::<[keycodes_s; 15]>()
-                .wrapping_div(::core::mem::size_of::<keycodes_s>())
-        {
-            return;
-        }
-        k = (*keycodes.ptr())[key as usize];
-    } else if key as ::core::ffi::c_uint
-        >= VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int as ::core::ffi::c_uint
-        && key as ::core::ffi::c_uint
-            <= VTERM_KEY_FUNCTION_MAX as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        if (key as ::core::ffi::c_uint)
-            .wrapping_sub(VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int as ::core::ffi::c_uint)
-            as usize
-            >= ::core::mem::size_of::<[keycodes_s; 13]>()
-                .wrapping_div(::core::mem::size_of::<keycodes_s>())
-        {
-            return;
-        }
-        k = (*keycodes_fn.ptr())[(key as ::core::ffi::c_uint)
-            .wrapping_sub(VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int as ::core::ffi::c_uint)
-            as usize];
-    } else if key as ::core::ffi::c_uint
-        >= VTERM_KEY_KP_0 as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        if (key as ::core::ffi::c_uint)
-            .wrapping_sub(VTERM_KEY_KP_0 as ::core::ffi::c_int as ::core::ffi::c_uint)
-            as usize
-            >= ::core::mem::size_of::<[keycodes_s; 18]>()
-                .wrapping_div(::core::mem::size_of::<keycodes_s>())
-        {
-            return;
-        }
-        if flags.disambiguate() {
-            k = (*keycodes_kp_csiu.ptr())[(key as ::core::ffi::c_uint)
-                .wrapping_sub(VTERM_KEY_KP_0 as ::core::ffi::c_int as ::core::ffi::c_uint)
-                as usize];
-        } else {
-            k = (*keycodes_kp.ptr())[(key as ::core::ffi::c_uint)
-                .wrapping_sub(VTERM_KEY_KP_0 as ::core::ffi::c_int as ::core::ffi::c_uint)
-                as usize];
+}
+
+/// Keys below `VTERM_KEY_FUNCTION_0`, indexed by their `VTermKey`.
+const KEYCODES: [Keycode; 15] = [
+    key(KeyForm::Absent, 0, 0),
+    key(KeyForm::Enter, b'\r', 0),
+    key(KeyForm::Tab, b'\t', 0),
+    key(KeyForm::Literal, 0x7f, 0),
+    key(KeyForm::Literal, 0x1b, 0),
+    key(KeyForm::CsiCursor, b'A', 0),
+    key(KeyForm::CsiCursor, b'B', 0),
+    key(KeyForm::CsiCursor, b'D', 0),
+    key(KeyForm::CsiCursor, b'C', 0),
+    key(KeyForm::CsiNum, b'~', 2),
+    key(KeyForm::CsiNum, b'~', 3),
+    key(KeyForm::CsiCursor, b'H', 0),
+    key(KeyForm::CsiCursor, b'F', 0),
+    key(KeyForm::CsiNum, b'~', 5),
+    key(KeyForm::CsiNum, b'~', 6),
+];
+
+/// Function keys, indexed by `VTermKey - VTERM_KEY_FUNCTION_0`. F1-F4 keep
+/// the VT100 SS3 forms; the rest are numbered, with gaps where DEC left them.
+const FUNCTION_KEYCODES: [Keycode; 13] = [
+    key(KeyForm::Absent, 0, 0),
+    key(KeyForm::Ss3, b'P', 0),
+    key(KeyForm::Ss3, b'Q', 0),
+    key(KeyForm::Ss3, b'R', 0),
+    key(KeyForm::Ss3, b'S', 0),
+    key(KeyForm::CsiNum, b'~', 15),
+    key(KeyForm::CsiNum, b'~', 17),
+    key(KeyForm::CsiNum, b'~', 18),
+    key(KeyForm::CsiNum, b'~', 19),
+    key(KeyForm::CsiNum, b'~', 20),
+    key(KeyForm::CsiNum, b'~', 21),
+    key(KeyForm::CsiNum, b'~', 23),
+    key(KeyForm::CsiNum, b'~', 24),
+];
+
+/// Keypad keys, indexed by `VTermKey - VTERM_KEY_KP_0`: the byte the numeric
+/// keypad sends, the private-use codepoint the disambiguating protocol reports
+/// instead, and the final byte of the application-keypad form.
+const KEYPAD: [(u8, c_int, u8); 18] = [
+    (b'0', 57399, b'p'),
+    (b'1', 57400, b'q'),
+    (b'2', 57401, b'r'),
+    (b'3', 57402, b's'),
+    (b'4', 57403, b't'),
+    (b'5', 57404, b'u'),
+    (b'6', 57405, b'v'),
+    (b'7', 57406, b'w'),
+    (b'8', 57407, b'x'),
+    (b'9', 57408, b'y'),
+    (b'*', 57411, b'j'),
+    (b'+', 57413, b'k'),
+    (b',', 57416, b'l'),
+    (b'-', 57412, b'm'),
+    (b'.', 57409, b'n'),
+    (b'/', 57410, b'o'),
+    (b'\n', 57414, b'M'),
+    (b'=', 57415, b'X'),
+];
+
+/// Everything about the terminal's current modes that changes how a key is
+/// spelled.
+#[derive(Clone, Copy)]
+struct KeyModes {
+    /// DECCKM: cursor keys send SS3 rather than CSI.
+    cursor: bool,
+    /// DECKPAM: the keypad sends its application-mode codes.
+    keypad: bool,
+    /// LNM: Enter sends CR LF.
+    newline: bool,
+    /// The host accepts 8-bit C1 controls.
+    ctrl8bit: bool,
+    /// The Kitty keyboard protocol's disambiguation level is in effect.
+    disambiguate: bool,
+}
+
+impl KeyModes {
+    fn read(vt: &VTerm, state: &VTermState) -> Self {
+        KeyModes {
+            cursor: state.mode.cursor() != 0,
+            keypad: state.mode.keypad() != 0,
+            newline: state.mode.newline() != 0,
+            ctrl8bit: vt.mode.ctrl8bit() != 0,
+            disambiguate: key_encoding_flags(state).disambiguate(),
         }
     }
-    's_322: {
-        '_case_CSI: {
-            '_case_LITERAL: {
-                match k.type_0 as ::core::ffi::c_uint {
-                    2 => {
-                        if flags.disambiguate() {
-                            break '_case_LITERAL;
-                        } else if mod_0 as ::core::ffi::c_uint
-                            == VTERM_MOD_SHIFT as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            vterm_push_output_sprintf_ctrl(
-                                vt,
-                                C1_CSI as ::core::ffi::c_int as uint8_t,
-                                b"Z\0".as_ptr() as *const ::core::ffi::c_char,
-                            );
-                            break 's_322;
-                        } else if mod_0 as ::core::ffi::c_uint
-                            & VTERM_MOD_SHIFT as ::core::ffi::c_int as ::core::ffi::c_uint
-                            != 0
-                        {
-                            vterm_push_output_sprintf_ctrl(
-                                vt,
-                                C1_CSI as ::core::ffi::c_int as uint8_t,
-                                b"1;%dZ\0".as_ptr() as *const ::core::ffi::c_char,
-                                (mod_0 as ::core::ffi::c_uint)
-                                    .wrapping_add(1 as ::core::ffi::c_uint),
-                            );
-                            break 's_322;
-                        } else {
-                            break '_case_LITERAL;
-                        }
-                    }
-                    3 => {
-                        if (*(*vt).state).mode.newline() != 0 {
-                            vterm_push_output_sprintf(
-                                vt,
-                                b"\r\n\0".as_ptr() as *const ::core::ffi::c_char,
-                            );
-                            break 's_322;
-                        } else {
-                            break '_case_LITERAL;
-                        }
-                    }
-                    1 => {
-                        break '_case_LITERAL;
-                    }
-                    4 => {}
-                    5 => {
-                        break '_case_CSI;
-                    }
-                    7 => {
-                        if mod_0 as ::core::ffi::c_uint == 0 as ::core::ffi::c_uint {
-                            vterm_push_output_sprintf_ctrl(
-                                vt,
-                                C1_CSI as ::core::ffi::c_int as uint8_t,
-                                b"%d%c\0".as_ptr() as *const ::core::ffi::c_char,
-                                k.csinum,
-                                k.literal,
-                            );
-                        } else {
-                            vterm_push_output_sprintf_ctrl(
-                                vt,
-                                C1_CSI as ::core::ffi::c_int as uint8_t,
-                                b"%d;%d%c\0".as_ptr() as *const ::core::ffi::c_char,
-                                k.csinum,
-                                (mod_0 as ::core::ffi::c_uint)
-                                    .wrapping_add(1 as ::core::ffi::c_uint),
-                                k.literal,
-                            );
-                        }
-                        break 's_322;
-                    }
-                    6 => {
-                        if (*(*vt).state).mode.cursor() == 0 {
-                            break '_case_CSI;
-                        }
-                    }
-                    8 => {
-                        if (*(*vt).state).mode.keypad() != 0 {
-                            k.literal = k.csinum;
-                        } else {
-                            break '_case_LITERAL;
-                        }
-                    }
-                    0 | _ => {
-                        break 's_322;
-                    }
-                }
-                if mod_0 as ::core::ffi::c_uint == 0 as ::core::ffi::c_uint {
-                    vterm_push_output_sprintf_ctrl(
-                        vt,
-                        C1_SS3 as ::core::ffi::c_int as uint8_t,
-                        b"%c\0".as_ptr() as *const ::core::ffi::c_char,
-                        k.literal,
-                    );
-                    break 's_322;
+}
+
+/// The key-encoding flags on top of the stack for the screen in use.
+///
+/// Each screen keeps its own stack so that a full-screen program's push is
+/// undone when it switches back, and each stack always has a base entry.
+fn key_encoding_flags(state: &VTermState) -> VTermKeyEncodingFlags {
+    let stack = &state.key_encoding_stacks[state.mode.alt_screen() as usize];
+    assert!(stack.size > 0, "key-encoding stack lost its base entry");
+    stack.items[usize::from(stack.size) - 1]
+}
+
+/// The keycode table entry for `key`, or `None` if it falls outside every
+/// table.
+fn lookup(key: VTermKey, disambiguate: bool) -> Option<Keycode> {
+    if key < VTERM_KEY_FUNCTION_0 {
+        KEYCODES.get(key as usize).copied()
+    } else if key <= VTERM_KEY_FUNCTION_MAX {
+        FUNCTION_KEYCODES
+            .get((key - VTERM_KEY_FUNCTION_0) as usize)
+            .copied()
+    } else {
+        KEYPAD
+            .get((key - VTERM_KEY_KP_0) as usize)
+            .map(|&(legacy, disambiguated, csinum)| Keycode {
+                form: KeyForm::Keypad,
+                literal: if disambiguate {
+                    disambiguated
                 } else {
-                    break '_case_CSI;
-                }
+                    c_int::from(legacy)
+                },
+                csinum: c_int::from(csinum),
+            })
+    }
+}
+
+/// `CSI <params> <literal>`, the fallback once a key carries modifiers.
+fn csi_form(k: Keycode, mod_0: VTermModifier, ctrl8bit: bool) -> EscapeSeq {
+    let mut seq = EscapeSeq::csi(ctrl8bit);
+    if mod_0 != 0 {
+        let _ = write!(seq, "1;{}", mod_0 + 1);
+    }
+    seq.push(k.literal as u8);
+    seq
+}
+
+/// The literal spelling: the key's own byte, prefixed with ESC for Alt, or
+/// the disambiguating protocol's `CSI <code>;<mod>u`.
+fn literal_form(key: VTermKey, k: Keycode, mod_0: VTermModifier, modes: KeyModes) -> EscapeSeq {
+    // Enter, Tab and Backspace keep their legacy bytes when unmodified even
+    // under the disambiguating protocol, so that a bare Return still ends a
+    // line for programs that never asked for the new encoding.
+    let disambiguate = modes.disambiguate
+        && (!matches!(key, VTERM_KEY_ENTER | VTERM_KEY_TAB | VTERM_KEY_BACKSPACE)
+            || mod_0 != VTERM_MOD_NONE);
+
+    if disambiguate {
+        let mut seq = EscapeSeq::csi(modes.ctrl8bit);
+        let _ = write!(seq, "{};{}u", k.literal, mod_0 + 1);
+        seq
+    } else {
+        let mut seq = EscapeSeq::new();
+        if mod_0 & VTERM_MOD_ALT != 0 {
+            seq.push(0x1b);
+        }
+        seq.push(k.literal as u8);
+        seq
+    }
+}
+
+/// Spell one special key, or `None` when there is nothing to send.
+fn encode_key(key: VTermKey, mod_0: VTermModifier, modes: KeyModes) -> Option<EscapeSeq> {
+    let mut k = lookup(key, modes.disambiguate)?;
+
+    // Resolve the mode-dependent forms down to Literal, Csi or Ss3.
+    let form = match k.form {
+        KeyForm::Absent => return None,
+        KeyForm::Tab if !modes.disambiguate && mod_0 & VTERM_MOD_SHIFT != 0 => {
+            // Shift-Tab is CSI Z, which takes its modifiers in the leading
+            // parameter rather than the usual trailing one.
+            let mut seq = EscapeSeq::csi(modes.ctrl8bit);
+            if mod_0 != VTERM_MOD_SHIFT {
+                let _ = write!(seq, "1;{}", mod_0 + 1);
             }
-            if flags.disambiguate() {
-                match key as ::core::ffi::c_uint {
-                    2 | 1 | 3 => {
-                        flags.set_disambiguate(
-                            (mod_0 as ::core::ffi::c_uint
-                                != VTERM_MOD_NONE as ::core::ffi::c_int as ::core::ffi::c_uint)
-                                as bool,
-                        );
-                    }
-                    _ => {}
-                }
-            }
-            if flags.disambiguate() {
-                vterm_push_output_sprintf_ctrl(
-                    vt,
-                    C1_CSI as ::core::ffi::c_int as uint8_t,
-                    b"%d;%du\0".as_ptr() as *const ::core::ffi::c_char,
-                    k.literal,
-                    (mod_0 as ::core::ffi::c_uint).wrapping_add(1 as ::core::ffi::c_uint),
-                );
+            seq.push(b'Z');
+            return Some(seq);
+        }
+        KeyForm::Enter if modes.newline => {
+            let mut seq = EscapeSeq::new();
+            seq.extend(b"\r\n");
+            return Some(seq);
+        }
+        KeyForm::CsiNum => {
+            let mut seq = EscapeSeq::csi(modes.ctrl8bit);
+            if mod_0 == 0 {
+                let _ = write!(seq, "{}", k.csinum);
             } else {
-                vterm_push_output_sprintf(
-                    vt,
-                    if mod_0 as ::core::ffi::c_uint
-                        & VTERM_MOD_ALT as ::core::ffi::c_int as ::core::ffi::c_uint
-                        != 0
-                    {
-                        b"\x1B%c\0".as_ptr() as *const ::core::ffi::c_char
-                    } else {
-                        b"%c\0".as_ptr() as *const ::core::ffi::c_char
-                    },
-                    k.literal,
-                );
+                let _ = write!(seq, "{};{}", k.csinum, mod_0 + 1);
             }
-            break 's_322;
+            seq.push(k.literal as u8);
+            return Some(seq);
         }
-        if mod_0 as ::core::ffi::c_uint == 0 as ::core::ffi::c_uint {
-            vterm_push_output_sprintf_ctrl(
-                vt,
-                C1_CSI as ::core::ffi::c_int as uint8_t,
-                b"%c\0".as_ptr() as *const ::core::ffi::c_char,
-                k.literal,
-            );
-        } else {
-            vterm_push_output_sprintf_ctrl(
-                vt,
-                C1_CSI as ::core::ffi::c_int as uint8_t,
-                b"1;%d%c\0".as_ptr() as *const ::core::ffi::c_char,
-                (mod_0 as ::core::ffi::c_uint).wrapping_add(1 as ::core::ffi::c_uint),
-                k.literal,
-            );
+        KeyForm::Tab | KeyForm::Enter | KeyForm::Literal => KeyForm::Literal,
+        KeyForm::Ss3 => KeyForm::Ss3,
+        KeyForm::Csi => KeyForm::Csi,
+        KeyForm::CsiCursor if modes.cursor => KeyForm::Ss3,
+        KeyForm::CsiCursor => KeyForm::Csi,
+        KeyForm::Keypad if modes.keypad => {
+            k.literal = k.csinum;
+            KeyForm::Ss3
         }
+        KeyForm::Keypad => KeyForm::Literal,
     };
+
+    Some(match form {
+        // SS3 has no room for parameters, so a modified key falls back to CSI.
+        KeyForm::Ss3 if mod_0 == 0 => {
+            let mut seq = EscapeSeq::ss3(modes.ctrl8bit);
+            seq.push(k.literal as u8);
+            seq
+        }
+        KeyForm::Ss3 | KeyForm::Csi => csi_form(k, mod_0, modes.ctrl8bit),
+        _ => literal_form(key, k, mod_0, modes),
+    })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_keyboard_start_paste(mut vt: *mut VTerm) {
-    if (*(*vt).state).mode.bracketpaste() != 0 {
-        vterm_push_output_sprintf_ctrl(
-            vt,
-            C1_CSI as ::core::ffi::c_int as uint8_t,
-            b"200~\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+
+/// The byte Ctrl+`c` sends, for the digits and punctuation the DEC keyboard
+/// gave control codes to.
+fn ctrl_fold(c: u32) -> u32 {
+    match c {
+        // Ctrl-Space and Ctrl-2 are both NUL.
+        0x20 | 0x32 => 0,
+        // Ctrl-3 through Ctrl-7 walk ESC, FS, GS, RS, US.
+        0x33..=0x37 => 0x1b + c - 0x33,
+        // Ctrl-8 is DEL, Ctrl-/ is US.
+        0x38 => 0x7f,
+        0x2f => 0x1f,
+        // Everything from '@' up loses its top two bits, the usual rule.
+        0x40..=0x7f => c & 0x1f,
+        _ => c,
     }
 }
+
+/// Spell one ordinary character keypress.
+fn encode_unichar(c: u32, mod_0: VTermModifier, modes: KeyModes) -> Option<EscapeSeq> {
+    // A character with no modifier beyond Shift is already the character the
+    // host wants. Space is the exception: Shift-Space has to stay
+    // distinguishable from Ctrl-Space, which is NUL.
+    let passthru = if c == u32::from(b' ') {
+        mod_0 == VTERM_MOD_NONE
+    } else {
+        mod_0 & !VTERM_MOD_SHIFT == 0
+    };
+    if passthru {
+        let mut seq = EscapeSeq::new();
+        seq.push_utf8(c as i32);
+        return Some(seq);
+    }
+
+    let mut c = c;
+    let mut mod_0 = mod_0;
+    if modes.disambiguate {
+        if (u32::from(b'A')..=u32::from(b'Z')).contains(&c) {
+            // CSI-u reports the unshifted key plus an explicit Shift.
+            c += u32::from(b'a' - b'A');
+            mod_0 |= VTERM_MOD_SHIFT;
+        }
+        let mut seq = EscapeSeq::csi(modes.ctrl8bit);
+        let _ = write!(seq, "{};{}u", c, mod_0 + 1);
+        return Some(seq);
+    }
+
+    if mod_0 & VTERM_MOD_CTRL != 0 {
+        c = ctrl_fold(c);
+    }
+    // The legacy encoding has one byte for the character, so anything above
+    // U+00FF is truncated exactly as the `%c` conversion used to truncate it.
+    let mut seq = EscapeSeq::new();
+    if mod_0 & VTERM_MOD_ALT != 0 {
+        seq.push(0x1b);
+    }
+    seq.push(c as u8);
+    Some(seq)
+}
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_keyboard_end_paste(mut vt: *mut VTerm) {
-    if (*(*vt).state).mode.bracketpaste() != 0 {
-        vterm_push_output_sprintf_ctrl(
-            vt,
-            C1_CSI as ::core::ffi::c_int as uint8_t,
-            b"201~\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+pub unsafe extern "C" fn vterm_keyboard_unichar(vt: *mut VTerm, c: uint32_t, mod_0: VTermModifier) {
+    let modes = KeyModes::read(&*vt, &*(*vt).state);
+    let report = encode_unichar(c, mod_0, modes);
+    if let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) {
+        vterm_push_output_bytes(vt, bytes.as_ptr() as *const c_char, bytes.len());
     }
 }
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn vterm_keyboard_key(vt: *mut VTerm, key: VTermKey, mod_0: VTermModifier) {
+    if key == VTERM_KEY_NONE {
+        return;
+    }
+    let modes = KeyModes::read(&*vt, &*(*vt).state);
+    let report = encode_key(key, mod_0, modes);
+    if let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) {
+        vterm_push_output_bytes(vt, bytes.as_ptr() as *const c_char, bytes.len());
+    }
+}
+
+/// The bracketed-paste brackets, sent only when the host turned the mode on.
+fn paste_marker(state: &VTermState, ctrl8bit: bool, body: &[u8]) -> Option<EscapeSeq> {
+    if state.mode.bracketpaste() == 0 {
+        return None;
+    }
+    let mut seq = EscapeSeq::csi(ctrl8bit);
+    seq.extend(body);
+    Some(seq)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn vterm_keyboard_start_paste(vt: *mut VTerm) {
+    let report = paste_marker(&*(*vt).state, (*vt).mode.ctrl8bit() != 0, b"200~");
+    if let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) {
+        vterm_push_output_bytes(vt, bytes.as_ptr() as *const c_char, bytes.len());
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn vterm_keyboard_end_paste(vt: *mut VTerm) {
+    let report = paste_marker(&*(*vt).state, (*vt).mode.ctrl8bit() != 0, b"201~");
+    if let Some(bytes) = report.as_ref().and_then(EscapeSeq::finish) {
+        vterm_push_output_bytes(vt, bytes.as_ptr() as *const c_char, bytes.len());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LEGACY: KeyModes = KeyModes {
+        cursor: false,
+        keypad: false,
+        newline: false,
+        ctrl8bit: false,
+        disambiguate: false,
+    };
+
+    fn key_bytes(key: VTermKey, mod_0: VTermModifier, modes: KeyModes) -> Vec<u8> {
+        encode_key(key, mod_0, modes)
+            .and_then(|seq| seq.finish().map(<[u8]>::to_vec))
+            .unwrap_or_default()
+    }
+
+    fn char_bytes(c: u32, mod_0: VTermModifier, modes: KeyModes) -> Vec<u8> {
+        encode_unichar(c, mod_0, modes)
+            .and_then(|seq| seq.finish().map(<[u8]>::to_vec))
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn unknown_keys_send_nothing() {
+        // The gap between the named keys and the function keys.
+        assert!(encode_key(15, 0, LEGACY).is_none());
+        assert!(encode_key(255, 0, LEGACY).is_none());
+        // The function-key and keypad table bases are placeholders.
+        assert!(encode_key(VTERM_KEY_FUNCTION_0, 0, LEGACY).is_none());
+        assert!(encode_key(VTERM_KEY_KP_0 + 18, 0, LEGACY).is_none());
+    }
+
+    #[test]
+    fn cursor_keys_follow_deccjm() {
+        let app = KeyModes {
+            cursor: true,
+            ..LEGACY
+        };
+        assert_eq!(key_bytes(5, 0, LEGACY), b"\x1b[A");
+        assert_eq!(key_bytes(5, 0, app), b"\x1bOA");
+        // Modifiers have no room in SS3, so both modes fall back to CSI.
+        assert_eq!(key_bytes(5, VTERM_MOD_SHIFT, app), b"\x1b[1;2A");
+        assert_eq!(key_bytes(5, VTERM_MOD_CTRL, LEGACY), b"\x1b[1;5A");
+    }
+
+    #[test]
+    fn numbered_keys_carry_their_modifier_after_the_number() {
+        // Insert, Delete, PageUp, PageDown.
+        assert_eq!(key_bytes(9, 0, LEGACY), b"\x1b[2~");
+        assert_eq!(key_bytes(10, VTERM_MOD_SHIFT, LEGACY), b"\x1b[3;2~");
+        assert_eq!(key_bytes(13, 0, LEGACY), b"\x1b[5~");
+        // F1 is SS3, F5 is numbered.
+        assert_eq!(key_bytes(VTERM_KEY_FUNCTION_0 + 1, 0, LEGACY), b"\x1bOP");
+        assert_eq!(key_bytes(VTERM_KEY_FUNCTION_0 + 5, 0, LEGACY), b"\x1b[15~");
+    }
+
+    #[test]
+    fn shift_tab_has_its_own_final_byte() {
+        assert_eq!(key_bytes(VTERM_KEY_TAB, 0, LEGACY), b"\t");
+        assert_eq!(key_bytes(VTERM_KEY_TAB, VTERM_MOD_SHIFT, LEGACY), b"\x1b[Z");
+        assert_eq!(
+            key_bytes(VTERM_KEY_TAB, VTERM_MOD_SHIFT | VTERM_MOD_ALT, LEGACY),
+            b"\x1b[1;4Z"
+        );
+        // Alt alone still takes the literal path.
+        assert_eq!(key_bytes(VTERM_KEY_TAB, VTERM_MOD_ALT, LEGACY), b"\x1b\t");
+    }
+
+    #[test]
+    fn enter_follows_lnm() {
+        assert_eq!(key_bytes(VTERM_KEY_ENTER, 0, LEGACY), b"\r");
+        let lnm = KeyModes {
+            newline: true,
+            ..LEGACY
+        };
+        assert_eq!(key_bytes(VTERM_KEY_ENTER, 0, lnm), b"\r\n");
+    }
+
+    #[test]
+    fn the_keypad_switches_between_digits_and_application_codes() {
+        assert_eq!(key_bytes(VTERM_KEY_KP_0, 0, LEGACY), b"0");
+        let app = KeyModes {
+            keypad: true,
+            ..LEGACY
+        };
+        assert_eq!(key_bytes(VTERM_KEY_KP_0, 0, app), b"\x1bOp");
+        assert_eq!(
+            key_bytes(VTERM_KEY_KP_0, VTERM_MOD_SHIFT, app),
+            b"\x1b[1;2p"
+        );
+    }
+
+    #[test]
+    fn disambiguation_reports_keypad_codepoints() {
+        let csiu = KeyModes {
+            disambiguate: true,
+            ..LEGACY
+        };
+        assert_eq!(key_bytes(VTERM_KEY_KP_0, 0, csiu), b"\x1b[57399;1u");
+        // With DECKPAM the application code still wins over the codepoint.
+        let both = KeyModes {
+            keypad: true,
+            ..csiu
+        };
+        assert_eq!(key_bytes(VTERM_KEY_KP_0, 0, both), b"\x1bOp");
+    }
+
+    #[test]
+    fn disambiguation_leaves_the_three_legacy_keys_alone_when_unmodified() {
+        let csiu = KeyModes {
+            disambiguate: true,
+            ..LEGACY
+        };
+        assert_eq!(key_bytes(VTERM_KEY_ENTER, 0, csiu), b"\r");
+        assert_eq!(key_bytes(VTERM_KEY_TAB, 0, csiu), b"\t");
+        assert_eq!(key_bytes(VTERM_KEY_BACKSPACE, 0, csiu), b"\x7f");
+        assert_eq!(
+            key_bytes(VTERM_KEY_ENTER, VTERM_MOD_CTRL, csiu),
+            b"\x1b[13;5u"
+        );
+        // Escape has no such exemption.
+        assert_eq!(key_bytes(4, 0, csiu), b"\x1b[27;1u");
+    }
+
+    #[test]
+    fn eight_bit_hosts_get_bare_c1_controls() {
+        let c1 = KeyModes {
+            ctrl8bit: true,
+            ..LEGACY
+        };
+        assert_eq!(key_bytes(5, 0, c1), b"\x9bA");
+        assert_eq!(key_bytes(9, 0, c1), b"\x9b2~");
+        let app = KeyModes { cursor: true, ..c1 };
+        assert_eq!(key_bytes(5, 0, app), b"\x8fA");
+    }
+
+    #[test]
+    fn characters_pass_through_unless_they_carry_a_modifier() {
+        assert_eq!(char_bytes(u32::from(b'a'), 0, LEGACY), b"a");
+        assert_eq!(char_bytes(u32::from(b'A'), VTERM_MOD_SHIFT, LEGACY), b"A");
+        assert_eq!(char_bytes(0x20ac, 0, LEGACY), "€".as_bytes());
+        assert_eq!(char_bytes(u32::from(b' '), 0, LEGACY), b" ");
+        // Space is the one character whose Shift form is not a pass-through,
+        // so that Ctrl-Space can reach the folding path below and become NUL.
+        // It still ends up as a plain space.
+        assert_eq!(char_bytes(u32::from(b' '), VTERM_MOD_SHIFT, LEGACY), b" ");
+    }
+
+    #[test]
+    fn control_folds_the_dec_keyboard_way() {
+        let ctrl = |c: u8| char_bytes(u32::from(c), VTERM_MOD_CTRL, LEGACY);
+        assert_eq!(ctrl(b'a'), b"\x01");
+        assert_eq!(ctrl(b'A'), b"\x01");
+        assert_eq!(ctrl(b'2'), b"\0");
+        assert_eq!(ctrl(b' '), b"\0");
+        assert_eq!(ctrl(b'3'), b"\x1b");
+        assert_eq!(ctrl(b'7'), b"\x1f");
+        assert_eq!(ctrl(b'8'), b"\x7f");
+        assert_eq!(ctrl(b'/'), b"\x1f");
+        // A digit with no control code of its own is sent unchanged.
+        assert_eq!(ctrl(b'1'), b"1");
+    }
+
+    #[test]
+    fn alt_prefixes_escape() {
+        assert_eq!(char_bytes(u32::from(b'a'), VTERM_MOD_ALT, LEGACY), b"\x1ba");
+        assert_eq!(
+            char_bytes(u32::from(b'a'), VTERM_MOD_ALT | VTERM_MOD_CTRL, LEGACY),
+            b"\x1b\x01"
+        );
+    }
+
+    #[test]
+    fn disambiguation_reports_shift_explicitly() {
+        let csiu = KeyModes {
+            disambiguate: true,
+            ..LEGACY
+        };
+        // An uppercase letter is reported as its key plus an explicit Shift.
+        assert_eq!(
+            char_bytes(u32::from(b'A'), VTERM_MOD_CTRL, csiu),
+            b"\x1b[97;6u"
+        );
+        assert_eq!(
+            char_bytes(u32::from(b'a'), VTERM_MOD_CTRL, csiu),
+            b"\x1b[97;5u"
+        );
+        // Characters carrying nothing but Shift still pass through untouched,
+        // so the protocol never sees them.
+        assert_eq!(char_bytes(u32::from(b'a'), 0, csiu), b"a");
+        assert_eq!(char_bytes(u32::from(b'A'), VTERM_MOD_SHIFT, csiu), b"A");
+    }
+}

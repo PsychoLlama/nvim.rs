@@ -216,7 +216,7 @@
     "crates/nvim/src/nvim/viml/parser/expressions.rs": {"lines": 11687, "no_mangle": 7, "unsafe": 21},
     "crates/nvim/src/nvim/viml/parser/parser.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/vterm/encoding.rs": {"no_mangle": 1, "unsafe": 2},
-    "crates/nvim/src/nvim/vterm/keyboard.rs": {"no_mangle": 4, "unsafe": 7},
+    "crates/nvim/src/nvim/vterm/keyboard.rs": {"no_mangle": 4, "unsafe": 4},
     "crates/nvim/src/nvim/vterm/mouse.rs": {"no_mangle": 2, "unsafe": 2},
     "crates/nvim/src/nvim/vterm/parser.rs": {"no_mangle": 2, "unsafe": 8},
     "crates/nvim/src/nvim/vterm/pen.rs": {"lines": 1224, "unsafe": 21},
