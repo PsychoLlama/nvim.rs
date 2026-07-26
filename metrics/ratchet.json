@@ -73,7 +73,7 @@
     "crates/nvim/src/nvim/event/rstream.rs": {"unsafe": 21},
     "crates/nvim/src/nvim/event/signal.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/event/socket.rs": {"lines": 1062, "unsafe": 25},
-    "crates/nvim/src/nvim/event/stream.rs": {"unsafe": 6},
+    "crates/nvim/src/nvim/event/stream.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/event/time.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/event/wstream.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/ex_cmds.rs": {"lines": 7659, "no_mangle": 1, "unsafe": 64},
