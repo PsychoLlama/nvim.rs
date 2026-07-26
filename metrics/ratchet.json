@@ -218,7 +218,7 @@
     "crates/nvim/src/nvim/vterm/encoding.rs": {"no_mangle": 1, "unsafe": 2},
     "crates/nvim/src/nvim/vterm/keyboard.rs": {"no_mangle": 4, "unsafe": 4},
     "crates/nvim/src/nvim/vterm/mouse.rs": {"no_mangle": 2, "unsafe": 2},
-    "crates/nvim/src/nvim/vterm/parser.rs": {"no_mangle": 2, "unsafe": 8},
+    "crates/nvim/src/nvim/vterm/parser.rs": {"no_mangle": 2, "unsafe": 3},
     "crates/nvim/src/nvim/vterm/pen.rs": {"lines": 1224, "unsafe": 21},
     "crates/nvim/src/nvim/vterm/screen.rs": {"lines": 1594, "no_mangle": 8, "unsafe": 60},
     "crates/nvim/src/nvim/vterm/state.rs": {"lines": 4045, "no_mangle": 9, "unsafe": 58},

@@ -1,678 +1,645 @@
-use crate::src::nvim::os::libc::{__assert_fail, strncpy};
-pub use crate::src::nvim::types::{
-    GraphemeState, ScreenCell, ScreenPen, VTerm, VTerm_mode as C2Rust_Unnamed_14,
-    VTerm_parser as C2Rust_Unnamed_9, VTerm_parser_v as C2Rust_Unnamed_10,
-    VTerm_parser_v_csi as C2Rust_Unnamed_13, VTerm_parser_v_dcs as C2Rust_Unnamed_11,
-    VTerm_parser_v_osc as C2Rust_Unnamed_12, VTermAllocatorFunctions, VTermAttr, VTermColor,
-    VTermColor_indexed as C2Rust_Unnamed, VTermColor_rgb as C2Rust_Unnamed_0, VTermDamageSize,
-    VTermEncoding, VTermEncodingInstance, VTermGlyphInfo, VTermKeyEncodingFlags,
-    VTermKeyEncodingStack, VTermLineInfo, VTermOutputCallback, VTermParserCallbacks,
-    VTermParserState, VTermPen, VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks,
-    VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks, VTermSelectionMask, VTermState,
-    VTermState_mode as C2Rust_Unnamed_7, VTermState_mouse_protocol as C2Rust_Unnamed_8,
-    VTermState_saved as C2Rust_Unnamed_5, VTermState_saved_mode as C2Rust_Unnamed_6,
-    VTermState_selection as C2Rust_Unnamed_1, VTermState_tmp as C2Rust_Unnamed_2,
-    VTermState_tmp_selection as C2Rust_Unnamed_3,
-    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStateCallbacks, VTermStateFallbacks,
-    VTermStateFields, VTermStringFragment, VTermTerminator, VTermValue, int32_t, schar_T, size_t,
-    uint8_t, uint16_t, uint32_t, utf8proc_int32_t,
-};
+//! The escape-sequence parser: a byte stream in, parser events out.
+//!
+//! Bytes arrive from the child process and leave as calls into the
+//! `VTermParserCallbacks` the consumer installed — text, control characters,
+//! escape sequences, control sequences, and the fragments of the
+//! string-carrying sequences (OSC, DCS, APC, PM, SOS). The only state kept
+//! between calls is the small block in `VTerm::parser`, so a sequence split
+//! across two writes resumes where it left off.
 
-pub const VTERM_N_DAMAGES: VTermDamageSize = 4;
-pub const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
-pub const VTERM_DAMAGE_SCREEN: VTermDamageSize = 2;
-pub const VTERM_DAMAGE_ROW: VTermDamageSize = 1;
-pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
-pub const VTERM_TERMINATOR_ST: VTermTerminator = 1;
-pub const VTERM_TERMINATOR_BEL: VTermTerminator = 0;
-pub const VTERM_N_PROPS: VTermProp = 12;
-pub const VTERM_PROP_SYNCOUTPUT: VTermProp = 11;
-pub const VTERM_PROP_THEMEUPDATES: VTermProp = 10;
-pub const VTERM_PROP_FOCUSREPORT: VTermProp = 9;
-pub const VTERM_PROP_MOUSE: VTermProp = 8;
-pub const VTERM_PROP_CURSORSHAPE: VTermProp = 7;
-pub const VTERM_PROP_REVERSE: VTermProp = 6;
-pub const VTERM_PROP_ICONNAME: VTermProp = 5;
-pub const VTERM_PROP_TITLE: VTermProp = 4;
-pub const VTERM_PROP_ALTSCREEN: VTermProp = 3;
-pub const VTERM_PROP_CURSORBLINK: VTermProp = 2;
-pub const VTERM_PROP_CURSORVISIBLE: VTermProp = 1;
-pub const VTERM_SELECTION_CUT0: VTermSelectionMask = 16;
-pub const VTERM_SELECTION_SELECT: VTermSelectionMask = 8;
-pub const VTERM_SELECTION_SECONDARY: VTermSelectionMask = 4;
-pub const VTERM_SELECTION_PRIMARY: VTermSelectionMask = 2;
-pub const VTERM_SELECTION_CLIPBOARD: VTermSelectionMask = 1;
-pub const SELECTION_INVALID: C2Rust_Unnamed_4 = 5;
-pub const SELECTION_SET: C2Rust_Unnamed_4 = 4;
-pub const SELECTION_SET_INITIAL: C2Rust_Unnamed_4 = 3;
-pub const SELECTION_QUERY: C2Rust_Unnamed_4 = 2;
-pub const SELECTION_SELECTED: C2Rust_Unnamed_4 = 1;
-pub const SELECTION_INITIAL: C2Rust_Unnamed_4 = 0;
-pub const MOUSE_RXVT: C2Rust_Unnamed_8 = 3;
-pub const MOUSE_SGR: C2Rust_Unnamed_8 = 2;
-pub const MOUSE_UTF8: C2Rust_Unnamed_8 = 1;
-pub const MOUSE_X10: C2Rust_Unnamed_8 = 0;
-pub const VTERM_N_ATTRS: VTermAttr = 16;
-pub const VTERM_ATTR_OVERLINE: VTermAttr = 15;
-pub const VTERM_ATTR_DIM: VTermAttr = 14;
-pub const VTERM_ATTR_URI: VTermAttr = 13;
-pub const VTERM_ATTR_BASELINE: VTermAttr = 12;
-pub const VTERM_ATTR_SMALL: VTermAttr = 11;
-pub const VTERM_ATTR_BACKGROUND: VTermAttr = 10;
-pub const VTERM_ATTR_FOREGROUND: VTermAttr = 9;
-pub const VTERM_ATTR_FONT: VTermAttr = 8;
-pub const VTERM_ATTR_STRIKE: VTermAttr = 7;
-pub const VTERM_ATTR_CONCEAL: VTermAttr = 6;
-pub const VTERM_ATTR_REVERSE: VTermAttr = 5;
-pub const VTERM_ATTR_BLINK: VTermAttr = 4;
-pub const VTERM_ATTR_ITALIC: VTermAttr = 3;
-pub const VTERM_ATTR_UNDERLINE: VTermAttr = 2;
-pub const VTERM_ATTR_BOLD: VTermAttr = 1;
-pub const SOS: VTermParserState = 10;
-pub const PM: VTermParserState = 9;
-pub const APC: VTermParserState = 8;
-pub const DCS_VTERM: VTermParserState = 7;
-pub const OSC: VTermParserState = 6;
-pub const OSC_COMMAND: VTermParserState = 5;
-pub const DCS_COMMAND: VTermParserState = 4;
-pub const CSI_INTERMED: VTermParserState = 3;
-pub const CSI_ARGS: VTermParserState = 2;
-pub const CSI_LEADER: VTermParserState = 1;
-pub const NORMAL: VTermParserState = 0;
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 56] = unsafe {
-    ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
-        *b"size_t vterm_input_write(VTerm *, const char *, size_t)\0",
-    )
+use crate::src::nvim::types::{
+    VTerm, VTermParserCallbacks, VTermParserState, VTermStringFragment, VTermTerminator, size_t,
 };
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const INTERMED_MAX: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-pub const CSI_LEADER_MAX: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-unsafe extern "C" fn is_intermed(mut c: uint8_t) -> bool {
-    return c as ::core::ffi::c_int >= 0x20 as ::core::ffi::c_int
-        && c as ::core::ffi::c_int <= 0x2f as ::core::ffi::c_int;
+use core::ffi::{c_char, c_int, c_long, c_void};
+use core::slice;
+
+const VTERM_TERMINATOR_BEL: VTermTerminator = 0;
+const VTERM_TERMINATOR_ST: VTermTerminator = 1;
+
+/// Intermediate bytes held for an escape or control sequence.
+const INTERMED_MAX: usize = 16;
+/// Private-marker bytes held ahead of a control sequence's parameters.
+const CSI_LEADER_MAX: usize = 16;
+/// Parameters a control sequence can carry.
+const CSI_ARGS_MAX: usize = 32;
+
+/// The value stored for a parameter the sender left empty.
+const CSI_ARG_MISSING: c_long = 0x7fff_ffff;
+/// Set on a parameter that was separated from the next by `:` rather than `;`.
+const CSI_ARG_FLAG_MORE: c_long = 0x8000_0000u32 as c_long;
+
+/// Where the parser is in a sequence.
+///
+/// The discriminants are the values stored in `VTerm::parser::state`, and
+/// their order matters: everything from `OscCommand` up is accumulating a
+/// string, which is what [`ParserState::is_string`] tests.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[repr(u32)]
+enum ParserState {
+    Normal = 0,
+    CsiLeader = 1,
+    CsiArgs = 2,
+    CsiIntermed = 3,
+    DcsCommand = 4,
+    OscCommand = 5,
+    Osc = 6,
+    Dcs = 7,
+    Apc = 8,
+    Pm = 9,
+    Sos = 10,
 }
-unsafe extern "C" fn do_control(mut vt: *mut VTerm, mut control: uint8_t) {
-    if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).control.is_some() {
-        if Some(
-            (*(*vt).parser.callbacks)
-                .control
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(control, (*vt).parser.cbdata)
-            != 0
-        {
-            return;
+
+impl ParserState {
+    fn from_raw(raw: VTermParserState) -> Self {
+        match raw {
+            1 => ParserState::CsiLeader,
+            2 => ParserState::CsiArgs,
+            3 => ParserState::CsiIntermed,
+            4 => ParserState::DcsCommand,
+            5 => ParserState::OscCommand,
+            6 => ParserState::Osc,
+            7 => ParserState::Dcs,
+            8 => ParserState::Apc,
+            9 => ParserState::Pm,
+            10 => ParserState::Sos,
+            _ => ParserState::Normal,
         }
     }
-}
-unsafe extern "C" fn do_csi(mut vt: *mut VTerm, mut command: ::core::ffi::c_char) {
-    if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).csi.is_some() {
-        if Some(
-            (*(*vt).parser.callbacks)
-                .csi
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(
-            if (*vt).parser.v.csi.leaderlen != 0 {
-                &raw mut (*vt).parser.v.csi.leader as *mut ::core::ffi::c_char
-            } else {
-                ::core::ptr::null_mut::<::core::ffi::c_char>()
-            },
-            &raw mut (*vt).parser.v.csi.args as *mut ::core::ffi::c_long
-                as *const ::core::ffi::c_long,
-            (*vt).parser.v.csi.argi,
-            if (*vt).parser.intermedlen != 0 {
-                &raw mut (*vt).parser.intermed as *mut ::core::ffi::c_char
-            } else {
-                ::core::ptr::null_mut::<::core::ffi::c_char>()
-            },
-            command,
-            (*vt).parser.cbdata,
-        ) != 0
-        {
-            return;
-        }
+
+    fn raw(self) -> VTermParserState {
+        self as VTermParserState
+    }
+
+    /// True while the parser is collecting the payload of a string-carrying
+    /// sequence, which changes how control characters and ESC are handled.
+    fn is_string(self) -> bool {
+        self >= ParserState::OscCommand
     }
 }
-unsafe extern "C" fn do_escape(mut vt: *mut VTerm, mut command: ::core::ffi::c_char) {
-    let mut seq: [::core::ffi::c_char; 17] = [0; 17];
-    let mut len: size_t = (*vt).parser.intermedlen as size_t;
-    strncpy(
-        &raw mut seq as *mut ::core::ffi::c_char,
-        &raw mut (*vt).parser.intermed as *mut ::core::ffi::c_char,
-        len,
-    );
-    let c2rust_fresh4 = len;
-    len = len.wrapping_add(1);
-    seq[c2rust_fresh4 as usize] = command;
-    seq[len as usize] = 0 as ::core::ffi::c_char;
-    if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).escape.is_some() {
-        if Some(
-            (*(*vt).parser.callbacks)
-                .escape
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(
-            &raw mut seq as *mut ::core::ffi::c_char,
-            len,
-            (*vt).parser.cbdata,
-        ) != 0
-        {
-            return;
-        }
-    }
+
+/// Intermediate bytes are the 0x20-0x2f range, which can appear in both
+/// escape and control sequences before the final byte.
+fn is_intermed(c: u8) -> bool {
+    (0x20..=0x2f).contains(&c)
 }
-unsafe extern "C" fn string_fragment(
-    mut vt: *mut VTerm,
-    mut str: *const ::core::ffi::c_char,
-    mut len: size_t,
-    mut final_0: bool,
-    mut terminator: VTermTerminator,
-) {
-    let mut frag: VTermStringFragment = {
-        let mut init = VTermStringFragment {
-            len_initial_final_0: [0; 4],
-            str: str,
-            terminator: terminator,
-        };
-        init.set_len(len);
-        init.set_initial((*vt).parser.string_initial);
-        init.set_final_0(final_0);
-        init
-    };
-    match (*vt).parser.state as ::core::ffi::c_uint {
-        6 => {
-            if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).osc.is_some() {
-                Some(
-                    (*(*vt).parser.callbacks)
-                        .osc
-                        .expect("non-null function pointer"),
-                )
-                .expect("non-null function pointer")(
-                    (*vt).parser.v.osc.command,
-                    frag,
-                    (*vt).parser.cbdata,
+
+/// Something the parser recognised, on its way to the consumer's callback.
+enum ParserEvent<'a> {
+    /// A control character the parser does not act on itself.
+    Control(u8),
+    /// A complete control sequence; the byte is its final character, and the
+    /// leader, parameters and intermediates are in `VTerm::parser`.
+    Csi(u8),
+    /// A complete escape sequence; the byte is its final character.
+    Escape(u8),
+    /// A piece of the payload of the string sequence currently open.
+    StringFragment {
+        bytes: &'a [u8],
+        /// The terminator has been seen; this is the last piece.
+        last: bool,
+        terminator: VTermTerminator,
+    },
+    /// Ordinary text; the callback reports how much of it it consumed.
+    Text(&'a [u8]),
+}
+
+/// Hand `event` to the callback registered for it, if there is one.
+///
+/// Returns how many bytes a [`ParserEvent::Text`] was consumed by; zero for
+/// every other event.
+///
+/// # Safety
+///
+/// `vt` must point at a live terminal, and the callback table installed by
+/// [`vterm_parser_set_callbacks`] must still be valid.
+unsafe fn dispatch(vt: *mut VTerm, event: ParserEvent) -> usize {
+    let callbacks = (*vt).parser.callbacks.as_ref();
+    let cbdata = (*vt).parser.cbdata;
+
+    match event {
+        ParserEvent::Control(control) => {
+            if let Some(f) = callbacks.and_then(|c| c.control) {
+                f(control, cbdata);
+            }
+        }
+        ParserEvent::Csi(command) => {
+            if let Some(f) = callbacks.and_then(|c| c.csi) {
+                let csi = &(*vt).parser.v.csi;
+                // A missing leader or intermediate is reported as NULL, not
+                // as an empty string.
+                let leader = if csi.leaderlen != 0 {
+                    csi.leader.as_ptr()
+                } else {
+                    core::ptr::null()
+                };
+                let intermed = if (*vt).parser.intermedlen != 0 {
+                    (*vt).parser.intermed.as_ptr()
+                } else {
+                    core::ptr::null()
+                };
+                f(
+                    leader,
+                    csi.args.as_ptr(),
+                    csi.argi,
+                    intermed,
+                    command as c_char,
+                    cbdata,
                 );
             }
         }
-        7 => {
-            if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).dcs.is_some() {
-                Some(
-                    (*(*vt).parser.callbacks)
-                        .dcs
-                        .expect("non-null function pointer"),
-                )
-                .expect("non-null function pointer")(
-                    &raw mut (*vt).parser.v.dcs.command as *mut ::core::ffi::c_char,
-                    (*vt).parser.v.dcs.commandlen as size_t,
-                    frag,
-                    (*vt).parser.cbdata,
-                );
+        ParserEvent::Escape(command) => {
+            // The consumer sees the intermediates followed by the final byte,
+            // NUL-terminated.
+            let mut seq = [0 as c_char; INTERMED_MAX + 1];
+            let parser = &(*vt).parser;
+            let intermedlen = (parser.intermedlen.max(0) as usize).min(seq.len() - 1);
+            seq[..intermedlen].copy_from_slice(&parser.intermed[..intermedlen]);
+            seq[intermedlen] = command as c_char;
+            if let Some(f) = callbacks.and_then(|c| c.escape) {
+                f(seq.as_ptr(), intermedlen + 1, cbdata);
             }
         }
-        8 => {
-            if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).apc.is_some() {
-                Some(
-                    (*(*vt).parser.callbacks)
-                        .apc
-                        .expect("non-null function pointer"),
-                )
-                .expect("non-null function pointer")(frag, (*vt).parser.cbdata);
+        ParserEvent::StringFragment {
+            bytes,
+            last,
+            terminator,
+        } => {
+            let mut frag = VTermStringFragment {
+                str: bytes.as_ptr().cast::<c_char>(),
+                len_initial_final_0: [0; 4],
+                terminator,
+            };
+            frag.set_len(bytes.len());
+            frag.set_initial((*vt).parser.string_initial);
+            frag.set_final_0(last);
+
+            match ParserState::from_raw((*vt).parser.state) {
+                ParserState::Osc => {
+                    if let Some(f) = callbacks.and_then(|c| c.osc) {
+                        f((*vt).parser.v.osc.command, frag, cbdata);
+                    }
+                }
+                ParserState::Dcs => {
+                    if let Some(f) = callbacks.and_then(|c| c.dcs) {
+                        let dcs = &(*vt).parser.v.dcs;
+                        f(
+                            dcs.command.as_ptr(),
+                            dcs.commandlen.max(0) as size_t,
+                            frag,
+                            cbdata,
+                        );
+                    }
+                }
+                ParserState::Apc => {
+                    if let Some(f) = callbacks.and_then(|c| c.apc) {
+                        f(frag, cbdata);
+                    }
+                }
+                ParserState::Pm => {
+                    if let Some(f) = callbacks.and_then(|c| c.pm) {
+                        f(frag, cbdata);
+                    }
+                }
+                ParserState::Sos => {
+                    if let Some(f) = callbacks.and_then(|c| c.sos) {
+                        f(frag, cbdata);
+                    }
+                }
+                // Nothing is open yet: the sequence's own command bytes are
+                // not a fragment of its payload.
+                _ => return 0,
+            }
+            // Only the first fragment of a string is the initial one.
+            (*vt).parser.string_initial = false;
+        }
+        ParserEvent::Text(text) => {
+            if let Some(f) = callbacks.and_then(|c| c.text) {
+                return f(text.as_ptr().cast::<c_char>(), text.len(), cbdata).max(0) as usize;
             }
         }
-        9 => {
-            if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).pm.is_some() {
-                Some(
-                    (*(*vt).parser.callbacks)
-                        .pm
-                        .expect("non-null function pointer"),
-                )
-                .expect("non-null function pointer")(frag, (*vt).parser.cbdata);
-            }
-        }
-        10 => {
-            if !(*vt).parser.callbacks.is_null() && (*(*vt).parser.callbacks).sos.is_some() {
-                Some(
-                    (*(*vt).parser.callbacks)
-                        .sos
-                        .expect("non-null function pointer"),
-                )
-                .expect("non-null function pointer")(frag, (*vt).parser.cbdata);
-            }
-        }
-        0 | 1 | 2 | 3 | 5 | 4 => return,
-        _ => {}
     }
-    (*vt).parser.string_initial = false_0 != 0;
+    0
 }
+
+/// The payload accumulated for the open string sequence, up to `pos`.
+///
+/// `start` is `None` before any payload has been seen — during an OSC's
+/// command digits, say — where upstream passed a dangling pointer to a
+/// fragment callback that discards it anyway.
+fn pending(input: &[u8], start: Option<usize>, pos: usize) -> &[u8] {
+    match start {
+        Some(start) if start <= pos => &input[start..pos.min(input.len())],
+        _ => &[],
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_input_write(
-    mut vt: *mut VTerm,
-    mut bytes: *const ::core::ffi::c_char,
-    mut len: size_t,
+    vt: *mut VTerm,
+    bytes: *const c_char,
+    len: size_t,
 ) -> size_t {
-    let mut pos: size_t = 0 as size_t;
-    let mut string_start: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    match (*vt).parser.state as ::core::ffi::c_uint {
-        0 | 1 | 2 | 3 | 5 | 4 => {
-            string_start = ::core::ptr::null::<::core::ffi::c_char>();
-        }
-        6 | 7 | 8 | 9 | 10 => {
-            string_start = bytes;
-        }
-        _ => {}
-    }
-    while pos < len {
-        let mut c: uint8_t = *bytes.offset(pos as isize) as uint8_t;
-        let mut c1_allowed: bool = (*vt).mode.utf8() == 0;
-        's_46: {
-            if c as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-                || c as ::core::ffi::c_int == 0x7f as ::core::ffi::c_int
-            {
-                if (*vt).parser.state as ::core::ffi::c_uint
-                    >= OSC_COMMAND as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    string_fragment(
+    let input = slice::from_raw_parts(bytes.cast::<u8>(), len);
+
+    // Index into `input` where the payload of the open string sequence
+    // begins. A sequence left open by an earlier call resumes at byte zero.
+    let mut string_start = ParserState::from_raw((*vt).parser.state)
+        .is_string()
+        .then_some(0usize);
+    let mut pos = 0usize;
+
+    while pos < input.len() {
+        let mut c = input[pos];
+        let mut c1_allowed = (*vt).mode.utf8() == 0;
+        let mut state = ParserState::from_raw((*vt).parser.state);
+
+        'byte: {
+            // NUL and DEL are filler; they interrupt a string but never end it.
+            if c == 0x00 || c == 0x7f {
+                if state.is_string() {
+                    dispatch(
                         vt,
-                        string_start,
-                        bytes.offset(pos as isize).offset_from(string_start) as size_t,
-                        false_0 != 0,
-                        VTERM_TERMINATOR_ST,
+                        ParserEvent::StringFragment {
+                            bytes: pending(input, string_start, pos),
+                            last: false,
+                            terminator: VTERM_TERMINATOR_ST,
+                        },
                     );
-                    string_start = bytes
-                        .offset(pos as isize)
-                        .offset(1 as ::core::ffi::c_int as isize);
+                    string_start = Some(pos + 1);
                 }
                 if (*vt).parser.emit_nul {
-                    do_control(vt, c);
+                    dispatch(vt, ParserEvent::Control(c));
                 }
-            } else if c as ::core::ffi::c_int == 0x18 as ::core::ffi::c_int
-                || c as ::core::ffi::c_int == 0x1a as ::core::ffi::c_int
-            {
-                (*vt).parser.set_in_esc((false_0 != 0) as bool);
-                (*vt).parser.state = NORMAL;
-                string_start = ::core::ptr::null::<::core::ffi::c_char>();
+                break 'byte;
+            }
+            // CAN and SUB abandon whatever was in progress.
+            if c == 0x18 || c == 0x1a {
+                (*vt).parser.set_in_esc(false);
+                (*vt).parser.state = ParserState::Normal.raw();
+                string_start = None;
                 if (*vt).parser.emit_nul {
-                    do_control(vt, c);
+                    dispatch(vt, ParserEvent::Control(c));
                 }
-            } else if c as ::core::ffi::c_int == 0x1b as ::core::ffi::c_int {
-                (*vt).parser.intermedlen = 0 as ::core::ffi::c_int;
-                if !((*vt).parser.state as ::core::ffi::c_uint
-                    >= OSC_COMMAND as ::core::ffi::c_int as ::core::ffi::c_uint)
-                {
-                    (*vt).parser.state = NORMAL;
+                break 'byte;
+            }
+            if c == 0x1b {
+                (*vt).parser.intermedlen = 0;
+                if !state.is_string() {
+                    (*vt).parser.state = ParserState::Normal.raw();
                 }
-                (*vt).parser.set_in_esc((true_0 != 0) as bool);
-            } else {
-                if !(c as ::core::ffi::c_int == 0x7 as ::core::ffi::c_int
-                    && (*vt).parser.state as ::core::ffi::c_uint
-                        >= OSC_COMMAND as ::core::ffi::c_int as ::core::ffi::c_uint)
+                (*vt).parser.set_in_esc(true);
+                break 'byte;
+            }
+            // Inside a string BEL stands in for ST, so it is handled below
+            // with the terminators rather than here with the controls.
+            if !(c == 0x07 && state.is_string()) && c < 0x20 {
+                // SOS is defined to swallow every other control character.
+                if state == ParserState::Sos {
+                    break 'byte;
+                }
+                if state.is_string() {
+                    dispatch(
+                        vt,
+                        ParserEvent::StringFragment {
+                            bytes: pending(input, string_start, pos),
+                            last: false,
+                            terminator: VTERM_TERMINATOR_ST,
+                        },
+                    );
+                }
+                dispatch(vt, ParserEvent::Control(c));
+                if ParserState::from_raw((*vt).parser.state).is_string() {
+                    string_start = Some(pos + 1);
+                }
+                break 'byte;
+            }
+
+            let mut string_len = string_start.map_or(0, |start| pos.saturating_sub(start));
+
+            if (*vt).parser.in_esc() {
+                // `ESC X` is the 7-bit spelling of the C1 control X + 0x40.
+                // Inside a string only `ESC \` (ST) is recognised, so that a
+                // stray ESC can't be mistaken for a new sequence.
+                if (*vt).parser.intermedlen == 0
+                    && (0x40..0x60).contains(&c)
+                    && (!state.is_string() || c == 0x5c)
                 {
-                    if (c as ::core::ffi::c_int) < 0x20 as ::core::ffi::c_int {
-                        if (*vt).parser.state as ::core::ffi::c_uint
-                            == SOS as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            break 's_46;
-                        } else {
-                            if (*vt).parser.state as ::core::ffi::c_uint
-                                >= OSC_COMMAND as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                string_fragment(
-                                    vt,
-                                    string_start,
-                                    bytes.offset(pos as isize).offset_from(string_start) as size_t,
-                                    false_0 != 0,
-                                    VTERM_TERMINATOR_ST,
-                                );
+                    c += 0x40;
+                    c1_allowed = true;
+                    // The ESC itself is not part of the payload.
+                    string_len = string_len.saturating_sub(1);
+                    (*vt).parser.set_in_esc(false);
+                } else {
+                    string_start = None;
+                    state = ParserState::Normal;
+                    (*vt).parser.state = state.raw();
+                }
+            }
+
+            // The CSI sections fall through to each other and an OSC command
+            // falls through to the string collector, so which section runs is
+            // a loop variable rather than a match arm.
+            let mut section = state;
+            loop {
+                match section {
+                    ParserState::CsiLeader => {
+                        // Private-use markers, 0x3c to 0x3f.
+                        if (0x3c..=0x3f).contains(&c) {
+                            let csi = &mut (*vt).parser.v.csi;
+                            if (csi.leaderlen as usize) < CSI_LEADER_MAX - 1 {
+                                csi.leader[csi.leaderlen as usize] = c as c_char;
+                                csi.leaderlen += 1;
                             }
-                            do_control(vt, c);
-                            if (*vt).parser.state as ::core::ffi::c_uint
-                                >= OSC_COMMAND as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                string_start = bytes
-                                    .offset(pos as isize)
-                                    .offset(1 as ::core::ffi::c_int as isize);
-                            }
-                            break 's_46;
+                            break;
                         }
+                        let csi = &mut (*vt).parser.v.csi;
+                        csi.leader[csi.leaderlen as usize] = 0;
+                        csi.argi = 0;
+                        csi.args[0] = CSI_ARG_MISSING;
+                        (*vt).parser.state = ParserState::CsiArgs.raw();
+                        section = ParserState::CsiArgs;
                     }
-                }
-                let mut string_len: size_t =
-                    bytes.offset(pos as isize).offset_from(string_start) as size_t;
-                if (*vt).parser.in_esc() {
-                    if (*vt).parser.intermedlen == 0
-                        && c as ::core::ffi::c_int >= 0x40 as ::core::ffi::c_int
-                        && (c as ::core::ffi::c_int) < 0x60 as ::core::ffi::c_int
-                        && (!((*vt).parser.state as ::core::ffi::c_uint
-                            >= OSC_COMMAND as ::core::ffi::c_int as ::core::ffi::c_uint)
-                            || c as ::core::ffi::c_int == 0x5c as ::core::ffi::c_int)
-                    {
-                        c = (c as ::core::ffi::c_int + 0x40 as ::core::ffi::c_int) as uint8_t;
-                        c1_allowed = true_0 != 0;
-                        if string_len != 0 {
-                            '_c2rust_label: {
-                                if string_len > 0 as size_t {
-                                } else {
-                                    __assert_fail(
-                                        b"string_len > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                                        b"src/nvim/vterm/parser.rs\0".as_ptr()
-                                            as *const ::core::ffi::c_char,
-                                        215 as ::core::ffi::c_uint,
-                                        __ASSERT_FUNCTION.as_ptr(),
-                                    );
-                                }
+                    ParserState::CsiArgs => {
+                        let csi = &mut (*vt).parser.v.csi;
+                        let argi = csi.argi as usize;
+                        if c.is_ascii_digit() {
+                            if csi.args[argi] == CSI_ARG_MISSING {
+                                csi.args[argi] = 0;
+                            }
+                            // A sender can run the digits past what a `long`
+                            // holds; wrap rather than trap, as the C did.
+                            csi.args[argi] = csi.args[argi]
+                                .wrapping_mul(10)
+                                .wrapping_add(c_long::from(c - b'0'));
+                            break;
+                        }
+                        // A colon separates sub-parameters of one parameter;
+                        // it is otherwise a semicolon with a flag set.
+                        if c == b':' {
+                            csi.args[argi] |= CSI_ARG_FLAG_MORE;
+                            c = b';';
+                        }
+                        // Upstream advanced `argi` unbounded, so a sequence
+                        // with 32 or more parameters ran off the end of
+                        // `args`. Parameters past the last slot now overwrite
+                        // it instead.
+                        if c == b';' {
+                            if argi + 1 < CSI_ARGS_MAX {
+                                csi.argi += 1;
+                            }
+                            csi.args[csi.argi as usize] = CSI_ARG_MISSING;
+                            break;
+                        }
+                        csi.argi = (csi.argi + 1).min(CSI_ARGS_MAX as c_int);
+                        (*vt).parser.intermedlen = 0;
+                        (*vt).parser.state = ParserState::CsiIntermed.raw();
+                        section = ParserState::CsiIntermed;
+                    }
+                    ParserState::CsiIntermed => {
+                        if is_intermed(c) {
+                            let parser = &mut (*vt).parser;
+                            if (parser.intermedlen as usize) < INTERMED_MAX - 1 {
+                                parser.intermed[parser.intermedlen as usize] = c as c_char;
+                                parser.intermedlen += 1;
+                            }
+                            break;
+                        }
+                        // ESC cancels the sequence; a final byte completes it;
+                        // anything else was malformed. All three end it.
+                        if c != 0x1b && (0x40..=0x7e).contains(&c) {
+                            (*vt).parser.intermed[(*vt).parser.intermedlen as usize] = 0;
+                            dispatch(vt, ParserEvent::Csi(c));
+                        }
+                        (*vt).parser.state = ParserState::Normal.raw();
+                        string_start = None;
+                        break;
+                    }
+                    ParserState::OscCommand => {
+                        let osc = &mut (*vt).parser.v.osc;
+                        if c.is_ascii_digit() {
+                            let base = if osc.command == -1 {
+                                0
+                            } else {
+                                osc.command.wrapping_mul(10)
                             };
-                            string_len = string_len.wrapping_sub(1 as size_t);
+                            osc.command = base.wrapping_add(c_int::from(c - b'0'));
+                            break;
                         }
-                        (*vt).parser.set_in_esc((false_0 != 0) as bool);
-                    } else {
-                        string_start = ::core::ptr::null::<::core::ffi::c_char>();
-                        (*vt).parser.state = NORMAL;
+                        if c == b';' {
+                            (*vt).parser.state = ParserState::Osc.raw();
+                            string_start = Some(pos + 1);
+                            break;
+                        }
+                        // No command digits at all: the payload starts here.
+                        string_start = Some(pos);
+                        string_len = 0;
+                        (*vt).parser.state = ParserState::Osc.raw();
+                        section = ParserState::Osc;
                     }
-                }
-                's_849: {
-                    'c_8046: {
-                        'c_8670: {
-                            match (*vt).parser.state as ::core::ffi::c_uint {
-                                1 => {
-                                    if c as ::core::ffi::c_int >= 0x3c as ::core::ffi::c_int
-                                        && c as ::core::ffi::c_int <= 0x3f as ::core::ffi::c_int
-                                    {
-                                        if (*vt).parser.v.csi.leaderlen
-                                            < CSI_LEADER_MAX - 1 as ::core::ffi::c_int
-                                        {
-                                            let c2rust_fresh0 = (*vt).parser.v.csi.leaderlen;
-                                            (*vt).parser.v.csi.leaderlen =
-                                                (*vt).parser.v.csi.leaderlen + 1;
-                                            (*vt).parser.v.csi.leader[c2rust_fresh0 as usize] =
-                                                c as ::core::ffi::c_char;
-                                        }
-                                        break 's_849;
+                    ParserState::DcsCommand => {
+                        let dcs = &mut (*vt).parser.v.dcs;
+                        if (dcs.commandlen as usize) < CSI_LEADER_MAX {
+                            dcs.command[dcs.commandlen as usize] = c as c_char;
+                            dcs.commandlen += 1;
+                        }
+                        if (0x40..=0x7e).contains(&c) {
+                            string_start = Some(pos + 1);
+                            (*vt).parser.state = ParserState::Dcs.raw();
+                        }
+                        break;
+                    }
+                    ParserState::Osc
+                    | ParserState::Dcs
+                    | ParserState::Apc
+                    | ParserState::Pm
+                    | ParserState::Sos => {
+                        if c == 0x07 || (c1_allowed && c == 0x9c) {
+                            let start = string_start.unwrap_or(pos);
+                            dispatch(
+                                vt,
+                                ParserEvent::StringFragment {
+                                    bytes: &input[start..(start + string_len).min(input.len())],
+                                    last: true,
+                                    terminator: if c == 0x07 {
+                                        VTERM_TERMINATOR_BEL
                                     } else {
-                                        (*vt).parser.v.csi.leader
-                                            [(*vt).parser.v.csi.leaderlen as usize] =
-                                            0 as ::core::ffi::c_char;
-                                        (*vt).parser.v.csi.argi = 0 as ::core::ffi::c_int;
-                                        (*vt).parser.v.csi.args[0 as ::core::ffi::c_int as usize] =
-                                            CSI_ARG_MISSING as ::core::ffi::c_long;
-                                        (*vt).parser.state = CSI_ARGS;
-                                    }
+                                        VTERM_TERMINATOR_ST
+                                    },
+                                },
+                            );
+                            (*vt).parser.state = ParserState::Normal.raw();
+                            string_start = None;
+                        }
+                        break;
+                    }
+                    ParserState::Normal => {
+                        if (*vt).parser.in_esc() {
+                            if is_intermed(c) {
+                                let parser = &mut (*vt).parser;
+                                if (parser.intermedlen as usize) < INTERMED_MAX - 1 {
+                                    parser.intermed[parser.intermedlen as usize] = c as c_char;
+                                    parser.intermedlen += 1;
                                 }
-                                2 => {}
-                                3 => {
-                                    break 'c_8046;
+                            } else if (0x30..0x7f).contains(&c) {
+                                dispatch(vt, ParserEvent::Escape(c));
+                                (*vt).parser.set_in_esc(false);
+                                (*vt).parser.state = ParserState::Normal.raw();
+                                string_start = None;
+                            }
+                            break;
+                        }
+                        if c1_allowed && (0x80..0xa0).contains(&c) {
+                            match c {
+                                // DCS
+                                0x90 => {
+                                    (*vt).parser.string_initial = true;
+                                    (*vt).parser.v.dcs.commandlen = 0;
+                                    (*vt).parser.state = ParserState::DcsCommand.raw();
+                                    string_start = None;
                                 }
-                                5 => {
-                                    if c as ::core::ffi::c_int >= '0' as ::core::ffi::c_int
-                                        && c as ::core::ffi::c_int <= '9' as ::core::ffi::c_int
-                                    {
-                                        if (*vt).parser.v.osc.command == -1 as ::core::ffi::c_int {
-                                            (*vt).parser.v.osc.command = 0 as ::core::ffi::c_int;
-                                        } else {
-                                            (*vt).parser.v.osc.command *= 10 as ::core::ffi::c_int;
-                                        }
-                                        (*vt).parser.v.osc.command +=
-                                            c as ::core::ffi::c_int - '0' as ::core::ffi::c_int;
-                                        break 's_849;
-                                    } else if c as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
-                                        (*vt).parser.state = OSC;
-                                        string_start = bytes
-                                            .offset(pos as isize)
-                                            .offset(1 as ::core::ffi::c_int as isize);
-                                        break 's_849;
-                                    } else {
-                                        string_start = bytes.offset(pos as isize);
-                                        string_len = 0 as size_t;
-                                        (*vt).parser.state = OSC;
-                                        break 'c_8670;
-                                    }
+                                // SOS
+                                0x98 => {
+                                    (*vt).parser.string_initial = true;
+                                    (*vt).parser.state = ParserState::Sos.raw();
+                                    string_start = Some(pos + 1);
                                 }
-                                4 => {
-                                    if (*vt).parser.v.dcs.commandlen < CSI_LEADER_MAX {
-                                        let c2rust_fresh2 = (*vt).parser.v.dcs.commandlen;
-                                        (*vt).parser.v.dcs.commandlen =
-                                            (*vt).parser.v.dcs.commandlen + 1;
-                                        (*vt).parser.v.dcs.command[c2rust_fresh2 as usize] =
-                                            c as ::core::ffi::c_char;
-                                    }
-                                    if c as ::core::ffi::c_int >= 0x40 as ::core::ffi::c_int
-                                        && c as ::core::ffi::c_int <= 0x7e as ::core::ffi::c_int
-                                    {
-                                        string_start = bytes
-                                            .offset(pos as isize)
-                                            .offset(1 as ::core::ffi::c_int as isize);
-                                        (*vt).parser.state = DCS_VTERM;
-                                    }
-                                    break 's_849;
+                                // CSI
+                                0x9b => {
+                                    (*vt).parser.v.csi.leaderlen = 0;
+                                    (*vt).parser.state = ParserState::CsiLeader.raw();
+                                    string_start = None;
                                 }
-                                6 | 7 | 8 | 9 | 10 => {
-                                    break 'c_8670;
+                                // OSC
+                                0x9d => {
+                                    (*vt).parser.v.osc.command = -1;
+                                    (*vt).parser.string_initial = true;
+                                    (*vt).parser.state = ParserState::OscCommand.raw();
+                                    string_start = None;
                                 }
-                                0 => {
-                                    if (*vt).parser.in_esc() {
-                                        if is_intermed(c) {
-                                            if (*vt).parser.intermedlen
-                                                < INTERMED_MAX - 1 as ::core::ffi::c_int
-                                            {
-                                                let c2rust_fresh3 = (*vt).parser.intermedlen;
-                                                (*vt).parser.intermedlen =
-                                                    (*vt).parser.intermedlen + 1;
-                                                (*vt).parser.intermed[c2rust_fresh3 as usize] =
-                                                    c as ::core::ffi::c_char;
-                                            }
-                                        } else if c as ::core::ffi::c_int
-                                            >= 0x30 as ::core::ffi::c_int
-                                            && (c as ::core::ffi::c_int)
-                                                < 0x7f as ::core::ffi::c_int
-                                        {
-                                            do_escape(vt, c as ::core::ffi::c_char);
-                                            (*vt).parser.set_in_esc(false as bool);
-                                            (*vt).parser.state = NORMAL;
-                                            string_start =
-                                                ::core::ptr::null::<::core::ffi::c_char>();
-                                        }
-                                        break 's_849;
-                                    } else {
-                                        if c1_allowed as ::core::ffi::c_int != 0
-                                            && c as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int
-                                            && (c as ::core::ffi::c_int)
-                                                < 0xa0 as ::core::ffi::c_int
-                                        {
-                                            match c as ::core::ffi::c_int {
-                                                144 => {
-                                                    (*vt).parser.string_initial = true_0 != 0;
-                                                    (*vt).parser.v.dcs.commandlen =
-                                                        0 as ::core::ffi::c_int;
-                                                    (*vt).parser.state = DCS_COMMAND;
-                                                    string_start =
-                                                        ::core::ptr::null::<::core::ffi::c_char>();
-                                                }
-                                                152 => {
-                                                    (*vt).parser.string_initial = true_0 != 0;
-                                                    (*vt).parser.state = SOS;
-                                                    string_start =
-                                                        ::core::ptr::null::<::core::ffi::c_char>();
-                                                    string_start = bytes
-                                                        .offset(pos as isize)
-                                                        .offset(1 as ::core::ffi::c_int as isize);
-                                                }
-                                                155 => {
-                                                    (*vt).parser.v.csi.leaderlen =
-                                                        0 as ::core::ffi::c_int;
-                                                    (*vt).parser.state = CSI_LEADER;
-                                                    string_start =
-                                                        ::core::ptr::null::<::core::ffi::c_char>();
-                                                }
-                                                157 => {
-                                                    (*vt).parser.v.osc.command =
-                                                        -1 as ::core::ffi::c_int;
-                                                    (*vt).parser.string_initial = true_0 != 0;
-                                                    (*vt).parser.state = OSC_COMMAND;
-                                                    string_start =
-                                                        ::core::ptr::null::<::core::ffi::c_char>();
-                                                }
-                                                158 => {
-                                                    (*vt).parser.string_initial = true_0 != 0;
-                                                    (*vt).parser.state = PM;
-                                                    string_start =
-                                                        ::core::ptr::null::<::core::ffi::c_char>();
-                                                    string_start = bytes
-                                                        .offset(pos as isize)
-                                                        .offset(1 as ::core::ffi::c_int as isize);
-                                                }
-                                                159 => {
-                                                    (*vt).parser.string_initial = true_0 != 0;
-                                                    (*vt).parser.state = APC;
-                                                    string_start =
-                                                        ::core::ptr::null::<::core::ffi::c_char>();
-                                                    string_start = bytes
-                                                        .offset(pos as isize)
-                                                        .offset(1 as ::core::ffi::c_int as isize);
-                                                }
-                                                _ => {
-                                                    do_control(vt, c);
-                                                }
-                                            }
-                                        } else {
-                                            let mut eaten: size_t = 0 as size_t;
-                                            if !(*vt).parser.callbacks.is_null()
-                                                && (*(*vt).parser.callbacks).text.is_some()
-                                            {
-                                                eaten = Some(
-                                                    (*(*vt).parser.callbacks)
-                                                        .text
-                                                        .expect("non-null function pointer"),
-                                                )
-                                                .expect("non-null function pointer")(
-                                                    bytes.offset(pos as isize),
-                                                    len.wrapping_sub(pos),
-                                                    (*vt).parser.cbdata,
-                                                )
-                                                    as size_t;
-                                            }
-                                            if eaten == 0 {
-                                                eaten = 1 as size_t;
-                                            }
-                                            pos = pos.wrapping_add(eaten.wrapping_sub(1 as size_t));
-                                        }
-                                        break 's_849;
-                                    }
+                                // PM
+                                0x9e => {
+                                    (*vt).parser.string_initial = true;
+                                    (*vt).parser.state = ParserState::Pm.raw();
+                                    string_start = Some(pos + 1);
+                                }
+                                // APC
+                                0x9f => {
+                                    (*vt).parser.string_initial = true;
+                                    (*vt).parser.state = ParserState::Apc.raw();
+                                    string_start = Some(pos + 1);
                                 }
                                 _ => {
-                                    break 's_849;
+                                    dispatch(vt, ParserEvent::Control(c));
                                 }
                             }
-                            if c as ::core::ffi::c_int >= '0' as ::core::ffi::c_int
-                                && c as ::core::ffi::c_int <= '9' as ::core::ffi::c_int
-                            {
-                                if (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize]
-                                    as ::core::ffi::c_ulong
-                                    == CSI_ARG_MISSING
-                                {
-                                    (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] =
-                                        0 as ::core::ffi::c_long;
-                                }
-                                (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] *=
-                                    10 as ::core::ffi::c_long;
-                                (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] +=
-                                    (c as ::core::ffi::c_int - '0' as ::core::ffi::c_int)
-                                        as ::core::ffi::c_long;
-                                break 's_849;
-                            } else {
-                                if c as ::core::ffi::c_int == ':' as ::core::ffi::c_int {
-                                    (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] |=
-                                        CSI_ARG_FLAG_MORE as ::core::ffi::c_long;
-                                    c = ';' as uint8_t;
-                                }
-                                if c as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
-                                    (*vt).parser.v.csi.argi += 1;
-                                    (*vt).parser.v.csi.args[(*vt).parser.v.csi.argi as usize] =
-                                        CSI_ARG_MISSING as ::core::ffi::c_long;
-                                    break 's_849;
-                                } else {
-                                    (*vt).parser.v.csi.argi += 1;
-                                    (*vt).parser.intermedlen = 0 as ::core::ffi::c_int;
-                                    (*vt).parser.state = CSI_INTERMED;
-                                    break 'c_8046;
-                                }
-                            }
+                            break;
                         }
-                        if c as ::core::ffi::c_int == 0x7 as ::core::ffi::c_int
-                            || c1_allowed as ::core::ffi::c_int != 0
-                                && c as ::core::ffi::c_int == 0x9c as ::core::ffi::c_int
-                        {
-                            string_fragment(
-                                vt,
-                                string_start,
-                                string_len,
-                                true_0 != 0,
-                                (if c as ::core::ffi::c_int == 0x7 as ::core::ffi::c_int {
-                                    VTERM_TERMINATOR_BEL as ::core::ffi::c_int
-                                } else {
-                                    VTERM_TERMINATOR_ST as ::core::ffi::c_int
-                                }) as VTermTerminator,
-                            );
-                            (*vt).parser.state = NORMAL;
-                            string_start = ::core::ptr::null::<::core::ffi::c_char>();
-                        }
-                        break 's_849;
-                    }
-                    if is_intermed(c) {
-                        if (*vt).parser.intermedlen < INTERMED_MAX - 1 as ::core::ffi::c_int {
-                            let c2rust_fresh1 = (*vt).parser.intermedlen;
-                            (*vt).parser.intermedlen = (*vt).parser.intermedlen + 1;
-                            (*vt).parser.intermed[c2rust_fresh1 as usize] =
-                                c as ::core::ffi::c_char;
-                        }
-                    } else {
-                        if c as ::core::ffi::c_int != 0x1b as ::core::ffi::c_int {
-                            if c as ::core::ffi::c_int >= 0x40 as ::core::ffi::c_int
-                                && c as ::core::ffi::c_int <= 0x7e as ::core::ffi::c_int
-                            {
-                                (*vt).parser.intermed[(*vt).parser.intermedlen as usize] =
-                                    0 as ::core::ffi::c_char;
-                                do_csi(vt, c as ::core::ffi::c_char);
-                            }
-                        }
-                        (*vt).parser.state = NORMAL;
-                        string_start = ::core::ptr::null::<::core::ffi::c_char>();
+                        // Plain text. The callback takes as much as it wants;
+                        // if it takes nothing, force a byte of progress.
+                        let eaten = dispatch(vt, ParserEvent::Text(&input[pos..])).max(1);
+                        pos += eaten - 1;
+                        break;
                     }
                 }
             }
         }
-        pos = pos.wrapping_add(1);
+        pos += 1;
     }
-    if !string_start.is_null() {
-        let mut string_len_0: size_t =
-            bytes.offset(pos as isize).offset_from(string_start) as size_t;
-        if string_len_0 > 0 as size_t {
+
+    // Hand over whatever payload this write ended in the middle of.
+    if let Some(start) = string_start {
+        let mut string_len = pos.min(input.len()).saturating_sub(start);
+        if string_len > 0 {
+            // A trailing ESC may yet turn out to be the ST that ends the
+            // string, so it is not part of the payload.
             if (*vt).parser.in_esc() {
-                string_len_0 = string_len_0.wrapping_sub(1 as size_t);
+                string_len -= 1;
             }
-            string_fragment(
+            dispatch(
                 vt,
-                string_start,
-                string_len_0,
-                false_0 != 0,
-                VTERM_TERMINATOR_ST,
+                ParserEvent::StringFragment {
+                    bytes: &input[start..start + string_len],
+                    last: false,
+                    terminator: VTERM_TERMINATOR_ST,
+                },
             );
         }
     }
-    return len;
+
+    len
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_parser_set_callbacks(
-    mut vt: *mut VTerm,
-    mut callbacks: *const VTermParserCallbacks,
-    mut user: *mut ::core::ffi::c_void,
+    vt: *mut VTerm,
+    callbacks: *const VTermParserCallbacks,
+    user: *mut c_void,
 ) {
     (*vt).parser.callbacks = callbacks;
     (*vt).parser.cbdata = user;
 }
-pub const CSI_ARG_FLAG_MORE: ::core::ffi::c_uint =
-    (1 as ::core::ffi::c_uint) << 31 as ::core::ffi::c_int;
-pub const CSI_ARG_MISSING: ::core::ffi::c_ulong = ((1 as ::core::ffi::c_ulong)
-    << 31 as ::core::ffi::c_int)
-    .wrapping_sub(1 as ::core::ffi::c_ulong);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn string_states_are_the_ones_that_collect_a_payload() {
+        assert!(!ParserState::Normal.is_string());
+        assert!(!ParserState::CsiLeader.is_string());
+        assert!(!ParserState::CsiIntermed.is_string());
+        // The DCS command bytes come before the payload.
+        assert!(!ParserState::DcsCommand.is_string());
+        for state in [
+            ParserState::OscCommand,
+            ParserState::Osc,
+            ParserState::Dcs,
+            ParserState::Apc,
+            ParserState::Pm,
+            ParserState::Sos,
+        ] {
+            assert!(state.is_string(), "{state:?}");
+        }
+    }
+
+    #[test]
+    fn states_round_trip_through_their_stored_value() {
+        for state in [
+            ParserState::Normal,
+            ParserState::CsiLeader,
+            ParserState::CsiArgs,
+            ParserState::CsiIntermed,
+            ParserState::DcsCommand,
+            ParserState::OscCommand,
+            ParserState::Osc,
+            ParserState::Dcs,
+            ParserState::Apc,
+            ParserState::Pm,
+            ParserState::Sos,
+        ] {
+            assert_eq!(ParserState::from_raw(state as VTermParserState), state);
+        }
+        // Anything the field could not have held reads back as Normal.
+        assert_eq!(ParserState::from_raw(11), ParserState::Normal);
+    }
+
+    #[test]
+    fn intermediates_are_the_punctuation_range() {
+        assert!(!is_intermed(0x1f));
+        assert!(is_intermed(0x20));
+        assert!(is_intermed(b'!'));
+        assert!(is_intermed(0x2f));
+        assert!(!is_intermed(0x30));
+    }
+
+    #[test]
+    fn pending_payload_is_empty_until_one_starts() {
+        let input = b"abcdef";
+        assert_eq!(pending(input, None, 3), b"");
+        assert_eq!(pending(input, Some(1), 3), b"bc");
+        assert_eq!(pending(input, Some(3), 3), b"");
+        // A payload marked as starting past the end of this write.
+        assert_eq!(pending(input, Some(6), 6), b"");
+        assert_eq!(pending(input, Some(4), 99), b"ef");
+    }
+}
