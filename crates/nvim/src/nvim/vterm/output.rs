@@ -18,9 +18,11 @@ pub struct EscapeSeq {
 }
 
 impl EscapeSeq {
-    /// Comfortably above the longest reply this builder is used for: a CSI
-    /// introducer plus three decimal fields and a final byte.
-    const CAPACITY: usize = 64;
+    /// Comfortably above the longest reply this builder is used for, which is
+    /// the DECRQSS report of the pen: a DCS introducer, up to twenty-odd SGR
+    /// parameters, a final byte and a string terminator. Upstream's own
+    /// ceiling was the terminal's 4 KiB scratch buffer.
+    const CAPACITY: usize = 256;
 
     /// An empty sequence, for replies that carry no C1 introducer.
     pub fn new() -> Self {
@@ -53,6 +55,20 @@ impl EscapeSeq {
     /// A single-shift-3 sequence: `SS3` (0x8f) or `ESC O`.
     pub fn ss3(ctrl8bit: bool) -> Self {
         Self::c1(0x8f, ctrl8bit)
+    }
+
+    /// A device-control string: `DCS` (0x90) or `ESC P`.
+    pub fn dcs(ctrl8bit: bool) -> Self {
+        Self::c1(0x90, ctrl8bit)
+    }
+
+    /// Close a control string with `ST` (0x9c), or its `ESC \` form.
+    pub fn terminate(&mut self, ctrl8bit: bool) {
+        if ctrl8bit {
+            self.push(0x9c);
+        } else {
+            self.extend(b"\x1b\\");
+        }
     }
 
     pub fn push(&mut self, byte: u8) {
@@ -123,6 +139,21 @@ mod tests {
         assert_eq!(EscapeSeq::csi(true).finish(), Some(&b"\x9b"[..]));
         assert_eq!(EscapeSeq::ss3(false).finish(), Some(&b"\x1bO"[..]));
         assert_eq!(EscapeSeq::ss3(true).finish(), Some(&b"\x8f"[..]));
+        assert_eq!(EscapeSeq::dcs(false).finish(), Some(&b"\x1bP"[..]));
+        assert_eq!(EscapeSeq::dcs(true).finish(), Some(&b"\x90"[..]));
+    }
+
+    #[test]
+    fn a_control_string_is_closed_by_a_matching_terminator() {
+        let mut seq = EscapeSeq::dcs(false);
+        seq.extend(b"0$r");
+        seq.terminate(false);
+        assert_eq!(seq.finish(), Some(&b"\x1bP0$r\x1b\\"[..]));
+
+        let mut seq = EscapeSeq::dcs(true);
+        seq.extend(b"0$r");
+        seq.terminate(true);
+        assert_eq!(seq.finish(), Some(&b"\x900$r\x9c"[..]));
     }
 
     #[test]

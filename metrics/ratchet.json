@@ -221,7 +221,7 @@
     "crates/nvim/src/nvim/vterm/parser.rs": {"no_mangle": 2, "unsafe": 3},
     "crates/nvim/src/nvim/vterm/pen.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/vterm/screen.rs": {"no_mangle": 8, "unsafe": 37},
-    "crates/nvim/src/nvim/vterm/state.rs": {"lines": 4029, "no_mangle": 9, "unsafe": 58},
+    "crates/nvim/src/nvim/vterm/state.rs": {"no_mangle": 9, "unsafe": 56},
     "crates/nvim/src/nvim/vterm/vterm.rs": {"no_mangle": 4, "unsafe": 21, "variadic": 3},
     "crates/nvim/src/nvim/window.rs": {"lines": 10287, "no_mangle": 5, "unsafe": 197},
     "crates/nvim/src/nvim/winfloat.rs": {"lines": 1248, "unsafe": 16},
