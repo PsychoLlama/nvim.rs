@@ -168,7 +168,6 @@
     "crates/nvim/src/nvim/version.rs": 66,
     "crates/nvim/src/nvim/viml/parser/expressions.rs": 697,
     "crates/nvim/src/nvim/viml/parser/parser.rs": 7,
-    "crates/nvim/src/nvim/vterm/encoding.rs": 5,
     "crates/nvim/src/nvim/vterm/keyboard.rs": 22,
     "crates/nvim/src/nvim/vterm/mouse.rs": 9,
     "crates/nvim/src/nvim/vterm/parser.rs": 34,
