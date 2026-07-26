@@ -357,3 +357,20 @@ fn highlighting_names_every_token() {
         "the missing operand is reported through the error, not a chunk"
     );
 }
+
+/// A figure brace is coloured when it opens and renamed once the parser knows
+/// what the node turned out to be. The rename reaches back into a chunk
+/// already in the log, which is the one place the parser writes to a recorded
+/// chunk rather than appending.
+#[test]
+fn figure_braces_are_recoloured_once_their_node_is_known() {
+    assert_eq!(parse("{}").groups, ["NvimDict", "NvimDict"]);
+    assert_eq!(
+        parse("{-> 1}").groups,
+        ["NvimLambda", "NvimArrow", "NvimNumber", "NvimLambda"]
+    );
+    assert_eq!(
+        parse("{a}").groups,
+        ["NvimCurly", "NvimIdentifierName", "NvimCurly"]
+    );
+}
