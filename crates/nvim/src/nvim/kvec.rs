@@ -41,6 +41,16 @@ impl<'a, T: Copy> InitVec<'a, T> {
         }
     }
 
+    /// `kvi_init`: empty the collection and point it at its inline array.
+    ///
+    /// Only valid where the containing struct is going to stay put — `items`
+    /// ends up holding the struct's own address.
+    pub fn init(&mut self) {
+        *self.size = 0;
+        *self.capacity = self.init_capacity;
+        *self.items = self.init;
+    }
+
     /// Still using the inline array rather than a heap buffer.
     pub fn is_inline(&self) -> bool {
         *self.items == self.init
