@@ -155,7 +155,6 @@
     "crates/nvim/src/nvim/tui/input.rs": 212,
     "crates/nvim/src/nvim/tui/terminfo.rs": 1659,
     "crates/nvim/src/nvim/tui/termkey/driver_csi.rs": 61,
-    "crates/nvim/src/nvim/tui/termkey/driver_ti.rs": 34,
     "crates/nvim/src/nvim/tui/termkey/termkey.rs": 145,
     "crates/nvim/src/nvim/tui/tui.rs": 291,
     "crates/nvim/src/nvim/tui/ugrid.rs": 2,

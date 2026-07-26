@@ -211,6 +211,7 @@ pub mod src {
                 pub mod driver_csi;
                 pub mod driver_ti;
                 pub mod termkey;
+                pub mod trie;
             } // mod termkey
             pub mod tui;
             pub mod ugrid;

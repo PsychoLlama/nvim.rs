@@ -9,9 +9,7 @@ use crate::src::nvim::tui::termkey::driver_csi::{
     free_driver_csi, new_driver_csi, peekkey_csi, termkey_interpret_modereport,
     termkey_interpret_mouse,
 };
-use crate::src::nvim::tui::termkey::driver_ti::{
-    free_driver_ti, new_driver_ti, peekkey_ti, start_driver_ti, stop_driver_ti,
-};
+use crate::src::nvim::tui::termkey::driver_ti;
 
 pub use crate::src::nvim::types::{
     TermKey, TermKey_Terminfo_Getstr_Hook, TermKeyCsi, TermKeyEvent, TermKeyFormat, TermKeyKey,
@@ -585,7 +583,7 @@ unsafe extern "C" fn termkey_init(
         0x1b as ::core::ffi::c_uchar,
         ::core::ptr::null::<::core::ffi::c_char>(),
     );
-    (*tk).ti = new_driver_ti(term);
+    (*tk).ti = driver_ti::new_driver(term);
     (*tk).csi = new_driver_csi();
     return 1 as ::core::ffi::c_int;
 }
@@ -616,7 +614,7 @@ pub unsafe extern "C" fn termkey_free(mut tk: *mut TermKey) {
     (*tk).buffer = ::core::ptr::null_mut::<::core::ffi::c_uchar>();
     xfree((*tk).keynames as *mut ::core::ffi::c_void);
     (*tk).keynames = ::core::ptr::null_mut::<*const ::core::ffi::c_char>();
-    free_driver_ti((*tk).ti);
+    driver_ti::free_driver((*tk).ti);
     free_driver_csi((*tk).csi);
     xfree(tk as *mut ::core::ffi::c_void);
 }
@@ -669,9 +667,7 @@ pub unsafe extern "C" fn termkey_start(mut tk: *mut TermKey) -> ::core::ffi::c_i
             tcsetattr((*tk).fd, TCSANOW, &raw mut termios);
         }
     }
-    if start_driver_ti(tk, (*tk).ti) == 0 {
-        return 0 as ::core::ffi::c_int;
-    }
+    driver_ti::load_keys(tk);
     (*tk).is_started = 1 as ::core::ffi::c_char;
     return 1 as ::core::ffi::c_int;
 }
@@ -680,7 +676,6 @@ pub unsafe extern "C" fn termkey_stop(mut tk: *mut TermKey) -> ::core::ffi::c_in
     if (*tk).is_started == 0 {
         return 1 as ::core::ffi::c_int;
     }
-    stop_driver_ti(tk, (*tk).ti);
     if (*tk).restore_termios_valid != 0 {
         tcsetattr((*tk).fd, TCSANOW, &raw mut (*tk).restore_termios);
     }
@@ -925,7 +920,7 @@ unsafe extern "C" fn peekkey(
     // terminal's own description), then the CSI driver's generic parsing.
     for probe in 0..2 as ::core::ffi::c_int {
         let ret: TermKeyResult = if probe == 0 {
-            peekkey_ti(tk, (*tk).ti, key, force, nbytep)
+            driver_ti::peek_key(tk, key, force, nbytep)
         } else {
             peekkey_csi(tk, (*tk).csi, key, force, nbytep)
         };
