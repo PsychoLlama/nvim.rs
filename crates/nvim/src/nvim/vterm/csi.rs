@@ -120,8 +120,8 @@ pub(super) fn dispatch(
             state.pos.row = param_or(args, 0, 1) - 1;
             state.pos.col = param_or(args, 1, 1) - 1;
             if state.mode.origin() != 0 {
-                state.pos.row += state.scrollregion_top;
-                state.pos.col += state.scroll_left();
+                state.pos.row = state.pos.row.wrapping_add(state.scrollregion_top);
+                state.pos.col = state.pos.col.wrapping_add(state.scroll_left());
             }
             state.at_phantom = 0;
         }
@@ -186,7 +186,11 @@ pub(super) fn dispatch(
                 start_row: state.pos.row,
                 end_row: state.pos.row + 1,
                 start_col: state.pos.col,
-                end_col: (state.pos.col + repeat(args, 0)).min(state.cursor_row_width()),
+                end_col: state
+                    .pos
+                    .col
+                    .wrapping_add(repeat(args, 0))
+                    .min(state.cursor_row_width()),
             };
             state.erase(rect, false);
         }
@@ -224,7 +228,7 @@ pub(super) fn dispatch(
             // VPA - ECMA-48 8.3.158
             state.pos.row = param_or(args, 0, 1) - 1;
             if state.mode.origin() != 0 {
-                state.pos.row += state.scrollregion_top;
+                state.pos.row = state.pos.row.wrapping_add(state.scrollregion_top);
             }
             state.at_phantom = 0;
         }
@@ -445,10 +449,10 @@ fn erase_display(state: &mut VTermState, args: &[c_long], selective: bool) -> bo
 /// `REP`: print the last glyph again, `count` more times.
 fn repeat_glyph(state: &mut VTermState, count: c_int, cancel_phantom: &mut bool) {
     let row_width = state.cursor_row_width();
-    let last_col = (state.pos.col + count).min(row_width);
+    let last_col = state.pos.col.wrapping_add(count).min(row_width);
     let (_, schar) = state.grapheme_metrics(state.grapheme_len);
-    // A glyph no columns wide would never reach `last_col`; upstream span in
-    // place forever, which a program can provoke by asking for a repeat
+    // A glyph no columns wide would never reach `last_col`; upstream spun in
+    // place forever, which any program can provoke by asking for a repeat
     // before it has printed anything at all.
     let width = state.combine_width;
     if width > 0 {
