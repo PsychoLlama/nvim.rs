@@ -62,14 +62,10 @@ fn decode(bytes: &[u8]) -> Decoded {
     }
 }
 
-fn text(object: &Object) -> &str {
+fn text(object: &Object) -> Vec<u8> {
     assert_eq!(object.type_0, kObjectTypeString);
     let string = unsafe { object.data.string };
-    unsafe { std::slice::from_raw_parts(string.data.cast::<u8>(), string.size) }
-        .iter()
-        .map(|&byte| byte as char)
-        .collect::<String>()
-        .leak()
+    unsafe { std::slice::from_raw_parts(string.data.cast::<u8>(), string.size) }.to_vec()
 }
 
 #[test]
@@ -94,7 +90,7 @@ fn decodes_scalars() {
 #[test]
 fn decodes_strings_and_containers() {
     let string = decode(&[0xa2, b'h', b'i']);
-    assert_eq!(text(&string.object), "hi");
+    assert_eq!(text(&string.object), b"hi");
 
     let array = decode(&[0x92, 0x01, 0x02]);
     assert_eq!(array.object.type_0, kObjectTypeArray);
@@ -158,6 +154,7 @@ fn unknown_extensions_decode_as_nil() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "api_set_error formats the message through vsnprintf")]
 fn rejects_truncated_input() {
     assert_eq!(decode(&[]).message(), Some("incomplete msgpack string"));
     // An array header promising two elements, with one.
@@ -173,12 +170,14 @@ fn rejects_truncated_input() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "api_set_error formats the message through vsnprintf")]
 fn rejects_bytes_that_are_not_msgpack() {
     // 0xc1 is the one byte msgpack leaves undefined.
     assert_eq!(decode(&[0xc1]).message(), Some("invalid msgpack string"));
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "api_set_error formats the message through vsnprintf")]
 fn rejects_trailing_data() {
     assert_eq!(
         decode(&[0xc0, 0xc0]).message(),
@@ -189,6 +188,7 @@ fn rejects_trailing_data() {
 /// The parse tree is a fixed-depth array, so nesting past it is refused
 /// rather than recursed into.
 #[test]
+#[cfg_attr(miri, ignore = "api_set_error formats the message through vsnprintf")]
 fn rejects_objects_that_nest_too_deep() {
     let shallow = vec![0x91_u8; 16];
     let mut ok = shallow.clone();
@@ -207,6 +207,7 @@ fn rejects_objects_that_nest_too_deep() {
 /// allocates for it up front, so an unbacked claim has to fail on the missing
 /// elements rather than on the allocation.
 #[test]
+#[cfg_attr(miri, ignore = "api_set_error formats the message through vsnprintf")]
 fn rejects_a_container_longer_than_its_contents() {
     // array32 claiming 0x10000 elements, with none.
     assert_eq!(

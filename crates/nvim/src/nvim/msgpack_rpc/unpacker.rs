@@ -93,19 +93,24 @@ pub unsafe extern "C" fn unpack(
     err: *mut Error,
 ) -> Object {
     let mut unpacker: Unpacker = core::mem::zeroed();
-    mpack_parser_init(&raw mut unpacker.parser, 0);
-    unpacker.parser.data.p = (&raw mut unpacker).cast::<c_void>();
-    unpacker.arena = *arena;
+    // `api_parse_enter` navigates back here through the parser's `data`
+    // field, so every access below has to go through the same pointer it is
+    // handed — writing to `unpacker` by name would strip the callback's
+    // permission to read what it wrote.
+    let p: *mut Unpacker = &raw mut unpacker;
+    mpack_parser_init(&raw mut (*p).parser, 0);
+    (*p).parser.data.p = p.cast::<c_void>();
+    (*p).arena = *arena;
 
     let result = mpack_parse(
-        &raw mut unpacker.parser,
+        &raw mut (*p).parser,
         &raw mut data,
         &raw mut size,
         Some(api_parse_enter),
         Some(parse_nop),
     );
 
-    *arena = unpacker.arena;
+    *arena = (*p).arena;
 
     let message = if result == MPACK_NOMEM {
         c"object was too deep to unpack"
@@ -116,10 +121,10 @@ pub unsafe extern "C" fn unpack(
     } else if result == MPACK_OK as c_int && size != 0 {
         c"trailing data in msgpack string"
     } else {
-        return unpacker.result;
+        return (*p).result;
     };
     api_set_error(err, kErrorTypeException, message.as_ptr());
-    unpacker.result
+    (*p).result
 }
 
 /// Fills in one node of libmpack's parse tree as it is entered.
