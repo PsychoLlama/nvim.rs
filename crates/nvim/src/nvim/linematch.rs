@@ -367,11 +367,14 @@ mod tests {
 
     #[test]
     fn matching_chars_truncates_long_lines() {
-        let long = vec![b'a'; MATCH_CHAR_MAX_LEN * 2];
-        assert_eq!(
-            matching_chars(&long, &long),
-            MATCH_CHAR_MAX_LEN as c_int - 1
-        );
+        // A character past the cap cannot match, one just inside it can.
+        let filler = |n| {
+            let mut line = vec![b'a'; n];
+            line.extend_from_slice(b"z\n");
+            line
+        };
+        assert_eq!(matching_chars(&filler(MATCH_CHAR_MAX_LEN - 1), b"z\n"), 0);
+        assert_eq!(matching_chars(&filler(MATCH_CHAR_MAX_LEN - 2), b"z\n"), 1);
     }
 
     #[test]
