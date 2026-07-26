@@ -22,8 +22,9 @@ use crate::src::nvim::msgpack_rpc::channel::rpc_write_raw;
 use crate::src::nvim::msgpack_rpc::packer::{
     mpack_array, mpack_be16, mpack_bool, mpack_object_array, mpack_uint,
 };
+use crate::src::nvim::msgpack_rpc::packer::{mpack_array_dyn16, mpack_str_small};
 use crate::src::nvim::option::set_tty_option;
-use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset, strlen};
+use crate::src::nvim::os::libc::{__assert_fail, memset, strlen};
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __uid_t, Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback,
@@ -240,43 +241,6 @@ unsafe extern "C" fn get_ui_or_err(mut chan_id: uint64_t, mut err: *mut Error) -
         );
     }
     return ui;
-}
-unsafe extern "C" fn mpack_array_dyn16(
-    buf: &mut *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    let c2rust_fresh4 = *buf;
-    *buf = (*buf).offset(1);
-    *c2rust_fresh4 = 0xdc as ::core::ffi::c_int as ::core::ffi::c_char;
-    let mut pos: *mut ::core::ffi::c_char = *buf;
-    mpack_be16(buf, 0xffef as uint32_t);
-    return pos;
-}
-unsafe extern "C" fn mpack_str_small(
-    buf: &mut *mut ::core::ffi::c_char,
-    mut str: *const ::core::ffi::c_char,
-    mut len: size_t,
-) {
-    '_c2rust_label: {
-        if len < 0x20 as size_t {
-        } else {
-            __assert_fail(
-                b"len < 0x20\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/ui.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                71 as ::core::ffi::c_uint,
-                b"void mpack_str_small(char **, const char *, size_t)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let c2rust_fresh3 = *buf;
-    *buf = (*buf).offset(1);
-    *c2rust_fresh3 = (0xa0 as size_t | len) as ::core::ffi::c_char;
-    memcpy(
-        *buf as *mut ::core::ffi::c_void,
-        str as *const ::core::ffi::c_void,
-        len,
-    );
-    *buf = (*buf).offset(len as isize);
 }
 unsafe extern "C" fn remote_ui_destroy(mut ui: *mut RemoteUI) {
     xfree((*ui).packer.startptr as *mut ::core::ffi::c_void);
@@ -902,11 +866,7 @@ unsafe extern "C" fn prepare_call(mut ui: *mut RemoteUI, mut name: *const ::core
         if (*ui).nevents_pos.is_null() {
             mpack_array(buf, 3 as uint32_t);
             mpack_uint(buf, 2 as uint32_t);
-            mpack_str_small(
-                buf,
-                b"redraw\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-            );
+            mpack_str_small(buf, b"redraw");
             (*ui).nevents_pos = mpack_array_dyn16(buf);
             '_c2rust_label: {
                 if (*ui).cur_event.is_null() {
@@ -924,7 +884,10 @@ unsafe extern "C" fn prepare_call(mut ui: *mut RemoteUI, mut name: *const ::core
         flush_event(ui);
         (*ui).cur_event = name;
         (*ui).ncalls_pos = mpack_array_dyn16(buf);
-        mpack_str_small(buf, name, strlen(name));
+        mpack_str_small(
+            buf,
+            ::core::slice::from_raw_parts(name.cast(), strlen(name)),
+        );
         (*ui).nevents = (*ui).nevents.wrapping_add(1);
         (*ui).ncalls = 1 as uint32_t;
     } else {
@@ -1664,12 +1627,7 @@ pub unsafe extern "C" fn remote_ui_raw_line(
                         nelem = nelem.wrapping_add(1);
                         (*ui).ncells_pending = (*ui).ncells_pending.wrapping_add(1 as size_t);
                         mpack_array(buf, 3 as uint32_t);
-                        mpack_str_small(
-                            buf,
-                            b" \0".as_ptr() as *const ::core::ffi::c_char,
-                            ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                                .wrapping_sub(1 as size_t),
-                        );
+                        mpack_str_small(buf, b" ");
                         mpack_uint(buf, clearattr as uint32_t);
                         mpack_uint(buf, 0 as uint32_t);
                     }
@@ -1728,11 +1686,7 @@ pub unsafe extern "C" fn remote_ui_raw_line(
             nelem = nelem.wrapping_add(1);
             (*ui).ncells_pending = (*ui).ncells_pending.wrapping_add(1 as size_t);
             mpack_array(buf, 3 as uint32_t);
-            mpack_str_small(
-                buf,
-                b" \0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
-            );
+            mpack_str_small(buf, b" ");
             mpack_uint(buf, clearattr as uint32_t);
             mpack_uint(buf, (clearcol - endcol) as uint32_t);
         }

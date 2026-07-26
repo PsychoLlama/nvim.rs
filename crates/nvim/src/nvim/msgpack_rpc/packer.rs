@@ -96,6 +96,33 @@ pub fn mpack_map(cursor: &mut *mut c_char, len: uint32_t) {
     emit(cursor, format::map_header(len).bytes());
 }
 
+/// Writes a 16-bit array header whose length is filled in later, and returns
+/// where to fill it in.
+///
+/// The UI event stream is built by appending to an array whose size is not
+/// known until it is flushed, so the header goes out with a placeholder and is
+/// overwritten in place with [`mpack_be16`].
+pub fn mpack_array_dyn16(cursor: &mut *mut c_char) -> *mut c_char {
+    emit(cursor, &[format::ARRAY16]);
+    let pos = *cursor;
+    // A recognisable placeholder rather than zero: a header left unpatched
+    // shows up as a decoder error rather than as a silently empty array.
+    mpack_be16(cursor, 0xffef);
+    pos
+}
+
+/// Writes a string that is known to fit a fixstr header.
+///
+/// Every caller passes a UI event or method name, all of which are well under
+/// the 31-byte limit, so the width choice the general [`mpack_str`] makes is
+/// an assertion here instead. Taking the bytes as a slice keeps this a safe
+/// `fn`; the callers hold their names as `(pointer, length)` inside an unsafe
+/// body, where making the slice costs nothing.
+pub fn mpack_str_small(cursor: &mut *mut c_char, str: &[u8]) {
+    emit(cursor, format::fixstr_header(str.len()).bytes());
+    emit(cursor, str);
+}
+
 /// How much room is left before the buffer has to be flushed.
 pub fn mpack_remaining(packer: &PackerBuffer) -> size_t {
     packer.endptr.addr() - packer.ptr.addr()

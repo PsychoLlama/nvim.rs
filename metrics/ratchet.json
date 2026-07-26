@@ -24,7 +24,7 @@
     "crates/nvim/src/nvim/api/private/helpers.rs": {"lines": 33900, "no_mangle": 2, "unsafe": 50, "variadic": 1},
     "crates/nvim/src/nvim/api/private/validate.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/api/tabpage.rs": {"unsafe": 9},
-    "crates/nvim/src/nvim/api/ui.rs": {"lines": 2622, "unsafe": 66},
+    "crates/nvim/src/nvim/api/ui.rs": {"lines": 2576, "unsafe": 64},
     "crates/nvim/src/nvim/api/vim.rs": {"lines": 4568, "unsafe": 90},
     "crates/nvim/src/nvim/api/vimscript.rs": {"lines": 2273, "unsafe": 11},
     "crates/nvim/src/nvim/api/win_config.rs": {"lines": 3643, "unsafe": 20},

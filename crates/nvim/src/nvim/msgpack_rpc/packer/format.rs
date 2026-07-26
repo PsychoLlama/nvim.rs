@@ -190,6 +190,19 @@ pub fn map_header(len: u32) -> Item {
     }
 }
 
+/// The tag of a 16-bit array header. The UI event stream writes one with a
+/// placeholder length and patches it once the batch is complete.
+pub use tag::ARRAY16;
+
+/// The one-byte header for a string of fewer than 32 bytes.
+///
+/// Panics above that: the callers that reach for it are writing UI event and
+/// method names, all of which are fixed and short.
+pub fn fixstr_header(len: usize) -> Item {
+    assert!(len < 32, "not a fixstr");
+    Item::of(&[tag::FIXSTR | len as u8])
+}
+
 /// The header for a string of `len` bytes, or `None` when no msgpack string
 /// header can describe it.
 ///
