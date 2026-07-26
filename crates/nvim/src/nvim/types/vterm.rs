@@ -42,8 +42,6 @@ crate::bitfield_accessors! {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTerm {
-    pub allocator: *const VTermAllocatorFunctions,
-    pub allocdata: *mut ::core::ffi::c_void,
     pub rows: ::core::ffi::c_int,
     pub cols: ::core::ffi::c_int,
     pub mode: VTerm_mode,
@@ -57,14 +55,6 @@ pub struct VTerm {
     pub tmpbuffer_len: size_t,
     pub state: *mut VTermState,
     pub screen: *mut VTermScreen,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct VTermAllocatorFunctions {
-    pub malloc:
-        Option<unsafe extern "C" fn(size_t, *mut ::core::ffi::c_void) -> *mut ::core::ffi::c_void>,
-    pub free:
-        Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, *mut ::core::ffi::c_void) -> ()>,
 }
 pub type VTermAttr = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]

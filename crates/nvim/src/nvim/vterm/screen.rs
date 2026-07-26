@@ -38,7 +38,7 @@ use crate::src::nvim::vterm::state::{
     vterm_state_set_unrecognised_fallbacks,
 };
 use crate::src::nvim::vterm::vterm::{
-    vterm_allocator_free, vterm_allocator_malloc, vterm_get_size, vterm_scroll_rect,
+    vterm_alloc, vterm_dealloc, vterm_get_size, vterm_scroll_rect,
 };
 
 /// The terminal property that swaps the alternate screen buffer in and out.
@@ -73,7 +73,7 @@ unsafe fn cells_mut<'a>(first: *mut ScreenCell, count: c_int) -> &'a mut [Screen
 /// A freshly allocated, fully blanked cell grid.
 unsafe fn alloc_buffer(screen: *mut VTermScreen, rows: c_int, cols: c_int) -> *mut ScreenCell {
     let bytes = size_of::<ScreenCell>() * rows as size_t * cols as size_t;
-    let buffer = vterm_allocator_malloc((*screen).vt, bytes) as *mut ScreenCell;
+    let buffer = vterm_alloc(bytes) as *mut ScreenCell;
     blank_cells(cells_mut(buffer, rows * cols), &(*screen).pen);
     buffer
 }
@@ -494,14 +494,10 @@ unsafe fn resize_buffer(
     let old_buffer = (*screen).buffers[bufidx];
     let old_lineinfo = (*statefields).lineinfos[bufidx];
 
-    let new_buffer = vterm_allocator_malloc(
-        (*screen).vt,
-        size_of::<ScreenCell>() * new_rows as size_t * new_cols as size_t,
-    ) as *mut ScreenCell;
-    let new_lineinfo = vterm_allocator_malloc(
-        (*screen).vt,
-        size_of::<VTermLineInfo>() * new_rows as size_t,
-    ) as *mut VTermLineInfo;
+    let new_buffer = vterm_alloc(size_of::<ScreenCell>() * new_rows as size_t * new_cols as size_t)
+        as *mut ScreenCell;
+    let new_lineinfo =
+        vterm_alloc(size_of::<VTermLineInfo>() * new_rows as size_t) as *mut VTermLineInfo;
 
     let mut old_row = old_rows - 1;
     let mut new_row = new_rows - 1;
@@ -688,9 +684,9 @@ unsafe fn resize_buffer(
         }
     }
 
-    vterm_allocator_free((*screen).vt, old_buffer as *mut c_void);
+    vterm_dealloc(old_buffer as *mut c_void);
     (*screen).buffers[bufidx] = new_buffer;
-    vterm_allocator_free((*screen).vt, old_lineinfo as *mut c_void);
+    vterm_dealloc(old_lineinfo as *mut c_void);
     (*statefields).lineinfos[bufidx] = new_lineinfo;
     if active {
         (*statefields).pos = new_cursor;
@@ -776,14 +772,9 @@ unsafe extern "C" fn resize(
     } else if new_rows != old_rows {
         // The altscreen itself is not allocated, but its line info still has
         // to match the new height.
-        vterm_allocator_free(
-            (*screen).vt,
-            (*fields).lineinfos[BUFIDX_ALTSCREEN] as *mut c_void,
-        );
-        let lineinfo = vterm_allocator_malloc(
-            (*screen).vt,
-            size_of::<VTermLineInfo>() * new_rows as size_t,
-        ) as *mut VTermLineInfo;
+        vterm_dealloc((*fields).lineinfos[BUFIDX_ALTSCREEN] as *mut c_void);
+        let lineinfo =
+            vterm_alloc(size_of::<VTermLineInfo>() * new_rows as size_t) as *mut VTermLineInfo;
         for row in 0..new_rows {
             *lineinfo.offset(row as isize) = blank_lineinfo();
         }
@@ -814,11 +805,10 @@ unsafe extern "C" fn resize(
 /// host's scrollback.
 unsafe fn realloc_sb_buffer(screen: *mut VTermScreen, cols: c_int) {
     if !(*screen).sb_buffer.is_null() {
-        vterm_allocator_free((*screen).vt, (*screen).sb_buffer as *mut c_void);
+        vterm_dealloc((*screen).sb_buffer as *mut c_void);
     }
     (*screen).sb_buffer =
-        vterm_allocator_malloc((*screen).vt, size_of::<VTermScreenCell>() * cols as size_t)
-            as *mut VTermScreenCell;
+        vterm_alloc(size_of::<VTermScreenCell>() * cols as size_t) as *mut VTermScreenCell;
 }
 
 static STATE_CALLBACKS: GlobalCell<VTermStateCallbacks> = GlobalCell::new(VTermStateCallbacks {
@@ -844,7 +834,7 @@ unsafe fn screen_new(vt: *mut VTerm) -> *mut VTermScreen {
     if state.is_null() {
         return core::ptr::null_mut();
     }
-    let screen = vterm_allocator_malloc(vt, size_of::<VTermScreen>()) as *mut VTermScreen;
+    let screen = vterm_alloc(size_of::<VTermScreen>()) as *mut VTermScreen;
     let mut rows = 0;
     let mut cols = 0;
     vterm_get_size(vt, &mut rows, &mut cols);
@@ -877,18 +867,12 @@ pub unsafe extern "C" fn vterm_obtain_screen(vt: *mut VTerm) -> *mut VTermScreen
 }
 
 pub unsafe fn vterm_screen_free(screen: *mut VTermScreen) {
-    vterm_allocator_free(
-        (*screen).vt,
-        (*screen).buffers[BUFIDX_PRIMARY] as *mut c_void,
-    );
+    vterm_dealloc((*screen).buffers[BUFIDX_PRIMARY] as *mut c_void);
     if !(*screen).buffers[BUFIDX_ALTSCREEN].is_null() {
-        vterm_allocator_free(
-            (*screen).vt,
-            (*screen).buffers[BUFIDX_ALTSCREEN] as *mut c_void,
-        );
+        vterm_dealloc((*screen).buffers[BUFIDX_ALTSCREEN] as *mut c_void);
     }
-    vterm_allocator_free((*screen).vt, (*screen).sb_buffer as *mut c_void);
-    vterm_allocator_free((*screen).vt, screen as *mut c_void);
+    vterm_dealloc((*screen).sb_buffer as *mut c_void);
+    vterm_dealloc(screen as *mut c_void);
 }
 
 #[unsafe(no_mangle)]

@@ -38,7 +38,7 @@ use crate::src::nvim::vterm::vterm::{
     MOUSE_X10, VTERM_PROP_ALTSCREEN, VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE,
     VTERM_PROP_CURSORVISIBLE, VTERM_PROP_FOCUSREPORT, VTERM_PROP_ICONNAME, VTERM_PROP_MOUSE,
     VTERM_PROP_REVERSE, VTERM_PROP_SYNCOUTPUT, VTERM_PROP_THEMEUPDATES, VTERM_PROP_TITLE,
-    vterm_allocator_free, vterm_allocator_malloc, vterm_push_output_bytes, vterm_scroll_rect,
+    vterm_alloc, vterm_dealloc, vterm_push_output_bytes, vterm_scroll_rect,
 };
 use crate::src::nvim::vterm::{csi, dcs, mode, selection, text};
 
@@ -354,9 +354,9 @@ impl VTermState {
             stops.push(bits);
         }
         unsafe {
-            let fresh = vterm_allocator_malloc(self.vt, bytes).cast::<uint8_t>();
+            let fresh = vterm_alloc(bytes).cast::<uint8_t>();
             fresh.copy_from_nonoverlapping(stops.as_ptr(), bytes);
-            vterm_allocator_free(self.vt, self.tabstops.cast::<c_void>());
+            vterm_dealloc(self.tabstops.cast::<c_void>());
             self.tabstops = fresh;
         }
     }
@@ -548,7 +548,7 @@ impl VTermState {
 
 /// Allocates a state machine for `vt` and gives it its power-on settings.
 unsafe fn vterm_state_new(vt: *mut VTerm) -> *mut VTermState {
-    let state = vterm_allocator_malloc(vt, ::core::mem::size_of::<VTermState>()) as *mut VTermState;
+    let state = vterm_alloc(::core::mem::size_of::<VTermState>()) as *mut VTermState;
 
     (*state).vt = vt;
     (*state).rows = (*vt).rows;
@@ -567,12 +567,11 @@ unsafe fn vterm_state_new(vt: *mut VTerm) -> *mut VTermState {
     (*state).bold_is_highbright = 0;
     (*state).combine_pos.row = -1;
 
-    (*state).tabstops = vterm_allocator_malloc(vt, tabstop_bytes((*state).cols)).cast::<uint8_t>();
+    (*state).tabstops = vterm_alloc(tabstop_bytes((*state).cols)).cast::<uint8_t>();
     let marks = ((*state).rows.max(0) as size_t) * ::core::mem::size_of::<VTermLineInfo>();
     // TODO(vterm): the altscreen's marks could wait until it is switched on.
-    (*state).lineinfos[BUFIDX_PRIMARY] = vterm_allocator_malloc(vt, marks).cast::<VTermLineInfo>();
-    (*state).lineinfos[BUFIDX_ALTSCREEN] =
-        vterm_allocator_malloc(vt, marks).cast::<VTermLineInfo>();
+    (*state).lineinfos[BUFIDX_PRIMARY] = vterm_alloc(marks).cast::<VTermLineInfo>();
+    (*state).lineinfos[BUFIDX_ALTSCREEN] = vterm_alloc(marks).cast::<VTermLineInfo>();
     (*state).lineinfo = (*state).lineinfos[BUFIDX_PRIMARY];
 
     let utf8 = vterm_lookup_encoding(ENC_UTF8, b'u' as c_char);
@@ -595,13 +594,12 @@ unsafe fn vterm_state_new(vt: *mut VTerm) -> *mut VTermState {
 }
 
 pub unsafe extern "C" fn vterm_state_free(state: *mut VTermState) {
-    let vt = (*state).vt;
-    vterm_allocator_free(vt, (*state).tabstops.cast::<c_void>());
-    vterm_allocator_free(vt, (*state).lineinfos[BUFIDX_PRIMARY].cast::<c_void>());
+    vterm_dealloc((*state).tabstops.cast::<c_void>());
+    vterm_dealloc((*state).lineinfos[BUFIDX_PRIMARY].cast::<c_void>());
     if !(*state).lineinfos[BUFIDX_ALTSCREEN].is_null() {
-        vterm_allocator_free(vt, (*state).lineinfos[BUFIDX_ALTSCREEN].cast::<c_void>());
+        vterm_dealloc((*state).lineinfos[BUFIDX_ALTSCREEN].cast::<c_void>());
     }
-    vterm_allocator_free(vt, state.cast::<c_void>());
+    vterm_dealloc(state.cast::<c_void>());
 }
 
 /// The terminal's state machine, created and wired to the parser on first ask.
@@ -963,7 +961,7 @@ pub unsafe extern "C" fn vterm_state_set_selection_callbacks(
     buflen: size_t,
 ) {
     let buffer = if buflen != 0 && buffer.is_null() {
-        vterm_allocator_malloc((*state).vt, buflen).cast::<c_char>()
+        vterm_alloc(buflen).cast::<c_char>()
     } else {
         buffer
     };

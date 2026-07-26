@@ -7,6 +7,13 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The embedded terminal emulator (`src/nvim/vterm`) was rewritten from its
+  transpiled form into safe, idiomatic Rust, and split along the lines of the
+  protocol it implements. Several latent crashes and hangs reachable from any
+  program running under `:terminal` went with it.
+
 ## [2026.07.26-d0c5cf2147]
 
 ### Changed
