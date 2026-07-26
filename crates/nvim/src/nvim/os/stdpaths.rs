@@ -1,296 +1,285 @@
+//! The XDG base directories, and the per-application subpaths nvim keeps
+//! under them (`stdpath()`, `$NVIM_APPNAME`).
+//!
+//! # Boundary
+//!
+//! [`get_appname`] returns a pointer into the shared `NameBuff` scratch
+//! buffer, as upstream does — the next call to it, or to anything else
+//! that writes `NameBuff`, invalidates the result. Everything else here
+//! returns freshly allocated C strings that the caller releases with
+//! `xfree`.
+
 use crate::src::nvim::fileio::vim_gettempdir;
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{IObuff, NameBuff};
-use crate::src::nvim::memory::{
-    memchrsub, memcnt, strequal, xfree, xmemcpyz, xmemdupz, xrealloc, xstrdup, xstrlcpy,
-};
+use crate::src::nvim::memory::{xfree, xmemcpyz, xmemdupz, xstrdup};
 use crate::src::nvim::os::env::{expand_env_save, os_env_exists, os_getenv, os_getenv_noalloc};
-use crate::src::nvim::os::libc::{__assert_fail, memmove, memset, strlen, strstr, strtok_r};
 use crate::src::nvim::path::{concat_fnames_realloc, path_fnamecmp, path_is_absolute};
-use crate::src::nvim::strings::kv_do_printf;
-pub use crate::src::nvim::types::{StringBuilder, XDGVarType, size_t};
-pub const kXDGDataDirs: XDGVarType = 6;
-pub const kXDGConfigDirs: XDGVarType = 5;
-pub const kXDGRuntimeDir: XDGVarType = 4;
-pub const kXDGStateHome: XDGVarType = 3;
-pub const kXDGCacheHome: XDGVarType = 2;
-pub const kXDGDataHome: XDGVarType = 1;
-pub const kXDGConfigHome: XDGVarType = 0;
+pub use crate::src::nvim::types::{XDGVarType, size_t};
+use core::ffi::{CStr, c_char};
+use core::ptr;
+use std::ffi::CString;
+
 pub const kXDGNone: XDGVarType = -1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut *mut ::core::ffi::c_char,
-}
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 37] = unsafe {
-    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-        *b"char *get_xdg_home(const XDGVarType)\0",
-    )
-};
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
-static xdg_env_vars: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
-    b"XDG_CONFIG_HOME\0".as_ptr() as *const ::core::ffi::c_char,
-    b"XDG_DATA_HOME\0".as_ptr() as *const ::core::ffi::c_char,
-    b"XDG_CACHE_HOME\0".as_ptr() as *const ::core::ffi::c_char,
-    b"XDG_STATE_HOME\0".as_ptr() as *const ::core::ffi::c_char,
-    b"XDG_RUNTIME_DIR\0".as_ptr() as *const ::core::ffi::c_char,
-    b"XDG_CONFIG_DIRS\0".as_ptr() as *const ::core::ffi::c_char,
-    b"XDG_DATA_DIRS\0".as_ptr() as *const ::core::ffi::c_char,
-]);
-static xdg_defaults: GlobalCell<[*const ::core::ffi::c_char; 7]> = GlobalCell::new([
-    b"~/.config\0".as_ptr() as *const ::core::ffi::c_char,
-    b"~/.local/share\0".as_ptr() as *const ::core::ffi::c_char,
-    b"~/.cache\0".as_ptr() as *const ::core::ffi::c_char,
-    b"~/.local/state\0".as_ptr() as *const ::core::ffi::c_char,
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    b"/etc/xdg/\0".as_ptr() as *const ::core::ffi::c_char,
-    b"/usr/local/share/:/usr/share/\0".as_ptr() as *const ::core::ffi::c_char,
-]);
-pub unsafe extern "C" fn get_appname(mut namelike: bool) -> *const ::core::ffi::c_char {
-    let mut env_val: *const ::core::ffi::c_char =
-        os_getenv_noalloc(b"NVIM_APPNAME\0".as_ptr() as *const ::core::ffi::c_char);
-    if env_val.is_null() {
-        xstrlcpy(
-            NameBuff.ptr() as *mut ::core::ffi::c_char,
-            b"nvim\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
-        );
-    }
-    if namelike {
-        memchrsub(
-            NameBuff.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-            '/' as ::core::ffi::c_char,
-            '-' as ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
-        );
-        memchrsub(
-            NameBuff.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-            '\\' as ::core::ffi::c_char,
-            '-' as ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
-        );
-    }
-    return NameBuff.ptr() as *mut ::core::ffi::c_char;
-}
-pub unsafe extern "C" fn appname_is_valid() -> bool {
-    let mut appname: *const ::core::ffi::c_char = get_appname(false_0 != 0);
-    if path_is_absolute(appname) as ::core::ffi::c_int != 0
-        || strequal(appname, b"/\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
-            != 0
-        || strequal(appname, b"\\\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
-            != 0
-        || strequal(appname, b".\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
-            != 0
-        || strequal(appname, b"..\0".as_ptr() as *const ::core::ffi::c_char) as ::core::ffi::c_int
-            != 0
-        || !strstr(appname, b"/..\0".as_ptr() as *const ::core::ffi::c_char).is_null()
-        || !strstr(appname, b"../\0".as_ptr() as *const ::core::ffi::c_char).is_null()
-    {
-        return false_0 != 0;
-    }
-    return true_0 != 0;
-}
-unsafe extern "C" fn xdg_remove_duplicate(
-    mut ret: *mut ::core::ffi::c_char,
-    mut sep: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    let mut data: C2Rust_Unnamed = C2Rust_Unnamed {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-    };
-    let mut saveptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut token: *mut ::core::ffi::c_char = strtok_r(ret, sep, &raw mut saveptr);
-    while !token.is_null() {
-        let mut is_duplicate: bool = false_0 != 0;
-        let mut i: size_t = 0 as size_t;
-        while i < data.size {
-            if path_fnamecmp(*data.items.offset(i as isize), token) == 0 as ::core::ffi::c_int {
-                is_duplicate = true_0 != 0;
-                break;
-            } else {
-                i = i.wrapping_add(1);
+pub const kXDGConfigHome: XDGVarType = 0;
+pub const kXDGDataHome: XDGVarType = 1;
+pub const kXDGCacheHome: XDGVarType = 2;
+pub const kXDGStateHome: XDGVarType = 3;
+pub const kXDGRuntimeDir: XDGVarType = 4;
+pub const kXDGConfigDirs: XDGVarType = 5;
+pub const kXDGDataDirs: XDGVarType = 6;
+
+/// Size of `IObuff`, the scratch buffer [`get_xdg_home`] assembles in.
+const IOSIZE: usize = 1024 + 1;
+const PATHSEP: u8 = b'/';
+/// Separator between entries of `$XDG_*_DIRS`.
+const ENV_SEP: u8 = b':';
+
+/// The environment variable behind each [`XDGVarType`].
+const XDG_ENV_VARS: [&CStr; 7] = [
+    c"XDG_CONFIG_HOME",
+    c"XDG_DATA_HOME",
+    c"XDG_CACHE_HOME",
+    c"XDG_STATE_HOME",
+    c"XDG_RUNTIME_DIR",
+    c"XDG_CONFIG_DIRS",
+    c"XDG_DATA_DIRS",
+];
+
+/// Value to fall back on when the environment variable is unset. Still
+/// needs `~` expansion. `kXDGRuntimeDir` has none: `vim_mktempdir()`
+/// decides it at startup.
+const XDG_DEFAULTS: [Option<&CStr>; 7] = [
+    Some(c"~/.config"),
+    Some(c"~/.local/share"),
+    Some(c"~/.cache"),
+    Some(c"~/.local/state"),
+    None,
+    Some(c"/etc/xdg/"),
+    Some(c"/usr/local/share/:/usr/share/"),
+];
+
+/// `$NVIM_APPNAME`, or "nvim" when unset.
+///
+/// The value lives in `NameBuff`, so the returned pointer is only good
+/// until the next thing that writes there.
+///
+/// `namelike` additionally flattens path separators to `-`, for callers
+/// that need a single name rather than a relative path. The substitution
+/// runs over the whole buffer, past the terminator, exactly as upstream's
+/// `memchrsub(NameBuff, ..., sizeof(NameBuff))` did.
+pub fn get_appname(namelike: bool) -> *const c_char {
+    // SAFETY: "noalloc" means it writes the value into `NameBuff` and
+    // returns a pointer to it, or NULL when the variable is unset. No
+    // borrow of `NameBuff` may be outstanding across the call.
+    let is_set = unsafe { !os_getenv_noalloc(c"NVIM_APPNAME".as_ptr()).is_null() };
+    NameBuff.with_mut(|buf| {
+        if !is_set {
+            for (slot, byte) in buf.iter_mut().zip(b"nvim\0") {
+                *slot = *byte as c_char;
             }
         }
-        if !is_duplicate {
-            if data.size == data.capacity {
-                data.capacity = if data.capacity != 0 {
-                    data.capacity << 1 as ::core::ffi::c_int
-                } else {
-                    8 as size_t
-                };
-                data.items = xrealloc(
-                    data.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<*mut ::core::ffi::c_char>().wrapping_mul(data.capacity),
-                ) as *mut *mut ::core::ffi::c_char;
-            } else {
-            };
-            let c2rust_fresh0 = data.size;
-            data.size = data.size.wrapping_add(1);
-            let c2rust_lvalue_ptr = &raw mut *data.items.offset(c2rust_fresh0 as isize);
-            *c2rust_lvalue_ptr = token;
+        if namelike {
+            for slot in buf.iter_mut() {
+                if *slot == b'/' as c_char || *slot == b'\\' as c_char {
+                    *slot = b'-' as c_char;
+                }
+            }
         }
-        token = strtok_r(
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            sep,
-            &raw mut saveptr,
-        );
-    }
-    let mut result: StringBuilder = StringBuilder {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
-    let mut i_0: size_t = 0 as size_t;
-    while i_0 < data.size {
-        if i_0 == 0 as size_t {
-            kv_do_printf(
-                &raw mut result,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                *data.items.offset(i_0 as isize),
-            );
-        } else {
-            kv_do_printf(
-                &raw mut result,
-                b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                sep,
-                *data.items.offset(i_0 as isize),
-            );
-        }
-        i_0 = i_0.wrapping_add(1);
-    }
-    xfree(data.items as *mut ::core::ffi::c_void);
-    data.capacity = 0 as size_t;
-    data.size = data.capacity;
-    data.items = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-    xfree(ret as *mut ::core::ffi::c_void);
-    return result.items;
+    });
+    NameBuff.ptr() as *const c_char
 }
-pub unsafe extern "C" fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut ::core::ffi::c_char {
-    let env: *const ::core::ffi::c_char = (*xdg_env_vars.ptr())[idx as usize];
-    let fallback: *const ::core::ffi::c_char = (*xdg_defaults.ptr())[idx as usize];
-    let mut env_val: *mut ::core::ffi::c_char = os_getenv(env);
-    if env_val.is_null() && os_env_exists(env, false_0 != 0) as ::core::ffi::c_int != 0 {
-        env_val = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
+
+/// Whether `$NVIM_APPNAME` is usable: a name or a relative path, with no
+/// way to escape the directory it names.
+pub fn appname_is_valid() -> bool {
+    let appname = get_appname(false);
+    // SAFETY: `get_appname` returns `NameBuff`, which is NUL-terminated
+    // and stays valid while this function runs.
+    let name = unsafe {
+        if path_is_absolute(appname) {
+            return false;
+        }
+        CStr::from_ptr(appname).to_bytes()
+    };
+    // `path_is_absolute` does not call "/" absolute, hence the explicit
+    // cases (upstream carries a TODO about that).
+    !matches!(name, b"/" | b"\\" | b"." | b"..")
+        && !contains(name, b"/..")
+        && !contains(name, b"../")
+}
+
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+
+/// Drop repeated directories from a `sep`-separated search path, keeping
+/// the first occurrence of each.
+fn remove_duplicate_dirs(list: &CStr, sep: u8) -> Option<CString> {
+    // `path_fnamecmp` rather than a byte compare: it honors
+    // 'fileignorecase' and the platform's path-separator equivalences.
+    dedup_dirs(list, sep, |a, b| {
+        // SAFETY: both are NUL-terminated and outlive the call.
+        unsafe { path_fnamecmp(a.as_ptr(), b.as_ptr()) == 0 }
+    })
+}
+
+/// [`remove_duplicate_dirs`] with the "same directory" test injected.
+///
+/// `None` when nothing survives — the C built the result in a string
+/// builder that stayed unallocated (NULL) in that case, and callers treat
+/// NULL as "no such directory list".
+fn dedup_dirs(list: &CStr, sep: u8, same: impl Fn(&CStr, &CStr) -> bool) -> Option<CString> {
+    let mut kept: Vec<CString> = Vec::new();
+    // Empty entries are skipped: the C tokenized with `strtok`, which
+    // collapses runs of separators and ignores leading and trailing ones.
+    for token in list.to_bytes().split(|&b| b == sep) {
+        if token.is_empty() {
+            continue;
+        }
+        let token = CString::new(token).expect("a CStr's bytes hold no NUL");
+        if !kept.iter().any(|kept| same(kept, &token)) {
+            kept.push(token);
+        }
     }
-    let mut ret: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if !env_val.is_null() {
-        ret = env_val;
-    } else if !fallback.is_null() {
-        ret = expand_env_save(fallback as *mut ::core::ffi::c_char);
-    } else if idx as ::core::ffi::c_int == kXDGRuntimeDir as ::core::ffi::c_int {
-        ret = vim_gettempdir();
+    if kept.is_empty() {
+        return None;
+    }
+    let joined = kept
+        .iter()
+        .map(|dir| dir.as_bytes())
+        .collect::<Vec<_>>()
+        .join(&[sep][..]);
+    Some(CString::new(joined).expect("the parts hold no NUL"))
+}
+
+/// The value of an XDG base directory variable, or NULL when there is
+/// none. The caller owns the result.
+pub fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut c_char {
+    let env = XDG_ENV_VARS[idx as usize];
+    // SAFETY: every pointer handed out below is NUL-terminated and either
+    // static or freshly allocated; `ret` is owned from here on.
+    unsafe {
+        let mut ret = os_getenv(env.as_ptr());
         if ret.is_null() {
-            ret = b"/tmp/\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            if os_env_exists(env.as_ptr(), false) {
+                // Set but empty: `os_getenv` reports that as unset.
+                ret = xstrdup(c"".as_ptr());
+            } else if let Some(fallback) = XDG_DEFAULTS[idx as usize] {
+                ret = expand_env_save(fallback.as_ptr() as *mut c_char);
+            } else if idx == kXDGRuntimeDir {
+                // stdpath('run') is whatever vim_mktempdir() decided at
+                // startup, minus its trailing slash.
+                let tmpdir = vim_gettempdir();
+                let tmpdir = if tmpdir.is_null() {
+                    c"/tmp/".as_ptr()
+                } else {
+                    tmpdir
+                };
+                let len = CStr::from_ptr(tmpdir).to_bytes().len();
+                ret = xmemdupz(tmpdir.cast(), len.saturating_sub(1)) as *mut c_char;
+            }
         }
-        let mut len: size_t = strlen(ret);
-        ret = xmemdupz(
-            ret as *const ::core::ffi::c_void,
-            if len >= 2 as size_t {
-                len.wrapping_sub(1 as size_t)
-            } else {
-                0 as size_t
-            },
-        ) as *mut ::core::ffi::c_char;
-    }
-    if (idx as ::core::ffi::c_int == kXDGDataDirs as ::core::ffi::c_int
-        || idx as ::core::ffi::c_int == kXDGConfigDirs as ::core::ffi::c_int)
-        && !ret.is_null()
-    {
-        ret = xdg_remove_duplicate(ret, ENV_SEPSTR.as_ptr());
-    }
-    return ret;
-}
-pub unsafe extern "C" fn get_xdg_home(idx: XDGVarType) -> *mut ::core::ffi::c_char {
-    let mut dir: *mut ::core::ffi::c_char = stdpaths_get_xdg_var(idx);
-    let mut appname: *const ::core::ffi::c_char = get_appname(false_0 != 0);
-    let mut appname_len: size_t = strlen(appname);
-    '_c2rust_label: {
-        if appname_len
-            < ((1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as usize)
-                .wrapping_sub(::core::mem::size_of::<[::core::ffi::c_char; 6]>())
-        {
-        } else {
-            __assert_fail(
-                b"appname_len < (IOSIZE - sizeof(\"-data\"))\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/os/stdpaths.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                206 as ::core::ffi::c_uint,
-                __ASSERT_FUNCTION.as_ptr(),
-            );
+        if ret.is_null() || (idx != kXDGDataDirs && idx != kXDGConfigDirs) {
+            return ret;
         }
-    };
-    if !dir.is_null() {
-        xmemcpyz(
-            IObuff.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-            appname as *const ::core::ffi::c_void,
-            appname_len,
-        );
-        dir = concat_fnames_realloc(dir, IObuff.ptr() as *mut ::core::ffi::c_char, true_0 != 0);
+        let deduped = remove_duplicate_dirs(CStr::from_ptr(ret), ENV_SEP);
+        xfree(ret.cast());
+        deduped.map_or(ptr::null_mut(), CString::into_raw)
     }
-    return dir;
 }
-pub unsafe extern "C" fn stdpaths_user_conf_subpath(
-    mut fname: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    return concat_fnames_realloc(get_xdg_home(kXDGConfigHome), fname, true_0 != 0);
+
+/// `{xdg_directory}/$NVIM_APPNAME`, or NULL when the directory is unset.
+/// The caller owns the result.
+pub fn get_xdg_home(idx: XDGVarType) -> *mut c_char {
+    let dir = stdpaths_get_xdg_var(idx);
+    // SAFETY: `get_appname` returns NUL-terminated `NameBuff`; `IObuff` is
+    // the scratch buffer this copy is sized against, and no borrow of it
+    // is outstanding. `dir` is owned, and `concat_fnames_realloc` consumes
+    // it.
+    unsafe {
+        let appname = get_appname(false);
+        let appname_len = CStr::from_ptr(appname).to_bytes().len();
+        // Windows appends "-data" to the data/state homes; the headroom is
+        // asserted on every platform.
+        assert!(appname_len < IOSIZE - c"-data".count_bytes() - 1);
+        if dir.is_null() {
+            return dir;
+        }
+        xmemcpyz(IObuff.ptr().cast(), appname.cast(), appname_len);
+        concat_fnames_realloc(dir, IObuff.ptr() as *mut c_char, true)
+    }
 }
-pub unsafe extern "C" fn stdpaths_user_state_subpath(
-    mut fname: *const ::core::ffi::c_char,
+
+/// `$XDG_CONFIG_HOME/$NVIM_APPNAME/{fname}`. The caller owns the result.
+pub unsafe fn stdpaths_user_conf_subpath(fname: *const c_char) -> *mut c_char {
+    concat_fnames_realloc(get_xdg_home(kXDGConfigHome), fname, true)
+}
+
+/// `$XDG_STATE_HOME/$NVIM_APPNAME/{fname}`, with `trailing_pathseps` path
+/// separators appended and — when `escape_commas` — every comma
+/// backslash-escaped, for the options that take comma-separated lists.
+/// The caller owns the result.
+pub unsafe fn stdpaths_user_state_subpath(
+    fname: *const c_char,
     trailing_pathseps: size_t,
     escape_commas: bool,
-) -> *mut ::core::ffi::c_char {
-    let mut ret: *mut ::core::ffi::c_char =
-        concat_fnames_realloc(get_xdg_home(kXDGStateHome), fname, true_0 != 0);
-    let len: size_t = strlen(ret);
-    let numcommas: size_t = if escape_commas as ::core::ffi::c_int != 0 {
-        memcnt(
-            ret as *const ::core::ffi::c_void,
-            ',' as ::core::ffi::c_char,
-            len,
-        )
+) -> *mut c_char {
+    let ret = concat_fnames_realloc(get_xdg_home(kXDGStateHome), fname, true);
+    let path = CStr::from_ptr(ret).to_bytes();
+    let commas = if escape_commas {
+        path.iter().filter(|&&b| b == b',').count()
     } else {
-        0 as size_t
+        0
     };
-    if numcommas != 0 || trailing_pathseps != 0 {
-        ret = xrealloc(
-            ret as *mut ::core::ffi::c_void,
-            len.wrapping_add(trailing_pathseps)
-                .wrapping_add(numcommas)
-                .wrapping_add(1 as size_t),
-        ) as *mut ::core::ffi::c_char;
-        let mut i: size_t = 0 as size_t;
-        while i < len.wrapping_add(numcommas) {
-            if *ret.offset(i as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
-                memmove(
-                    ret.offset(i as isize)
-                        .offset(1 as ::core::ffi::c_int as isize)
-                        as *mut ::core::ffi::c_void,
-                    ret.offset(i as isize) as *const ::core::ffi::c_void,
-                    len.wrapping_sub(i).wrapping_add(numcommas),
-                );
-                *ret.offset(i as isize) = '\\' as ::core::ffi::c_char;
-                i = i.wrapping_add(1);
-            }
-            i = i.wrapping_add(1);
-        }
-        if trailing_pathseps != 0 {
-            memset(
-                ret.offset(len as isize).offset(numcommas as isize) as *mut ::core::ffi::c_void,
-                PATHSEP,
-                trailing_pathseps,
-            );
-        }
-        *ret.offset(len.wrapping_add(trailing_pathseps).wrapping_add(numcommas) as isize) =
-            NUL as ::core::ffi::c_char;
+    if commas == 0 && trailing_pathseps == 0 {
+        return ret;
     }
-    return ret;
+    let mut out = Vec::with_capacity(path.len() + commas + trailing_pathseps + 1);
+    for &byte in path {
+        if escape_commas && byte == b',' {
+            out.push(b'\\');
+        }
+        out.push(byte);
+    }
+    out.resize(out.len() + trailing_pathseps, PATHSEP);
+    xfree(ret.cast());
+    CString::new(out)
+        .expect("a CStr's bytes hold no NUL")
+        .into_raw()
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const ENV_SEPSTR: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b":\0") };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `dedup_dirs` with a plain byte comparison, so the test never
+    /// reaches `path_fnamecmp` (and through it libc, which Miri cannot
+    /// call).
+    fn dedup(list: &CStr) -> Option<CString> {
+        dedup_dirs(list, ENV_SEP, |a, b| a == b)
+    }
+
+    #[test]
+    fn nothing_survives_an_empty_dir_list() {
+        assert_eq!(dedup(c""), None);
+        assert_eq!(dedup(c":::"), None);
+    }
+
+    #[test]
+    fn separator_runs_collapse() {
+        assert_eq!(dedup(c":/a::/b:").as_deref(), Some(c"/a:/b"));
+    }
+
+    #[test]
+    fn the_first_occurrence_of_each_dir_wins() {
+        assert_eq!(dedup(c"/a:/b:/a:/c:/b").as_deref(), Some(c"/a:/b:/c"));
+    }
+
+    #[test]
+    fn appname_validity_rejects_traversal() {
+        assert!(contains(b"a/../b", b"/.."));
+        assert!(contains(b"../b", b"../"));
+        assert!(!contains(b"a..b", b"/.."));
+        assert!(!contains(b"", b"/.."));
+    }
+}

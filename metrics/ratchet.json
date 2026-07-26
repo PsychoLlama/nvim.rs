@@ -147,7 +147,7 @@
     "crates/nvim/src/nvim/os/pty_proc_unix.rs": {"lines": 1056, "static_mut": 1, "unsafe": 19},
     "crates/nvim/src/nvim/os/shell.rs": {"lines": 2002, "no_mangle": 3, "unsafe": 31},
     "crates/nvim/src/nvim/os/signal.rs": {"unsafe": 20},
-    "crates/nvim/src/nvim/os/stdpaths.rs": {"unsafe": 9},
+    "crates/nvim/src/nvim/os/stdpaths.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/os/time.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/os/users.rs": {"no_mangle": 4, "unsafe": 7},
     "crates/nvim/src/nvim/path.rs": {"lines": 3020, "no_mangle": 15, "unsafe": 69},
