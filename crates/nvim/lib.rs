@@ -208,8 +208,11 @@ pub mod src {
             pub mod input;
             pub mod terminfo;
             pub mod termkey {
+                pub mod csi;
                 pub mod driver_csi;
                 pub mod driver_ti;
+                pub mod keytables;
+                pub mod report;
                 pub mod termkey;
                 pub mod trie;
             } // mod termkey

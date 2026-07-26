@@ -6,8 +6,7 @@ use crate::src::nvim::os::libc::{
     tcsetattr, tolower,
 };
 use crate::src::nvim::tui::termkey::driver_csi::{
-    free_driver_csi, new_driver_csi, peekkey_csi, termkey_interpret_modereport,
-    termkey_interpret_mouse,
+    self, termkey_interpret_modereport, termkey_interpret_mouse,
 };
 use crate::src::nvim::tui::termkey::driver_ti;
 
@@ -584,7 +583,7 @@ unsafe extern "C" fn termkey_init(
         ::core::ptr::null::<::core::ffi::c_char>(),
     );
     (*tk).ti = driver_ti::new_driver(term);
-    (*tk).csi = new_driver_csi();
+    (*tk).csi = driver_csi::new_driver();
     return 1 as ::core::ffi::c_int;
 }
 #[unsafe(no_mangle)]
@@ -615,7 +614,7 @@ pub unsafe extern "C" fn termkey_free(mut tk: *mut TermKey) {
     xfree((*tk).keynames as *mut ::core::ffi::c_void);
     (*tk).keynames = ::core::ptr::null_mut::<*const ::core::ffi::c_char>();
     driver_ti::free_driver((*tk).ti);
-    free_driver_csi((*tk).csi);
+    driver_csi::free_driver((*tk).csi);
     xfree(tk as *mut ::core::ffi::c_void);
 }
 #[unsafe(no_mangle)]
@@ -922,7 +921,7 @@ unsafe extern "C" fn peekkey(
         let ret: TermKeyResult = if probe == 0 {
             driver_ti::peek_key(tk, key, force, nbytep)
         } else {
-            peekkey_csi(tk, (*tk).csi, key, force, nbytep)
+            driver_csi::peek_key(tk, (*tk).csi, key, force, nbytep)
         };
         match ret {
             TERMKEY_RES_KEY => {

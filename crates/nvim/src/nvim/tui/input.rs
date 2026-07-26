@@ -14,8 +14,7 @@ use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcmp, memcpy, memmove, snprintf, strlen};
 use crate::src::nvim::strings::kv_do_printf;
 use crate::src::nvim::tui::termkey::driver_csi::{
-    termkey_interpret_csi, termkey_interpret_csi_param, termkey_interpret_modereport,
-    termkey_interpret_mouse,
+    csi_param_value, termkey_interpret_csi, termkey_interpret_modereport, termkey_interpret_mouse,
 };
 use crate::src::nvim::tui::termkey::termkey::{
     termkey_destroy, termkey_get_buffer_remaining, termkey_get_buffer_size, termkey_get_canonflags,
@@ -1767,17 +1766,7 @@ unsafe extern "C" fn handle_primary_device_attr(
     let mut i: size_t = 0 as size_t;
     '_out: {
         while i < nparams {
-            let mut arg: ::core::ffi::c_int = 0;
-            if termkey_interpret_csi_param(
-                *params.offset(i as isize),
-                &raw mut arg,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                ::core::ptr::null_mut::<size_t>(),
-            ) as ::core::ffi::c_uint
-                != TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                break '_out;
-            }
+            let arg: ::core::ffi::c_int = csi_param_value(*params.offset(i as isize));
             kv_do_printf(
                 &raw mut response,
                 b"%d\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1904,16 +1893,7 @@ unsafe extern "C" fn handle_unknown_csi(mut input: *mut TermInput, mut key: *con
                             == 0) as ::core::ffi::c_int as usize,
                     )
                 {
-                    if termkey_interpret_csi_param(
-                        params[i as usize],
-                        (&raw mut args as *mut ::core::ffi::c_int).offset(i as isize),
-                        ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                        ::core::ptr::null_mut::<size_t>(),
-                    ) as ::core::ffi::c_uint
-                        != TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        return;
-                    }
+                    args[i as usize] = csi_param_value(params[i as usize]);
                     i = i.wrapping_add(1);
                 }
                 if args[0 as ::core::ffi::c_int as usize] == 48 as ::core::ffi::c_int {
@@ -1927,17 +1907,8 @@ unsafe extern "C" fn handle_unknown_csi(mut input: *mut TermInput, mut key: *con
         }
         110 => {
             if nparams == 1 as size_t {
-                let mut arg: ::core::ffi::c_int = 0;
-                if termkey_interpret_csi_param(
-                    params[0 as ::core::ffi::c_int as usize],
-                    &raw mut arg,
-                    ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                    ::core::ptr::null_mut::<size_t>(),
-                ) as ::core::ffi::c_uint
-                    != TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    return;
-                }
+                let arg: ::core::ffi::c_int =
+                    csi_param_value(params[0 as ::core::ffi::c_int as usize]);
                 let mut args_0: Array = ARRAY_DICT_INIT;
                 let mut args__items: [Object; 2] = [Object {
                     type_0: kObjectTypeNil,
@@ -2000,16 +1971,7 @@ unsafe extern "C" fn handle_unknown_csi(mut input: *mut TermInput, mut key: *con
                                 == 0) as ::core::ffi::c_int as usize,
                         )
                 {
-                    if termkey_interpret_csi_param(
-                        params[i_0 as usize],
-                        (&raw mut args_1 as *mut ::core::ffi::c_int).offset(i_0 as isize),
-                        ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                        ::core::ptr::null_mut::<size_t>(),
-                    ) as ::core::ffi::c_uint
-                        != TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        return;
-                    }
+                    args_1[i_0 as usize] = csi_param_value(params[i_0 as usize]);
                     i_0 = i_0.wrapping_add(1);
                 }
                 if args_1[0 as ::core::ffi::c_int as usize] == 997 as ::core::ffi::c_int {
