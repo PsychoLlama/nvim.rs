@@ -414,8 +414,7 @@ unsafe extern "C" fn log_notify(
 pub unsafe extern "C" fn rpc_init() {
     ch_before_blocking_events.set(multiqueue_new_child((*main_loop.ptr()).events));
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rpc_start(mut channel: *mut Channel) {
+pub unsafe fn rpc_start(mut channel: *mut Channel) {
     channel_incref(channel);
     (*channel).is_rpc = true_0 != 0;
     let mut rpc: *mut RpcState = &raw mut (*channel).rpc;
@@ -1178,8 +1177,7 @@ unsafe extern "C" fn broadcast_event(mut name: *const ::core::ffi::c_char, mut a
         let _ = *ptr_;
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rpc_close(mut channel: *mut Channel) {
+pub unsafe fn rpc_close(mut channel: *mut Channel) {
     if (*channel).rpc.closed {
         return;
     }
@@ -1245,8 +1243,7 @@ unsafe extern "C" fn rpc_close_event(mut argv: *mut *mut ::core::ffi::c_void) {
         exit_on_closed_chan(0 as ::core::ffi::c_int);
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rpc_free(mut channel: *mut Channel) {
+pub unsafe fn rpc_free(mut channel: *mut Channel) {
     unpacker_teardown((*channel).rpc.unpacker);
     xfree((*channel).rpc.unpacker as *mut ::core::ffi::c_void);
     xfree((*channel).rpc.call_stack.items as *mut ::core::ffi::c_void);
@@ -1516,8 +1513,7 @@ pub unsafe extern "C" fn rpc_set_client_info(mut id: uint64_t, mut info: Dict) {
     }
     channel_info_changed(chan, false_0 != 0);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn get_client_info(
+pub unsafe fn get_client_info(
     mut chan: *mut Channel,
     mut key: *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {

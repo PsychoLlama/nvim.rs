@@ -621,8 +621,7 @@ pub unsafe extern "C" fn channel_init() {
     channel_alloc(kChannelStreamStderr);
     rpc_init();
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn channel_alloc(mut type_0: ChannelStreamType) -> *mut Channel {
+pub unsafe fn channel_alloc(mut type_0: ChannelStreamType) -> *mut Channel {
     let mut chan: *mut Channel =
         xcalloc(1 as size_t, ::core::mem::size_of::<Channel>()) as *mut Channel;
     if type_0 as ::core::ffi::c_uint
@@ -729,12 +728,10 @@ pub unsafe extern "C" fn channel_create_event(
     arena_mem_free(arena_finish(&raw mut arena));
     channel_info_changed(chan, true_0 != 0);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn channel_incref(mut chan: *mut Channel) {
+pub unsafe fn channel_incref(mut chan: *mut Channel) {
     (*chan).refcount = (*chan).refcount.wrapping_add(1);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn channel_decref(mut chan: *mut Channel) {
+pub unsafe fn channel_decref(mut chan: *mut Channel) {
     (*chan).refcount = (*chan).refcount.wrapping_sub(1);
     if (*chan).refcount == 0 {
         multiqueue_put_event(
@@ -1591,8 +1588,7 @@ unsafe extern "C" fn term_close(mut data: *mut ::core::ffi::c_void) {
         },
     );
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn channel_info_changed(mut chan: *mut Channel, mut new_chan: bool) {
+pub unsafe fn channel_info_changed(mut chan: *mut Channel, mut new_chan: bool) {
     let mut event: event_T = (if new_chan as ::core::ffi::c_int != 0 {
         EVENT_CHANOPEN as ::core::ffi::c_int
     } else {

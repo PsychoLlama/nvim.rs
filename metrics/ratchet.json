@@ -1,5 +1,5 @@
 {
-  "internal_exports": 154,
+  "internal_exports": 146,
   "files_without_forbid_unsafe": 223,
   "files_without_deny_unsafe_op": 188,
   "files": {
@@ -35,7 +35,7 @@
     "crates/nvim/src/nvim/buffer_updates.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/bufwrite.rs": {"lines": 3421, "unsafe": 24},
     "crates/nvim/src/nvim/change.rs": {"lines": 2895, "no_mangle": 4, "unsafe": 36},
-    "crates/nvim/src/nvim/channel.rs": {"lines": 1978, "no_mangle": 4, "unsafe": 72},
+    "crates/nvim/src/nvim/channel.rs": {"lines": 1974, "unsafe": 72},
     "crates/nvim/src/nvim/charset.rs": {"lines": 1704, "no_mangle": 4, "unsafe": 63},
     "crates/nvim/src/nvim/clipboard.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/cmdexpand.rs": {"lines": 6680, "unsafe": 128},
@@ -127,7 +127,7 @@
     "crates/nvim/src/nvim/message_fmt.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/mouse.rs": {"lines": 2596, "no_mangle": 1, "unsafe": 38},
     "crates/nvim/src/nvim/move.rs": {"lines": 2933, "no_mangle": 5, "unsafe": 58},
-    "crates/nvim/src/nvim/msgpack_rpc/channel.rs": {"lines": 1541, "no_mangle": 4, "unsafe": 50},
+    "crates/nvim/src/nvim/msgpack_rpc/channel.rs": {"lines": 1537, "unsafe": 50},
     "crates/nvim/src/nvim/msgpack_rpc/packer.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/msgpack_rpc/server.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/msgpack_rpc/unpacker.rs": {"no_mangle": 4, "unsafe": 24},
