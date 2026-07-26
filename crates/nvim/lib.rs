@@ -170,7 +170,6 @@ pub mod src {
             pub mod input;
             pub mod lang;
             pub mod libc;
-            pub mod mem;
             pub mod proc;
             pub mod pty_proc_unix;
             pub mod shell;
