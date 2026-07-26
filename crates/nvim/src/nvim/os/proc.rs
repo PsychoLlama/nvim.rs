@@ -1,450 +1,104 @@
+//! OS process inspection and termination.
+//!
+//! # Boundary
+//!
+//! `uv_kill` is libuv's `kill(2)`, returning a negated errno rather than
+//! setting one. Everything else is `/proc`, read through `std::fs`.
+//!
+//! This is the Linux build of upstream's `os/proc.c`; the Windows
+//! (toolhelp32) and BSD/macOS (`sysctl KERN_PROC`) implementations of
+//! [`os_proc_children`] were not transpiled, and with them went the
+//! "process not found" outcome that only those platforms could report.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::event::libuv::uv_kill;
 use crate::src::nvim::log::logmsg;
-use crate::src::nvim::memory::xrealloc;
-use crate::src::nvim::os::libc::{__assert_fail, fclose, fopen, fscanf, snprintf};
-pub use crate::src::nvim::types::{
-    __off_t, __off64_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, FILE, size_t,
-};
-pub type C2Rust_Unnamed = ::core::ffi::c_int;
-pub const UV_ERRNO_MAX: C2Rust_Unnamed = -4096;
-pub const UV_ENOEXEC: C2Rust_Unnamed = -8;
-pub const UV_EUNATCH: C2Rust_Unnamed = -49;
-pub const UV_ENODATA: C2Rust_Unnamed = -61;
-pub const UV_ESOCKTNOSUPPORT: C2Rust_Unnamed = -94;
-pub const UV_EILSEQ: C2Rust_Unnamed = -84;
-pub const UV_EFTYPE: C2Rust_Unnamed = -4028;
-pub const UV_ENOTTY: C2Rust_Unnamed = -25;
-pub const UV_EREMOTEIO: C2Rust_Unnamed = -121;
-pub const UV_EHOSTDOWN: C2Rust_Unnamed = -112;
-pub const UV_EMLINK: C2Rust_Unnamed = -31;
-pub const UV_ENXIO: C2Rust_Unnamed = -6;
-pub const UV_EOF: C2Rust_Unnamed = -4095;
-pub const UV_UNKNOWN: C2Rust_Unnamed = -4094;
-pub const UV_EXDEV: C2Rust_Unnamed = -18;
-pub const UV_ETXTBSY: C2Rust_Unnamed = -26;
-pub const UV_ETIMEDOUT: C2Rust_Unnamed = -110;
-pub const UV_ESRCH: C2Rust_Unnamed = -3;
-pub const UV_ESPIPE: C2Rust_Unnamed = -29;
-pub const UV_ESHUTDOWN: C2Rust_Unnamed = -108;
-pub const UV_EROFS: C2Rust_Unnamed = -30;
-pub const UV_ERANGE: C2Rust_Unnamed = -34;
-pub const UV_EPROTOTYPE: C2Rust_Unnamed = -91;
-pub const UV_EPROTONOSUPPORT: C2Rust_Unnamed = -93;
-pub const UV_EPROTO: C2Rust_Unnamed = -71;
-pub const UV_EPIPE: C2Rust_Unnamed = -32;
-pub const UV_EPERM: C2Rust_Unnamed = -1;
-pub const UV_EOVERFLOW: C2Rust_Unnamed = -75;
-pub const UV_ENOTSUP: C2Rust_Unnamed = -95;
-pub const UV_ENOTSOCK: C2Rust_Unnamed = -88;
-pub const UV_ENOTEMPTY: C2Rust_Unnamed = -39;
-pub const UV_ENOTDIR: C2Rust_Unnamed = -20;
-pub const UV_ENOTCONN: C2Rust_Unnamed = -107;
-pub const UV_ENOSYS: C2Rust_Unnamed = -38;
-pub const UV_ENOSPC: C2Rust_Unnamed = -28;
-pub const UV_ENOPROTOOPT: C2Rust_Unnamed = -92;
-pub const UV_ENONET: C2Rust_Unnamed = -64;
-pub const UV_ENOMEM: C2Rust_Unnamed = -12;
-pub const UV_ENOENT: C2Rust_Unnamed = -2;
-pub const UV_ENODEV: C2Rust_Unnamed = -19;
-pub const UV_ENOBUFS: C2Rust_Unnamed = -105;
-pub const UV_ENFILE: C2Rust_Unnamed = -23;
-pub const UV_ENETUNREACH: C2Rust_Unnamed = -101;
-pub const UV_ENETDOWN: C2Rust_Unnamed = -100;
-pub const UV_ENAMETOOLONG: C2Rust_Unnamed = -36;
-pub const UV_EMSGSIZE: C2Rust_Unnamed = -90;
-pub const UV_EMFILE: C2Rust_Unnamed = -24;
-pub const UV_ELOOP: C2Rust_Unnamed = -40;
-pub const UV_EISDIR: C2Rust_Unnamed = -21;
-pub const UV_EISCONN: C2Rust_Unnamed = -106;
-pub const UV_EIO: C2Rust_Unnamed = -5;
-pub const UV_EINVAL: C2Rust_Unnamed = -22;
-pub const UV_EINTR: C2Rust_Unnamed = -4;
-pub const UV_EHOSTUNREACH: C2Rust_Unnamed = -113;
-pub const UV_EFBIG: C2Rust_Unnamed = -27;
-pub const UV_EFAULT: C2Rust_Unnamed = -14;
-pub const UV_EEXIST: C2Rust_Unnamed = -17;
-pub const UV_EDESTADDRREQ: C2Rust_Unnamed = -89;
-pub const UV_ECONNRESET: C2Rust_Unnamed = -104;
-pub const UV_ECONNREFUSED: C2Rust_Unnamed = -111;
-pub const UV_ECONNABORTED: C2Rust_Unnamed = -103;
-pub const UV_ECHARSET: C2Rust_Unnamed = -4080;
-pub const UV_ECANCELED: C2Rust_Unnamed = -125;
-pub const UV_EBUSY: C2Rust_Unnamed = -16;
-pub const UV_EBADF: C2Rust_Unnamed = -9;
-pub const UV_EALREADY: C2Rust_Unnamed = -114;
-pub const UV_EAI_SOCKTYPE: C2Rust_Unnamed = -3011;
-pub const UV_EAI_SERVICE: C2Rust_Unnamed = -3010;
-pub const UV_EAI_PROTOCOL: C2Rust_Unnamed = -3014;
-pub const UV_EAI_OVERFLOW: C2Rust_Unnamed = -3009;
-pub const UV_EAI_NONAME: C2Rust_Unnamed = -3008;
-pub const UV_EAI_NODATA: C2Rust_Unnamed = -3007;
-pub const UV_EAI_MEMORY: C2Rust_Unnamed = -3006;
-pub const UV_EAI_FAMILY: C2Rust_Unnamed = -3005;
-pub const UV_EAI_FAIL: C2Rust_Unnamed = -3004;
-pub const UV_EAI_CANCELED: C2Rust_Unnamed = -3003;
-pub const UV_EAI_BADHINTS: C2Rust_Unnamed = -3013;
-pub const UV_EAI_BADFLAGS: C2Rust_Unnamed = -3002;
-pub const UV_EAI_AGAIN: C2Rust_Unnamed = -3001;
-pub const UV_EAI_ADDRFAMILY: C2Rust_Unnamed = -3000;
-pub const UV_EAGAIN: C2Rust_Unnamed = -11;
-pub const UV_EAFNOSUPPORT: C2Rust_Unnamed = -97;
-pub const UV_EADDRNOTAVAIL: C2Rust_Unnamed = -99;
-pub const UV_EADDRINUSE: C2Rust_Unnamed = -98;
-pub const UV_EACCES: C2Rust_Unnamed = -13;
-pub const UV_E2BIG: C2Rust_Unnamed = -7;
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 34] = unsafe {
-    ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
-        *b"_Bool os_proc_tree_kill(int, int)\0",
-    )
-};
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub unsafe extern "C" fn os_proc_tree_kill(
-    mut pid: ::core::ffi::c_int,
-    mut sig: ::core::ffi::c_int,
-) -> bool {
-    '_c2rust_label: {
-        if sig == 15 as ::core::ffi::c_int || sig == 9 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"sig == SIGTERM || sig == SIGKILL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/os/proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                98 as ::core::ffi::c_uint,
-                __ASSERT_FUNCTION.as_ptr(),
-            );
-        }
-    };
-    if pid == 0 as ::core::ffi::c_int {
-        return false_0 != 0;
+use core::ffi::c_int;
+use core::ptr;
+use std::ffi::CString;
+
+const LOGLVL_INF: c_int = 2;
+const SIGKILL: c_int = 9;
+const SIGTERM: c_int = 15;
+/// `uv_kill` reporting ESRCH: no such process.
+const UV_ESRCH: c_int = -3;
+
+/// Kill the process group led by `pid`, which is what nvim's spawned jobs
+/// are set up as. `sig` must be SIGTERM or SIGKILL.
+///
+/// Returns whether the signal was delivered.
+pub fn os_proc_tree_kill(pid: c_int, sig: c_int) -> bool {
+    assert!(sig == SIGTERM || sig == SIGKILL);
+    if pid == 0 {
+        // Never kill self: `kill(0, ...)` signals our own process group.
+        return false;
     }
-    logmsg(
-        LOGLVL_INF,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"os_proc_tree_kill\0".as_ptr() as *const ::core::ffi::c_char,
-        103 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"sending %s to PID %d\0".as_ptr() as *const ::core::ffi::c_char,
-        if sig == 15 as ::core::ffi::c_int {
-            b"SIGTERM\0".as_ptr() as *const ::core::ffi::c_char
-        } else {
-            b"SIGKILL\0".as_ptr() as *const ::core::ffi::c_char
-        },
-        -pid,
-    );
-    return uv_kill(-pid, sig) == 0 as ::core::ffi::c_int;
+    let name = if sig == SIGTERM { "SIGTERM" } else { "SIGKILL" };
+    let text = CString::new(format!("sending {name} to PID {}", -pid)).expect("no interior NUL");
+    // SAFETY: `logmsg` is variadic and printf-shaped, so the message goes
+    // through `%s` rather than becoming the format string itself; both
+    // pointers outlive the call. `uv_kill` takes no pointers.
+    unsafe {
+        logmsg(
+            LOGLVL_INF,
+            ptr::null(),
+            c"os_proc_tree_kill".as_ptr(),
+            103,
+            true,
+            c"%s".as_ptr(),
+            text.as_ptr(),
+        );
+        uv_kill(-pid, sig) == 0
+    }
 }
-pub unsafe extern "C" fn os_proc_children(
-    mut ppid: ::core::ffi::c_int,
-    mut proc_list: *mut *mut ::core::ffi::c_int,
-    mut proc_count: *mut size_t,
-) -> ::core::ffi::c_int {
-    if ppid < 0 as ::core::ffi::c_int {
-        return 2 as ::core::ffi::c_int;
+
+/// The pids of the immediate children of `ppid`, or `None` when the process
+/// could not be inspected — the caller is expected to fall back to
+/// `vim._os_proc_children()`.
+///
+/// Children are read from the *thread* of the same id as the process, which
+/// is where Linux records them.
+pub fn os_proc_children(ppid: c_int) -> Option<Vec<c_int>> {
+    if ppid < 0 {
+        return None;
     }
-    let mut temp: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
-    *proc_list = ::core::ptr::null_mut::<::core::ffi::c_int>();
-    *proc_count = 0 as size_t;
-    let mut proc_p: [::core::ffi::c_char; 256] = [
-        0 as ::core::ffi::c_char,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-    ];
-    snprintf(
-        &raw mut proc_p as *mut ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 256]>(),
-        b"/proc/%d/task/%d/children\0".as_ptr() as *const ::core::ffi::c_char,
-        ppid,
-        ppid,
-    );
-    let mut fp: *mut FILE = fopen(
-        &raw mut proc_p as *mut ::core::ffi::c_char,
-        b"r\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as *mut FILE;
-    if fp.is_null() {
-        return 2 as ::core::ffi::c_int;
-    }
-    let mut match_pid: ::core::ffi::c_int = 0;
-    while fscanf(
-        fp,
-        b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-        &raw mut match_pid,
-    ) > 0 as ::core::ffi::c_int
-    {
-        temp = xrealloc(
-            temp as *mut ::core::ffi::c_void,
-            (*proc_count)
-                .wrapping_add(1 as size_t)
-                .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
-        ) as *mut ::core::ffi::c_int;
-        *temp.offset(*proc_count as isize) = match_pid;
-        *proc_count = (*proc_count).wrapping_add(1);
-    }
-    fclose(fp);
-    *proc_list = temp;
-    return 0 as ::core::ffi::c_int;
+    let children = std::fs::read_to_string(format!("/proc/{ppid}/task/{ppid}/children")).ok()?;
+    Some(parse_pids(&children))
 }
-pub unsafe extern "C" fn os_proc_running(mut pid: ::core::ffi::c_int) -> bool {
-    let mut err: ::core::ffi::c_int = uv_kill(pid, 0 as ::core::ffi::c_int);
-    if err == 0 as ::core::ffi::c_int {
-        return true_0 != 0;
-    }
-    if err == UV_ESRCH as ::core::ffi::c_int {
-        return false_0 != 0;
-    }
-    return true_0 != 0;
+
+/// Leading whitespace-separated integers, stopping at the first token that
+/// is not one — `fscanf("%d")` in a loop, which is what the C did.
+fn parse_pids(text: &str) -> Vec<c_int> {
+    text.split_ascii_whitespace()
+        .map_while(|token| token.parse().ok())
+        .collect()
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+/// Whether process `pid` is running.
+///
+/// A process owned by another user answers EPERM rather than ESRCH; only a
+/// definite ESRCH counts as "gone".
+pub fn os_proc_running(pid: c_int) -> bool {
+    // SAFETY: `uv_kill` takes no pointers. Signal 0 delivers nothing and
+    // only probes for the process's existence.
+    unsafe { uv_kill(pid, 0) != UV_ESRCH }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pids_parse_until_the_first_non_integer() {
+        assert_eq!(parse_pids("123 456\n"), [123, 456]);
+        assert_eq!(parse_pids("7 x 9"), [7]);
+        assert_eq!(parse_pids(""), []);
+        assert_eq!(parse_pids("  \n "), []);
+    }
+
+    #[test]
+    fn our_own_process_is_running() {
+        assert!(os_proc_running(std::process::id() as c_int));
+    }
+}

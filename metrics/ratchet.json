@@ -1,7 +1,7 @@
 {
   "internal_exports": 154,
   "files_without_forbid_unsafe": 227,
-  "files_without_deny_unsafe_op": 194,
+  "files_without_deny_unsafe_op": 193,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -25,7 +25,7 @@
     "crates/nvim/src/nvim/api/private/validate.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/api/tabpage.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/api/ui.rs": {"lines": 2725, "unsafe": 72},
-    "crates/nvim/src/nvim/api/vim.rs": {"lines": 4667, "unsafe": 93},
+    "crates/nvim/src/nvim/api/vim.rs": {"lines": 4662, "unsafe": 93},
     "crates/nvim/src/nvim/api/vimscript.rs": {"lines": 2273, "unsafe": 11},
     "crates/nvim/src/nvim/api/win_config.rs": {"lines": 3643, "unsafe": 20},
     "crates/nvim/src/nvim/api/window.rs": {"unsafe": 20},
@@ -143,7 +143,7 @@
     "crates/nvim/src/nvim/os/input.rs": {"lines": 1267, "unsafe": 29},
     "crates/nvim/src/nvim/os/lang.rs": {"lines": 5119, "static_mut": 1, "unsafe": 15},
     "crates/nvim/src/nvim/os/libc.rs": {"static_mut": 3, "unsafe": 24, "variadic": 1},
-    "crates/nvim/src/nvim/os/proc.rs": {"unsafe": 4},
+    "crates/nvim/src/nvim/os/proc.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/os/pty_proc_unix.rs": {"lines": 1056, "static_mut": 1, "unsafe": 19},
     "crates/nvim/src/nvim/os/shell.rs": {"lines": 2002, "no_mangle": 3, "unsafe": 31},
     "crates/nvim/src/nvim/os/signal.rs": {"unsafe": 20},

@@ -3491,14 +3491,13 @@ pub unsafe extern "C" fn nvim_get_proc_children(
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) -> Array {
-    let mut proc_count: size_t = 0;
     let mut rv: ::core::ffi::c_int = 0;
     let mut rvobj: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let mut proc_list: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
+    let mut children: Vec<::core::ffi::c_int> = Vec::new();
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
         api_err_invalid(
             err,
@@ -3508,12 +3507,11 @@ pub unsafe extern "C" fn nvim_get_proc_children(
             false_0 != 0,
         );
     } else {
-        proc_count = 0;
-        rv = os_proc_children(
-            pid as ::core::ffi::c_int,
-            &raw mut proc_list,
-            &raw mut proc_count,
-        );
+        match os_proc_children(pid as ::core::ffi::c_int) {
+            Some(pids) => children = pids,
+            // Only "could not inspect" is reachable on this platform.
+            None => rv = 2 as ::core::ffi::c_int,
+        }
         if rv == 2 as ::core::ffi::c_int {
             logmsg(
                 LOGLVL_DBG,
@@ -3570,22 +3568,19 @@ pub unsafe extern "C" fn nvim_get_proc_children(
                 );
             }
         } else {
-            rvobj = arena_array(arena, proc_count);
-            let mut i: size_t = 0 as size_t;
-            while i < proc_count {
+            rvobj = arena_array(arena, children.len() as size_t);
+            for pid in children {
                 let c2rust_fresh27 = rvobj.size;
                 rvobj.size = rvobj.size.wrapping_add(1);
                 *rvobj.items.offset(c2rust_fresh27 as isize) = object {
                     type_0: kObjectTypeInteger,
                     data: C2Rust_Unnamed {
-                        integer: *proc_list.offset(i as isize) as Integer,
+                        integer: pid as Integer,
                     },
                 };
-                i = i.wrapping_add(1);
             }
         }
     }
-    xfree(proc_list as *mut ::core::ffi::c_void);
     return rvobj;
 }
 pub unsafe extern "C" fn nvim_get_proc(
