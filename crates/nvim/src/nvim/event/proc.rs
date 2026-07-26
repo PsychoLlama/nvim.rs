@@ -1,3 +1,30 @@
+//! Child processes: spawning them, waiting on them, stopping them, and
+//! tearing the whole set down at exit.
+//!
+//! A [`Proc`] is the part of a child that does not depend on how it was
+//! started. The two concrete kinds embed it as their first field —
+//! `LibuvProc` (a `uv_process_t`) and `PtyProc` (a `forkpty` child) — so a
+//! `*mut Proc` casts to and from either, and the `type_0` field says which.
+//! That cast is the reason `Proc`, `LibuvProc` and `PtyProc` are all
+//! `repr(C)`: `Channel` embeds all three in a union, by value.
+//!
+//! # Lifetime
+//!
+//! A spawned child is refcounted: one reference per open standard stream,
+//! plus one for the child itself. libuv drops them by calling back — a
+//! stream's close callback and the child's exit callback both land in
+//! [`decref`] — and the last drop unlinks the child from `loop->children`
+//! and queues the caller's exit callback. Nothing here frees a `Proc`; the
+//! owner (a `Channel`, or a stack frame in `os/shell.rs`) does that.
+//!
+//! # Aliasing
+//!
+//! libuv and the stream layer both hold the address of a `Proc` (or of a
+//! field inside it) in a `data` pointer for as long as the child lives, so a
+//! `Proc` must not move once spawned, and the callbacks reached from
+//! [`proc_close_handles`] may re-enter this module while a caller further up
+//! the stack still holds a `*mut Proc` to the same child.
+
 use crate::src::nvim::event::libuv::{
     uv_close, uv_pipe_init, uv_recv_buffer_size, uv_timer_start, uv_timer_stop, uv_unref,
 };
@@ -15,163 +42,117 @@ use crate::src::nvim::main::{
     ui_client_exit_status,
 };
 use crate::src::nvim::memory::xrealloc;
-use crate::src::nvim::os::libc::{__assert_fail, memmove};
 use crate::src::nvim::os::proc::os_proc_tree_kill;
 use crate::src::nvim::os::pty_proc_unix::{
     pty_proc_close, pty_proc_close_master, pty_proc_flush_master, pty_proc_spawn, pty_proc_teardown,
 };
 use crate::src::nvim::os::shell::shell_free_argv;
+use crate::src::nvim::os::signal::{SIGHUP, SIGKILL, SIGTERM};
 use crate::src::nvim::os::time::os_hrtime;
-pub use crate::src::nvim::types::{
-    __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __uid_t, Event, LibuvProc, Loop, LuaRef, MultiQueue, Proc, ProcType, PtyProc, QUEUE, RStream,
-    ScopeType, Stream, VarLockStatus, argv_callback, dict_T, dictvar_S, gid_t, hash_T, hashitem_T,
-    hashtab_T, int64_t, internal_proc_cb, intptr_t, loop_0, loop_0_children as C2Rust_Unnamed_13,
-    multiqueue, proc, proc_exit_cb, proc_state_cb, pthread_mutex_t, pthread_rwlock_t, queue,
-    rstream, size_t, ssize_t, stream, stream_close_cb, stream_read_cb,
-    stream_uv as C2Rust_Unnamed_14, stream_write_cb, uid_t, uint8_t, uint16_t, uint64_t, uv__io_cb,
-    uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s,
-    uv_async_s_u as C2Rust_Unnamed_3, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
-    uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb, uv_file, uv_gid_t, uv_handle_s,
-    uv_handle_s_u as C2Rust_Unnamed_0, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
-    uv_idle_s_u as C2Rust_Unnamed_10, uv_idle_t, uv_loop_s,
-    uv_loop_s_active_reqs as C2Rust_Unnamed_4, uv_loop_s_timer_heap as C2Rust_Unnamed_2, uv_loop_t,
-    uv_mutex_t, uv_pipe_s, uv_pipe_s_u as C2Rust_Unnamed_7, uv_pipe_t, uv_process_options_s,
-    uv_process_options_t, uv_process_s, uv_process_s_u as C2Rust_Unnamed_11, uv_process_t,
-    uv_read_cb, uv_req_type, uv_rwlock_t, uv_shutdown_cb, uv_shutdown_s, uv_shutdown_t,
-    uv_signal_cb, uv_signal_s, uv_signal_s_tree_entry as C2Rust_Unnamed,
-    uv_signal_s_u as C2Rust_Unnamed_1, uv_signal_t, uv_stdio_container_s,
-    uv_stdio_container_s_data as C2Rust_Unnamed_12, uv_stdio_container_t, uv_stdio_flags,
-    uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_5, uv_stream_t, uv_tcp_s,
-    uv_tcp_s_u as C2Rust_Unnamed_6, uv_tcp_t, uv_timer_cb, uv_timer_s,
-    uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
-    winsize,
+use crate::src::nvim::types::{
+    Event, LibuvProc, Loop, MultiQueue, Proc, ProcType, PtyProc, RStream, Stream, argv_callback,
+    uv_handle_t, uv_stream_t, uv_timer_t,
 };
-pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
-pub const UV_FILE: uv_handle_type = 17;
-pub const UV_SIGNAL: uv_handle_type = 16;
-pub const UV_UDP: uv_handle_type = 15;
-pub const UV_TTY: uv_handle_type = 14;
-pub const UV_TIMER: uv_handle_type = 13;
-pub const UV_TCP: uv_handle_type = 12;
-pub const UV_STREAM: uv_handle_type = 11;
-pub const UV_PROCESS: uv_handle_type = 10;
-pub const UV_PREPARE: uv_handle_type = 9;
-pub const UV_POLL: uv_handle_type = 8;
-pub const UV_NAMED_PIPE: uv_handle_type = 7;
-pub const UV_IDLE: uv_handle_type = 6;
-pub const UV_HANDLE: uv_handle_type = 5;
-pub const UV_FS_POLL: uv_handle_type = 4;
-pub const UV_FS_EVENT: uv_handle_type = 3;
-pub const UV_CHECK: uv_handle_type = 2;
-pub const UV_ASYNC: uv_handle_type = 1;
-pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
-pub const UV_RANDOM: uv_req_type = 10;
-pub const UV_GETNAMEINFO: uv_req_type = 9;
-pub const UV_GETADDRINFO: uv_req_type = 8;
-pub const UV_WORK: uv_req_type = 7;
-pub const UV_FS: uv_req_type = 6;
-pub const UV_UDP_SEND: uv_req_type = 5;
-pub const UV_SHUTDOWN: uv_req_type = 4;
-pub const UV_WRITE: uv_req_type = 3;
-pub const UV_CONNECT: uv_req_type = 2;
-pub const UV_REQ: uv_req_type = 1;
-pub const UV_UNKNOWN_REQ: uv_req_type = 0;
-pub const UV_OVERLAPPED_PIPE: uv_stdio_flags = 64;
-pub const UV_NONBLOCK_PIPE: uv_stdio_flags = 64;
-pub const UV_WRITABLE_PIPE: uv_stdio_flags = 32;
-pub const UV_READABLE_PIPE: uv_stdio_flags = 16;
-pub const UV_INHERIT_STREAM: uv_stdio_flags = 4;
-pub const UV_INHERIT_FD: uv_stdio_flags = 2;
-pub const UV_CREATE_PIPE: uv_stdio_flags = 1;
-pub const UV_IGNORE: uv_stdio_flags = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const kProcTypePty: ProcType = 1;
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
+use core::slice;
+
+/// A child started through libuv's process API.
 pub const kProcTypeUv: ProcType = 0;
-pub const UINT64_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KILL_TIMEOUT_MS: ::core::ffi::c_int = 2000 as ::core::ffi::c_int;
-static proc_is_tearing_down: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static exit_need_delay: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-pub unsafe extern "C" fn proc_spawn(
-    mut proc: *mut Proc,
-    mut in_0: bool,
-    mut out: bool,
-    mut err: bool,
-) -> ::core::ffi::c_int {
-    '_c2rust_label: {
-        if !(err as ::core::ffi::c_int != 0 && (*proc).fwd_err as ::core::ffi::c_int != 0) {
+/// A child started through `forkpty`.
+pub const kProcTypePty: ProcType = 1;
+
+/// How long a stopped child has to exit cleanly before it is killed. A pty
+/// child is sent SIGTERM at this point (SIGHUP having already failed) and
+/// gets another interval before SIGKILL.
+const KILL_TIMEOUT_MS: u64 = 2000;
+
+/// Fallback for the read-ahead limit when libuv will not report the socket
+/// receive buffer size.
+const ARENA_BLOCK_SIZE: c_int = 4096;
+
+const LOGLVL_DBG: c_int = 1;
+const LOGLVL_INF: c_int = 2;
+
+/// Set for the whole of [`proc_teardown`]. Relaxes the "a child is closed
+/// exactly once" assertion, because a detached or pty child can die while
+/// being torn down and be closed a second time from its exit callback.
+static PROC_IS_TEARING_DOWN: GlobalCell<bool> = GlobalCell::new(false);
+
+/// Non-zero while [`proc_close_handles`] is draining a child's output.
+/// Exiting in the middle of that deadlocks, so [`exit_event`] reschedules
+/// itself instead.
+static EXIT_NEED_DELAY: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// A fresh, unspawned child of the given kind.
+///
+/// Every field of `Proc` is a pointer, an integer, a `bool` or an
+/// `Option<fn>`, for all of which all-zeroes is the "unset" value the
+/// field-by-field initialiser upstream spelled out; only the four fields
+/// below differ from it.
+pub fn proc_init(uv_loop: *mut Loop, kind: ProcType, data: *mut c_void) -> Proc {
+    // SAFETY: see above — `Proc` is inhabited by the all-zero bit pattern.
+    let mut proc: Proc = unsafe { core::mem::zeroed() };
+    proc.type_0 = kind;
+    proc.loop_0 = uv_loop;
+    proc.data = data;
+    proc.status = -1;
+    proc.out.s.fd = 1; // STDOUT_FILENO
+    proc.err.s.fd = 2; // STDERR_FILENO
+    proc
+}
+
+/// The executable a child was (or is about to be) started from.
+///
+/// `exepath` is set when the caller resolved the program itself; otherwise
+/// it is `argv[0]`, as passed to `execvp`.
+pub unsafe fn proc_get_exepath(proc: *mut Proc) -> *const c_char {
+    if (*proc).exepath.is_null() {
+        *(*proc).argv as *const c_char
+    } else {
+        (*proc).exepath
+    }
+}
+
+/// Start `proc`, optionally with each of the three standard streams piped.
+///
+/// Returns zero, or a negative error code — in which case `proc` has already
+/// been closed and freed and its status set to -1.
+pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: bool) -> c_int {
+    // Forwarding stderr contradicts processing it internally.
+    assert!(!(has_err && (*proc).fwd_err));
+
+    let streams = [
+        (has_in, &raw mut (*proc).in_0),
+        (has_out, &raw mut (*proc).out.s),
+        (has_err, &raw mut (*proc).err.s),
+    ];
+
+    // A stream the caller did not ask for starts out closed; the rest get a
+    // pipe handle now, which the spawn hooks below fill with a descriptor.
+    for (wanted, stream) in streams {
+        if wanted {
+            uv_pipe_init(&raw mut (*(*proc).loop_0).uv, &raw mut (*stream).uv.pipe, 0);
         } else {
-            __assert_fail(
-                b"!(err && proc->fwd_err)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                46 as ::core::ffi::c_uint,
-                b"int proc_spawn(Proc *, _Bool, _Bool, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
+            (*stream).closed = true;
         }
+    }
+
+    let status = match (*proc).type_0 {
+        kProcTypePty => pty_proc_spawn(proc as *mut PtyProc),
+        _ => libuv_proc_spawn(proc as *mut LibuvProc),
     };
-    if in_0 {
-        uv_pipe_init(
-            &raw mut (*(*proc).loop_0).uv,
-            &raw mut (*proc).in_0.uv.pipe,
-            0 as ::core::ffi::c_int,
-        );
-    } else {
-        (*proc).in_0.closed = true_0 != 0;
-    }
-    if out {
-        uv_pipe_init(
-            &raw mut (*(*proc).loop_0).uv,
-            &raw mut (*proc).out.s.uv.pipe,
-            0 as ::core::ffi::c_int,
-        );
-    } else {
-        (*proc).out.s.closed = true_0 != 0;
-    }
-    if err {
-        uv_pipe_init(
-            &raw mut (*(*proc).loop_0).uv,
-            &raw mut (*proc).err.s.uv.pipe,
-            0 as ::core::ffi::c_int,
-        );
-    } else {
-        (*proc).err.s.closed = true_0 != 0;
-    }
-    let mut status: ::core::ffi::c_int = 0;
-    match (*proc).type_0 as ::core::ffi::c_uint {
-        0 => {
-            status = libuv_proc_spawn(proc as *mut LibuvProc);
-        }
-        1 => {
-            status = pty_proc_spawn(proc as *mut PtyProc);
-        }
-        _ => {}
-    }
+
     if status != 0 {
-        if in_0 {
-            uv_close(&raw mut (*proc).in_0.uv.pipe as *mut uv_handle_t, None);
+        for (wanted, stream) in streams {
+            if wanted {
+                uv_close(&raw mut (*stream).uv.pipe as *mut uv_handle_t, None);
+            }
         }
-        if out {
-            uv_close(&raw mut (*proc).out.s.uv.pipe as *mut uv_handle_t, None);
-        }
-        if err {
-            uv_close(&raw mut (*proc).err.s.uv.pipe as *mut uv_handle_t, None);
-        }
-        if (*proc).type_0 as ::core::ffi::c_uint
-            == kProcTypeUv as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if (*proc).type_0 == kProcTypeUv {
+            // The process handle was never started, so it is dropped
+            // directly rather than through `proc_close`, which would run the
+            // close callbacks of a child that does not exist.
             uv_close(
                 &raw mut (*(proc as *mut LibuvProc)).uv as *mut uv_handle_t,
                 None,
@@ -180,635 +161,577 @@ pub unsafe extern "C" fn proc_spawn(
             proc_close(proc);
         }
         proc_free(proc);
-        (*proc).status = -1 as ::core::ffi::c_int;
+        (*proc).status = -1;
         return status;
     }
-    if in_0 {
-        stream_init(
-            ::core::ptr::null_mut::<Loop>(),
-            &raw mut (*proc).in_0,
-            -1 as ::core::ffi::c_int,
-            &raw mut (*proc).in_0.uv.pipe as *mut uv_stream_t,
-        );
-        (*proc).in_0.internal_data = proc as *mut ::core::ffi::c_void;
-        (*proc).in_0.internal_close_cb = Some(
-            on_proc_stream_close
-                as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
-        ) as stream_close_cb;
-        (*proc).refcount += 1;
+
+    // One reference per piped stream, plus one for the child itself.
+    for (wanted, stream) in streams {
+        if wanted {
+            stream_init(
+                ptr::null_mut(),
+                stream,
+                -1,
+                &raw mut (*stream).uv.pipe as *mut uv_stream_t,
+            );
+            (*stream).internal_data = proc as *mut c_void;
+            (*stream).internal_close_cb = Some(on_proc_stream_close);
+            (*proc).refcount += 1;
+        }
     }
-    if out {
-        stream_init(
-            ::core::ptr::null_mut::<Loop>(),
-            &raw mut (*proc).out.s,
-            -1 as ::core::ffi::c_int,
-            &raw mut (*proc).out.s.uv.pipe as *mut uv_stream_t,
-        );
-        (*proc).out.s.internal_data = proc as *mut ::core::ffi::c_void;
-        (*proc).out.s.internal_close_cb = Some(
-            on_proc_stream_close
-                as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
-        ) as stream_close_cb;
-        (*proc).refcount += 1;
-    }
-    if err {
-        stream_init(
-            ::core::ptr::null_mut::<Loop>(),
-            &raw mut (*proc).err.s,
-            -1 as ::core::ffi::c_int,
-            &raw mut (*proc).err.s.uv.pipe as *mut uv_stream_t,
-        );
-        (*proc).err.s.internal_data = proc as *mut ::core::ffi::c_void;
-        (*proc).err.s.internal_close_cb = Some(
-            on_proc_stream_close
-                as unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
-        ) as stream_close_cb;
-        (*proc).refcount += 1;
-    }
-    (*proc).internal_exit_cb =
-        Some(on_proc_exit as unsafe extern "C" fn(*mut Proc) -> ()) as internal_proc_cb;
-    (*proc).internal_close_cb =
-        Some(decref as unsafe extern "C" fn(*mut Proc) -> ()) as internal_proc_cb;
+    (*proc).internal_exit_cb = Some(on_proc_exit);
+    (*proc).internal_close_cb = Some(decref);
     (*proc).refcount += 1;
-    if (*(*proc).loop_0).children.size == (*(*proc).loop_0).children.capacity {
-        (*(*proc).loop_0).children.capacity = if (*(*proc).loop_0).children.capacity != 0 {
-            (*(*proc).loop_0).children.capacity << 1 as ::core::ffi::c_int
-        } else {
-            8 as size_t
-        };
-        (*(*proc).loop_0).children.items = xrealloc(
-            (*(*proc).loop_0).children.items as *mut ::core::ffi::c_void,
-            ::core::mem::size_of::<*mut Proc>().wrapping_mul((*(*proc).loop_0).children.capacity),
-        ) as *mut *mut Proc;
-    } else {
-    };
-    let c2rust_fresh0 = (*(*proc).loop_0).children.size;
-    (*(*proc).loop_0).children.size = (*(*proc).loop_0).children.size.wrapping_add(1);
-    let c2rust_lvalue_ptr = &raw mut *(*(*proc).loop_0)
-        .children
-        .items
-        .offset(c2rust_fresh0 as isize);
-    *c2rust_lvalue_ptr = proc;
+
+    push_child((*proc).loop_0, proc);
     logmsg(
         LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"proc_spawn\0".as_ptr() as *const ::core::ffi::c_char,
-        127 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"new: pid=%d exepath=[%s]\0".as_ptr() as *const ::core::ffi::c_char,
+        ptr::null(),
+        c"proc_spawn".as_ptr(),
+        127,
+        true,
+        c"new: pid=%d exepath=[%s]".as_ptr(),
         (*proc).pid,
         proc_get_exepath(proc),
     );
-    return 0 as ::core::ffi::c_int;
+    0
 }
-pub unsafe extern "C" fn proc_teardown(mut loop_0: *mut Loop) {
-    proc_is_tearing_down.set(true_0 != 0);
-    let mut i: size_t = 0 as size_t;
-    while i < (*loop_0).children.size {
-        let mut proc: *mut Proc = *(*loop_0).children.items.offset(i as isize);
-        if (*proc).detach as ::core::ffi::c_int != 0
-            || (*proc).type_0 as ::core::ffi::c_uint
-                == kProcTypePty as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            if !(*loop_0).events.is_null() {
-                multiqueue_put_event(
-                    (*loop_0).events,
-                    Event {
-                        handler: Some(
-                            proc_close_handles
-                                as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-                        ),
-                        argv: [
-                            proc as *mut ::core::ffi::c_void,
-                            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                        ],
-                    },
-                );
-            } else {
-                let mut argv: [*mut ::core::ffi::c_void; 1] = [proc as *mut ::core::ffi::c_void];
-                proc_close_handles(&raw mut argv as *mut *mut ::core::ffi::c_void);
-            }
+
+/// Stop every child and wait for the loop to be free of them.
+///
+/// Detached and pty children are not killed — their handles are closed and
+/// they are left to run — but everything else is asked to terminate.
+pub unsafe fn proc_teardown(uv_loop: *mut Loop) {
+    PROC_IS_TEARING_DOWN.set(true);
+    // Re-read the length each pass: closing a child's handles can run its
+    // exit callback inline, which unlinks it from this very list.
+    let mut i = 0;
+    while i < (*uv_loop).children.size {
+        let proc = *(*uv_loop).children.items.add(i);
+        if (*proc).detach || (*proc).type_0 == kProcTypePty {
+            create_event((*uv_loop).events, proc_close_handles, proc as *mut c_void);
         } else {
             proc_stop(proc);
         }
-        i = i.wrapping_add(1);
+        i += 1;
     }
-    let mut remaining: int64_t = -1 as int64_t;
-    let mut before: uint64_t = if remaining > 0 as int64_t {
-        os_hrtime()
-    } else {
-        0 as uint64_t
-    };
-    while !((*loop_0).children.size == 0 as size_t
-        && multiqueue_empty((*loop_0).events) as ::core::ffi::c_int != 0)
-    {
-        if !(*loop_0).events.is_null() && !multiqueue_empty((*loop_0).events) {
-            multiqueue_process_events((*loop_0).events);
-        } else {
-            loop_poll_events(loop_0, remaining);
-        }
-        if remaining == 0 as int64_t {
-            break;
-        }
-        if remaining <= 0 as int64_t {
-            continue;
-        }
-        let mut now: uint64_t = os_hrtime();
-        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
-        before = now;
-        if remaining <= 0 as int64_t {
-            break;
-        }
-    }
-    pty_proc_teardown(loop_0);
+
+    process_events_until(uv_loop, (*uv_loop).events, -1, || {
+        (*uv_loop).children.size == 0 && multiqueue_empty((*uv_loop).events)
+    });
+    pty_proc_teardown(uv_loop);
 }
-pub unsafe extern "C" fn proc_close_streams(mut proc: *mut Proc) {
+
+pub unsafe fn proc_close_streams(proc: *mut Proc) {
     stream_may_close(&raw mut (*proc).in_0);
     rstream_may_close(&raw mut (*proc).out);
     rstream_may_close(&raw mut (*proc).err);
 }
-pub unsafe extern "C" fn proc_wait(
-    mut proc: *mut Proc,
-    mut ms: ::core::ffi::c_int,
-    mut events: *mut MultiQueue,
-) -> ::core::ffi::c_int {
+
+/// Wait for `proc` to finish, for at most `ms` milliseconds.
+///
+/// `ms` of 0 polls once and returns; -1 waits indefinitely. `events`, if
+/// given, is drained instead of the child's own queue.
+///
+/// Returns the child's exit status, -1 if the wait timed out with the child
+/// still running, or -2 if the user interrupted it.
+pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, mut events: *mut MultiQueue) -> c_int {
     if (*proc).refcount == 0 {
-        let mut status: ::core::ffi::c_int = (*proc).status;
-        if !(*proc).events.is_null() && !multiqueue_empty((*proc).events) {
-            multiqueue_process_events((*proc).events);
-        } else {
-            loop_poll_events((*proc).loop_0, 0 as int64_t);
-        }
+        // Read the status before draining: an event may free the child.
+        let status = (*proc).status;
+        process_events((*proc).loop_0, (*proc).events, 0);
         return status;
     }
+
     if events.is_null() {
         events = (*proc).events;
     }
+
+    // Hold a reference of our own so the exit callback cannot free the child
+    // before its status has been read.
     (*proc).refcount += 1;
-    let mut remaining: int64_t = ms as int64_t;
-    let mut before: uint64_t = if remaining > 0 as int64_t {
-        os_hrtime()
-    } else {
-        0 as uint64_t
-    };
-    while !(got_int.get() as ::core::ffi::c_int != 0 || (*proc).refcount == 1 as ::core::ffi::c_int)
-    {
-        if !events.is_null() && !multiqueue_empty(events) {
-            multiqueue_process_events(events);
-        } else {
-            loop_poll_events((*proc).loop_0, remaining);
-        }
-        if remaining == 0 as int64_t {
-            break;
-        }
-        if remaining <= 0 as int64_t {
-            continue;
-        }
-        let mut now: uint64_t = os_hrtime();
-        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
-        before = now;
-        if remaining <= 0 as int64_t {
-            break;
-        }
-    }
+    process_events_until((*proc).loop_0, events, ms as i64, || {
+        got_int.get() || (*proc).refcount == 1
+    });
+
+    // A user hitting CTRL-C is assumed not to like the current job.
     if got_int.get() {
-        got_int.set(false_0 != 0);
+        got_int.set(false);
         proc_stop(proc);
-        if ms == -1 as ::core::ffi::c_int {
-            let mut remaining_0: int64_t = -1 as int64_t;
-            let mut before_0: uint64_t = if remaining_0 > 0 as int64_t {
-                os_hrtime()
-            } else {
-                0 as uint64_t
-            };
-            // Not immutable: event callbacks run inside the loop body flip it behind a raw pointer.
-            #[allow(clippy::while_immutable_condition)]
-            while (*proc).refcount != 1 as ::core::ffi::c_int {
-                if !events.is_null() && !multiqueue_empty(events) {
-                    multiqueue_process_events(events);
-                } else {
-                    loop_poll_events((*proc).loop_0, remaining_0);
-                }
-                if remaining_0 == 0 as int64_t {
-                    break;
-                }
-                if remaining_0 <= 0 as int64_t {
-                    continue;
-                }
-                let mut now_0: uint64_t = os_hrtime();
-                remaining_0 -= now_0
-                    .wrapping_sub(before_0)
-                    .wrapping_div(1000000 as uint64_t) as int64_t;
-                before_0 = now_0;
-                if remaining_0 <= 0 as int64_t {
-                    break;
-                }
-            }
-        } else if !events.is_null() && !multiqueue_empty(events) {
-            multiqueue_process_events(events);
+        if ms == -1 {
+            // Returning is only safe once every handle is closed too.
+            process_events_until((*proc).loop_0, events, -1, || (*proc).refcount == 1);
         } else {
-            loop_poll_events((*proc).loop_0, 0 as int64_t);
+            process_events((*proc).loop_0, events, 0);
         }
-        (*proc).status = -2 as ::core::ffi::c_int;
+        (*proc).status = -2;
     }
-    if (*proc).refcount == 1 as ::core::ffi::c_int {
+
+    if (*proc).refcount == 1 {
         decref(proc);
         if !(*proc).events.is_null() {
+            // `decref` queued the exit event; run it now.
             multiqueue_process_events((*proc).events);
         }
     } else {
         (*proc).refcount -= 1;
     }
-    return (*proc).status;
+    (*proc).status
 }
-pub unsafe extern "C" fn proc_stop(mut proc: *mut Proc) {
-    let mut exited: bool = (*proc).status >= 0 as ::core::ffi::c_int;
-    if exited as ::core::ffi::c_int != 0 || (*proc).stopped_time != 0 {
+
+/// Ask `proc` to terminate, and arm the timer that kills it if it does not.
+pub unsafe fn proc_stop(proc: *mut Proc) {
+    let exited = (*proc).status >= 0;
+    if exited || (*proc).stopped_time != 0 {
         return;
     }
     (*proc).stopped_time = os_hrtime();
-    match (*proc).type_0 as ::core::ffi::c_uint {
-        0 => {
-            (*proc).exit_signal = SIGTERM as uint8_t;
-            os_proc_tree_kill((*proc).pid, SIGTERM);
-        }
-        1 => {
-            (*proc).exit_signal = SIGHUP as uint8_t;
-            proc_close_streams(proc);
-            pty_proc_close_master(proc as *mut PtyProc);
-        }
-        _ => {}
+
+    if (*proc).type_0 == kProcTypePty {
+        // Closing every stream is what sends SIGHUP to a pty child.
+        (*proc).exit_signal = SIGHUP as u8;
+        proc_close_streams(proc);
+        pty_proc_close_master(proc as *mut PtyProc);
+    } else {
+        (*proc).exit_signal = SIGTERM as u8;
+        os_proc_tree_kill((*proc).pid, SIGTERM);
     }
+
     uv_timer_start(
         &raw mut (*(*proc).loop_0).children_kill_timer,
-        Some(children_kill_cb as unsafe extern "C" fn(*mut uv_timer_t) -> ()),
-        KILL_TIMEOUT_MS as uint64_t,
-        0 as uint64_t,
+        Some(children_kill_cb),
+        KILL_TIMEOUT_MS,
+        0,
     );
 }
-pub unsafe extern "C" fn proc_free(mut proc: *mut Proc) {
+
+/// Release the resources the child itself owns. The `Proc` is the caller's.
+pub unsafe fn proc_free(proc: *mut Proc) {
     if !(*proc).argv.is_null() {
         shell_free_argv((*proc).argv);
-        (*proc).argv = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
+        (*proc).argv = ptr::null_mut();
     }
 }
-unsafe extern "C" fn children_kill_cb(mut handle: *mut uv_timer_t) {
-    let mut loop_0: *mut Loop = (*(*handle).loop_0).data as *mut Loop;
-    let mut i: size_t = 0 as size_t;
-    while i < (*loop_0).children.size {
-        let mut proc: *mut Proc = *(*loop_0).children.items.offset(i as isize);
-        let mut exited: bool = (*proc).status >= 0 as ::core::ffi::c_int;
-        if !(exited as ::core::ffi::c_int != 0 || (*proc).stopped_time == 0) {
-            let mut term_sent: uint64_t =
-                (UINT64_MAX as uint64_t == (*proc).stopped_time) as ::core::ffi::c_int as uint64_t;
-            if kProcTypePty as ::core::ffi::c_int as ::core::ffi::c_uint
-                != (*proc).type_0 as ::core::ffi::c_uint
-                || term_sent != 0
-            {
-                (*proc).exit_signal = SIGKILL as uint8_t;
-                os_proc_tree_kill((*proc).pid, SIGKILL);
-            } else {
-                (*proc).exit_signal = SIGTERM as uint8_t;
-                os_proc_tree_kill((*proc).pid, SIGTERM);
-                (*proc).stopped_time = UINT64_MAX as uint64_t;
-                uv_timer_start(
-                    &raw mut (*(*proc).loop_0).children_kill_timer,
-                    Some(children_kill_cb as unsafe extern "C" fn(*mut uv_timer_t) -> ()),
-                    KILL_TIMEOUT_MS as uint64_t,
-                    0 as uint64_t,
-                );
-            }
-        }
-        i = i.wrapping_add(1);
-    }
-}
-unsafe extern "C" fn proc_close_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut proc: *mut Proc = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Proc;
-    if (*proc).cb.is_some() {
-        (*proc).cb.expect("non-null function pointer")(proc, (*proc).status, (*proc).data);
-    } else {
-        proc_free(proc);
-    };
-}
-unsafe extern "C" fn decref(mut proc: *mut Proc) {
-    (*proc).refcount -= 1;
-    if (*proc).refcount != 0 as ::core::ffi::c_int {
-        return;
-    }
-    let mut loop_0: *mut Loop = (*proc).loop_0;
-    let mut i: size_t = 0;
-    i = 0 as size_t;
-    while i < (*loop_0).children.size {
-        let mut current: *mut Proc = *(*loop_0).children.items.offset(i as isize);
-        if current == proc {
-            break;
-        }
-        i = i.wrapping_add(1);
-    }
-    '_c2rust_label: {
-        if i < (*loop_0).children.size {
-        } else {
-            __assert_fail(
-                b"i < kv_size(loop->children)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                305 as ::core::ffi::c_uint,
-                b"void decref(Proc *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    if i < (*loop_0).children.size.wrapping_sub(1 as size_t) {
-        memmove(
-            (*loop_0).children.items.offset(i as isize) as *mut ::core::ffi::c_void,
-            (*loop_0)
-                .children
-                .items
-                .offset(i.wrapping_add(1 as size_t) as isize)
-                as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<*mut *mut Proc>().wrapping_mul(
-                (*loop_0)
-                    .children
-                    .size
-                    .wrapping_sub(i.wrapping_add(1 as size_t)),
+
+/// Self-exit, because the primary RPC channel was closed.
+pub fn exit_on_closed_chan(status: c_int) {
+    // SAFETY: `main_loop.fast_events` is live for as long as the editor is.
+    unsafe {
+        logmsg(
+            LOGLVL_DBG,
+            ptr::null(),
+            c"exit_on_closed_chan".as_ptr(),
+            440,
+            true,
+            c"self-exit triggered by closed RPC channel...".as_ptr(),
+        );
+        multiqueue_put_event(
+            (*main_loop.ptr()).fast_events,
+            one_arg_event(
+                Some(exit_event),
+                ptr::with_exposed_provenance_mut(status as isize as usize),
             ),
         );
     }
-    (*loop_0).children.size = (*loop_0).children.size.wrapping_sub(1);
-    if !(*proc).events.is_null() {
-        multiqueue_put_event(
-            (*proc).events,
-            Event {
-                handler: Some(
-                    proc_close_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-                ),
-                argv: [
-                    proc as *mut ::core::ffi::c_void,
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ],
-            },
-        );
-    } else {
-        let mut argv: [*mut ::core::ffi::c_void; 1] = [proc as *mut ::core::ffi::c_void];
-        proc_close_event(&raw mut argv as *mut *mut ::core::ffi::c_void);
-    };
 }
-unsafe extern "C" fn proc_close(mut proc: *mut Proc) {
-    if proc_is_tearing_down.get() as ::core::ffi::c_int != 0
-        && (*proc).closed as ::core::ffi::c_int != 0
-        && ((*proc).detach as ::core::ffi::c_int != 0
-            || (*proc).type_0 as ::core::ffi::c_uint
-                == kProcTypePty as ::core::ffi::c_int as ::core::ffi::c_uint)
-    {
-        return;
-    }
-    '_c2rust_label: {
-        if !(*proc).closed {
+
+// ---------------------------------------------------------------------------
+// The loop's list of live children
+// ---------------------------------------------------------------------------
+
+/// Append `proc` to `loop->children`, growing the array if it is full.
+///
+/// This is upstream's `kv_push`: capacity doubles from an initial eight, and
+/// the storage is the editor's own allocator so that `event/loop.rs` can free
+/// it with `xfree`.
+unsafe fn push_child(uv_loop: *mut Loop, proc: *mut Proc) {
+    let children = &mut (*uv_loop).children;
+    if children.size == children.capacity {
+        children.capacity = if children.capacity != 0 {
+            children.capacity * 2
         } else {
-            __assert_fail(
-                b"!proc->closed\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                321 as ::core::ffi::c_uint,
-                b"void proc_close(Proc *)\0".as_ptr() as *const ::core::ffi::c_char,
+            8
+        };
+        children.items = xrealloc(
+            children.items.cast(),
+            size_of::<*mut Proc>() * children.capacity,
+        )
+        .cast();
+    }
+    *children.items.add(children.size) = proc;
+    children.size += 1;
+}
+
+/// Remove `proc` from `loop->children`, preserving the order of the rest.
+unsafe fn remove_child(uv_loop: *mut Loop, proc: *mut Proc) {
+    let children = &mut (*uv_loop).children;
+    let items = slice::from_raw_parts_mut(children.items, children.size);
+    let i = items
+        .iter()
+        .position(|&child| child == proc)
+        .expect("a child that is being closed is on the loop's child list");
+    items.copy_within(i + 1.., i);
+    children.size -= 1;
+}
+
+// ---------------------------------------------------------------------------
+// Event-loop plumbing
+// ---------------------------------------------------------------------------
+
+/// An [`Event`] carrying a single argument, which is all any handler here
+/// takes.
+fn one_arg_event(handler: argv_callback, arg: *mut c_void) -> Event {
+    let mut argv = [ptr::null_mut::<c_void>(); 10];
+    argv[0] = arg;
+    Event { handler, argv }
+}
+
+/// Queue `handler` on `queue`, or run it immediately if there is no queue.
+///
+/// Upstream's `CREATE_EVENT`. A `Loop` without an event queue is one that is
+/// driven synchronously (`os/shell.rs` builds one), so the handler simply
+/// runs on the spot.
+unsafe fn create_event(
+    queue: *mut MultiQueue,
+    handler: unsafe extern "C" fn(*mut *mut c_void),
+    arg: *mut c_void,
+) {
+    if queue.is_null() {
+        let mut argv = [arg];
+        handler(argv.as_mut_ptr());
+    } else {
+        multiqueue_put_event(queue, one_arg_event(Some(handler), arg));
+    }
+}
+
+/// One pass of upstream's `LOOP_PROCESS_EVENTS`: drain `queue` if it has
+/// anything, otherwise let the loop poll for `timeout` milliseconds.
+unsafe fn process_events(uv_loop: *mut Loop, queue: *mut MultiQueue, timeout: i64) {
+    if !queue.is_null() && !multiqueue_empty(queue) {
+        multiqueue_process_events(queue);
+    } else {
+        loop_poll_events(uv_loop, timeout);
+    }
+}
+
+/// Upstream's `LOOP_PROCESS_EVENTS_UNTIL`: run passes until `done` holds or
+/// the millisecond budget runs out.
+///
+/// `done` is re-evaluated between passes and may observe state that the pass
+/// itself changed, which is the whole point — a child's refcount reaching one
+/// is what ends most of these waits.
+unsafe fn process_events_until(
+    uv_loop: *mut Loop,
+    queue: *mut MultiQueue,
+    ms: i64,
+    mut done: impl FnMut() -> bool,
+) {
+    let mut budget = Budget::new(ms, os_hrtime);
+    while !done() {
+        process_events(uv_loop, queue, budget.remaining());
+        if !budget.charge(os_hrtime) {
+            break;
+        }
+    }
+}
+
+/// The millisecond budget of a wait loop.
+///
+/// A budget of zero means "one pass, then stop"; a negative one is unlimited.
+/// The clock is only read when the budget is finite, which is why `now` is
+/// taken as a closure rather than a value.
+struct Budget {
+    remaining: i64,
+    /// The reading `remaining` was last charged against.
+    before: u64,
+}
+
+impl Budget {
+    fn new(ms: i64, now: impl FnOnce() -> u64) -> Self {
+        Budget {
+            remaining: ms,
+            before: if ms > 0 { now() } else { 0 },
+        }
+    }
+
+    fn remaining(&self) -> i64 {
+        self.remaining
+    }
+
+    /// Charge the time elapsed since the last call. Returns false once the
+    /// budget is spent and the loop should stop.
+    fn charge(&mut self, now: impl FnOnce() -> u64) -> bool {
+        if self.remaining == 0 {
+            return false;
+        }
+        if self.remaining < 0 {
+            return true;
+        }
+        let now = now();
+        self.remaining -= now.wrapping_sub(self.before).wrapping_div(1_000_000) as i64;
+        self.before = now;
+        self.remaining > 0
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Callbacks
+// ---------------------------------------------------------------------------
+
+/// The kill timer: SIGKILL anything that did not exit after [`proc_stop`].
+///
+/// A pty child gets SIGTERM first (SIGHUP having already been sent by closing
+/// its streams) and the timer is restarted; `stopped_time` is set to
+/// `u64::MAX` to record that.
+unsafe extern "C" fn children_kill_cb(handle: *mut uv_timer_t) {
+    let uv_loop = (*(*handle).loop_0).data as *mut Loop;
+    let mut i = 0;
+    while i < (*uv_loop).children.size {
+        let proc = *(*uv_loop).children.items.add(i);
+        i += 1;
+        let exited = (*proc).status >= 0;
+        if exited || (*proc).stopped_time == 0 {
+            continue;
+        }
+        let term_sent = (*proc).stopped_time == u64::MAX;
+        if (*proc).type_0 != kProcTypePty || term_sent {
+            (*proc).exit_signal = SIGKILL as u8;
+            os_proc_tree_kill((*proc).pid, SIGKILL);
+        } else {
+            (*proc).exit_signal = SIGTERM as u8;
+            os_proc_tree_kill((*proc).pid, SIGTERM);
+            (*proc).stopped_time = u64::MAX;
+            uv_timer_start(
+                &raw mut (*(*proc).loop_0).children_kill_timer,
+                Some(children_kill_cb),
+                KILL_TIMEOUT_MS,
+                0,
             );
         }
-    };
-    (*proc).closed = true_0 != 0;
-    if (*proc).detach {
-        if (*proc).type_0 as ::core::ffi::c_uint
-            == kProcTypeUv as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            uv_unref(&raw mut (*(proc as *mut LibuvProc)).uv as *mut uv_handle_t);
-        }
     }
-    match (*proc).type_0 as ::core::ffi::c_uint {
-        0 => {
-            libuv_proc_close(proc as *mut LibuvProc);
-        }
-        1 => {
-            pty_proc_close(proc as *mut PtyProc);
-        }
-        _ => {}
-    };
 }
-unsafe extern "C" fn flush_stream(mut proc: *mut Proc, mut stream: *mut RStream) {
-    if stream.is_null() || (*stream).s.closed as ::core::ffi::c_int != 0 {
+
+/// The last thing that happens to a child: hand it to its owner's callback,
+/// which is responsible for freeing it.
+unsafe extern "C" fn proc_close_event(argv: *mut *mut c_void) {
+    let proc = *argv as *mut Proc;
+    if let Some(notify) = (*proc).cb {
+        notify(proc, (*proc).status, (*proc).data);
+    } else {
+        proc_free(proc);
+    }
+}
+
+/// Drop one reference to `proc`; unlink and report it when the last one goes.
+unsafe extern "C" fn decref(proc: *mut Proc) {
+    (*proc).refcount -= 1;
+    if (*proc).refcount != 0 {
         return;
     }
-    let mut max_bytes: size_t = SIZE_MAX as size_t;
-    if (*proc).type_0 as ::core::ffi::c_uint
-        != kProcTypePty as ::core::ffi::c_int as ::core::ffi::c_uint
-        || proc_is_tearing_down.get() as ::core::ffi::c_int != 0
+    remove_child((*proc).loop_0, proc);
+    create_event((*proc).events, proc_close_event, proc as *mut c_void);
+}
+
+/// Close the child's own handle (the process or the pty master).
+unsafe fn proc_close(proc: *mut Proc) {
+    if PROC_IS_TEARING_DOWN.get()
+        && (*proc).closed
+        && ((*proc).detach || (*proc).type_0 == kProcTypePty)
     {
-        let mut system_buffer_size: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut err: ::core::ffi::c_int = uv_recv_buffer_size(
+        // A detached or pty child that dies while being torn down gets here
+        // twice: once from the teardown, once from its own exit callback.
+        return;
+    }
+    assert!(!(*proc).closed);
+    (*proc).closed = true;
+
+    if (*proc).detach && (*proc).type_0 == kProcTypeUv {
+        // Let the loop exit without waiting for a child we no longer own.
+        uv_unref(&raw mut (*(proc as *mut LibuvProc)).uv as *mut uv_handle_t);
+    }
+
+    if (*proc).type_0 == kProcTypePty {
+        pty_proc_close(proc as *mut PtyProc);
+    } else {
+        libuv_proc_close(proc as *mut LibuvProc);
+    }
+}
+
+/// Read whatever a dead child left in one of its output streams.
+///
+/// The read is bounded so that a child which keeps its output open — or a
+/// grandchild that inherited it — cannot block teardown forever. The bound is
+/// the system receive buffer size on top of what has already been read, which
+/// is the most a terminated process can still have queued.
+unsafe fn flush_stream(proc: *mut Proc, stream: *mut RStream) {
+    if stream.is_null() || (*stream).s.closed {
+        return;
+    }
+
+    let mut max_bytes = usize::MAX;
+    // A pty master is exempt until teardown: on Linux it can hold far more
+    // than one system buffer's worth. #3030
+    if (*proc).type_0 != kProcTypePty || PROC_IS_TEARING_DOWN.get() {
+        let mut system_buffer_size: c_int = 0;
+        // Every arm of the `uv` union shares an address.
+        let err = uv_recv_buffer_size(
             &raw mut (*stream).s.uv as *mut uv_handle_t,
             &raw mut system_buffer_size,
         );
-        if err != 0 as ::core::ffi::c_int {
+        if err != 0 {
             system_buffer_size = ARENA_BLOCK_SIZE;
         }
-        max_bytes = (*stream)
-            .num_bytes
-            .wrapping_add(system_buffer_size as size_t);
+        max_bytes = (*stream).num_bytes + system_buffer_size as usize;
     }
-    // Not immutable: stream callbacks run inside the loop body flip it behind a raw pointer.
+
+    // Not immutable: the events processed in the body reach the stream's own
+    // callbacks, which are what advance `num_bytes` and can close it.
     #[allow(clippy::while_immutable_condition)]
     while !(*stream).s.closed && (*stream).num_bytes < max_bytes {
-        let mut num_bytes: size_t = (*stream).num_bytes;
-        if (*proc).type_0 as ::core::ffi::c_uint
-            == kProcTypePty as ::core::ffi::c_int as ::core::ffi::c_uint
-            && !(*stream).did_eof
-        {
+        let num_bytes = (*stream).num_bytes;
+
+        if (*proc).type_0 == kProcTypePty && !(*stream).did_eof {
             pty_proc_flush_master(proc as *mut PtyProc);
         }
-        loop_poll_events((*proc).loop_0, 0 as int64_t);
+        loop_poll_events((*proc).loop_0, 0);
         if !(*stream).s.events.is_null() {
             multiqueue_process_events((*stream).s.events);
         }
+
         if num_bytes != (*stream).num_bytes {
             continue;
         }
-        if (*stream).read_cb.is_some() && !(*stream).did_eof {
-            (*stream).read_cb.expect("non-null function pointer")(
-                stream,
-                (*stream).buffer,
-                0 as size_t,
-                (*stream).s.cb_data,
-                true_0 != 0,
-            );
+        // Nothing arrived, so the stream is empty. A child that keeps it open
+        // would otherwise deny the reader its end-of-file.
+        if let Some(read) = (*stream).read_cb {
+            if !(*stream).did_eof {
+                read(stream, (*stream).buffer, 0, (*stream).s.cb_data, true);
+            }
         }
         break;
     }
 }
-unsafe extern "C" fn proc_close_handles(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut proc: *mut Proc = *argv.offset(0 as ::core::ffi::c_int as isize) as *mut Proc;
-    (*exit_need_delay.ptr()) += 1;
+
+/// Drain and close everything belonging to a child that has exited.
+unsafe extern "C" fn proc_close_handles(argv: *mut *mut c_void) {
+    let proc = *argv as *mut Proc;
+
+    *EXIT_NEED_DELAY.ptr() += 1;
     flush_stream(proc, &raw mut (*proc).out);
     flush_stream(proc, &raw mut (*proc).err);
     proc_close_streams(proc);
     proc_close(proc);
-    (*exit_need_delay.ptr()) -= 1;
+    *EXIT_NEED_DELAY.ptr() -= 1;
 }
-unsafe extern "C" fn exit_delay_cb(mut _handle: *mut uv_timer_t) {
+
+/// Retry an exit that had to wait for [`proc_close_handles`] to finish.
+unsafe extern "C" fn exit_delay_cb(_handle: *mut uv_timer_t) {
     uv_timer_stop(&raw mut (*main_loop.ptr()).exit_delay_timer);
     multiqueue_put_event(
         (*main_loop.ptr()).fast_events,
-        Event {
-            handler: Some(exit_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()),
-            argv: [
-                (*main_loop.ptr()).exit_delay_timer.data,
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ],
-        },
+        one_arg_event(Some(exit_event), (*main_loop.ptr()).exit_delay_timer.data),
     );
 }
-unsafe extern "C" fn exit_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut status: ::core::ffi::c_int = (*argv.offset(0 as ::core::ffi::c_int as isize))
-        .expose_provenance() as intptr_t
-        as ::core::ffi::c_int;
-    if exit_need_delay.get() != 0 {
-        (*main_loop.ptr()).exit_delay_timer.data = *argv.offset(0 as ::core::ffi::c_int as isize);
+
+/// Exit the editor with the status packed into `argv[0]`.
+unsafe extern "C" fn exit_event(argv: *mut *mut c_void) {
+    let status = (*argv).expose_provenance() as c_int;
+    if EXIT_NEED_DELAY.get() != 0 {
+        // The exit timer doubles as the carrier for the status.
+        (*main_loop.ptr()).exit_delay_timer.data = *argv;
         uv_timer_start(
             &raw mut (*main_loop.ptr()).exit_delay_timer,
-            Some(exit_delay_cb as unsafe extern "C" fn(*mut uv_timer_t) -> ()),
-            0 as uint64_t,
-            0 as uint64_t,
+            Some(exit_delay_cb),
+            0,
+            0,
         );
         return;
     }
+
     if !exiting.get() {
         if ui_client_channel_id.get() != 0 {
             ui_client_exit_status.set(status);
             os_exit(status);
         } else {
-            '_c2rust_label: {
-                if status == 0 as ::core::ffi::c_int {
-                } else {
-                    __assert_fail(
-                        b"status == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/event/proc.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        431 as ::core::ffi::c_uint,
-                        b"void exit_event(void **)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            preserve_exit(::core::ptr::null::<::core::ffi::c_char>());
+            // The only other caller is `rpc_close`, which passes 0.
+            assert!(status == 0);
+            preserve_exit(ptr::null());
         }
     }
 }
-pub unsafe extern "C" fn exit_on_closed_chan(mut status: ::core::ffi::c_int) {
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"exit_on_closed_chan\0".as_ptr() as *const ::core::ffi::c_char,
-        440 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"self-exit triggered by closed RPC channel...\0".as_ptr() as *const ::core::ffi::c_char,
-    );
-    multiqueue_put_event(
-        (*main_loop.ptr()).fast_events,
-        Event {
-            handler: Some(exit_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()),
-            argv: [
-                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                    status as intptr_t as usize,
-                ),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ],
-        },
-    );
-}
-unsafe extern "C" fn on_proc_exit(mut proc: *mut Proc) {
-    let mut loop_0: *mut Loop = (*proc).loop_0;
+
+/// libuv told us the child exited.
+///
+/// There may still be output to read, but we are inside the libuv loop and
+/// cannot poll for more from here — so the draining is queued as an event.
+unsafe extern "C" fn on_proc_exit(proc: *mut Proc) {
+    let uv_loop = (*proc).loop_0;
     logmsg(
         LOGLVL_INF,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"on_proc_exit\0".as_ptr() as *const ::core::ffi::c_char,
-        447 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"child exited: pid=%d status=%dlu\0".as_ptr() as *const ::core::ffi::c_char,
+        ptr::null(),
+        c"on_proc_exit".as_ptr(),
+        447,
+        true,
+        // The stray "lu" is upstream's: the C source concatenated PRIu64
+        // onto a format that had already consumed the argument with %d.
+        c"child exited: pid=%d status=%dlu".as_ptr(),
         (*proc).pid,
         (*proc).status,
     );
-    let mut queue: *mut MultiQueue = if !(*proc).events.is_null() {
+    let queue = if (*proc).events.is_null() {
+        (*uv_loop).events
+    } else {
         (*proc).events
-    } else {
-        (*loop_0).events
     };
-    if !queue.is_null() {
-        multiqueue_put_event(
-            queue,
-            Event {
-                handler: Some(
-                    proc_close_handles as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-                ),
-                argv: [
-                    proc as *mut ::core::ffi::c_void,
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ],
-            },
-        );
-    } else {
-        let mut argv: [*mut ::core::ffi::c_void; 1] = [proc as *mut ::core::ffi::c_void];
-        proc_close_handles(&raw mut argv as *mut *mut ::core::ffi::c_void);
-    };
+    create_event(queue, proc_close_handles, proc as *mut c_void);
 }
-unsafe extern "C" fn on_proc_stream_close(
-    mut _stream: *mut Stream,
-    mut data: *mut ::core::ffi::c_void,
-) {
-    let mut proc: *mut Proc = data as *mut Proc;
-    decref(proc);
+
+/// One of the child's streams finished closing.
+unsafe extern "C" fn on_proc_stream_close(_stream: *mut Stream, data: *mut c_void) {
+    decref(data as *mut Proc);
 }
-#[inline]
-unsafe extern "C" fn proc_get_exepath(mut proc: *mut Proc) -> *const ::core::ffi::c_char {
-    return if !(*proc).exepath.is_null() {
-        (*proc).exepath
-    } else {
-        *(*proc).argv.offset(0 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_char
-    };
+
+#[cfg(test)]
+mod tests {
+    use super::Budget;
+
+    #[test]
+    fn an_unlimited_budget_never_expires() {
+        let mut budget = Budget::new(-1, || panic!("the clock is not read"));
+        assert_eq!(budget.remaining(), -1);
+        assert!(budget.charge(|| panic!("the clock is not read")));
+        assert!(budget.charge(|| panic!("the clock is not read")));
+    }
+
+    #[test]
+    fn a_zero_budget_stops_after_one_pass() {
+        let mut budget = Budget::new(0, || panic!("the clock is not read"));
+        assert_eq!(budget.remaining(), 0);
+        assert!(!budget.charge(|| panic!("the clock is not read")));
+    }
+
+    #[test]
+    fn a_finite_budget_is_charged_in_whole_milliseconds() {
+        let mut budget = Budget::new(10, || 1_000_000_000);
+        // 2.9ms rounds down to 2.
+        assert!(budget.charge(|| 1_002_900_000));
+        assert_eq!(budget.remaining(), 8);
+        // Charging is against the previous reading, not the start.
+        assert!(budget.charge(|| 1_005_900_000));
+        assert_eq!(budget.remaining(), 5);
+    }
+
+    #[test]
+    fn a_finite_budget_stops_when_it_reaches_zero() {
+        let mut budget = Budget::new(5, || 0);
+        assert!(!budget.charge(|| 5_000_000));
+        assert_eq!(budget.remaining(), 0);
+    }
+
+    #[test]
+    fn an_overspent_budget_stops_rather_than_wrapping() {
+        let mut budget = Budget::new(5, || 0);
+        assert!(!budget.charge(|| 50_000_000));
+        assert_eq!(budget.remaining(), -45);
+    }
 }
-pub const SIGTERM: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
-pub const SIGHUP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const SIGKILL: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

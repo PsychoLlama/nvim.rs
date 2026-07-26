@@ -37,12 +37,19 @@ pub struct __sigset_t {
 }
 pub type sigset_t = __sigset_t;
 
+// Signal numbers, for this module and for anything else that names one. Only
+// the values Linux and the BSDs agree on are listed without qualification;
+// these are the numbers the editor builds against.
 pub const SIGHUP: c_int = 1;
 pub const SIGINT: c_int = 2;
 pub const SIGQUIT: c_int = 3;
+pub const SIGKILL: c_int = 9;
 pub const SIGUSR1: c_int = 10;
 pub const SIGPIPE: c_int = 13;
+pub const SIGALRM: c_int = 14;
 pub const SIGTERM: c_int = 15;
+pub const SIGCHLD: c_int = 17;
+pub const SIGCONT: c_int = 18;
 pub const SIGTSTP: c_int = 20;
 pub const SIGWINCH: c_int = 28;
 pub const SIGPWR: c_int = 30;
