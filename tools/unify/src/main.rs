@@ -752,7 +752,7 @@ fn main() {
     // view those modules had all along.
     let pristine_edges: Vec<Vec<usize>> = defs.iter().map(|d| d.edges.clone()).collect();
     let mut fold_blacklist: HashSet<String> = HashSet::new();
-    let (keys, mut groups, def_group, folded) = loop {
+    let (keys, mut groups, def_group) = loop {
         for (d, e) in defs.iter_mut().zip(&pristine_edges) {
             d.edges = e.clone();
         }
@@ -969,7 +969,7 @@ fn main() {
             .filter(|n| !fold_blacklist.contains(n))
             .collect();
         if newly.is_empty() {
-            break (keys, groups, def_group, folded);
+            break (keys, groups, def_group);
         }
         eprintln!("  fold retry: blacklisting {newly:?}");
         fold_blacklist.extend(newly);
@@ -1393,10 +1393,10 @@ fn main() {
         let mut chunk_opaque: Vec<String> = Vec::new();
         let mut chunk_items: Vec<String> = Vec::new();
         let mut chunk_lines = 0usize;
-        let mut flush = |idx: &mut usize,
-                         opaque: &mut Vec<String>,
-                         items: &mut Vec<String>,
-                         mod_names: &mut Vec<String>| {
+        let flush = |idx: &mut usize,
+                     opaque: &mut Vec<String>,
+                     items: &mut Vec<String>,
+                     mod_names: &mut Vec<String>| {
             if opaque.is_empty() && items.is_empty() {
                 return;
             }
