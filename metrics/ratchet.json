@@ -68,7 +68,7 @@
     "crates/nvim/src/nvim/event/libuv.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/event/libuv_proc.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/event/loop.rs": {"unsafe": 22},
-    "crates/nvim/src/nvim/event/multiqueue.rs": {"no_mangle": 6, "unsafe": 23},
+    "crates/nvim/src/nvim/event/multiqueue.rs": {"no_mangle": 6, "unsafe": 15},
     "crates/nvim/src/nvim/event/proc.rs": {"unsafe": 31},
     "crates/nvim/src/nvim/event/rstream.rs": {"unsafe": 21},
     "crates/nvim/src/nvim/event/signal.rs": {"unsafe": 10},

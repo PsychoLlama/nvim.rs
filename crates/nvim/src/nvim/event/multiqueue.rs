@@ -1,395 +1,238 @@
-use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::os::libc::__assert_fail;
+//! The editor's multi-level event queue.
+//!
+//! There is one parent queue and any number of children. An event pushed onto
+//! a child is visible from both: from the child in the order that child saw
+//! it, and from the parent interleaved with the other children's events in
+//! the order the parent saw them. Taking an event from either side removes it
+//! from both. Nesting stops at one level — a child may not have children of
+//! its own.
+//!
+//! Each queue owns an [`ItemList`]. An event pushed onto a
+//! child appends an `Item::Event` to the child and an `Item::Link` to the
+//! parent; the event remembers the handle of its link so that taking it from
+//! the child can unlink it from the parent in constant time, and the link
+//! stands for whichever event is at the head of that child when the parent
+//! reaches it. Both lists are FIFO, so the parent's earliest link to a child
+//! always names that child's earliest remaining event.
+//!
+//! The entry points keep their C shapes (`*mut MultiQueue`, `Event` by
+//! value): roughly forty still-transpiled modules call them, and every one of
+//! those call sites is already inside an `unsafe fn`. They are the surface to
+//! retire once the loop and channel code above them is rewritten.
+
+mod list;
+
 pub use crate::src::nvim::types::{
-    Event, MultiQueue, PutCallback, QUEUE, argv_callback, multiqueue, queue, size_t,
+    Event, MultiQueue, PutCallback, argv_callback, multiqueue, size_t,
 };
-pub type MultiQueueItem = multiqueue_item;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct multiqueue_item {
-    pub data: C2Rust_Unnamed,
-    pub link: bool,
-    pub node: QUEUE,
+use core::ffi::c_void;
+use core::ptr;
+use list::{Handle, List};
+
+/// A queue's items, in order.
+type ItemList = List<Item>;
+
+/// A slot in a queue's list.
+enum Item {
+    /// An event on the queue it was pushed to. `parent_slot` names the link
+    /// standing for it in the parent's list, when there is a parent.
+    Event {
+        event: Event,
+        parent_slot: Option<Handle>,
+    },
+    /// A placeholder in a parent's list, standing for the head event of
+    /// `child` at the time the parent reaches it.
+    Link { child: *mut MultiQueue },
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed {
-    pub queue: *mut MultiQueue,
-    pub item: C2Rust_Unnamed_0,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_0 {
-    pub event: Event,
-    pub parent_item: *mut MultiQueueItem,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct MulticastEvent {
-    pub event: Event,
-    pub fired: bool,
-    pub refcount: ::core::ffi::c_int,
-}
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[inline(always)]
-unsafe extern "C" fn QUEUE_EMPTY(q: *const QUEUE) -> ::core::ffi::c_int {
-    return (q == (*q).next as *const QUEUE) as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn QUEUE_INIT(q: *mut QUEUE) {
-    (*q).next = q as *mut queue;
-    (*q).prev = q as *mut queue;
-}
-#[inline(always)]
-unsafe extern "C" fn QUEUE_INSERT_TAIL(h: *mut QUEUE, q: *mut QUEUE) {
-    (*q).next = h as *mut queue;
-    (*q).prev = (*h).prev;
-    (*(*q).prev).next = q as *mut queue;
-    (*h).prev = q as *mut queue;
-}
-#[inline(always)]
-unsafe extern "C" fn QUEUE_REMOVE(q: *mut QUEUE) {
-    (*(*q).prev).next = (*q).next;
-    (*(*q).next).prev = (*q).prev;
-}
-static NILEVENT: GlobalCell<Event> = GlobalCell::new(Event {
+
+/// What `multiqueue_get` yields for an empty queue.
+const NIL_EVENT: Event = Event {
     handler: None,
-    argv: [
-        NULL,
-        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    ],
-});
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_new(
-    mut on_put: PutCallback,
-    mut data: *mut ::core::ffi::c_void,
-) -> *mut MultiQueue {
-    return _multiqueue_new(::core::ptr::null_mut::<MultiQueue>(), on_put, data);
+    argv: [ptr::null_mut(); 10],
+};
+
+/// An event that runs at most once however many queues it was put on, and is
+/// released once all `refcount` of them have reached it.
+struct MulticastEvent {
+    event: Event,
+    fired: bool,
+    refcount: ::core::ffi::c_int,
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_new_child(mut parent: *mut MultiQueue) -> *mut MultiQueue {
-    '_c2rust_label: {
-        if (*parent).parent.is_null() {
-        } else {
-            __assert_fail(
-                b"!parent->parent\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                95 as ::core::ffi::c_uint,
-                b"MultiQueue *multiqueue_new_child(MultiQueue *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+pub unsafe extern "C" fn multiqueue_new(on_put: PutCallback, data: *mut c_void) -> *mut MultiQueue {
+    new_queue(ptr::null_mut(), on_put, data)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue {
+    assert!(
+        (*parent).parent.is_null(),
+        "queues nest only one level deep"
+    );
+    // Upstream counts a new child in the parent's size. See the field's note.
     (*parent).size = (*parent).size.wrapping_add(1);
-    return _multiqueue_new(parent, None, NULL);
+    new_queue(parent, None, ptr::null_mut())
 }
-unsafe extern "C" fn _multiqueue_new(
-    mut parent: *mut MultiQueue,
-    mut on_put: PutCallback,
-    mut data: *mut ::core::ffi::c_void,
-) -> *mut MultiQueue {
-    let mut rv: *mut MultiQueue = xmalloc(::core::mem::size_of::<MultiQueue>()) as *mut MultiQueue;
-    QUEUE_INIT(&raw mut (*rv).headtail);
-    (*rv).size = 0 as size_t;
-    (*rv).parent = parent;
-    (*rv).on_put = on_put;
-    (*rv).data = data;
-    return rv;
+
+fn new_queue(parent: *mut MultiQueue, on_put: PutCallback, data: *mut c_void) -> *mut MultiQueue {
+    Box::into_raw(Box::new(multiqueue {
+        parent,
+        on_put,
+        data,
+        size: 0,
+        items: Box::into_raw(Box::new(ItemList::new())).cast(),
+    }))
 }
+
+/// The items `queue` owns. Every queue is created with a list and keeps it
+/// until `multiqueue_free` takes both away together.
+unsafe fn items<'a>(queue: *mut MultiQueue) -> &'a mut ItemList {
+    &mut *(*queue).items.cast::<ItemList>()
+}
+
+/// Release `queue` and unlink whatever it still holds from its parent.
+///
+/// Freeing a *parent* leaves its children pointing at released memory, as it
+/// did upstream; nothing does that while children are alive.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_free(mut self_0: *mut MultiQueue) {
-    '_c2rust_label: {
-        if !self_0.is_null() {
-        } else {
-            __assert_fail(
-                b"self\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                113 as ::core::ffi::c_uint,
-                b"void multiqueue_free(MultiQueue *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+pub unsafe extern "C" fn multiqueue_free(queue: *mut MultiQueue) {
+    assert!(!queue.is_null());
+    // Both boxes stay alive until the end of the scope: the parent is read
+    // out of `owned` while its items are being unlinked.
+    let owned = Box::from_raw(queue);
+    let mut own_items = Box::from_raw(owned.items.cast::<ItemList>());
+    while let Some(item) = own_items.pop_front() {
+        if let Item::Event {
+            parent_slot: Some(slot),
+            ..
+        } = item
+        {
+            items(owned.parent).remove(slot);
         }
-    };
-    let mut q: *mut QUEUE = ::core::ptr::null_mut::<QUEUE>();
-    q = (*self_0).headtail.next as *mut QUEUE;
-    while q != &raw mut (*self_0).headtail {
-        let mut next: *mut QUEUE = (*q).next as *mut QUEUE;
-        let mut item: *mut MultiQueueItem = multiqueue_node_data(q);
-        if !(*self_0).parent.is_null() {
-            QUEUE_REMOVE(&raw mut (*(*item).data.item.parent_item).node);
-            xfree((*item).data.item.parent_item as *mut ::core::ffi::c_void);
-        }
-        QUEUE_REMOVE(q);
-        xfree(item as *mut ::core::ffi::c_void);
-        q = next;
     }
-    xfree(self_0 as *mut ::core::ffi::c_void);
 }
+
+/// The next event, or a handler-less event when there is none.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_get(mut self_0: *mut MultiQueue) -> Event {
-    return if multiqueue_empty(self_0) as ::core::ffi::c_int != 0 {
-        NILEVENT.get()
+pub unsafe extern "C" fn multiqueue_get(queue: *mut MultiQueue) -> Event {
+    if multiqueue_empty(queue) {
+        NIL_EVENT
     } else {
-        multiqueue_remove(self_0)
-    };
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_put_event(mut self_0: *mut MultiQueue, mut event: Event) {
-    '_c2rust_label: {
-        if !self_0.is_null() {
-        } else {
-            __assert_fail(
-                b"self\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                136 as ::core::ffi::c_uint,
-                b"void multiqueue_put_event(MultiQueue *, Event)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    multiqueue_push(self_0, event);
-    if !(*self_0).parent.is_null() && (*(*self_0).parent).on_put.is_some() {
-        (*(*self_0).parent)
-            .on_put
-            .expect("non-null function pointer")((*self_0).parent, (*(*self_0).parent).data);
+        take_event(queue)
     }
 }
-pub unsafe extern "C" fn multiqueue_move_events(
-    mut dest: *mut MultiQueue,
-    mut src: *mut MultiQueue,
-) {
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn multiqueue_put_event(queue: *mut MultiQueue, event: Event) {
+    assert!(!queue.is_null());
+    let parent = (*queue).parent;
+    let parent_slot = if parent.is_null() {
+        None
+    } else {
+        Some(items(parent).push_back(Item::Link { child: queue }))
+    };
+    items(queue).push_back(Item::Event { event, parent_slot });
+    (*queue).size = (*queue).size.wrapping_add(1);
+    // Only a child's put notifies, and only through its parent's callback —
+    // a parentless queue's own `on_put` is never reached from here.
+    if !parent.is_null()
+        && let Some(on_put) = (*parent).on_put
+    {
+        on_put(parent, (*parent).data);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn multiqueue_size(queue: *mut MultiQueue) -> size_t {
+    (*queue).size
+}
+
+/// Take the head event, unlinking it from the other side as well.
+unsafe fn take_event(queue: *mut MultiQueue) -> Event {
+    let item = items(queue)
+        .pop_front()
+        .expect("caller checked the queue is not empty");
+    let event = match item {
+        // Reached from a parent: the link stands for the child's head event.
+        // Upstream leaves the child's own counter alone here, so this does
+        // too.
+        Item::Link { child } => match items(child).pop_front() {
+            Some(Item::Event { event, .. }) => event,
+            _ => panic!("a link names an event of a non-empty child"),
+        },
+        // Reached from the queue the event was pushed to.
+        Item::Event { event, parent_slot } => {
+            if let Some(slot) = parent_slot {
+                items((*queue).parent).remove(slot);
+            }
+            event
+        }
+    };
+    (*queue).size = (*queue).size.wrapping_sub(1);
+    event
+}
+
+pub unsafe fn multiqueue_empty(queue: *mut MultiQueue) -> bool {
+    assert!(!queue.is_null());
+    items(queue).is_empty()
+}
+
+pub unsafe fn multiqueue_move_events(dest: *mut MultiQueue, src: *mut MultiQueue) {
     while !multiqueue_empty(src) {
-        let mut event: Event = multiqueue_get(src);
+        let event = multiqueue_get(src);
         multiqueue_put_event(dest, event);
     }
 }
-pub unsafe extern "C" fn multiqueue_process_events(mut self_0: *mut MultiQueue) {
-    '_c2rust_label: {
-        if !self_0.is_null() {
-        } else {
-            __assert_fail(
-                b"self\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                155 as ::core::ffi::c_uint,
-                b"void multiqueue_process_events(MultiQueue *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    while !multiqueue_empty(self_0) {
-        let mut event: Event = multiqueue_remove(self_0);
-        if event.handler.is_some() {
-            event.handler.expect("non-null function pointer")(
-                &raw mut event.argv as *mut *mut ::core::ffi::c_void,
-            );
+
+pub unsafe fn multiqueue_process_events(queue: *mut MultiQueue) {
+    assert!(!queue.is_null());
+    while !multiqueue_empty(queue) {
+        let mut event = take_event(queue);
+        if let Some(handler) = event.handler {
+            handler(&raw mut event.argv as *mut *mut c_void);
         }
     }
 }
-pub unsafe extern "C" fn multiqueue_purge_events(mut self_0: *mut MultiQueue) {
-    '_c2rust_label: {
-        if !self_0.is_null() {
-        } else {
-            __assert_fail(
-                b"self\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                167 as ::core::ffi::c_uint,
-                b"void multiqueue_purge_events(MultiQueue *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    while !multiqueue_empty(self_0) {
-        multiqueue_remove(self_0);
+
+pub unsafe fn multiqueue_purge_events(queue: *mut MultiQueue) {
+    assert!(!queue.is_null());
+    while !multiqueue_empty(queue) {
+        take_event(queue);
     }
 }
-pub unsafe extern "C" fn multiqueue_empty(mut self_0: *mut MultiQueue) -> bool {
-    '_c2rust_label: {
-        if !self_0.is_null() {
-        } else {
-            __assert_fail(
-                b"self\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                175 as ::core::ffi::c_uint,
-                b"_Bool multiqueue_empty(MultiQueue *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    return QUEUE_EMPTY(&raw mut (*self_0).headtail) != 0;
+
+pub unsafe fn multiqueue_replace_parent(queue: *mut MultiQueue, new_parent: *mut MultiQueue) {
+    assert!(multiqueue_empty(queue));
+    (*queue).parent = new_parent;
 }
-pub unsafe extern "C" fn multiqueue_replace_parent(
-    mut self_0: *mut MultiQueue,
-    mut new_parent: *mut MultiQueue,
-) {
-    '_c2rust_label: {
-        if multiqueue_empty(self_0) {
-        } else {
-            __assert_fail(
-                b"multiqueue_empty(self)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                181 as ::core::ffi::c_uint,
-                b"void multiqueue_replace_parent(MultiQueue *, MultiQueue *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    (*self_0).parent = new_parent;
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn multiqueue_size(mut self_0: *mut MultiQueue) -> size_t {
-    return (*self_0).size;
-}
-unsafe extern "C" fn multiqueueitem_get_event(
-    mut item: *mut MultiQueueItem,
-    mut remove: bool,
-) -> Event {
-    '_c2rust_label: {
-        if !item.is_null() {
-        } else {
-            __assert_fail(
-                b"item != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                196 as ::core::ffi::c_uint,
-                b"Event multiqueueitem_get_event(MultiQueueItem *, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut ev: Event = Event {
-        handler: None,
-        argv: [::core::ptr::null_mut::<::core::ffi::c_void>(); 10],
-    };
-    if (*item).link {
-        let mut linked: *mut MultiQueue = (*item).data.queue;
-        '_c2rust_label_0: {
-            if !multiqueue_empty(linked) {
-            } else {
-                __assert_fail(
-                    b"!multiqueue_empty(linked)\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    201 as ::core::ffi::c_uint,
-                    b"Event multiqueueitem_get_event(MultiQueueItem *, _Bool)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        let mut child: *mut MultiQueueItem =
-            multiqueue_node_data((*linked).headtail.next as *mut QUEUE);
-        ev = (*child).data.item.event;
-        if remove {
-            QUEUE_REMOVE(&raw mut (*child).node);
-            xfree(child as *mut ::core::ffi::c_void);
-        }
-    } else {
-        if remove as ::core::ffi::c_int != 0 && !(*item).data.item.parent_item.is_null() {
-            QUEUE_REMOVE(&raw mut (*(*item).data.item.parent_item).node);
-            xfree((*item).data.item.parent_item as *mut ::core::ffi::c_void);
-            (*item).data.item.parent_item = ::core::ptr::null_mut::<MultiQueueItem>();
-        }
-        ev = (*item).data.item.event;
+
+/// An event that fires the first time it is reached and is released once
+/// `num` queues have reached it.
+pub fn event_create_oneshot(event: Event, num: ::core::ffi::c_int) -> Event {
+    let data = Box::into_raw(Box::new(MulticastEvent {
+        event,
+        fired: false,
+        refcount: num,
+    }));
+    let mut argv = [ptr::null_mut::<c_void>(); 10];
+    argv[0] = data.cast();
+    Event {
+        handler: Some(multiqueue_oneshot_event),
+        argv,
     }
-    return ev;
 }
-unsafe extern "C" fn multiqueue_remove(mut self_0: *mut MultiQueue) -> Event {
-    '_c2rust_label: {
-        if !multiqueue_empty(self_0) {
-        } else {
-            __assert_fail(
-                b"!multiqueue_empty(self)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                224 as ::core::ffi::c_uint,
-                b"Event multiqueue_remove(MultiQueue *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut h: *mut QUEUE = (*self_0).headtail.next as *mut QUEUE;
-    QUEUE_REMOVE(h);
-    let mut item: *mut MultiQueueItem = multiqueue_node_data(h);
-    '_c2rust_label_0: {
-        if !(*item).link || (*self_0).parent.is_null() {
-        } else {
-            __assert_fail(
-                b"!item->link || !self->parent\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/event/multiqueue.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                228 as ::core::ffi::c_uint,
-                b"Event multiqueue_remove(MultiQueue *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut ev: Event = multiqueueitem_get_event(item, true_0 != 0);
-    (*self_0).size = (*self_0).size.wrapping_sub(1);
-    xfree(item as *mut ::core::ffi::c_void);
-    return ev;
-}
-unsafe extern "C" fn multiqueue_push(mut self_0: *mut MultiQueue, mut event: Event) {
-    let mut item: *mut MultiQueueItem =
-        xmalloc(::core::mem::size_of::<MultiQueueItem>()) as *mut MultiQueueItem;
-    (*item).link = false_0 != 0;
-    (*item).data.item.event = event;
-    (*item).data.item.parent_item = ::core::ptr::null_mut::<MultiQueueItem>();
-    QUEUE_INSERT_TAIL(&raw mut (*self_0).headtail, &raw mut (*item).node);
-    if !(*self_0).parent.is_null() {
-        (*item).data.item.parent_item =
-            xmalloc(::core::mem::size_of::<MultiQueueItem>()) as *mut MultiQueueItem;
-        (*(*item).data.item.parent_item).link = true_0 != 0;
-        (*(*item).data.item.parent_item).data.queue = self_0;
-        QUEUE_INSERT_TAIL(
-            &raw mut (*(*self_0).parent).headtail,
-            &raw mut (*(*item).data.item.parent_item).node,
-        );
-    }
-    (*self_0).size = (*self_0).size.wrapping_add(1);
-}
-unsafe extern "C" fn multiqueue_node_data(mut q: *mut QUEUE) -> *mut MultiQueueItem {
-    return (q as *mut ::core::ffi::c_char).offset(-(104 as ::core::ffi::c_ulong as isize))
-        as *mut MultiQueueItem;
-}
-pub unsafe extern "C" fn event_create_oneshot(mut ev: Event, mut num: ::core::ffi::c_int) -> Event {
-    let mut data: *mut MulticastEvent =
-        xmalloc(::core::mem::size_of::<MulticastEvent>()) as *mut MulticastEvent;
-    (*data).event = ev;
-    (*data).fired = false_0 != 0;
-    (*data).refcount = num;
-    return Event {
-        handler: Some(
-            multiqueue_oneshot_event as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-        ),
-        argv: [
-            data as *mut ::core::ffi::c_void,
-            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        ],
-    };
-}
-unsafe extern "C" fn multiqueue_oneshot_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut data: *mut MulticastEvent =
-        *argv.offset(0 as ::core::ffi::c_int as isize) as *mut MulticastEvent;
+
+unsafe extern "C" fn multiqueue_oneshot_event(argv: *mut *mut c_void) {
+    let data = (*argv.offset(0)).cast::<MulticastEvent>();
     if !(*data).fired {
-        (*data).fired = true_0 != 0;
-        if (*data).event.handler.is_some() {
-            (*data).event.handler.expect("non-null function pointer")(
-                &raw mut (*data).event.argv as *mut *mut ::core::ffi::c_void,
-            );
+        (*data).fired = true;
+        if let Some(handler) = (*data).event.handler {
+            handler(&raw mut (*data).event.argv as *mut *mut c_void);
         }
     }
     (*data).refcount -= 1;
-    if (*data).refcount == 0 as ::core::ffi::c_int {
-        xfree(data as *mut ::core::ffi::c_void);
+    if (*data).refcount == 0 {
+        drop(Box::from_raw(data));
     }
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
