@@ -51,7 +51,7 @@ use crate::src::nvim::os::libc::{
     __assert_fail, abort, close, fclose, fdopen, fflush, fread, fwrite, getc, gettext, getuid,
     memcmp, memmove, memset, ngettext, strcmp, strftime, strlen, time,
 };
-use crate::src::nvim::os::time::{os_localtime_r, os_time};
+use crate::src::nvim::os::time::{os_localtime_r, os_time, tm_zeroed};
 use crate::src::nvim::path::{FullName_save, concat_fnames, path_tail, vim_ispathsep};
 use crate::src::nvim::sha256::{SHA256_SUM_SIZE, Sha256};
 use crate::src::nvim::spell::spell_check_window;
@@ -3636,20 +3636,8 @@ pub unsafe extern "C" fn undo_fmt_time(
     mut tt: time_t,
 ) {
     if time(::core::ptr::null_mut::<time_t>()) - tt >= 100 as time_t {
-        let mut curtime: tm = tm {
-            tm_sec: 0,
-            tm_min: 0,
-            tm_hour: 0,
-            tm_mday: 0,
-            tm_mon: 0,
-            tm_year: 0,
-            tm_wday: 0,
-            tm_yday: 0,
-            tm_isdst: 0,
-            tm_gmtoff: 0,
-            tm_zone: ::core::ptr::null::<::core::ffi::c_char>(),
-        };
-        os_localtime_r(&raw mut tt, &raw mut curtime);
+        let mut curtime: tm = tm_zeroed();
+        os_localtime_r(tt, &mut curtime);
         let mut n: size_t = 0;
         if time(::core::ptr::null_mut::<time_t>()) - tt
             < (60 as ::core::ffi::c_int * 60 as ::core::ffi::c_int * 12 as ::core::ffi::c_int)

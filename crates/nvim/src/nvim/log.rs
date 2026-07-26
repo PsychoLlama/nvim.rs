@@ -13,7 +13,7 @@ use crate::src::nvim::os::libc::{
     stderr, stdout, strerror, strftime, vfprintf,
 };
 use crate::src::nvim::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
-use crate::src::nvim::os::time::os_localtime;
+use crate::src::nvim::os::time::{os_localtime, tm_zeroed};
 use crate::src::nvim::path::path_tail;
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __pthread_internal_list,
@@ -4555,20 +4555,8 @@ unsafe extern "C" fn log_write_prefix(
             );
         }
     };
-    let mut local_time: tm = tm {
-        tm_sec: 0,
-        tm_min: 0,
-        tm_hour: 0,
-        tm_mday: 0,
-        tm_mon: 0,
-        tm_year: 0,
-        tm_wday: 0,
-        tm_yday: 0,
-        tm_isdst: 0,
-        tm_gmtoff: 0,
-        tm_zone: ::core::ptr::null::<::core::ffi::c_char>(),
-    };
-    if os_localtime(&raw mut local_time).is_null() {
+    let mut local_time: tm = tm_zeroed();
+    if !os_localtime(&mut local_time) {
         return false_0 != 0;
     }
     let mut date_time: [::core::ffi::c_char; 20] = [0; 20];

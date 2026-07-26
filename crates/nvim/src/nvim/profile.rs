@@ -81,8 +81,7 @@ struct sn_prl_T {
 
 /// The current time.
 pub fn profile_start() -> proftime_T {
-    // SAFETY: uv_hrtime has no preconditions.
-    unsafe { os_hrtime() }
+    os_hrtime()
 }
 
 /// Elapsed time from `tm` until now.

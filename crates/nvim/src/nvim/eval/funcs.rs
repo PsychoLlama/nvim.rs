@@ -226,7 +226,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::pty_proc_unix::pty_proc_resize;
 use crate::src::nvim::os::shell::shell_free_argv;
 use crate::src::nvim::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
-use crate::src::nvim::os::time::{os_hrtime, os_localtime_r, os_strptime};
+use crate::src::nvim::os::time::{os_hrtime, os_localtime_r, os_strptime, tm_zeroed};
 use crate::src::nvim::path::{concat_fnames_realloc, vim_FullName};
 use crate::src::nvim::plines::{getvvcol, win_chartabsize};
 use crate::src::nvim::popupmenu::{pum_set_event_info, pum_visible};
@@ -12630,21 +12630,8 @@ unsafe extern "C" fn f_strftime(
     } else {
         seconds = tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize)) as time_t;
     }
-    let mut curtime: tm = tm {
-        tm_sec: 0,
-        tm_min: 0,
-        tm_hour: 0,
-        tm_mday: 0,
-        tm_mon: 0,
-        tm_year: 0,
-        tm_wday: 0,
-        tm_yday: 0,
-        tm_isdst: 0,
-        tm_gmtoff: 0,
-        tm_zone: ::core::ptr::null::<::core::ffi::c_char>(),
-    };
-    let mut curtime_ptr: *mut tm = os_localtime_r(&raw mut seconds, &raw mut curtime);
-    if curtime_ptr.is_null() {
+    let mut curtime: tm = tm_zeroed();
+    if !os_localtime_r(seconds, &mut curtime) {
         (*rettv).vval.v_string = xstrdup(gettext(
             b"(Invalid)\0".as_ptr() as *const ::core::ffi::c_char
         ));
@@ -12668,7 +12655,7 @@ unsafe extern "C" fn f_strftime(
             &raw mut result_buf as *mut ::core::ffi::c_char,
             ::core::mem::size_of::<[::core::ffi::c_char; 256]>(),
             p,
-            curtime_ptr,
+            &raw mut curtime,
         ) == 0 as size_t
     {
         result_buf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
@@ -12700,18 +12687,10 @@ unsafe extern "C" fn f_strptime(
 ) {
     let mut fmt_buf: [::core::ffi::c_char; 65] = [0; 65];
     let mut str_buf: [::core::ffi::c_char; 65] = [0; 65];
+    // strptime() is asked to determine DST itself.
     let mut tmval: tm = tm {
-        tm_sec: 0,
-        tm_min: 0,
-        tm_hour: 0,
-        tm_mday: 0,
-        tm_mon: 0,
-        tm_year: 0,
-        tm_wday: 0,
-        tm_yday: 0,
-        tm_isdst: -1 as ::core::ffi::c_int,
-        tm_gmtoff: 0,
-        tm_zone: ::core::ptr::null::<::core::ffi::c_char>(),
+        tm_isdst: -1,
+        ..tm_zeroed()
     };
     let mut fmt: *mut ::core::ffi::c_char = tv_get_string_buf(
         argvars.offset(0 as ::core::ffi::c_int as isize),
@@ -12732,10 +12711,13 @@ unsafe extern "C" fn f_strptime(
     if conv.vc_type != CONV_NONE as ::core::ffi::c_int {
         fmt = string_convert(&raw mut conv, fmt, ::core::ptr::null_mut::<size_t>());
     }
-    if fmt.is_null() || os_strptime(str, fmt, &raw mut tmval).is_null() || {
-        (*rettv).vval.v_number = mktime(&raw mut tmval) as varnumber_T;
-        (*rettv).vval.v_number == -1 as varnumber_T
-    } {
+    if fmt.is_null()
+        || os_strptime(CStr::from_ptr(str), CStr::from_ptr(fmt), &mut tmval).is_null()
+        || {
+            (*rettv).vval.v_number = mktime(&raw mut tmval) as varnumber_T;
+            (*rettv).vval.v_number == -1 as varnumber_T
+        }
+    {
         (*rettv).vval.v_number = 0 as varnumber_T;
     }
     if conv.vc_type != CONV_NONE as ::core::ffi::c_int {

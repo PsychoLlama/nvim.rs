@@ -3926,12 +3926,7 @@ unsafe extern "C" fn swapfile_info(
         kv_do_printf(
             msg_0,
             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            os_ctime_r(
-                &raw mut x,
-                &raw mut ctime_buf as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 100]>(),
-                true,
-            ),
+            os_ctime_r(x, &mut ctime_buf, true),
         );
     }
     let mut fd: ::core::ffi::c_int = os_open(fname, O_RDONLY, 0 as ::core::ffi::c_int);
@@ -6096,12 +6091,7 @@ unsafe extern "C" fn attention_message(
         kv_do_printf(
             msg_0,
             b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            os_ctime_r(
-                &raw mut x,
-                &raw mut ctime_buf as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 50]>(),
-                true,
-            ),
+            os_ctime_r(x, &mut ctime_buf, true),
         );
         if swap_mtime != 0 as time_t && x > swap_mtime {
             kv_do_printf(

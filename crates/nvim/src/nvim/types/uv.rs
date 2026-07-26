@@ -485,6 +485,15 @@ pub union uv_timer_s_u {
     pub fd: ::core::ffi::c_int,
     pub reserved: [*mut ::core::ffi::c_void; 4],
 }
+pub type uv_clock_id = ::core::ffi::c_uint;
+pub const UV_CLOCK_MONOTONIC: uv_clock_id = 0;
+pub const UV_CLOCK_REALTIME: uv_clock_id = 1;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_timespec64_t {
+    pub tv_sec: int64_t,
+    pub tv_nsec: int32_t,
+}
 pub type uv_timer_t = uv_timer_s;
 #[derive(Copy, Clone)]
 #[repr(C)]

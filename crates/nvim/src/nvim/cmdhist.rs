@@ -546,8 +546,7 @@ pub fn add_to_history(histype: c_int, new_entry: &[u8], in_map: bool, sep: u8) {
     if cmdmod.with(|m| m.cmod_flags as c_int & CMOD_KEEPPATTERNS != 0) && histype == HIST_SEARCH {
         return;
     }
-    // SAFETY: wall-clock read, no editor state involved.
-    let now = unsafe { os_time() };
+    let now = os_time();
     HISTORY.with_mut(|h| {
         if histype == HIST_SEARCH && in_map {
             if maptick.get() == LAST_MAPTICK.get() && !h[HIST_SEARCH as usize].is_empty() {

@@ -189,6 +189,7 @@ unsafe extern "C" {
     ) -> ::core::ffi::c_int;
     pub fn uv_get_total_memory() -> uint64_t;
     pub fn uv_guess_handle(file: uv_file) -> uv_handle_type;
+    pub fn uv_clock_gettime(clock_id: uv_clock_id, ts: *mut uv_timespec64_t) -> ::core::ffi::c_int;
     pub fn uv_hrtime() -> uint64_t;
     pub fn uv_idle_init(_: *mut uv_loop_t, idle: *mut uv_idle_t) -> ::core::ffi::c_int;
     pub fn uv_idle_start(idle: *mut uv_idle_t, cb: uv_idle_cb) -> ::core::ffi::c_int;
