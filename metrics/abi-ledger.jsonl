@@ -22,7 +22,7 @@
 {"symbol":"build_stl_str_hl","kind":"fn","file":"crates/nvim/src/nvim/statusline.rs","class":"test","refs":["unit-specs","functional-specs"]}
 {"symbol":"callback_free","kind":"fn","file":"crates/nvim/src/nvim/eval/typval.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"can_abandon","kind":"fn","file":"crates/nvim/src/nvim/ex_cmds2.rs","class":"internal","refs":[]}
-{"symbol":"ccs_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"ccs_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions/ast.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"changed","kind":"fn","file":"crates/nvim/src/nvim/change.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"changed_lines","kind":"fn","file":"crates/nvim/src/nvim/change.rs","class":"internal","refs":[]}
 {"symbol":"check_cursor","kind":"fn","file":"crates/nvim/src/nvim/cursor.rs","class":"internal","refs":[]}
@@ -41,8 +41,8 @@
 {"symbol":"display_tick","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"do_ecmd","kind":"fn","file":"crates/nvim/src/nvim/ex_cmds.rs","class":"internal","refs":[]}
 {"symbol":"early_init","kind":"fn","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"east_node_type_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"eltkn_cmp_type_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"east_node_type_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions/ast.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"eltkn_cmp_type_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions/ast.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"emsg","kind":"fn","file":"crates/nvim/src/nvim/message.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"emsg_silent","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"emsg_skip","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
@@ -51,7 +51,7 @@
 {"symbol":"event_init","kind":"fn","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"exiting","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"expand_env_esc","kind":"fn","file":"crates/nvim/src/nvim/os/env.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"expr_asgn_type_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"expr_asgn_type_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions/ast.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"extmark_splice","kind":"fn","file":"crates/nvim/src/nvim/extmark.rs","class":"internal","refs":[]}
 {"symbol":"file_close","kind":"fn","file":"crates/nvim/src/nvim/os/fileio.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"file_flush","kind":"fn","file":"crates/nvim/src/nvim/os/fileio.rs","class":"test","refs":["unit-specs"]}
@@ -419,9 +419,9 @@
 {"symbol":"vim_regsub_multi","kind":"fn","file":"crates/nvim/src/nvim/regexp.rs","class":"internal","refs":[]}
 {"symbol":"vim_tempname","kind":"fn","file":"crates/nvim/src/nvim/fileio.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"vim_to_object","kind":"fn","file":"crates/nvim/src/nvim/api/private/converter.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"viml_pexpr_free_ast","kind":"fn","file":"crates/nvim/src/nvim/viml/parser/expressions.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"viml_pexpr_next_token","kind":"fn","file":"crates/nvim/src/nvim/viml/parser/expressions.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"viml_pexpr_parse","kind":"fn","file":"crates/nvim/src/nvim/viml/parser/expressions.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"viml_pexpr_free_ast","kind":"fn","file":"crates/nvim/src/nvim/viml/parser/expressions/ast.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"viml_pexpr_next_token","kind":"fn","file":"crates/nvim/src/nvim/viml/parser/expressions/lexer.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"viml_pexpr_parse","kind":"fn","file":"crates/nvim/src/nvim/viml/parser/expressions/parse.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"vterm_input_write","kind":"fn","file":"crates/nvim/src/nvim/vterm/parser.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"vterm_keyboard_end_paste","kind":"fn","file":"crates/nvim/src/nvim/vterm/keyboard.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"vterm_keyboard_key","kind":"fn","file":"crates/nvim/src/nvim/vterm/keyboard.rs","class":"test","refs":["unit-specs"]}
