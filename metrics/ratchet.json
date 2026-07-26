@@ -1,7 +1,7 @@
 {
   "internal_exports": 154,
-  "files_without_forbid_unsafe": 227,
-  "files_without_deny_unsafe_op": 193,
+  "files_without_forbid_unsafe": 226,
+  "files_without_deny_unsafe_op": 192,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -46,7 +46,7 @@
     "crates/nvim/src/nvim/debugger.rs": {"lines": 2106, "unsafe": 22},
     "crates/nvim/src/nvim/decoration.rs": {"lines": 2617, "unsafe": 59},
     "crates/nvim/src/nvim/decoration_provider.rs": {"unsafe": 13},
-    "crates/nvim/src/nvim/diff.rs": {"lines": 6308, "unsafe": 84},
+    "crates/nvim/src/nvim/diff.rs": {"lines": 6305, "unsafe": 84},
     "crates/nvim/src/nvim/digraph.rs": {"unsafe": 31},
     "crates/nvim/src/nvim/drawline.rs": {"lines": 4979, "unsafe": 46},
     "crates/nvim/src/nvim/drawscreen.rs": {"lines": 3885, "no_mangle": 5, "unsafe": 55},
@@ -100,7 +100,6 @@
     "crates/nvim/src/nvim/input.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/insexpand.rs": {"lines": 8696, "unsafe": 224},
     "crates/nvim/src/nvim/keycodes.rs": {"lines": 3845, "unsafe": 19},
-    "crates/nvim/src/nvim/linematch.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/log.rs": {"lines": 4687, "unsafe": 13, "variadic": 1},
     "crates/nvim/src/nvim/lua/api_wrappers.rs": {"lines": 18140, "unsafe": 407},
     "crates/nvim/src/nvim/lua/base64.rs": {"unsafe": 5},

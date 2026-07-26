@@ -1,483 +1,404 @@
-use crate::src::nvim::memory::{xfree, xmalloc};
-use crate::src::nvim::os::libc::{__assert_fail, memchr, pow};
-pub use crate::src::nvim::types::{int32_t, linenr_T, mmfile_t, s_mmfile, size_t};
-pub type diffcmppath_T = diffcmppath_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct diffcmppath_S {
-    pub df_lev_score: ::core::ffi::c_int,
-    pub df_path_n: size_t,
-    pub df_choice_mem: [::core::ffi::c_int; 256],
-    pub df_choice: [::core::ffi::c_int; 255],
-    pub df_decision: [*mut diffcmppath_T; 255],
-    pub df_optimal_choice: size_t,
+//! The `linematch` diff refinement: given one diff block whose lines
+//! differ across two or more buffers, choose which of those lines to
+//! align against each other so the rendered diff reads well.
+//!
+//! The algorithm walks an n-dimensional tensor whose axes are the buffers
+//! and whose extent along each axis is that buffer's line count in the
+//! block, plus one. Moving from one cell to a neighbour is a *decision*:
+//! a bitmask naming the buffers whose next line is consumed by this step.
+//! Each decision scores the characters the consumed lines have in common,
+//! and the best path from the origin to the far corner is the alignment.
+//! Among equally scored paths the one with the fewest changes of decision
+//! wins, so runs of the same decision stay contiguous.
+//!
+//! For questions about the algorithm itself please contact its author,
+//! Jonathon White (jonathonwhite@protonmail.com).
+//!
+//! # Boundary
+//!
+//! Nothing here touches C. Callers hand in the block text of each buffer
+//! as a byte slice — the `mmfile_t`s the diff machinery passes around
+//! convert at the call site — and get the decisions back as a `Vec`.
+
+#![forbid(unsafe_code)]
+
+pub use crate::src::nvim::types::linenr_T;
+use core::ffi::c_int;
+
+/// Buffers a diff block can span (`DB_COUNT`).
+const LN_MAX_BUFS: usize = 8;
+/// Distinct decisions: one per non-empty subset of the buffers, so
+/// `2^LN_MAX_BUFS - 1`. Also the longest path recorded per tensor cell.
+const LN_DECISION_MAX: usize = 255;
+/// Only this many leading bytes of a line take part in character
+/// matching, capping the quadratic comparison below.
+const MATCH_CHAR_MAX_LEN: usize = 800;
+
+/// One cell of the tensor: the best score reached here, and every
+/// equally-scored way of reaching it.
+#[derive(Clone)]
+struct PathNode {
+    /// Total score of the paths recorded below.
+    score: c_int,
+    /// How many entries of `choice`/`predecessor` are populated.
+    path_n: usize,
+    /// Memoized [`Tensor::min_turns`] result, indexed by the decision
+    /// taken *out* of this cell. `-1` means "not computed yet".
+    choice_mem: [c_int; LN_DECISION_MAX + 1],
+    /// The decision taken to arrive here along each recorded path.
+    choice: [c_int; LN_DECISION_MAX],
+    /// The cell each recorded path came from.
+    predecessor: [usize; LN_DECISION_MAX],
+    /// Index into `choice`/`predecessor` of the path that reaches the end
+    /// with the fewest changes of decision.
+    optimal_choice: usize,
 }
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 87] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 87],
-        [::core::ffi::c_char; 87],
-    >(
-        *b"size_t linematch_nbuffers(const mmfile_t **, const int *, const size_t, int **, _Bool)\0",
-    )
-};
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-unsafe extern "C" fn line_len(mut m: *const mmfile_t) -> size_t {
-    let mut s: *mut ::core::ffi::c_char = (*m).ptr;
-    let mut end: *mut ::core::ffi::c_char = memchr(
-        s as *const ::core::ffi::c_void,
-        '\n' as ::core::ffi::c_int,
-        (*m).size as size_t,
-    ) as *mut ::core::ffi::c_char;
-    return if !end.is_null() {
-        end.offset_from(s) as size_t
-    } else {
-        (*m).size as size_t
-    };
-}
-unsafe extern "C" fn matching_chars_iwhite(
-    mut s1: *const mmfile_t,
-    mut s2: *const mmfile_t,
-) -> ::core::ffi::c_int {
-    let mut sp: [mmfile_t; 2] = [mmfile_t {
-        ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    }; 2];
-    let mut p: [[::core::ffi::c_char; 800]; 2] = [[0; 800]; 2];
-    let mut k: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while k < 2 as ::core::ffi::c_int {
-        let mut s: *const mmfile_t = if k == 0 as ::core::ffi::c_int { s1 } else { s2 };
-        let mut pi: size_t = 0 as size_t;
-        let mut slen: size_t =
-            if ((800 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as size_t) < line_len(s) {
-                (800 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as size_t
-            } else {
-                line_len(s)
-            };
-        let mut i: size_t = 0 as size_t;
-        while i <= slen {
-            let mut e: ::core::ffi::c_char = *(*s).ptr.offset(i as isize);
-            if e as ::core::ffi::c_int != ' ' as ::core::ffi::c_int
-                && e as ::core::ffi::c_int != '\t' as ::core::ffi::c_int
-            {
-                p[k as usize][pi as usize] = e;
-                pi = pi.wrapping_add(1);
-            }
-            i = i.wrapping_add(1);
+
+impl PathNode {
+    const fn new() -> Self {
+        Self {
+            score: 0,
+            path_n: 0,
+            choice_mem: [-1; LN_DECISION_MAX + 1],
+            choice: [0; LN_DECISION_MAX],
+            predecessor: [0; LN_DECISION_MAX],
+            optimal_choice: 0,
         }
-        sp[k as usize] = s_mmfile {
-            ptr: &raw mut *(&raw mut p as *mut [::core::ffi::c_char; 800]).offset(k as isize)
-                as *mut ::core::ffi::c_char,
-            size: pi as ::core::ffi::c_int,
-        };
-        k += 1;
     }
-    return matching_chars(
-        (&raw mut sp as *mut mmfile_t).offset(0 as ::core::ffi::c_int as isize),
-        (&raw mut sp as *mut mmfile_t).offset(1 as ::core::ffi::c_int as isize),
-    );
 }
-unsafe extern "C" fn matching_chars(
-    mut m1: *const mmfile_t,
-    mut m2: *const mmfile_t,
-) -> ::core::ffi::c_int {
-    let mut s1len: size_t =
-        if ((800 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as size_t) < line_len(m1) {
-            (800 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as size_t
-        } else {
-            line_len(m1)
-        };
-    let mut s2len: size_t =
-        if ((800 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as size_t) < line_len(m2) {
-            (800 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as size_t
-        } else {
-            line_len(m2)
-        };
-    let mut s1: *mut ::core::ffi::c_char = (*m1).ptr;
-    let mut s2: *mut ::core::ffi::c_char = (*m2).ptr;
-    let mut matrix: [[::core::ffi::c_int; 800]; 2] = [[0 as ::core::ffi::c_int; 800], [0; 800]];
-    let mut icur: bool = true;
-    let mut i: size_t = 0 as size_t;
-    while i < s1len {
-        icur = !icur;
-        let mut e1: *mut ::core::ffi::c_int =
-            &raw mut *(&raw mut matrix as *mut [::core::ffi::c_int; 800]).offset(icur as isize)
-                as *mut ::core::ffi::c_int;
-        let mut e2: *mut ::core::ffi::c_int = &raw mut *(&raw mut matrix
-            as *mut [::core::ffi::c_int; 800])
-            .offset(!icur as ::core::ffi::c_int as isize)
-            as *mut ::core::ffi::c_int;
-        let mut j: size_t = 0 as size_t;
-        while j < s2len {
-            if *e2.offset(j.wrapping_add(1 as size_t) as isize)
-                > *e1.offset(j.wrapping_add(1 as size_t) as isize)
-            {
-                *e1.offset(j.wrapping_add(1 as size_t) as isize) =
-                    *e2.offset(j.wrapping_add(1 as size_t) as isize);
+
+/// Length of the first line of `block`, excluding its newline.
+fn line_len(block: &[u8]) -> usize {
+    block
+        .iter()
+        .position(|&b| b == b'\n')
+        .unwrap_or(block.len())
+}
+
+/// The first line of `block`, truncated to what the matcher looks at.
+fn leading_line(block: &[u8]) -> &[u8] {
+    &block[..line_len(block).min(MATCH_CHAR_MAX_LEN - 1)]
+}
+
+/// Characters `a` and `b` have in common, in order — the length of their
+/// longest common subsequence. Only the first line of each is compared.
+///
+/// Examples:
+///   `matching_chars("aabc", "acba")`               -> 2, 'a' and 'b'
+///   `matching_chars("123hello567", "he123ll567o")` -> 8, '123', 'll', '567'
+///   `matching_chars("abcdefg", "gfedcba")`         -> 1, every character
+///                                                     is common but no
+///                                                     two are in order
+fn matching_chars(a: &[u8], b: &[u8]) -> c_int {
+    let s1 = leading_line(a);
+    let s2 = leading_line(b);
+    // Only two rows of the table are ever live, so they alternate.
+    let mut buf = ([0 as c_int; MATCH_CHAR_MAX_LEN], [0; MATCH_CHAR_MAX_LEN]);
+    let mut prev: &mut [c_int] = &mut buf.0;
+    let mut cur: &mut [c_int] = &mut buf.1;
+    for &c1 in s1 {
+        for (j, &c2) in s2.iter().enumerate() {
+            // Skip a character in either string, or consume one from
+            // both when they agree.
+            let mut best = prev[j + 1].max(cur[j]);
+            if c1 == c2 {
+                best = best.max(prev[j] + 1);
             }
-            if *e1.offset(j as isize) > *e1.offset(j.wrapping_add(1 as size_t) as isize) {
-                *e1.offset(j.wrapping_add(1 as size_t) as isize) = *e1.offset(j as isize);
-            }
-            if *s1.offset(i as isize) as ::core::ffi::c_int
-                == *s2.offset(j as isize) as ::core::ffi::c_int
-                && *e2.offset(j as isize) + 1 as ::core::ffi::c_int
-                    > *e1.offset(j.wrapping_add(1 as size_t) as isize)
-            {
-                *e1.offset(j.wrapping_add(1 as size_t) as isize) =
-                    *e2.offset(j as isize) + 1 as ::core::ffi::c_int;
-            }
-            j = j.wrapping_add(1);
+            cur[j + 1] = best;
         }
-        i = i.wrapping_add(1);
+        core::mem::swap(&mut prev, &mut cur);
     }
-    return matrix[icur as usize][s2len as usize];
+    prev[s2.len()]
 }
-unsafe extern "C" fn count_n_matched_chars(
-    mut sp: *mut *mut mmfile_t,
-    n: size_t,
-    mut iwhite: bool,
-) -> ::core::ffi::c_int {
-    let mut matched_chars: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut matched: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut i: size_t = 0 as size_t;
-    while i < n {
-        let mut j: size_t = i.wrapping_add(1 as size_t);
-        while j < n {
-            if !(**sp.offset(i as isize)).ptr.is_null() && !(**sp.offset(j as isize)).ptr.is_null()
-            {
+
+/// [`matching_chars`] with spaces and tabs squeezed out first.
+///
+/// The newline terminating each line is copied along with the text, so
+/// the compacted lines still look like lines to [`matching_chars`]. A
+/// final line with no newline contributes nothing in its place: upstream
+/// read one byte past the end of the block there, which this cannot and
+/// does not reproduce.
+fn matching_chars_iwhite(a: &[u8], b: &[u8]) -> c_int {
+    let mut buf = [[0u8; MATCH_CHAR_MAX_LEN]; 2];
+    let mut lens = [0usize; 2];
+    for (k, block) in [a, b].into_iter().enumerate() {
+        let take = (line_len(block).min(MATCH_CHAR_MAX_LEN - 1) + 1).min(block.len());
+        for &byte in &block[..take] {
+            if byte != b' ' && byte != b'\t' {
+                buf[k][lens[k]] = byte;
+                lens[k] += 1;
+            }
+        }
+    }
+    let (first, second) = buf.split_at(1);
+    matching_chars(&first[0][..lens[0]], &second[0][..lens[1]])
+}
+
+/// Score one decision: the characters shared by every pair of lines it
+/// consumes. `lines` holds `None` for the buffers it skips.
+///
+/// A match across three or more buffers is worth the same as a match
+/// across two, so a wide decision doesn't beat a narrow one on breadth
+/// alone.
+fn count_matched_chars(lines: &[Option<&[u8]>], iwhite: bool) -> c_int {
+    let mut matched_chars = 0;
+    let mut matched = 0;
+    for (i, first) in lines.iter().enumerate() {
+        for second in &lines[i + 1..] {
+            if let (Some(a), Some(b)) = (first, second) {
                 matched += 1;
-                matched_chars += if iwhite as ::core::ffi::c_int != 0 {
-                    matching_chars_iwhite(*sp.offset(i as isize), *sp.offset(j as isize))
+                matched_chars += if iwhite {
+                    matching_chars_iwhite(a, b)
                 } else {
-                    matching_chars(*sp.offset(i as isize), *sp.offset(j as isize))
+                    matching_chars(a, b)
                 };
             }
-            j = j.wrapping_add(1);
         }
-        i = i.wrapping_add(1);
     }
-    if matched >= 2 as ::core::ffi::c_int {
-        matched_chars *= 2 as ::core::ffi::c_int;
-        matched_chars /= matched;
+    if matched >= 2 {
+        matched_chars = matched_chars * 2 / matched;
     }
-    return matched_chars;
+    matched_chars
 }
-pub unsafe extern "C" fn fastforward_buf_to_lnum(mut s: mmfile_t, mut lnum: linenr_T) -> mmfile_t {
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while (i as linenr_T) < lnum - 1 as linenr_T {
-        let mut line_end: *mut ::core::ffi::c_char = memchr(
-            s.ptr as *const ::core::ffi::c_void,
-            '\n' as ::core::ffi::c_int,
-            s.size as size_t,
-        ) as *mut ::core::ffi::c_char;
-        s.size = if !line_end.is_null() {
-            (s.size as isize - line_end.offset_from(s.ptr)) as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        };
-        s.ptr = line_end;
-        if s.ptr.is_null() {
-            break;
+
+/// The block text from line `lnum` (1-based) onward, or `None` when the
+/// block ends before that line starts.
+pub fn block_from_lnum(block: &[u8], lnum: linenr_T) -> Option<&[u8]> {
+    let mut rest = block;
+    for _ in 1..lnum {
+        match rest.iter().position(|&b| b == b'\n') {
+            Some(end) => rest = &rest[end + 1..],
+            None => return None,
         }
-        s.ptr = s.ptr.offset(1);
-        s.size -= 1;
-        i += 1;
     }
-    return s;
+    Some(rest)
 }
-unsafe extern "C" fn try_possible_paths(
-    mut df_iters: *const ::core::ffi::c_int,
-    mut paths: *const size_t,
-    npaths: ::core::ffi::c_int,
-    path_idx: ::core::ffi::c_int,
-    mut choice: *mut ::core::ffi::c_int,
-    mut diffcmppath: *mut diffcmppath_T,
-    mut diff_len: *const ::core::ffi::c_int,
-    ndiffs: size_t,
-    mut diff_blk: *mut *const mmfile_t,
-    mut iwhite: bool,
-) {
-    if path_idx == npaths {
-        if *choice > 0 as ::core::ffi::c_int {
-            let mut from_vals: [::core::ffi::c_int; 8] = [0 as ::core::ffi::c_int; 8];
-            let mut to_vals: *const ::core::ffi::c_int = df_iters;
-            let mut mm: [mmfile_t; 8] = [mmfile_t {
-                ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0,
-            }; 8];
-            let mut current_lines: [*mut mmfile_t; 8] = [::core::ptr::null_mut::<mmfile_t>(); 8];
-            let mut k: size_t = 0 as size_t;
-            while k < ndiffs {
-                from_vals[k as usize] = *df_iters.offset(k as isize);
-                if *choice & (1 as ::core::ffi::c_int) << k != 0 {
-                    from_vals[k as usize] -= 1;
-                    mm[k as usize] = fastforward_buf_to_lnum(
-                        **diff_blk.offset(k as isize),
-                        *df_iters.offset(k as isize) as linenr_T,
-                    );
-                } else {
-                    mm[k as usize] = s_mmfile {
-                        ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        size: 0,
-                    };
-                }
-                current_lines[k as usize] = (&raw mut mm as *mut mmfile_t).offset(k as isize);
-                k = k.wrapping_add(1);
+
+/// Flatten a per-buffer line index into an index of the flattened tensor.
+fn unwrap_indexes(values: &[c_int], diff_len: &[c_int]) -> usize {
+    let mut stride: usize = diff_len.iter().map(|&len| len as usize + 1).product();
+    let mut idx = 0;
+    for (k, &n) in values.iter().enumerate() {
+        stride /= diff_len[k] as usize + 1;
+        idx += stride * n as usize;
+    }
+    idx
+}
+
+/// The flattened tensor, plus the inputs every step of the walk needs.
+struct Tensor<'a> {
+    nodes: Vec<PathNode>,
+    /// Block text of each buffer, one entry per axis.
+    blocks: &'a [&'a [u8]],
+    /// Lines each buffer contributes, i.e. the extent of each axis less one.
+    diff_len: &'a [c_int],
+    iwhite: bool,
+}
+
+impl Tensor<'_> {
+    fn ndiffs(&self) -> usize {
+        self.diff_len.len()
+    }
+
+    /// Fill every cell along axis `dim` and everything below it, then
+    /// score the decisions that lead into the cell `df_iters` names.
+    fn populate(&mut self, df_iters: &mut [c_int], dim: usize) {
+        if dim < self.ndiffs() {
+            for i in 0..=self.diff_len[dim] {
+                df_iters[dim] = i;
+                self.populate(df_iters, dim + 1);
             }
-            let mut unwrapped_idx_from: size_t = unwrap_indexes(
-                &raw mut from_vals as *mut ::core::ffi::c_int,
-                diff_len,
-                ndiffs,
-            );
-            let mut unwrapped_idx_to: size_t = unwrap_indexes(to_vals, diff_len, ndiffs);
-            let mut matched_chars: ::core::ffi::c_int =
-                count_n_matched_chars(&raw mut current_lines as *mut *mut mmfile_t, ndiffs, iwhite);
-            let mut score: ::core::ffi::c_int =
-                (*diffcmppath.offset(unwrapped_idx_from as isize)).df_lev_score + matched_chars;
-            if score > (*diffcmppath.offset(unwrapped_idx_to as isize)).df_lev_score {
-                (*diffcmppath.offset(unwrapped_idx_to as isize)).df_path_n = 1 as size_t;
-                (*diffcmppath.offset(unwrapped_idx_to as isize)).df_decision
-                    [0 as ::core::ffi::c_int as usize] =
-                    diffcmppath.offset(unwrapped_idx_from as isize);
-                (*diffcmppath.offset(unwrapped_idx_to as isize)).df_choice
-                    [0 as ::core::ffi::c_int as usize] = *choice;
-                (*diffcmppath.offset(unwrapped_idx_to as isize)).df_lev_score = score;
-            } else if score == (*diffcmppath.offset(unwrapped_idx_to as isize)).df_lev_score {
-                let c2rust_fresh1 = (*diffcmppath.offset(unwrapped_idx_to as isize)).df_path_n;
-                (*diffcmppath.offset(unwrapped_idx_to as isize)).df_path_n = (*diffcmppath
-                    .offset(unwrapped_idx_to as isize))
-                .df_path_n
-                .wrapping_add(1);
-                let mut k_0: size_t = c2rust_fresh1;
-                (*diffcmppath.offset(unwrapped_idx_to as isize)).df_decision[k_0 as usize] =
-                    diffcmppath.offset(unwrapped_idx_from as isize);
-                (*diffcmppath.offset(unwrapped_idx_to as isize)).df_choice[k_0 as usize] = *choice;
-            }
+            return;
         }
-        return;
-    }
-    let mut bit_place: size_t = *paths.offset(path_idx as isize);
-    *choice |= (1 as ::core::ffi::c_int) << bit_place;
-    try_possible_paths(
-        df_iters,
-        paths,
-        npaths,
-        path_idx + 1 as ::core::ffi::c_int,
-        choice,
-        diffcmppath,
-        diff_len,
-        ndiffs,
-        diff_blk,
-        iwhite,
-    );
-    *choice &= !((1 as ::core::ffi::c_int) << bit_place);
-    try_possible_paths(
-        df_iters,
-        paths,
-        npaths,
-        path_idx + 1 as ::core::ffi::c_int,
-        choice,
-        diffcmppath,
-        diff_len,
-        ndiffs,
-        diff_blk,
-        iwhite,
-    );
-}
-unsafe extern "C" fn unwrap_indexes(
-    mut values: *const ::core::ffi::c_int,
-    mut diff_len: *const ::core::ffi::c_int,
-    ndiffs: size_t,
-) -> size_t {
-    let mut num_unwrap_scalar: size_t = 1 as size_t;
-    let mut k: size_t = 0 as size_t;
-    while k < ndiffs {
-        num_unwrap_scalar = num_unwrap_scalar
-            .wrapping_mul((*diff_len.offset(k as isize) as size_t).wrapping_add(1 as size_t));
-        k = k.wrapping_add(1);
-    }
-    let mut path_idx: size_t = 0 as size_t;
-    let mut k_0: size_t = 0 as size_t;
-    while k_0 < ndiffs {
-        num_unwrap_scalar = num_unwrap_scalar
-            .wrapping_div((*diff_len.offset(k_0 as isize) as size_t).wrapping_add(1 as size_t));
-        let mut n: ::core::ffi::c_int = *values.offset(k_0 as isize);
-        path_idx = path_idx.wrapping_add(num_unwrap_scalar.wrapping_mul(n as size_t));
-        k_0 = k_0.wrapping_add(1);
-    }
-    return path_idx;
-}
-unsafe extern "C" fn populate_tensor(
-    mut df_iters: *mut ::core::ffi::c_int,
-    ch_dim: size_t,
-    mut diffcmppath: *mut diffcmppath_T,
-    mut diff_len: *const ::core::ffi::c_int,
-    ndiffs: size_t,
-    mut diff_blk: *mut *const mmfile_t,
-    mut iwhite: bool,
-) {
-    if ch_dim == ndiffs {
-        let mut npaths: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut paths: [size_t; 8] = [0; 8];
-        let mut j: size_t = 0 as size_t;
-        while j < ndiffs {
-            if *df_iters.offset(j as isize) > 0 as ::core::ffi::c_int {
-                paths[npaths as usize] = j;
+        // A buffer can only be consumed if it still has a line here.
+        let mut paths = [0usize; LN_MAX_BUFS];
+        let mut npaths = 0;
+        for (j, &iter) in df_iters.iter().enumerate() {
+            if iter > 0 {
+                paths[npaths] = j;
                 npaths += 1;
             }
-            j = j.wrapping_add(1);
         }
-        let mut choice: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut unwrapper_idx_to: size_t = unwrap_indexes(df_iters, diff_len, ndiffs);
-        (*diffcmppath.offset(unwrapper_idx_to as isize)).df_lev_score = -1 as ::core::ffi::c_int;
-        try_possible_paths(
-            df_iters,
-            &raw mut paths as *mut size_t,
-            npaths,
-            0 as ::core::ffi::c_int,
-            &raw mut choice,
-            diffcmppath,
-            diff_len,
-            ndiffs,
-            diff_blk,
-            iwhite,
-        );
-        return;
+        let to = unwrap_indexes(df_iters, self.diff_len);
+        self.nodes[to].score = -1;
+        self.try_possible_paths(df_iters, &paths[..npaths], 0, &mut 0);
     }
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i <= *diff_len.offset(ch_dim as isize) {
-        *df_iters.offset(ch_dim as isize) = i;
-        populate_tensor(
-            df_iters,
-            ch_dim.wrapping_add(1 as size_t),
-            diffcmppath,
-            diff_len,
-            ndiffs,
-            diff_blk,
-            iwhite,
-        );
-        i += 1;
-    }
-}
-pub unsafe extern "C" fn linematch_nbuffers(
-    mut diff_blk: *mut *const mmfile_t,
-    mut diff_len: *const ::core::ffi::c_int,
-    ndiffs: size_t,
-    mut decisions: *mut *mut ::core::ffi::c_int,
-    mut iwhite: bool,
-) -> size_t {
-    '_c2rust_label: {
-        if ndiffs <= 8 as size_t {
-        } else {
-            __assert_fail(
-                b"ndiffs <= LN_MAX_BUFS\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/linematch.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                332 as ::core::ffi::c_uint,
-                __ASSERT_FUNCTION.as_ptr(),
-            );
-        }
-    };
-    let mut memsize: size_t = 1 as size_t;
-    let mut memsize_decisions: size_t = 0 as size_t;
-    let mut i: size_t = 0 as size_t;
-    while i < ndiffs {
-        '_c2rust_label_0: {
-            if *diff_len.offset(i as isize) >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"diff_len[i] >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/linematch.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    337 as ::core::ffi::c_uint,
-                    __ASSERT_FUNCTION.as_ptr(),
-                );
+
+    /// Walk every subset of `paths` — every decision that could lead into
+    /// the cell `df_iters` names — and score each one.
+    fn try_possible_paths(
+        &mut self,
+        df_iters: &[c_int],
+        paths: &[usize],
+        path_idx: usize,
+        choice: &mut c_int,
+    ) {
+        let Some(&bit) = paths.get(path_idx) else {
+            if *choice > 0 {
+                self.record_path(df_iters, *choice);
             }
+            return;
         };
-        memsize = memsize
-            .wrapping_mul((*diff_len.offset(i as isize) + 1 as ::core::ffi::c_int) as size_t);
-        memsize_decisions = memsize_decisions.wrapping_add(*diff_len.offset(i as isize) as size_t);
-        i = i.wrapping_add(1);
+        *choice |= 1 << bit;
+        self.try_possible_paths(df_iters, paths, path_idx + 1, choice);
+        *choice &= !(1 << bit);
+        self.try_possible_paths(df_iters, paths, path_idx + 1, choice);
     }
-    let mut diffcmppath: *mut diffcmppath_T =
-        xmalloc(::core::mem::size_of::<diffcmppath_T>().wrapping_mul(memsize))
-            as *mut diffcmppath_T;
-    let mut n: size_t = pow(2.0f64, ndiffs as ::core::ffi::c_double) as size_t;
-    let mut i_0: size_t = 0 as size_t;
-    while i_0 < memsize {
-        (*diffcmppath.offset(i_0 as isize)).df_lev_score = 0 as ::core::ffi::c_int;
-        (*diffcmppath.offset(i_0 as isize)).df_path_n = 0 as size_t;
-        let mut j: size_t = 0 as size_t;
-        while j < n {
-            (*diffcmppath.offset(i_0 as isize)).df_choice_mem[j as usize] =
-                -1 as ::core::ffi::c_int;
-            j = j.wrapping_add(1);
-        }
-        i_0 = i_0.wrapping_add(1);
-    }
-    let mut df_iters: [::core::ffi::c_int; 8] = [0; 8];
-    populate_tensor(
-        &raw mut df_iters as *mut ::core::ffi::c_int,
-        0 as size_t,
-        diffcmppath,
-        diff_len,
-        ndiffs,
-        diff_blk,
-        iwhite,
-    );
-    let u: size_t = unwrap_indexes(diff_len, diff_len, ndiffs);
-    let mut startNode: *mut diffcmppath_T = diffcmppath.offset(u as isize);
-    *decisions =
-        xmalloc(::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(memsize_decisions))
-            as *mut ::core::ffi::c_int;
-    let mut n_optimal: size_t = 0 as size_t;
-    test_charmatch_paths(startNode, 0 as ::core::ffi::c_int);
-    while (*startNode).df_path_n > 0 as size_t {
-        let mut j_0: size_t = (*startNode).df_optimal_choice;
-        let c2rust_fresh0 = n_optimal;
-        n_optimal = n_optimal.wrapping_add(1);
-        *(*decisions).offset(c2rust_fresh0 as isize) = (*startNode).df_choice[j_0 as usize];
-        startNode = (*startNode).df_decision[j_0 as usize];
-    }
-    let mut i_1: size_t = 0 as size_t;
-    while i_1 < n_optimal.wrapping_div(2 as size_t) {
-        let mut tmp: ::core::ffi::c_int = *(*decisions).offset(i_1 as isize);
-        *(*decisions).offset(i_1 as isize) =
-            *(*decisions).offset(n_optimal.wrapping_sub(1 as size_t).wrapping_sub(i_1) as isize);
-        *(*decisions).offset(n_optimal.wrapping_sub(1 as size_t).wrapping_sub(i_1) as isize) = tmp;
-        i_1 = i_1.wrapping_add(1);
-    }
-    xfree(diffcmppath as *mut ::core::ffi::c_void);
-    return n_optimal;
-}
-unsafe extern "C" fn test_charmatch_paths(
-    mut node: *mut diffcmppath_T,
-    mut lastdecision: ::core::ffi::c_int,
-) -> size_t {
-    if (*node).df_choice_mem[lastdecision as usize] == -1 as ::core::ffi::c_int {
-        if (*node).df_path_n == 0 as size_t {
-            (*node).df_choice_mem[lastdecision as usize] = 0 as ::core::ffi::c_int;
-        } else {
-            let mut minimum_turns: size_t = SIZE_MAX as size_t;
-            let mut i: size_t = 0 as size_t;
-            while i < (*node).df_path_n {
-                let mut t: size_t = test_charmatch_paths(
-                    (*node).df_decision[i as usize],
-                    (*node).df_choice[i as usize],
-                )
-                .wrapping_add(
-                    (if lastdecision != (*node).df_choice[i as usize] {
-                        1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    }) as size_t,
-                );
-                if t < minimum_turns {
-                    (*node).df_optimal_choice = i;
-                    minimum_turns = t;
-                }
-                i = i.wrapping_add(1);
+
+    /// Score `choice` as a way into the cell `df_iters` names, and keep it
+    /// if it ties or beats what is already recorded there.
+    fn record_path(&mut self, df_iters: &[c_int], choice: c_int) {
+        let (blocks, diff_len) = (self.blocks, self.diff_len);
+        let mut from_vals = [0 as c_int; LN_MAX_BUFS];
+        let mut lines = [None; LN_MAX_BUFS];
+        for (k, &iter) in df_iters.iter().enumerate() {
+            from_vals[k] = iter;
+            if choice & (1 << k) != 0 {
+                from_vals[k] -= 1;
+                lines[k] = block_from_lnum(blocks[k], iter);
             }
-            (*node).df_choice_mem[lastdecision as usize] = minimum_turns as ::core::ffi::c_int;
+        }
+        let n = df_iters.len();
+        let from = unwrap_indexes(&from_vals[..n], diff_len);
+        let to = unwrap_indexes(df_iters, diff_len);
+        let score = self.nodes[from].score + count_matched_chars(&lines[..n], self.iwhite);
+        let node = &mut self.nodes[to];
+        if score > node.score {
+            node.path_n = 1;
+            node.score = score;
+            node.choice[0] = choice;
+            node.predecessor[0] = from;
+        } else if score == node.score {
+            let k = node.path_n;
+            node.path_n += 1;
+            node.choice[k] = choice;
+            node.predecessor[k] = from;
         }
     }
-    return (*node).df_choice_mem[lastdecision as usize] as size_t;
+
+    /// Fewest changes of decision on any path from `idx` back to the
+    /// origin, given that the step *out* of `idx` was `last_decision`.
+    /// Records the winning path in the cell's `optimal_choice`.
+    fn min_turns(&mut self, idx: usize, last_decision: c_int) -> usize {
+        let memo = self.nodes[idx].choice_mem[last_decision as usize];
+        if memo >= 0 {
+            return memo as usize;
+        }
+        let mut minimum = 0;
+        for i in 0..self.nodes[idx].path_n {
+            let (choice, from) = (self.nodes[idx].choice[i], self.nodes[idx].predecessor[i]);
+            let turns = self.min_turns(from, choice) + usize::from(last_decision != choice);
+            if i == 0 || turns < minimum {
+                self.nodes[idx].optimal_choice = i;
+                minimum = turns;
+            }
+        }
+        self.nodes[idx].choice_mem[last_decision as usize] = minimum as c_int;
+        minimum
+    }
+}
+
+/// Align the lines of one diff block across `diff_blk.len()` buffers.
+///
+/// `diff_blk` is each buffer's block text, `diff_len` the number of lines
+/// each contributes. The result is one decision per output line, in
+/// order: a bitmask of the buffers whose next line that output line
+/// shows.
+pub fn linematch_nbuffers(diff_blk: &[&[u8]], diff_len: &[c_int], iwhite: bool) -> Vec<c_int> {
+    let ndiffs = diff_len.len();
+    assert!(ndiffs <= LN_MAX_BUFS);
+    assert_eq!(diff_blk.len(), ndiffs);
+
+    let mut memsize = 1usize;
+    let mut max_decisions = 0usize;
+    for &len in diff_len {
+        assert!(len >= 0);
+        memsize *= len as usize + 1;
+        max_decisions += len as usize;
+    }
+
+    let mut tensor = Tensor {
+        nodes: vec![PathNode::new(); memsize],
+        blocks: diff_blk,
+        diff_len,
+        iwhite,
+    };
+    let mut df_iters = [0 as c_int; LN_MAX_BUFS];
+    tensor.populate(&mut df_iters[..ndiffs], 0);
+
+    // Walk back from the far corner along the cheapest of the best paths.
+    let mut node = unwrap_indexes(diff_len, diff_len);
+    tensor.min_turns(node, 0);
+    let mut decisions = Vec::with_capacity(max_decisions);
+    while tensor.nodes[node].path_n > 0 {
+        let j = tensor.nodes[node].optimal_choice;
+        decisions.push(tensor.nodes[node].choice[j]);
+        node = tensor.nodes[node].predecessor[j];
+    }
+    decisions.reverse();
+    decisions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn line_len_stops_at_the_newline() {
+        assert_eq!(line_len(b"abc\ndef\n"), 3);
+        assert_eq!(line_len(b"\n"), 0);
+        assert_eq!(line_len(b"no newline"), 10);
+        assert_eq!(line_len(b""), 0);
+    }
+
+    #[test]
+    fn matching_chars_counts_the_longest_common_subsequence() {
+        // The examples from the algorithm's own documentation.
+        assert_eq!(matching_chars(b"aabc\n", b"acba\n"), 2);
+        assert_eq!(matching_chars(b"123hello567\n", b"he123ll567o\n"), 8);
+        assert_eq!(matching_chars(b"abcdefg\n", b"gfedcba\n"), 1);
+    }
+
+    #[test]
+    fn matching_chars_looks_at_the_first_line_only() {
+        assert_eq!(matching_chars(b"ab\nxyz\n", b"ab\nxyz\n"), 2);
+        assert_eq!(matching_chars(b"", b"anything\n"), 0);
+    }
+
+    #[test]
+    fn matching_chars_truncates_long_lines() {
+        let long = vec![b'a'; MATCH_CHAR_MAX_LEN * 2];
+        assert_eq!(
+            matching_chars(&long, &long),
+            MATCH_CHAR_MAX_LEN as c_int - 1
+        );
+    }
+
+    #[test]
+    fn matching_chars_iwhite_ignores_spaces_and_tabs() {
+        // Without it the shared indent alone scores a match.
+        assert_eq!(matching_chars(b" a\n", b" b\n"), 1);
+        assert_eq!(matching_chars_iwhite(b" a\n", b" b\n"), 0);
+        // The newline travels with the text, so it is not compared.
+        assert_eq!(matching_chars_iwhite(b"  \n", b"\t\n"), 0);
+    }
+
+    #[test]
+    fn block_from_lnum_walks_lines() {
+        let block = b"one\ntwo\nthree\n";
+        assert_eq!(block_from_lnum(block, 1), Some(&block[..]));
+        assert_eq!(block_from_lnum(block, 3), Some(&b"three\n"[..]));
+        // The trailing newline leaves an empty — but present — remainder.
+        assert_eq!(block_from_lnum(block, 4), Some(&b""[..]));
+        assert_eq!(block_from_lnum(block, 5), None);
+        assert_eq!(block_from_lnum(b"", 2), None);
+    }
+
+    #[test]
+    fn unwrap_indexes_flattens_row_major() {
+        assert_eq!(unwrap_indexes(&[0, 0], &[2, 3]), 0);
+        assert_eq!(unwrap_indexes(&[0, 1], &[2, 3]), 1);
+        assert_eq!(unwrap_indexes(&[1, 0], &[2, 3]), 4);
+        assert_eq!(unwrap_indexes(&[2, 3], &[2, 3]), 11);
+    }
 }

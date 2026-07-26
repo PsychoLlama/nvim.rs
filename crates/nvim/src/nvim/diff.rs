@@ -3687,7 +3687,6 @@ unsafe extern "C" fn run_linematch_algorithm(mut dp: *mut diff_T) {
         ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         size: 0,
     }; 8];
-    let mut diffbufs: [*const mmfile_t; 8] = [::core::ptr::null::<mmfile_t>(); 8];
     let mut diff_length: [::core::ffi::c_int; 8] = [0; 8];
     let mut ndiffs: size_t = 0 as size_t;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3704,22 +3703,21 @@ unsafe extern "C" fn run_linematch_algorithm(mut dp: *mut diff_T) {
                 diffbufs_mm[ndiffs as usize].size = 0 as ::core::ffi::c_int;
                 diffbufs_mm[ndiffs as usize].ptr = ::core::ptr::null_mut::<::core::ffi::c_char>();
             }
-            diffbufs[ndiffs as usize] =
-                (&raw mut diffbufs_mm as *mut mmfile_t).offset(ndiffs as isize);
             diff_length[ndiffs as usize] = (*dp).df_count[i as usize] as ::core::ffi::c_int;
             ndiffs = ndiffs.wrapping_add(1);
         }
         i += 1;
     }
-    let mut decisions: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
     let iwhite: bool = diff_flags.get() & (DIFF_IWHITEALL | DIFF_IWHITE) > 0 as ::core::ffi::c_int;
-    let mut decisions_length: size_t = linematch_nbuffers(
-        &raw mut diffbufs as *mut *const mmfile_t,
-        &raw mut diff_length as *mut ::core::ffi::c_int,
-        ndiffs,
-        &raw mut decisions,
-        iwhite,
-    );
+    // `diff_write_buffer` leaves an empty block as a NULL pointer, which
+    // `from_raw_parts` may not see; those axes have zero length anyway.
+    let mut blocks: [&[u8]; 8] = [&[]; 8];
+    for (block, mm) in blocks.iter_mut().zip(&diffbufs_mm[..ndiffs]) {
+        if !mm.ptr.is_null() {
+            *block = ::core::slice::from_raw_parts(mm.ptr as *const u8, mm.size as usize);
+        }
+    }
+    let decisions = linematch_nbuffers(&blocks[..ndiffs], &diff_length[..ndiffs], iwhite);
     let mut i_0: size_t = 0 as size_t;
     while i_0 < ndiffs {
         let mut ptr_: *mut *mut ::core::ffi::c_void =
@@ -3730,8 +3728,7 @@ unsafe extern "C" fn run_linematch_algorithm(mut dp: *mut diff_T) {
         let _ = *ptr_;
         i_0 = i_0.wrapping_add(1);
     }
-    apply_linematch_results(dp, decisions_length, decisions);
-    xfree(decisions as *mut ::core::ffi::c_void);
+    apply_linematch_results(dp, decisions.len(), decisions.as_ptr());
 }
 pub unsafe extern "C" fn diff_check_with_linestatus(
     mut wp: *mut win_T,

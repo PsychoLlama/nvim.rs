@@ -1,6 +1,6 @@
 use crate::src::nvim::api::private::dispatch::KeyDict_xdl_diff_get_field;
 use crate::src::nvim::api::private::helpers::{api_clear_error, api_free_string, api_set_error};
-use crate::src::nvim::linematch::{fastforward_buf_to_lnum, linematch_nbuffers};
+use crate::src::nvim::linematch::{block_from_lnum, linematch_nbuffers};
 use crate::src::nvim::lua::converter::nlua_pop_keydict;
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_pushref};
 use crate::src::nvim::lua::ffi::{
@@ -9,7 +9,7 @@ use crate::src::nvim::lua::ffi::{
     lua_tonumber, lua_type, luaL_argerror, luaL_buffinit, luaL_error, luaL_prepbuffer,
     luaL_pushresult, luaL_where,
 };
-use crate::src::nvim::memory::{strequal, xfree};
+use crate::src::nvim::memory::strequal;
 use crate::src::nvim::os::libc::{memcpy, memset};
 pub use crate::src::nvim::types::{
     Arena, Array, Boolean, Dict, Error, ErrorType, FieldHashfn, Float, Integer, KeySetLink,
@@ -162,33 +162,20 @@ unsafe extern "C" fn get_linematch_results(
     mut count_b: ::core::ffi::c_int,
     mut iwhite: bool,
 ) {
-    let mut ma0: mmfile_t = fastforward_buf_to_lnum(*ma, start_a as linenr_T + 1 as linenr_T);
-    let mut mb0: mmfile_t = fastforward_buf_to_lnum(*mb, start_b as linenr_T + 1 as linenr_T);
-    let mut diff_begin: [*const mmfile_t; 2] = [
-        &raw mut ma0 as *const mmfile_t,
-        &raw mut mb0 as *const mmfile_t,
-    ];
-    let mut diff_length: [::core::ffi::c_int; 2] = [count_a, count_b];
-    let mut decisions: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
-    let mut decisions_length: size_t = linematch_nbuffers(
-        &raw mut diff_begin as *mut *const mmfile_t,
-        &raw mut diff_length as *mut ::core::ffi::c_int,
-        2 as size_t,
-        &raw mut decisions,
-        iwhite,
-    );
+    // The two blocks as bytes; `xdl_diff` only hands over non-empty ones.
+    let bytes_a: &[u8] = ::core::slice::from_raw_parts((*ma).ptr as *const u8, (*ma).size as usize);
+    let bytes_b: &[u8] = ::core::slice::from_raw_parts((*mb).ptr as *const u8, (*mb).size as usize);
+    let block_a = block_from_lnum(bytes_a, start_a as linenr_T + 1).unwrap_or_default();
+    let block_b = block_from_lnum(bytes_b, start_b as linenr_T + 1).unwrap_or_default();
+    let decisions = linematch_nbuffers(&[block_a, block_b], &[count_a, count_b], iwhite);
     let mut lnuma: ::core::ffi::c_int = start_a;
     let mut lnumb: ::core::ffi::c_int = start_b;
     let mut hunkstarta: ::core::ffi::c_int = lnuma;
     let mut hunkstartb: ::core::ffi::c_int = lnumb;
     let mut hunkcounta: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut hunkcountb: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut i: size_t = 0 as size_t;
-    while i < decisions_length {
-        if i != 0
-            && *decisions.offset(i.wrapping_sub(1 as size_t) as isize)
-                != *decisions.offset(i as isize)
-        {
+    for (i, &decision) in decisions.iter().enumerate() {
+        if i != 0 && decisions[i - 1] != decision {
             lua_pushhunk(
                 lstate,
                 hunkstarta as ::core::ffi::c_long,
@@ -201,15 +188,14 @@ unsafe extern "C" fn get_linematch_results(
             hunkcounta = 0 as ::core::ffi::c_int;
             hunkcountb = 0 as ::core::ffi::c_int;
         }
-        if *decisions.offset(i as isize) & COMPARED_BUFFER0 != 0 {
+        if decision & COMPARED_BUFFER0 != 0 {
             lnuma += 1;
             hunkcounta += 1;
         }
-        if *decisions.offset(i as isize) & COMPARED_BUFFER1 != 0 {
+        if decision & COMPARED_BUFFER1 != 0 {
             lnumb += 1;
             hunkcountb += 1;
         }
-        i = i.wrapping_add(1);
     }
     lua_pushhunk(
         lstate,
@@ -218,7 +204,6 @@ unsafe extern "C" fn get_linematch_results(
         hunkstartb as ::core::ffi::c_long,
         hunkcountb as ::core::ffi::c_long,
     );
-    xfree(decisions as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn write_string(
     mut priv_0: *mut ::core::ffi::c_void,

@@ -10,6 +10,7 @@ mod cmdhist;
 mod digraph;
 mod garray;
 mod keycodes;
+mod linematch;
 mod memory;
 mod profile;
 mod sha256;
