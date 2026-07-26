@@ -5,7 +5,7 @@ use crate::src::nvim::api::private::helpers::{
 use crate::src::nvim::channel::{channel_connect, channel_job_start};
 use crate::src::nvim::event::r#loop::process_events;
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
-use crate::src::nvim::event::socket::socket_address_tcp_host_end;
+use crate::src::nvim::event::socket::socket_address_is_tcp;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::dict2hlattrs;
 use crate::src::nvim::log::logmsg;
@@ -56,6 +56,7 @@ pub use crate::src::nvim::types::{
     uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
     varnumber_T, winsize,
 };
+use core::ffi::CStr;
 unsafe extern "C" {
     fn tui_start(
         tui_p: *mut *mut TUIData,
@@ -992,7 +993,7 @@ unsafe extern "C" fn channel_connect_event(mut argv: *mut *mut ::core::ffi::c_vo
     let mut server_addr: *mut ::core::ffi::c_char =
         *argv.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
     let mut err: *const ::core::ffi::c_char = b"\0".as_ptr() as *const ::core::ffi::c_char;
-    let mut is_tcp: bool = !socket_address_tcp_host_end(server_addr).is_null();
+    let mut is_tcp: bool = socket_address_is_tcp(CStr::from_ptr(server_addr));
     let mut on_data: CallbackReader = CallbackReader {
         cb: Callback {
             data: C2Rust_Unnamed_0 {
@@ -1085,13 +1086,8 @@ pub unsafe extern "C" fn ui_client_attach_to_restarted_server() {
             b"Error handling ui event 'restart'\0".as_ptr() as *const ::core::ffi::c_char,
         );
     } else {
-        listen_addr = (*(*restart_args.ptr())
-            .items
-            .offset(0 as ::core::ffi::c_int as isize))
-        .data
-        .string
-        .data;
-        is_tcp = !socket_address_tcp_host_end(listen_addr).is_null();
+        listen_addr = (*(*restart_args.ptr()).items).data.string.data;
+        is_tcp = socket_address_is_tcp(CStr::from_ptr(listen_addr));
         err = b"\0".as_ptr() as *const ::core::ffi::c_char;
         chan_id = channel_connect(
             is_tcp,

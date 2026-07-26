@@ -28,7 +28,7 @@ use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::event::r#loop::{loop_close, loop_init, loop_poll_events};
 use crate::src::nvim::event::multiqueue::{multiqueue_new_child, multiqueue_process_events};
 use crate::src::nvim::event::proc::proc_teardown;
-use crate::src::nvim::event::socket::socket_address_tcp_host_end;
+use crate::src::nvim::event::socket::socket_address_is_tcp;
 use crate::src::nvim::event::stream::stream_set_blocking;
 use crate::src::nvim::ex_cmds::do_ecmd;
 use crate::src::nvim::ex_docmd::{do_cmdline_cmd, filetype_maybe_enable, filetype_plugin_enable};
@@ -161,6 +161,7 @@ use crate::src::nvim::window::{
     goto_tabpage, make_tabpages, make_windows, only_one_window, win_alloc_first, win_close,
     win_count, win_enter, win_equal, win_init_size, win_new_screensize,
 };
+use core::ffi::CStr;
 unsafe extern "C" {
     fn qf_init(
         wp: *mut win_T,
@@ -5936,7 +5937,7 @@ unsafe extern "C" fn server_connect(
         type_0: ::core::ptr::null::<::core::ffi::c_char>(),
     };
     let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut is_tcp: bool = !socket_address_tcp_host_end(server_addr).is_null();
+    let mut is_tcp: bool = socket_address_is_tcp(CStr::from_ptr(server_addr));
     let mut chan: uint64_t = channel_connect(
         is_tcp,
         server_addr,
@@ -6742,9 +6743,7 @@ unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
                                 (*parmp).n_commands = (*parmp).n_commands + 1;
                                 let c2rust_lvalue_ptr_1 =
                                     &raw mut (*parmp).commands[c2rust_fresh9 as usize];
-                                *c2rust_lvalue_ptr_1 = (*argv
-                                    .offset(0 as ::core::ffi::c_int as isize))
-                                .offset(argv_idx as isize);
+                                *c2rust_lvalue_ptr_1 = (*argv).offset(argv_idx as isize);
                                 argv_idx = -1 as ::core::ffi::c_int;
                                 break 's_747;
                             } else {
