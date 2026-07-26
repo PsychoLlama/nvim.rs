@@ -15,6 +15,7 @@ use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::garray::{ga_append, ga_concat, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::hashtab::{hash_lock, hash_unlock};
 use crate::src::nvim::main::{
     did_emsg, e_invalblob, e_invarg, e_invarg2, e_list_index_out_of_range_nr, e_listblobarg,
     e_listblobreq, e_listdictarg, e_listdictblobarg, e_string_required,
@@ -35,10 +36,6 @@ pub use crate::src::nvim::types::{
     proftime_T, ptrdiff_t, queue, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S,
     ufunc_T, uint8_t, uint64_t, varnumber_T, vimconv_T,
 };
-unsafe extern "C" {
-    fn hash_lock(ht: *mut hashtab_T);
-    fn hash_unlock(ht: *mut hashtab_T);
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

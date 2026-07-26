@@ -21,6 +21,7 @@ use crate::src::nvim::fold::foldOpenCursor;
 use crate::src::nvim::garray::{ga_clear, ga_clear_strings, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup};
 use crate::src::nvim::help::help_heuristic;
 use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
@@ -101,21 +102,6 @@ use crate::src::nvim::window::{
     win_split, win_valid,
 };
 unsafe extern "C" {
-    fn hash_init(ht: *mut hashtab_T);
-    fn hash_clear(ht: *mut hashtab_T);
-    fn hash_lookup(
-        ht: *const hashtab_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        hash: hash_T,
-    ) -> *mut hashitem_T;
-    fn hash_add_item(
-        ht: *mut hashtab_T,
-        hi: *mut hashitem_T,
-        key: *mut ::core::ffi::c_char,
-        hash: hash_T,
-    );
-    fn hash_hash(key: *const ::core::ffi::c_char) -> hash_T;
     fn set_errorlist(
         wp: *mut win_T,
         list: *mut list_T,

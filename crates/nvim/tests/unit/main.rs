@@ -9,6 +9,7 @@ mod charset;
 mod cmdhist;
 mod digraph;
 mod garray;
+mod hashtab;
 mod keycodes;
 mod linematch;
 mod memory;

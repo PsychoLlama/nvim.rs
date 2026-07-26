@@ -43,6 +43,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{
     grid_adjust, grid_assign_handle, grid_clear, grid_free, win_grid_alloc,
 };
+use crate::src::nvim::hashtab::hash_init;
 use crate::src::nvim::main::{
     Columns, KeyStuffed, KeyTyped, RedrawingDisabled, Rows, State, VIsual_active, allow_keys,
     au_pending_free_win, autocmd_busy, clear_cmdline, cmdline_row, cmdline_win, cmdmod,
@@ -148,7 +149,6 @@ use crate::src::nvim::winfloat::{
 };
 unsafe extern "C" {
     static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_20>;
-    fn hash_init(ht: *mut hashtab_T);
     fn qf_free_all(wp: *mut win_T);
     fn copy_loclist_stack(from: *mut win_T, to: *mut win_T);
     fn terminal_check_size(term: *mut Terminal);

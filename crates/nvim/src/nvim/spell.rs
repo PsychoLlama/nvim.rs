@@ -15,6 +15,9 @@ use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::hashtab::{
+    hash_add_item, hash_clear_all, hash_find, hash_hash, hash_init, hash_lookup,
+};
 use crate::src::nvim::insexpand::{
     ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted,
 };
@@ -93,22 +96,6 @@ pub use crate::src::nvim::types::{
 use crate::src::nvim::undo::u_save_cursor;
 use crate::src::nvim::window::win_valid_any_tab;
 unsafe extern "C" {
-    fn hash_init(ht: *mut hashtab_T);
-    fn hash_clear_all(ht: *mut hashtab_T, off: ::core::ffi::c_uint);
-    fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
-    fn hash_lookup(
-        ht: *const hashtab_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        hash: hash_T,
-    ) -> *mut hashitem_T;
-    fn hash_add_item(
-        ht: *mut hashtab_T,
-        hi: *mut hashitem_T,
-        key: *mut ::core::ffi::c_char,
-        hash: hash_T,
-    );
-    fn hash_hash(key: *const ::core::ffi::c_char) -> hash_T;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

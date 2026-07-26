@@ -24,6 +24,7 @@ use crate::src::nvim::fileio::{check_timestamps, file_pat_to_reg_pat, match_file
 use crate::src::nvim::getchar::{restoreRedobuff, saveRedobuff};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::grid_free;
+use crate::src::nvim::hashtab::hash_init;
 use crate::src::nvim::insexpand::ins_compl_active;
 use crate::src::nvim::lua::executor::{nlua_call_ref, nlua_set_sctx};
 use crate::src::nvim::main::{
@@ -124,7 +125,6 @@ use crate::src::nvim::window::{
 use crate::src::nvim::winfloat::win_config_float;
 unsafe extern "C" {
     static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_30>;
-    fn hash_init(ht: *mut hashtab_T);
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

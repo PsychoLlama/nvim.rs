@@ -54,6 +54,7 @@ use crate::src::nvim::ex_docmd::{
 use crate::src::nvim::ex_eval::{aborting, discard_current_exception};
 use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::hash_init;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::highlight_group::syn_name2id;
 use crate::src::nvim::insexpand::{set_ref_in_cpt_callbacks, set_ref_in_insexpand_funcs};
@@ -179,7 +180,6 @@ use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::u_clearallandblockfree;
 unsafe extern "C" {
     static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_35>;
-    fn hash_init(ht: *mut hashtab_T);
     fn vim_regsub(
         rmp: *mut regmatch_T,
         source: *mut ::core::ffi::c_char,

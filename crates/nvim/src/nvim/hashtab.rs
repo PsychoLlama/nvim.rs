@@ -15,28 +15,11 @@ use crate::src::nvim::memory::{xcalloc, xfree};
 use crate::src::nvim::message::siemsg;
 use crate::src::nvim::os::libc::gettext;
 
-pub type hash_T = usize;
+pub use crate::src::nvim::types::{hash_T, hashitem_T, hashtab_T};
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct hashitem_T {
-    pub hi_hash: hash_T,
-    pub hi_key: *mut c_char,
-}
-
+/// The array a table starts with, inline in the struct. Growing past it moves
+/// to the heap; shrinking back to this size moves back in.
 pub const HT_INIT_SIZE: usize = 16;
-
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct hashtab_T {
-    pub ht_mask: hash_T,
-    pub ht_used: usize,
-    pub ht_filled: usize,
-    pub ht_changed: c_int,
-    pub ht_locked: c_int,
-    pub ht_array: *mut hashitem_T,
-    pub ht_smallarray: [hashitem_T; HT_INIT_SIZE],
-}
 
 const PERTURB_SHIFT: u32 = 5;
 const OK: c_int = 1;
@@ -57,16 +40,20 @@ fn removed_sentinel() -> *mut c_char {
 }
 
 impl hashitem_T {
-    fn is_empty(&self) -> bool {
+    /// Never held a key.
+    pub fn is_empty(&self) -> bool {
         self.hi_key.is_null()
     }
 
-    fn is_removed(&self) -> bool {
+    /// Held a key that was removed: a tombstone, which a probe walks past but
+    /// an insertion may reuse.
+    pub fn is_removed(&self) -> bool {
         self.hi_key == removed_sentinel()
     }
 
-    /// Holds a live key (neither empty nor a tombstone).
-    fn is_kept(&self) -> bool {
+    /// Holds a live key (neither empty nor a tombstone). This is the
+    /// `HASHITEM_EMPTY` test every caller that walks `ht_array` open-codes.
+    pub fn is_kept(&self) -> bool {
         !self.is_empty() && !self.is_removed()
     }
 }
@@ -202,8 +189,7 @@ fn rehash_into(old: &[hashitem_T], new: &mut [hashitem_T], used: usize) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_init(ht: *mut hashtab_T) {
+pub unsafe fn hash_init(ht: *mut hashtab_T) {
     *ht = hashtab_T {
         ht_mask: (HT_INIT_SIZE - 1) as hash_T,
         ht_used: 0,
@@ -216,8 +202,7 @@ pub unsafe extern "C" fn hash_init(ht: *mut hashtab_T) {
     (*ht).ht_array = (&raw mut (*ht).ht_smallarray) as *mut hashitem_T;
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_clear(ht: *mut hashtab_T) {
+pub unsafe fn hash_clear(ht: *mut hashtab_T) {
     if (*ht).ht_array != (&raw mut (*ht).ht_smallarray) as *mut hashitem_T {
         xfree((*ht).ht_array as *mut c_void);
     }
@@ -225,14 +210,13 @@ pub unsafe extern "C" fn hash_clear(ht: *mut hashtab_T) {
 
 /// Free the table *and* every key, where each key pointer was offset by
 /// `off` bytes into its allocation (keys living inside larger structs).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_clear_all(ht: *mut hashtab_T, off: c_uint) {
+pub unsafe fn hash_clear_all(ht: *mut hashtab_T, off: c_uint) {
     let mut todo = (*ht).ht_used;
     // Error paths free zeroed, never-initialized tables whose ht_array is
     // still null; like the C loop, don't touch the array unless a live
     // item needs freeing.
     if todo > 0 {
-        let items = slice::from_raw_parts((*ht).ht_array, (*ht).ht_mask as usize + 1);
+        let items = slice::from_raw_parts((*ht).ht_array, (*ht).ht_mask + 1);
         for hi in items {
             if todo == 0 {
                 break;
@@ -246,8 +230,7 @@ pub unsafe extern "C" fn hash_clear_all(ht: *mut hashtab_T, off: c_uint) {
     hash_clear(ht);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_find(ht: *const hashtab_T, key: *const c_char) -> *mut hashitem_T {
+pub unsafe fn hash_find(ht: *const hashtab_T, key: *const c_char) -> *mut hashitem_T {
     hash_lookup(
         ht,
         key,
@@ -256,8 +239,7 @@ pub unsafe extern "C" fn hash_find(ht: *const hashtab_T, key: *const c_char) -> 
     )
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_find_len(
+pub unsafe fn hash_find_len(
     ht: *const hashtab_T,
     key: *const c_char,
     len: usize,
@@ -268,8 +250,7 @@ pub unsafe extern "C" fn hash_find_len(
 /// Find `key` (of `key_len` bytes, hashing to `hash`): returns the item
 /// holding it, or — for an absent key — the slot where it belongs (a
 /// tombstone if the walk crossed one, else the empty slot that ended it).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_lookup(
+pub unsafe fn hash_lookup(
     ht: *const hashtab_T,
     key: *const c_char,
     key_len: usize,
@@ -293,18 +274,12 @@ pub unsafe extern "C" fn hash_lookup(
     unreachable!("probe sequence always finds an empty slot");
 }
 
-pub extern "C" fn hash_debug_results() {}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> c_int {
+pub unsafe fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> c_int {
     let hash = hash_hash(key);
     let hi = hash_lookup(ht, key, CStr::from_ptr(key).to_bytes().len(), hash);
     if (*hi).is_kept() {
         siemsg(
-            gettext(
-                b"E685: Internal error: hash_add(): duplicate key \"%s\"\0".as_ptr()
-                    as *const c_char,
-            ),
+            gettext(c"E685: Internal error: hash_add(): duplicate key \"%s\"".as_ptr()),
             key,
         );
         return FAIL;
@@ -315,8 +290,7 @@ pub unsafe extern "C" fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> c_int
 
 /// Add `key` at `hi`, which the caller obtained from `hash_lookup` on a
 /// missing key (so it is empty or a tombstone).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_add_item(
+pub unsafe fn hash_add_item(
     ht: *mut hashtab_T,
     hi: *mut hashitem_T,
     key: *mut c_char,
@@ -334,8 +308,7 @@ pub unsafe extern "C" fn hash_add_item(
 
 /// Remove the item at `hi` (leaving a tombstone). The key itself belongs to
 /// the caller.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T) {
+pub unsafe fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T) {
     (*ht).ht_used = (*ht).ht_used.wrapping_sub(1);
     (*ht).ht_changed += 1;
     (*hi).hi_key = removed_sentinel();
@@ -344,13 +317,11 @@ pub unsafe extern "C" fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T) {
 
 /// Lock out resizing while a caller iterates `ht_array` or holds item
 /// pointers across mutations.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_lock(ht: *mut hashtab_T) {
+pub unsafe fn hash_lock(ht: *mut hashtab_T) {
     (*ht).ht_locked += 1;
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_unlock(ht: *mut hashtab_T) {
+pub unsafe fn hash_unlock(ht: *mut hashtab_T) {
     (*ht).ht_locked -= 1;
     hash_may_resize(ht, 0);
 }
@@ -362,7 +333,7 @@ unsafe fn hash_may_resize(ht: *mut hashtab_T, minitems: usize) {
         return;
     }
     let smallarray = (&raw mut (*ht).ht_smallarray) as *mut hashitem_T;
-    let oldsize = (*ht).ht_mask as usize + 1;
+    let oldsize = (*ht).ht_mask + 1;
     let newsize = match resize_decision(
         (*ht).ht_filled,
         (*ht).ht_used,
@@ -405,12 +376,11 @@ unsafe fn hash_may_resize(ht: *mut hashtab_T, minitems: usize) {
     (*ht).ht_changed += 1;
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn hash_hash(key: *const c_char) -> hash_T {
+pub unsafe fn hash_hash(key: *const c_char) -> hash_T {
     hash_bytes(CStr::from_ptr(key).to_bytes())
 }
 
-pub unsafe extern "C" fn hash_hash_len(key: *const c_char, len: usize) -> hash_T {
+pub unsafe fn hash_hash_len(key: *const c_char, len: usize) -> hash_T {
     hash_bytes_len(slice::from_raw_parts(key as *const u8, len))
 }
 

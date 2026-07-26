@@ -37,7 +37,6 @@ use crate::src::nvim::fileio::{readfile, shorten_fnames};
 use crate::src::nvim::garray::ga_grow;
 use crate::src::nvim::getchar::{open_scriptin, stuffcharReadbuff, vgetc};
 use crate::src::nvim::global_cell::{GlobalCell, SharedCell};
-use crate::src::nvim::hashtab::hash_debug_results;
 use crate::src::nvim::highlight::highlight_init;
 use crate::src::nvim::highlight_group::init_highlight;
 use crate::src::nvim::log::{log_init, logmsg};
@@ -5734,7 +5733,6 @@ pub unsafe extern "C" fn getout(mut exitval: ::core::ffi::c_int) -> ! {
         );
     }
     invoke_all_defer();
-    hash_debug_results();
     if v_dying.get() <= 1 as ::core::ffi::c_int {
         let mut next_tp: *const tabpage_T = ::core::ptr::null::<tabpage_T>();
         let mut tp: *const tabpage_T = first_tabpage.get();

@@ -12,6 +12,10 @@ use crate::src::nvim::fold::{foldUpdateAll, foldmethodIsSyntax};
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::hashtab::{
+    hash_add_item, hash_clear, hash_find, hash_hash, hash_init, hash_lock, hash_lookup,
+    hash_remove, hash_unlock,
+};
 use crate::src::nvim::highlight_group::{
     highlight_group_name, highlight_link_id, highlight_num_groups, init_highlight, syn_check_group,
     syn_id2attr, syn_list_header, syn_name2id, syn_name2id_len,
@@ -77,25 +81,6 @@ pub use crate::src::nvim::types::{
     wline_T, xfmark_T, xp_prefix_T,
 };
 unsafe extern "C" {
-    fn hash_init(ht: *mut hashtab_T);
-    fn hash_clear(ht: *mut hashtab_T);
-    fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
-    fn hash_lookup(
-        ht: *const hashtab_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        hash: hash_T,
-    ) -> *mut hashitem_T;
-    fn hash_add_item(
-        ht: *mut hashtab_T,
-        hi: *mut hashitem_T,
-        key: *mut ::core::ffi::c_char,
-        hash: hash_T,
-    );
-    fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T);
-    fn hash_lock(ht: *mut hashtab_T);
-    fn hash_unlock(ht: *mut hashtab_T);
-    fn hash_hash(key: *const ::core::ffi::c_char) -> hash_T;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

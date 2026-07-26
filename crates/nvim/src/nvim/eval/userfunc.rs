@@ -32,6 +32,7 @@ use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga
 use crate::src::nvim::getchar::{restoreRedobuff, saveRedobuff};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::hashtab::{hash_add, hash_find, hash_find_len, hash_init, hash_remove};
 use crate::src::nvim::insexpand::ins_compl_active;
 use crate::src::nvim::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
@@ -112,15 +113,6 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui::ui_has;
 unsafe extern "C" {
-    fn hash_init(ht: *mut hashtab_T);
-    fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
-    fn hash_find_len(
-        ht: *const hashtab_T,
-        key: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut hashitem_T;
-    fn hash_add(ht: *mut hashtab_T, key: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T);
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

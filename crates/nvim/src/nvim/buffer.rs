@@ -36,6 +36,7 @@ use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::getchar::vgetc;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::hashtab::{hash_find, hash_init, hash_remove};
 use crate::src::nvim::help::get_local_additions;
 use crate::src::nvim::indent::inindent;
 use crate::src::nvim::indent_c::parse_cino;
@@ -151,9 +152,6 @@ use crate::src::nvim::window::{
 };
 use crate::src::nvim::winfloat::win_set_minimal_style;
 unsafe extern "C" {
-    fn hash_init(ht: *mut hashtab_T);
-    fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
-    fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T);
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

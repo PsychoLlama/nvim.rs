@@ -35,6 +35,7 @@ use crate::src::nvim::getchar::{beep_flush, char_avail, vpeekc};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start};
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup};
 use crate::src::nvim::help::{cleanup_help_tags, find_help_tags};
 use crate::src::nvim::highlight_group::{get_highlight_name, set_context_in_highlight_cmd};
 use crate::src::nvim::insexpand::find_word_end;
@@ -140,21 +141,6 @@ use crate::src::nvim::usercmd::{
 use crate::src::nvim::window::{global_stl_height, last_status};
 use core::ffi::CStr;
 unsafe extern "C" {
-    fn hash_init(ht: *mut hashtab_T);
-    fn hash_clear(ht: *mut hashtab_T);
-    fn hash_lookup(
-        ht: *const hashtab_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        hash: hash_T,
-    ) -> *mut hashitem_T;
-    fn hash_add_item(
-        ht: *mut hashtab_T,
-        hi: *mut hashitem_T,
-        key: *mut ::core::ffi::c_char,
-        hash: hash_T,
-    );
-    fn hash_hash(key: *const ::core::ffi::c_char) -> hash_T;
     static pum_want: GlobalCell<C2Rust_Unnamed_22>;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,

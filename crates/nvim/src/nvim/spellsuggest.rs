@@ -10,6 +10,9 @@ use crate::src::nvim::getchar::{
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::hashtab::{
+    hash_add_item, hash_clear, hash_clear_all, hash_find, hash_hash, hash_init, hash_lookup,
+};
 use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::main::{
     IObuff, Rows, VIsual, VIsual_active, cmdline_row, cmdmsg_rl, curbuf, curwin, e_no_spell,
@@ -74,25 +77,6 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui::{ui_has, vim_beep};
 use crate::src::nvim::undo::u_save_cursor;
-unsafe extern "C" {
-    fn hash_init(ht: *mut hashtab_T);
-    fn hash_clear(ht: *mut hashtab_T);
-    fn hash_clear_all(ht: *mut hashtab_T, off: ::core::ffi::c_uint);
-    fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
-    fn hash_lookup(
-        ht: *const hashtab_T,
-        key: *const ::core::ffi::c_char,
-        key_len: size_t,
-        hash: hash_T,
-    ) -> *mut hashitem_T;
-    fn hash_add_item(
-        ht: *mut hashtab_T,
-        hi: *mut hashitem_T,
-        key: *mut ::core::ffi::c_char,
-        hash: hash_T,
-    );
-    fn hash_hash(key: *const ::core::ffi::c_char) -> hash_T;
-}
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

@@ -19,6 +19,9 @@ use crate::src::nvim::garray::{
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::hashtab::{
+    hash_add, hash_clear, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_unlock,
+};
 use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
 use crate::src::nvim::main::{
     curwin, did_emsg, e_blobidx, e_cannot_change_value, e_cannot_change_value_of_str, e_dictkey,
@@ -72,20 +75,6 @@ pub use crate::src::nvim::types::{
     undo_object, uvarnumber_T, varnumber_T, vimconv_T, virt_line, visualinfo_T, win_T, window_S,
     wininfo_S, winopt_T, wline_T, xfmark_T,
 };
-unsafe extern "C" {
-    fn hash_init(ht: *mut hashtab_T);
-    fn hash_clear(ht: *mut hashtab_T);
-    fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
-    fn hash_find_len(
-        ht: *const hashtab_T,
-        key: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut hashitem_T;
-    fn hash_add(ht: *mut hashtab_T, key: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T);
-    fn hash_lock(ht: *mut hashtab_T);
-    fn hash_unlock(ht: *mut hashtab_T);
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

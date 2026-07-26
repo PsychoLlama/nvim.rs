@@ -30,6 +30,9 @@ use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::hashtab::{
+    hash_add, hash_clear, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_unlock,
+};
 use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
     EVALARG_EVALUATE, called_emsg, curbuf, current_sctx, curtab, curwin, did_emsg,
@@ -99,20 +102,6 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::version::{highest_patch, min_vim_version};
 use crate::src::nvim::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
-unsafe extern "C" {
-    fn hash_init(ht: *mut hashtab_T);
-    fn hash_clear(ht: *mut hashtab_T);
-    fn hash_find(ht: *const hashtab_T, key: *const ::core::ffi::c_char) -> *mut hashitem_T;
-    fn hash_find_len(
-        ht: *const hashtab_T,
-        key: *const ::core::ffi::c_char,
-        len: size_t,
-    ) -> *mut hashitem_T;
-    fn hash_add(ht: *mut hashtab_T, key: *mut ::core::ffi::c_char) -> ::core::ffi::c_int;
-    fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T);
-    fn hash_lock(ht: *mut hashtab_T);
-    fn hash_unlock(ht: *mut hashtab_T);
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISpunct: C2Rust_Unnamed = 4;
