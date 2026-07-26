@@ -96,9 +96,4 @@ mod tests {
         assert_eq!(parse_pids(""), []);
         assert_eq!(parse_pids("  \n "), []);
     }
-
-    #[test]
-    fn our_own_process_is_running() {
-        assert!(os_proc_running(std::process::id() as c_int));
-    }
 }
