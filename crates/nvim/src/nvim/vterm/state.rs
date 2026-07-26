@@ -984,8 +984,11 @@ pub(super) fn test_state(
     let mut state: VTermState = unsafe { ::core::mem::zeroed() };
     state.rows = lineinfo.len() as c_int;
     state.cols = cols;
-    state.lineinfo = lineinfo.as_mut_ptr();
-    state.lineinfos = [lineinfo.as_mut_ptr(); 2];
+    // Both arrays are borrowed exactly once: taking a second pointer out of
+    // the same reference would invalidate the first.
+    let marks = lineinfo.as_mut_ptr();
+    state.lineinfo = marks;
+    state.lineinfos = [marks; 2];
     state.tabstops = tabstops.as_mut_ptr();
     state.scrollregion_bottom = -1;
     state.scrollregion_right = -1;
