@@ -15,3 +15,4 @@ mod memory;
 mod profile;
 mod sha256;
 mod strings;
+mod terminfo;

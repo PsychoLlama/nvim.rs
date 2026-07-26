@@ -32,6 +32,21 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::strings::kv_do_printf;
+use crate::src::nvim::tui::terminfo::caps::{
+    TerminfoDef, kTerm_carriage_return, kTerm_change_scroll_region, kTerm_clear_screen,
+    kTerm_clr_eol, kTerm_clr_eos, kTerm_cursor_address, kTerm_cursor_down, kTerm_cursor_home,
+    kTerm_cursor_invisible, kTerm_cursor_left, kTerm_cursor_normal, kTerm_cursor_right,
+    kTerm_cursor_up, kTerm_delete_line, kTerm_enter_blink_mode, kTerm_enter_bold_mode,
+    kTerm_enter_ca_mode, kTerm_enter_dim_mode, kTerm_enter_italics_mode, kTerm_enter_reverse_mode,
+    kTerm_enter_secure_mode, kTerm_enter_standout_mode, kTerm_enter_strikethrough_mode,
+    kTerm_enter_underline_mode, kTerm_erase_chars, kTerm_exit_attribute_mode, kTerm_exit_ca_mode,
+    kTerm_from_status_line, kTerm_insert_line, kTerm_keypad_local, kTerm_keypad_xmit,
+    kTerm_parm_delete_line, kTerm_parm_down_cursor, kTerm_parm_insert_line, kTerm_parm_left_cursor,
+    kTerm_parm_right_cursor, kTerm_parm_up_cursor, kTerm_reset_cursor_color,
+    kTerm_reset_cursor_style, kTerm_set_a_background, kTerm_set_a_foreground, kTerm_set_attributes,
+    kTerm_set_cursor_color, kTerm_set_cursor_style, kTerm_set_lr_margin, kTerm_set_rgb_background,
+    kTerm_set_rgb_foreground, kTerm_set_underline_style, kTerm_to_status_line, kTermCount,
+};
 use crate::src::nvim::tui::terminfo::{
     terminfo_fmt, terminfo_from_builtin, terminfo_from_database, terminfo_info_msg,
     terminfo_is_bsd_console, terminfo_is_term_family,
@@ -313,57 +328,6 @@ pub const SHAPE_BLOCK: CursorShape = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const kLineFlagInvalid: C2Rust_Unnamed_17 = 2;
 pub const kLineFlagWrap: C2Rust_Unnamed_17 = 1;
-pub type TerminfoDef = ::core::ffi::c_uint;
-pub const kTermCount: TerminfoDef = 49;
-pub const kTerm_set_underline_style: TerminfoDef = 48;
-pub const kTerm_reset_cursor_color: TerminfoDef = 47;
-pub const kTerm_set_cursor_color: TerminfoDef = 46;
-pub const kTerm_set_rgb_background: TerminfoDef = 45;
-pub const kTerm_set_rgb_foreground: TerminfoDef = 44;
-pub const kTerm_enter_strikethrough_mode: TerminfoDef = 43;
-pub const kTerm_set_cursor_style: TerminfoDef = 42;
-pub const kTerm_reset_cursor_style: TerminfoDef = 41;
-pub const kTerm_to_status_line: TerminfoDef = 40;
-pub const kTerm_set_lr_margin: TerminfoDef = 39;
-pub const kTerm_set_attributes: TerminfoDef = 38;
-pub const kTerm_set_a_foreground: TerminfoDef = 37;
-pub const kTerm_set_a_background: TerminfoDef = 36;
-pub const kTerm_parm_up_cursor: TerminfoDef = 35;
-pub const kTerm_parm_right_cursor: TerminfoDef = 34;
-pub const kTerm_parm_left_cursor: TerminfoDef = 33;
-pub const kTerm_parm_insert_line: TerminfoDef = 32;
-pub const kTerm_parm_down_cursor: TerminfoDef = 31;
-pub const kTerm_parm_delete_line: TerminfoDef = 30;
-pub const kTerm_keypad_xmit: TerminfoDef = 29;
-pub const kTerm_keypad_local: TerminfoDef = 28;
-pub const kTerm_insert_line: TerminfoDef = 27;
-pub const kTerm_from_status_line: TerminfoDef = 26;
-pub const kTerm_exit_ca_mode: TerminfoDef = 25;
-pub const kTerm_exit_attribute_mode: TerminfoDef = 24;
-pub const kTerm_erase_chars: TerminfoDef = 23;
-pub const kTerm_enter_underline_mode: TerminfoDef = 22;
-pub const kTerm_enter_standout_mode: TerminfoDef = 21;
-pub const kTerm_enter_secure_mode: TerminfoDef = 20;
-pub const kTerm_enter_reverse_mode: TerminfoDef = 19;
-pub const kTerm_enter_italics_mode: TerminfoDef = 18;
-pub const kTerm_enter_dim_mode: TerminfoDef = 17;
-pub const kTerm_enter_ca_mode: TerminfoDef = 16;
-pub const kTerm_enter_bold_mode: TerminfoDef = 15;
-pub const kTerm_enter_blink_mode: TerminfoDef = 14;
-pub const kTerm_delete_line: TerminfoDef = 13;
-pub const kTerm_cursor_right: TerminfoDef = 12;
-pub const kTerm_cursor_up: TerminfoDef = 11;
-pub const kTerm_cursor_normal: TerminfoDef = 10;
-pub const kTerm_cursor_home: TerminfoDef = 9;
-pub const kTerm_cursor_left: TerminfoDef = 8;
-pub const kTerm_cursor_invisible: TerminfoDef = 7;
-pub const kTerm_cursor_down: TerminfoDef = 6;
-pub const kTerm_cursor_address: TerminfoDef = 5;
-pub const kTerm_clr_eos: TerminfoDef = 4;
-pub const kTerm_clr_eol: TerminfoDef = 3;
-pub const kTerm_clear_screen: TerminfoDef = 2;
-pub const kTerm_change_scroll_region: TerminfoDef = 1;
-pub const kTerm_carriage_return: TerminfoDef = 0;
 pub struct TUIData {
     pub loop_0: *mut Loop,
     pub buf: [::core::ffi::c_char; 65535],
@@ -886,19 +850,19 @@ unsafe extern "C" fn terminfo_start(mut tui: *mut TUIData) {
     let mut term: *mut ::core::ffi::c_char =
         os_getenv(b"TERM\0".as_ptr() as *const ::core::ffi::c_char);
     (*tui).terminfo_found_in_db = false_0 != 0;
-    if !term.is_null() {
-        if terminfo_from_database(&raw mut (*tui).ti, term, &raw mut (*tui).ti_arena) {
-            (*tui).term = arena_strdup(&raw mut (*tui).ti_arena, term);
-            (*tui).terminfo_found_in_db = true_0 != 0;
-        }
+    let term_name: Option<&::core::ffi::CStr> =
+        (!term.is_null()).then(|| ::core::ffi::CStr::from_ptr(term));
+    if let Some(name) = term_name
+        && let Some(entry) = terminfo_from_database(name, &raw mut (*tui).ti_arena)
+    {
+        (*tui).ti = entry;
+        (*tui).term = arena_strdup(&raw mut (*tui).ti_arena, term);
+        (*tui).terminfo_found_in_db = true_0 != 0;
     }
     if !(*tui).terminfo_found_in_db {
-        let mut new: *const TerminfoEntry = terminfo_from_builtin(term, &raw mut (*tui).term);
-        memcpy(
-            &raw mut (*tui).ti as *mut ::core::ffi::c_void,
-            new as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<TerminfoEntry>(),
-        );
+        let (builtin_name, entry) = terminfo_from_builtin(term_name);
+        (*tui).ti = entry;
+        (*tui).term = builtin_name.as_ptr().cast_mut();
     }
     let mut colorterm: *mut ::core::ffi::c_char =
         os_getenv(b"COLORTERM\0".as_ptr() as *const ::core::ffi::c_char);
@@ -931,23 +895,18 @@ unsafe extern "C" fn terminfo_start(mut tui: *mut TUIData) {
             b"Apple_Terminal\0".as_ptr() as *const ::core::ffi::c_char,
         )
         .is_null()
-        || terminfo_is_term_family(term, b"nsterm\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0;
-    let mut konsole: bool =
-        terminfo_is_term_family(term, b"konsole\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
+        || terminfo_is_term_family(term, c"nsterm") as ::core::ffi::c_int != 0;
+    let mut konsole: bool = terminfo_is_term_family(term, c"konsole") as ::core::ffi::c_int != 0
+        || os_env_exists(
+            b"KONSOLE_PROFILE_NAME\0".as_ptr() as *const ::core::ffi::c_char,
+            true_0 != 0,
+        ) as ::core::ffi::c_int
             != 0
-            || os_env_exists(
-                b"KONSOLE_PROFILE_NAME\0".as_ptr() as *const ::core::ffi::c_char,
-                true_0 != 0,
-            ) as ::core::ffi::c_int
-                != 0
-            || os_env_exists(
-                b"KONSOLE_DBUS_SESSION\0".as_ptr() as *const ::core::ffi::c_char,
-                true_0 != 0,
-            ) as ::core::ffi::c_int
-                != 0;
+        || os_env_exists(
+            b"KONSOLE_DBUS_SESSION\0".as_ptr() as *const ::core::ffi::c_char,
+            true_0 != 0,
+        ) as ::core::ffi::c_int
+            != 0;
     let mut konsolev: ::core::ffi::c_int = if !konsolev_env.is_null() {
         strtol(
             konsolev_env,
@@ -965,17 +924,13 @@ unsafe extern "C" fn terminfo_start(mut tui: *mut TUIData) {
     } else {
         ::core::ptr::null_mut::<::core::ffi::c_char>()
     };
-    let mut screen: bool =
-        terminfo_is_term_family(term, b"screen\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut tmux: bool =
-        terminfo_is_term_family(term, b"tmux\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-            || os_env_exists(
-                b"TMUX\0".as_ptr() as *const ::core::ffi::c_char,
-                true_0 != 0,
-            ) as ::core::ffi::c_int
-                != 0;
+    let mut screen: bool = terminfo_is_term_family(term, c"screen");
+    let mut tmux: bool = terminfo_is_term_family(term, c"tmux") as ::core::ffi::c_int != 0
+        || os_env_exists(
+            b"TMUX\0".as_ptr() as *const ::core::ffi::c_char,
+            true_0 != 0,
+        ) as ::core::ffi::c_int
+            != 0;
     (*tui).screen_or_tmux = screen as ::core::ffi::c_int != 0 || tmux as ::core::ffi::c_int != 0;
     (*tui).rgb = term_has_truecolor(tui, colorterm);
     patch_terminfo_bugs(tui, term, colorterm, vtev, konsolev, iterm_env, nsterm);
@@ -991,18 +946,10 @@ unsafe extern "C" fn terminfo_start(mut tui: *mut TUIData) {
     (*tui).can_erase_chars =
         !(*tui).ti.defs[kTerm_erase_chars as ::core::ffi::c_int as usize].is_null();
     (*tui).immediate_wrap_after_last_column =
-        terminfo_is_term_family(term, b"conemu\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-            || terminfo_is_term_family(term, b"cygwin\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int
-                != 0
-            || terminfo_is_term_family(term, b"win32con\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int
-                != 0
-            || terminfo_is_term_family(term, b"interix\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int
-                != 0;
+        terminfo_is_term_family(term, c"conemu") as ::core::ffi::c_int != 0
+            || terminfo_is_term_family(term, c"cygwin") as ::core::ffi::c_int != 0
+            || terminfo_is_term_family(term, c"win32con") as ::core::ffi::c_int != 0
+            || terminfo_is_term_family(term, c"interix") as ::core::ffi::c_int != 0;
     (*tui).bce = (*tui).ti.bce;
     t_colors.set((*tui).ti.max_colors);
     terminfo_out(tui, kTerm_enter_ca_mode);
@@ -2699,8 +2646,7 @@ unsafe extern "C" fn show_verbose_terminfo(mut tui: *mut TUIData) {
     }; 1];
     info.capacity = 1 as size_t;
     info.items = &raw mut info__items as *mut Object;
-    let mut str: String_0 =
-        terminfo_info_msg(&raw mut (*tui).ti, (*tui).term, (*tui).terminfo_found_in_db);
+    let mut str: String_0 = terminfo_info_msg(&(*tui).ti, (*tui).term, (*tui).terminfo_found_in_db);
     let c2rust_fresh8 = info.size;
     info.size = info.size.wrapping_add(1);
     *info.items.offset(c2rust_fresh8 as isize) = object {
@@ -3493,63 +3439,31 @@ unsafe extern "C" fn patch_terminfo_bugs(
 ) {
     let mut xterm_version: *mut ::core::ffi::c_char =
         os_getenv(b"XTERM_VERSION\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut xterm: bool =
-        terminfo_is_term_family(term, b"xterm\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-            || nsterm as ::core::ffi::c_int != 0;
-    let mut hterm: bool =
-        terminfo_is_term_family(term, b"hterm\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut kitty: bool = terminfo_is_term_family(
-        term,
-        b"xterm-kitty\0".as_ptr() as *const ::core::ffi::c_char,
-    );
-    let mut linuxvt: bool =
-        terminfo_is_term_family(term, b"linux\0".as_ptr() as *const ::core::ffi::c_char);
+    let mut xterm: bool = terminfo_is_term_family(term, c"xterm") as ::core::ffi::c_int != 0
+        || nsterm as ::core::ffi::c_int != 0;
+    let mut hterm: bool = terminfo_is_term_family(term, c"hterm");
+    let mut kitty: bool = terminfo_is_term_family(term, c"xterm-kitty");
+    let mut linuxvt: bool = terminfo_is_term_family(term, c"linux");
     let mut bsdvt: bool = terminfo_is_bsd_console(term);
-    let mut rxvt: bool =
-        terminfo_is_term_family(term, b"rxvt\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut teraterm: bool =
-        terminfo_is_term_family(term, b"teraterm\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut putty: bool =
-        terminfo_is_term_family(term, b"putty\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut screen: bool =
-        terminfo_is_term_family(term, b"screen\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut tmux: bool =
-        terminfo_is_term_family(term, b"tmux\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-            || os_env_exists(
-                b"TMUX\0".as_ptr() as *const ::core::ffi::c_char,
-                true_0 != 0,
-            ) as ::core::ffi::c_int
-                != 0;
-    let mut st: bool =
-        terminfo_is_term_family(term, b"st\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut gnome: bool =
-        terminfo_is_term_family(term, b"gnome\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-            || terminfo_is_term_family(term, b"vte\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int
-                != 0;
-    let mut iterm: bool =
-        terminfo_is_term_family(term, b"iterm\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-            || terminfo_is_term_family(term, b"iterm2\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int
-                != 0
-            || terminfo_is_term_family(term, b"iTerm.app\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int
-                != 0
-            || terminfo_is_term_family(term, b"iTerm2.app\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int
-                != 0;
-    let mut alacritty: bool =
-        terminfo_is_term_family(term, b"alacritty\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut foot: bool =
-        terminfo_is_term_family(term, b"foot\0".as_ptr() as *const ::core::ffi::c_char);
+    let mut rxvt: bool = terminfo_is_term_family(term, c"rxvt");
+    let mut teraterm: bool = terminfo_is_term_family(term, c"teraterm");
+    let mut putty: bool = terminfo_is_term_family(term, c"putty");
+    let mut screen: bool = terminfo_is_term_family(term, c"screen");
+    let mut tmux: bool = terminfo_is_term_family(term, c"tmux") as ::core::ffi::c_int != 0
+        || os_env_exists(
+            b"TMUX\0".as_ptr() as *const ::core::ffi::c_char,
+            true_0 != 0,
+        ) as ::core::ffi::c_int
+            != 0;
+    let mut st: bool = terminfo_is_term_family(term, c"st");
+    let mut gnome: bool = terminfo_is_term_family(term, c"gnome") as ::core::ffi::c_int != 0
+        || terminfo_is_term_family(term, c"vte") as ::core::ffi::c_int != 0;
+    let mut iterm: bool = terminfo_is_term_family(term, c"iterm") as ::core::ffi::c_int != 0
+        || terminfo_is_term_family(term, c"iterm2") as ::core::ffi::c_int != 0
+        || terminfo_is_term_family(term, c"iTerm.app") as ::core::ffi::c_int != 0
+        || terminfo_is_term_family(term, c"iTerm2.app") as ::core::ffi::c_int != 0;
+    let mut alacritty: bool = terminfo_is_term_family(term, c"alacritty");
+    let mut foot: bool = terminfo_is_term_family(term, c"foot");
     let mut iterm_pretending_xterm: bool =
         xterm as ::core::ffi::c_int != 0 && iterm_env as ::core::ffi::c_int != 0;
     let mut gnome_pretending_xterm: bool = xterm as ::core::ffi::c_int != 0
@@ -3568,12 +3482,8 @@ unsafe extern "C" fn patch_terminfo_bugs(
         .is_null();
     let mut true_xterm: bool =
         xterm as ::core::ffi::c_int != 0 && !xterm_version.is_null() && !bsdvt;
-    let mut cygwin: bool =
-        terminfo_is_term_family(term, b"cygwin\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut ghostty: bool = terminfo_is_term_family(
-        term,
-        b"xterm-ghostty\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut cygwin: bool = terminfo_is_term_family(term, c"cygwin");
+    let mut ghostty: bool = terminfo_is_term_family(term, c"xterm-ghostty");
     let mut fix_normal: *const ::core::ffi::c_char =
         (*tui).ti.defs[kTerm_cursor_normal as ::core::ffi::c_int as usize];
     if !fix_normal.is_null() {
@@ -3722,7 +3632,7 @@ unsafe extern "C" fn patch_terminfo_bugs(
             kTerm_enter_italics_mode,
             b"\x1B[3m\0".as_ptr() as *const ::core::ffi::c_char,
         );
-    } else if terminfo_is_term_family(term, b"interix\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if terminfo_is_term_family(term, c"interix") {
         terminfo_set_if_empty(
             tui,
             kTerm_carriage_return,
@@ -3899,54 +3809,28 @@ unsafe extern "C" fn augment_terminfo(
 ) {
     let mut xterm_version: *mut ::core::ffi::c_char =
         os_getenv(b"XTERM_VERSION\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut xterm: bool =
-        terminfo_is_term_family(term, b"xterm\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-            || nsterm as ::core::ffi::c_int != 0;
-    let mut hterm: bool =
-        terminfo_is_term_family(term, b"hterm\0".as_ptr() as *const ::core::ffi::c_char);
+    let mut xterm: bool = terminfo_is_term_family(term, c"xterm") as ::core::ffi::c_int != 0
+        || nsterm as ::core::ffi::c_int != 0;
+    let mut hterm: bool = terminfo_is_term_family(term, c"hterm");
     let mut bsdvt: bool = terminfo_is_bsd_console(term);
-    let mut dtterm: bool =
-        terminfo_is_term_family(term, b"dtterm\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut rxvt: bool =
-        terminfo_is_term_family(term, b"rxvt\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut teraterm: bool =
-        terminfo_is_term_family(term, b"teraterm\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut putty: bool =
-        terminfo_is_term_family(term, b"putty\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut screen: bool =
-        terminfo_is_term_family(term, b"screen\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut tmux: bool =
-        terminfo_is_term_family(term, b"tmux\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-            || os_env_exists(
-                b"TMUX\0".as_ptr() as *const ::core::ffi::c_char,
-                true_0 != 0,
-            ) as ::core::ffi::c_int
-                != 0;
-    let mut st: bool =
-        terminfo_is_term_family(term, b"st\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut iterm: bool =
-        terminfo_is_term_family(term, b"iterm\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-            || terminfo_is_term_family(term, b"iterm2\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int
-                != 0
-            || terminfo_is_term_family(term, b"iTerm.app\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int
-                != 0
-            || terminfo_is_term_family(term, b"iTerm2.app\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int
-                != 0;
-    let mut alacritty: bool =
-        terminfo_is_term_family(term, b"alacritty\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut kitty: bool = terminfo_is_term_family(
-        term,
-        b"xterm-kitty\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    let mut dtterm: bool = terminfo_is_term_family(term, c"dtterm");
+    let mut rxvt: bool = terminfo_is_term_family(term, c"rxvt");
+    let mut teraterm: bool = terminfo_is_term_family(term, c"teraterm");
+    let mut putty: bool = terminfo_is_term_family(term, c"putty");
+    let mut screen: bool = terminfo_is_term_family(term, c"screen");
+    let mut tmux: bool = terminfo_is_term_family(term, c"tmux") as ::core::ffi::c_int != 0
+        || os_env_exists(
+            b"TMUX\0".as_ptr() as *const ::core::ffi::c_char,
+            true_0 != 0,
+        ) as ::core::ffi::c_int
+            != 0;
+    let mut st: bool = terminfo_is_term_family(term, c"st");
+    let mut iterm: bool = terminfo_is_term_family(term, c"iterm") as ::core::ffi::c_int != 0
+        || terminfo_is_term_family(term, c"iterm2") as ::core::ffi::c_int != 0
+        || terminfo_is_term_family(term, c"iTerm.app") as ::core::ffi::c_int != 0
+        || terminfo_is_term_family(term, c"iTerm2.app") as ::core::ffi::c_int != 0;
+    let mut alacritty: bool = terminfo_is_term_family(term, c"alacritty");
+    let mut kitty: bool = terminfo_is_term_family(term, c"xterm-kitty");
     let mut iterm_pretending_xterm: bool =
         xterm as ::core::ffi::c_int != 0 && iterm_env as ::core::ffi::c_int != 0;
     let mut true_xterm: bool =

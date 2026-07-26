@@ -5,6 +5,7 @@
 //! sequences those capabilities named. Input is then matched against the trie
 //! before the generic CSI driver gets a look.
 
+use crate::src::nvim::tui::terminfo::caps::{KEYS, MAX_FUNCTION_KEY, key_slot};
 use crate::src::nvim::tui::termkey::termkey::{
     TERMKEY_KEYMOD_SHIFT, TERMKEY_RES_AGAIN, TERMKEY_RES_KEY, TERMKEY_RES_NONE,
     TERMKEY_SYM_BACKSPACE, TERMKEY_SYM_BEGIN, TERMKEY_SYM_CLEAR, TERMKEY_SYM_DELETE,
@@ -20,34 +21,21 @@ pub use crate::src::nvim::types::{
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
-/// The highest `key_fN` capability terminfo defines.
-const TERMKEY_MAX_FUNCTION_KEY: usize = 63;
-
 /// One of the named (non-`key_fN`) capabilities the driver looks up.
 struct NamedKey {
-    /// Index into `TerminfoEntry::keys`. That array's order is fixed by
-    /// `UNI_KEYS` in tui/terminfo.rs; the two must be kept in step.
+    /// Which of `tui::terminfo::caps::KEYS` this is. That index is also the
+    /// slot in `TerminfoEntry::keys`, and it carries the capability names the
+    /// getstr hook is asked for, so the two tables cannot drift apart.
     slot: usize,
-    /// Terminfo capability names, passed to nvim's getstr hook so it can
-    /// substitute its own sequence for the terminal's.
-    unshifted: &'static CStr,
-    shifted: &'static CStr,
     kind: TermKeyType,
     sym: TermKeySym,
     /// Modifiers the capability implies on its own (only shift, for `key_btab`).
     mods: c_int,
 }
 
-const fn named(
-    slot: usize,
-    unshifted: &'static CStr,
-    shifted: &'static CStr,
-    sym: TermKeySym,
-) -> NamedKey {
+const fn named(slot: usize, sym: TermKeySym) -> NamedKey {
     NamedKey {
         slot,
-        unshifted,
-        shifted,
         kind: TERMKEY_TYPE_KEYSYM,
         sym,
         mods: 0,
@@ -57,34 +45,27 @@ const fn named(
 /// Registration order matters: the first sequence to claim a byte string wins,
 /// so this list keeps upstream's, alphabetical by capability.
 static NAMED_KEYS: [NamedKey; 16] = [
-    named(
-        0,
-        c"key_backspace",
-        c"key_sbackspace",
-        TERMKEY_SYM_BACKSPACE,
-    ),
-    named(1, c"key_beg", c"key_sbeg", TERMKEY_SYM_BEGIN),
+    named(key_slot::BACKSPACE, TERMKEY_SYM_BACKSPACE),
+    named(key_slot::BEG, TERMKEY_SYM_BEGIN),
     NamedKey {
-        slot: 2,
-        unshifted: c"key_btab",
-        shifted: c"key_sbtab",
+        slot: key_slot::BTAB,
         kind: TERMKEY_TYPE_KEYSYM,
         sym: TERMKEY_SYM_TAB,
         mods: TERMKEY_KEYMOD_SHIFT as c_int,
     },
-    named(3, c"key_clear", c"key_sclear", TERMKEY_SYM_CLEAR),
-    named(4, c"key_dc", c"key_sdc", TERMKEY_SYM_DELETE),
-    named(5, c"key_end", c"key_send", TERMKEY_SYM_END),
-    named(6, c"key_find", c"key_sfind", TERMKEY_SYM_FIND),
-    named(7, c"key_home", c"key_shome", TERMKEY_SYM_HOME),
-    named(8, c"key_ic", c"key_sic", TERMKEY_SYM_INSERT),
-    named(14, c"key_left", c"key_sleft", TERMKEY_SYM_LEFT),
-    named(9, c"key_npage", c"key_snpage", TERMKEY_SYM_PAGEDOWN),
-    named(10, c"key_ppage", c"key_sppage", TERMKEY_SYM_PAGEUP),
-    named(15, c"key_right", c"key_sright", TERMKEY_SYM_RIGHT),
-    named(11, c"key_select", c"key_sselect", TERMKEY_SYM_SELECT),
-    named(12, c"key_suspend", c"key_ssuspend", TERMKEY_SYM_SUSPEND),
-    named(13, c"key_undo", c"key_sundo", TERMKEY_SYM_UNDO),
+    named(key_slot::CLEAR, TERMKEY_SYM_CLEAR),
+    named(key_slot::DC, TERMKEY_SYM_DELETE),
+    named(key_slot::END, TERMKEY_SYM_END),
+    named(key_slot::FIND, TERMKEY_SYM_FIND),
+    named(key_slot::HOME, TERMKEY_SYM_HOME),
+    named(key_slot::IC, TERMKEY_SYM_INSERT),
+    named(key_slot::LEFT, TERMKEY_SYM_LEFT),
+    named(key_slot::NPAGE, TERMKEY_SYM_PAGEDOWN),
+    named(key_slot::PPAGE, TERMKEY_SYM_PAGEUP),
+    named(key_slot::RIGHT, TERMKEY_SYM_RIGHT),
+    named(key_slot::SELECT, TERMKEY_SYM_SELECT),
+    named(key_slot::SUSPEND, TERMKEY_SYM_SUSPEND),
+    named(key_slot::UNDO, TERMKEY_SYM_UNDO),
 ];
 
 /// The driver's per-`TermKey` state. Reached through `TermKey::ti` as an opaque
@@ -147,6 +128,7 @@ unsafe fn register(
 unsafe fn load(tk: *mut TermKey, entry: *mut TerminfoEntry) -> KeyTrie {
     let mut trie = KeyTrie::default();
     for key in &NAMED_KEYS {
+        let cap = &KEYS[key.slot];
         let (plain, shifted) = if entry.is_null() {
             (core::ptr::null(), core::ptr::null())
         } else {
@@ -156,7 +138,7 @@ unsafe fn load(tk: *mut TermKey, entry: *mut TerminfoEntry) -> KeyTrie {
             tk,
             &mut trie,
             plain,
-            key.unshifted,
+            cap.name,
             keyinfo {
                 type_0: key.kind,
                 sym: key.sym,
@@ -172,7 +154,7 @@ unsafe fn load(tk: *mut TermKey, entry: *mut TerminfoEntry) -> KeyTrie {
                 tk,
                 &mut trie,
                 shifted,
-                key.shifted,
+                cap.shifted_name,
                 keyinfo {
                     type_0: key.kind,
                     sym: key.sym,
@@ -185,7 +167,7 @@ unsafe fn load(tk: *mut TermKey, entry: *mut TerminfoEntry) -> KeyTrie {
     // Function keys are numbered, not symbolic: `keyinfo::sym` carries the
     // number when the type is TERMKEY_TYPE_FUNCTION. The scan stops at the
     // first gap, so a terminal without `key_f1` gets no function keys at all.
-    for number in 1..=TERMKEY_MAX_FUNCTION_KEY {
+    for number in 1..=MAX_FUNCTION_KEY {
         let from_entry = if entry.is_null() {
             core::ptr::null()
         } else {
