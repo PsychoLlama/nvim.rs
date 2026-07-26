@@ -96,7 +96,6 @@
     "crates/nvim/src/nvim/lua/api_wrappers.rs": 1199,
     "crates/nvim/src/nvim/lua/converter.rs": 145,
     "crates/nvim/src/nvim/lua/executor.rs": 253,
-    "crates/nvim/src/nvim/lua/secure.rs": 18,
     "crates/nvim/src/nvim/lua/stdlib.rs": 92,
     "crates/nvim/src/nvim/lua/treesitter.rs": 164,
     "crates/nvim/src/nvim/lua/xdiff.rs": 16,
