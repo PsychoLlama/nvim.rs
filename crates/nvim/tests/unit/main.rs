@@ -12,6 +12,7 @@ mod garray;
 mod hashtab;
 mod keycodes;
 mod linematch;
+mod map;
 mod memory;
 mod multiqueue;
 mod packer;

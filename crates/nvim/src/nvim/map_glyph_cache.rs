@@ -1,18 +1,13 @@
 use crate::src::nvim::api::private::helpers::cstr_as_string;
-use crate::src::nvim::map::mh_realloc;
+use crate::src::nvim::map::{MapKey, mh_realloc};
 use crate::src::nvim::memory::xrealloc;
-use crate::src::nvim::os::libc::{__assert_fail, abort, memcmp, memcpy, strlen};
+use crate::src::nvim::os::libc::{abort, memcpy, strlen};
 pub use crate::src::nvim::types::{
     MHPutStatus, MapHash, Set_glyph, String_0, size_t, uint8_t, uint32_t,
 };
 pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 58] = unsafe {
-    ::core::mem::transmute::<[u8; 58], [::core::ffi::c_char; 58]>(
-        *b"uint32_t mh_put_glyph(Set_glyph *, String, MHPutStatus *)\0",
-    )
-};
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub unsafe extern "C" fn mh_find_bucket_glyph(
     mut set: *mut Set_glyph,
@@ -22,7 +17,7 @@ pub unsafe extern "C" fn mh_find_bucket_glyph(
     let mut h: *mut MapHash = &raw mut (*set).h;
     let mut step: uint32_t = 0 as uint32_t;
     let mut mask: uint32_t = (*h).n_buckets.wrapping_sub(1 as uint32_t);
-    let mut k: uint32_t = hash_String(key);
+    let mut k: uint32_t = key.map_hash();
     let mut i: uint32_t = k & mask;
     let mut last: uint32_t = i;
     let mut site: uint32_t = if put as ::core::ffi::c_int != 0 {
@@ -35,14 +30,13 @@ pub unsafe extern "C" fn mh_find_bucket_glyph(
             if site == last {
                 site = i;
             }
-        } else if equal_String(
-            cstr_as_string(
-                (*set)
-                    .keys
-                    .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize),
-            ),
-            key,
-        ) {
+        } else if cstr_as_string(
+            (*set)
+                .keys
+                .offset((*(*h).hash.offset(i as isize)).wrapping_sub(1 as uint32_t) as isize),
+        )
+        .map_eq(&key)
+        {
             return i;
         }
         step = step.wrapping_add(1);
@@ -121,44 +115,9 @@ pub unsafe extern "C" fn mh_put_glyph(
     } else {
         *new = kMHExisting;
         let mut pos_0: uint32_t = (*(*h).hash.offset(idx as isize)).wrapping_sub(1 as uint32_t);
-        '_c2rust_label: {
-            if equal_String(cstr_as_string((*set).keys.offset(pos_0 as isize)), key) {
-            } else {
-                __assert_fail(
-                    b"equal_String(cstr_as_string(&set->keys[pos]), key)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                    b"src/nvim/map_glyph_cache.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    106 as ::core::ffi::c_uint,
-                    __ASSERT_FUNCTION.as_ptr(),
-                );
-            }
-        };
+        assert!(cstr_as_string((*set).keys.offset(pos_0 as isize)).map_eq(&key));
         return pos_0;
     };
-}
-#[inline]
-unsafe extern "C" fn hash_String(mut s: String_0) -> uint32_t {
-    let mut h: uint32_t = 0 as uint32_t;
-    let mut i: size_t = 0 as size_t;
-    while i < s.size {
-        h = (h << 5 as ::core::ffi::c_int)
-            .wrapping_sub(h)
-            .wrapping_add(*s.data.offset(i as isize) as uint8_t as uint32_t);
-        i = i.wrapping_add(1);
-    }
-    return h;
-}
-#[inline]
-unsafe extern "C" fn equal_String(mut a: String_0, mut b: String_0) -> bool {
-    if a.size != b.size {
-        return false_0 != 0;
-    }
-    return a.size == 0 as size_t
-        || memcmp(
-            a.data as *const ::core::ffi::c_void,
-            b.data as *const ::core::ffi::c_void,
-            a.size,
-        ) == 0 as ::core::ffi::c_int;
 }
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
