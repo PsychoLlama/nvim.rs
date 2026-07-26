@@ -4,12 +4,9 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-// Opaque C type: layout unknown here, only ever used behind a pointer.
-#[repr(C)]
-pub struct Unpacker {
-    _data: [u8; 0],
-    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
-}
+// Owned by the msgpack-rpc unpacker; re-exported so `RpcState` and its
+// consumers all name the same type.
+pub use crate::src::nvim::msgpack_rpc::unpacker::Unpacker;
 
 #[derive(Copy, Clone)]
 #[repr(C)]

@@ -198,6 +198,7 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::mouse::f_getmousepos;
 use crate::src::nvim::r#move::{f_screenpos, f_virtcol2col, update_curswant, win_col_off};
+use crate::src::nvim::msgpack_rpc::channel::get_client_info;
 use crate::src::nvim::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
 use crate::src::nvim::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use crate::src::nvim::msgpack_rpc::server::{
@@ -262,6 +263,7 @@ use crate::src::nvim::syntax::{
     get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char, syntax_present,
 };
 use crate::src::nvim::tag::{get_tagfname, get_tags, get_tagstack, set_tagstack, tagname_free};
+use crate::src::nvim::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::src::nvim::testing::{
     f_assert_beeps, f_assert_equal, f_assert_equalfile, f_assert_exception, f_assert_fails,
     f_assert_false, f_assert_inrange, f_assert_match, f_assert_nobeep, f_assert_notequal,
@@ -355,10 +357,6 @@ unsafe extern "C" {
         flags: ::core::ffi::c_uint,
         cb: uv_random_cb,
     ) -> ::core::ffi::c_int;
-    fn get_client_info(
-        chan: *mut Channel,
-        key: *const ::core::ffi::c_char,
-    ) -> *const ::core::ffi::c_char;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
@@ -366,9 +364,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
     -> bool;
-    fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T);
-    fn terminal_buf(term: *const Terminal) -> Buffer;
-    fn terminal_running(term: *const Terminal) -> bool;
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;

@@ -6,6 +6,7 @@ use crate::src::nvim::api::private::helpers::{
 };
 use crate::src::nvim::api::ui::{remote_ui_disconnect, remote_ui_flush_pending_data};
 use crate::src::nvim::channel::channel_close;
+use crate::src::nvim::channel::{channel_decref, channel_incref, channel_info_changed};
 use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::event::r#loop::process_events_until;
 use crate::src::nvim::event::multiqueue::{
@@ -31,27 +32,29 @@ use crate::src::nvim::message::semsg;
 use crate::src::nvim::msgpack_rpc::packer::{
     mpack_integer, mpack_object, mpack_object_array, mpack_str,
 };
+use crate::src::nvim::msgpack_rpc::unpacker::{unpacker_advance, unpacker_init, unpacker_teardown};
 use crate::src::nvim::os::input::input_blocking;
 use crate::src::nvim::os::libc::{__assert_fail, abort, snprintf};
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __uid_t, ApiDispatchWrapper, Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback,
-    Callback_data as C2Rust_Unnamed_0, CallbackReader, CallbackType, ChannelCallFrame, ChannelPart,
-    ChannelStreamType, ClientType, Dict, Error, ErrorType, Event, Float, GridLineEvent, Integer,
-    InternalState, KeyValuePair, LibuvProc, Loop, LuaRef, Map_uint64_t_ptr_t, MapHash, MessageType,
-    MsgpackRpcRequestHandler, MultiQueue, Object, ObjectType, PackerBuffer, PackerBufferFlush,
-    Proc, ProcType, PtyProc, QUEUE, RStream, RemoteUI, ScopeDictDictItem, ScopeType, Set_uint64_t,
-    SpecialVarValue, StderrState, StdioPair, Stream, String_0, Terminal, UIClientHandler,
-    VarLockStatus, VarType, WBuffer, argv_callback, blob_T, blobvar_S, consumed_blk, dict_T,
-    dictvar_S, float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T,
-    gid_t, hash_T, hashitem_T, hashtab_T, int32_t, int64_t, internal_proc_cb, key_value_pair,
-    linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0,
-    mpack_data_t, mpack_node_s, mpack_node_t, mpack_parser_t, mpack_sintmax_t, mpack_tokbuf_s,
-    mpack_tokbuf_t, mpack_token_s, mpack_token_s_data as C2Rust_Unnamed_20, mpack_token_t,
-    mpack_token_type_t, mpack_uint32_t, mpack_uintmax_t, mpack_value_s, mpack_value_t, multiqueue,
-    object, object_data as C2Rust_Unnamed, packer_buffer_t, partial_S, partial_T, proc,
-    proc_exit_cb, proc_state_cb, proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, queue,
-    rstream, scid_T, sctx_T, size_t, ssize_t, stream, stream_close_cb, stream_read_cb,
+    Callback_data as C2Rust_Unnamed_0, CallbackReader, CallbackType, Channel, Channel_stream,
+    ChannelCallFrame, ChannelPart, ChannelStreamType, ClientType, Dict, Error, ErrorType, Event,
+    Float, GridLineEvent, Integer, InternalState, KeyValuePair, LibuvProc, Loop, LuaRef,
+    Map_uint64_t_ptr_t, MapHash, MessageType, MsgpackRpcRequestHandler, MultiQueue, Object,
+    ObjectType, PackerBuffer, PackerBufferFlush, Proc, ProcType, PtyProc, QUEUE, RStream, RemoteUI,
+    RpcState, RpcState_call_stack, ScopeDictDictItem, ScopeType, Set_uint64_t, SpecialVarValue,
+    StderrState, StdioPair, Stream, String_0, Terminal, UIClientHandler, Unpacker, VarLockStatus,
+    VarType, WBuffer, argv_callback, blob_T, blobvar_S, consumed_blk, dict_T, dictvar_S, float_T,
+    funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t, hash_T,
+    hashitem_T, hashtab_T, int32_t, int64_t, internal_proc_cb, key_value_pair, linenr_T, list_T,
+    listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0, mpack_data_t,
+    mpack_node_s, mpack_node_t, mpack_parser_t, mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t,
+    mpack_token_s, mpack_token_s_data as C2Rust_Unnamed_20, mpack_token_t, mpack_token_type_t,
+    mpack_uint32_t, mpack_uintmax_t, mpack_value_s, mpack_value_t, multiqueue, object,
+    object_data as C2Rust_Unnamed, packer_buffer_t, partial_S, partial_T, proc, proc_exit_cb,
+    proc_state_cb, proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, queue, rstream, scid_T,
+    sctx_T, size_t, ssize_t, stream, stream_close_cb, stream_read_cb,
     stream_uv as C2Rust_Unnamed_12, stream_write_cb, terminal, typval_T, typval_vval_union,
     ufunc_S, ufunc_T, uid_t, uint8_t, uint16_t, uint32_t, uint64_t, uv__io_cb, uv__io_s, uv__io_t,
     uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_7, uv_async_t,
@@ -71,14 +74,6 @@ pub use crate::src::nvim::types::{
     varnumber_T, wbuffer, wbuffer_data_finalizer, winsize,
 };
 use crate::src::nvim::ui_client::{ui_client_attach_to_restarted_server, ui_client_event_raw_line};
-unsafe extern "C" {
-    fn channel_incref(chan: *mut Channel);
-    fn channel_decref(chan: *mut Channel);
-    fn channel_info_changed(chan: *mut Channel, new_chan: bool);
-    fn unpacker_init(p: *mut Unpacker);
-    fn unpacker_teardown(p: *mut Unpacker);
-    fn unpacker_advance(p: *mut Unpacker) -> bool;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
@@ -260,36 +255,6 @@ pub const kChannelPartRpc: ChannelPart = 3;
 pub const kChannelPartStderr: ChannelPart = 2;
 pub const kChannelPartStdout: ChannelPart = 1;
 pub const kChannelPartStdin: ChannelPart = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Channel {
-    pub id: uint64_t,
-    pub refcount: size_t,
-    pub events: *mut MultiQueue,
-    pub streamtype: ChannelStreamType,
-    pub stream: C2Rust_Unnamed_21,
-    pub is_rpc: bool,
-    pub detach: bool,
-    pub rpc: RpcState,
-    pub term: *mut Terminal,
-    pub on_data: CallbackReader,
-    pub on_stderr: CallbackReader,
-    pub on_exit: Callback,
-    pub exit_status: ::core::ffi::c_int,
-    pub callback_busy: bool,
-    pub callback_scheduled: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct RpcState {
-    pub closed: bool,
-    pub unpacker: *mut Unpacker,
-    pub ui: *mut RemoteUI,
-    pub next_request_id: uint32_t,
-    pub call_stack: C2Rust_Unnamed_19,
-    pub info: Dict,
-    pub client_type: ClientType,
-}
 pub const kClientTypePlugin: ClientType = 4;
 pub const kClientTypeHost: ClientType = 3;
 pub const kClientTypeEmbedder: ClientType = 2;
@@ -297,36 +262,6 @@ pub const kClientTypeUi: ClientType = 1;
 pub const kClientTypeMsgpackRpc: ClientType = 5;
 pub const kClientTypeRemote: ClientType = 0;
 pub const kClientTypeUnknown: ClientType = -1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_19 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut *mut ChannelCallFrame,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Unpacker {
-    pub parser: mpack_parser_t,
-    pub reader: mpack_tokbuf_t,
-    pub read_ptr: *const ::core::ffi::c_char,
-    pub read_size: size_t,
-    pub ext_buf: [::core::ffi::c_char; 9],
-    pub state: ::core::ffi::c_int,
-    pub type_0: MessageType,
-    pub request_id: uint32_t,
-    pub method_name_len: size_t,
-    pub handler: MsgpackRpcRequestHandler,
-    pub error: Object,
-    pub result: Object,
-    pub unpack_error: Error,
-    pub arena: Arena,
-    pub nevents: ::core::ffi::c_int,
-    pub ncalls: ::core::ffi::c_int,
-    pub ui_handler: UIClientHandler,
-    pub grid_line_event: GridLineEvent,
-    pub has_grid_line_event: bool,
-}
 pub const MPACK_TOKEN_EXT: mpack_token_type_t = 11;
 pub const MPACK_TOKEN_STR: mpack_token_type_t = 10;
 pub const MPACK_TOKEN_BIN: mpack_token_type_t = 9;
@@ -338,17 +273,6 @@ pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
 pub const MPACK_TOKEN_UINT: mpack_token_type_t = 3;
 pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = 2;
 pub const MPACK_TOKEN_NIL: mpack_token_type_t = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_21 {
-    pub proc: Proc,
-    pub uv: LibuvProc,
-    pub pty: PtyProc,
-    pub socket: RStream,
-    pub stdio: StdioPair,
-    pub err: StderrState,
-    pub internal: InternalState,
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct RequestEvent {

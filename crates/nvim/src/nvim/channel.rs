@@ -41,6 +41,7 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::msgpack_rpc::channel::rpc_init;
+use crate::src::nvim::msgpack_rpc::channel::{rpc_close, rpc_free, rpc_start};
 use crate::src::nvim::msgpack_rpc::server::server_owns_pipe_address;
 use crate::src::nvim::os::fs::os_write;
 use crate::src::nvim::os::libc::{
@@ -50,6 +51,10 @@ use crate::src::nvim::os::pty_proc_unix::{
     pty_proc_close_master, pty_proc_init, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
 };
 use crate::src::nvim::os::shell::shell_free_argv;
+use crate::src::nvim::terminal::{
+    terminal_alloc, terminal_buf, terminal_close, terminal_destroy, terminal_receive,
+    terminal_set_state,
+};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __gid_t, __off_t, __off64_t, __pthread_internal_list, __pthread_list_t,
     __pthread_mutex_s, __pthread_rwlock_arch_t, __socklen_t, __time_t, __uid_t, _IO_FILE,
@@ -112,17 +117,6 @@ pub use crate::src::nvim::types::{
     wininfo_S, winopt_T, winsize, wline_T, xfmark_T,
 };
 use crate::src::nvim::ui_client::ui_client_attach_to_restarted_server;
-unsafe extern "C" {
-    fn rpc_start(channel: *mut Channel);
-    fn rpc_close(channel: *mut Channel);
-    fn rpc_free(channel: *mut Channel);
-    fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Terminal;
-    fn terminal_close(termpp: *mut *mut Terminal, status: ::core::ffi::c_int);
-    fn terminal_set_state(term: *mut Terminal, suspended: bool);
-    fn terminal_destroy(termpp: *mut *mut Terminal);
-    fn terminal_receive(term: *mut Terminal, data: *const ::core::ffi::c_char, len: size_t);
-    fn terminal_buf(term: *const Terminal) -> Buffer;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

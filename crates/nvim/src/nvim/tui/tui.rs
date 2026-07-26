@@ -32,6 +32,9 @@ use crate::src::nvim::os::libc::{
     sscanf, strchr, strcmp, strlen, strstr, strtol, tcgetattr, vsnprintf,
 };
 use crate::src::nvim::strings::kv_do_printf;
+use crate::src::nvim::tui::input::{
+    TermInput, tinput_destroy, tinput_init, tinput_start, tinput_stop,
+};
 use crate::src::nvim::tui::terminfo::caps::{
     TerminfoDef, kTerm_carriage_return, kTerm_change_scroll_region, kTerm_clear_screen,
     kTerm_clr_eol, kTerm_clr_eos, kTerm_cursor_address, kTerm_cursor_down, kTerm_cursor_home,
@@ -51,6 +54,7 @@ use crate::src::nvim::tui::terminfo::{
     terminfo_fmt, terminfo_from_builtin, terminfo_from_database, terminfo_info_msg,
     terminfo_is_bsd_console, terminfo_is_term_family,
 };
+use crate::src::nvim::types::tui::TUIData as TUIHandle;
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __pid_t, __pthread_internal_list,
     __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __va_list_tag, _IO_FILE,
@@ -93,10 +97,6 @@ unsafe extern "C" {
         width: *mut ::core::ffi::c_int,
         height: *mut ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn tinput_init(input: *mut TermInput, loop_0: *mut Loop, ti: *mut TerminfoEntry);
-    fn tinput_destroy(input: *mut TermInput);
-    fn tinput_start(input: *mut TermInput);
-    fn tinput_stop(input: *mut TermInput);
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
@@ -439,33 +439,9 @@ pub union C2Rust_Unnamed_22 {
     pub tty: uv_tty_t,
     pub pipe: uv_pipe_t,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TermInput {
-    pub in_fd: ::core::ffi::c_int,
-    pub paste: int8_t,
-    pub ttimeout: bool,
-    pub callbacks: TermInputCallbacks,
-    pub key_encoding: KeyEncoding,
-    pub ttimeoutlen: OptInt,
-    pub tk: *mut TermKey,
-    pub tk_ti_hook_fn: Option<TermKey_Terminfo_Getstr_Hook>,
-    pub timer_handle: uv_timer_t,
-    pub bg_query_timer: uv_timer_t,
-    pub loop_0: *mut Loop,
-    pub read_stream: RStream,
-    pub tui_data: *mut TUIData,
-    pub key_buffer: [::core::ffi::c_char; 4096],
-    pub key_buffer_len: size_t,
-}
 pub const kKeyEncodingXterm: KeyEncoding = 2;
 pub const kKeyEncodingKitty: KeyEncoding = 1;
 pub const kKeyEncodingLegacy: KeyEncoding = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TermInputCallbacks {
-    pub primary_device_attr: Option<unsafe extern "C" fn(*mut TUIData) -> ()>,
-}
 pub const kTermModeResizeEvents: TermMode = 2048;
 pub const kTermModeThemeUpdates: TermMode = 2031;
 pub const kTermModeGraphemeClusters: TermMode = 2027;
@@ -757,15 +733,15 @@ pub unsafe extern "C" fn tui_enable_extended_underline(mut tui: *mut TUIData) {
 }
 unsafe extern "C" fn tui_query_kitty_keyboard(mut tui: *mut TUIData) {
     (*tui).input.callbacks.primary_device_attr =
-        Some(tui_set_key_encoding as unsafe extern "C" fn(*mut TUIData) -> ())
-            as Option<unsafe extern "C" fn(*mut TUIData) -> ()>;
+        Some(tui_set_key_encoding as unsafe extern "C" fn(*mut TUIHandle) -> ());
     out(
         tui,
         b"\x1B[?u\x1B[c\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
     );
 }
-pub unsafe extern "C" fn tui_set_key_encoding(mut tui: *mut TUIData) {
+pub unsafe extern "C" fn tui_set_key_encoding(tui: *mut TUIHandle) {
+    let mut tui: *mut TUIData = tui.cast::<TUIData>();
     match (*tui).input.key_encoding as ::core::ffi::c_uint {
         1 => {
             out(
@@ -833,7 +809,7 @@ unsafe extern "C" fn terminfo_start(mut tui: *mut TUIData) {
     (*tui).terminfo_ext.disable_focus_reporting = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*tui).out_fd = STDOUT_FILENO;
     (*tui).out_isatty = os_isatty((*tui).out_fd);
-    (*tui).input.tui_data = tui;
+    (*tui).input.tui_data = tui.cast::<TUIHandle>();
     (*tui).ti_arena = ARENA_EMPTY;
     '_c2rust_label: {
         if (*tui).term.is_null() {
@@ -1151,8 +1127,7 @@ pub unsafe extern "C" fn tui_stop(mut tui: *mut TUIData) {
         return;
     }
     (*tui).input.callbacks.primary_device_attr =
-        Some(tui_stop_cb as unsafe extern "C" fn(*mut TUIData) -> ())
-            as Option<unsafe extern "C" fn(*mut TUIData) -> ()>;
+        Some(tui_stop_cb as unsafe extern "C" fn(*mut TUIHandle) -> ());
     terminfo_disable(tui);
     process_events_until((*tui).loop_0, (*(*tui).loop_0).events, 1000, || {
         (*tui).stopped || (*tui).input.read_stream.did_eof
@@ -1178,7 +1153,8 @@ pub unsafe extern "C" fn tui_stop(mut tui: *mut TUIData) {
         None,
     );
 }
-unsafe extern "C" fn tui_stop_cb(mut tui: *mut TUIData) {
+unsafe extern "C" fn tui_stop_cb(tui: *mut TUIHandle) {
+    let mut tui: *mut TUIData = tui.cast::<TUIData>();
     (*tui).stopped = true_0 != 0;
 }
 unsafe extern "C" fn tui_terminal_stop(mut tui: *mut TUIData) {
@@ -2732,11 +2708,11 @@ pub unsafe extern "C" fn tui_suspend(mut tui: *mut TUIData) {
     ui_client_detach();
     (*tui).mouse_enabled_save = (*tui).mouse_enabled;
     (*tui).input.callbacks.primary_device_attr =
-        Some(tui_suspend_cb as unsafe extern "C" fn(*mut TUIData) -> ())
-            as Option<unsafe extern "C" fn(*mut TUIData) -> ()>;
+        Some(tui_suspend_cb as unsafe extern "C" fn(*mut TUIHandle) -> ());
     terminfo_disable(tui);
 }
-unsafe extern "C" fn tui_suspend_cb(mut tui: *mut TUIData) {
+unsafe extern "C" fn tui_suspend_cb(tui: *mut TUIHandle) {
+    let mut tui: *mut TUIData = tui.cast::<TUIData>();
     tui_terminal_stop(tui);
     stream_set_blocking((*tui).input.in_fd, true_0 != 0);
     kill(0 as __pid_t, SIGSTOP);

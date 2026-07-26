@@ -16,6 +16,7 @@ use crate::src::nvim::buffer::{
     set_bufref,
 };
 use crate::src::nvim::channel::{channel_all_info, channel_info, channel_send};
+use crate::src::nvim::channel::{channel_alloc, channel_decref, channel_incref};
 use crate::src::nvim::context::{
     ctx_free, ctx_from_dict, ctx_restore, ctx_save, ctx_to_dict, kCtxAll,
 };
@@ -91,34 +92,40 @@ use crate::src::nvim::state::get_mode;
 use crate::src::nvim::statusline::{
     build_stl_str_hl, draw_tabline, fillchar_status, win_redr_status, win_redr_winbar,
 };
+use crate::src::nvim::terminal::{
+    terminal_alloc, terminal_buf, terminal_check_size, terminal_destroy, terminal_open,
+    terminal_running, terminal_set_streamed_paste,
+};
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __time_t, __uid_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array,
     ArrayBuilder, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, Callback,
     Callback_data as C2Rust_Unnamed_5, CallbackReader, CallbackType, CdScope, ChangedtickDictItem,
-    ChannelCallFrame, ChannelStreamType, ClientType, Context, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
-    DoInRuntimepathCB, Error, ErrorType, ExtmarkUndoObject, FileID, Float, FloatAnchor,
-    FloatRelative, GridLineEvent, GridView, HLGroupID, HlAttrs, HlMessage, HlMessageChunk, Integer,
-    InternalState, Intersection, KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts,
-    KeyDict_empty, KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns,
-    KeyDict_highlight, KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime,
-    KeyValuePair, LibuvProc, Loop, LuaRef, LuaRetMode, MTKey, MTNode, MTPos, Map_int64_t_int64_t,
-    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, MessageData,
-    MessageType, MotionType, MsgpackRpcRequestHandler, MultiQueue, NS, Object, ObjectType,
-    OptIndex, OptInt, OptScope, OptVal, OptValData, OptValType, OptionalKeys, PackerBuffer,
-    PackerBufferFlush, Proc, ProcType, PtyProc, QUEUE, RStream, RemapValues, RemoteUI, RgbValue,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SignTextAttrs, SpecialVarValue, StderrState, StdioPair, StlClickDefinition,
+    Channel, Channel_stream, ChannelCallFrame, ChannelStreamType, ClientType, Context, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, Dict, DoInRuntimepathCB, Error, ErrorType,
+    ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridLineEvent, GridView,
+    HLGroupID, HlAttrs, HlMessage, HlMessageChunk, Integer, InternalState, Intersection,
+    KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
+    KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
+    KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, KeyValuePair, LibuvProc,
+    Loop, LuaRef, LuaRetMode, MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, MessageData, MessageType,
+    MotionType, MsgpackRpcRequestHandler, MultiQueue, NS, Object, ObjectType, OptIndex, OptInt,
+    OptScope, OptVal, OptValData, OptValType, OptionalKeys, PackerBuffer, PackerBufferFlush, Proc,
+    ProcType, PtyProc, QUEUE, RStream, RemapValues, RemoteUI, RgbValue, RpcState,
+    RpcState_call_stack, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
+    Set_uint64_t, SignTextAttrs, SpecialVarValue, StderrState, StdioPair, StlClickDefinition,
     StlClickDefinition_type_0 as C2Rust_Unnamed_12, StlClickRecord, StlFlag, Stream, String_0,
     StringBuilder, Tabpage, Terminal, TerminalOptions, Timestamp, TriState, TryState,
-    UIClientHandler, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, auto_event, bhdr_T,
-    bln_values, blob_T, blobvar_S, blocknr_T, buf_T, bufref_T, bufstate_T, chunksize_T, colnr_T,
-    color_name_table_T, consumed_blk, dict_T, dictitem_T, dictvar_S, diff_T, diffblock_S,
-    disptick_T, dobuf_action_values, dobuf_start_values, event_T, except_T, except_type_T,
-    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
-    file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
+    UIClientHandler, Unpacker, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText,
+    VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T,
+    auto_event, bhdr_T, bln_values, blob_T, blobvar_S, blocknr_T, buf_T, bufref_T, bufstate_T,
+    chunksize_T, colnr_T, color_name_table_T, consumed_blk, dict_T, dictitem_T, dictvar_S, diff_T,
+    diffblock_S, disptick_T, dobuf_action_values, dobuf_start_values, event_T, except_T,
+    except_type_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
+    file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
+    file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, foldinfo_T,
     frame_S, frame_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T,
     gid_t, handle_T, hash_T, hashitem_T, hashtab_T, hlf_T, infoptr_T, int16_t, int32_t, int64_t,
@@ -162,18 +169,6 @@ use crate::src::nvim::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::src::nvim::window::{
     global_stl_height, goto_tabpage_tp, goto_tabpage_win, win_find_tabpage,
 };
-unsafe extern "C" {
-    fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel;
-    fn channel_incref(chan: *mut Channel);
-    fn channel_decref(chan: *mut Channel);
-    fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Terminal;
-    fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T);
-    fn terminal_check_size(term: *mut Terminal);
-    fn terminal_destroy(termpp: *mut *mut Terminal);
-    fn terminal_set_streamed_paste(term: *mut Terminal, streamed: bool);
-    fn terminal_buf(term: *const Terminal) -> Buffer;
-    fn terminal_running(term: *const Terminal) -> bool;
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
@@ -987,36 +982,6 @@ pub const EVENT_BUFADD: auto_event = 0;
 pub const OPT_LOCAL: C2Rust_Unnamed_38 = 2;
 pub const BCO_NOHELP: C2Rust_Unnamed_37 = 4;
 pub const BCO_ENTER: C2Rust_Unnamed_37 = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Channel {
-    pub id: uint64_t,
-    pub refcount: size_t,
-    pub events: *mut MultiQueue,
-    pub streamtype: ChannelStreamType,
-    pub stream: C2Rust_Unnamed_32,
-    pub is_rpc: bool,
-    pub detach: bool,
-    pub rpc: RpcState,
-    pub term: *mut Terminal,
-    pub on_data: CallbackReader,
-    pub on_stderr: CallbackReader,
-    pub on_exit: Callback,
-    pub exit_status: ::core::ffi::c_int,
-    pub callback_busy: bool,
-    pub callback_scheduled: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct RpcState {
-    pub closed: bool,
-    pub unpacker: *mut Unpacker,
-    pub ui: *mut RemoteUI,
-    pub next_request_id: uint32_t,
-    pub call_stack: C2Rust_Unnamed_30,
-    pub info: Dict,
-    pub client_type: ClientType,
-}
 pub const kClientTypePlugin: ClientType = 4;
 pub const kClientTypeHost: ClientType = 3;
 pub const kClientTypeEmbedder: ClientType = 2;
@@ -1024,36 +989,6 @@ pub const kClientTypeUi: ClientType = 1;
 pub const kClientTypeMsgpackRpc: ClientType = 5;
 pub const kClientTypeRemote: ClientType = 0;
 pub const kClientTypeUnknown: ClientType = -1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_30 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut *mut ChannelCallFrame,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Unpacker {
-    pub parser: mpack_parser_t,
-    pub reader: mpack_tokbuf_t,
-    pub read_ptr: *const ::core::ffi::c_char,
-    pub read_size: size_t,
-    pub ext_buf: [::core::ffi::c_char; 9],
-    pub state: ::core::ffi::c_int,
-    pub type_0: MessageType,
-    pub request_id: uint32_t,
-    pub method_name_len: size_t,
-    pub handler: MsgpackRpcRequestHandler,
-    pub error: Object,
-    pub result: Object,
-    pub unpack_error: Error,
-    pub arena: Arena,
-    pub nevents: ::core::ffi::c_int,
-    pub ncalls: ::core::ffi::c_int,
-    pub ui_handler: UIClientHandler,
-    pub grid_line_event: GridLineEvent,
-    pub has_grid_line_event: bool,
-}
 pub const MPACK_TOKEN_EXT: mpack_token_type_t = 11;
 pub const MPACK_TOKEN_STR: mpack_token_type_t = 10;
 pub const MPACK_TOKEN_BIN: mpack_token_type_t = 9;
@@ -1065,17 +1000,6 @@ pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
 pub const MPACK_TOKEN_UINT: mpack_token_type_t = 3;
 pub const MPACK_TOKEN_BOOLEAN: mpack_token_type_t = 2;
 pub const MPACK_TOKEN_NIL: mpack_token_type_t = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_32 {
-    pub proc: Proc,
-    pub uv: LibuvProc,
-    pub pty: PtyProc,
-    pub socket: RStream,
-    pub stdio: StdioPair,
-    pub err: StderrState,
-    pub internal: InternalState,
-}
 pub const kChannelStreamInternal: ChannelStreamType = 4;
 pub const kChannelStreamStderr: ChannelStreamType = 3;
 pub const kChannelStreamStdio: ChannelStreamType = 2;
