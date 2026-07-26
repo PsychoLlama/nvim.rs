@@ -30,7 +30,9 @@ pub struct loop_0 {
     pub events: *mut MultiQueue,
     pub thread_events: *mut MultiQueue,
     pub fast_events: *mut MultiQueue,
-    pub children: loop_0_children,
+    /// The job-control children: a `Box<Vec<*mut Proc>>`, behind a
+    /// `*mut c_void` so `Loop` stays FFI-safe. See `event/loop.rs`.
+    pub children: *mut ::core::ffi::c_void,
     pub children_watcher: uv_signal_t,
     pub children_kill_timer: uv_timer_t,
     pub poll_timer: uv_timer_t,
@@ -39,13 +41,6 @@ pub struct loop_0 {
     pub mutex: uv_mutex_t,
     pub recursive: ::core::ffi::c_int,
     pub closing: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct loop_0_children {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut *mut Proc,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

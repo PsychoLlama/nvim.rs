@@ -21,6 +21,7 @@ use crate::src::nvim::event::libuv::{
     uv_chdir, uv_disable_stdio_inheritance, uv_pipe_open, uv_signal_start, uv_signal_stop,
     uv_strerror,
 };
+use crate::src::nvim::event::r#loop::loop_children;
 use crate::src::nvim::event::proc::{kProcTypePty, proc_get_exepath, proc_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::logmsg;
@@ -397,8 +398,8 @@ unsafe fn open_duplicate(fd: c_int, pipe: *mut uv_pipe_t) -> c_int {
 unsafe extern "C" fn chld_handler(handle: *mut uv_signal_t, _signum: c_int) {
     let uv_loop = (*(*handle).loop_0).data as *mut Loop;
     let mut i = 0;
-    while i < (*uv_loop).children.size {
-        let proc = *(*uv_loop).children.items.add(i);
+    while i < (*loop_children(uv_loop)).len() {
+        let proc = (&*loop_children(uv_loop))[i];
         i += 1;
 
         let mut stat: c_int = 0;

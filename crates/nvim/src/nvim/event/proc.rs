@@ -29,7 +29,9 @@ use crate::src::nvim::event::libuv::{
     uv_close, uv_pipe_init, uv_recv_buffer_size, uv_timer_start, uv_timer_stop, uv_unref,
 };
 use crate::src::nvim::event::libuv_proc::{libuv_proc_close, libuv_proc_spawn};
-use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::event::r#loop::{
+    loop_children, loop_poll_events, process_events, process_events_until,
+};
 use crate::src::nvim::event::multiqueue::{
     multiqueue_empty, multiqueue_process_events, multiqueue_put_event,
 };
@@ -41,7 +43,6 @@ use crate::src::nvim::main::{
     exiting, got_int, main_loop, os_exit, preserve_exit, ui_client_channel_id,
     ui_client_exit_status,
 };
-use crate::src::nvim::memory::xrealloc;
 use crate::src::nvim::os::proc::os_proc_tree_kill;
 use crate::src::nvim::os::pty_proc_unix::{
     pty_proc_close, pty_proc_close_master, pty_proc_flush_master, pty_proc_spawn, pty_proc_teardown,
@@ -55,7 +56,6 @@ use crate::src::nvim::types::{
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
-use core::slice;
 
 /// A child started through libuv's process API.
 pub const kProcTypeUv: ProcType = 0;
@@ -183,7 +183,7 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
     (*proc).internal_close_cb = Some(decref);
     (*proc).refcount += 1;
 
-    push_child((*proc).loop_0, proc);
+    (*loop_children((*proc).loop_0)).push(proc);
     logmsg(
         LOGLVL_DBG,
         ptr::null(),
@@ -206,8 +206,8 @@ pub unsafe fn proc_teardown(uv_loop: *mut Loop) {
     // Re-read the length each pass: closing a child's handles can run its
     // exit callback inline, which unlinks it from this very list.
     let mut i = 0;
-    while i < (*uv_loop).children.size {
-        let proc = *(*uv_loop).children.items.add(i);
+    while i < (*loop_children(uv_loop)).len() {
+        let proc = (&*loop_children(uv_loop))[i];
         if (*proc).detach || (*proc).type_0 == kProcTypePty {
             create_event((*uv_loop).events, proc_close_handles, proc as *mut c_void);
         } else {
@@ -217,7 +217,7 @@ pub unsafe fn proc_teardown(uv_loop: *mut Loop) {
     }
 
     process_events_until(uv_loop, (*uv_loop).events, -1, || {
-        (*uv_loop).children.size == 0 && multiqueue_empty((*uv_loop).events)
+        (*loop_children(uv_loop)).is_empty() && multiqueue_empty((*uv_loop).events)
     });
     pty_proc_teardown(uv_loop);
 }
@@ -339,39 +339,17 @@ pub fn exit_on_closed_chan(status: c_int) {
 // The loop's list of live children
 // ---------------------------------------------------------------------------
 
-/// Append `proc` to `loop->children`, growing the array if it is full.
-///
-/// This is upstream's `kv_push`: capacity doubles from an initial eight, and
-/// the storage is the editor's own allocator so that `event/loop.rs` can free
-/// it with `xfree`.
-unsafe fn push_child(uv_loop: *mut Loop, proc: *mut Proc) {
-    let children = &mut (*uv_loop).children;
-    if children.size == children.capacity {
-        children.capacity = if children.capacity != 0 {
-            children.capacity * 2
-        } else {
-            8
-        };
-        children.items = xrealloc(
-            children.items.cast(),
-            size_of::<*mut Proc>() * children.capacity,
-        )
-        .cast();
-    }
-    *children.items.add(children.size) = proc;
-    children.size += 1;
-}
-
 /// Remove `proc` from `loop->children`, preserving the order of the rest.
+///
+/// The borrow is momentary on purpose: the list is re-entered while a child is
+/// being closed.
 unsafe fn remove_child(uv_loop: *mut Loop, proc: *mut Proc) {
-    let children = &mut (*uv_loop).children;
-    let items = slice::from_raw_parts_mut(children.items, children.size);
-    let i = items
+    let children = &mut *loop_children(uv_loop);
+    let i = children
         .iter()
         .position(|&child| child == proc)
         .expect("a child that is being closed is on the loop's child list");
-    items.copy_within(i + 1.., i);
-    children.size -= 1;
+    children.remove(i);
 }
 
 // ---------------------------------------------------------------------------
@@ -404,76 +382,6 @@ unsafe fn create_event(
     }
 }
 
-/// One pass of upstream's `LOOP_PROCESS_EVENTS`: drain `queue` if it has
-/// anything, otherwise let the loop poll for `timeout` milliseconds.
-unsafe fn process_events(uv_loop: *mut Loop, queue: *mut MultiQueue, timeout: i64) {
-    if !queue.is_null() && !multiqueue_empty(queue) {
-        multiqueue_process_events(queue);
-    } else {
-        loop_poll_events(uv_loop, timeout);
-    }
-}
-
-/// Upstream's `LOOP_PROCESS_EVENTS_UNTIL`: run passes until `done` holds or
-/// the millisecond budget runs out.
-///
-/// `done` is re-evaluated between passes and may observe state that the pass
-/// itself changed, which is the whole point — a child's refcount reaching one
-/// is what ends most of these waits.
-unsafe fn process_events_until(
-    uv_loop: *mut Loop,
-    queue: *mut MultiQueue,
-    ms: i64,
-    mut done: impl FnMut() -> bool,
-) {
-    let mut budget = Budget::new(ms, os_hrtime);
-    while !done() {
-        process_events(uv_loop, queue, budget.remaining());
-        if !budget.charge(os_hrtime) {
-            break;
-        }
-    }
-}
-
-/// The millisecond budget of a wait loop.
-///
-/// A budget of zero means "one pass, then stop"; a negative one is unlimited.
-/// The clock is only read when the budget is finite, which is why `now` is
-/// taken as a closure rather than a value.
-struct Budget {
-    remaining: i64,
-    /// The reading `remaining` was last charged against.
-    before: u64,
-}
-
-impl Budget {
-    fn new(ms: i64, now: impl FnOnce() -> u64) -> Self {
-        Budget {
-            remaining: ms,
-            before: if ms > 0 { now() } else { 0 },
-        }
-    }
-
-    fn remaining(&self) -> i64 {
-        self.remaining
-    }
-
-    /// Charge the time elapsed since the last call. Returns false once the
-    /// budget is spent and the loop should stop.
-    fn charge(&mut self, now: impl FnOnce() -> u64) -> bool {
-        if self.remaining == 0 {
-            return false;
-        }
-        if self.remaining < 0 {
-            return true;
-        }
-        let now = now();
-        self.remaining -= now.wrapping_sub(self.before).wrapping_div(1_000_000) as i64;
-        self.before = now;
-        self.remaining > 0
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Callbacks
 // ---------------------------------------------------------------------------
@@ -486,8 +394,8 @@ impl Budget {
 unsafe extern "C" fn children_kill_cb(handle: *mut uv_timer_t) {
     let uv_loop = (*(*handle).loop_0).data as *mut Loop;
     let mut i = 0;
-    while i < (*uv_loop).children.size {
-        let proc = *(*uv_loop).children.items.add(i);
+    while i < (*loop_children(uv_loop)).len() {
+        let proc = (&*loop_children(uv_loop))[i];
         i += 1;
         let exited = (*proc).status >= 0;
         if exited || (*proc).stopped_time == 0 {
@@ -689,49 +597,4 @@ unsafe extern "C" fn on_proc_exit(proc: *mut Proc) {
 /// One of the child's streams finished closing.
 unsafe extern "C" fn on_proc_stream_close(_stream: *mut Stream, data: *mut c_void) {
     decref(data as *mut Proc);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Budget;
-
-    #[test]
-    fn an_unlimited_budget_never_expires() {
-        let mut budget = Budget::new(-1, || panic!("the clock is not read"));
-        assert_eq!(budget.remaining(), -1);
-        assert!(budget.charge(|| panic!("the clock is not read")));
-        assert!(budget.charge(|| panic!("the clock is not read")));
-    }
-
-    #[test]
-    fn a_zero_budget_stops_after_one_pass() {
-        let mut budget = Budget::new(0, || panic!("the clock is not read"));
-        assert_eq!(budget.remaining(), 0);
-        assert!(!budget.charge(|| panic!("the clock is not read")));
-    }
-
-    #[test]
-    fn a_finite_budget_is_charged_in_whole_milliseconds() {
-        let mut budget = Budget::new(10, || 1_000_000_000);
-        // 2.9ms rounds down to 2.
-        assert!(budget.charge(|| 1_002_900_000));
-        assert_eq!(budget.remaining(), 8);
-        // Charging is against the previous reading, not the start.
-        assert!(budget.charge(|| 1_005_900_000));
-        assert_eq!(budget.remaining(), 5);
-    }
-
-    #[test]
-    fn a_finite_budget_stops_when_it_reaches_zero() {
-        let mut budget = Budget::new(5, || 0);
-        assert!(!budget.charge(|| 5_000_000));
-        assert_eq!(budget.remaining(), 0);
-    }
-
-    #[test]
-    fn an_overspent_budget_stops_rather_than_wrapping() {
-        let mut budget = Budget::new(5, || 0);
-        assert!(!budget.charge(|| 50_000_000));
-        assert_eq!(budget.remaining(), -45);
-    }
 }

@@ -61,7 +61,6 @@
     "crates/nvim/src/nvim/eval/userfunc.rs": 161,
     "crates/nvim/src/nvim/eval/vars.rs": 224,
     "crates/nvim/src/nvim/eval/window.rs": 71,
-    "crates/nvim/src/nvim/event/loop.rs": 2,
     "crates/nvim/src/nvim/event/rstream.rs": 1,
     "crates/nvim/src/nvim/event/socket.rs": 19,
     "crates/nvim/src/nvim/ex_cmds.rs": 123,
