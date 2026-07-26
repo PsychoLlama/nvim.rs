@@ -8,7 +8,7 @@
 //! [`socket_connect`] is the other direction, and is *synchronous*: it drives
 //! the main loop itself until the connection succeeds, fails or times out.
 
-mod address;
+pub mod address;
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};

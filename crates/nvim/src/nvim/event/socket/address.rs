@@ -25,6 +25,18 @@ pub fn tcp_host_end(address: &[u8]) -> Option<usize> {
     address.iter().rposition(|&b| b == b':').filter(|&i| i > 0)
 }
 
+/// Whether `address` is a bare name rather than something to connect to.
+///
+/// `serverstart("foo")` and `--listen foo` mean "make me a socket called
+/// foo" in the runtime directory. Anything carrying a separator — a colon, a
+/// forward slash or a backslash — is taken as an address or a path, on every
+/// platform, because it may have come from another machine's command line.
+pub fn is_bare_server_name(address: &[u8]) -> bool {
+    !address
+        .iter()
+        .any(|&byte| matches!(byte, b':' | b'/' | b'\\'))
+}
+
 /// `":<port>"`, NUL-terminated, for appending to a bound address.
 ///
 /// The address a server reports through `v:servername` has to name the port
@@ -51,7 +63,7 @@ pub fn port_suffix(port: u16) -> [u8; 8] {
 
 #[cfg(test)]
 mod tests {
-    use super::{port_suffix, tcp_host_end};
+    use super::{is_bare_server_name, port_suffix, tcp_host_end};
 
     fn host_end(address: &str) -> Option<usize> {
         tcp_host_end(address.as_bytes())
@@ -94,6 +106,17 @@ mod tests {
     #[test]
     fn the_last_colon_wins() {
         assert_eq!(host_end("::1:6666"), Some(3));
+    }
+
+    #[test]
+    fn a_bare_name_has_no_separator_of_any_kind() {
+        assert!(is_bare_server_name(b"nvim"));
+        assert!(is_bare_server_name(b""));
+        assert!(!is_bare_server_name(b"127.0.0.1:6666"));
+        assert!(!is_bare_server_name(b"/tmp/nvim.sock"));
+        assert!(is_bare_server_name(b"nvim.sock"));
+        // A backslash counts on every platform, not just Windows.
+        assert!(!is_bare_server_name(br"C:\pipe\nvim"));
     }
 
     #[test]

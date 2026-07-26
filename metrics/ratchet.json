@@ -129,7 +129,7 @@
     "crates/nvim/src/nvim/move.rs": {"lines": 2933, "no_mangle": 5, "unsafe": 58},
     "crates/nvim/src/nvim/msgpack_rpc/channel.rs": {"lines": 1541, "no_mangle": 4, "unsafe": 50},
     "crates/nvim/src/nvim/msgpack_rpc/packer.rs": {"unsafe": 11},
-    "crates/nvim/src/nvim/msgpack_rpc/server.rs": {"unsafe": 17},
+    "crates/nvim/src/nvim/msgpack_rpc/server.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/msgpack_rpc/unpacker.rs": {"no_mangle": 4, "unsafe": 24},
     "crates/nvim/src/nvim/normal.rs": {"lines": 10125, "unsafe": 367},
     "crates/nvim/src/nvim/ops.rs": {"lines": 5773, "no_mangle": 1, "unsafe": 63},
