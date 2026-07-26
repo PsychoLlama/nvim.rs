@@ -1,6 +1,6 @@
 {
   "internal_exports": 146,
-  "files_without_forbid_unsafe": 223,
+  "files_without_forbid_unsafe": 202,
   "files_without_deny_unsafe_op": 188,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
