@@ -107,7 +107,7 @@
     "crates/nvim/src/nvim/lua/executor.rs": {"lines": 4944, "unsafe": 125},
     "crates/nvim/src/nvim/lua/ffi.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/lua/secure.rs": {"unsafe": 2},
-    "crates/nvim/src/nvim/lua/spell.rs": {"unsafe": 4},
+    "crates/nvim/src/nvim/lua/spell.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/lua/stdlib.rs": {"lines": 1310, "unsafe": 44, "variadic": 1},
     "crates/nvim/src/nvim/lua/treesitter.rs": {"lines": 3140, "unsafe": 192},
     "crates/nvim/src/nvim/lua/xdiff.rs": {"unsafe": 13},
