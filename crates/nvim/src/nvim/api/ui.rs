@@ -18,7 +18,9 @@ use crate::src::nvim::memory::{
     ARENA_EMPTY, alloc_block, arena_finish, arena_mem_free, free_block, strequal, xcalloc, xfree,
 };
 use crate::src::nvim::msgpack_rpc::channel::rpc_write_raw;
-use crate::src::nvim::msgpack_rpc::packer::mpack_object_array;
+use crate::src::nvim::msgpack_rpc::packer::{
+    mpack_array, mpack_be16, mpack_bool, mpack_object_array, mpack_uint,
+};
 use crate::src::nvim::option::set_tty_option;
 use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset, strlen};
 pub use crate::src::nvim::types::{
@@ -239,17 +241,17 @@ unsafe extern "C" fn get_ui_or_err(mut chan_id: uint64_t, mut err: *mut Error) -
     return ui;
 }
 unsafe extern "C" fn mpack_array_dyn16(
-    mut buf: *mut *mut ::core::ffi::c_char,
+    buf: &mut *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
     let c2rust_fresh4 = *buf;
     *buf = (*buf).offset(1);
     *c2rust_fresh4 = 0xdc as ::core::ffi::c_int as ::core::ffi::c_char;
     let mut pos: *mut ::core::ffi::c_char = *buf;
-    mpack_w2(buf, 0xffef as uint32_t);
+    mpack_be16(buf, 0xffef as uint32_t);
     return pos;
 }
 unsafe extern "C" fn mpack_str_small(
-    mut buf: *mut *mut ::core::ffi::c_char,
+    buf: &mut *mut ::core::ffi::c_char,
     mut str: *const ::core::ffi::c_char,
     mut len: size_t,
 ) {
@@ -869,8 +871,8 @@ pub unsafe extern "C" fn nvim_ui_pum_set_bounds(
 }
 unsafe extern "C" fn flush_event(mut ui: *mut RemoteUI) {
     if !(*ui).cur_event.is_null() {
-        mpack_w2(
-            &raw mut (*ui).ncalls_pos,
+        mpack_be16(
+            &mut (*ui).ncalls_pos,
             (1 as uint32_t).wrapping_add((*ui).ncalls),
         );
         (*ui).cur_event = ::core::ptr::null::<::core::ffi::c_char>();
@@ -895,7 +897,7 @@ unsafe extern "C" fn prepare_call(mut ui: *mut RemoteUI, mut name: *const ::core
         ui_alloc_buf(ui);
     }
     if (*ui).cur_event.is_null() || !strequal((*ui).cur_event, name) {
-        let mut buf: *mut *mut ::core::ffi::c_char = &raw mut (*ui).packer.ptr;
+        let buf = &mut (*ui).packer.ptr;
         if (*ui).nevents_pos.is_null() {
             mpack_array(buf, 3 as uint32_t);
             mpack_uint(buf, 2 as uint32_t);
@@ -934,7 +936,7 @@ unsafe extern "C" fn push_call(
     mut args: Array,
 ) {
     prepare_call(ui, name);
-    mpack_object_array(args, &raw mut (*ui).packer);
+    mpack_object_array(args, &mut (*ui).packer);
 }
 unsafe extern "C" fn ui_flush_callback(mut packer: *mut PackerBuffer) {
     let mut ui: *mut RemoteUI = (*packer).anydata as *mut RemoteUI;
@@ -1628,7 +1630,7 @@ pub unsafe extern "C" fn remote_ui_raw_line(
 ) {
     if (*ui).ui_ext[kUILinegrid as ::core::ffi::c_int as usize] {
         prepare_call(ui, b"grid_line\0".as_ptr() as *const ::core::ffi::c_char);
-        let mut buf: *mut *mut ::core::ffi::c_char = &raw mut (*ui).packer.ptr;
+        let buf = &mut (*ui).packer.ptr;
         mpack_array(buf, 5 as uint32_t);
         mpack_uint(buf, grid as uint32_t);
         mpack_uint(buf, row as uint32_t);
@@ -1670,7 +1672,7 @@ pub unsafe extern "C" fn remote_ui_raw_line(
                         mpack_uint(buf, clearattr as uint32_t);
                         mpack_uint(buf, 0 as uint32_t);
                     }
-                    mpack_w2(&raw mut lenpos, nelem);
+                    mpack_be16(&mut lenpos, nelem);
                     mpack_bool(buf, false_0 != 0);
                     ui_flush_buf(ui, false_0 != 0);
                     prepare_call(ui, b"grid_line\0".as_ptr() as *const ::core::ffi::c_char);
@@ -1733,7 +1735,7 @@ pub unsafe extern "C" fn remote_ui_raw_line(
             mpack_uint(buf, clearattr as uint32_t);
             mpack_uint(buf, (clearcol - endcol) as uint32_t);
         }
-        mpack_w2(&raw mut lenpos, nelem);
+        mpack_be16(&mut lenpos, nelem);
         mpack_bool(
             buf,
             flags as ::core::ffi::c_int & kLineFlagWrap as ::core::ffi::c_int != 0,
@@ -1787,7 +1789,7 @@ unsafe extern "C" fn ui_flush_buf(mut ui: *mut RemoteUI, mut incomplete_event: b
     (*ui).incomplete_event = incomplete_event;
     flush_event(ui);
     if !(*ui).nevents_pos.is_null() {
-        mpack_w2(&raw mut (*ui).nevents_pos, (*ui).nevents);
+        mpack_be16(&mut (*ui).nevents_pos, (*ui).nevents);
         (*ui).nevents = 0 as uint32_t;
         (*ui).nevents_pos = ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
@@ -2615,84 +2617,6 @@ pub unsafe extern "C" fn remote_ui_error_exit(mut ui: *mut RemoteUI, mut status:
 }
 pub const CHAN_STDIO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
-    let c2rust_fresh1 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh1 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh2 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh2 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
-}
-#[inline]
-unsafe extern "C" fn mpack_w4(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
-    let c2rust_fresh10 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh10 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh11 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh11 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh12 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh12 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh13 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh13 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
-}
-#[inline]
-unsafe extern "C" fn mpack_uint(mut buf: *mut *mut ::core::ffi::c_char, mut val: uint32_t) {
-    if val > 0xffff as uint32_t {
-        let c2rust_fresh5 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh5 = 0xce as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w4(buf, val);
-    } else if val > 0xff as uint32_t {
-        let c2rust_fresh6 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh6 = 0xcd as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w2(buf, val);
-    } else if val > 0x7f as uint32_t {
-        let c2rust_fresh7 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh7 = 0xcc as ::core::ffi::c_int as ::core::ffi::c_char;
-        let c2rust_fresh8 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh8 = val as ::core::ffi::c_char;
-    } else {
-        let c2rust_fresh9 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh9 = val as ::core::ffi::c_char;
-    };
-}
-#[inline]
-unsafe extern "C" fn mpack_bool(mut buf: *mut *mut ::core::ffi::c_char, mut val: bool) {
-    let c2rust_fresh61 = *buf;
-    *buf = (*buf).offset(1);
-    *c2rust_fresh61 = (0xc2 as ::core::ffi::c_int
-        | (if val as ::core::ffi::c_int != 0 {
-            1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        })) as ::core::ffi::c_char;
-}
-#[inline]
-unsafe extern "C" fn mpack_array(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
-    if len < 0x10 as uint32_t {
-        let c2rust_fresh14 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh14 = (0x90 as uint32_t | len) as ::core::ffi::c_char;
-    } else if len < 0x10000 as uint32_t {
-        let c2rust_fresh15 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh15 = 0xdc as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w2(buf, len);
-    } else {
-        let c2rust_fresh16 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh16 = 0xdd as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w4(buf, len);
-    };
-}
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline]

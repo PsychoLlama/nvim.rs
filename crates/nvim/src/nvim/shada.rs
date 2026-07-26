@@ -44,8 +44,8 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::{semsg, siemsg, smsg, verbose_enter, verbose_leave};
 use crate::src::nvim::msgpack_rpc::packer::{
-    mpack_bin, mpack_check_buffer, mpack_integer, mpack_raw, mpack_str, mpack_uint64,
-    packer_string_buffer, packer_take_string,
+    mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_integer, mpack_map, mpack_raw,
+    mpack_remaining, mpack_str, mpack_uint, mpack_uint64, packer_string_buffer, packer_take_string,
 };
 use crate::src::nvim::msgpack_rpc::unpacker::{
     push_additional_data, unpack_array, unpack_integer, unpack_keydict, unpack_skip, unpack_string,
@@ -819,106 +819,6 @@ unsafe extern "C" fn mark_local_index(name: ::core::ffi::c_char) -> ::core::ffi:
     } else {
         -1 as ::core::ffi::c_int
     };
-}
-#[inline]
-unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
-    let c2rust_fresh0 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh0 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh1 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh1 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
-}
-#[inline]
-unsafe extern "C" fn mpack_w4(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
-    let c2rust_fresh2 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh2 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh3 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh3 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh4 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh4 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh5 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh5 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
-}
-#[inline]
-unsafe extern "C" fn mpack_uint(mut buf: *mut *mut ::core::ffi::c_char, mut val: uint32_t) {
-    if val > 0xffff as uint32_t {
-        let c2rust_fresh6 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh6 = 0xce as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w4(buf, val);
-    } else if val > 0xff as uint32_t {
-        let c2rust_fresh7 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh7 = 0xcd as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w2(buf, val);
-    } else if val > 0x7f as uint32_t {
-        let c2rust_fresh8 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh8 = 0xcc as ::core::ffi::c_int as ::core::ffi::c_char;
-        let c2rust_fresh9 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh9 = val as ::core::ffi::c_char;
-    } else {
-        let c2rust_fresh10 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh10 = val as ::core::ffi::c_char;
-    };
-}
-#[inline]
-unsafe extern "C" fn mpack_bool(mut buf: *mut *mut ::core::ffi::c_char, mut val: bool) {
-    let c2rust_fresh11 = *buf;
-    *buf = (*buf).offset(1);
-    *c2rust_fresh11 = (0xc2 as ::core::ffi::c_int
-        | (if val as ::core::ffi::c_int != 0 {
-            1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        })) as ::core::ffi::c_char;
-}
-#[inline]
-unsafe extern "C" fn mpack_array(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
-    if len < 0x10 as uint32_t {
-        let c2rust_fresh12 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh12 = (0x90 as uint32_t | len) as ::core::ffi::c_char;
-    } else if len < 0x10000 as uint32_t {
-        let c2rust_fresh13 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh13 = 0xdc as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w2(buf, len);
-    } else {
-        let c2rust_fresh14 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh14 = 0xdd as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w4(buf, len);
-    };
-}
-#[inline]
-unsafe extern "C" fn mpack_map(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
-    if len < 0x10 as uint32_t {
-        let c2rust_fresh15 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh15 = (0x80 as uint32_t | len) as ::core::ffi::c_char;
-    } else if len < 0x10000 as uint32_t {
-        let c2rust_fresh16 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh16 = 0xde as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w2(buf, len);
-    } else {
-        let c2rust_fresh17 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh17 = 0xdf as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w4(buf, len);
-    };
-}
-#[inline]
-unsafe extern "C" fn mpack_remaining(mut packer: *mut PackerBuffer) -> size_t {
-    return (*packer).endptr.offset_from((*packer).ptr) as size_t;
 }
 #[inline]
 unsafe extern "C" fn file_space(mut fp: *mut FileDescriptor) -> size_t {
@@ -2385,7 +2285,7 @@ unsafe extern "C" fn shada_filename(
 }
 pub const SHADA_MPACK_FREE_SPACE: ::core::ffi::c_int = 4 as ::core::ffi::c_int * MPACK_ITEM_SIZE;
 unsafe extern "C" fn shada_check_buffer(mut packer: *mut PackerBuffer) {
-    if mpack_remaining(packer) < SHADA_MPACK_FREE_SPACE as size_t {
+    if mpack_remaining(&*packer) < SHADA_MPACK_FREE_SPACE as size_t {
         (*packer).packer_flush.expect("non-null function pointer")(packer);
     }
 }
@@ -2404,7 +2304,7 @@ unsafe extern "C" fn dump_additional_data(
         mpack_raw(
             &raw mut (*src).data as *mut ::core::ffi::c_char,
             (*src).nbytes as size_t,
-            sbuf,
+            &mut *sbuf,
         );
     }
 }
@@ -2419,7 +2319,7 @@ unsafe extern "C" fn shada_pack_entry(
     };
     let mut ret: ShaDaWriteResult = kSDWriteFailed;
     let mut sbuf: PackerBuffer = packer_string_buffer();
-    shada_check_buffer(&raw mut sbuf);
+    shada_check_buffer(&mut sbuf);
     '_shada_pack_entry_error: {
         match entry.type_0 as ::core::ffi::c_int {
             0 => {
@@ -2429,7 +2329,7 @@ unsafe extern "C" fn shada_pack_entry(
                 mpack_raw(
                     entry.data.unknown_item.contents,
                     entry.data.unknown_item.size,
-                    &raw mut sbuf,
+                    &mut sbuf,
                 );
             }
             4 => {
@@ -2438,22 +2338,16 @@ unsafe extern "C" fn shada_pack_entry(
                 let mut arr_size: uint32_t = (2 as uint32_t)
                     .wrapping_add(is_hist_search as uint32_t)
                     .wrapping_add(additional_data_len(entry.additional_data));
-                mpack_array(&raw mut sbuf.ptr, arr_size);
-                mpack_uint(
-                    &raw mut sbuf.ptr,
-                    entry.data.history_item.histtype as uint32_t,
-                );
-                mpack_bin(
-                    cstr_as_string(entry.data.history_item.string),
-                    &raw mut sbuf,
-                );
+                mpack_array(&mut sbuf.ptr, arr_size);
+                mpack_uint(&mut sbuf.ptr, entry.data.history_item.histtype as uint32_t);
+                mpack_bin(cstr_as_string(entry.data.history_item.string), &mut sbuf);
                 if is_hist_search {
                     mpack_uint(
-                        &raw mut sbuf.ptr,
+                        &mut sbuf.ptr,
                         entry.data.history_item.sep as uint8_t as uint32_t,
                     );
                 }
-                dump_additional_data(entry.additional_data, &raw mut sbuf);
+                dump_additional_data(entry.additional_data, &mut sbuf);
             }
             6 => {
                 let mut is_blob: bool = entry.data.global_var.value.v_type as ::core::ffi::c_uint
@@ -2465,9 +2359,9 @@ unsafe extern "C" fn shada_pack_entry(
                         0 as ::core::ffi::c_int
                     })) as uint32_t)
                     .wrapping_add(additional_data_len(entry.additional_data));
-                mpack_array(&raw mut sbuf.ptr, arr_size_0);
+                mpack_array(&mut sbuf.ptr, arr_size_0);
                 let varname: String_0 = cstr_as_string(entry.data.global_var.name);
-                mpack_bin(varname, &raw mut sbuf);
+                mpack_bin(varname, &mut sbuf);
                 let mut vardesc: [::core::ffi::c_char; 256] = ::core::mem::transmute::<
                     [u8; 256],
                     [::core::ffi::c_char; 256],
@@ -2483,7 +2377,7 @@ unsafe extern "C" fn shada_pack_entry(
                     varname.size.wrapping_add(1 as size_t),
                 );
                 if encode_vim_to_msgpack(
-                    &raw mut sbuf,
+                    &mut sbuf,
                     &raw mut entry.data.global_var.value,
                     &raw mut vardesc as *mut ::core::ffi::c_char,
                 ) == FAIL
@@ -2497,21 +2391,21 @@ unsafe extern "C" fn shada_pack_entry(
                     break '_shada_pack_entry_error;
                 } else {
                     if is_blob {
-                        mpack_check_buffer(&raw mut sbuf);
+                        mpack_check_buffer(&mut sbuf);
                         mpack_integer(
-                            &raw mut sbuf.ptr,
+                            &mut sbuf.ptr,
                             VAR_TYPE_BLOB as ::core::ffi::c_int as Integer,
                         );
                     }
-                    dump_additional_data(entry.additional_data, &raw mut sbuf);
+                    dump_additional_data(entry.additional_data, &mut sbuf);
                 }
             }
             3 => {
                 let mut arr_size_1: uint32_t =
                     (1 as uint32_t).wrapping_add(additional_data_len(entry.additional_data));
-                mpack_array(&raw mut sbuf.ptr, arr_size_1);
-                mpack_bin(cstr_as_string(entry.data.sub_string.sub), &raw mut sbuf);
-                dump_additional_data(entry.additional_data, &raw mut sbuf);
+                mpack_array(&mut sbuf.ptr, arr_size_1);
+                mpack_bin(cstr_as_string(entry.data.sub_string.sub), &mut sbuf);
+                dump_additional_data(entry.additional_data, &mut sbuf);
             }
             2 => {
                 let mut entry_map_size: uint32_t = (1 as uint32_t)
@@ -2589,7 +2483,7 @@ unsafe extern "C" fn shada_pack_entry(
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(additional_data_len(entry.additional_data));
-                mpack_map(&raw mut sbuf.ptr, entry_map_size);
+                mpack_map(&mut sbuf.ptr, entry_map_size);
                 mpack_str(
                     String_0 {
                         data: b"sp\0".as_ptr() as *const ::core::ffi::c_char
@@ -2597,9 +2491,9 @@ unsafe extern "C" fn shada_pack_entry(
                         size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                             .wrapping_sub(1 as size_t),
                     },
-                    &raw mut sbuf,
+                    &mut sbuf,
                 );
-                mpack_bin(entry.data.search_pattern.pat, &raw mut sbuf);
+                mpack_bin(entry.data.search_pattern.pat, &mut sbuf);
                 if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .search_pattern
@@ -2613,10 +2507,10 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     mpack_bool(
-                        &raw mut sbuf.ptr,
+                        &mut sbuf.ptr,
                         !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
@@ -2636,10 +2530,10 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     mpack_bool(
-                        &raw mut sbuf.ptr,
+                        &mut sbuf.ptr,
                         !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
@@ -2659,10 +2553,10 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     mpack_bool(
-                        &raw mut sbuf.ptr,
+                        &mut sbuf.ptr,
                         !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
@@ -2682,10 +2576,10 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     mpack_bool(
-                        &raw mut sbuf.ptr,
+                        &mut sbuf.ptr,
                         !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
@@ -2705,10 +2599,10 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     mpack_bool(
-                        &raw mut sbuf.ptr,
+                        &mut sbuf.ptr,
                         !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
@@ -2728,10 +2622,10 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     mpack_bool(
-                        &raw mut sbuf.ptr,
+                        &mut sbuf.ptr,
                         !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
@@ -2751,10 +2645,10 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     mpack_bool(
-                        &raw mut sbuf.ptr,
+                        &mut sbuf.ptr,
                         !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
@@ -2774,10 +2668,10 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     mpack_bool(
-                        &raw mut sbuf.ptr,
+                        &mut sbuf.ptr,
                         !(*sd_default_values.ptr())[entry.type_0 as usize]
                             .data
                             .search_pattern
@@ -2797,11 +2691,11 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
-                    mpack_integer(&raw mut sbuf.ptr, entry.data.search_pattern.offset);
+                    mpack_integer(&mut sbuf.ptr, entry.data.search_pattern.offset);
                 }
-                dump_additional_data(entry.additional_data, &raw mut sbuf);
+                dump_additional_data(entry.additional_data, &mut sbuf);
             }
             11 | 7 | 10 | 8 => {
                 let mut entry_map_size_0: size_t = (1 as uint32_t)
@@ -2833,7 +2727,7 @@ unsafe extern "C" fn shada_pack_entry(
                     )
                     .wrapping_add(additional_data_len(entry.additional_data))
                     as size_t;
-                mpack_map(&raw mut sbuf.ptr, entry_map_size_0 as uint32_t);
+                mpack_map(&mut sbuf.ptr, entry_map_size_0 as uint32_t);
                 mpack_str(
                     String_0 {
                         data: b"f\0".as_ptr() as *const ::core::ffi::c_char
@@ -2841,9 +2735,9 @@ unsafe extern "C" fn shada_pack_entry(
                         size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                             .wrapping_sub(1 as size_t),
                     },
-                    &raw mut sbuf,
+                    &mut sbuf,
                 );
-                mpack_bin(cstr_as_string(entry.data.filemark.fname), &raw mut sbuf);
+                mpack_bin(cstr_as_string(entry.data.filemark.fname), &mut sbuf);
                 if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .filemark
@@ -2858,9 +2752,9 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
-                    mpack_integer(&raw mut sbuf.ptr, entry.data.filemark.mark.lnum as Integer);
+                    mpack_integer(&mut sbuf.ptr, entry.data.filemark.mark.lnum as Integer);
                 }
                 if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
@@ -2876,9 +2770,9 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
-                    mpack_integer(&raw mut sbuf.ptr, entry.data.filemark.mark.col as Integer);
+                    mpack_integer(&mut sbuf.ptr, entry.data.filemark.mark.col as Integer);
                 }
                 '_c2rust_label: {
                     if (if entry.type_0 as ::core::ffi::c_int == kSDItemJump as ::core::ffi::c_int
@@ -2919,14 +2813,14 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     mpack_uint(
-                        &raw mut sbuf.ptr,
+                        &mut sbuf.ptr,
                         entry.data.filemark.name as uint8_t as uint32_t,
                     );
                 }
-                dump_additional_data(entry.additional_data, &raw mut sbuf);
+                dump_additional_data(entry.additional_data, &mut sbuf);
             }
             5 => {
                 let mut entry_map_size_1: uint32_t = (2 as uint32_t)
@@ -2955,7 +2849,7 @@ unsafe extern "C" fn shada_pack_entry(
                             as ::core::ffi::c_int as uint32_t,
                     )
                     .wrapping_add(additional_data_len(entry.additional_data));
-                mpack_map(&raw mut sbuf.ptr, entry_map_size_1);
+                mpack_map(&mut sbuf.ptr, entry_map_size_1);
                 mpack_str(
                     String_0 {
                         data: b"rc\0".as_ptr() as *const ::core::ffi::c_char
@@ -2963,12 +2857,12 @@ unsafe extern "C" fn shada_pack_entry(
                         size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                             .wrapping_sub(1 as size_t),
                     },
-                    &raw mut sbuf,
+                    &mut sbuf,
                 );
-                mpack_array(&raw mut sbuf.ptr, entry.data.reg.contents_size as uint32_t);
+                mpack_array(&mut sbuf.ptr, entry.data.reg.contents_size as uint32_t);
                 let mut i: size_t = 0 as size_t;
                 while i < entry.data.reg.contents_size {
-                    mpack_bin(*entry.data.reg.contents.offset(i as isize), &raw mut sbuf);
+                    mpack_bin(*entry.data.reg.contents.offset(i as isize), &mut sbuf);
                     i = i.wrapping_add(1);
                 }
                 mpack_str(
@@ -2978,12 +2872,9 @@ unsafe extern "C" fn shada_pack_entry(
                         size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                             .wrapping_sub(1 as size_t),
                     },
-                    &raw mut sbuf,
+                    &mut sbuf,
                 );
-                mpack_uint(
-                    &raw mut sbuf.ptr,
-                    entry.data.reg.name as uint8_t as uint32_t,
-                );
+                mpack_uint(&mut sbuf.ptr, entry.data.reg.name as uint8_t as uint32_t);
                 if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
                     .reg
@@ -2997,12 +2888,9 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
-                    mpack_uint(
-                        &raw mut sbuf.ptr,
-                        entry.data.reg.type_0 as uint8_t as uint32_t,
-                    );
+                    mpack_uint(&mut sbuf.ptr, entry.data.reg.type_0 as uint8_t as uint32_t);
                 }
                 if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
@@ -3017,9 +2905,9 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
-                    mpack_uint64(&raw mut sbuf.ptr, entry.data.reg.width as uint64_t);
+                    mpack_uint64(&mut sbuf.ptr, entry.data.reg.width as uint64_t);
                 }
                 if !((*sd_default_values.ptr())[entry.type_0 as usize]
                     .data
@@ -3034,14 +2922,14 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
-                    mpack_bool(&raw mut sbuf.ptr, entry.data.reg.is_unnamed);
+                    mpack_bool(&mut sbuf.ptr, entry.data.reg.is_unnamed);
                 }
-                dump_additional_data(entry.additional_data, &raw mut sbuf);
+                dump_additional_data(entry.additional_data, &mut sbuf);
             }
             9 => {
-                mpack_array(&raw mut sbuf.ptr, entry.data.buffer_list.size as uint32_t);
+                mpack_array(&mut sbuf.ptr, entry.data.buffer_list.size as uint32_t);
                 let mut i_0: size_t = 0 as size_t;
                 while i_0 < entry.data.buffer_list.size {
                     let mut entry_map_size_2: size_t = (1 as size_t)
@@ -3062,7 +2950,7 @@ unsafe extern "C" fn shada_pack_entry(
                         .wrapping_add(additional_data_len(
                             (*entry.data.buffer_list.buffers.offset(i_0 as isize)).additional_data,
                         ) as size_t);
-                    mpack_map(&raw mut sbuf.ptr, entry_map_size_2 as uint32_t);
+                    mpack_map(&mut sbuf.ptr, entry_map_size_2 as uint32_t);
                     mpack_str(
                         String_0 {
                             data: b"f\0".as_ptr() as *const ::core::ffi::c_char
@@ -3070,13 +2958,13 @@ unsafe extern "C" fn shada_pack_entry(
                             size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                                 .wrapping_sub(1 as size_t),
                         },
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     mpack_bin(
                         cstr_as_string(
                             (*entry.data.buffer_list.buffers.offset(i_0 as isize)).fname,
                         ),
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     if (*entry.data.buffer_list.buffers.offset(i_0 as isize))
                         .pos
@@ -3090,10 +2978,10 @@ unsafe extern "C" fn shada_pack_entry(
                                 size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                                     .wrapping_sub(1 as size_t),
                             },
-                            &raw mut sbuf,
+                            &mut sbuf,
                         );
                         mpack_uint64(
-                            &raw mut sbuf.ptr,
+                            &mut sbuf.ptr,
                             (*entry.data.buffer_list.buffers.offset(i_0 as isize))
                                 .pos
                                 .lnum as uint64_t,
@@ -3111,10 +2999,10 @@ unsafe extern "C" fn shada_pack_entry(
                                 size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                                     .wrapping_sub(1 as size_t),
                             },
-                            &raw mut sbuf,
+                            &mut sbuf,
                         );
                         mpack_uint64(
-                            &raw mut sbuf.ptr,
+                            &mut sbuf.ptr,
                             (*entry.data.buffer_list.buffers.offset(i_0 as isize))
                                 .pos
                                 .col as uint64_t,
@@ -3122,26 +3010,26 @@ unsafe extern "C" fn shada_pack_entry(
                     }
                     dump_additional_data(
                         (*entry.data.buffer_list.buffers.offset(i_0 as isize)).additional_data,
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     i_0 = i_0.wrapping_add(1);
                 }
             }
             1 => {
-                mpack_map(&raw mut sbuf.ptr, entry.data.header.size as uint32_t);
+                mpack_map(&mut sbuf.ptr, entry.data.header.size as uint32_t);
                 let mut i_1: size_t = 0 as size_t;
                 while i_1 < entry.data.header.size {
                     mpack_str(
                         (*entry.data.header.items.offset(i_1 as isize)).key,
-                        &raw mut sbuf,
+                        &mut sbuf,
                     );
                     let obj: Object = (*entry.data.header.items.offset(i_1 as isize)).value;
                     match obj.type_0 as ::core::ffi::c_uint {
                         4 => {
-                            mpack_bin(obj.data.string, &raw mut sbuf);
+                            mpack_bin(obj.data.string, &mut sbuf);
                         }
                         2 => {
-                            mpack_integer(&raw mut sbuf.ptr, obj.data.integer);
+                            mpack_integer(&mut sbuf.ptr, obj.data.integer);
                         }
                         _ => {
                             abort();
@@ -3152,18 +3040,18 @@ unsafe extern "C" fn shada_pack_entry(
             }
             _ => {}
         }
-        packed = packer_take_string(&raw mut sbuf);
+        packed = packer_take_string(&mut sbuf);
         if max_kbyte == 0 || packed.size <= max_kbyte.wrapping_mul(1024 as size_t) {
             shada_check_buffer(packer);
             if entry.type_0 as ::core::ffi::c_int == kSDItemUnknown as ::core::ffi::c_int {
-                mpack_uint64(&raw mut (*packer).ptr, entry.data.unknown_item.type_0);
+                mpack_uint64(&mut (*packer).ptr, entry.data.unknown_item.type_0);
             } else {
-                mpack_uint64(&raw mut (*packer).ptr, entry.type_0 as uint64_t);
+                mpack_uint64(&mut (*packer).ptr, entry.type_0 as uint64_t);
             }
-            mpack_uint64(&raw mut (*packer).ptr, entry.timestamp);
+            mpack_uint64(&mut (*packer).ptr, entry.timestamp);
             if packed.size > 0 as size_t {
-                mpack_uint64(&raw mut (*packer).ptr, packed.size as uint64_t);
-                mpack_raw(packed.data, packed.size, packer);
+                mpack_uint64(&mut (*packer).ptr, packed.size as uint64_t);
+                mpack_raw(packed.data, packed.size, &mut *packer);
             }
             if (*packer).anyint != 0 as int64_t {
                 break '_shada_pack_entry_error;
@@ -4533,7 +4421,7 @@ unsafe extern "C" fn shada_write(
             }
             if !sd_reader.is_null() {
                 let srww_ret: ShaDaWriteResult =
-                    shada_read_when_writing(sd_reader, srni_flags, max_kbyte, wms, &raw mut packer);
+                    shada_read_when_writing(sd_reader, srni_flags, max_kbyte, wms, &mut packer);
                 if srww_ret as ::core::ffi::c_uint
                     != kSDWriteSuccessful as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
@@ -4868,7 +4756,7 @@ unsafe extern "C" fn shada_write(
         h: MAPHASH_INIT,
         keys: ::core::ptr::null_mut::<ptr_t>(),
     };
-    packer.packer_flush.expect("non-null function pointer")(&raw mut packer);
+    packer.packer_flush.expect("non-null function pointer")(&mut packer);
     xfree((*wms).dumped_variables.keys as *mut ::core::ffi::c_void);
     xfree((*wms).dumped_variables.h.hash as *mut ::core::ffi::c_void);
     (*wms).dumped_variables = Set_cstr_t {
@@ -6446,7 +6334,7 @@ pub unsafe extern "C" fn shada_encode_regs() -> String_0 {
         i = i.wrapping_add(1);
     }
     xfree(wms as *mut ::core::ffi::c_void);
-    return packer_take_string(&raw mut packer);
+    return packer_take_string(&mut packer);
 }
 pub unsafe extern "C" fn shada_encode_jumps() -> String_0 {
     let mut removable_bufs: Set_ptr_t = Set_ptr_t {
@@ -6480,7 +6368,7 @@ pub unsafe extern "C" fn shada_encode_jumps() -> String_0 {
         }
         i = i.wrapping_add(1);
     }
-    return packer_take_string(&raw mut packer);
+    return packer_take_string(&mut packer);
 }
 pub unsafe extern "C" fn shada_encode_buflist() -> String_0 {
     let mut removable_bufs: Set_ptr_t = Set_ptr_t {
@@ -6496,7 +6384,7 @@ pub unsafe extern "C" fn shada_encode_buflist() -> String_0 {
         abort();
     }
     xfree(buflist_entry.data.buffer_list.buffers as *mut ::core::ffi::c_void);
-    return packer_take_string(&raw mut packer);
+    return packer_take_string(&mut packer);
 }
 pub unsafe extern "C" fn shada_encode_gvars() -> String_0 {
     let mut packer: PackerBuffer = packer_string_buffer();
@@ -6559,7 +6447,7 @@ pub unsafe extern "C" fn shada_encode_gvars() -> String_0 {
             break;
         }
     }
-    return packer_take_string(&raw mut packer);
+    return packer_take_string(&mut packer);
 }
 pub unsafe extern "C" fn shada_read_string(mut string: String_0, flags: ::core::ffi::c_int) {
     if string.size == 0 as size_t {

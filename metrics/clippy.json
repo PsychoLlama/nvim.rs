@@ -108,7 +108,6 @@
     "crates/nvim/src/nvim/mouse.rs": 27,
     "crates/nvim/src/nvim/move.rs": 29,
     "crates/nvim/src/nvim/msgpack_rpc/channel.rs": 54,
-    "crates/nvim/src/nvim/msgpack_rpc/packer.rs": 13,
     "crates/nvim/src/nvim/msgpack_rpc/server.rs": 23,
     "crates/nvim/src/nvim/msgpack_rpc/unpacker.rs": 57,
     "crates/nvim/src/nvim/normal.rs": 146,

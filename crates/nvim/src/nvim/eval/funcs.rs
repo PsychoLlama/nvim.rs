@@ -8970,7 +8970,7 @@ unsafe extern "C" fn f_msgpackdump(
             li = (*li).li_next;
         }
     }
-    let mut data: String_0 = packer_take_string(&raw mut packer);
+    let mut data: String_0 = packer_take_string(&mut packer);
     if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
         != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
         && strequal(

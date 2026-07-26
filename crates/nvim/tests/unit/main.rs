@@ -13,6 +13,7 @@ mod keycodes;
 mod linematch;
 mod memory;
 mod multiqueue;
+mod packer;
 mod profile;
 mod sha256;
 mod strings;

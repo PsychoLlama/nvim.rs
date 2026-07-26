@@ -11,7 +11,8 @@ use crate::src::nvim::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr
 use crate::src::nvim::memory::{memchrsub, memcnt, xfree, xmalloc, xmemdupz, xmemscan, xrealloc};
 use crate::src::nvim::message::{emsg, internal_error, semsg};
 use crate::src::nvim::msgpack_rpc::packer::{
-    mpack_bin, mpack_check_buffer, mpack_ext, mpack_float8, mpack_integer, mpack_str, mpack_uint64,
+    mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_ext, mpack_float8, mpack_integer,
+    mpack_map, mpack_str, mpack_uint64,
 };
 use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memcpy, strlen};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen};
@@ -123,7 +124,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
     copyID: ::core::ffi::c_int,
     objname: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    mpack_check_buffer(packer);
+    mpack_check_buffer(&mut *packer);
     '_typval_encode_stop_converting_one_item: {
         match (*tv).v_type as ::core::ffi::c_uint {
             2 => {
@@ -132,14 +133,14 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                         data: (*tv).vval.v_string,
                         size: tv_strlen(tv),
                     },
-                    packer,
+                    &mut *packer,
                 );
             }
             1 => {
-                mpack_integer(&raw mut (*packer).ptr, (*tv).vval.v_number);
+                mpack_integer(&mut (*packer).ptr, (*tv).vval.v_number);
             }
             6 => {
-                mpack_float8(&raw mut (*packer).ptr, (*tv).vval.v_float);
+                mpack_float8(&mut (*packer).ptr, (*tv).vval.v_float);
             }
             10 => {
                 mpack_bin(
@@ -151,7 +152,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                         }) as *mut ::core::ffi::c_char,
                         size: tv_blob_len((*tv).vval.v_blob) as size_t,
                     },
-                    packer,
+                    &mut *packer,
                 );
             }
             3 => {
@@ -196,7 +197,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                 if (*tv).vval.v_list.is_null()
                     || tv_list_len((*tv).vval.v_list) == 0 as ::core::ffi::c_int
                 {
-                    mpack_array(&raw mut (*packer).ptr, 0 as uint32_t);
+                    mpack_array(&mut (*packer).ptr, 0 as uint32_t);
                 } else {
                     let saved_copyID: ::core::ffi::c_int = tv_list_copyid((*tv).vval.v_list);
                     let te_csr_ret: ::core::ffi::c_int =
@@ -213,7 +214,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                         return te_csr_ret;
                     }
                     mpack_array(
-                        &raw mut (*packer).ptr,
+                        &mut (*packer).ptr,
                         tv_list_len((*tv).vval.v_list) as uint32_t,
                     );
                     '_c2rust_label: {
@@ -321,7 +322,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
             7 => match (*tv).vval.v_bool as ::core::ffi::c_uint {
                 1 | 0 => {
                     mpack_bool(
-                        &raw mut (*packer).ptr,
+                        &mut (*packer).ptr,
                         ((*tv).vval.v_bool as u64 != 0) as ::core::ffi::c_int
                             == kBoolVarTrue as ::core::ffi::c_int,
                     );
@@ -340,7 +341,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                 if (*tv).vval.v_dict.is_null()
                     || (*(*tv).vval.v_dict).dv_hashtab.ht_used == 0 as size_t
                 {
-                    mpack_map(&raw mut (*packer).ptr, 0 as uint32_t);
+                    mpack_map(&mut (*packer).ptr, 0 as uint32_t);
                 } else {
                     let mut type_di: *const dictitem_T = ::core::ptr::null::<dictitem_T>();
                     let mut val_di: *const dictitem_T = ::core::ptr::null::<dictitem_T>();
@@ -389,7 +390,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                 }
                                 i = i.wrapping_add(1);
                             }
-                            mpack_check_buffer(packer);
+                            mpack_check_buffer(&mut *packer);
                             if i != ::core::mem::size_of::<[*const list_T; 8]>()
                                 .wrapping_div(::core::mem::size_of::<*const list_T>())
                                 .wrapping_div(
@@ -414,7 +415,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                                 as ::core::ffi::c_uint
                                         {
                                             mpack_bool(
-                                                &raw mut (*packer).ptr,
+                                                &mut (*packer).ptr,
                                                 (*val_di).di_tv.vval.v_number != 0,
                                             );
                                             break '_typval_encode_stop_converting_one_item;
@@ -491,12 +492,12 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                                                 | low_bits as uint64_t;
                                                             if sign > 0 as varnumber_T {
                                                                 mpack_uint64(
-                                                                    &raw mut (*packer).ptr,
+                                                                    &mut (*packer).ptr,
                                                                     number,
                                                                 );
                                                             } else {
                                                                 mpack_integer(
-                                                                    &raw mut (*packer).ptr,
+                                                                    &mut (*packer).ptr,
                                                                     number.wrapping_neg()
                                                                         as Integer,
                                                                 );
@@ -514,7 +515,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                                 as ::core::ffi::c_uint
                                         {
                                             mpack_float8(
-                                                &raw mut (*packer).ptr,
+                                                &mut (*packer).ptr,
                                                 (*val_di).di_tv.vval.v_float,
                                             );
                                             break '_typval_encode_stop_converting_one_item;
@@ -537,7 +538,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                                         data: buf,
                                                         size: len,
                                                     },
-                                                    packer,
+                                                    &mut *packer,
                                                 );
                                                 xfree(buf as *mut ::core::ffi::c_void);
                                                 break '_typval_encode_stop_converting_one_item;
@@ -566,7 +567,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                                 return te_csr_ret_0;
                                             }
                                             mpack_array(
-                                                &raw mut (*packer).ptr,
+                                                &mut (*packer).ptr,
                                                 tv_list_len((*val_di).di_tv.vval.v_list)
                                                     as uint32_t,
                                             );
@@ -733,7 +734,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                                 || tv_list_len(val_list_0)
                                                     == 0 as ::core::ffi::c_int
                                             {
-                                                mpack_map(&raw mut (*packer).ptr, 0 as uint32_t);
+                                                mpack_map(&mut (*packer).ptr, 0 as uint32_t);
                                                 break '_typval_encode_stop_converting_one_item;
                                             } else {
                                                 let l_: *const list_T = val_list_0;
@@ -775,7 +776,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                                     return te_csr_ret_1;
                                                 }
                                                 mpack_map(
-                                                    &raw mut (*packer).ptr,
+                                                    &mut (*packer).ptr,
                                                     tv_list_len(val_list_0) as uint32_t,
                                                 );
                                                 '_c2rust_label_1: {
@@ -982,7 +983,12 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                                                 &raw mut len_0,
                                                 &raw mut buf_0,
                                             ) {
-                                                mpack_ext(buf_0, len_0, type_0 as int8_t, packer);
+                                                mpack_ext(
+                                                    buf_0,
+                                                    len_0,
+                                                    type_0 as int8_t,
+                                                    &mut *packer,
+                                                );
                                                 xfree(buf_0 as *mut ::core::ffi::c_void);
                                                 break '_typval_encode_stop_converting_one_item;
                                             }
@@ -1010,7 +1016,7 @@ unsafe extern "C" fn _typval_encode_msgpack_convert_one_value(
                         return te_csr_ret_2;
                     }
                     mpack_map(
-                        &raw mut (*packer).ptr,
+                        &mut (*packer).ptr,
                         (*(*tv).vval.v_dict).dv_hashtab.ht_used as uint32_t,
                     );
                     '_c2rust_label_2: {
@@ -1208,7 +1214,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                                             .offset(0 as ::core::ffi::c_int as isize),
                                     ),
                                 },
-                                packer,
+                                &mut *packer,
                             );
                             tv = &raw mut (*di).di_tv;
                         }
@@ -1262,7 +1268,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                             0 => {
                                 (*cur_mpsv).data.p.stage = kMPConvPartialSelf;
                                 if !pt.is_null() && (*pt).pt_argc > 0 as ::core::ffi::c_int {
-                                    mpack_array(&raw mut (*packer).ptr, (*pt).pt_argc as uint32_t);
+                                    mpack_array(&mut (*packer).ptr, (*pt).pt_argc as uint32_t);
                                     if mpstack.size == mpstack.capacity {
                                         mpstack.capacity = if mpstack.capacity
                                             << 1 as ::core::ffi::c_int
@@ -1383,7 +1389,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                                     continue;
                                 }
                                 if (*dict).dv_hashtab.ht_used == 0 as size_t {
-                                    mpack_map(&raw mut (*packer).ptr, 0 as uint32_t);
+                                    mpack_map(&mut (*packer).ptr, 0 as uint32_t);
                                     continue;
                                 } else {
                                     let saved_copyID: ::core::ffi::c_int = (*dict).dv_copyID;
@@ -1405,7 +1411,7 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                                         }
                                     } else {
                                         mpack_map(
-                                            &raw mut (*packer).ptr,
+                                            &mut (*packer).ptr,
                                             (*dict).dv_hashtab.ht_used as uint32_t,
                                         );
                                         '_c2rust_label: {
@@ -8720,76 +8726,5 @@ unsafe extern "C" fn tv_strlen(tv: *const typval_T) -> size_t {
     };
 }
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
-    let c2rust_fresh17 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh17 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh18 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh18 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
-}
-#[inline]
-unsafe extern "C" fn mpack_w4(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
-    let c2rust_fresh13 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh13 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh14 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh14 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh15 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh15 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh16 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh16 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
-}
-#[inline]
-unsafe extern "C" fn mpack_bool(mut buf: *mut *mut ::core::ffi::c_char, mut val: bool) {
-    let c2rust_fresh41 = *buf;
-    *buf = (*buf).offset(1);
-    *c2rust_fresh41 = (0xc2 as ::core::ffi::c_int
-        | (if val as ::core::ffi::c_int != 0 {
-            1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        })) as ::core::ffi::c_char;
-}
-#[inline]
-unsafe extern "C" fn mpack_array(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
-    if len < 0x10 as uint32_t {
-        let c2rust_fresh38 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh38 = (0x90 as uint32_t | len) as ::core::ffi::c_char;
-    } else if len < 0x10000 as uint32_t {
-        let c2rust_fresh39 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh39 = 0xdc as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w2(buf, len);
-    } else {
-        let c2rust_fresh40 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh40 = 0xdd as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w4(buf, len);
-    };
-}
-#[inline]
-unsafe extern "C" fn mpack_map(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
-    if len < 0x10 as uint32_t {
-        let c2rust_fresh10 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh10 = (0x80 as uint32_t | len) as ::core::ffi::c_char;
-    } else if len < 0x10000 as uint32_t {
-        let c2rust_fresh11 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh11 = 0xde as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w2(buf, len);
-    } else {
-        let c2rust_fresh12 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh12 = 0xdf as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w4(buf, len);
-    };
-}
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

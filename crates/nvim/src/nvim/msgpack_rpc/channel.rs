@@ -30,7 +30,7 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::msgpack_rpc::packer::{
-    mpack_integer, mpack_object, mpack_object_array, mpack_str,
+    mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
 };
 use crate::src::nvim::msgpack_rpc::unpacker::{unpacker_advance, unpacker_init, unpacker_teardown};
 use crate::src::nvim::os::input::input_blocking;
@@ -1309,9 +1309,9 @@ unsafe extern "C" fn serialize_request(
         anyint: 0,
         packer_flush: None,
     };
-    packer_buffer_init_channels(chans, nchans, &raw mut packer);
+    packer_buffer_init_channels(chans, nchans, &mut packer);
     mpack_array(
-        &raw mut packer.ptr,
+        &mut packer.ptr,
         (if request_id != 0 {
             4 as ::core::ffi::c_int
         } else {
@@ -1326,11 +1326,11 @@ unsafe extern "C" fn serialize_request(
         2 as ::core::ffi::c_int
     }) as ::core::ffi::c_char;
     if request_id != 0 {
-        mpack_uint(&raw mut packer.ptr, request_id);
+        mpack_uint(&mut packer.ptr, request_id);
     }
-    mpack_str(cstr_as_string(method), &raw mut packer);
-    mpack_object_array(args, &raw mut packer);
-    packer_buffer_finish_channels(&raw mut packer);
+    mpack_str(cstr_as_string(method), &mut packer);
+    mpack_object_array(args, &mut packer);
+    packer_buffer_finish_channels(&mut packer);
 }
 pub unsafe extern "C" fn serialize_response(
     mut channel: *mut Channel,
@@ -1401,16 +1401,16 @@ pub unsafe extern "C" fn serialize_response(
         anyint: 0,
         packer_flush: None,
     };
-    packer_buffer_init_channels(&raw mut channel, 1 as size_t, &raw mut packer);
-    mpack_array(&raw mut packer.ptr, 4 as uint32_t);
+    packer_buffer_init_channels(&raw mut channel, 1 as size_t, &mut packer);
+    mpack_array(&mut packer.ptr, 4 as uint32_t);
     let c2rust_fresh2 = packer.ptr;
     packer.ptr = packer.ptr.offset(1);
     *c2rust_fresh2 = 1 as ::core::ffi::c_int as ::core::ffi::c_char;
-    mpack_uint(&raw mut packer.ptr, response_id);
+    mpack_uint(&mut packer.ptr, response_id);
     if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        mpack_array(&raw mut packer.ptr, 2 as uint32_t);
-        mpack_integer(&raw mut packer.ptr, (*err).type_0 as Integer);
-        mpack_str(cstr_as_string((*err).msg), &raw mut packer);
+        mpack_array(&mut packer.ptr, 2 as uint32_t);
+        mpack_integer(&mut packer.ptr, (*err).type_0 as Integer);
+        mpack_str(cstr_as_string((*err).msg), &mut packer);
         let c2rust_fresh3 = packer.ptr;
         packer.ptr = packer.ptr.offset(1);
         *c2rust_fresh3 = 0xc0 as ::core::ffi::c_int as ::core::ffi::c_char;
@@ -1418,9 +1418,9 @@ pub unsafe extern "C" fn serialize_response(
         let c2rust_fresh4 = packer.ptr;
         packer.ptr = packer.ptr.offset(1);
         *c2rust_fresh4 = 0xc0 as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_object(arg, &raw mut packer);
+        mpack_object(arg, &mut packer);
     }
-    packer_buffer_finish_channels(&raw mut packer);
+    packer_buffer_finish_channels(&mut packer);
     log_response(
         SEND.as_ptr() as *mut ::core::ffi::c_char,
         (*channel).id,
@@ -1480,7 +1480,7 @@ unsafe extern "C" fn channel_flush_callback(mut packer: *mut PackerBuffer) {
     packer_buffer_init_channels(
         (*packer).anydata as *mut *mut Channel,
         (*packer).anyint as size_t,
-        packer,
+        &mut *packer,
     );
 }
 pub unsafe extern "C" fn rpc_set_client_info(mut id: uint64_t, mut info: Dict) {
@@ -1536,73 +1536,6 @@ pub unsafe extern "C" fn get_client_info(
         i = i.wrapping_add(1);
     }
     return ::core::ptr::null::<::core::ffi::c_char>();
-}
-#[inline]
-unsafe extern "C" fn mpack_w2(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
-    let c2rust_fresh12 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh12 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh13 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh13 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
-}
-#[inline]
-unsafe extern "C" fn mpack_w4(mut b: *mut *mut ::core::ffi::c_char, mut v: uint32_t) {
-    let c2rust_fresh8 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh8 = (v >> 24 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh9 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh9 = (v >> 16 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh10 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh10 = (v >> 8 as ::core::ffi::c_int & 0xff as uint32_t) as ::core::ffi::c_char;
-    let c2rust_fresh11 = *b;
-    *b = (*b).offset(1);
-    *c2rust_fresh11 = (v & 0xff as uint32_t) as ::core::ffi::c_char;
-}
-#[inline]
-unsafe extern "C" fn mpack_uint(mut buf: *mut *mut ::core::ffi::c_char, mut val: uint32_t) {
-    if val > 0xffff as uint32_t {
-        let c2rust_fresh14 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh14 = 0xce as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w4(buf, val);
-    } else if val > 0xff as uint32_t {
-        let c2rust_fresh15 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh15 = 0xcd as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w2(buf, val);
-    } else if val > 0x7f as uint32_t {
-        let c2rust_fresh16 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh16 = 0xcc as ::core::ffi::c_int as ::core::ffi::c_char;
-        let c2rust_fresh17 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh17 = val as ::core::ffi::c_char;
-    } else {
-        let c2rust_fresh18 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh18 = val as ::core::ffi::c_char;
-    };
-}
-#[inline]
-unsafe extern "C" fn mpack_array(mut buf: *mut *mut ::core::ffi::c_char, mut len: uint32_t) {
-    if len < 0x10 as uint32_t {
-        let c2rust_fresh5 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh5 = (0x90 as uint32_t | len) as ::core::ffi::c_char;
-    } else if len < 0x10000 as uint32_t {
-        let c2rust_fresh6 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh6 = 0xdc as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w2(buf, len);
-    } else {
-        let c2rust_fresh7 = *buf;
-        *buf = (*buf).offset(1);
-        *c2rust_fresh7 = 0xdd as ::core::ffi::c_int as ::core::ffi::c_char;
-        mpack_w4(buf, len);
-    };
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
