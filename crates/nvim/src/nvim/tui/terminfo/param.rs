@@ -15,8 +15,11 @@
 //! - Upstream passed an `int` where the assembled format said `%ld`, so the
 //!   upper half of the value was whatever happened to be in the register.
 //!   The rendering below prints the parameter as the `int` it is.
-//! - A width above 10000, or a second `.`, made upstream assemble a lone `%`
-//!   and hand that to `snprintf`. Such a conversion prints nothing here.
+//! - A width above 10000, or a second `.`, made upstream give up on the
+//!   conversion and assemble a lone `%` for `snprintf`, which printed
+//!   nothing. Giving up here means the same: no conversion happens, and what
+//!   followed the offending character is printed as the literal text it now
+//!   is.
 
 #![forbid(unsafe_code)]
 
@@ -170,8 +173,10 @@ struct Spec {
     width: usize,
     /// `Some` once a `.` has been seen, even as `%.d`.
     precision: Option<usize>,
-    /// A width above 10000 or a second `.`: upstream could not assemble a
-    /// format string for this, and neither can we.
+    /// A width above 10000 or a second `.`. The parse gives up on the spot,
+    /// so the command character is whatever caused it rather than a
+    /// conversion -- this only ever reaches the arms that ignore it, and is
+    /// kept because it is where upstream's `done == 2` went.
     invalid: bool,
 }
 
