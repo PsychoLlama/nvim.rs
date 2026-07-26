@@ -1,11 +1,11 @@
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::os::libc::{__assert_fail, abort, strncpy};
+use crate::src::nvim::tui::termkey::termkey::{emit_codepoint, peekkey_mouse};
 pub use crate::src::nvim::types::{
-    TermKey, TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed, TermKeyCsi,
-    TermKeyCsiParam, TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyKey,
+    TermKey, TermKeyCsi, TermKeyCsiParam, TermKeyEvent, TermKeyKey,
     TermKeyKey_code as C2Rust_Unnamed_0, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType,
-    TerminfoEntry, cc_t, keyinfo, size_t, speed_t, tcflag_t, termios, uint8_t,
+    keyinfo, size_t, uint8_t,
 };
 pub const TERMKEY_EVENT_RELEASE: TermKeyEvent = 3;
 pub const TERMKEY_EVENT_REPEAT: TermKeyEvent = 2;
@@ -377,15 +377,7 @@ unsafe extern "C" fn handle_csifunc(
             return result;
         }
         let mut mod_0: ::core::ffi::c_int = (*key).modifiers;
-        Some(
-            (*tk)
-                .method
-                .emit_codepoint
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(
-            tk, args[2 as ::core::ffi::c_int as usize], key
-        );
+        emit_codepoint(tk, args[2 as ::core::ffi::c_int as usize], key);
         (*key).modifiers |= mod_0;
     } else if args[0 as ::core::ffi::c_int as usize] >= 0 as ::core::ffi::c_int
         && args[0 as ::core::ffi::c_int as usize] < NCSIFUNCS
@@ -480,15 +472,7 @@ unsafe extern "C" fn handle_csi_u(
             }
             let mut mod_0: ::core::ffi::c_int = (*key).modifiers;
             (*key).type_0 = TERMKEY_TYPE_KEYSYM;
-            Some(
-                (*tk)
-                    .method
-                    .emit_codepoint
-                    .expect("non-null function pointer"),
-            )
-            .expect("non-null function pointer")(
-                tk, args[0 as ::core::ffi::c_int as usize], key
-            );
+            emit_codepoint(tk, args[0 as ::core::ffi::c_int as usize], key);
             (*key).modifiers |= mod_0;
             return TERMKEY_RES_KEY;
         }
@@ -1342,23 +1326,16 @@ unsafe extern "C" fn register_keys() -> ::core::ffi::c_int {
     keyinfo_initialised.set(1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn new_driver_csi(
-    mut tk: *mut TermKey,
-    mut _term: *mut TerminfoEntry,
-) -> *mut ::core::ffi::c_void {
+pub unsafe extern "C" fn new_driver_csi() -> *mut TermKeyCsi {
     if keyinfo_initialised.get() == 0 {
-        if register_keys() == 0 {
-            return NULL;
-        }
+        register_keys();
     }
-    let mut csi: *mut TermKeyCsi = xmalloc(::core::mem::size_of::<TermKeyCsi>()) as *mut TermKeyCsi;
-    (*csi).tk = tk;
+    let csi: *mut TermKeyCsi = xmalloc(::core::mem::size_of::<TermKeyCsi>()) as *mut TermKeyCsi;
     (*csi).saved_string_id = 0 as ::core::ffi::c_int;
     (*csi).saved_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    return csi as *mut ::core::ffi::c_void;
+    return csi;
 }
-pub unsafe extern "C" fn free_driver_csi(mut info: *mut ::core::ffi::c_void) {
-    let mut csi: *mut TermKeyCsi = info as *mut TermKeyCsi;
+pub unsafe extern "C" fn free_driver_csi(mut csi: *mut TermKeyCsi) {
     if !(*csi).saved_string.is_null() {
         xfree((*csi).saved_string as *mut ::core::ffi::c_void);
     }
@@ -1392,13 +1369,7 @@ unsafe extern "C" fn peekkey_csi_csi(
         if force == 0 {
             return TERMKEY_RES_AGAIN;
         }
-        Some(
-            (*tk)
-                .method
-                .emit_codepoint
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(tk, '[' as ::core::ffi::c_int, key);
+        emit_codepoint(tk, '[' as ::core::ffi::c_int, key);
         (*key).modifiers |= TERMKEY_KEYMOD_ALT as ::core::ffi::c_int;
         *nbytep = introlen;
         return TERMKEY_RES_KEY;
@@ -1406,14 +1377,7 @@ unsafe extern "C" fn peekkey_csi_csi(
     if cmd == 'M' as ::core::ffi::c_uint && nparams < 3 as size_t {
         (*tk).buffstart = (*tk).buffstart.wrapping_add(csi_len);
         (*tk).buffcount = (*tk).buffcount.wrapping_sub(csi_len);
-        let mut mouse_result: TermKeyResult =
-            Some(
-                (*tk)
-                    .method
-                    .peekkey_mouse
-                    .expect("non-null function pointer"),
-            )
-            .expect("non-null function pointer")(tk, key, nbytep);
+        let mouse_result: TermKeyResult = peekkey_mouse(tk, key, nbytep);
         (*tk).buffstart = (*tk).buffstart.wrapping_sub(csi_len);
         (*tk).buffcount = (*tk).buffcount.wrapping_add(csi_len);
         if mouse_result as ::core::ffi::c_uint
@@ -1468,13 +1432,7 @@ unsafe extern "C" fn peekkey_ss3(
         if force == 0 {
             return TERMKEY_RES_AGAIN;
         }
-        Some(
-            (*tk)
-                .method
-                .emit_codepoint
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(tk, 'O' as ::core::ffi::c_int, key);
+        emit_codepoint(tk, 'O' as ::core::ffi::c_int, key);
         (*key).modifiers |= TERMKEY_KEYMOD_ALT as ::core::ffi::c_int;
         *nbytep = (*tk).buffcount;
         return TERMKEY_RES_KEY;
@@ -1619,7 +1577,7 @@ unsafe extern "C" fn peekkey_ctrlstring(
 }
 pub unsafe extern "C" fn peekkey_csi(
     mut tk: *mut TermKey,
-    mut info: *mut ::core::ffi::c_void,
+    mut csi: *mut TermKeyCsi,
     mut key: *mut TermKeyKey,
     mut force: ::core::ffi::c_int,
     mut nbytep: *mut size_t,
@@ -1631,7 +1589,6 @@ pub unsafe extern "C" fn peekkey_csi(
             TERMKEY_RES_NONE as ::core::ffi::c_int
         }) as TermKeyResult;
     }
-    let mut csi: *mut TermKeyCsi = info as *mut TermKeyCsi;
     match *(*tk)
         .buffer
         .offset((*tk).buffstart.wrapping_add(0 as size_t) as isize) as ::core::ffi::c_int

@@ -1,4 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
@@ -25,13 +25,13 @@ pub struct TermKey {
     pub nkeynames: ::core::ffi::c_int,
     pub keynames: *mut *const ::core::ffi::c_char,
     pub c0: [keyinfo; 32],
-    pub drivers: *mut TermKeyDriverNode,
-    pub method: TermKey_method,
+    /// Terminfo driver state (`TermKeyTI`), opaque outside `tui::termkey::driver_ti`.
+    pub ti: *mut ::core::ffi::c_void,
+    pub csi: *mut TermKeyCsi,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TermKeyCsi {
-    pub tk: *mut TermKey,
     pub saved_string_id: ::core::ffi::c_int,
     pub saved_string: *mut ::core::ffi::c_char,
 }
@@ -64,19 +64,3 @@ pub type TermKeyMouseEvent = ::core::ffi::c_uint;
 pub type TermKeyResult = ::core::ffi::c_uint;
 pub type TermKeySym = ::core::ffi::c_int;
 pub type TermKeyType = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TermKey_method {
-    pub emit_codepoint:
-        Option<unsafe extern "C" fn(*mut TermKey, ::core::ffi::c_int, *mut TermKeyKey) -> ()>,
-    pub peekkey_simple: Option<
-        unsafe extern "C" fn(
-            *mut TermKey,
-            *mut TermKeyKey,
-            ::core::ffi::c_int,
-            *mut size_t,
-        ) -> TermKeyResult,
-    >,
-    pub peekkey_mouse:
-        Option<unsafe extern "C" fn(*mut TermKey, *mut TermKeyKey, *mut size_t) -> TermKeyResult>,
-}

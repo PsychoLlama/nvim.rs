@@ -1,12 +1,12 @@
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::os::libc::{__assert_fail, abort, fprintf, sprintf, stderr, strlen, write};
+use crate::src::nvim::tui::termkey::termkey::peekkey_mouse;
 pub use crate::src::nvim::types::{
     __gid_t, __mode_t, __off_t, __off64_t, __time_t, __uid_t, _IO_FILE, _IO_codecvt, _IO_lock_t,
-    _IO_marker, _IO_wide_data, FILE, TermKey, TermKey_Terminfo_Getstr_Hook,
-    TermKey_method as C2Rust_Unnamed_0, TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyKey,
+    _IO_marker, _IO_wide_data, FILE, TermKey, TermKeyEvent, TermKeyKey,
     TermKeyKey_code as C2Rust_Unnamed_1, TermKeyResult, TermKeySym, TermKeyType, TerminfoEntry,
-    cc_t, keyinfo, size_t, speed_t, ssize_t, tcflag_t, termios,
+    keyinfo, size_t, ssize_t,
 };
 unsafe extern "C" {
     fn fstat(__fd: ::core::ffi::c_int, __buf: *mut stat) -> ::core::ffi::c_int;
@@ -199,7 +199,6 @@ pub const TERMKEY_KEYMOD_SHIFT: C2Rust_Unnamed_2 = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TermKeyTI {
-    pub tk: *mut TermKey,
     pub ti: *mut TerminfoEntry,
     pub root: *mut trie_node,
     pub start_string: *mut ::core::ffi::c_char,
@@ -498,6 +497,7 @@ unsafe extern "C" fn compress_trie(mut n: *mut trie_node) -> *mut trie_node {
     return n;
 }
 unsafe extern "C" fn try_load_terminfo_key(
+    mut tk: *mut TermKey,
     mut ti: *mut TermKeyTI,
     mut fn_nr: bool,
     mut key: ::core::ffi::c_int,
@@ -529,11 +529,11 @@ unsafe extern "C" fn try_load_terminfo_key(
             value = (*(*ti).ti).f_keys[key as usize];
         }
     }
-    if (*(*ti).tk).ti_getstr_hook.is_some() {
-        value = (*(*ti).tk)
-            .ti_getstr_hook
-            .expect("non-null function pointer")(
-            name, value, (*(*ti).tk).ti_getstr_hook_data
+    if (*tk).ti_getstr_hook.is_some() {
+        value = (*tk).ti_getstr_hook.expect("non-null function pointer")(
+            name,
+            value,
+            (*tk).ti_getstr_hook_data,
         );
     }
     if value.is_null()
@@ -554,7 +554,10 @@ unsafe extern "C" fn try_load_terminfo_key(
     insert_seq(ti, value, node);
     return true_0 != 0;
 }
-unsafe extern "C" fn load_terminfo(mut ti: *mut TermKeyTI) -> ::core::ffi::c_int {
+unsafe extern "C" fn load_terminfo(
+    mut tk: *mut TermKey,
+    mut ti: *mut TermKeyTI,
+) -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0;
     (*ti).root =
         new_node_arr(0 as ::core::ffi::c_uchar, 0xff as ::core::ffi::c_uchar) as *mut trie_node;
@@ -576,6 +579,7 @@ unsafe extern "C" fn load_terminfo(mut ti: *mut TermKeyTI) -> ::core::ffi::c_int
             modifier_set: (*funcs.ptr())[i as usize].mods,
         };
         if try_load_terminfo_key(
+            tk,
             ti,
             false_0 != 0,
             (*funcs.ptr())[i as usize].ti_key as ::core::ffi::c_int,
@@ -597,6 +601,7 @@ unsafe extern "C" fn load_terminfo(mut ti: *mut TermKeyTI) -> ::core::ffi::c_int
                     | TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int,
             };
             try_load_terminfo_key(
+                tk,
                 ti,
                 false_0 != 0,
                 (*funcs.ptr())[i as usize].ti_key as ::core::ffi::c_int,
@@ -622,6 +627,7 @@ unsafe extern "C" fn load_terminfo(mut ti: *mut TermKeyTI) -> ::core::ffi::c_int
             modifier_set: 0 as ::core::ffi::c_int,
         };
         if !try_load_terminfo_key(
+            tk,
             ti,
             true_0 != 0,
             i - 1 as ::core::ffi::c_int,
@@ -656,12 +662,8 @@ unsafe extern "C" fn load_terminfo(mut ti: *mut TermKeyTI) -> ::core::ffi::c_int
     (*ti).root = compress_trie((*ti).root as *mut trie_node) as *mut trie_node;
     return 1 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn new_driver_ti(
-    mut tk: *mut TermKey,
-    mut term: *mut TerminfoEntry,
-) -> *mut ::core::ffi::c_void {
+pub unsafe extern "C" fn new_driver_ti(mut term: *mut TerminfoEntry) -> *mut ::core::ffi::c_void {
     let mut ti: *mut TermKeyTI = xmalloc(::core::mem::size_of::<TermKeyTI>()) as *mut TermKeyTI;
-    (*ti).tk = tk;
     (*ti).root = ::core::ptr::null_mut::<trie_node>();
     (*ti).start_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
     (*ti).stop_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -702,7 +704,7 @@ pub unsafe extern "C" fn start_driver_ti(
     let mut start_string: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut len: size_t = 0;
     if (*ti).root.is_null() {
-        load_terminfo(ti);
+        load_terminfo(tk, ti);
     }
     start_string = (*ti).start_string;
     if (*tk).fd == -1 as ::core::ffi::c_int || start_string.is_null() {
@@ -836,14 +838,7 @@ pub unsafe extern "C" fn peekkey_ti(
         if (*nk).key.type_0 as ::core::ffi::c_int == TERMKEY_TYPE_MOUSE as ::core::ffi::c_int {
             (*tk).buffstart = (*tk).buffstart.wrapping_add(pos as size_t);
             (*tk).buffcount = (*tk).buffcount.wrapping_sub(pos as size_t);
-            let mut mouse_result: TermKeyResult =
-                Some(
-                    (*tk)
-                        .method
-                        .peekkey_mouse
-                        .expect("non-null function pointer"),
-                )
-                .expect("non-null function pointer")(tk, key, nbytep);
+            let mouse_result: TermKeyResult = peekkey_mouse(tk, key, nbytep);
             (*tk).buffstart = (*tk).buffstart.wrapping_sub(pos as size_t);
             (*tk).buffcount = (*tk).buffcount.wrapping_add(pos as size_t);
             if mouse_result as ::core::ffi::c_uint

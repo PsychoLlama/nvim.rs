@@ -12,9 +12,9 @@ use crate::src::nvim::tui::termkey::driver_csi::{
 use crate::src::nvim::tui::termkey::driver_ti::{
     free_driver_ti, new_driver_ti, peekkey_ti, start_driver_ti, stop_driver_ti,
 };
+
 pub use crate::src::nvim::types::{
-    TermKey, TermKey_Terminfo_Getstr_Hook, TermKey_method as C2Rust_Unnamed_1, TermKeyCsi,
-    TermKeyDriver, TermKeyDriverNode, TermKeyEvent, TermKeyFormat, TermKeyKey,
+    TermKey, TermKey_Terminfo_Getstr_Hook, TermKeyCsi, TermKeyEvent, TermKeyFormat, TermKeyKey,
     TermKeyKey_code as C2Rust_Unnamed_2, TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType,
     TerminfoEntry, cc_t, keyinfo, size_t, speed_t, tcflag_t, termios,
 };
@@ -158,57 +158,6 @@ pub struct modnames {
     pub ctrl: *const ::core::ffi::c_char,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub static termkey_driver_ti: GlobalCell<TermKeyDriver> = GlobalCell::new(TermKeyDriver {
-    name: b"terminfo\0".as_ptr() as *const ::core::ffi::c_char,
-    new_driver: Some(
-        new_driver_ti
-            as unsafe extern "C" fn(*mut TermKey, *mut TerminfoEntry) -> *mut ::core::ffi::c_void,
-    ),
-    free_driver: Some(free_driver_ti as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()),
-    start_driver: Some(
-        start_driver_ti
-            as unsafe extern "C" fn(*mut TermKey, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    ),
-    stop_driver: Some(
-        stop_driver_ti
-            as unsafe extern "C" fn(*mut TermKey, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    ),
-    peekkey: Some(
-        peekkey_ti
-            as unsafe extern "C" fn(
-                *mut TermKey,
-                *mut ::core::ffi::c_void,
-                *mut TermKeyKey,
-                ::core::ffi::c_int,
-                *mut size_t,
-            ) -> TermKeyResult,
-    ),
-});
-pub static termkey_driver_csi: GlobalCell<TermKeyDriver> = GlobalCell::new(TermKeyDriver {
-    name: b"CSI\0".as_ptr() as *const ::core::ffi::c_char,
-    new_driver: Some(
-        new_driver_csi
-            as unsafe extern "C" fn(*mut TermKey, *mut TerminfoEntry) -> *mut ::core::ffi::c_void,
-    ),
-    free_driver: Some(free_driver_csi as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ()),
-    start_driver: None,
-    stop_driver: None,
-    peekkey: Some(
-        peekkey_csi
-            as unsafe extern "C" fn(
-                *mut TermKey,
-                *mut ::core::ffi::c_void,
-                *mut TermKeyKey,
-                ::core::ffi::c_int,
-                *mut size_t,
-            ) -> TermKeyResult,
-    ),
-});
-static drivers: GlobalCell<[*mut TermKeyDriver; 3]> = GlobalCell::new([
-    (termkey_driver_ti.as_raw() as *const _) as *mut TermKeyDriver,
-    (termkey_driver_csi.as_raw() as *const _) as *mut TermKeyDriver,
-    ::core::ptr::null_mut::<TermKeyDriver>(),
-]);
 static keynames: GlobalCell<[C2Rust_Unnamed_6; 61]> = GlobalCell::new([
     C2Rust_Unnamed_6 {
         sym: TERMKEY_SYM_NONE,
@@ -467,24 +416,13 @@ pub unsafe extern "C" fn termkey_interpret_string(
     mut key: *const TermKeyKey,
     mut strp: *mut *const ::core::ffi::c_char,
 ) -> TermKeyResult {
-    let mut p: *mut TermKeyDriverNode = ::core::ptr::null_mut::<TermKeyDriverNode>();
-    p = (*tk).drivers;
-    while !p.is_null() {
-        if (*p).driver == termkey_driver_csi.ptr() {
-            break;
-        }
-        p = (*p).next;
-    }
-    if p.is_null() {
-        return TERMKEY_RES_NONE;
-    }
     if (*key).type_0 as ::core::ffi::c_int != TERMKEY_TYPE_DCS as ::core::ffi::c_int
         && (*key).type_0 as ::core::ffi::c_int != TERMKEY_TYPE_OSC as ::core::ffi::c_int
         && (*key).type_0 as ::core::ffi::c_int != TERMKEY_TYPE_APC as ::core::ffi::c_int
     {
         return TERMKEY_RES_NONE;
     }
-    let mut csi: *mut TermKeyCsi = (*p).info as *mut TermKeyCsi;
+    let csi: *mut TermKeyCsi = (*tk).csi;
     if (*csi).saved_string_id != (*key).code.number {
         return TERMKEY_RES_NONE;
     }
@@ -601,43 +539,14 @@ unsafe extern "C" fn termkey_alloc() -> *mut TermKey {
         (*tk).c0[i as usize].sym = TERMKEY_SYM_NONE;
         i += 1;
     }
-    (*tk).drivers = ::core::ptr::null_mut::<TermKeyDriverNode>();
-    (*tk).method.emit_codepoint = Some(
-        emit_codepoint
-            as unsafe extern "C" fn(*mut TermKey, ::core::ffi::c_int, *mut TermKeyKey) -> (),
-    )
-        as Option<unsafe extern "C" fn(*mut TermKey, ::core::ffi::c_int, *mut TermKeyKey) -> ()>;
-    (*tk).method.peekkey_simple = Some(
-        peekkey_simple
-            as unsafe extern "C" fn(
-                *mut TermKey,
-                *mut TermKeyKey,
-                ::core::ffi::c_int,
-                *mut size_t,
-            ) -> TermKeyResult,
-    )
-        as Option<
-            unsafe extern "C" fn(
-                *mut TermKey,
-                *mut TermKeyKey,
-                ::core::ffi::c_int,
-                *mut size_t,
-            ) -> TermKeyResult,
-        >;
-    (*tk).method.peekkey_mouse = Some(
-        peekkey_mouse
-            as unsafe extern "C" fn(*mut TermKey, *mut TermKeyKey, *mut size_t) -> TermKeyResult,
-    )
-        as Option<
-            unsafe extern "C" fn(*mut TermKey, *mut TermKeyKey, *mut size_t) -> TermKeyResult,
-        >;
+    (*tk).ti = NULL;
+    (*tk).csi = ::core::ptr::null_mut::<TermKeyCsi>();
     return tk;
 }
 unsafe extern "C" fn termkey_init(
     mut tk: *mut TermKey,
     mut term: *mut TerminfoEntry,
 ) -> ::core::ffi::c_int {
-    let mut tail: *mut TermKeyDriverNode = ::core::ptr::null_mut::<TermKeyDriverNode>();
     (*tk).buffer = xmalloc((*tk).buffsize) as *mut ::core::ffi::c_uchar;
     (*tk).keynames = xmalloc(
         ::core::mem::size_of::<*const ::core::ffi::c_char>()
@@ -650,90 +559,35 @@ unsafe extern "C" fn termkey_init(
         i += 1;
     }
     i = 0 as ::core::ffi::c_int;
-    '_abort_free_keynames: {
-        while !(*keynames.ptr())[i as usize].name.is_null() {
-            if termkey_register_keyname(
-                tk,
-                (*keynames.ptr())[i as usize].sym,
-                (*keynames.ptr())[i as usize].name,
-            ) as ::core::ffi::c_int
-                == -1 as ::core::ffi::c_int
-            {
-                break '_abort_free_keynames;
-            }
-            i += 1;
-        }
-        register_c0(
+    while !(*keynames.ptr())[i as usize].name.is_null() {
+        termkey_register_keyname(
             tk,
-            TERMKEY_SYM_TAB,
-            0x9 as ::core::ffi::c_uchar,
-            ::core::ptr::null::<::core::ffi::c_char>(),
+            (*keynames.ptr())[i as usize].sym,
+            (*keynames.ptr())[i as usize].name,
         );
-        register_c0(
-            tk,
-            TERMKEY_SYM_ENTER,
-            0xd as ::core::ffi::c_uchar,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-        );
-        register_c0(
-            tk,
-            TERMKEY_SYM_ESCAPE,
-            0x1b as ::core::ffi::c_uchar,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-        );
-        tail = ::core::ptr::null_mut::<TermKeyDriverNode>();
-        i = 0 as ::core::ffi::c_int;
-        '_abort_free_drivers: {
-            while !(*drivers.ptr())[i as usize].is_null() {
-                let mut info: *mut ::core::ffi::c_void =
-                    Some(
-                        (**(drivers.ptr() as *mut *mut TermKeyDriver).offset(i as isize))
-                            .new_driver
-                            .expect("non-null function pointer"),
-                    )
-                    .expect("non-null function pointer")(tk, term);
-                if !info.is_null() {
-                    let mut thisdrv: *mut TermKeyDriverNode =
-                        xmalloc(::core::mem::size_of::<TermKeyDriverNode>())
-                            as *mut TermKeyDriverNode;
-                    if thisdrv.is_null() {
-                        break '_abort_free_drivers;
-                    }
-                    (*thisdrv).driver = (*drivers.ptr())[i as usize];
-                    (*thisdrv).info = info;
-                    (*thisdrv).next = ::core::ptr::null_mut::<TermKeyDriverNode>();
-                    if tail.is_null() {
-                        (*tk).drivers = thisdrv;
-                    } else {
-                        (*tail).next = thisdrv;
-                    }
-                    tail = thisdrv;
-                }
-                i += 1;
-            }
-            if (*tk).drivers.is_null() {
-                *__errno_location() = ENOENT;
-                break '_abort_free_keynames;
-            } else {
-                return 1 as ::core::ffi::c_int;
-            }
-        }
-        let mut p: *mut TermKeyDriverNode = (*tk).drivers;
-        while !p.is_null() {
-            Some(
-                (*(*p).driver)
-                    .free_driver
-                    .expect("non-null function pointer"),
-            )
-            .expect("non-null function pointer")((*p).info);
-            let mut next: *mut TermKeyDriverNode = (*p).next;
-            xfree(p as *mut ::core::ffi::c_void);
-            p = next;
-        }
+        i += 1;
     }
-    xfree((*tk).keynames as *mut ::core::ffi::c_void);
-    xfree((*tk).buffer as *mut ::core::ffi::c_void);
-    return 0 as ::core::ffi::c_int;
+    register_c0(
+        tk,
+        TERMKEY_SYM_TAB,
+        0x9 as ::core::ffi::c_uchar,
+        ::core::ptr::null::<::core::ffi::c_char>(),
+    );
+    register_c0(
+        tk,
+        TERMKEY_SYM_ENTER,
+        0xd as ::core::ffi::c_uchar,
+        ::core::ptr::null::<::core::ffi::c_char>(),
+    );
+    register_c0(
+        tk,
+        TERMKEY_SYM_ESCAPE,
+        0x1b as ::core::ffi::c_uchar,
+        ::core::ptr::null::<::core::ffi::c_char>(),
+    );
+    (*tk).ti = new_driver_ti(term);
+    (*tk).csi = new_driver_csi();
+    return 1 as ::core::ffi::c_int;
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn termkey_new_abstract(
@@ -762,19 +616,8 @@ pub unsafe extern "C" fn termkey_free(mut tk: *mut TermKey) {
     (*tk).buffer = ::core::ptr::null_mut::<::core::ffi::c_uchar>();
     xfree((*tk).keynames as *mut ::core::ffi::c_void);
     (*tk).keynames = ::core::ptr::null_mut::<*const ::core::ffi::c_char>();
-    let mut p: *mut TermKeyDriverNode = ::core::ptr::null_mut::<TermKeyDriverNode>();
-    p = (*tk).drivers;
-    while !p.is_null() {
-        Some(
-            (*(*p).driver)
-                .free_driver
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")((*p).info);
-        let mut next: *mut TermKeyDriverNode = (*p).next;
-        xfree(p as *mut ::core::ffi::c_void);
-        p = next;
-    }
+    free_driver_ti((*tk).ti);
+    free_driver_csi((*tk).csi);
     xfree(tk as *mut ::core::ffi::c_void);
 }
 #[unsafe(no_mangle)]
@@ -826,22 +669,8 @@ pub unsafe extern "C" fn termkey_start(mut tk: *mut TermKey) -> ::core::ffi::c_i
             tcsetattr((*tk).fd, TCSANOW, &raw mut termios);
         }
     }
-    let mut p: *mut TermKeyDriverNode = ::core::ptr::null_mut::<TermKeyDriverNode>();
-    p = (*tk).drivers;
-    while !p.is_null() {
-        if (*(*p).driver).start_driver.is_some() {
-            if Some(
-                (*(*p).driver)
-                    .start_driver
-                    .expect("non-null function pointer"),
-            )
-            .expect("non-null function pointer")(tk, (*p).info)
-                == 0
-            {
-                return 0 as ::core::ffi::c_int;
-            }
-        }
-        p = (*p).next;
+    if start_driver_ti(tk, (*tk).ti) == 0 {
+        return 0 as ::core::ffi::c_int;
     }
     (*tk).is_started = 1 as ::core::ffi::c_char;
     return 1 as ::core::ffi::c_int;
@@ -851,19 +680,7 @@ pub unsafe extern "C" fn termkey_stop(mut tk: *mut TermKey) -> ::core::ffi::c_in
     if (*tk).is_started == 0 {
         return 1 as ::core::ffi::c_int;
     }
-    let mut p: *mut TermKeyDriverNode = ::core::ptr::null_mut::<TermKeyDriverNode>();
-    p = (*tk).drivers;
-    while !p.is_null() {
-        if (*(*p).driver).stop_driver.is_some() {
-            Some(
-                (*(*p).driver)
-                    .stop_driver
-                    .expect("non-null function pointer"),
-            )
-            .expect("non-null function pointer")(tk, (*p).info);
-        }
-        p = (*p).next;
-    }
+    stop_driver_ti(tk, (*tk).ti);
     if (*tk).restore_termios_valid != 0 {
         tcsetattr((*tk).fd, TCSANOW, &raw mut (*tk).restore_termios);
     }
@@ -997,7 +814,7 @@ unsafe extern "C" fn parse_utf8(
     *nbytep = nbytes as size_t;
     return TERMKEY_RES_KEY;
 }
-unsafe extern "C" fn emit_codepoint(
+pub unsafe extern "C" fn emit_codepoint(
     mut tk: *mut TermKey,
     mut codepoint: ::core::ffi::c_int,
     mut key: *mut TermKeyKey,
@@ -1104,50 +921,43 @@ unsafe extern "C" fn peekkey(
         (*tk).buffcount = (*tk).buffcount.wrapping_sub((*tk).hightide);
         (*tk).hightide = 0 as size_t;
     }
-    let mut ret: TermKeyResult = TERMKEY_RES_NONE;
-    let mut p: *mut TermKeyDriverNode = ::core::ptr::null_mut::<TermKeyDriverNode>();
-    p = (*tk).drivers;
-    while !p.is_null() {
-        ret = (*(*p).driver).peekkey.expect("non-null function pointer")(
-            tk,
-            (*p).info,
-            key,
-            force,
-            nbytep,
-        );
-        's_115: {
-            match ret as ::core::ffi::c_uint {
-                1 => {
-                    let mut halfsize: size_t = (*tk).buffsize.wrapping_div(2 as size_t);
-                    if (*tk).buffstart > halfsize {
-                        memcpy(
-                            (*tk).buffer as *mut ::core::ffi::c_void,
-                            (*tk).buffer.offset(halfsize as isize) as *const ::core::ffi::c_void,
-                            halfsize,
-                        );
-                        (*tk).buffstart = (*tk).buffstart.wrapping_sub(halfsize);
-                    }
+    // The terminfo driver has first refusal (its key sequences come from the
+    // terminal's own description), then the CSI driver's generic parsing.
+    for probe in 0..2 as ::core::ffi::c_int {
+        let ret: TermKeyResult = if probe == 0 {
+            peekkey_ti(tk, (*tk).ti, key, force, nbytep)
+        } else {
+            peekkey_csi(tk, (*tk).csi, key, force, nbytep)
+        };
+        match ret {
+            TERMKEY_RES_KEY => {
+                // Reclaim the front half of the buffer once reads have walked
+                // past its midpoint, so long runs don't push buffstart off the
+                // end. Only worth doing when a key was actually consumed.
+                let halfsize: size_t = (*tk).buffsize.wrapping_div(2 as size_t);
+                if (*tk).buffstart > halfsize {
+                    memcpy(
+                        (*tk).buffer as *mut ::core::ffi::c_void,
+                        (*tk).buffer.offset(halfsize as isize) as *const ::core::ffi::c_void,
+                        halfsize,
+                    );
+                    (*tk).buffstart = (*tk).buffstart.wrapping_sub(halfsize);
                 }
-                2 | 4 => {}
-                3 => {
-                    if force == 0 {
-                        again = 1 as ::core::ffi::c_int;
-                    }
-                    break 's_115;
-                }
-                0 | _ => {
-                    break 's_115;
+                return ret;
+            }
+            TERMKEY_RES_EOF | TERMKEY_RES_ERROR => return ret,
+            TERMKEY_RES_AGAIN => {
+                if force == 0 {
+                    again = 1 as ::core::ffi::c_int;
                 }
             }
-            return ret;
+            _ => {}
         }
-        p = (*p).next;
     }
     if again != 0 {
         return TERMKEY_RES_AGAIN;
     }
-    ret = peekkey_simple(tk, key, force, nbytep);
-    return ret;
+    return peekkey_simple(tk, key, force, nbytep);
 }
 unsafe extern "C" fn peekkey_simple(
     mut tk: *mut TermKey,
@@ -1170,13 +980,7 @@ unsafe extern "C" fn peekkey_simple(
             if force == 0 {
                 return TERMKEY_RES_AGAIN;
             }
-            Some(
-                (*tk)
-                    .method
-                    .emit_codepoint
-                    .expect("non-null function pointer"),
-            )
-            .expect("non-null function pointer")(tk, b0 as ::core::ffi::c_int, key);
+            emit_codepoint(tk, b0 as ::core::ffi::c_int, key);
             *nbytep = 1 as size_t;
             return TERMKEY_RES_KEY;
         }
@@ -1194,13 +998,7 @@ unsafe extern "C" fn peekkey_simple(
         }
         return metakey_result;
     } else if (b0 as ::core::ffi::c_int) < 0xa0 as ::core::ffi::c_int {
-        Some(
-            (*tk)
-                .method
-                .emit_codepoint
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(tk, b0 as ::core::ffi::c_int, key);
+        emit_codepoint(tk, b0 as ::core::ffi::c_int, key);
         *nbytep = 1 as size_t;
         return TERMKEY_RES_KEY;
     } else if (*tk).flags & TERMKEY_FLAG_UTF8 as ::core::ffi::c_int != 0 {
@@ -1221,13 +1019,7 @@ unsafe extern "C" fn peekkey_simple(
         }
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
         (*key).modifiers = 0 as ::core::ffi::c_int;
-        Some(
-            (*tk)
-                .method
-                .emit_codepoint
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(tk, codepoint, key);
+        emit_codepoint(tk, codepoint, key);
         return res;
     } else {
         (*key).type_0 = TERMKEY_TYPE_UNICODE;
@@ -1240,7 +1032,7 @@ unsafe extern "C" fn peekkey_simple(
         return TERMKEY_RES_KEY;
     };
 }
-unsafe extern "C" fn peekkey_mouse(
+pub unsafe extern "C" fn peekkey_mouse(
     mut tk: *mut TermKey,
     mut key: *mut TermKeyKey,
     mut nbytep: *mut size_t,

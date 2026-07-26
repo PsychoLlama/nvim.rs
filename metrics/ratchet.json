@@ -1,6 +1,6 @@
 {
   "internal_exports": 154,
-  "files_without_forbid_unsafe": 226,
+  "files_without_forbid_unsafe": 224,
   "files_without_deny_unsafe_op": 191,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -174,9 +174,9 @@
     "crates/nvim/src/nvim/textobject.rs": {"lines": 2004, "unsafe": 32},
     "crates/nvim/src/nvim/tui/input.rs": {"lines": 2196, "no_mangle": 4, "unsafe": 39},
     "crates/nvim/src/nvim/tui/terminfo.rs": {"lines": 4543, "no_mangle": 1, "unsafe": 11},
-    "crates/nvim/src/nvim/tui/termkey/driver_csi.rs": {"lines": 1669, "no_mangle": 4, "unsafe": 35},
+    "crates/nvim/src/nvim/tui/termkey/driver_csi.rs": {"lines": 1626, "no_mangle": 4, "unsafe": 35},
     "crates/nvim/src/nvim/tui/termkey/driver_ti.rs": {"unsafe": 15},
-    "crates/nvim/src/nvim/tui/termkey/termkey.rs": {"lines": 1799, "no_mangle": 18, "unsafe": 49},
+    "crates/nvim/src/nvim/tui/termkey/termkey.rs": {"lines": 1591, "no_mangle": 18, "unsafe": 35},
     "crates/nvim/src/nvim/tui/tui.rs": {"lines": 4422, "no_mangle": 32, "unsafe": 106, "variadic": 1},
     "crates/nvim/src/nvim/tui/ugrid.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/types/api.rs": {"unsafe": 1},
@@ -197,8 +197,6 @@
     "crates/nvim/src/nvim/types/runtime.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/types/state.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/types/terminal_defs.rs": {"unsafe": 5},
-    "crates/nvim/src/nvim/types/termkey.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/types/termkey_internal.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/types/types.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/types/ui.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/types/userfunc.rs": {"unsafe": 1},
