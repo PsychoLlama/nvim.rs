@@ -137,7 +137,6 @@
     "crates/nvim/src/nvim/os/signal.rs": 21,
     "crates/nvim/src/nvim/os/stdpaths.rs": 37,
     "crates/nvim/src/nvim/os/time.rs": 10,
-    "crates/nvim/src/nvim/os/users.rs": 2,
     "crates/nvim/src/nvim/path.rs": 82,
     "crates/nvim/src/nvim/popupmenu.rs": 30,
     "crates/nvim/src/nvim/profile.rs": 7,

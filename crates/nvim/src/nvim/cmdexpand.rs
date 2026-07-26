@@ -71,7 +71,7 @@ use crate::src::nvim::os::libc::{
     __assert_fail, gettext, memmove, memset, qsort, snprintf, strchr, strcmp, strcpy, strlen,
     strncmp, strncpy,
 };
-use crate::src::nvim::os::users::{get_users, match_user};
+use crate::src::nvim::os::users::{UserMatch, get_users, match_user};
 use crate::src::nvim::path::{
     FreeWild, after_pathsep, expand_wildcards, expand_wildcards_eval, match_suffix,
     path_is_absolute, path_tail, vim_ispathsep,
@@ -138,6 +138,7 @@ use crate::src::nvim::usercmd::{
     set_context_in_user_cmd, set_context_in_user_cmdarg,
 };
 use crate::src::nvim::window::{global_stl_height, last_status};
+use core::ffi::CStr;
 unsafe extern "C" {
     fn hash_init(ht: *mut hashtab_T);
     fn hash_clear(ht: *mut hashtab_T);
@@ -3010,11 +3011,10 @@ unsafe extern "C" fn set_context_for_wildcard_arg(
         {
             p = p.offset(1);
         }
+        let user: *mut ::core::ffi::c_char = (*xp).xp_pattern.offset(1);
         if *p as ::core::ffi::c_int == NUL
-            && p > (*xp).xp_pattern.offset(1 as ::core::ffi::c_int as isize)
-                as *const ::core::ffi::c_char
-            && match_user((*xp).xp_pattern.offset(1 as ::core::ffi::c_int as isize))
-                >= 1 as ::core::ffi::c_int
+            && p > user as *const ::core::ffi::c_char
+            && match_user(CStr::from_ptr(user)) != UserMatch::None
         {
             (*xp).xp_context = EXPAND_USER as ::core::ffi::c_int;
             (*xp).xp_pattern = (*xp).xp_pattern.offset(1);

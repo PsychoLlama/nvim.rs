@@ -149,7 +149,7 @@
     "crates/nvim/src/nvim/os/signal.rs": {"unsafe": 20},
     "crates/nvim/src/nvim/os/stdpaths.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/os/time.rs": {"unsafe": 11},
-    "crates/nvim/src/nvim/os/users.rs": {"no_mangle": 4, "unsafe": 9},
+    "crates/nvim/src/nvim/os/users.rs": {"no_mangle": 4, "unsafe": 7},
     "crates/nvim/src/nvim/path.rs": {"lines": 3020, "no_mangle": 15, "unsafe": 69},
     "crates/nvim/src/nvim/plines.rs": {"lines": 1429, "no_mangle": 4, "unsafe": 42},
     "crates/nvim/src/nvim/popupmenu.rs": {"lines": 3685, "unsafe": 34},
