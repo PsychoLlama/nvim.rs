@@ -11,7 +11,7 @@ use crate::src::nvim::tui::termkey::termkey::{
     TERMKEY_SYM_END, TERMKEY_SYM_FIND, TERMKEY_SYM_HOME, TERMKEY_SYM_INSERT, TERMKEY_SYM_LEFT,
     TERMKEY_SYM_PAGEDOWN, TERMKEY_SYM_PAGEUP, TERMKEY_SYM_RIGHT, TERMKEY_SYM_SELECT,
     TERMKEY_SYM_SUSPEND, TERMKEY_SYM_TAB, TERMKEY_SYM_UNDO, TERMKEY_TYPE_FUNCTION,
-    TERMKEY_TYPE_KEYSYM, TERMKEY_TYPE_MOUSE, peekkey_mouse,
+    TERMKEY_TYPE_KEYSYM,
 };
 use crate::src::nvim::tui::termkey::trie::{KeyTrie, Lookup};
 pub use crate::src::nvim::types::{
@@ -243,19 +243,9 @@ pub unsafe fn peek_key(
         .as_ref()
         .map_or(Lookup::None, |t| t.lookup(bytes));
     match found {
-        Lookup::Key { info, consumed } if info.type_0 == TERMKEY_TYPE_MOUSE => {
-            // The sequence was only the mouse report's introducer; hand the
-            // rest to the shared mouse decoder with the buffer advanced past it.
-            (*tk).buffstart += consumed;
-            (*tk).buffcount -= consumed;
-            let result = peekkey_mouse(tk, key, nbytep);
-            (*tk).buffstart -= consumed;
-            (*tk).buffcount += consumed;
-            if result == TERMKEY_RES_KEY {
-                *nbytep += consumed;
-            }
-            result
-        }
+        // Every capability this driver loads names a symbol or a function key,
+        // so upstream's branch handing a TERMKEY_TYPE_MOUSE hit to the mouse
+        // decoder could never run and is gone.
         Lookup::Key { info, consumed } => {
             (*key).type_0 = info.type_0;
             (*key).code.sym = info.sym;
