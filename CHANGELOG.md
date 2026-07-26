@@ -17,6 +17,11 @@ and this project adheres to [CalVer](https://calver.org/).
   parsing, tables and formatting are now safe modules, and the plugin
   machinery it carried for drivers this editor never had is gone. Four
   out-of-bounds writes and reads reachable from terminal input went with it.
+- Terminal descriptions (`src/nvim/tui/terminfo`) were rewritten the same way:
+  the capability slots every part of the TUI indexes by are now defined once,
+  the built-in terminal descriptions are data modules pinned by a checksum
+  against the C original, and the parameterised-string interpreter renders its
+  own conversions instead of assembling `printf` formats at runtime.
 
 ## [2026.07.26-d0c5cf2147]
 
