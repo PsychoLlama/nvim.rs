@@ -18,6 +18,7 @@ use crate::src::nvim::channel::{
     channel_close, channel_connect, channel_create_event, channel_decref, channel_from_stdio,
     channel_incref, channel_job_start, channel_send, channel_terminal_alloc,
 };
+use crate::src::nvim::channel::{channel_proc, channel_pty};
 use crate::src::nvim::charset::{getdigits_int, skipwhite};
 use crate::src::nvim::cmdexpand::{
     ExpandCleanup, ExpandInit, ExpandOne, cmdline_pum_active, f_cmdcomplete_info, f_getcompletion,
@@ -7014,7 +7015,7 @@ unsafe extern "C" fn f_jobpid(
     if data.is_null() {
         return;
     }
-    let mut proc: *mut Proc = &raw mut (*data).stream.proc;
+    let mut proc: *mut Proc = channel_proc(data);
     (*rettv).vval.v_number = (*proc).pid as varnumber_T;
 }
 unsafe extern "C" fn f_jobresize(
@@ -7046,7 +7047,7 @@ unsafe extern "C" fn f_jobresize(
     if data.is_null() {
         return;
     }
-    if (*data).stream.proc.type_0 as ::core::ffi::c_uint
+    if (*channel_proc(data)).type_0 as ::core::ffi::c_uint
         != kProcTypePty as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         emsg(gettext(
@@ -7055,7 +7056,7 @@ unsafe extern "C" fn f_jobresize(
         return;
     }
     pty_proc_resize(
-        &raw mut (*data).stream.pty,
+        channel_pty(data),
         (*argvars.offset(1 as ::core::ffi::c_int as isize))
             .vval
             .v_number as uint16_t,
@@ -7525,11 +7526,11 @@ pub unsafe extern "C" fn f_jobstart(
             if (*rettv).vval.v_number <= 0 as varnumber_T {
                 return;
             }
-            let pid: ::core::ffi::c_int = (*chan).stream.pty.proc.pid;
+            let pid: ::core::ffi::c_int = (*channel_proc(chan)).pid;
             let buf: *mut buf_T = curbuf.get();
             (*buf).b_p_swf = false_0;
             if (*buf).b_ml.ml_mfp.is_null() && ml_open(buf) == FAIL {
-                proc_stop(&raw mut (*chan).stream.proc);
+                proc_stop(channel_proc(chan));
                 channel_decref(chan);
                 return;
             }
@@ -7676,7 +7677,7 @@ pub unsafe extern "C" fn f_jobstop(
     if (*data).is_rpc {
         channel_close((*data).id, kChannelPartRpc, &raw mut error);
     }
-    proc_stop(&raw mut (*data).stream.proc);
+    proc_stop(channel_proc(data));
     (*rettv).vval.v_number = 1 as varnumber_T;
     if !error.is_null() {
         emsg(error);
@@ -7729,9 +7730,9 @@ unsafe extern "C" fn f_jobwait(
                     != kChannelStreamProc as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 *jobs.offset(i as isize) = ::core::ptr::null_mut::<Channel>();
-            } else if proc_is_stopped(&(*chan).stream.proc) {
+            } else if proc_is_stopped(&*channel_proc(chan)) {
                 proc_wait(
-                    &raw mut (*chan).stream.proc,
+                    channel_proc(chan),
                     -1 as ::core::ffi::c_int,
                     ::core::ptr::null_mut::<MultiQueue>(),
                 );
@@ -7739,7 +7740,7 @@ unsafe extern "C" fn f_jobwait(
             } else {
                 *jobs.offset(i as isize) = chan;
                 channel_incref(chan);
-                if (*chan).stream.proc.status < 0 as ::core::ffi::c_int {
+                if (*channel_proc(chan)).status < 0 as ::core::ffi::c_int {
                     multiqueue_process_events((*chan).events);
                     multiqueue_replace_parent((*chan).events, waiting_jobs);
                 }
@@ -7774,7 +7775,7 @@ unsafe extern "C" fn f_jobwait(
         }
         if !(*jobs.offset(i as isize)).is_null() {
             let mut status: ::core::ffi::c_int = proc_wait(
-                &raw mut (**jobs.offset(i as isize)).stream.proc,
+                channel_proc(*jobs.offset(i as isize)),
                 remaining,
                 waiting_jobs,
             );
@@ -7812,7 +7813,7 @@ unsafe extern "C" fn f_jobwait(
             );
             tv_list_append_number(
                 rv,
-                (**jobs.offset(i as isize)).stream.proc.status as varnumber_T,
+                (*channel_proc(*jobs.offset(i as isize))).status as varnumber_T,
             );
             channel_decref(*jobs.offset(i as isize));
         }

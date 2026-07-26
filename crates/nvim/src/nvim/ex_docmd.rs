@@ -16,6 +16,7 @@ use crate::src::nvim::buffer::{
     no_write_message, otherfile, set_bufref, setaltfname, setfname,
 };
 use crate::src::nvim::change::deleted_lines_mark;
+use crate::src::nvim::channel::channel_proc;
 use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::channel::{channel_close, channel_job_start};
 use crate::src::nvim::charset::{
@@ -9011,9 +9012,9 @@ unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
         );
         api_clear_error(&raw mut err);
         arena_mem_free(result_mem);
-        proc_stop(&raw mut (*channel).stream.proc);
+        proc_stop(channel_proc(channel));
         if proc_wait(
-            &raw mut (*channel).stream.proc,
+            channel_proc(channel),
             -1 as ::core::ffi::c_int,
             ::core::ptr::null_mut::<MultiQueue>(),
         ) < 0 as ::core::ffi::c_int

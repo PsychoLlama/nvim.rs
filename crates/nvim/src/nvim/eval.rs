@@ -3,6 +3,7 @@ use crate::src::nvim::api::private::helpers::{cstr_as_string, cstr_to_string};
 use crate::src::nvim::buffer::{bt_prompt, buflist_findnr};
 use crate::src::nvim::change::appended_lines_mark;
 use crate::src::nvim::channel::callback_reader_free;
+use crate::src::nvim::channel::channel_proc;
 use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::charset::{
     hex2nr, skipdigits, skiptowhite, skipwhite, vim_isIDc, vim_str2nr,
@@ -9524,7 +9525,7 @@ pub unsafe extern "C" fn find_job(mut id: uint64_t, mut show_error: bool) -> *mu
     if data.is_null()
         || (*data).streamtype as ::core::ffi::c_uint
             != kChannelStreamProc as ::core::ffi::c_int as ::core::ffi::c_uint
-        || proc_is_stopped(&(*data).stream.proc) as ::core::ffi::c_int != 0
+        || proc_is_stopped(&*channel_proc(data)) as ::core::ffi::c_int != 0
     {
         if show_error {
             if !data.is_null()

@@ -22,7 +22,8 @@ use crate::src::nvim::api::private::helpers::{
 };
 use crate::src::nvim::api::ui::remote_ui_disconnect;
 use crate::src::nvim::channel::{
-    channel_close, channel_decref, channel_incref, channel_info_changed, find_channel,
+    channel_close, channel_decref, channel_incref, channel_info_changed, channel_instream,
+    channel_outstream, find_channel,
 };
 use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::event::r#loop::{one_arg_event, process_events_until};
@@ -45,7 +46,7 @@ use crate::src::nvim::os::input::input_blocking;
 use crate::src::nvim::types::{
     Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ChannelStreamType, ClientType,
     Dict, Error, ErrorType, Integer, MessageType, MsgpackRpcRequestHandler, Object, ObjectType,
-    RStream, Stream, Unpacker, WBuffer, size_t, uint32_t, uint64_t,
+    RStream, Unpacker, WBuffer, size_t, uint32_t, uint64_t,
 };
 use crate::src::nvim::ui_client::{ui_client_attach_to_restarted_server, ui_client_event_raw_line};
 
@@ -791,34 +792,6 @@ unsafe fn send_error(
     let mut answer = NIL;
     serialize_response(chan, handler, type_0, id, &raw mut e, &raw mut answer);
     api_clear_error(&raw mut e);
-}
-
-// ---------------------------------------------------------------------------
-// Transports
-// ---------------------------------------------------------------------------
-
-/// The stream this channel writes to.
-///
-/// Only defined for the three transports that have one; the internal and
-/// stderr channels never reach here, because [`rpc_start`] and
-/// [`channel_write`] both branch on the type first.
-unsafe fn channel_instream(chan: *mut Channel) -> *mut Stream {
-    match (*chan).streamtype {
-        0 => &raw mut (*chan).stream.proc.in_0,
-        1 => &raw mut (*chan).stream.socket.s,
-        2 => &raw mut (*chan).stream.stdio.out,
-        other => unreachable!("channel stream type {other} has no write stream"),
-    }
-}
-
-/// The stream this channel reads from. See [`channel_instream`].
-unsafe fn channel_outstream(chan: *mut Channel) -> *mut RStream {
-    match (*chan).streamtype {
-        0 => &raw mut (*chan).stream.proc.out,
-        1 => &raw mut (*chan).stream.socket,
-        2 => &raw mut (*chan).stream.stdio.in_0,
-        other => unreachable!("channel stream type {other} has no read stream"),
-    }
 }
 
 // ---------------------------------------------------------------------------

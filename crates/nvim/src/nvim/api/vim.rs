@@ -15,6 +15,7 @@ use crate::src::nvim::buffer::{
     buf_close_terminal, buflist_new, buflist_nr2name, bufref_valid, do_buffer, read_buffer_into,
     set_bufref,
 };
+use crate::src::nvim::channel::channel_internal;
 use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::channel::{channel_all_info, channel_info, channel_send};
 use crate::src::nvim::channel::{channel_alloc, channel_decref, channel_incref};
@@ -2517,8 +2518,8 @@ pub unsafe extern "C" fn nvim_open_term(
         (*opts).on_input = LUA_NOREF as LuaRef;
     }
     let mut chan: *mut Channel = channel_alloc(kChannelStreamInternal);
-    (*chan).stream.internal.cb = cb;
-    (*chan).stream.internal.closed = false_0 != 0;
+    (*channel_internal(chan)).cb = cb;
+    (*channel_internal(chan)).closed = false_0 != 0;
     let mut topts: TerminalOptions = TerminalOptions {
         data: chan as *mut ::core::ffi::c_void,
         width: (if (*curwin.get()).w_view_width - win_col_off(curwin.get())
@@ -2596,7 +2597,7 @@ unsafe extern "C" fn term_write(
     mut data: *mut ::core::ffi::c_void,
 ) {
     let mut chan: *mut Channel = data as *mut Channel;
-    let mut cb: LuaRef = (*chan).stream.internal.cb;
+    let mut cb: LuaRef = (*channel_internal(chan)).cb;
     if cb == LUA_NOREF {
         return;
     }
@@ -2659,8 +2660,8 @@ unsafe extern "C" fn term_resume(mut _data: *mut ::core::ffi::c_void) {}
 unsafe extern "C" fn term_close(mut data: *mut ::core::ffi::c_void) {
     let mut chan: *mut Channel = data as *mut Channel;
     terminal_destroy(&raw mut (*chan).term);
-    api_free_luaref((*chan).stream.internal.cb);
-    (*chan).stream.internal.cb = LUA_NOREF as LuaRef;
+    api_free_luaref((*channel_internal(chan)).cb);
+    (*channel_internal(chan)).cb = LUA_NOREF as LuaRef;
     channel_decref(chan);
 }
 pub unsafe extern "C" fn nvim_chan_send(
