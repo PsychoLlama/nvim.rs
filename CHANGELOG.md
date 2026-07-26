@@ -33,6 +33,11 @@ and this project adheres to [CalVer](https://calver.org/).
   per-translation-unit copies of `Channel`, `Terminal`, `Unpacker` and
   `TermInput` were folded onto single definitions, so the two halves of a
   boundary can no longer disagree about a layout.
+- The Vimscript expression parser (`src/nvim/viml/parser`) was split into a
+  lexer, an AST module, a string decoder and the parse state machine, and its
+  hand-expanded vectors became owned Rust collections. `nvim_parse_expression`
+  and the cmdline highlighter report exactly what they did; a leak and an
+  aliasing fault in the highlighter's figure-brace handling went with it.
 
 ## [2026.07.26-d0c5cf2147]
 
