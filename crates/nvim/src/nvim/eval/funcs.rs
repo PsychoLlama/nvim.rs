@@ -210,7 +210,7 @@ use crate::src::nvim::ops::{
 };
 use crate::src::nvim::option::set_option_value_give_err;
 use crate::src::nvim::optionstr::free_string_option;
-use crate::src::nvim::os::dl::os_libcall;
+use crate::src::nvim::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::src::nvim::os::env::{
     expand_env_save, home_replace, os_copy_fullenv, os_env_exists, os_free_fullenv,
     os_get_fullenv_size, os_get_hostname, os_get_pid, os_getenv, vim_env_iter, vim_getenv,
@@ -345,6 +345,8 @@ use crate::src::nvim::ui_compositor::ui_comp_get_grid_at_coord;
 use crate::src::nvim::undo::{f_undofile, f_undotree};
 use crate::src::nvim::version::{has_nvim_version, has_vim_patch};
 use crate::src::nvim::window::find_tabpage;
+use core::ffi::CStr;
+use std::ffi::CString;
 unsafe extern "C" {
     fn uv_random(
         loop_0: *mut uv_loop_t,
@@ -8027,52 +8029,46 @@ unsafe extern "C" fn libcall_common(
     if check_secure() {
         return;
     }
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if (*argvars).v_type != VAR_STRING || (*argvars.offset(1)).v_type != VAR_STRING {
         return;
     }
-    let mut libname: *const ::core::ffi::c_char = (*argvars
-        .offset(0 as ::core::ffi::c_int as isize))
-    .vval
-    .v_string;
-    let mut funcname: *const ::core::ffi::c_char = (*argvars
-        .offset(1 as ::core::ffi::c_int as isize))
-    .vval
-    .v_string;
-    let mut in_type: VarType = (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type;
-    let mut str_in: *mut ::core::ffi::c_char = if in_type as ::core::ffi::c_uint
-        == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        (*argvars.offset(2 as ::core::ffi::c_int as isize))
-            .vval
-            .v_string
+    let libname: *const ::core::ffi::c_char = (*argvars).vval.v_string;
+    let funcname: *const ::core::ffi::c_char = (*argvars.offset(1)).vval.v_string;
+    let arg3: *mut typval_T = argvars.offset(2);
+    let str_in: *mut ::core::ffi::c_char = if (*arg3).v_type == VAR_STRING {
+        (*arg3).vval.v_string
     } else {
         ::core::ptr::null_mut::<::core::ffi::c_char>()
     };
-    let mut int_in: ::core::ffi::c_int = (*argvars.offset(2 as ::core::ffi::c_int as isize))
-        .vval
-        .v_number as ::core::ffi::c_int;
-    let mut str_out: *mut *mut ::core::ffi::c_char = if out_type == VAR_STRING as ::core::ffi::c_int
-    {
-        &raw mut (*rettv).vval.v_string
+    // A VAR_STRING third argument with a NULL v_string falls through to the
+    // int-taking prototype, reading the same union as a number. Upstream
+    // quirk, preserved.
+    let arg = if str_in.is_null() {
+        LibcallArg::Int((*arg3).vval.v_number as ::core::ffi::c_int)
     } else {
-        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>()
+        LibcallArg::Str(CStr::from_ptr(str_in))
     };
-    let mut int_out: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut success: bool =
-        os_libcall(libname, funcname, str_in, int_in, str_out, &raw mut int_out);
-    if !success {
-        semsg(
-            gettext(&raw const e_libcall as *const ::core::ffi::c_char),
-            funcname,
-        );
-        return;
-    }
-    if out_type == VAR_NUMBER as ::core::ffi::c_int {
-        (*rettv).vval.v_number = int_out as varnumber_T;
+    let want = if out_type == VAR_STRING as ::core::ffi::c_int {
+        LibcallReturn::Str
+    } else {
+        LibcallReturn::Int
+    };
+    let result = if libname.is_null() || funcname.is_null() {
+        None
+    } else {
+        os_libcall(CStr::from_ptr(libname), CStr::from_ptr(funcname), arg, want)
+    };
+    match result {
+        None => {
+            semsg(
+                gettext(&raw const e_libcall as *const ::core::ffi::c_char),
+                funcname,
+            );
+        }
+        Some(LibcallResult::Str(s)) => {
+            (*rettv).vval.v_string = s.map_or(::core::ptr::null_mut(), CString::into_raw);
+        }
+        Some(LibcallResult::Int(n)) => (*rettv).vval.v_number = n as varnumber_T,
     }
 }
 unsafe extern "C" fn f_libcall(
