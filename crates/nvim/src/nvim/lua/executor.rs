@@ -9,10 +9,8 @@ use crate::src::nvim::drawscreen::redraw_curbuf_later;
 use crate::src::nvim::eval::funcs::find_internal_func;
 use crate::src::nvim::eval::typval::tv_clear;
 use crate::src::nvim::eval::userfunc::{call_func, register_luafunc};
-use crate::src::nvim::event::r#loop::{loop_poll_events, loop_schedule_deferred};
-use crate::src::nvim::event::multiqueue::{
-    multiqueue_empty, multiqueue_process_events, multiqueue_put_event,
-};
+use crate::src::nvim::event::r#loop::{loop_schedule_deferred, process_events_until};
+use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
 };
@@ -64,7 +62,6 @@ use crate::src::nvim::os::libc::{
     __assert_fail, exit, fprintf, gettext, memcpy, memset, pthread_exit, snprintf, stderr, strcmp,
     strlen,
 };
-use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::path::fix_fname;
 use crate::src::nvim::profile::{time_msg, time_pop, time_push};
 use crate::src::nvim::runtime::{
@@ -1542,42 +1539,16 @@ unsafe extern "C-unwind" fn nlua_wait(mut lstate: *mut lua_State) -> ::core::ffi
     let mut callback_result: bool = false_0 != 0;
     let mut nresults: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     ui_flush();
-    let mut remaining: int64_t = timeout;
-    let mut before: uint64_t = if remaining > 0 as int64_t {
-        os_hrtime()
-    } else {
-        0 as uint64_t
-    };
-    while !(got_int.get() as ::core::ffi::c_int != 0
-        || (if is_function as ::core::ffi::c_int != 0 {
-            nlua_wait_condition(
-                lstate,
-                &raw mut pcall_status,
-                &raw mut callback_result,
-                &raw mut nresults,
-            ) as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        }) != 0)
-    {
-        if !loop_events.is_null() && !multiqueue_empty(loop_events) {
-            multiqueue_process_events(loop_events);
-        } else {
-            loop_poll_events(main_loop.ptr(), remaining);
-        }
-        if remaining == 0 as int64_t {
-            break;
-        }
-        if remaining <= 0 as int64_t {
-            continue;
-        }
-        let mut now: uint64_t = os_hrtime();
-        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
-        before = now;
-        if remaining <= 0 as int64_t {
-            break;
-        }
-    }
+    process_events_until(main_loop.ptr(), loop_events, timeout, || {
+        got_int.get()
+            || is_function
+                && nlua_wait_condition(
+                    lstate,
+                    &raw mut pcall_status,
+                    &raw mut callback_result,
+                    &raw mut nresults,
+                )
+    });
     time_watcher_stop(tw);
     time_watcher_close(
         tw,

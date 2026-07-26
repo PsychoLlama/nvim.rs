@@ -3,10 +3,8 @@ use crate::src::nvim::api::private::helpers::{
     api_dict_to_keydict, api_free_array, api_metadata, api_set_error, copy_array, cstr_as_string,
 };
 use crate::src::nvim::channel::{channel_connect, channel_job_start};
-use crate::src::nvim::event::r#loop::loop_poll_events;
-use crate::src::nvim::event::multiqueue::{
-    multiqueue_empty, multiqueue_process_events, multiqueue_put_event,
-};
+use crate::src::nvim::event::r#loop::process_events;
+use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::event::socket::socket_address_tcp_host_end;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::dict2hlattrs;
@@ -766,12 +764,9 @@ pub unsafe extern "C" fn ui_client_run() -> ! {
         );
     }
     time_finish();
+    // Never returns: the UI client exits from a callback.
     loop {
-        if !(*main_loop.ptr()).events.is_null() && !multiqueue_empty((*main_loop.ptr()).events) {
-            multiqueue_process_events((*main_loop.ptr()).events);
-        } else {
-            loop_poll_events(main_loop.ptr(), -1 as int64_t);
-        }
+        process_events(main_loop.ptr(), (*main_loop.ptr()).events, -1);
     }
 }
 pub unsafe extern "C" fn ui_client_stop() {

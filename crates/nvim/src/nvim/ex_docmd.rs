@@ -57,8 +57,7 @@ use crate::src::nvim::eval_1::{
     skip_expr,
 };
 use crate::src::nvim::event::libuv::uv_strerror;
-use crate::src::nvim::event::r#loop::loop_poll_events;
-use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_process_events};
+use crate::src::nvim::event::r#loop::process_events_until;
 use crate::src::nvim::event::proc::{proc_stop, proc_wait};
 use crate::src::nvim::ex_cmds::{
     do_ascii, do_bang, do_ecmd, do_move, do_wqall, do_write, ex_align, ex_append, ex_change,
@@ -179,7 +178,6 @@ use crate::src::nvim::os::libc::{
     snprintf, strcasecmp, strcat, strcmp, strcpy, strlen, strncmp, strpbrk, strrchr, strstr,
 };
 use crate::src::nvim::os::shell::{shell_build_argv, shell_free_argv};
-use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::path::{
     FullName_save, path_fnamecmp, path_has_wildcard, path_tail, path_try_shorten_fname, pathcmp,
 };
@@ -10654,31 +10652,9 @@ pub unsafe extern "C" fn do_sleep(mut msec: int64_t, mut hide_cursor: bool) {
         ui_busy_start();
     }
     ui_flush();
-    let mut remaining: int64_t = msec;
-    let mut before: uint64_t = if remaining > 0 as int64_t {
-        os_hrtime()
-    } else {
-        0 as uint64_t
-    };
-    while !got_int.get() {
-        if !(*main_loop.ptr()).events.is_null() && !multiqueue_empty((*main_loop.ptr()).events) {
-            multiqueue_process_events((*main_loop.ptr()).events);
-        } else {
-            loop_poll_events(main_loop.ptr(), remaining);
-        }
-        if remaining == 0 as int64_t {
-            break;
-        }
-        if remaining <= 0 as int64_t {
-            continue;
-        }
-        let mut now: uint64_t = os_hrtime();
-        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
-        before = now;
-        if remaining <= 0 as int64_t {
-            break;
-        }
-    }
+    process_events_until(main_loop.ptr(), (*main_loop.ptr()).events, msec, || {
+        got_int.get()
+    });
     if got_int.get() {
         vpeekc();
     }

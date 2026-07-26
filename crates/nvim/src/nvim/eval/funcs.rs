@@ -106,10 +106,9 @@ use crate::src::nvim::eval_1::{
     timer_due_cb, timer_start, timer_stop, timer_stop_all, tv_to_argv, var_item_copy, var2fpos,
 };
 use crate::src::nvim::event::libuv::{uv_kill, uv_strerror};
-use crate::src::nvim::event::r#loop::{loop_on_put, loop_poll_events};
+use crate::src::nvim::event::r#loop::{loop_on_put, process_events_until};
 use crate::src::nvim::event::multiqueue::{
-    multiqueue_empty, multiqueue_free, multiqueue_new, multiqueue_process_events,
-    multiqueue_replace_parent,
+    multiqueue_free, multiqueue_new, multiqueue_process_events, multiqueue_replace_parent,
 };
 use crate::src::nvim::event::proc::{proc_stop, proc_wait};
 use crate::src::nvim::event::time::{
@@ -6044,42 +6043,24 @@ unsafe extern "C" fn f_wait(
     let mut error: bool = false_0 != 0;
     let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
     ui_flush();
-    let mut remaining: int64_t = timeout as int64_t;
-    let mut before: uint64_t = if remaining > 0 as int64_t {
-        os_hrtime()
-    } else {
-        0 as uint64_t
-    };
-    while !(eval_expr_typval(
-        &raw mut expr,
-        false,
-        &raw mut argv,
-        0 as ::core::ffi::c_int,
-        &raw mut exprval,
-    ) != 1 as ::core::ffi::c_int
-        || tv_get_number_chk(&raw mut exprval, &raw mut error) != 0
-        || called_emsg.get() > called_emsg_before
-        || error as ::core::ffi::c_int != 0
-        || got_int.get() as ::core::ffi::c_int != 0)
-    {
-        if !(*main_loop.ptr()).events.is_null() && !multiqueue_empty((*main_loop.ptr()).events) {
-            multiqueue_process_events((*main_loop.ptr()).events);
-        } else {
-            loop_poll_events(main_loop.ptr(), remaining);
-        }
-        if remaining == 0 as int64_t {
-            break;
-        }
-        if remaining <= 0 as int64_t {
-            continue;
-        }
-        let mut now: uint64_t = os_hrtime();
-        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
-        before = now;
-        if remaining <= 0 as int64_t {
-            break;
-        }
-    }
+    process_events_until(
+        main_loop.ptr(),
+        (*main_loop.ptr()).events,
+        timeout as int64_t,
+        || {
+            eval_expr_typval(
+                &raw mut expr,
+                false,
+                &raw mut argv,
+                0 as ::core::ffi::c_int,
+                &raw mut exprval,
+            ) != 1 as ::core::ffi::c_int
+                || tv_get_number_chk(&raw mut exprval, &raw mut error) != 0
+                || called_emsg.get() > called_emsg_before
+                || error
+                || got_int.get()
+        },
+    );
     if called_emsg.get() > called_emsg_before || error as ::core::ffi::c_int != 0 {
         (*rettv).vval.v_number = -3 as varnumber_T;
     } else if got_int.get() {

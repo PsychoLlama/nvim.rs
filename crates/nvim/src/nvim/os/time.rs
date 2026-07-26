@@ -9,7 +9,7 @@
 #[cfg(not(miri))]
 use crate::src::nvim::event::libuv::uv_hrtime;
 use crate::src::nvim::event::libuv::{uv_clock_gettime, uv_err_name, uv_now, uv_sleep};
-use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::event::r#loop::process_events_until;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::{got_int, main_loop};
@@ -129,27 +129,14 @@ pub fn os_delay(ms: u64, ignoreinput: bool) {
             c"%lu ms".as_ptr(),
             ms,
         );
-        let mut remaining = ms.min(c_int::MAX as u64) as i64;
-        let mut before = if remaining > 0 { os_hrtime() } else { 0 };
-        while !(if ignoreinput {
-            got_int.get()
-        } else {
-            os_input_ready(ptr::null_mut())
-        }) {
-            loop_poll_events(main_loop.ptr(), remaining);
-            if remaining == 0 {
-                break;
+        let ms = ms.min(c_int::MAX as u64) as i64;
+        process_events_until(main_loop.ptr(), ptr::null_mut(), ms, || {
+            if ignoreinput {
+                got_int.get()
+            } else {
+                os_input_ready(ptr::null_mut())
             }
-            if remaining <= 0 {
-                continue;
-            }
-            let now = os_hrtime();
-            remaining -= now.wrapping_sub(before).wrapping_div(1_000_000) as i64;
-            before = now;
-            if remaining <= 0 {
-                break;
-            }
-        }
+        });
     }
 }
 

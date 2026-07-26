@@ -7,10 +7,9 @@ use crate::src::nvim::api::private::helpers::{
 use crate::src::nvim::api::ui::{remote_ui_disconnect, remote_ui_flush_pending_data};
 use crate::src::nvim::channel::channel_close;
 use crate::src::nvim::event::libuv::uv_strerror;
-use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::event::r#loop::process_events_until;
 use crate::src::nvim::event::multiqueue::{
-    event_create_oneshot, multiqueue_empty, multiqueue_new_child, multiqueue_process_events,
-    multiqueue_put_event,
+    event_create_oneshot, multiqueue_new_child, multiqueue_put_event,
 };
 use crate::src::nvim::event::proc::exit_on_closed_chan;
 use crate::src::nvim::event::rstream::rstream_start;
@@ -34,7 +33,6 @@ use crate::src::nvim::msgpack_rpc::packer::{
 };
 use crate::src::nvim::os::input::input_blocking;
 use crate::src::nvim::os::libc::{__assert_fail, abort, snprintf};
-use crate::src::nvim::os::time::os_hrtime;
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __uid_t, ApiDispatchWrapper, Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback,
@@ -636,33 +634,9 @@ pub unsafe extern "C" fn rpc_send_call(
     (*rpc).call_stack.size = (*rpc).call_stack.size.wrapping_add(1);
     let c2rust_lvalue_ptr = &raw mut *(*rpc).call_stack.items.offset(c2rust_fresh22 as isize);
     *c2rust_lvalue_ptr = &raw mut frame;
-    let mut remaining: int64_t = -1 as int64_t;
-    let mut before: uint64_t = if remaining > 0 as int64_t {
-        os_hrtime()
-    } else {
-        0 as uint64_t
-    };
-    // Not immutable: RPC callbacks set frame.returned via the call_stack pointer.
-    #[allow(clippy::while_immutable_condition)]
-    while !(frame.returned as ::core::ffi::c_int != 0 || (*rpc).closed as ::core::ffi::c_int != 0) {
-        if !(*channel).events.is_null() && !multiqueue_empty((*channel).events) {
-            multiqueue_process_events((*channel).events);
-        } else {
-            loop_poll_events(main_loop.ptr(), remaining);
-        }
-        if remaining == 0 as int64_t {
-            break;
-        }
-        if remaining <= 0 as int64_t {
-            continue;
-        }
-        let mut now: uint64_t = os_hrtime();
-        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
-        before = now;
-        if remaining <= 0 as int64_t {
-            break;
-        }
-    }
+    process_events_until(main_loop.ptr(), (*channel).events, -1, || {
+        frame.returned || (*rpc).closed
+    });
     (*rpc).call_stack.size = (*rpc).call_stack.size.wrapping_sub(1);
     if !frame.returned {
         api_set_error(

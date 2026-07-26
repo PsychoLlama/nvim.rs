@@ -3,8 +3,7 @@ use crate::src::nvim::api::private::helpers::{
 };
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
-use crate::src::nvim::event::r#loop::loop_poll_events;
-use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_process_events};
+use crate::src::nvim::event::r#loop::process_events_until;
 use crate::src::nvim::event::wstream::wstream_new_buffer;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{schar_get, schar_get_adv};
@@ -22,7 +21,6 @@ use crate::src::nvim::msgpack_rpc::channel::rpc_write_raw;
 use crate::src::nvim::msgpack_rpc::packer::mpack_object_array;
 use crate::src::nvim::option::set_tty_option;
 use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset, strlen};
-use crate::src::nvim::os::time::os_hrtime;
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __uid_t, Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback,
@@ -335,31 +333,9 @@ pub unsafe extern "C" fn remote_ui_disconnect(
     remote_ui_destroy(ui);
 }
 pub unsafe extern "C" fn remote_ui_wait_for_attach() {
-    let mut remaining: int64_t = -1 as int64_t;
-    let mut before: uint64_t = if remaining > 0 as int64_t {
-        os_hrtime()
-    } else {
-        0 as uint64_t
-    };
-    while ui_active() == 0 {
-        if !(*main_loop.ptr()).events.is_null() && !multiqueue_empty((*main_loop.ptr()).events) {
-            multiqueue_process_events((*main_loop.ptr()).events);
-        } else {
-            loop_poll_events(main_loop.ptr(), remaining);
-        }
-        if remaining == 0 as int64_t {
-            break;
-        }
-        if remaining <= 0 as int64_t {
-            continue;
-        }
-        let mut now: uint64_t = os_hrtime();
-        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
-        before = now;
-        if remaining <= 0 as int64_t {
-            break;
-        }
-    }
+    process_events_until(main_loop.ptr(), (*main_loop.ptr()).events, -1, || {
+        ui_active() != 0
+    });
 }
 pub unsafe extern "C" fn nvim_ui_attach(
     mut channel_id: uint64_t,

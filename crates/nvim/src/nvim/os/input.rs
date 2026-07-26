@@ -1,6 +1,6 @@
 use crate::src::nvim::autocmd::{apply_autocmds, trigger_cursorhold};
 use crate::src::nvim::event::libuv::uv_guess_handle;
-use crate::src::nvim::event::r#loop::loop_poll_events;
+use crate::src::nvim::event::r#loop::{loop_poll_events, process_events_until};
 use crate::src::nvim::event::multiqueue::{
     multiqueue_empty, multiqueue_process_events, multiqueue_put_event,
 };
@@ -1122,35 +1122,14 @@ unsafe extern "C" fn inbuf_poll(
             b"false\0".as_ptr() as *const ::core::ffi::c_char
         },
     );
-    let mut remaining: int64_t = ms as int64_t;
-    let mut before: uint64_t = if remaining > 0 as int64_t {
-        os_hrtime()
-    } else {
-        0 as uint64_t
-    };
-    while !(os_input_ready(events) as ::core::ffi::c_int != 0
-        || input_eof.get() as ::core::ffi::c_int != 0)
-    {
-        if !::core::ptr::null_mut::<::core::ffi::c_void>().is_null()
-            && !multiqueue_empty(::core::ptr::null_mut::<MultiQueue>())
-        {
-            multiqueue_process_events(::core::ptr::null_mut::<MultiQueue>());
-        } else {
-            loop_poll_events(main_loop.ptr(), remaining);
-        }
-        if remaining == 0 as int64_t {
-            break;
-        }
-        if remaining <= 0 as int64_t {
-            continue;
-        }
-        let mut now: uint64_t = os_hrtime();
-        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
-        before = now;
-        if remaining <= 0 as int64_t {
-            break;
-        }
-    }
+    // Upstream polls with a NULL queue here, so the macro's "drain this queue
+    // instead" branch is dead: `events` is only read by `os_input_ready`.
+    process_events_until(
+        main_loop.ptr(),
+        ::core::ptr::null_mut(),
+        ms as int64_t,
+        || os_input_ready(events) || input_eof.get(),
+    );
     blocking.set(false_0 != 0);
     if do_profiling.get() == PROF_YES && ms != 0 {
         prof_input_end();

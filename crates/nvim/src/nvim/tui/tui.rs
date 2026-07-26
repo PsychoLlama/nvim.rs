@@ -4,8 +4,9 @@ use crate::src::nvim::event::libuv::{
     uv_chdir, uv_close, uv_is_closing, uv_loop_close, uv_loop_init, uv_pipe_init, uv_pipe_open,
     uv_run, uv_sleep, uv_strerror, uv_timer_init, uv_timer_start, uv_tty_reset_mode, uv_write,
 };
-use crate::src::nvim::event::r#loop::{loop_poll_events, loop_purge, loop_size};
-use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_process_events};
+use crate::src::nvim::event::r#loop::{
+    loop_poll_events, loop_purge, loop_size, process_events_until,
+};
 use crate::src::nvim::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
 };
@@ -30,7 +31,6 @@ use crate::src::nvim::os::libc::{
     __assert_fail, abort, fclose, fopen, fprintf, fwrite, kill, memcmp, memcpy, memset, snprintf,
     sscanf, strchr, strcmp, strlen, strstr, strtol, tcgetattr, vsnprintf,
 };
-use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::strings::kv_do_printf;
 use crate::src::nvim::tui::terminfo::caps::{
     TerminfoDef, kTerm_carriage_return, kTerm_change_scroll_region, kTerm_clear_screen,
@@ -1154,35 +1154,9 @@ pub unsafe extern "C" fn tui_stop(mut tui: *mut TUIData) {
         Some(tui_stop_cb as unsafe extern "C" fn(*mut TUIData) -> ())
             as Option<unsafe extern "C" fn(*mut TUIData) -> ()>;
     terminfo_disable(tui);
-    let mut remaining: int64_t = 1000 as int64_t;
-    let mut before: uint64_t = if remaining > 0 as int64_t {
-        os_hrtime()
-    } else {
-        0 as uint64_t
-    };
-    // Not immutable: input/signal callbacks run inside the loop body flip it behind a raw pointer.
-    #[allow(clippy::while_immutable_condition)]
-    while !((*tui).stopped as ::core::ffi::c_int != 0
-        || (*tui).input.read_stream.did_eof as ::core::ffi::c_int != 0)
-    {
-        if !(*(*tui).loop_0).events.is_null() && !multiqueue_empty((*(*tui).loop_0).events) {
-            multiqueue_process_events((*(*tui).loop_0).events);
-        } else {
-            loop_poll_events((*tui).loop_0, remaining);
-        }
-        if remaining == 0 as int64_t {
-            break;
-        }
-        if remaining <= 0 as int64_t {
-            continue;
-        }
-        let mut now: uint64_t = os_hrtime();
-        remaining -= now.wrapping_sub(before).wrapping_div(1000000 as uint64_t) as int64_t;
-        before = now;
-        if remaining <= 0 as int64_t {
-            break;
-        }
-    }
+    process_events_until((*tui).loop_0, (*(*tui).loop_0).events, 1000, || {
+        (*tui).stopped || (*tui).input.read_stream.did_eof
+    });
     if !(*tui).stopped && !(*tui).input.read_stream.did_eof {
         logmsg(
             LOGLVL_WRN,
