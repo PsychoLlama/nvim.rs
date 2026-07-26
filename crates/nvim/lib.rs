@@ -231,7 +231,9 @@ pub mod src {
             } // mod parser
         } // mod viml
         pub mod vterm {
+            pub mod cell;
             pub mod color;
+            pub mod damage;
             pub mod encoding;
             pub mod keyboard;
             pub mod mouse;

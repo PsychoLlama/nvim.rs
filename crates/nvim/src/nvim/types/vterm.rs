@@ -185,7 +185,7 @@ pub struct VTermPos {
     pub col: ::core::ffi::c_int,
 }
 pub type VTermProp = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(C)]
 pub struct VTermRect {
     pub start_row: ::core::ffi::c_int,

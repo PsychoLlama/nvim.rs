@@ -1,25 +1,38 @@
+//! The screen: the grid of cells the terminal state paints onto.
+//!
+//! The state below reports what changed — a glyph here, a scroll there — and
+//! the screen keeps the resulting cells, batches the damage at whatever
+//! granularity the host asked for, and hands cells back on demand. It also
+//! owns the resize, which is where the interesting work is: rows reflow to
+//! the new width, spare lines go out to scrollback, and lines come back from
+//! scrollback to fill what is left.
+//!
+//! Anything reachable from the state's callback table takes the screen as a
+//! raw pointer rather than a reference: those callbacks re-enter the screen
+//! freely, and a live borrow across such a call would not hold.
+
+use core::ffi::{c_int, c_void};
+
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::os::libc::{abort, fprintf, memmove, stderr};
-pub use crate::src::nvim::types::{
-    __off_t, __off64_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, FILE,
-    GraphemeState, ScreenCell, ScreenPen, VTerm, VTerm_mode as C2Rust_Unnamed_14,
-    VTerm_parser as C2Rust_Unnamed_9, VTerm_parser_v as C2Rust_Unnamed_10,
-    VTerm_parser_v_csi as C2Rust_Unnamed_13, VTerm_parser_v_dcs as C2Rust_Unnamed_11,
-    VTerm_parser_v_osc as C2Rust_Unnamed_12, VTermAllocatorFunctions, VTermAttr, VTermColor,
-    VTermColor_indexed as C2Rust_Unnamed, VTermColor_rgb as C2Rust_Unnamed_0, VTermDamageSize,
-    VTermEncoding, VTermEncodingInstance, VTermGlyphInfo, VTermKeyEncodingFlags,
-    VTermKeyEncodingStack, VTermLineInfo, VTermOutputCallback, VTermParserCallbacks,
-    VTermParserState, VTermPen, VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks,
-    VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks, VTermSelectionMask, VTermState,
-    VTermState_mode as C2Rust_Unnamed_7, VTermState_mouse_protocol as C2Rust_Unnamed_8,
-    VTermState_saved as C2Rust_Unnamed_5, VTermState_saved_mode as C2Rust_Unnamed_6,
-    VTermState_selection as C2Rust_Unnamed_1, VTermState_tmp as C2Rust_Unnamed_2,
-    VTermState_tmp_selection as C2Rust_Unnamed_3,
-    VTermState_tmp_selection_state as C2Rust_Unnamed_4, VTermStateCallbacks, VTermStateFallbacks,
-    VTermStateFields, VTermStringFragment, VTermTerminator, VTermValue, int32_t, schar_T, size_t,
-    uint8_t, uint16_t, uint32_t, utf8proc_int32_t,
+use crate::src::nvim::types::{
+    ScreenCell, VTerm, VTermAttr, VTermColor, VTermDamageSize, VTermGlyphInfo, VTermLineInfo,
+    VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks, VTermScreenCell,
+    VTermStateCallbacks, VTermStateFallbacks, VTermStateFields, VTermValue, size_t,
 };
-use crate::src::nvim::vterm::pen::convert_color_to_rgb;
+use crate::src::nvim::vterm::cell::{
+    SCHAR_CONTINUATION, blank_cells, erased_pen, export_pen, import_row,
+};
+use crate::src::nvim::vterm::damage::{
+    Damage, NO_RECT, VTERM_DAMAGE_CELL, VTERM_DAMAGE_SCROLL, follow_scroll, intersects,
+    merge_damage,
+};
+use crate::src::nvim::vterm::pen::{
+    VTERM_ATTR_BACKGROUND, VTERM_ATTR_BASELINE, VTERM_ATTR_BLINK, VTERM_ATTR_BOLD,
+    VTERM_ATTR_CONCEAL, VTERM_ATTR_DIM, VTERM_ATTR_FONT, VTERM_ATTR_FOREGROUND, VTERM_ATTR_ITALIC,
+    VTERM_ATTR_OVERLINE, VTERM_ATTR_REVERSE, VTERM_ATTR_SMALL, VTERM_ATTR_STRIKE,
+    VTERM_ATTR_UNDERLINE, VTERM_ATTR_URI, convert_color_to_rgb,
+};
 use crate::src::nvim::vterm::state::{
     vterm_obtain_state, vterm_state_get_lineinfo, vterm_state_reset, vterm_state_set_callbacks,
     vterm_state_set_unrecognised_fallbacks,
@@ -28,224 +41,271 @@ use crate::src::nvim::vterm::vterm::{
     vterm_allocator_free, vterm_allocator_malloc, vterm_get_size, vterm_scroll_rect,
 };
 
-pub const VTERM_N_DAMAGES: VTermDamageSize = 4;
-pub const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
-pub const VTERM_DAMAGE_SCREEN: VTermDamageSize = 2;
-pub const VTERM_DAMAGE_ROW: VTermDamageSize = 1;
-pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
-pub const VTERM_TERMINATOR_ST: VTermTerminator = 1;
-pub const VTERM_TERMINATOR_BEL: VTermTerminator = 0;
-pub const VTERM_N_PROPS: VTermProp = 12;
-pub const VTERM_PROP_SYNCOUTPUT: VTermProp = 11;
-pub const VTERM_PROP_THEMEUPDATES: VTermProp = 10;
-pub const VTERM_PROP_FOCUSREPORT: VTermProp = 9;
-pub const VTERM_PROP_MOUSE: VTermProp = 8;
-pub const VTERM_PROP_CURSORSHAPE: VTermProp = 7;
-pub const VTERM_PROP_REVERSE: VTermProp = 6;
-pub const VTERM_PROP_ICONNAME: VTermProp = 5;
-pub const VTERM_PROP_TITLE: VTermProp = 4;
-pub const VTERM_PROP_ALTSCREEN: VTermProp = 3;
-pub const VTERM_PROP_CURSORBLINK: VTermProp = 2;
-pub const VTERM_PROP_CURSORVISIBLE: VTermProp = 1;
-pub const VTERM_SELECTION_CUT0: VTermSelectionMask = 16;
-pub const VTERM_SELECTION_SELECT: VTermSelectionMask = 8;
-pub const VTERM_SELECTION_SECONDARY: VTermSelectionMask = 4;
-pub const VTERM_SELECTION_PRIMARY: VTermSelectionMask = 2;
-pub const VTERM_SELECTION_CLIPBOARD: VTermSelectionMask = 1;
-pub const SELECTION_INVALID: C2Rust_Unnamed_4 = 5;
-pub const SELECTION_SET: C2Rust_Unnamed_4 = 4;
-pub const SELECTION_SET_INITIAL: C2Rust_Unnamed_4 = 3;
-pub const SELECTION_QUERY: C2Rust_Unnamed_4 = 2;
-pub const SELECTION_SELECTED: C2Rust_Unnamed_4 = 1;
-pub const SELECTION_INITIAL: C2Rust_Unnamed_4 = 0;
-pub const MOUSE_RXVT: C2Rust_Unnamed_8 = 3;
-pub const MOUSE_SGR: C2Rust_Unnamed_8 = 2;
-pub const MOUSE_UTF8: C2Rust_Unnamed_8 = 1;
-pub const MOUSE_X10: C2Rust_Unnamed_8 = 0;
-pub const VTERM_N_ATTRS: VTermAttr = 16;
-pub const VTERM_ATTR_OVERLINE: VTermAttr = 15;
-pub const VTERM_ATTR_DIM: VTermAttr = 14;
-pub const VTERM_ATTR_URI: VTermAttr = 13;
-pub const VTERM_ATTR_BASELINE: VTermAttr = 12;
-pub const VTERM_ATTR_SMALL: VTermAttr = 11;
-pub const VTERM_ATTR_BACKGROUND: VTermAttr = 10;
-pub const VTERM_ATTR_FOREGROUND: VTermAttr = 9;
-pub const VTERM_ATTR_FONT: VTermAttr = 8;
-pub const VTERM_ATTR_STRIKE: VTermAttr = 7;
-pub const VTERM_ATTR_CONCEAL: VTermAttr = 6;
-pub const VTERM_ATTR_REVERSE: VTermAttr = 5;
-pub const VTERM_ATTR_BLINK: VTermAttr = 4;
-pub const VTERM_ATTR_ITALIC: VTermAttr = 3;
-pub const VTERM_ATTR_UNDERLINE: VTermAttr = 2;
-pub const VTERM_ATTR_BOLD: VTermAttr = 1;
-pub const SOS: VTermParserState = 10;
-pub const PM: VTermParserState = 9;
-pub const APC: VTermParserState = 8;
-pub const DCS_VTERM: VTermParserState = 7;
-pub const OSC: VTermParserState = 6;
-pub const OSC_COMMAND: VTermParserState = 5;
-pub const DCS_COMMAND: VTermParserState = 4;
-pub const CSI_INTERMED: VTermParserState = 3;
-pub const CSI_ARGS: VTermParserState = 2;
-pub const CSI_LEADER: VTermParserState = 1;
-pub const NORMAL: VTermParserState = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const BUFIDX_PRIMARY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const BUFIDX_ALTSCREEN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn vterm_rect_move(
-    mut rect: *mut VTermRect,
-    mut row_delta: ::core::ffi::c_int,
-    mut col_delta: ::core::ffi::c_int,
-) {
-    (*rect).start_row += row_delta;
-    (*rect).end_row += row_delta;
-    (*rect).start_col += col_delta;
-    (*rect).end_col += col_delta;
-}
-#[inline]
-unsafe extern "C" fn clearcell(mut screen: *const VTermScreen, mut cell: *mut ScreenCell) {
-    (*cell).schar = 0 as schar_T;
-    (*cell).pen = (*screen).pen;
-}
+/// The terminal property that swaps the alternate screen buffer in and out.
+const VTERM_PROP_ALTSCREEN: VTermProp = 3;
+/// The terminal property that reverses the whole screen at once.
+const VTERM_PROP_REVERSE: VTermProp = 6;
+pub const BUFIDX_PRIMARY: usize = 0;
+pub const BUFIDX_ALTSCREEN: usize = 1;
+
+// ------------------------------------------------------------ the cell grid
+
+/// The cell at `row`/`col`, or null outside the grid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn getcell(
-    mut screen: *const VTermScreen,
-    mut row: ::core::ffi::c_int,
-    mut col: ::core::ffi::c_int,
+    screen: *const VTermScreen,
+    row: c_int,
+    col: c_int,
 ) -> *mut ScreenCell {
-    if row < 0 as ::core::ffi::c_int || row >= (*screen).rows {
-        return ::core::ptr::null_mut::<ScreenCell>();
+    if row < 0 || row >= (*screen).rows || col < 0 || col >= (*screen).cols {
+        return core::ptr::null_mut();
     }
-    if col < 0 as ::core::ffi::c_int || col >= (*screen).cols {
-        return ::core::ptr::null_mut::<ScreenCell>();
-    }
-    return (*screen)
+    (*screen)
         .buffer
-        .offset(((*screen).cols * row) as isize)
-        .offset(col as isize);
+        .offset(((*screen).cols * row + col) as isize)
 }
-unsafe extern "C" fn alloc_buffer(
-    mut screen: *mut VTermScreen,
-    mut rows: ::core::ffi::c_int,
-    mut cols: ::core::ffi::c_int,
-) -> *mut ScreenCell {
-    let mut new_buffer: *mut ScreenCell = vterm_allocator_malloc(
-        (*screen).vt,
-        ::core::mem::size_of::<ScreenCell>()
-            .wrapping_mul(rows as size_t)
-            .wrapping_mul(cols as size_t),
-    ) as *mut ScreenCell;
-    let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while row < rows {
-        let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while col < cols {
-            clearcell(screen, new_buffer.offset((row * cols + col) as isize));
-            col += 1;
-        }
-        row += 1;
+
+/// `count` cells starting at `first`, as a slice.
+unsafe fn cells_mut<'a>(first: *mut ScreenCell, count: c_int) -> &'a mut [ScreenCell] {
+    core::slice::from_raw_parts_mut(first, count as usize)
+}
+
+/// A freshly allocated, fully blanked cell grid.
+unsafe fn alloc_buffer(screen: *mut VTermScreen, rows: c_int, cols: c_int) -> *mut ScreenCell {
+    let bytes = size_of::<ScreenCell>() * rows as size_t * cols as size_t;
+    let buffer = vterm_allocator_malloc((*screen).vt, bytes) as *mut ScreenCell;
+    blank_cells(cells_mut(buffer, rows * cols), &(*screen).pen);
+    buffer
+}
+
+/// How many leading cells of a row are non-blank, i.e. where its trailing run
+/// of blanks starts.
+unsafe fn line_popcount(buffer: *const ScreenCell, row: c_int, cols: c_int) -> c_int {
+    let mut col = cols - 1;
+    while col >= 0 && (*buffer.offset((row * cols + col) as isize)).schar == 0 {
+        col -= 1;
     }
-    return new_buffer;
+    col + 1
 }
-unsafe extern "C" fn damagerect(mut screen: *mut VTermScreen, mut rect: VTermRect) {
-    let mut emit: VTermRect = VTermRect {
-        start_row: 0,
-        end_row: 0,
-        start_col: 0,
-        end_col: 0,
+
+// -------------------------------------------------------------------- damage
+
+/// Records damage to `rect`, telling the host at once or holding it back,
+/// according to the merge level.
+unsafe fn damage_rect(screen: *mut VTermScreen, rect: VTermRect) {
+    let merge = (*screen).damage_merge;
+    let emit = match merge_damage(&mut (*screen).damaged, rect, merge) {
+        Damage::Pending => return,
+        Damage::Emit(pending) => pending,
+        Damage::FlushFirst(pending) => {
+            vterm_screen_flush_damage(screen);
+            pending
+        }
     };
-    match (*screen).damage_merge as ::core::ffi::c_uint {
-        0 => {
-            emit = rect;
-        }
-        1 => {
-            if rect.end_row > rect.start_row + 1 as ::core::ffi::c_int {
-                vterm_screen_flush_damage(screen);
-                emit = rect;
-            } else if (*screen).damaged.start_row == -1 as ::core::ffi::c_int {
-                (*screen).damaged = rect;
-                return;
-            } else if rect.start_row == (*screen).damaged.start_row {
-                if (*screen).damaged.start_col > rect.start_col {
-                    (*screen).damaged.start_col = rect.start_col;
-                }
-                if (*screen).damaged.end_col < rect.end_col {
-                    (*screen).damaged.end_col = rect.end_col;
-                }
-                return;
-            } else {
-                emit = (*screen).damaged;
-                (*screen).damaged = rect;
-            }
-        }
-        2 | 3 => {
-            if (*screen).damaged.start_row == -1 as ::core::ffi::c_int {
-                (*screen).damaged = rect;
-            } else {
-                rect_expand(&raw mut (*screen).damaged, &raw mut rect);
-            }
-            return;
-        }
-        _ => return,
-    }
-    if !(*screen).callbacks.is_null() && (*(*screen).callbacks).damage.is_some() {
-        Some(
-            (*(*screen).callbacks)
-                .damage
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(emit, (*screen).cbdata);
+    if let Some(callbacks) = (*screen).callbacks.as_ref()
+        && let Some(damage) = callbacks.damage
+    {
+        damage(emit, (*screen).cbdata);
     }
 }
-unsafe extern "C" fn damagescreen(mut screen: *mut VTermScreen) {
-    let mut rect: VTermRect = VTermRect {
-        start_row: 0 as ::core::ffi::c_int,
+
+/// Records damage to every cell.
+unsafe fn damage_screen(screen: *mut VTermScreen) {
+    let whole = VTermRect {
+        start_row: 0,
         end_row: (*screen).rows,
-        start_col: 0 as ::core::ffi::c_int,
+        start_col: 0,
         end_col: (*screen).cols,
     };
-    damagerect(screen, rect);
+    damage_rect(screen, whole);
 }
+
+// -------------------------------------------------------- state callbacks
+
 unsafe extern "C" fn putglyph(
-    mut info: *mut VTermGlyphInfo,
-    mut pos: VTermPos,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    let mut cell: *mut ScreenCell = getcell(screen, pos.row, pos.col);
+    info: *mut VTermGlyphInfo,
+    pos: VTermPos,
+    user: *mut c_void,
+) -> c_int {
+    let screen = user as *mut VTermScreen;
+    let cell = getcell(screen, pos.row, pos.col);
     if cell.is_null() {
-        return 0 as ::core::ffi::c_int;
+        return 0;
     }
     (*cell).schar = (*info).schar;
-    if (*info).schar != 0 as schar_T {
+    // An erasing glyph keeps the cell's existing pen.
+    if (*info).schar != 0 {
         (*cell).pen = (*screen).pen;
     }
-    let mut col: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while col < (*info).width {
-        (*getcell(screen, pos.row, pos.col + col)).schar =
-            -1 as ::core::ffi::c_int as uint32_t as schar_T;
-        col += 1;
+    for col in 1..(*info).width {
+        (*getcell(screen, pos.row, pos.col + col)).schar = SCHAR_CONTINUATION;
     }
-    let mut rect: VTermRect = VTermRect {
-        start_row: pos.row,
-        end_row: pos.row + 1 as ::core::ffi::c_int,
-        start_col: pos.col,
-        end_col: pos.col + (*info).width,
-    };
-    (*cell)
-        .pen
-        .set_protected_cell((*info).protected_cell() as ::core::ffi::c_uint);
-    (*cell).pen.set_dwl((*info).dwl() as ::core::ffi::c_uint);
-    (*cell).pen.set_dhl((*info).dhl() as ::core::ffi::c_uint);
-    damagerect(screen, rect);
-    return 1 as ::core::ffi::c_int;
+    (*cell).pen.set_protected_cell((*info).protected_cell());
+    (*cell).pen.set_dwl((*info).dwl());
+    (*cell).pen.set_dhl((*info).dhl());
+    damage_rect(
+        screen,
+        VTermRect {
+            start_row: pos.row,
+            end_row: pos.row + 1,
+            start_col: pos.col,
+            end_col: pos.col + (*info).width,
+        },
+    );
+    1
 }
-unsafe extern "C" fn sb_pushline_from_row(
-    mut screen: *mut VTermScreen,
-    mut row: ::core::ffi::c_int,
-) {
-    let mut pos: VTermPos = VTermPos { row: row, col: 0 };
-    pos.col = 0 as ::core::ffi::c_int;
+
+unsafe extern "C" fn movecursor(
+    pos: VTermPos,
+    oldpos: VTermPos,
+    visible: c_int,
+    user: *mut c_void,
+) -> c_int {
+    let screen = user as *mut VTermScreen;
+    if let Some(callbacks) = (*screen).callbacks.as_ref()
+        && let Some(on_movecursor) = callbacks.movecursor
+    {
+        return on_movecursor(pos, oldpos, visible, (*screen).cbdata);
+    }
+    0
+}
+
+unsafe extern "C" fn setpenattr(attr: VTermAttr, val: *mut VTermValue, user: *mut c_void) -> c_int {
+    let pen = &mut (*(user as *mut VTermScreen)).pen;
+    match attr {
+        VTERM_ATTR_BOLD => pen.set_bold((*val).boolean as u32),
+        VTERM_ATTR_UNDERLINE => pen.set_underline((*val).number as u32),
+        VTERM_ATTR_ITALIC => pen.set_italic((*val).boolean as u32),
+        VTERM_ATTR_BLINK => pen.set_blink((*val).boolean as u32),
+        VTERM_ATTR_REVERSE => pen.set_reverse((*val).boolean as u32),
+        VTERM_ATTR_CONCEAL => pen.set_conceal((*val).boolean as u32),
+        VTERM_ATTR_STRIKE => pen.set_strike((*val).boolean as u32),
+        VTERM_ATTR_FONT => pen.set_font((*val).number as u32),
+        VTERM_ATTR_FOREGROUND => pen.fg = (*val).color,
+        VTERM_ATTR_BACKGROUND => pen.bg = (*val).color,
+        VTERM_ATTR_SMALL => pen.set_small((*val).boolean as u32),
+        VTERM_ATTR_BASELINE => pen.set_baseline((*val).number as u32),
+        VTERM_ATTR_URI => pen.uri = (*val).number,
+        VTERM_ATTR_DIM => pen.set_dim((*val).boolean as u32),
+        VTERM_ATTR_OVERLINE => pen.set_overline((*val).boolean as u32),
+        _ => return 0,
+    }
+    1
+}
+
+unsafe extern "C" fn settermprop(
+    prop: VTermProp,
+    val: *mut VTermValue,
+    user: *mut c_void,
+) -> c_int {
+    let screen = user as *mut VTermScreen;
+    match prop {
+        VTERM_PROP_ALTSCREEN => {
+            let want_altscreen = (*val).boolean != 0;
+            if want_altscreen && (*screen).buffers[BUFIDX_ALTSCREEN].is_null() {
+                return 0;
+            }
+            (*screen).buffer = if want_altscreen {
+                (*screen).buffers[BUFIDX_ALTSCREEN]
+            } else {
+                (*screen).buffers[BUFIDX_PRIMARY]
+            };
+            // Only on disable: enabling is followed by an erase, which
+            // reports the damage anyway.
+            if !want_altscreen {
+                damage_screen(screen);
+            }
+        }
+        VTERM_PROP_REVERSE => {
+            (*screen).set_global_reverse((*val).boolean as u32);
+            damage_screen(screen);
+        }
+        _ => {}
+    }
+    if let Some(callbacks) = (*screen).callbacks.as_ref()
+        && let Some(on_settermprop) = callbacks.settermprop
+    {
+        return on_settermprop(prop, val, (*screen).cbdata);
+    }
+    1
+}
+
+unsafe extern "C" fn bell(user: *mut c_void) -> c_int {
+    let screen = user as *mut VTermScreen;
+    if let Some(callbacks) = (*screen).callbacks.as_ref()
+        && let Some(on_bell) = callbacks.bell
+    {
+        return on_bell((*screen).cbdata);
+    }
+    0
+}
+
+unsafe extern "C" fn theme(dark: *mut bool, user: *mut c_void) -> c_int {
+    let screen = user as *mut VTermScreen;
+    if let Some(callbacks) = (*screen).callbacks.as_ref()
+        && let Some(on_theme) = callbacks.theme
+    {
+        return on_theme(dark, (*screen).cbdata);
+    }
+    1
+}
+
+unsafe extern "C" fn sb_clear(user: *mut c_void) -> c_int {
+    let screen = user as *mut VTermScreen;
+    if let Some(callbacks) = (*screen).callbacks.as_ref()
+        && let Some(on_sb_clear) = callbacks.sb_clear
+        && on_sb_clear((*screen).cbdata) != 0
+    {
+        return 1;
+    }
+    0
+}
+
+/// A line's double-width or double-height mark changed: restamp the row's
+/// cells and report the damage. Going double-width halves the usable row, so
+/// the right half is erased outright.
+unsafe extern "C" fn setlineinfo(
+    row: c_int,
+    newinfo: *const VTermLineInfo,
+    oldinfo: *const VTermLineInfo,
+    user: *mut c_void,
+) -> c_int {
+    let screen = user as *mut VTermScreen;
+    if (*newinfo).doublewidth() == (*oldinfo).doublewidth()
+        && (*newinfo).doubleheight() == (*oldinfo).doubleheight()
+    {
+        return 1;
+    }
+    for col in 0..(*screen).cols {
+        let cell = getcell(screen, row, col);
+        (*cell).pen.set_dwl((*newinfo).doublewidth());
+        (*cell).pen.set_dhl((*newinfo).doubleheight());
+    }
+    let doublewidth = (*newinfo).doublewidth() != 0;
+    let mut rect = VTermRect {
+        start_row: row,
+        end_row: row + 1,
+        start_col: 0,
+        end_col: if doublewidth {
+            (*screen).cols / 2
+        } else {
+            (*screen).cols
+        },
+    };
+    damage_rect(screen, rect);
+    if doublewidth {
+        rect.start_col = (*screen).cols / 2;
+        rect.end_col = (*screen).cols;
+        erase_internal(rect, 0, user);
+    }
+    1
+}
+
+// ------------------------------------------------- moving and erasing cells
+
+/// Copies `screen`'s row `row` into the scrollback buffer and hands it over.
+unsafe fn sb_pushline_from_row(screen: *mut VTermScreen, row: c_int) {
+    let mut pos = VTermPos { row, col: 0 };
     while pos.col < (*screen).cols {
         vterm_screen_get_cell(screen, pos, (*screen).sb_buffer.offset(pos.col as isize));
         pos.col += 1;
@@ -256,1339 +316,681 @@ unsafe extern "C" fn sb_pushline_from_row(
         (*screen).cols, (*screen).sb_buffer, (*screen).cbdata
     );
 }
+
+/// Moves cells within the grid. Rows scrolled off the top of the primary
+/// buffer go out to scrollback on the way.
 unsafe extern "C" fn moverect_internal(
-    mut dest: VTermRect,
-    mut src: VTermRect,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    if !(*screen).callbacks.is_null()
-        && (*(*screen).callbacks).sb_pushline.is_some()
-        && dest.start_row == 0 as ::core::ffi::c_int
-        && dest.start_col == 0 as ::core::ffi::c_int
+    dest: VTermRect,
+    src: VTermRect,
+    user: *mut c_void,
+) -> c_int {
+    let screen = user as *mut VTermScreen;
+    let full_width_from_top = dest.start_row == 0
+        && dest.start_col == 0
         && dest.end_col == (*screen).cols
-        && (*screen).buffer == (*screen).buffers[BUFIDX_PRIMARY as usize]
+        && (*screen).buffer == (*screen).buffers[BUFIDX_PRIMARY];
+    if full_width_from_top
+        && let Some(callbacks) = (*screen).callbacks.as_ref()
+        && callbacks.sb_pushline.is_some()
     {
-        let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while row < src.start_row {
+        for row in 0..src.start_row {
             sb_pushline_from_row(screen, row);
-            row += 1;
         }
     }
-    let mut cols: ::core::ffi::c_int = src.end_col - src.start_col;
-    let mut downward: ::core::ffi::c_int = src.start_row - dest.start_row;
-    let mut init_row: ::core::ffi::c_int = 0;
-    let mut test_row: ::core::ffi::c_int = 0;
-    let mut inc_row: ::core::ffi::c_int = 0;
-    if downward < 0 as ::core::ffi::c_int {
-        init_row = dest.end_row - 1 as ::core::ffi::c_int;
-        test_row = dest.start_row - 1 as ::core::ffi::c_int;
-        inc_row = -1 as ::core::ffi::c_int;
+    let cols = src.end_col - src.start_col;
+    let downward = src.start_row - dest.start_row;
+    // Overlapping ranges: copy away from the direction of travel.
+    let (mut row, limit, step) = if downward < 0 {
+        (dest.end_row - 1, dest.start_row - 1, -1)
     } else {
-        init_row = dest.start_row;
-        test_row = dest.end_row;
-        inc_row = 1 as ::core::ffi::c_int;
-    }
-    let mut row_0: ::core::ffi::c_int = init_row;
-    while row_0 != test_row {
+        (dest.start_row, dest.end_row, 1)
+    };
+    while row != limit {
         memmove(
-            getcell(screen, row_0, dest.start_col) as *mut ::core::ffi::c_void,
-            getcell(screen, row_0 + downward, src.start_col) as *const ::core::ffi::c_void,
-            (cols as size_t).wrapping_mul(::core::mem::size_of::<ScreenCell>()),
+            getcell(screen, row, dest.start_col) as *mut c_void,
+            getcell(screen, row + downward, src.start_col) as *const c_void,
+            cols as size_t * size_of::<ScreenCell>(),
         );
-        row_0 += inc_row;
+        row += step;
     }
-    return 1 as ::core::ffi::c_int;
+    1
 }
-unsafe extern "C" fn moverect_user(
-    mut dest: VTermRect,
-    mut src: VTermRect,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    if !(*screen).callbacks.is_null() && (*(*screen).callbacks).moverect.is_some() {
-        if (*screen).damage_merge as ::core::ffi::c_uint
-            != VTERM_DAMAGE_SCROLL as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+
+/// Tells the host about a move it may be able to perform itself, falling back
+/// to reporting the destination as damaged.
+unsafe extern "C" fn moverect_user(dest: VTermRect, src: VTermRect, user: *mut c_void) -> c_int {
+    let screen = user as *mut VTermScreen;
+    if let Some(callbacks) = (*screen).callbacks.as_ref()
+        && let Some(moverect) = callbacks.moverect
+    {
+        // Flushing under scroll merging would recurse back into here.
+        if (*screen).damage_merge != VTERM_DAMAGE_SCROLL {
             vterm_screen_flush_damage(screen);
         }
-        if Some(
-            (*(*screen).callbacks)
-                .moverect
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(dest, src, (*screen).cbdata)
-            != 0
-        {
-            return 1 as ::core::ffi::c_int;
+        if moverect(dest, src, (*screen).cbdata) != 0 {
+            return 1;
         }
     }
-    damagerect(screen, dest);
-    return 1 as ::core::ffi::c_int;
+    damage_rect(screen, dest);
+    1
 }
-unsafe extern "C" fn erase_internal(
-    mut rect: VTermRect,
-    mut selective: ::core::ffi::c_int,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    let mut row: ::core::ffi::c_int = rect.start_row;
+
+/// Blanks the cells in `rect`, keeping the screen's current colours. A
+/// selective erase spares cells the host marked protected.
+unsafe extern "C" fn erase_internal(rect: VTermRect, selective: c_int, user: *mut c_void) -> c_int {
+    let screen = user as *mut VTermScreen;
+    let mut row = rect.start_row;
     while row < (*(*screen).state).rows && row < rect.end_row {
-        let mut info: *const VTermLineInfo = vterm_state_get_lineinfo((*screen).state, row);
-        let mut col: ::core::ffi::c_int = rect.start_col;
-        while col < rect.end_col {
-            let mut cell: *mut ScreenCell = getcell(screen, row, col);
-            if !(selective != 0 && (*cell).pen.protected_cell() as ::core::ffi::c_int != 0) {
-                (*cell).schar = 0 as schar_T;
-                (*cell).pen = {
-                    let mut init = ScreenPen {
-                        bold_underline_italic_blink_reverse_conceal_strike_font_small_baseline_dim_overline_protected_cell_dwl_dhl: [0; 3],
-                        c2rust_padding: [0; 1],
-                        fg: (*screen).pen.fg,
-                        bg: (*screen).pen.bg,
-                        uri: 0,
-                    };
-                    init.set_bold(0);
-                    init.set_underline(0);
-                    init.set_italic(0);
-                    init.set_blink(0);
-                    init.set_reverse(0);
-                    init.set_conceal(0);
-                    init.set_strike(0);
-                    init.set_font(0);
-                    init.set_small(0);
-                    init.set_baseline(0);
-                    init.set_dim(0);
-                    init.set_overline(0);
-                    init.set_protected_cell(0);
-                    init.set_dwl(0);
-                    init.set_dhl(0);
-                    init
-                };
-                (*cell)
-                    .pen
-                    .set_dwl((*info).doublewidth() as ::core::ffi::c_uint);
-                (*cell)
-                    .pen
-                    .set_dhl((*info).doubleheight() as ::core::ffi::c_uint);
+        let info = vterm_state_get_lineinfo((*screen).state, row);
+        for col in rect.start_col..rect.end_col {
+            let cell = getcell(screen, row, col);
+            if selective != 0 && (*cell).pen.protected_cell() != 0 {
+                continue;
             }
-            col += 1;
+            (*cell).schar = 0;
+            (*cell).pen = erased_pen((*screen).pen.fg, (*screen).pen.bg);
+            (*cell).pen.set_dwl((*info).doublewidth());
+            (*cell).pen.set_dhl((*info).doubleheight());
         }
         row += 1;
     }
-    return 1 as ::core::ffi::c_int;
+    1
 }
-unsafe extern "C" fn erase_user(
-    mut rect: VTermRect,
-    mut _selective: ::core::ffi::c_int,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    damagerect(screen, rect);
-    return 1 as ::core::ffi::c_int;
+
+/// The reporting half of an erase: the cells themselves are another pass.
+unsafe extern "C" fn erase_user(rect: VTermRect, _selective: c_int, user: *mut c_void) -> c_int {
+    damage_rect(user as *mut VTermScreen, rect);
+    1
 }
-unsafe extern "C" fn erase(
-    mut rect: VTermRect,
-    mut selective: ::core::ffi::c_int,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
+
+unsafe extern "C" fn erase(rect: VTermRect, selective: c_int, user: *mut c_void) -> c_int {
     erase_internal(rect, selective, user);
-    return erase_user(rect, 0 as ::core::ffi::c_int, user);
+    erase_user(rect, 0, user)
 }
+
+/// Scrolls a region. Under cell or row merging the move happens at once, in
+/// two passes so that the host sees the cells settle before it is told. Under
+/// scroll merging the move is coalesced with whatever is already pending.
 unsafe extern "C" fn scrollrect(
-    mut rect: VTermRect,
-    mut downward: ::core::ffi::c_int,
-    mut rightward: ::core::ffi::c_int,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    if (*screen).damage_merge as ::core::ffi::c_uint
-        != VTERM_DAMAGE_SCROLL as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    region: VTermRect,
+    downward: c_int,
+    rightward: c_int,
+    user: *mut c_void,
+) -> c_int {
+    let screen = user as *mut VTermScreen;
+    if (*screen).damage_merge != VTERM_DAMAGE_SCROLL {
         vterm_scroll_rect(
-            rect,
+            region,
             downward,
             rightward,
-            Some(
-                moverect_internal
-                    as unsafe extern "C" fn(
-                        VTermRect,
-                        VTermRect,
-                        *mut ::core::ffi::c_void,
-                    ) -> ::core::ffi::c_int,
-            ),
-            Some(
-                erase_internal
-                    as unsafe extern "C" fn(
-                        VTermRect,
-                        ::core::ffi::c_int,
-                        *mut ::core::ffi::c_void,
-                    ) -> ::core::ffi::c_int,
-            ),
-            screen as *mut ::core::ffi::c_void,
+            Some(moverect_internal),
+            Some(erase_internal),
+            user,
         );
         vterm_screen_flush_damage(screen);
         vterm_scroll_rect(
-            rect,
+            region,
             downward,
             rightward,
-            Some(
-                moverect_user
-                    as unsafe extern "C" fn(
-                        VTermRect,
-                        VTermRect,
-                        *mut ::core::ffi::c_void,
-                    ) -> ::core::ffi::c_int,
-            ),
-            Some(
-                erase_user
-                    as unsafe extern "C" fn(
-                        VTermRect,
-                        ::core::ffi::c_int,
-                        *mut ::core::ffi::c_void,
-                    ) -> ::core::ffi::c_int,
-            ),
-            screen as *mut ::core::ffi::c_void,
+            Some(moverect_user),
+            Some(erase_user),
+            user,
         );
-        return 1 as ::core::ffi::c_int;
+        return 1;
     }
-    if (*screen).damaged.start_row != -1 as ::core::ffi::c_int
-        && rect_intersects(&raw mut rect, &raw mut (*screen).damaged) == 0
-    {
+    if (*screen).damaged.start_row != NO_RECT && !intersects(&region, &(*screen).damaged) {
         vterm_screen_flush_damage(screen);
     }
-    if (*screen).pending_scrollrect.start_row == -1 as ::core::ffi::c_int {
-        (*screen).pending_scrollrect = rect;
+    let pending_matches = (*screen).pending_scrollrect == region
+        && ((*screen).pending_scroll_downward == 0 && downward == 0
+            || (*screen).pending_scroll_rightward == 0 && rightward == 0);
+    if (*screen).pending_scrollrect.start_row == NO_RECT {
+        (*screen).pending_scrollrect = region;
         (*screen).pending_scroll_downward = downward;
         (*screen).pending_scroll_rightward = rightward;
-    } else if rect_equal(&raw mut (*screen).pending_scrollrect, &raw mut rect) != 0
-        && ((*screen).pending_scroll_downward == 0 as ::core::ffi::c_int
-            && downward == 0 as ::core::ffi::c_int
-            || (*screen).pending_scroll_rightward == 0 as ::core::ffi::c_int
-                && rightward == 0 as ::core::ffi::c_int)
-    {
+    } else if pending_matches {
         (*screen).pending_scroll_downward += downward;
         (*screen).pending_scroll_rightward += rightward;
     } else {
         vterm_screen_flush_damage(screen);
-        (*screen).pending_scrollrect = rect;
+        (*screen).pending_scrollrect = region;
         (*screen).pending_scroll_downward = downward;
         (*screen).pending_scroll_rightward = rightward;
     }
     vterm_scroll_rect(
-        rect,
+        region,
         downward,
         rightward,
-        Some(
-            moverect_internal
-                as unsafe extern "C" fn(
-                    VTermRect,
-                    VTermRect,
-                    *mut ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
-        ),
-        Some(
-            erase_internal
-                as unsafe extern "C" fn(
-                    VTermRect,
-                    ::core::ffi::c_int,
-                    *mut ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
-        ),
-        screen as *mut ::core::ffi::c_void,
+        Some(moverect_internal),
+        Some(erase_internal),
+        user,
     );
-    if (*screen).damaged.start_row == -1 as ::core::ffi::c_int {
-        return 1 as ::core::ffi::c_int;
+    if (*screen).damaged.start_row != NO_RECT {
+        follow_scroll(&mut (*screen).damaged, &region, downward, rightward);
     }
-    if rect_contains(&raw mut rect, &raw mut (*screen).damaged) != 0 {
-        vterm_rect_move(&raw mut (*screen).damaged, -downward, -rightward);
-        rect_clip(&raw mut (*screen).damaged, &raw mut rect);
-    } else if rect.start_col <= (*screen).damaged.start_col
-        && rect.end_col >= (*screen).damaged.end_col
-        && rightward == 0 as ::core::ffi::c_int
-    {
-        if (*screen).damaged.start_row >= rect.start_row
-            && (*screen).damaged.start_row < rect.end_row
-        {
-            (*screen).damaged.start_row -= downward;
-            if (*screen).damaged.start_row < rect.start_row {
-                (*screen).damaged.start_row = rect.start_row;
-            }
-            if (*screen).damaged.start_row > rect.end_row {
-                (*screen).damaged.start_row = rect.end_row;
-            }
-        }
-        if (*screen).damaged.end_row >= rect.start_row && (*screen).damaged.end_row < rect.end_row {
-            (*screen).damaged.end_row -= downward;
-            if (*screen).damaged.end_row < rect.start_row {
-                (*screen).damaged.end_row = rect.start_row;
-            }
-            if (*screen).damaged.end_row > rect.end_row {
-                (*screen).damaged.end_row = rect.end_row;
-            }
-        }
-    }
-    return 1 as ::core::ffi::c_int;
+    1
 }
-unsafe extern "C" fn movecursor(
-    mut pos: VTermPos,
-    mut oldpos: VTermPos,
-    mut visible: ::core::ffi::c_int,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    if !(*screen).callbacks.is_null() && (*(*screen).callbacks).movecursor.is_some() {
-        return Some(
-            (*(*screen).callbacks)
-                .movecursor
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(pos, oldpos, visible, (*screen).cbdata);
-    }
-    return 0 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn setpenattr(
-    mut attr: VTermAttr,
-    mut val: *mut VTermValue,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    match attr as ::core::ffi::c_uint {
-        1 => {
-            (*screen)
-                .pen
-                .set_bold((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        2 => {
-            (*screen)
-                .pen
-                .set_underline((*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        3 => {
-            (*screen)
-                .pen
-                .set_italic((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        4 => {
-            (*screen)
-                .pen
-                .set_blink((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        5 => {
-            (*screen)
-                .pen
-                .set_reverse((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        6 => {
-            (*screen)
-                .pen
-                .set_conceal((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        7 => {
-            (*screen)
-                .pen
-                .set_strike((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        8 => {
-            (*screen)
-                .pen
-                .set_font((*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        9 => {
-            (*screen).pen.fg = (*val).color;
-            return 1 as ::core::ffi::c_int;
-        }
-        10 => {
-            (*screen).pen.bg = (*val).color;
-            return 1 as ::core::ffi::c_int;
-        }
-        11 => {
-            (*screen)
-                .pen
-                .set_small((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        12 => {
-            (*screen)
-                .pen
-                .set_baseline((*val).number as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        13 => {
-            (*screen).pen.uri = (*val).number;
-            return 1 as ::core::ffi::c_int;
-        }
-        14 => {
-            (*screen)
-                .pen
-                .set_dim((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        15 => {
-            (*screen)
-                .pen
-                .set_overline((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            return 1 as ::core::ffi::c_int;
-        }
-        16 => return 0 as ::core::ffi::c_int,
-        _ => {}
-    }
-    return 0 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn settermprop(
-    mut prop: VTermProp,
-    mut val: *mut VTermValue,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    match prop as ::core::ffi::c_uint {
-        3 => {
-            if (*val).boolean != 0 && (*screen).buffers[BUFIDX_ALTSCREEN as usize].is_null() {
-                return 0 as ::core::ffi::c_int;
-            }
-            (*screen).buffer = if (*val).boolean != 0 {
-                (*screen).buffers[BUFIDX_ALTSCREEN as usize]
-            } else {
-                (*screen).buffers[BUFIDX_PRIMARY as usize]
-            };
-            if (*val).boolean == 0 {
-                damagescreen(screen);
-            }
-        }
-        6 => {
-            (*screen)
-                .set_global_reverse((*val).boolean as ::core::ffi::c_uint as ::core::ffi::c_uint);
-            damagescreen(screen);
-        }
-        _ => {}
-    }
-    if !(*screen).callbacks.is_null() && (*(*screen).callbacks).settermprop.is_some() {
-        return Some(
-            (*(*screen).callbacks)
-                .settermprop
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(prop, val, (*screen).cbdata);
-    }
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn bell(mut user: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    if !(*screen).callbacks.is_null() && (*(*screen).callbacks).bell.is_some() {
-        return Some(
-            (*(*screen).callbacks)
-                .bell
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")((*screen).cbdata);
-    }
-    return 0 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn line_popcount(
-    mut buffer: *mut ScreenCell,
-    mut row: ::core::ffi::c_int,
-    mut _rows: ::core::ffi::c_int,
-    mut cols: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut col: ::core::ffi::c_int = cols - 1 as ::core::ffi::c_int;
-    while col >= 0 as ::core::ffi::c_int
-        && (*buffer.offset((row * cols + col) as isize)).schar == 0 as schar_T
-    {
-        col -= 1;
-    }
-    return col + 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn resize_buffer(
-    mut screen: *mut VTermScreen,
-    mut bufidx: ::core::ffi::c_int,
-    mut new_rows: ::core::ffi::c_int,
-    mut new_cols: ::core::ffi::c_int,
-    mut active: bool,
-    mut statefields: *mut VTermStateFields,
+
+// -------------------------------------------------------------- resizing
+
+/// Rebuilds one of the screen's buffers at a new size.
+///
+/// Rows are laid out from the bottom up, so that the content nearest the
+/// cursor survives. With reflow on, a run of continuation rows is one logical
+/// line and is re-wrapped to the new width; otherwise every row stays a row.
+/// Content that falls off the top goes to scrollback, and if there is room
+/// left at the bottom, scrollback is popped back in to fill it. `active`
+/// marks the buffer holding the cursor, whose position is rewritten.
+unsafe fn resize_buffer(
+    screen: *mut VTermScreen,
+    bufidx: usize,
+    new_rows: c_int,
+    new_cols: c_int,
+    active: bool,
+    statefields: *mut VTermStateFields,
 ) {
-    let mut old_rows: ::core::ffi::c_int = (*screen).rows;
-    let mut old_cols: ::core::ffi::c_int = (*screen).cols;
-    let mut old_buffer: *mut ScreenCell = (*screen).buffers[bufidx as usize];
-    let mut old_lineinfo: *mut VTermLineInfo = (*statefields).lineinfos[bufidx as usize];
-    let mut new_buffer: *mut ScreenCell = vterm_allocator_malloc(
+    let old_rows = (*screen).rows;
+    let old_cols = (*screen).cols;
+    let old_buffer = (*screen).buffers[bufidx];
+    let old_lineinfo = (*statefields).lineinfos[bufidx];
+
+    let new_buffer = vterm_allocator_malloc(
         (*screen).vt,
-        ::core::mem::size_of::<ScreenCell>()
-            .wrapping_mul(new_rows as size_t)
-            .wrapping_mul(new_cols as size_t),
+        size_of::<ScreenCell>() * new_rows as size_t * new_cols as size_t,
     ) as *mut ScreenCell;
-    let mut new_lineinfo: *mut VTermLineInfo = vterm_allocator_malloc(
+    let new_lineinfo = vterm_allocator_malloc(
         (*screen).vt,
-        ::core::mem::size_of::<VTermLineInfo>().wrapping_mul(new_rows as size_t),
+        size_of::<VTermLineInfo>() * new_rows as size_t,
     ) as *mut VTermLineInfo;
-    let mut old_row: ::core::ffi::c_int = old_rows - 1 as ::core::ffi::c_int;
-    let mut new_row: ::core::ffi::c_int = new_rows - 1 as ::core::ffi::c_int;
-    let mut old_cursor: VTermPos = (*statefields).pos;
-    let mut new_cursor: VTermPos = VTermPos {
-        row: -1 as ::core::ffi::c_int,
-        col: -1 as ::core::ffi::c_int,
-    };
-    let mut final_blank_row: ::core::ffi::c_int = new_rows;
-    let mut do_reflow: bool =
-        (*screen).reflow() as ::core::ffi::c_int != 0 && bufidx == BUFIDX_PRIMARY;
-    while old_row >= 0 as ::core::ffi::c_int {
-        let mut old_row_end: ::core::ffi::c_int = old_row;
-        while do_reflow as ::core::ffi::c_int != 0
+
+    let mut old_row = old_rows - 1;
+    let mut new_row = new_rows - 1;
+    let old_cursor = (*statefields).pos;
+    let mut new_cursor = VTermPos { row: -1, col: -1 };
+    // The topmost row known to be blank, i.e. how much room there is to
+    // scroll content down into.
+    let mut final_blank_row = new_rows;
+    let do_reflow = (*screen).reflow() != 0 && bufidx == BUFIDX_PRIMARY;
+
+    while old_row >= 0 {
+        // Walk back over the continuation rows of one logical line.
+        let old_row_end = old_row;
+        while do_reflow
             && !old_lineinfo.is_null()
-            && old_row > 0 as ::core::ffi::c_int
-            && (*old_lineinfo.offset(old_row as isize)).continuation() as ::core::ffi::c_int != 0
+            && old_row > 0
+            && (*old_lineinfo.offset(old_row as isize)).continuation() != 0
         {
             old_row -= 1;
         }
-        let mut old_row_start: ::core::ffi::c_int = old_row;
-        let mut width: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut row: ::core::ffi::c_int = old_row_start;
-        while row <= old_row_end {
-            if do_reflow as ::core::ffi::c_int != 0
-                && row < old_rows - 1 as ::core::ffi::c_int
-                && (*old_lineinfo.offset((row + 1 as ::core::ffi::c_int) as isize)).continuation()
-                    as ::core::ffi::c_int
-                    != 0
-            {
-                width += old_cols;
+        let old_row_start = old_row;
+
+        let mut width = 0;
+        for row in old_row_start..=old_row_end {
+            let wrapped = do_reflow
+                && row < old_rows - 1
+                && (*old_lineinfo.offset((row + 1) as isize)).continuation() != 0;
+            width += if wrapped {
+                old_cols
             } else {
-                width += line_popcount(old_buffer, row, old_rows, old_cols);
-            }
-            row += 1;
+                line_popcount(old_buffer, row, old_cols)
+            };
         }
-        if final_blank_row == new_row + 1 as ::core::ffi::c_int && width == 0 as ::core::ffi::c_int
-        {
+
+        if final_blank_row == new_row + 1 && width == 0 {
             final_blank_row = new_row;
         }
-        let mut new_height: ::core::ffi::c_int = if do_reflow as ::core::ffi::c_int != 0 {
-            if width != 0 {
-                (width + new_cols - 1 as ::core::ffi::c_int) / new_cols
-            } else {
-                1 as ::core::ffi::c_int
-            }
+
+        let new_height = if do_reflow && width != 0 {
+            (width + new_cols - 1) / new_cols
         } else {
-            1 as ::core::ffi::c_int
+            1
         };
-        let mut new_row_end: ::core::ffi::c_int = new_row;
-        let mut new_row_start: ::core::ffi::c_int = new_row - new_height + 1 as ::core::ffi::c_int;
-        old_row = old_row_start;
-        let mut old_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut spare_rows: ::core::ffi::c_int = new_rows - final_blank_row;
-        if new_row_start < 0 as ::core::ffi::c_int
-            && spare_rows >= 0 as ::core::ffi::c_int
-            && (!active
-                || new_cursor.row == -1 as ::core::ffi::c_int
-                || new_cursor.row - new_row_start < new_rows)
+        let mut new_row_end = new_row;
+        let mut new_row_start = new_row - new_height + 1;
+        let spare_rows = new_rows - final_blank_row;
+
+        if new_row_start < 0
+            && spare_rows >= 0
+            && (!active || new_cursor.row == -1 || new_cursor.row - new_row_start < new_rows)
         {
-            let mut downwards: ::core::ffi::c_int = -new_row_start;
-            if downwards > spare_rows {
-                downwards = spare_rows;
-            }
-            let mut rowcount: ::core::ffi::c_int = new_rows - downwards;
+            // The line would fall off the top; push what is already placed
+            // down into the blank rows at the bottom to make room.
+            let downwards = (-new_row_start).min(spare_rows);
+            let rowcount = new_rows - downwards;
             memmove(
-                new_buffer.offset((downwards * new_cols) as isize) as *mut ::core::ffi::c_void,
-                new_buffer.offset(0 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                (rowcount as size_t)
-                    .wrapping_mul(new_cols as size_t)
-                    .wrapping_mul(::core::mem::size_of::<ScreenCell>()),
+                new_buffer.offset((downwards * new_cols) as isize) as *mut c_void,
+                new_buffer as *const c_void,
+                rowcount as size_t * new_cols as size_t * size_of::<ScreenCell>(),
             );
             memmove(
-                new_lineinfo.offset(downwards as isize) as *mut ::core::ffi::c_void,
-                new_lineinfo.offset(0 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                (rowcount as size_t).wrapping_mul(::core::mem::size_of::<VTermLineInfo>()),
+                new_lineinfo.offset(downwards as isize) as *mut c_void,
+                new_lineinfo as *const c_void,
+                rowcount as size_t * size_of::<VTermLineInfo>(),
             );
             new_row += downwards;
             new_row_start += downwards;
             new_row_end += downwards;
-            if new_cursor.row >= 0 as ::core::ffi::c_int {
+            if new_cursor.row >= 0 {
                 new_cursor.row += downwards;
             }
             final_blank_row += downwards;
         }
-        if new_row_start < 0 as ::core::ffi::c_int {
+
+        if new_row_start < 0 {
+            // Out of room: this line and everything above it is scrollback.
             if old_row_start <= old_cursor.row && old_cursor.row <= old_row_end {
-                new_cursor.row = 0 as ::core::ffi::c_int;
-                new_cursor.col = old_cursor.col;
-                if new_cursor.col >= new_cols {
-                    new_cursor.col = new_cols - 1 as ::core::ffi::c_int;
-                }
+                new_cursor.row = 0;
+                new_cursor.col = old_cursor.col.min(new_cols - 1);
             }
             break;
-        } else {
-            new_row = new_row_start;
-            old_row = old_row_start;
-            while new_row <= new_row_end {
-                let mut count: ::core::ffi::c_int =
-                    if width >= new_cols { new_cols } else { width };
-                width -= count;
-                let mut new_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while count != 0 {
-                    *new_buffer.offset((new_row * new_cols + new_col) as isize) =
-                        *old_buffer.offset((old_row * old_cols + old_col) as isize);
-                    if old_cursor.row == old_row && old_cursor.col == old_col {
-                        new_cursor.row = new_row;
-                        new_cursor.col = new_col;
-                    }
-                    old_col += 1;
-                    if old_col == old_cols {
-                        old_row += 1;
-                        if !do_reflow {
-                            new_col += 1;
-                            break;
-                        } else {
-                            old_col = 0 as ::core::ffi::c_int;
-                        }
-                    }
-                    new_col += 1;
-                    count -= 1;
+        }
+
+        old_row = old_row_start;
+        let mut old_col = 0;
+        new_row = new_row_start;
+        while new_row <= new_row_end {
+            let mut count = width.min(new_cols);
+            width -= count;
+            let mut new_col = 0;
+            while count != 0 {
+                *new_buffer.offset((new_row * new_cols + new_col) as isize) =
+                    *old_buffer.offset((old_row * old_cols + old_col) as isize);
+                if old_cursor.row == old_row && old_cursor.col == old_col {
+                    new_cursor = VTermPos {
+                        row: new_row,
+                        col: new_col,
+                    };
                 }
-                if old_cursor.row == old_row && old_cursor.col >= old_col {
-                    new_cursor.row = new_row;
-                    new_cursor.col = old_cursor.col - old_col + new_col;
-                    if new_cursor.col >= new_cols {
-                        new_cursor.col = new_cols - 1 as ::core::ffi::c_int;
+                old_col += 1;
+                if old_col == old_cols {
+                    old_row += 1;
+                    if !do_reflow {
+                        new_col += 1;
+                        break;
                     }
+                    old_col = 0;
                 }
-                while new_col < new_cols {
-                    clearcell(
-                        screen,
-                        new_buffer.offset((new_row * new_cols + new_col) as isize),
-                    );
-                    new_col += 1;
-                }
-                (*new_lineinfo.offset(new_row as isize)).set_continuation(
-                    (new_row > new_row_start) as ::core::ffi::c_int as ::core::ffi::c_uint
-                        as ::core::ffi::c_uint,
-                );
-                new_row += 1;
+                new_col += 1;
+                count -= 1;
             }
-            old_row = old_row_start - 1 as ::core::ffi::c_int;
-            new_row = new_row_start - 1 as ::core::ffi::c_int;
+            // The cursor sat in the blank tail of the old row.
+            if old_cursor.row == old_row && old_cursor.col >= old_col {
+                new_cursor.row = new_row;
+                new_cursor.col = (old_cursor.col - old_col + new_col).min(new_cols - 1);
+            }
+            let row_start = new_buffer.offset((new_row * new_cols) as isize);
+            let row_cells = cells_mut(row_start, new_cols);
+            blank_cells(&mut row_cells[new_col as usize..], &(*screen).pen);
+            (*new_lineinfo.offset(new_row as isize))
+                .set_continuation((new_row > new_row_start) as u32);
+            new_row += 1;
         }
+
+        old_row = old_row_start - 1;
+        new_row = new_row_start - 1;
     }
+
     if old_cursor.row <= old_row {
-        new_cursor.row = 0 as ::core::ffi::c_int;
-        new_cursor.col = old_cursor.col;
-        if new_cursor.col >= new_cols {
-            new_cursor.col = new_cols - 1 as ::core::ffi::c_int;
-        }
+        // The cursor was on a row that fell off the top; bring it into range.
+        new_cursor.row = 0;
+        new_cursor.col = old_cursor.col.min(new_cols - 1);
     }
-    if active as ::core::ffi::c_int != 0
-        && (new_cursor.row == -1 as ::core::ffi::c_int
-            || new_cursor.col == -1 as ::core::ffi::c_int)
-    {
+    if active && (new_cursor.row == -1 || new_cursor.col == -1) {
         fprintf(
             stderr,
-            b"screen_resize failed to update cursor position\n\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"screen_resize failed to update cursor position\n".as_ptr(),
         );
         abort();
     }
-    if old_row >= 0 as ::core::ffi::c_int && bufidx == BUFIDX_PRIMARY {
-        if !(*screen).callbacks.is_null() && (*(*screen).callbacks).sb_pushline.is_some() {
-            let mut row_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while row_0 <= old_row {
-                sb_pushline_from_row(screen, row_0);
-                row_0 += 1;
+
+    if old_row >= 0 && bufidx == BUFIDX_PRIMARY {
+        if let Some(callbacks) = (*screen).callbacks.as_ref()
+            && callbacks.sb_pushline.is_some()
+        {
+            for row in 0..=old_row {
+                sb_pushline_from_row(screen, row);
             }
         }
         if active {
-            (*statefields).pos.row -= old_row + 1 as ::core::ffi::c_int;
+            (*statefields).pos.row -= old_row + 1;
         }
     }
-    if new_row >= 0 as ::core::ffi::c_int
-        && bufidx == BUFIDX_PRIMARY
-        && !(*screen).callbacks.is_null()
-        && (*(*screen).callbacks).sb_popline.is_some()
-    {
-        while new_row >= 0 as ::core::ffi::c_int {
-            if (*(*screen).callbacks)
-                .sb_popline
-                .expect("non-null function pointer")(
-                old_cols,
-                (*screen).sb_buffer,
-                (*screen).cbdata,
-            ) == 0
-            {
-                break;
-            }
-            let mut pos: VTermPos = VTermPos {
-                row: new_row,
-                col: 0,
-            };
-            pos.col = 0 as ::core::ffi::c_int;
-            while pos.col < old_cols && pos.col < new_cols {
-                let mut src: *mut VTermScreenCell = (*screen).sb_buffer.offset(pos.col as isize);
-                let mut dst: *mut ScreenCell =
-                    new_buffer.offset((pos.row * new_cols + pos.col) as isize);
-                (*dst).schar = (*src).schar;
-                (*dst)
-                    .pen
-                    .set_bold((*src).attrs.bold() as ::core::ffi::c_uint);
-                (*dst)
-                    .pen
-                    .set_underline((*src).attrs.underline() as ::core::ffi::c_uint);
-                (*dst)
-                    .pen
-                    .set_italic((*src).attrs.italic() as ::core::ffi::c_uint);
-                (*dst)
-                    .pen
-                    .set_blink((*src).attrs.blink() as ::core::ffi::c_uint);
-                (*dst).pen.set_reverse(
-                    ((*src).attrs.reverse() as ::core::ffi::c_int
-                        ^ (*screen).global_reverse() as ::core::ffi::c_int)
-                        as ::core::ffi::c_uint as ::core::ffi::c_uint,
-                );
-                (*dst)
-                    .pen
-                    .set_conceal((*src).attrs.conceal() as ::core::ffi::c_uint);
-                (*dst)
-                    .pen
-                    .set_strike((*src).attrs.strike() as ::core::ffi::c_uint);
-                (*dst)
-                    .pen
-                    .set_font((*src).attrs.font() as ::core::ffi::c_uint);
-                (*dst)
-                    .pen
-                    .set_small((*src).attrs.small() as ::core::ffi::c_uint);
-                (*dst)
-                    .pen
-                    .set_baseline((*src).attrs.baseline() as ::core::ffi::c_uint);
-                (*dst)
-                    .pen
-                    .set_dim((*src).attrs.dim() as ::core::ffi::c_uint);
-                (*dst)
-                    .pen
-                    .set_overline((*src).attrs.overline() as ::core::ffi::c_uint);
-                (*dst).pen.fg = (*src).fg;
-                (*dst).pen.bg = (*src).bg;
-                (*dst).pen.uri = (*src).uri;
-                if (*src).width as ::core::ffi::c_int == 2 as ::core::ffi::c_int
-                    && pos.col < new_cols - 1 as ::core::ffi::c_int
-                {
-                    (*dst.offset(1 as ::core::ffi::c_int as isize)).schar =
-                        -1 as ::core::ffi::c_int as uint32_t as schar_T;
-                }
-                pos.col +=
-                    (*(*screen).sb_buffer.offset(pos.col as isize)).width as ::core::ffi::c_int;
-            }
-            while pos.col < new_cols {
-                clearcell(
-                    screen,
-                    new_buffer.offset((pos.row * new_cols + pos.col) as isize),
-                );
-                pos.col += 1;
-            }
-            new_row -= 1;
-            if active {
-                (*statefields).pos.row += 1;
-            }
-        }
+    if new_row >= 0 && bufidx == BUFIDX_PRIMARY {
+        backfill_from_scrollback(
+            screen,
+            new_buffer,
+            &mut new_row,
+            new_cols,
+            old_cols,
+            active,
+            statefields,
+        );
     }
-    if new_row >= 0 as ::core::ffi::c_int {
-        let mut moverows: ::core::ffi::c_int = new_rows - new_row - 1 as ::core::ffi::c_int;
+    if new_row >= 0 {
+        // Content ended up low in the buffer; slide it up to the top and
+        // blank whatever is left at the bottom.
+        let moverows = new_rows - new_row - 1;
         memmove(
-            new_buffer.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-            new_buffer.offset(((new_row + 1 as ::core::ffi::c_int) * new_cols) as isize)
-                as *const ::core::ffi::c_void,
-            (moverows as size_t)
-                .wrapping_mul(new_cols as size_t)
-                .wrapping_mul(::core::mem::size_of::<ScreenCell>()),
+            new_buffer as *mut c_void,
+            new_buffer.offset(((new_row + 1) * new_cols) as isize) as *const c_void,
+            moverows as size_t * new_cols as size_t * size_of::<ScreenCell>(),
         );
         memmove(
-            new_lineinfo.offset(0 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-            new_lineinfo.offset((new_row + 1 as ::core::ffi::c_int) as isize)
-                as *const ::core::ffi::c_void,
-            (moverows as size_t).wrapping_mul(::core::mem::size_of::<VTermLineInfo>()),
+            new_lineinfo as *mut c_void,
+            new_lineinfo.offset((new_row + 1) as isize) as *const c_void,
+            moverows as size_t * size_of::<VTermLineInfo>(),
         );
-        new_cursor.row -= new_row + 1 as ::core::ffi::c_int;
-        new_row = moverows;
-        while new_row < new_rows {
-            let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while col < new_cols {
-                clearcell(
-                    screen,
-                    new_buffer.offset((new_row * new_cols + col) as isize),
-                );
-                col += 1;
-            }
-            *new_lineinfo.offset(new_row as isize) = {
-                let mut init = VTermLineInfo {
-                    doublewidth_doubleheight_continuation: [0; 1],
-                    c2rust_padding: [0; 3],
-                };
-                init.set_doublewidth(0 as ::core::ffi::c_uint);
-                init.set_doubleheight(0);
-                init.set_continuation(0);
-                init
-            };
-            new_row += 1;
+        new_cursor.row -= new_row + 1;
+        for row in moverows..new_rows {
+            let row_start = new_buffer.offset((row * new_cols) as isize);
+            blank_cells(cells_mut(row_start, new_cols), &(*screen).pen);
+            *new_lineinfo.offset(row as isize) = blank_lineinfo();
         }
     }
-    vterm_allocator_free((*screen).vt, old_buffer as *mut ::core::ffi::c_void);
-    (*screen).buffers[bufidx as usize] = new_buffer;
-    vterm_allocator_free((*screen).vt, old_lineinfo as *mut ::core::ffi::c_void);
-    (*statefields).lineinfos[bufidx as usize] = new_lineinfo;
+
+    vterm_allocator_free((*screen).vt, old_buffer as *mut c_void);
+    (*screen).buffers[bufidx] = new_buffer;
+    vterm_allocator_free((*screen).vt, old_lineinfo as *mut c_void);
+    (*statefields).lineinfos[bufidx] = new_lineinfo;
     if active {
         (*statefields).pos = new_cursor;
     }
 }
-unsafe extern "C" fn resize(
-    mut new_rows: ::core::ffi::c_int,
-    mut new_cols: ::core::ffi::c_int,
-    mut fields: *mut VTermStateFields,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    let mut altscreen_active: ::core::ffi::c_int = (!(*screen).buffers[BUFIDX_ALTSCREEN as usize]
-        .is_null()
-        && (*screen).buffer == (*screen).buffers[BUFIDX_ALTSCREEN as usize])
-        as ::core::ffi::c_int;
-    let mut old_rows: ::core::ffi::c_int = (*screen).rows;
-    let mut old_cols: ::core::ffi::c_int = (*screen).cols;
-    if new_cols > old_cols {
-        if !(*screen).sb_buffer.is_null() {
-            vterm_allocator_free(
-                (*screen).vt,
-                (*screen).sb_buffer as *mut ::core::ffi::c_void,
-            );
+
+/// Pops lines off the host's scrollback into the rows above `*new_row`, until
+/// the host runs out or the space does. Leaves `*new_row` one above the
+/// topmost row it filled.
+unsafe fn backfill_from_scrollback(
+    screen: *mut VTermScreen,
+    new_buffer: *mut ScreenCell,
+    new_row: &mut c_int,
+    new_cols: c_int,
+    old_cols: c_int,
+    active: bool,
+    statefields: *mut VTermStateFields,
+) {
+    let Some(callbacks) = (*screen).callbacks.as_ref() else {
+        return;
+    };
+    let Some(sb_popline) = callbacks.sb_popline else {
+        return;
+    };
+    while *new_row >= 0 {
+        if sb_popline(old_cols, (*screen).sb_buffer, (*screen).cbdata) == 0 {
+            break;
         }
-        (*screen).sb_buffer = vterm_allocator_malloc(
-            (*screen).vt,
-            ::core::mem::size_of::<VTermScreenCell>().wrapping_mul(new_cols as size_t),
-        ) as *mut VTermScreenCell;
+        let popped = core::slice::from_raw_parts((*screen).sb_buffer, old_cols as usize);
+        let row_start = new_buffer.offset((*new_row * new_cols) as isize);
+        let global_reverse = (*screen).global_reverse() != 0;
+        let pen = (*screen).pen;
+        import_row(popped, cells_mut(row_start, new_cols), global_reverse, &pen);
+        *new_row -= 1;
+        if active {
+            (*statefields).pos.row += 1;
+        }
+    }
+}
+
+/// A line with no double-width, double-height or continuation marks.
+fn blank_lineinfo() -> VTermLineInfo {
+    VTermLineInfo {
+        doublewidth_doubleheight_continuation: [0; 1],
+        c2rust_padding: [0; 3],
+    }
+}
+
+unsafe extern "C" fn resize(
+    new_rows: c_int,
+    new_cols: c_int,
+    fields: *mut VTermStateFields,
+    user: *mut c_void,
+) -> c_int {
+    let screen = user as *mut VTermScreen;
+    let altscreen = (*screen).buffers[BUFIDX_ALTSCREEN];
+    let altscreen_active = !altscreen.is_null() && (*screen).buffer == altscreen;
+    let old_rows = (*screen).rows;
+    let old_cols = (*screen).cols;
+
+    // The scrollback staging buffer has to hold a row of either width, so it
+    // is grown before the resize and shrunk after it.
+    if new_cols > old_cols {
+        realloc_sb_buffer(screen, new_cols);
     }
     resize_buffer(
         screen,
-        0 as ::core::ffi::c_int,
+        BUFIDX_PRIMARY,
         new_rows,
         new_cols,
-        altscreen_active == 0,
+        !altscreen_active,
         fields,
     );
-    if !(*screen).buffers[BUFIDX_ALTSCREEN as usize].is_null() {
+    if !altscreen.is_null() {
         resize_buffer(
             screen,
-            1 as ::core::ffi::c_int,
+            BUFIDX_ALTSCREEN,
             new_rows,
             new_cols,
-            altscreen_active != 0,
+            altscreen_active,
             fields,
         );
     } else if new_rows != old_rows {
+        // The altscreen itself is not allocated, but its line info still has
+        // to match the new height.
         vterm_allocator_free(
             (*screen).vt,
-            (*fields).lineinfos[BUFIDX_ALTSCREEN as usize] as *mut ::core::ffi::c_void,
+            (*fields).lineinfos[BUFIDX_ALTSCREEN] as *mut c_void,
         );
-        let mut new_lineinfo: *mut VTermLineInfo = vterm_allocator_malloc(
+        let lineinfo = vterm_allocator_malloc(
             (*screen).vt,
-            ::core::mem::size_of::<VTermLineInfo>().wrapping_mul(new_rows as size_t),
+            size_of::<VTermLineInfo>() * new_rows as size_t,
         ) as *mut VTermLineInfo;
-        let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while row < new_rows {
-            *new_lineinfo.offset(row as isize) = {
-                let mut init = VTermLineInfo {
-                    doublewidth_doubleheight_continuation: [0; 1],
-                    c2rust_padding: [0; 3],
-                };
-                init.set_doublewidth(0 as ::core::ffi::c_uint);
-                init.set_doubleheight(0);
-                init.set_continuation(0);
-                init
-            };
-            row += 1;
+        for row in 0..new_rows {
+            *lineinfo.offset(row as isize) = blank_lineinfo();
         }
-        (*fields).lineinfos[BUFIDX_ALTSCREEN as usize] = new_lineinfo;
+        (*fields).lineinfos[BUFIDX_ALTSCREEN] = lineinfo;
     }
-    (*screen).buffer = if altscreen_active != 0 {
-        (*screen).buffers[BUFIDX_ALTSCREEN as usize]
+
+    (*screen).buffer = if altscreen_active {
+        (*screen).buffers[BUFIDX_ALTSCREEN]
     } else {
-        (*screen).buffers[BUFIDX_PRIMARY as usize]
+        (*screen).buffers[BUFIDX_PRIMARY]
     };
     (*screen).rows = new_rows;
     (*screen).cols = new_cols;
     if new_cols <= old_cols {
-        if !(*screen).sb_buffer.is_null() {
-            vterm_allocator_free(
-                (*screen).vt,
-                (*screen).sb_buffer as *mut ::core::ffi::c_void,
-            );
-        }
-        (*screen).sb_buffer = vterm_allocator_malloc(
-            (*screen).vt,
-            ::core::mem::size_of::<VTermScreenCell>().wrapping_mul(new_cols as size_t),
-        ) as *mut VTermScreenCell;
+        realloc_sb_buffer(screen, new_cols);
     }
-    damagescreen(screen);
-    if !(*screen).callbacks.is_null() && (*(*screen).callbacks).resize.is_some() {
-        return Some(
-            (*(*screen).callbacks)
-                .resize
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(new_rows, new_cols, (*screen).cbdata);
-    }
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn theme(
-    mut dark: *mut bool,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    if !(*screen).callbacks.is_null() && (*(*screen).callbacks).theme.is_some() {
-        return Some(
-            (*(*screen).callbacks)
-                .theme
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")(dark, (*screen).cbdata);
-    }
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn setlineinfo(
-    mut row: ::core::ffi::c_int,
-    mut newinfo: *const VTermLineInfo,
-    mut oldinfo: *const VTermLineInfo,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    if (*newinfo).doublewidth() as ::core::ffi::c_int
-        != (*oldinfo).doublewidth() as ::core::ffi::c_int
-        || (*newinfo).doubleheight() as ::core::ffi::c_int
-            != (*oldinfo).doubleheight() as ::core::ffi::c_int
+
+    damage_screen(screen);
+    if let Some(callbacks) = (*screen).callbacks.as_ref()
+        && let Some(on_resize) = callbacks.resize
     {
-        let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while col < (*screen).cols {
-            let mut cell: *mut ScreenCell = getcell(screen, row, col);
-            (*cell)
-                .pen
-                .set_dwl((*newinfo).doublewidth() as ::core::ffi::c_uint);
-            (*cell)
-                .pen
-                .set_dhl((*newinfo).doubleheight() as ::core::ffi::c_uint);
-            col += 1;
-        }
-        let mut rect: VTermRect = VTermRect {
-            start_row: row,
-            end_row: row + 1 as ::core::ffi::c_int,
-            start_col: 0 as ::core::ffi::c_int,
-            end_col: if (*newinfo).doublewidth() as ::core::ffi::c_int != 0 {
-                (*screen).cols / 2 as ::core::ffi::c_int
-            } else {
-                (*screen).cols
-            },
-        };
-        damagerect(screen, rect);
-        if (*newinfo).doublewidth() != 0 {
-            rect.start_col = (*screen).cols / 2 as ::core::ffi::c_int;
-            rect.end_col = (*screen).cols;
-            erase_internal(rect, 0 as ::core::ffi::c_int, user);
-        }
+        return on_resize(new_rows, new_cols, (*screen).cbdata);
     }
-    return 1 as ::core::ffi::c_int;
+    1
 }
-unsafe extern "C" fn sb_clear(mut user: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
-    let mut screen: *mut VTermScreen = user as *mut VTermScreen;
-    if !(*screen).callbacks.is_null() && (*(*screen).callbacks).sb_clear.is_some() {
-        if Some(
-            (*(*screen).callbacks)
-                .sb_clear
-                .expect("non-null function pointer"),
-        )
-        .expect("non-null function pointer")((*screen).cbdata)
-            != 0
-        {
-            return 1 as ::core::ffi::c_int;
-        }
+
+/// Resizes the one-row staging buffer that carries cells to and from the
+/// host's scrollback.
+unsafe fn realloc_sb_buffer(screen: *mut VTermScreen, cols: c_int) {
+    if !(*screen).sb_buffer.is_null() {
+        vterm_allocator_free((*screen).vt, (*screen).sb_buffer as *mut c_void);
     }
-    return 0 as ::core::ffi::c_int;
+    (*screen).sb_buffer =
+        vterm_allocator_malloc((*screen).vt, size_of::<VTermScreenCell>() * cols as size_t)
+            as *mut VTermScreenCell;
 }
-static state_cbs: GlobalCell<VTermStateCallbacks> = GlobalCell::new(VTermStateCallbacks {
-    putglyph: Some(
-        putglyph
-            as unsafe extern "C" fn(
-                *mut VTermGlyphInfo,
-                VTermPos,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    movecursor: Some(
-        movecursor
-            as unsafe extern "C" fn(
-                VTermPos,
-                VTermPos,
-                ::core::ffi::c_int,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    scrollrect: Some(
-        scrollrect
-            as unsafe extern "C" fn(
-                VTermRect,
-                ::core::ffi::c_int,
-                ::core::ffi::c_int,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
+
+static STATE_CALLBACKS: GlobalCell<VTermStateCallbacks> = GlobalCell::new(VTermStateCallbacks {
+    putglyph: Some(putglyph),
+    movecursor: Some(movecursor),
+    scrollrect: Some(scrollrect),
     moverect: None,
-    erase: Some(
-        erase
-            as unsafe extern "C" fn(
-                VTermRect,
-                ::core::ffi::c_int,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
+    erase: Some(erase),
     initpen: None,
-    setpenattr: Some(
-        setpenattr
-            as unsafe extern "C" fn(
-                VTermAttr,
-                *mut VTermValue,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    settermprop: Some(
-        settermprop
-            as unsafe extern "C" fn(
-                VTermProp,
-                *mut VTermValue,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    bell: Some(bell as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int),
-    resize: Some(
-        resize
-            as unsafe extern "C" fn(
-                ::core::ffi::c_int,
-                ::core::ffi::c_int,
-                *mut VTermStateFields,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    theme: Some(
-        theme as unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    ),
-    setlineinfo: Some(
-        setlineinfo
-            as unsafe extern "C" fn(
-                ::core::ffi::c_int,
-                *const VTermLineInfo,
-                *const VTermLineInfo,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    sb_clear: Some(
-        sb_clear as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-    ),
+    setpenattr: Some(setpenattr),
+    settermprop: Some(settermprop),
+    bell: Some(bell),
+    resize: Some(resize),
+    theme: Some(theme),
+    setlineinfo: Some(setlineinfo),
+    sb_clear: Some(sb_clear),
 });
-unsafe extern "C" fn screen_new(mut vt: *mut VTerm) -> *mut VTermScreen {
-    let mut state: *mut VTermState = vterm_obtain_state(vt);
+
+// ------------------------------------------------------------ the interface
+
+unsafe fn screen_new(vt: *mut VTerm) -> *mut VTermScreen {
+    let state = vterm_obtain_state(vt);
     if state.is_null() {
-        return ::core::ptr::null_mut::<VTermScreen>();
+        return core::ptr::null_mut();
     }
-    let mut screen: *mut VTermScreen =
-        vterm_allocator_malloc(vt, ::core::mem::size_of::<VTermScreen>()) as *mut VTermScreen;
-    let mut rows: ::core::ffi::c_int = 0;
-    let mut cols: ::core::ffi::c_int = 0;
-    vterm_get_size(vt, &raw mut rows, &raw mut cols);
+    let screen = vterm_allocator_malloc(vt, size_of::<VTermScreen>()) as *mut VTermScreen;
+    let mut rows = 0;
+    let mut cols = 0;
+    vterm_get_size(vt, &mut rows, &mut cols);
     (*screen).vt = vt;
     (*screen).state = state;
     (*screen).damage_merge = VTERM_DAMAGE_CELL;
-    (*screen).damaged.start_row = -1 as ::core::ffi::c_int;
-    (*screen).pending_scrollrect.start_row = -1 as ::core::ffi::c_int;
+    (*screen).damaged.start_row = NO_RECT;
+    (*screen).pending_scrollrect.start_row = NO_RECT;
     (*screen).rows = rows;
     (*screen).cols = cols;
-    (*screen).set_global_reverse(false_0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
-    (*screen).set_reflow(false_0 as ::core::ffi::c_uint as ::core::ffi::c_uint);
-    (*screen).callbacks = ::core::ptr::null::<VTermScreenCallbacks>();
-    (*screen).cbdata = NULL;
-    (*screen).buffers[BUFIDX_PRIMARY as usize] = alloc_buffer(screen, rows, cols);
-    (*screen).buffer = (*screen).buffers[BUFIDX_PRIMARY as usize];
-    (*screen).sb_buffer = vterm_allocator_malloc(
-        (*screen).vt,
-        ::core::mem::size_of::<VTermScreenCell>().wrapping_mul(cols as size_t),
-    ) as *mut VTermScreenCell;
-    vterm_state_set_callbacks(
-        (*screen).state,
-        state_cbs.ptr(),
-        screen as *mut ::core::ffi::c_void,
-    );
-    return screen;
+    (*screen).set_global_reverse(0);
+    (*screen).set_reflow(0);
+    (*screen).callbacks = core::ptr::null();
+    (*screen).cbdata = core::ptr::null_mut();
+    (*screen).buffers[BUFIDX_PRIMARY] = alloc_buffer(screen, rows, cols);
+    (*screen).buffer = (*screen).buffers[BUFIDX_PRIMARY];
+    (*screen).sb_buffer = core::ptr::null_mut();
+    realloc_sb_buffer(screen, cols);
+    vterm_state_set_callbacks(state, STATE_CALLBACKS.ptr(), screen as *mut c_void);
+    screen
 }
-pub unsafe extern "C" fn vterm_screen_free(mut screen: *mut VTermScreen) {
+
+/// The terminal's screen, creating it on first use.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn vterm_obtain_screen(vt: *mut VTerm) -> *mut VTermScreen {
+    if (*vt).screen.is_null() {
+        (*vt).screen = screen_new(vt);
+    }
+    (*vt).screen
+}
+
+pub unsafe fn vterm_screen_free(screen: *mut VTermScreen) {
     vterm_allocator_free(
         (*screen).vt,
-        (*screen).buffers[BUFIDX_PRIMARY as usize] as *mut ::core::ffi::c_void,
+        (*screen).buffers[BUFIDX_PRIMARY] as *mut c_void,
     );
-    if !(*screen).buffers[BUFIDX_ALTSCREEN as usize].is_null() {
+    if !(*screen).buffers[BUFIDX_ALTSCREEN].is_null() {
         vterm_allocator_free(
             (*screen).vt,
-            (*screen).buffers[BUFIDX_ALTSCREEN as usize] as *mut ::core::ffi::c_void,
+            (*screen).buffers[BUFIDX_ALTSCREEN] as *mut c_void,
         );
     }
-    vterm_allocator_free(
-        (*screen).vt,
-        (*screen).sb_buffer as *mut ::core::ffi::c_void,
-    );
-    vterm_allocator_free((*screen).vt, screen as *mut ::core::ffi::c_void);
+    vterm_allocator_free((*screen).vt, (*screen).sb_buffer as *mut c_void);
+    vterm_allocator_free((*screen).vt, screen as *mut c_void);
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_screen_reset(
-    mut screen: *mut VTermScreen,
-    mut hard: ::core::ffi::c_int,
-) {
-    (*screen).damaged.start_row = -1 as ::core::ffi::c_int;
-    (*screen).pending_scrollrect.start_row = -1 as ::core::ffi::c_int;
+pub unsafe extern "C" fn vterm_screen_reset(screen: *mut VTermScreen, hard: c_int) {
+    (*screen).damaged.start_row = NO_RECT;
+    (*screen).pending_scrollrect.start_row = NO_RECT;
     vterm_state_reset((*screen).state, hard);
     vterm_screen_flush_damage(screen);
 }
+
+/// Copies the cell at `pos` into its reported form. Returns 0 for a position
+/// outside the screen.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_get_cell(
-    mut screen: *const VTermScreen,
-    mut pos: VTermPos,
-    mut cell: *mut VTermScreenCell,
-) -> ::core::ffi::c_int {
-    let mut intcell: *mut ScreenCell = getcell(screen, pos.row, pos.col);
+    screen: *const VTermScreen,
+    pos: VTermPos,
+    cell: *mut VTermScreenCell,
+) -> c_int {
+    let intcell = getcell(screen, pos.row, pos.col);
     if intcell.is_null() {
-        return 0 as ::core::ffi::c_int;
+        return 0;
     }
-    (*cell).schar = if (*intcell).schar == -1 as ::core::ffi::c_int as uint32_t {
-        0 as schar_T
+    // The gap behind a double-width glyph reports as empty.
+    (*cell).schar = if (*intcell).schar == SCHAR_CONTINUATION {
+        0
     } else {
         (*intcell).schar
     };
-    (*cell)
-        .attrs
-        .set_bold((*intcell).pen.bold() as ::core::ffi::c_uint);
-    (*cell)
-        .attrs
-        .set_underline((*intcell).pen.underline() as ::core::ffi::c_uint);
-    (*cell)
-        .attrs
-        .set_italic((*intcell).pen.italic() as ::core::ffi::c_uint);
-    (*cell)
-        .attrs
-        .set_blink((*intcell).pen.blink() as ::core::ffi::c_uint);
-    (*cell).attrs.set_reverse(
-        ((*intcell).pen.reverse() as ::core::ffi::c_int
-            ^ (*screen).global_reverse() as ::core::ffi::c_int) as ::core::ffi::c_uint
-            as ::core::ffi::c_uint,
-    );
-    (*cell)
-        .attrs
-        .set_conceal((*intcell).pen.conceal() as ::core::ffi::c_uint);
-    (*cell)
-        .attrs
-        .set_strike((*intcell).pen.strike() as ::core::ffi::c_uint);
-    (*cell)
-        .attrs
-        .set_font((*intcell).pen.font() as ::core::ffi::c_uint);
-    (*cell)
-        .attrs
-        .set_small((*intcell).pen.small() as ::core::ffi::c_uint);
-    (*cell)
-        .attrs
-        .set_baseline((*intcell).pen.baseline() as ::core::ffi::c_uint);
-    (*cell)
-        .attrs
-        .set_dim((*intcell).pen.dim() as ::core::ffi::c_uint);
-    (*cell)
-        .attrs
-        .set_overline((*intcell).pen.overline() as ::core::ffi::c_uint);
-    (*cell)
-        .attrs
-        .set_dwl((*intcell).pen.dwl() as ::core::ffi::c_uint);
-    (*cell)
-        .attrs
-        .set_dhl((*intcell).pen.dhl() as ::core::ffi::c_uint);
-    (*cell).fg = (*intcell).pen.fg;
-    (*cell).bg = (*intcell).pen.bg;
-    (*cell).uri = (*intcell).pen.uri;
-    if pos.col < (*screen).cols - 1 as ::core::ffi::c_int
-        && (*getcell(screen, pos.row, pos.col + 1 as ::core::ffi::c_int)).schar
-            == -1 as ::core::ffi::c_int as uint32_t
-    {
-        (*cell).width = 2 as ::core::ffi::c_char;
-    } else {
-        (*cell).width = 1 as ::core::ffi::c_char;
-    }
-    return 1 as ::core::ffi::c_int;
+    export_pen(&(*intcell).pen, (*screen).global_reverse() != 0, &mut *cell);
+    let followed_by_gap = pos.col < (*screen).cols - 1
+        && (*getcell(screen, pos.row, pos.col + 1)).schar == SCHAR_CONTINUATION;
+    (*cell).width = if followed_by_gap { 2 } else { 1 };
+    1
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_obtain_screen(mut vt: *mut VTerm) -> *mut VTermScreen {
-    if !(*vt).screen.is_null() {
-        return (*vt).screen;
-    }
-    let mut screen: *mut VTermScreen = screen_new(vt);
-    (*vt).screen = screen;
-    return screen;
+pub unsafe extern "C" fn vterm_screen_enable_reflow(screen: *mut VTermScreen, reflow: bool) {
+    (*screen).set_reflow(reflow as u32);
 }
+
+/// Allocates the alternate screen buffer, which the terminal starts without.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_screen_enable_reflow(
-    mut screen: *mut VTermScreen,
-    mut reflow: bool,
-) {
-    (*screen).set_reflow(reflow as ::core::ffi::c_uint as ::core::ffi::c_uint);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_screen_enable_altscreen(
-    mut screen: *mut VTermScreen,
-    mut altscreen: ::core::ffi::c_int,
-) {
-    if (*screen).buffers[BUFIDX_ALTSCREEN as usize].is_null() && altscreen != 0 {
-        let mut rows: ::core::ffi::c_int = 0;
-        let mut cols: ::core::ffi::c_int = 0;
-        vterm_get_size((*screen).vt, &raw mut rows, &raw mut cols);
-        (*screen).buffers[BUFIDX_ALTSCREEN as usize] = alloc_buffer(screen, rows, cols);
+pub unsafe extern "C" fn vterm_screen_enable_altscreen(screen: *mut VTermScreen, altscreen: c_int) {
+    if (*screen).buffers[BUFIDX_ALTSCREEN].is_null() && altscreen != 0 {
+        let mut rows = 0;
+        let mut cols = 0;
+        vterm_get_size((*screen).vt, &mut rows, &mut cols);
+        (*screen).buffers[BUFIDX_ALTSCREEN] = alloc_buffer(screen, rows, cols);
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_set_callbacks(
-    mut screen: *mut VTermScreen,
-    mut callbacks: *const VTermScreenCallbacks,
-    mut user: *mut ::core::ffi::c_void,
+    screen: *mut VTermScreen,
+    callbacks: *const VTermScreenCallbacks,
+    user: *mut c_void,
 ) {
     (*screen).callbacks = callbacks;
     (*screen).cbdata = user;
 }
-pub unsafe extern "C" fn vterm_screen_set_unrecognised_fallbacks(
-    mut screen: *mut VTermScreen,
-    mut fallbacks: *const VTermStateFallbacks,
-    mut user: *mut ::core::ffi::c_void,
+
+pub unsafe fn vterm_screen_set_unrecognised_fallbacks(
+    screen: *mut VTermScreen,
+    fallbacks: *const VTermStateFallbacks,
+    user: *mut c_void,
 ) {
     vterm_state_set_unrecognised_fallbacks((*screen).state, fallbacks, user);
 }
-pub unsafe extern "C" fn vterm_screen_flush_damage(mut screen: *mut VTermScreen) {
-    if (*screen).pending_scrollrect.start_row != -1 as ::core::ffi::c_int {
+
+/// Hands the host everything held back by the merge level.
+pub unsafe fn vterm_screen_flush_damage(screen: *mut VTermScreen) {
+    if (*screen).pending_scrollrect.start_row != NO_RECT {
         vterm_scroll_rect(
             (*screen).pending_scrollrect,
             (*screen).pending_scroll_downward,
             (*screen).pending_scroll_rightward,
-            Some(
-                moverect_user
-                    as unsafe extern "C" fn(
-                        VTermRect,
-                        VTermRect,
-                        *mut ::core::ffi::c_void,
-                    ) -> ::core::ffi::c_int,
-            ),
-            Some(
-                erase_user
-                    as unsafe extern "C" fn(
-                        VTermRect,
-                        ::core::ffi::c_int,
-                        *mut ::core::ffi::c_void,
-                    ) -> ::core::ffi::c_int,
-            ),
-            screen as *mut ::core::ffi::c_void,
+            Some(moverect_user),
+            Some(erase_user),
+            screen as *mut c_void,
         );
-        (*screen).pending_scrollrect.start_row = -1 as ::core::ffi::c_int;
+        (*screen).pending_scrollrect.start_row = NO_RECT;
     }
-    if (*screen).damaged.start_row != -1 as ::core::ffi::c_int {
-        if !(*screen).callbacks.is_null() && (*(*screen).callbacks).damage.is_some() {
-            Some(
-                (*(*screen).callbacks)
-                    .damage
-                    .expect("non-null function pointer"),
-            )
-            .expect("non-null function pointer")((*screen).damaged, (*screen).cbdata);
+    if (*screen).damaged.start_row != NO_RECT {
+        if let Some(callbacks) = (*screen).callbacks.as_ref()
+            && let Some(damage) = callbacks.damage
+        {
+            damage((*screen).damaged, (*screen).cbdata);
         }
-        (*screen).damaged.start_row = -1 as ::core::ffi::c_int;
+        (*screen).damaged.start_row = NO_RECT;
     }
 }
-pub unsafe extern "C" fn vterm_screen_set_damage_merge(
-    mut screen: *mut VTermScreen,
-    mut size: VTermDamageSize,
-) {
+
+pub unsafe fn vterm_screen_set_damage_merge(screen: *mut VTermScreen, size: VTermDamageSize) {
     vterm_screen_flush_damage(screen);
     (*screen).damage_merge = size;
 }
+
+/// [`convert_color_to_rgb`] against a screen rather than a state.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_convert_color_to_rgb(
-    mut screen: *const VTermScreen,
-    mut col: *mut VTermColor,
+    screen: *const VTermScreen,
+    col: *mut VTermColor,
 ) {
     convert_color_to_rgb(&*(*screen).state, &mut *col);
 }
-pub unsafe extern "C" fn rect_expand(mut dst: *mut VTermRect, mut src: *mut VTermRect) {
-    if (*dst).start_row > (*src).start_row {
-        (*dst).start_row = (*src).start_row;
-    }
-    if (*dst).start_col > (*src).start_col {
-        (*dst).start_col = (*src).start_col;
-    }
-    if (*dst).end_row < (*src).end_row {
-        (*dst).end_row = (*src).end_row;
-    }
-    if (*dst).end_col < (*src).end_col {
-        (*dst).end_col = (*src).end_col;
-    }
-}
-pub unsafe extern "C" fn rect_clip(mut dst: *mut VTermRect, mut bounds: *mut VTermRect) {
-    if (*dst).start_row < (*bounds).start_row {
-        (*dst).start_row = (*bounds).start_row;
-    }
-    if (*dst).start_col < (*bounds).start_col {
-        (*dst).start_col = (*bounds).start_col;
-    }
-    if (*dst).end_row > (*bounds).end_row {
-        (*dst).end_row = (*bounds).end_row;
-    }
-    if (*dst).end_col > (*bounds).end_col {
-        (*dst).end_col = (*bounds).end_col;
-    }
-    if (*dst).end_row < (*dst).start_row {
-        (*dst).end_row = (*dst).start_row;
-    }
-    if (*dst).end_col < (*dst).start_col {
-        (*dst).end_col = (*dst).start_col;
-    }
-}
-pub unsafe extern "C" fn rect_equal(
-    mut a: *mut VTermRect,
-    mut b: *mut VTermRect,
-) -> ::core::ffi::c_int {
-    return ((*a).start_row == (*b).start_row
-        && (*a).start_col == (*b).start_col
-        && (*a).end_row == (*b).end_row
-        && (*a).end_col == (*b).end_col) as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn rect_contains(
-    mut big: *mut VTermRect,
-    mut small: *mut VTermRect,
-) -> ::core::ffi::c_int {
-    if (*small).start_row < (*big).start_row {
-        return 0 as ::core::ffi::c_int;
-    }
-    if (*small).start_col < (*big).start_col {
-        return 0 as ::core::ffi::c_int;
-    }
-    if (*small).end_row > (*big).end_row {
-        return 0 as ::core::ffi::c_int;
-    }
-    if (*small).end_col > (*big).end_col {
-        return 0 as ::core::ffi::c_int;
-    }
-    return 1 as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn rect_intersects(
-    mut a: *mut VTermRect,
-    mut b: *mut VTermRect,
-) -> ::core::ffi::c_int {
-    if (*a).start_row > (*b).end_row || (*b).start_row > (*a).end_row {
-        return 0 as ::core::ffi::c_int;
-    }
-    if (*a).start_col > (*b).end_col || (*b).start_col > (*a).end_col {
-        return 0 as ::core::ffi::c_int;
-    }
-    return 1 as ::core::ffi::c_int;
-}
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
