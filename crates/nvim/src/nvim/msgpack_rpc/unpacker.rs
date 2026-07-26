@@ -75,7 +75,7 @@ mod field_type {
     pub const STRING_ARRAY: c_int = super::kUnpackTypeStringArray;
 }
 
-/// libmpack's parse results.
+/// libmpack's parse results: ok, ran out of input, malformed, too deep.
 pub const MPACK_OK: c_uint = 0;
 pub const MPACK_EOF: c_uint = 1;
 pub const MPACK_ERROR: c_uint = 2;
@@ -604,7 +604,10 @@ unsafe fn parse_redraw(p: *mut Unpacker, cursor: &mut Cursor) -> Result<bool, Ha
     if stage == protocol::REDRAW_ARGS {
         return Ok(true);
     }
-    if !(protocol::REDRAW_EVENTS..=protocol::GRID_LINE_WRAP).contains(&stage) {
+    // `REDRAW_ARGS_DONE` belongs to the tree parser, not to this one, and its
+    // caller filters it out; anything else means the machine lost track.
+    let known = protocol::REDRAW_EVENTS..=protocol::GRID_LINE_WRAP;
+    if stage == protocol::REDRAW_ARGS_DONE || !known.contains(&stage) {
         abort();
     }
 
