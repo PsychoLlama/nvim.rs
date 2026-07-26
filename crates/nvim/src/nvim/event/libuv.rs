@@ -1,8 +1,12 @@
-//! Shared libuv `extern "C"` declarations (phase 5b).
+//! Shared libuv `extern "C"` declarations.
 //!
-//! One declaration per symbol, `use`d by every consumer, instead of
-//! the per-module copies c2rust emitted. Everything here resolves
-//! against the static libuv at link time.
+//! One declaration per symbol, `use`d by every consumer, instead of the
+//! per-module copies c2rust emitted. Everything here resolves against the
+//! static libuv at link time.
+//!
+//! This is the permanent boundary. Rust above it, C below it; nothing here
+//! grows a wrapper, and anything that wants a safe signature builds it in the
+//! module that owns the state, not here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -187,7 +191,6 @@ unsafe extern "C" {
         offset: int64_t,
         cb: uv_fs_cb,
     ) -> ::core::ffi::c_int;
-    pub fn uv_get_total_memory() -> uint64_t;
     pub fn uv_guess_handle(file: uv_file) -> uv_handle_type;
     pub fn uv_clock_gettime(clock_id: uv_clock_id, ts: *mut uv_timespec64_t) -> ::core::ffi::c_int;
     pub fn uv_hrtime() -> uint64_t;

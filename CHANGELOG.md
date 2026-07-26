@@ -22,6 +22,11 @@ and this project adheres to [CalVer](https://calver.org/).
   the built-in terminal descriptions are data modules pinned by a checksum
   against the C original, and the parameterised-string interpreter renders its
   own conversions instead of assembling `printf` formats at runtime.
+- The event loop and job control (`src/nvim/event`, `src/nvim/os/pty_proc_unix`)
+  were rewritten over their libuv boundary: the queues, streams, watchers,
+  sockets and child processes are safe Rust above a single set of foreign
+  declarations, and the loop's intrusive lists and hand-rolled vectors are now
+  owned Rust collections.
 
 ## [2026.07.26-d0c5cf2147]
 
