@@ -138,6 +138,7 @@ unsafe extern "C" {
     pub fn getc(__stream: *mut FILE) -> ::core::ffi::c_int;
     pub fn getgid() -> __gid_t;
     pub fn getpid() -> __pid_t;
+    #[cfg(not(miri))]
     pub fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char;
     pub fn getuid() -> __uid_t;
     pub fn getxattr(
@@ -519,6 +520,13 @@ pub unsafe extern "C" fn snprintf(
         }
     }
     bytes.len() as ::core::ffi::c_int
+}
+
+/// Untranslated, which is what libc's `gettext` answers for a message with
+/// no catalogue entry — and the test lane runs with no catalogue.
+#[cfg(miri)]
+pub extern "C" fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+    __msgid as *mut ::core::ffi::c_char
 }
 
 #[cfg(miri)]

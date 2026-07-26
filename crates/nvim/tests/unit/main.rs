@@ -8,6 +8,7 @@ mod support;
 mod charset;
 mod cmdhist;
 mod digraph;
+mod expressions;
 mod garray;
 mod hashtab;
 mod keycodes;

@@ -52,7 +52,7 @@ pub use crate::src::nvim::types::{
     uint64_t, uvarnumber_T, varnumber_T, vimconv_T,
 };
 use crate::src::nvim::viml::parser::parser::{
-    viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,
+    highlight_vec, viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const STR2NR_QUOTE: C2Rust_Unnamed = 16;

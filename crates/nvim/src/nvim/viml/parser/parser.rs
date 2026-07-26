@@ -99,6 +99,10 @@ fn stack_vec(stack: &mut ParserState_stack) -> InitVec<'_, ParserStateItem> {
     )
 }
 
+/// The caller's highlight log. Everything that reads or rewrites a recorded
+/// chunk must come through here rather than through `colors.items`: while the
+/// collection is inline that pointer carries whatever provenance the last
+/// `viml_parser_highlight` left behind, and the view re-derives it.
 pub fn highlight_vec(colors: &mut ParserHighlight) -> InitVec<'_, ParserHighlightChunk> {
     InitVec::new(
         &mut colors.size,

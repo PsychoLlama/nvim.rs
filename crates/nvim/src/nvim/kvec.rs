@@ -90,6 +90,13 @@ impl<'a, T: Copy> InitVec<'a, T> {
         unsafe { slice::from_raw_parts(self.base(), *self.size) }
     }
 
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        if *self.size == 0 {
+            return &mut [];
+        }
+        unsafe { slice::from_raw_parts_mut(self.base(), *self.size) }
+    }
+
     /// The last element. Panics where `kv_last` on an empty vector read one
     /// slot before the buffer.
     pub fn last(&self) -> T {

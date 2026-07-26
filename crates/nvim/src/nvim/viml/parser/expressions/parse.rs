@@ -1122,10 +1122,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         );
                                         (*node_).type_0 = kExprNodeLambda;
                                         if !(*pstate).colors.is_null() {
-                                            (*(*(*pstate).colors).items.offset(
-                                                (*node_).data.fig.opening_hl_idx as isize,
-                                            ))
-                                            .group = if is_invalid {
+                                            highlight_vec(&mut *(*pstate).colors).as_mut_slice()
+                                                [(*node_).data.fig.opening_hl_idx]
+                                                .group = if is_invalid {
                                                 b"NvimInvalidLambda\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
@@ -1322,16 +1321,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             (*node__0).type_0 =
                                                                 kExprNodeDictLiteral;
                                                             if !(*pstate).colors.is_null() {
-                                                                (*(*(*pstate).colors)
-                                                                    .items
-                                                                    .offset(
-                                                                        (*node__0)
-                                                                            .data
-                                                                            .fig
-                                                                            .opening_hl_idx
-                                                                            as isize,
-                                                                    ))
-                                                                .group = if is_invalid {
+                                                                highlight_vec(
+                                                                    &mut *(*pstate).colors,
+                                                                )
+                                                                .as_mut_slice()[(*node__0)
+                                                                    .data
+                                                                    .fig
+                                                                    .opening_hl_idx]
+                                                                    .group = if is_invalid {
                                                                     b"NvimInvalidDict\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimDict\0".as_ptr() as *const ::core::ffi::c_char
@@ -1909,16 +1906,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             (*node__1).type_0 =
                                                                 kExprNodeDictLiteral;
                                                             if !(*pstate).colors.is_null() {
-                                                                (*(*(*pstate).colors)
-                                                                    .items
-                                                                    .offset(
-                                                                        (*node__1)
-                                                                            .data
-                                                                            .fig
-                                                                            .opening_hl_idx
-                                                                            as isize,
-                                                                    ))
-                                                                .group = if is_invalid {
+                                                                highlight_vec(
+                                                                    &mut *(*pstate).colors,
+                                                                )
+                                                                .as_mut_slice()[(*node__1)
+                                                                    .data
+                                                                    .fig
+                                                                    .opening_hl_idx]
+                                                                    .group = if is_invalid {
                                                                     b"NvimInvalidDict\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimDict\0".as_ptr() as *const ::core::ffi::c_char
@@ -1946,16 +1941,14 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                             (*node__2).type_0 =
                                                                 kExprNodeCurlyBracesIdentifier;
                                                             if !(*pstate).colors.is_null() {
-                                                                (*(*(*pstate).colors)
-                                                                    .items
-                                                                    .offset(
-                                                                        (*node__2)
-                                                                            .data
-                                                                            .fig
-                                                                            .opening_hl_idx
-                                                                            as isize,
-                                                                    ))
-                                                                .group = if is_invalid {
+                                                                highlight_vec(
+                                                                    &mut *(*pstate).colors,
+                                                                )
+                                                                .as_mut_slice()[(*node__2)
+                                                                    .data
+                                                                    .fig
+                                                                    .opening_hl_idx]
+                                                                    .group = if is_invalid {
                                                                     b"NvimInvalidCurly\0".as_ptr() as *const ::core::ffi::c_char
                                                                 } else {
                                                                     b"NvimCurly\0".as_ptr() as *const ::core::ffi::c_char
@@ -1983,16 +1976,15 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                                                 (*new_top_node_0).start,
                                                             );
                                                             if !(*pstate).colors.is_null() {
-                                                                (*(*(*pstate).colors)
-                                                                    .items
-                                                                    .offset(
-                                                                        (*new_top_node_0)
-                                                                            .data
-                                                                            .fig
-                                                                            .opening_hl_idx
-                                                                            as isize,
-                                                                    ))
-                                                                .group = if is_invalid {
+                                                                highlight_vec(
+                                                                    &mut *(*pstate).colors,
+                                                                )
+                                                                .as_mut_slice()
+                                                                    [(*new_top_node_0)
+                                                                        .data
+                                                                        .fig
+                                                                        .opening_hl_idx]
+                                                                    .group = if is_invalid {
                                                                     b"NvimInvalidFigureBrace\0".as_ptr()
                                                                         as *const ::core::ffi::c_char
                                                                 } else {
@@ -2337,10 +2329,9 @@ pub unsafe extern "C" fn viml_pexpr_parse(
                                         );
                                         (*node__3).type_0 = kExprNodeLambda;
                                         if !(*pstate).colors.is_null() {
-                                            (*(*(*pstate).colors).items.offset(
-                                                (*node__3).data.fig.opening_hl_idx as isize,
-                                            ))
-                                            .group = if is_invalid {
+                                            highlight_vec(&mut *(*pstate).colors).as_mut_slice()
+                                                [(*node__3).data.fig.opening_hl_idx]
+                                                .group = if is_invalid {
                                                 b"NvimInvalidLambda\0".as_ptr()
                                                     as *const ::core::ffi::c_char
                                             } else {
