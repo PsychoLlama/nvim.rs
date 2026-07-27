@@ -430,6 +430,17 @@ pub unsafe extern "C" fn itr_eq(mut itr1: *mut MarkTreeIter, mut itr2: *mut Mark
         == (&raw mut (*(*itr2).x).key as *mut MTKey).offset((*itr2).i as isize);
 }
 
+/// Position the iterator to enumerate the ranges overlapping (row, col).
+///
+/// Follow it with [`marktree_itr_step_overlap`] until that returns false.
+///
+/// To get everything overlapping a *region* rather than a point: run this loop
+/// for the region's start, then keep calling [`marktree_itr_next`] until the
+/// iterator passes the region's end, taking the start halves (and unpaired
+/// marks) and skipping the end halves.
+///
+/// Answers false when no mark can possibly be found. True is not a promise:
+/// the first `step_overlap` may still answer false.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn marktree_itr_get_overlap(
     mut b: *mut MarkTree,
@@ -460,6 +471,19 @@ pub unsafe extern "C" fn marktree_itr_get_overlap(
     return true;
 }
 
+/// Yield one more range overlapping the position
+/// [`marktree_itr_get_overlap`] was given.
+///
+/// Two phases. First, walk from the root towards the node holding the sought
+/// position, and at each node on the way hand back every id in its intersection
+/// set — those are exactly the ranges covering the whole of that subtree, so
+/// they cover the position without being stored anywhere near it. Second, once
+/// the leaf is reached, scan it for the ends of ranges that started before the
+/// position, which the sets do not record because such a range does not cover
+/// its own leaf entirely.
+///
+/// Answers false once every overlapping pair has been handed back, at which
+/// point the iterator is an ordinary one positioned at (row, col).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn marktree_itr_step_overlap(
     mut b: *mut MarkTree,

@@ -162,6 +162,13 @@ pub unsafe extern "C" fn marktree_check_node(
     return n_keys;
 }
 
+/// Rebuild every intersection set from the pairs themselves and check it
+/// against what was there.
+///
+/// Three steps: move each node's set aside and empty it; walk every mark and,
+/// for each start of a pair, intersect the nodes between the two halves as if
+/// the pair had just been inserted; then compare each node's rebuilt set
+/// against the one that was moved aside.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn marktree_check_intersections(mut b: *mut MarkTree) -> bool {
     if (*b).root.is_null() {

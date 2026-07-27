@@ -1,3 +1,34 @@
+//! The extmark store: a wide B-tree keyed by (row, col).
+//!
+//! Marks go in with [`marktree_put`]; a text change is applied to all of them
+//! at once with [`marktree_splice`](splice::marktree_splice); everything else —
+//! reading, deleting — goes through `MarkTreeIter`. Position an iterator with
+//! [`marktree_itr_get`](iter::marktree_itr_get), or find a mark by its id with
+//! [`marktree_lookup`], then read with
+//! [`marktree_itr_current`](iter::marktree_itr_current) and step with
+//! [`marktree_itr_next`](iter::marktree_itr_next). [`marktree_del_itr`] deletes
+//! the mark under the iterator and leaves it on the next one.
+//!
+//! Three design decisions account for most of the code:
+//!
+//! * **Positions are relative.** A key's position is stored relative to the key
+//!   before it in the same node, and a node's to its parent's. So a change
+//!   affecting a whole subtree can be applied to one node instead of to every
+//!   mark in it, which is what makes a splice near the top of a large buffer
+//!   cheap. Everything that moves a key between nodes has to rebase it.
+//! * **Ranges are two keys.** A `(ns, id)` pair with `MT_FLAG_END` set on the
+//!   second. They are ordered like any other key, and the tree keeps them
+//!   consistent across splices that would otherwise reverse them.
+//! * **Covering ranges are recorded on nodes, not smeared over keys.** A node
+//!   carries the ids of the ranges that cover the whole of it; see
+//!   [`intersect`]. That is what makes "which ranges cover this position" a
+//!   walk down the tree.
+//!
+//! Derived from kbtree in klib, and from the marker tree of the Atom editor.
+//! The layouts of `MarkTree`, `MarkTreeIter`, `MTNode`, `MTKey` and `MTPos` are
+//! pinned by `test/unit/marktree_spec.lua`, which builds them with LuaJIT's FFI
+//! and reads their fields directly.
+
 pub mod check;
 pub mod inspect;
 pub mod intersect;
@@ -31,21 +62,10 @@ pub use crate::src::nvim::types::{
     int16_t, int32_t, mtnode_inner_s, mtnode_s, ptr_t, schar_T, size_t, ssize_t, uint8_t, uint16_t,
     uint32_t, uint64_t, virt_line,
 };
+/// What a splice recorded about pairs whose halves crossed while it ran.
 pub type MTDamageMap = Map_uint64_t_MTDamagePair;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_3 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut MTKey,
-}
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: C2Rust_Unnamed_3 = C2Rust_Unnamed_3 {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<MTKey>(),
-};
 static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
@@ -192,6 +212,15 @@ pub unsafe extern "C" fn marktree_put(
         );
     }
 }
+/// Record (or, with `delete`, unrecord) that the range `id` covers the nodes
+/// between its two halves.
+///
+/// Walks up from the start half and down to the end half, marking every node
+/// that the range covers *entirely*: a node whose parent the range also covers
+/// is left alone, because the parent's record already implies it. That is what
+/// keeps a range spanning a million lines out of a million nodes' sets.
+///
+/// `itr` is mutated; `end_itr` is not.
 pub unsafe extern "C" fn marktree_intersect_pair(
     mut b: *mut MarkTree,
     mut id: uint64_t,
@@ -273,6 +302,12 @@ pub unsafe extern "C" fn marktree_intersect_pair(
         );
     }
 }
+/// Insert one already-built key, splitting a full node on the way down.
+///
+/// The first root is allocated at the internal node's size even though it
+/// starts at level zero, so the tail it never uses is wasted for a tree that
+/// stays under one node. Upstream does the same; nothing depends on it beyond
+/// `marktree_free_node` not caring which size a node was.
 pub unsafe extern "C" fn marktree_put_key(mut b: *mut MarkTree, mut k: MTKey) {
     k.flags = (k.flags as ::core::ffi::c_int | MT_FLAG_REAL) as uint16_t;
     if (*b).root.is_null() {
@@ -296,6 +331,28 @@ pub unsafe extern "C" fn marktree_put_key(mut b: *mut MarkTree, mut k: MTKey) {
     meta_add(&mut (*b).meta_root, &meta_inc);
     (*b).n_keys = (*b).n_keys.wrapping_add(1);
 }
+/// Delete the mark the iterator names, and answer the id of the other half of
+/// its pair (zero for an unpaired mark).
+///
+/// The protocol, which is why this is as long as it is:
+///
+/// 1. The caller hands us a valid iterator.
+/// 2. If it names a key in an internal node, step one place left or right to
+///    reach a leaf key — the *auxiliary* key.
+/// 3. Delete that leaf key. The leaf may now be undersized.
+/// 4. If step 2 happened, write the auxiliary key over the one the caller
+///    actually wanted gone, rebasing its position.
+/// 5. Repair upward from the leaf: if the node is big enough, stop; else steal
+///    from the left sibling, else from the right; else merge with a sibling,
+///    which may leave the parent undersized, so repeat for the parent.
+/// 6. If step 5 reached the root and left it with no keys, drop it and promote
+///    its only child.
+///
+/// The iterator stays valid and points at the key *after* the deleted one.
+///
+/// `rev` says the caller intends to keep iterating backwards and deleting keys
+/// before this one. Iterating forward is the recommended strategy and passes
+/// false.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn marktree_del_itr(
     mut b: *mut MarkTree,
@@ -765,6 +822,8 @@ pub unsafe extern "C" fn marktree_move(
     }
     (*itr).x = ::core::ptr::null_mut::<MTNode>();
 }
+/// Re-record the intersections for the pair `key` belongs to, after one of its
+/// halves has been re-inserted.
 pub unsafe extern "C" fn marktree_restore_pair(mut b: *mut MarkTree, mut key: MTKey) {
     let mut itr: [MarkTreeIter; 1] = [MarkTreeIter {
         pos: MTPos { row: 0, col: 0 },
