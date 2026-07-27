@@ -53,6 +53,7 @@ use crate::src::nvim::r#move::{set_empty_rows, validate_virtcol, win_col_off, wi
 use crate::src::nvim::option::get_showbreak_value;
 use crate::src::nvim::os::libc::{__assert_fail, abs, memcpy, memmove, memset, snprintf, strlen};
 use crate::src::nvim::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
+use crate::src::nvim::pos::ltoreq;
 use crate::src::nvim::spell::{
     check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end,
 };
@@ -597,24 +598,6 @@ pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn vim_isbreak(mut c: ::core::ffi::c_int) -> bool {
     return (*breakat_flags.ptr())[c as uint8_t as usize] != 0;
-}
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
-#[inline(always)]
-unsafe extern "C" fn ltoreq(mut a: pos_T, mut b: pos_T) -> bool {
-    return lt(a, b) as ::core::ffi::c_int != 0 || equalpos(a, b) as ::core::ffi::c_int != 0;
 }
 pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;

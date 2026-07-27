@@ -1,18 +1,3 @@
-/// `pos.h`'s ordering on a buffer position.
-pub(super) fn lt(a: pos_T, b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        a.lnum < b.lnum
-    } else if a.col != b.col {
-        a.col < b.col
-    } else {
-        a.coladd < b.coladd
-    }
-}
-
-pub(super) fn equalpos(a: pos_T, b: pos_T) -> bool {
-    a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd
-}
-
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::buffer::{bt_prompt, buflist_findnr, buflist_nr2name};
 use crate::src::nvim::charset::{ptr2cells, skipwhite};
@@ -28,6 +13,7 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::os::libc::{gettext, snprintf};
 use crate::src::nvim::os::time::os_time;
+use crate::src::nvim::pos::lt;
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;

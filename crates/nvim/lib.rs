@@ -185,6 +185,7 @@ pub mod src {
         pub mod path;
         pub mod plines;
         pub mod popupmenu;
+        pub mod pos;
         pub mod profile;
         pub mod quickfix;
         pub mod regexp;

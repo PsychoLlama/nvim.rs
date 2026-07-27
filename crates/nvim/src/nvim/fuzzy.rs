@@ -7,6 +7,7 @@ use crate::src::nvim::eval::typval::{
     tv_list_append_tv, tv_list_find,
 };
 use crate::src::nvim::eval_1::callback_call;
+use crate::src::nvim::pos::equalpos;
 
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::insexpand::{
@@ -155,10 +156,6 @@ pub struct fuzzyItem_T {
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline]

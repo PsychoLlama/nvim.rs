@@ -17,6 +17,7 @@ use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::option::{copy_option_part, skip_to_option_part};
 use crate::src::nvim::os::libc::{__assert_fail, atoi, strcpy, strlen, strncmp, tolower};
 use crate::src::nvim::plines::getvcol;
+use crate::src::nvim::pos::lt;
 use crate::src::nvim::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
@@ -155,16 +156,6 @@ pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
 pub const COM_LEFT: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
 pub const COM_RIGHT: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
 pub const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
-    };
-}
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 34] = unsafe {
     ::core::mem::transmute::<[u8; 34], [::core::ffi::c_char; 34]>(
         *b"_Bool in_cinkeys(int, int, _Bool)\0",

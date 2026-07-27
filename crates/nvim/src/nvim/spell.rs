@@ -50,6 +50,7 @@ use crate::src::nvim::os::libc::{
     strlen, strncmp, strstr,
 };
 use crate::src::nvim::path::{path_fnamecmp, path_full_compare, path_tail};
+use crate::src::nvim::pos::clearpos;
 use crate::src::nvim::runtime::do_in_runtimepath;
 use crate::src::nvim::search::do_search;
 use crate::src::nvim::spellfile::spell_load_file;
@@ -1518,12 +1519,6 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
-    (*a).lnum = 0 as ::core::ffi::c_int as linenr_T;
-    (*a).col = 0 as ::core::ffi::c_int as colnr_T;
-    (*a).coladd = 0 as ::core::ffi::c_int as colnr_T;
-}
 #[inline(always)]
 unsafe extern "C" fn decor_redraw_col(
     mut wp: *mut win_T,
@@ -3386,7 +3381,7 @@ pub unsafe extern "C" fn spell_move_to(
     let mut wrapped: bool = false_0 != 0;
     let mut ret: size_t = 0 as size_t;
     let mut lnum: linenr_T = (*wp).w_cursor.lnum;
-    clearpos(&raw mut found_pos);
+    clearpos(&mut found_pos);
     let mut saved_decor_start: DecorState = decor_state.get();
     let mut decor_lnum: linenr_T = -1 as linenr_T;
     decor_state.set(DecorState {

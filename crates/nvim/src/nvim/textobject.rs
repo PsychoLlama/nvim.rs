@@ -19,6 +19,7 @@ use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::r#move::adjust_skipcol;
 use crate::src::nvim::normal::unadjust_for_sel;
 use crate::src::nvim::os::libc::snprintf;
+use crate::src::nvim::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::src::nvim::search::{findmatch, findmatchlimit, linewhite};
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
@@ -131,30 +132,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
-#[inline(always)]
-unsafe extern "C" fn ltoreq(mut a: pos_T, mut b: pos_T) -> bool {
-    return lt(a, b) as ::core::ffi::c_int != 0 || equalpos(a, b) as ::core::ffi::c_int != 0;
-}
-#[inline(always)]
-unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
-    (*a).lnum = 0 as ::core::ffi::c_int as linenr_T;
-    (*a).col = 0 as ::core::ffi::c_int as colnr_T;
-    (*a).coladd = 0 as ::core::ffi::c_int as colnr_T;
-}
 pub const CPO_ENDOFSENT: ::core::ffi::c_int = 'J' as ::core::ffi::c_int;
 pub const CPO_MATCHBSL: ::core::ffi::c_int = 'M' as ::core::ffi::c_int;
 pub unsafe extern "C" fn findsent(
@@ -772,7 +749,7 @@ pub unsafe extern "C" fn current_word(
     let mut inclusive: bool = true_0 != 0;
     let mut include_white: bool = false_0 != 0;
     cls_bigword.set(bigword);
-    clearpos(&raw mut start_pos);
+    clearpos(&mut start_pos);
     if VIsual_active.get() as ::core::ffi::c_int != 0
         && *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
         && lt(VIsual.get(), (*curwin.get()).w_cursor) as ::core::ffi::c_int != 0

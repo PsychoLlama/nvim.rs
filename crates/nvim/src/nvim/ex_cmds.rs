@@ -115,6 +115,7 @@ use crate::src::nvim::os::shell::call_shell;
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::path::{fix_fname, invocation_path_tail};
 use crate::src::nvim::plines::{getvcol, linetabsize_col, plines_m_win_fill};
+use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};
 use crate::src::nvim::regexp::{regtilde, skip_regexp, skip_regexp_err, skip_regexp_ex};
 use crate::src::nvim::search::{get_search_pat, last_search_pat, save_re_pat, search_regcomp};
@@ -1937,10 +1938,6 @@ pub const KEYMAP_INIT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EXFLAG_LIST: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;

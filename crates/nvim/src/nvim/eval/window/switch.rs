@@ -1,4 +1,5 @@
 use super::*;
+use crate::src::nvim::pos::equalpos;
 
 /// Switch to a window for executing user code.
 /// Caller must call win_execute_after() later regardless of return value.
@@ -160,9 +161,4 @@ pub unsafe extern "C" fn restore_win_noblock(switchwin: *mut switchwin_T, no_dis
         curwin.set((*switchwin).sw_curwin);
         curbuf.set((*curwin.get()).w_buffer);
     }
-}
-#[inline(always)]
-/// Do two positions name the same place, including the virtual column?
-fn equalpos(a: pos_T, b: pos_T) -> bool {
-    a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd
 }

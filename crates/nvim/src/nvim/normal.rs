@@ -112,6 +112,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::plines::{
     getvcol, getvcols, getvvcol, linetabsize, plines_m_win_fill, plines_win, win_get_fill,
 };
+use crate::src::nvim::pos::{clearpos, equalpos, lt};
 use crate::src::nvim::profile::{time_finish, time_msg};
 use crate::src::nvim::quickfix::qf_view_result;
 use crate::src::nvim::register::{
@@ -1593,26 +1594,6 @@ pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
-#[inline(always)]
-unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
-    (*a).lnum = 0 as ::core::ffi::c_int as linenr_T;
-    (*a).col = 0 as ::core::ffi::c_int as colnr_T;
-    (*a).coladd = 0 as ::core::ffi::c_int as colnr_T;
-}
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = 9;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
@@ -5163,7 +5144,7 @@ pub unsafe extern "C" fn find_decl(
         }
     }
     (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-    clearpos(&raw mut found_pos);
+    clearpos(&mut found_pos);
     loop {
         t = searchit(
             curwin.get(),
@@ -5230,7 +5211,7 @@ pub unsafe extern "C" fn find_decl(
                     break;
                 } else {
                     if !valid {
-                        clearpos(&raw mut found_pos);
+                        clearpos(&mut found_pos);
                     } else {
                         found_pos = (*curwin.get()).w_cursor;
                     }

@@ -18,6 +18,7 @@ use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::option::{copy_option_part, was_set_insecurely};
 use crate::src::nvim::os::libc::{strcmp, strncmp};
 use crate::src::nvim::plines::{init_charsize_arg, win_charsize};
+use crate::src::nvim::pos::lt;
 use crate::src::nvim::search::{findmatch, linewhite};
 use crate::src::nvim::strings::vim_strchr;
 

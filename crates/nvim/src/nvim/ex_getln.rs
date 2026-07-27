@@ -108,6 +108,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::path::vim_ispathsep;
 use crate::src::nvim::popupmenu::{pum_check_clear, pum_undisplay};
+use crate::src::nvim::pos::{clearpos, equalpos, lt};
 use crate::src::nvim::profile::profile_setlimit;
 use crate::src::nvim::regexp::skip_regexp_ex;
 use crate::src::nvim::register::{
@@ -2087,26 +2088,6 @@ unsafe extern "C" fn set_put_ptr_t(
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
-#[inline(always)]
-unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
-    (*a).lnum = 0 as ::core::ffi::c_int as linenr_T;
-    (*a).col = 0 as ::core::ffi::c_int as colnr_T;
-    (*a).coladd = 0 as ::core::ffi::c_int as colnr_T;
-}
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
@@ -2256,7 +2237,7 @@ unsafe extern "C" fn init_incsearch_state(mut s: *mut incsearch_state_T) {
     (*s).did_incsearch = false_0 != 0;
     (*s).incsearch_postponed = false_0 != 0;
     (*s).magic_overruled_save = magic_overruled.get();
-    clearpos(&raw mut (*s).match_end);
+    clearpos(&mut (*s).match_end);
     (*s).save_cursor = (*curwin.get()).w_cursor;
     (*s).search_start = (*curwin.get()).w_cursor;
     save_viewstate(curwin.get(), &raw mut (*s).init_viewstate);

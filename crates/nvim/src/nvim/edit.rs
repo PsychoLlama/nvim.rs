@@ -105,6 +105,7 @@ use crate::src::nvim::plines::{
     win_chartabsize,
 };
 use crate::src::nvim::popupmenu::{pum_check_clear, pum_visible};
+use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::register::{
     do_put, get_expr_register, get_yank_register, insert_reg, valid_yank_reg,
 };
@@ -874,10 +875,6 @@ pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const ML_LINE_DIRTY: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const ML_ALLOCATED: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline(always)]

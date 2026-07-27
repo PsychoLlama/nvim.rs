@@ -46,6 +46,7 @@ use crate::src::nvim::plines::{
     win_chartabsize, win_get_fill, win_may_fill,
 };
 use crate::src::nvim::popupmenu::pum_visible;
+use crate::src::nvim::pos::{equalpos, lt, ltoreq};
 use crate::src::nvim::register::{do_put, insert_reg, yank_register_mline};
 use crate::src::nvim::search::findmatch;
 use crate::src::nvim::state::virtual_active;
@@ -379,24 +380,6 @@ pub const VALID_TOPLINE: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
-#[inline(always)]
-unsafe extern "C" fn ltoreq(mut a: pos_T, mut b: pos_T) -> bool {
-    return lt(a, b) as ::core::ffi::c_int != 0 || equalpos(a, b) as ::core::ffi::c_int != 0;
-}
 pub const MOUSE_VISUAL: ::core::ffi::c_int = 'v' as ::core::ffi::c_int;
 pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;

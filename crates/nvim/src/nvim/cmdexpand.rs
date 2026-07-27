@@ -81,6 +81,7 @@ use crate::src::nvim::path::{
 use crate::src::nvim::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_undisplay, pum_visible,
 };
+use crate::src::nvim::pos::ltoreq;
 use crate::src::nvim::profile::{get_profile_name, set_context_in_profile_cmd};
 use crate::src::nvim::regexp::skip_regexp;
 use crate::src::nvim::runtime::{
@@ -1150,24 +1151,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
-#[inline(always)]
-unsafe extern "C" fn ltoreq(mut a: pos_T, mut b: pos_T) -> bool {
-    return lt(a, b) as ::core::ffi::c_int != 0 || equalpos(a, b) as ::core::ffi::c_int != 0;
-}
 pub const EX_EXTRA: ::core::ffi::c_uint = 0x4 as ::core::ffi::c_uint;
 pub const EX_XFILE: ::core::ffi::c_uint = 0x8 as ::core::ffi::c_uint;
 pub const EX_TRLBAR: ::core::ffi::c_uint = 0x100 as ::core::ffi::c_uint;

@@ -62,6 +62,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::time::{os_delay, os_time};
 use crate::src::nvim::path::path_full_compare;
 use crate::src::nvim::plines::getvcol;
+use crate::src::nvim::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit};
 use crate::src::nvim::regexp::skip_regexp_ex;
 use crate::src::nvim::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
@@ -709,30 +710,6 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
-#[inline(always)]
-unsafe extern "C" fn ltoreq(mut a: pos_T, mut b: pos_T) -> bool {
-    return lt(a, b) as ::core::ffi::c_int != 0 || equalpos(a, b) as ::core::ffi::c_int != 0;
-}
-#[inline(always)]
-unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
-    (*a).lnum = 0 as ::core::ffi::c_int as linenr_T;
-    (*a).col = 0 as ::core::ffi::c_int as colnr_T;
-    (*a).coladd = 0 as ::core::ffi::c_int as colnr_T;
-}
 #[inline(always)]
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
@@ -2876,7 +2853,7 @@ pub unsafe extern "C" fn findmatchlimit(
         col: 0,
         coladd: 0,
     };
-    clearpos(&raw mut match_pos);
+    clearpos(&mut match_pos);
     if backwards as ::core::ffi::c_int != 0 && comment_dir != 0 || lisp as ::core::ffi::c_int != 0 {
         comment_col = check_linecomment(linep);
     }
@@ -3554,7 +3531,7 @@ pub unsafe extern "C" fn current_search(
                 return FAIL;
             } else if i == 0 as ::core::ffi::c_int && result == 0 {
                 if forward {
-                    clearpos(&raw mut pos);
+                    clearpos(&mut pos);
                 } else {
                     pos.lnum = (*(*curwin.get()).w_buffer).b_ml.ml_line_count;
                     pos.col = ml_get_len((*(*curwin.get()).w_buffer).b_ml.ml_line_count);
@@ -3645,7 +3622,7 @@ unsafe extern "C" fn is_zero_width(
     }
     regmatch.startpos[0 as ::core::ffi::c_int as usize].col = -1 as ::core::ffi::c_int as colnr_T;
     if move_0 {
-        clearpos(&raw mut pos);
+        clearpos(&mut pos);
     } else {
         pos = *cur;
         flag = SEARCH_START as ::core::ffi::c_int;
@@ -3900,7 +3877,7 @@ unsafe extern "C" fn update_search_stat(
         cnt.set(0 as ::core::ffi::c_int);
         exact_match.set(false_0 != 0);
         incomplete.set(0 as ::core::ffi::c_int);
-        clearpos(lastpos.ptr());
+        clearpos(&mut *lastpos.ptr());
         lbuf.set(curbuf.get());
     }
     if equalpos(lastpos.get(), *cursor_pos) as ::core::ffi::c_int != 0

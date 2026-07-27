@@ -57,6 +57,7 @@ use crate::src::nvim::path::{
     FreeWild, FullName_save, path_full_compare, path_has_wildcard, path_tail, simplify_filename,
     vim_isAbsName,
 };
+use crate::src::nvim::pos::clearpos;
 use crate::src::nvim::regexp::skip_regexp;
 use crate::src::nvim::runtime::do_in_runtimepath;
 use crate::src::nvim::search::{do_search, ignorecase, ignorecase_opt};
@@ -1857,12 +1858,6 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const TAGSTACKSIZE: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
-    (*a).lnum = 0 as ::core::ffi::c_int as linenr_T;
-    (*a).col = 0 as ::core::ffi::c_int as colnr_T;
-    (*a).coladd = 0 as ::core::ffi::c_int as colnr_T;
-}
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CPO_TAGPAT: ::core::ffi::c_int = 't' as ::core::ffi::c_int;
@@ -2046,7 +2041,7 @@ pub unsafe extern "C" fn do_tag(
     let mut prev_num_matches: ::core::ffi::c_int = num_matches.get();
     free_string_option(nofile_fname.get());
     nofile_fname.set(::core::ptr::null_mut::<::core::ffi::c_char>());
-    clearpos(&raw mut saved_fmark.mark);
+    clearpos(&mut saved_fmark.mark);
     saved_fmark.fnum = 0 as ::core::ffi::c_int;
     saved_fmark.view = fmarkv_T {
         topline_offset: MAXLNUM as ::core::ffi::c_int as linenr_T,

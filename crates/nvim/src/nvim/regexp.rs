@@ -33,6 +33,7 @@ use crate::src::nvim::os::libc::{
     strncpy,
 };
 use crate::src::nvim::plines::{getvvcol, init_charsize_arg, linesize_fast, linesize_regular};
+use crate::src::nvim::pos::lt;
 use crate::src::nvim::profile::profile_passed_limit;
 use crate::src::nvim::strings::{cmp_keyvalue_value_n, vim_strchr, vim_strsave_escaped, xstrnsave};
 pub use crate::src::nvim::types::{
@@ -24047,16 +24048,6 @@ pub unsafe extern "C" fn vim_regexec_multi(
         0 as ::core::ffi::c_int
     } else {
         result
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
     };
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

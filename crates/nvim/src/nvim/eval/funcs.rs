@@ -233,6 +233,7 @@ use crate::src::nvim::os::time::{os_hrtime, os_localtime_r, os_strptime, tm_zero
 use crate::src::nvim::path::{concat_fnames_realloc, vim_FullName};
 use crate::src::nvim::plines::{getvvcol, win_chartabsize};
 use crate::src::nvim::popupmenu::{pum_set_event_info, pum_visible};
+use crate::src::nvim::pos::{clearpos, equalpos, lt};
 use crate::src::nvim::profile::{
     profile_end, profile_msg, profile_setlimit, profile_signed, profile_start, profile_sub,
 };
@@ -2265,26 +2266,6 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_growsize: 1 as ::core::ffi::c_int,
     ga_data: NULL_0,
 };
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
-#[inline(always)]
-unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
-    (*a).lnum = 0 as ::core::ffi::c_int as linenr_T;
-    (*a).col = 0 as ::core::ffi::c_int as colnr_T;
-    (*a).coladd = 0 as ::core::ffi::c_int as colnr_T;
-}
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
@@ -11088,13 +11069,13 @@ pub unsafe extern "C" fn do_searchpair(
         col: 0,
         coladd: 0,
     };
-    clearpos(&raw mut firstpos);
+    clearpos(&mut firstpos);
     let mut foundpos: pos_T = pos_T {
         lnum: 0,
         col: 0,
         coladd: 0,
     };
-    clearpos(&raw mut foundpos);
+    clearpos(&mut foundpos);
     let mut pat: *mut ::core::ffi::c_char = pat3;
     '_c2rust_label: {
         if pat3len >= 0 as ::core::ffi::c_int {

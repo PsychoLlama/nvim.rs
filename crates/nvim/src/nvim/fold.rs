@@ -136,24 +136,6 @@ pub struct fline_T {
     /// `end`.
     pub had_end: c_int,
 }
-/// `pos.h`'s ordering on a buffer position.
-fn lt(a: pos_T, b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        a.lnum < b.lnum
-    } else if a.col != b.col {
-        a.col < b.col
-    } else {
-        a.coladd < b.coladd
-    }
-}
-
-fn equalpos(a: pos_T, b: pos_T) -> bool {
-    a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd
-}
-
-fn ltoreq(a: pos_T, b: pos_T) -> bool {
-    lt(a, b) || equalpos(a, b)
-}
 
 /// The `fold_T` array a `garray_T` holds. Every fold list in the tree — a
 /// window's top level and each fold's `fd_nested` — is an untyped growable

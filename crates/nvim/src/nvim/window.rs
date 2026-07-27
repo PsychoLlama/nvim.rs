@@ -92,6 +92,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::path::pathcmp;
 use crate::src::nvim::plines::{plines_win, plines_win_col, plines_win_nofill, win_text_height};
 use crate::src::nvim::popupmenu::pum_ui_flush;
+use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::quickfix::qf_view_result;
 use crate::src::nvim::search::find_pattern_in_path;
 use crate::src::nvim::state::{get_real_state, virtual_active};
@@ -1559,10 +1560,6 @@ pub const SNAP_COUNT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

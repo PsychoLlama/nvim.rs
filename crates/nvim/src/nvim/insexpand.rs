@@ -80,6 +80,7 @@ use crate::src::nvim::path::{FreeWild, expand_wildcards, path_tail, vim_ispathse
 use crate::src::nvim::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,
 };
+use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::register::{copy_register, free_register, valid_yank_reg};
 use crate::src::nvim::search::{find_pattern_in_path, ignorecase, search_for_exact_line, searchit};
 use crate::src::nvim::spell::{
@@ -1416,10 +1417,6 @@ pub const Ctrl_Y: ::core::ffi::c_int = 25 as ::core::ffi::c_int;
 pub const Ctrl_Z: ::core::ffi::c_int = 26 as ::core::ffi::c_int;
 pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
 pub const BS_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
 #[inline]
 unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {

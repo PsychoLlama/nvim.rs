@@ -16,6 +16,7 @@ use crate::src::nvim::mbyte::{utf_ptr2StrCharInfo, utf_ptr2char, utfc_next, utfc
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::r#move::{win_col_off, win_col_off2};
 use crate::src::nvim::option::get_showbreak_value;
+use crate::src::nvim::pos::{lt, ltoreq};
 use crate::src::nvim::state::virtual_active;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CSType, Callback,
@@ -144,24 +145,6 @@ pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
 unsafe extern "C" fn set_has_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> bool {
     return mh_get_uint32_t(set, key) != MH_TOMBSTONE as uint32_t;
-}
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
-#[inline(always)]
-unsafe extern "C" fn ltoreq(mut a: pos_T, mut b: pos_T) -> bool {
-    return lt(a, b) as ::core::ffi::c_int != 0 || equalpos(a, b) as ::core::ffi::c_int != 0;
 }
 #[inline]
 unsafe extern "C" fn ns_in_win(mut ns_id: uint32_t, mut wp: *mut win_T) -> bool {

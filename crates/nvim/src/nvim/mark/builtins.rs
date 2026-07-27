@@ -1,18 +1,3 @@
-/// `pos.h`'s ordering on a buffer position.
-pub(super) fn lt(a: pos_T, b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        a.lnum < b.lnum
-    } else if a.col != b.col {
-        a.col < b.col
-    } else {
-        a.coladd < b.coladd
-    }
-}
-
-pub(super) fn equalpos(a: pos_T, b: pos_T) -> bool {
-    a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd
-}
-
 use crate::src::nvim::buffer::buflist_nr2name;
 use crate::src::nvim::eval::typval::{
     tv_dict_add_list, tv_dict_add_str, tv_dict_alloc, tv_list_alloc, tv_list_append_dict,

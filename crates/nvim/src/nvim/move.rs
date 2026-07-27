@@ -32,6 +32,7 @@ use crate::src::nvim::plines::{
     getvcol, getvvcol, linetabsize_eol, plines_m_win, plines_win, plines_win_full,
     plines_win_nofill, win_get_fill, win_may_fill,
 };
+use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
@@ -165,10 +166,6 @@ pub const VALID_BOTLINE_AP: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const VALID_TOPLINE: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
 unsafe extern "C" fn adjust_plines_for_skipcol(mut wp: *mut win_T) -> ::core::ffi::c_int {
     if (*wp).w_skipcol == 0 as ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;

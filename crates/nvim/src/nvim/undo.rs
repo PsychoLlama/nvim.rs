@@ -53,6 +53,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::os::time::{os_localtime_r, os_time, tm_zeroed};
 use crate::src::nvim::path::{FullName_save, concat_fnames, path_tail, vim_ispathsep};
+use crate::src::nvim::pos::clearpos;
 use crate::src::nvim::sha256::{SHA256_SUM_SIZE, Sha256};
 use crate::src::nvim::spell::spell_check_window;
 use crate::src::nvim::state::virtual_active;
@@ -131,12 +132,6 @@ pub const UNDO_HASH_SIZE: c_int = 32;
 pub struct bufinfo_T {
     pub bi_buf: *mut buf_T,
     pub bi_fp: *mut FILE,
-}
-#[inline(always)]
-unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
-    (*a).lnum = 0;
-    (*a).col = 0;
-    (*a).coladd = 0;
 }
 pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
@@ -503,14 +498,14 @@ pub unsafe extern "C" fn u_find_first_changed() {
             *(*uep).ue_array.offset((lnum - 1) as isize),
         ) != 0
         {
-            clearpos(&raw mut (*uhp).uh_cursor);
+            clearpos(&mut (*uhp).uh_cursor);
             (*uhp).uh_cursor.lnum = lnum;
             return;
         }
         lnum += 1;
     }
     if (*curbuf.get()).b_ml.ml_line_count != (*uep).ue_size {
-        clearpos(&raw mut (*uhp).uh_cursor);
+        clearpos(&mut (*uhp).uh_cursor);
         (*uhp).uh_cursor.lnum = lnum;
     }
 }

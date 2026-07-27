@@ -67,6 +67,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::plines::{
     getvcol, getvcols, getvvcol, init_charsize_arg, linetabsize_col, win_charsize,
 };
+use crate::src::nvim::pos::{equalpos, lt, ltoreq};
 use crate::src::nvim::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,
     shift_delete_registers, valid_yank_reg,
@@ -818,24 +819,6 @@ pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn lt(mut a: pos_T, mut b: pos_T) -> bool {
-    if a.lnum != b.lnum {
-        return a.lnum < b.lnum;
-    } else if a.col != b.col {
-        return a.col < b.col;
-    } else {
-        return a.coladd < b.coladd;
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;
-}
-#[inline(always)]
-unsafe extern "C" fn ltoreq(mut a: pos_T, mut b: pos_T) -> bool {
-    return lt(a, b) as ::core::ffi::c_int != 0 || equalpos(a, b) as ::core::ffi::c_int != 0;
-}
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
