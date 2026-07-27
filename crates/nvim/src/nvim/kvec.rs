@@ -166,6 +166,20 @@ impl<'a, T: Copy> InitVec<'a, T> {
     }
 }
 
+/// Copy `size` bytes from `src` to `dest`, then free `src`. klib's kvec
+/// spells this inline in every `kv_concat`-shaped macro.
+pub unsafe fn _memcpy_free(
+    dest: *mut ::core::ffi::c_void,
+    src: *mut ::core::ffi::c_void,
+    size: size_t,
+) -> *mut ::core::ffi::c_void {
+    unsafe {
+        memcpy(dest, src, size);
+        xfree(src);
+    }
+    dest
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,18 +264,4 @@ mod tests {
         assert!(v.view().is_inline());
         assert_eq!(v.view().as_slice(), &[7]);
     }
-}
-
-/// Copy `size` bytes from `src` to `dest`, then free `src`. klib's kvec
-/// spells this inline in every `kv_concat`-shaped macro.
-pub unsafe fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    unsafe {
-        memcpy(dest, src, size);
-        xfree(src);
-    }
-    dest
 }
