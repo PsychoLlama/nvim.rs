@@ -4,11 +4,37 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-// Opaque C type: layout unknown here, only ever used behind a pointer.
+/// The head every compiled pattern starts with, whichever engine built it.
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct regprog {
-    _data: [u8; 0],
-    _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
+    pub engine: *mut regengine_T,
+    pub regflags: ::core::ffi::c_uint,
+    pub re_engine: ::core::ffi::c_uint,
+    pub re_flags: ::core::ffi::c_uint,
+    pub re_in_use: bool,
+}
+pub type regengine_T = regengine;
+/// The vtable of a regexp engine (backtracking or NFA).
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct regengine {
+    pub regcomp: Option<unsafe extern "C" fn(*mut uint8_t, ::core::ffi::c_int) -> *mut regprog_T>,
+    pub regfree: Option<unsafe extern "C" fn(*mut regprog_T) -> ()>,
+    pub regexec_nl: Option<
+        unsafe extern "C" fn(*mut regmatch_T, *mut uint8_t, colnr_T, bool) -> ::core::ffi::c_int,
+    >,
+    pub regexec_multi: Option<
+        unsafe extern "C" fn(
+            *mut regmmatch_T,
+            *mut win_T,
+            *mut buf_T,
+            linenr_T,
+            colnr_T,
+            *mut proftime_T,
+            *mut ::core::ffi::c_int,
+        ) -> ::core::ffi::c_int,
+    >,
 }
 
 pub type magic_T = ::core::ffi::c_uint;

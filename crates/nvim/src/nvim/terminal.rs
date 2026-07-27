@@ -145,12 +145,6 @@ use crate::src::nvim::vterm::vterm::{
 use crate::src::nvim::window::may_trigger_win_scrolled_resized;
 use crate::src::nvim::window::win_valid;
 
-// Phase-5a blacklist residue: this module keeps concrete local copies of
-// types whose canonical form is opaque (file_buffer, window_S, ...), so
-// these declarations cannot become `use` imports until the phase-8 rewrite.
-// The copies are layout-identical to the canonical definitions (proven by
-// the 5a parity suite); the nominal decl/decl mismatch is expected.
-#[allow(clashing_extern_declarations)]
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

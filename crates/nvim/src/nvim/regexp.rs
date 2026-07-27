@@ -1,4 +1,3 @@
-// `buf_T` here is this module's own layout-identical copy, hence the casts.
 use crate::src::nvim::charset::{
     getdigits_int, hex2nr, vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordc_buf, vim_iswordp_buf,
 };
@@ -15,12 +14,14 @@ use crate::src::nvim::main::{
     p_cpo, p_mmp, p_re, p_sel, p_verbose, rc_did_emsg, re_extmatch_in, re_extmatch_out,
     reg_do_extmatch,
 };
+use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::mark::mark_get;
 use crate::src::nvim::mbyte::{
     mb_get_class_tab, mb_islower, mb_isupper, mb_ptr2char_adv, mb_strnicmp, mb_tolower, mb_toupper,
     utf_char2bytes, utf_char2len, utf_composinglike, utf_fold, utf_head_off,
     utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len, utf_strnicmp, utfc_ptr2len,
 };
+use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xrealloc, xstrdup};
 use crate::src::nvim::message::{
     emsg, iemsg, internal_error, msg_puts, semsg, siemsg, verbose_enter, verbose_leave,
@@ -30,70 +31,38 @@ use crate::src::nvim::os::libc::{
     __assert_fail, __ctype_b_loc, bsearch, gettext, memmove, memset, strcpy, strlen, strncmp,
     strncpy,
 };
+use crate::src::nvim::plines::{getvvcol, init_charsize_arg, linesize_fast, linesize_regular};
 use crate::src::nvim::profile::profile_passed_limit;
 use crate::src::nvim::strings::{cmp_keyvalue_value_n, vim_strchr, vim_strsave_escaped, xstrnsave};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, ArgvFunc, BoolVarValue,
     BufUpdateCallbacks, CSType, Callback, Callback_data as C2Rust_Unnamed_8, CallbackType,
-    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
-    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3, ExtmarkUndoObject, FileID, FloatAnchor,
-    FloatRelative, GraphemeState, GridView, Intersection, LuaRef, MTKey, MTNode, MTPos,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
-    MarkGet, MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_14, OptInt, QUEUE,
-    ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_5, Terminal,
-    Timestamp, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
-    WinSplit, WinStyle, Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, bufstate_T,
-    chunksize_T, colnr_T, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, float_T,
-    fmark_T, fmarkv_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, funcexe_T,
-    garray_T, handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t,
-    keyvalue_T, lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
-    listwatch_T, llpos_T, lpos_T, magic_T, mapblock, mapblock_T, memfile_T, memline_T, mfdirty_T,
-    mtnode_inner_s, mtnode_s, partial_S, partial_T, pos_T, pos_save_T, proftime_T, ptr_t,
-    ptrdiff_t, qf_info_S, qf_info_T, queue, reg_extmatch_T, sattr_T, schar_T, scid_T, sctx_T,
-    size_t, ssize_t, staticList10_T, syn_state, syn_state_sst_union as C2Rust_Unnamed_7,
-    syn_time_T, synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry,
-    u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_10,
+    ChangedtickDictItem, CharsizeArg, DecorExt, DecorHighlightInline, DecorInlineData,
+    DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_3, ExtmarkUndoObject,
+    FileID, FloatAnchor, FloatRelative, GraphemeState, GridView, Intersection, LuaRef, MTKey,
+    MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
+    Map_uint64_t_ptr_t, MapHash, MarkGet, MarkTree, MarkTreeIter,
+    MarkTreeIter_s as C2Rust_Unnamed_14, OptInt, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid,
+    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_5, Terminal, Timestamp, VarLockStatus, VarType,
+    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
+    Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T,
+    dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer, float_T, fmark_T,
+    fmarkv_T, frame_S, frame_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T,
+    funcexe_T, garray_T, handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t,
+    int64_t, keyvalue_T, lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
+    listwatch_S, listwatch_T, llpos_T, lpos_T, magic_T, mapblock, mapblock_T, match_T, matchitem,
+    matchitem_T, memfile_T, memline_T, mfdirty_T, mtnode_inner_s, mtnode_s, partial_S, partial_T,
+    pos_T, pos_save_T, proftime_T, ptr_t, ptrdiff_t, qf_info_S, qf_info_T, queue, reg_extmatch_T,
+    regengine, regengine_T, regmatch_T, regmmatch_T, regprog, regprog_T, sattr_T, schar_T, scid_T,
+    sctx_T, size_t, ssize_t, staticList10_T, syn_state, syn_state_sst_union as C2Rust_Unnamed_7,
+    syn_time_T, synblock_T, synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union,
+    u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_10,
     u_header_uh_alt_prev as C2Rust_Unnamed_9, u_header_uh_next as C2Rust_Unnamed_12,
     u_header_uh_prev as C2Rust_Unnamed_11, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
-    uintmax_t, undo_object, utf8proc_int32_t, varnumber_T, virt_line, visualinfo_T, winopt_T,
-    wline_T, xfmark_T,
+    uintmax_t, undo_object, utf8proc_int32_t, varnumber_T, virt_line, visualinfo_T, win_T,
+    window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
-// Phase-5a blacklist residue: this module keeps concrete local copies of
-// types whose canonical form is opaque (file_buffer, window_S, ...), so
-// these declarations cannot become `use` imports until the phase-8 rewrite.
-// The copies are layout-identical to the canonical definitions (proven by
-// the 5a parity suite); the nominal decl/decl mismatch is expected.
-#[allow(clashing_extern_declarations)]
-unsafe extern "C" {
-    static curwin: GlobalCell<*mut win_T>;
-    static curbuf: GlobalCell<*mut buf_T>;
-    fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
-    fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
-    fn init_charsize_arg(
-        csarg: *mut CharsizeArg,
-        wp: *mut win_T,
-        lnum: linenr_T,
-        line: *mut ::core::ffi::c_char,
-    ) -> CSType;
-    fn linesize_regular(
-        csarg: *mut CharsizeArg,
-        vcol_arg: ::core::ffi::c_int,
-        len: colnr_T,
-    ) -> ::core::ffi::c_int;
-    fn linesize_fast(
-        csarg: *const CharsizeArg,
-        vcol_arg: ::core::ffi::c_int,
-        len: colnr_T,
-    ) -> ::core::ffi::c_int;
-    fn getvvcol(
-        wp: *mut win_T,
-        pos: *mut pos_T,
-        start: *mut colnr_T,
-        cursor: *mut colnr_T,
-        end: *mut colnr_T,
-    );
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISpunct: C2Rust_Unnamed = 4;
@@ -109,540 +78,12 @@ pub const _ISlower: C2Rust_Unnamed = 512;
 pub const _ISupper: C2Rust_Unnamed = 256;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_0 = 2147483647;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct file_buffer {
-    pub handle: handle_T,
-    pub b_ml: memline_T,
-    pub b_next: *mut buf_T,
-    pub b_prev: *mut buf_T,
-    pub b_nwindows: ::core::ffi::c_int,
-    pub b_flags: ::core::ffi::c_int,
-    pub b_locked: ::core::ffi::c_int,
-    pub b_locked_split: ::core::ffi::c_int,
-    pub b_ro_locked: ::core::ffi::c_int,
-    pub b_ffname: *mut ::core::ffi::c_char,
-    pub b_sfname: *mut ::core::ffi::c_char,
-    pub b_fname: *mut ::core::ffi::c_char,
-    pub file_id_valid: bool,
-    pub file_id: FileID,
-    pub b_changed: ::core::ffi::c_int,
-    pub b_changed_invalid: bool,
-    pub changedtick_di: ChangedtickDictItem,
-    pub b_last_changedtick: varnumber_T,
-    pub b_last_changedtick_i: varnumber_T,
-    pub b_last_changedtick_pum: varnumber_T,
-    pub b_saving: bool,
-    pub b_mod_set: bool,
-    pub b_mod_top: linenr_T,
-    pub b_mod_bot: linenr_T,
-    pub b_mod_xlines: linenr_T,
-    pub b_wininfo: C2Rust_Unnamed_13,
-    pub b_mod_tick_syn: disptick_T,
-    pub b_mod_tick_decor: disptick_T,
-    pub b_mtime: int64_t,
-    pub b_mtime_ns: int64_t,
-    pub b_mtime_read: int64_t,
-    pub b_mtime_read_ns: int64_t,
-    pub b_orig_size: uint64_t,
-    pub b_orig_mode: ::core::ffi::c_int,
-    pub b_last_used: time_t,
-    pub b_namedm: [fmark_T; 26],
-    pub b_visual: visualinfo_T,
-    pub b_visual_mode_eval: ::core::ffi::c_int,
-    pub b_last_cursor: fmark_T,
-    pub b_last_insert: fmark_T,
-    pub b_last_change: fmark_T,
-    pub b_changelist: [fmark_T; 100],
-    pub b_changelistlen: ::core::ffi::c_int,
-    pub b_new_change: bool,
-    pub b_chartab: [uint64_t; 4],
-    pub b_maphash: [*mut mapblock_T; 256],
-    pub b_first_abbr: *mut mapblock_T,
-    pub b_ucmds: garray_T,
-    pub b_op_start: pos_T,
-    pub b_op_start_orig: pos_T,
-    pub b_op_end: pos_T,
-    pub b_marks_read: bool,
-    pub b_modified_was_set: bool,
-    pub b_did_filetype: bool,
-    pub b_keep_filetype: bool,
-    pub b_au_did_filetype: bool,
-    pub b_u_oldhead: *mut u_header_T,
-    pub b_u_newhead: *mut u_header_T,
-    pub b_u_curhead: *mut u_header_T,
-    pub b_u_numhead: ::core::ffi::c_int,
-    pub b_u_synced: bool,
-    pub b_u_seq_last: ::core::ffi::c_int,
-    pub b_u_save_nr_last: ::core::ffi::c_int,
-    pub b_u_seq_cur: ::core::ffi::c_int,
-    pub b_u_time_cur: time_t,
-    pub b_u_save_nr_cur: ::core::ffi::c_int,
-    pub b_u_line_ptr: *mut ::core::ffi::c_char,
-    pub b_u_line_lnum: linenr_T,
-    pub b_u_line_colnr: colnr_T,
-    pub b_scanned: bool,
-    pub b_p_iminsert: OptInt,
-    pub b_p_imsearch: OptInt,
-    pub b_kmap_state: int16_t,
-    pub b_kmap_ga: garray_T,
-    pub b_p_initialized: bool,
-    pub b_p_script_ctx: [sctx_T; 92],
-    pub b_p_ac: ::core::ffi::c_int,
-    pub b_p_ai: ::core::ffi::c_int,
-    pub b_p_ai_nopaste: ::core::ffi::c_int,
-    pub b_p_bkc: *mut ::core::ffi::c_char,
-    pub b_bkc_flags: ::core::ffi::c_uint,
-    pub b_p_ci: ::core::ffi::c_int,
-    pub b_p_bin: ::core::ffi::c_int,
-    pub b_p_bomb: ::core::ffi::c_int,
-    pub b_p_bh: *mut ::core::ffi::c_char,
-    pub b_p_bt: *mut ::core::ffi::c_char,
-    pub b_p_busy: OptInt,
-    pub b_has_qf_entry: ::core::ffi::c_int,
-    pub b_p_bl: ::core::ffi::c_int,
-    pub b_p_channel: OptInt,
-    pub b_p_cin: ::core::ffi::c_int,
-    pub b_p_cino: *mut ::core::ffi::c_char,
-    pub b_p_cink: *mut ::core::ffi::c_char,
-    pub b_p_cinw: *mut ::core::ffi::c_char,
-    pub b_p_cinsd: *mut ::core::ffi::c_char,
-    pub b_p_com: *mut ::core::ffi::c_char,
-    pub b_p_cms: *mut ::core::ffi::c_char,
-    pub b_p_cot: *mut ::core::ffi::c_char,
-    pub b_cot_flags: ::core::ffi::c_uint,
-    pub b_p_cpt: *mut ::core::ffi::c_char,
-    pub b_p_cpt_cb: *mut Callback,
-    pub b_p_cpt_count: ::core::ffi::c_int,
-    pub b_p_cfu: *mut ::core::ffi::c_char,
-    pub b_cfu_cb: Callback,
-    pub b_p_ofu: *mut ::core::ffi::c_char,
-    pub b_ofu_cb: Callback,
-    pub b_p_tfu: *mut ::core::ffi::c_char,
-    pub b_tfu_cb: Callback,
-    pub b_p_ffu: *mut ::core::ffi::c_char,
-    pub b_ffu_cb: Callback,
-    pub b_p_eof: ::core::ffi::c_int,
-    pub b_p_eol: ::core::ffi::c_int,
-    pub b_p_fixeol: ::core::ffi::c_int,
-    pub b_p_et: ::core::ffi::c_int,
-    pub b_p_et_nobin: ::core::ffi::c_int,
-    pub b_p_et_nopaste: ::core::ffi::c_int,
-    pub b_p_fenc: *mut ::core::ffi::c_char,
-    pub b_p_ff: *mut ::core::ffi::c_char,
-    pub b_p_ft: *mut ::core::ffi::c_char,
-    pub b_p_fo: *mut ::core::ffi::c_char,
-    pub b_p_flp: *mut ::core::ffi::c_char,
-    pub b_p_inf: ::core::ffi::c_int,
-    pub b_p_isk: *mut ::core::ffi::c_char,
-    pub b_p_def: *mut ::core::ffi::c_char,
-    pub b_p_inc: *mut ::core::ffi::c_char,
-    pub b_p_inex: *mut ::core::ffi::c_char,
-    pub b_p_inex_flags: uint32_t,
-    pub b_p_inde: *mut ::core::ffi::c_char,
-    pub b_p_inde_flags: uint32_t,
-    pub b_p_indk: *mut ::core::ffi::c_char,
-    pub b_p_fp: *mut ::core::ffi::c_char,
-    pub b_p_fex: *mut ::core::ffi::c_char,
-    pub b_p_fex_flags: uint32_t,
-    pub b_p_fs: ::core::ffi::c_int,
-    pub b_p_kp: *mut ::core::ffi::c_char,
-    pub b_p_lisp: ::core::ffi::c_int,
-    pub b_p_lop: *mut ::core::ffi::c_char,
-    pub b_p_menc: *mut ::core::ffi::c_char,
-    pub b_p_mps: *mut ::core::ffi::c_char,
-    pub b_p_ml: ::core::ffi::c_int,
-    pub b_p_ml_nobin: ::core::ffi::c_int,
-    pub b_p_ma: ::core::ffi::c_int,
-    pub b_p_nf: *mut ::core::ffi::c_char,
-    pub b_p_pi: ::core::ffi::c_int,
-    pub b_p_qe: *mut ::core::ffi::c_char,
-    pub b_p_ro: ::core::ffi::c_int,
-    pub b_p_sw: OptInt,
-    pub b_p_scbk: OptInt,
-    pub b_p_si: ::core::ffi::c_int,
-    pub b_p_sts: OptInt,
-    pub b_p_sts_nopaste: OptInt,
-    pub b_p_sua: *mut ::core::ffi::c_char,
-    pub b_p_swf: ::core::ffi::c_int,
-    pub b_p_smc: OptInt,
-    pub b_p_syn: *mut ::core::ffi::c_char,
-    pub b_p_ts: OptInt,
-    pub b_p_tw: OptInt,
-    pub b_p_tw_nobin: OptInt,
-    pub b_p_tw_nopaste: OptInt,
-    pub b_p_wm: OptInt,
-    pub b_p_wm_nobin: OptInt,
-    pub b_p_wm_nopaste: OptInt,
-    pub b_p_vsts: *mut ::core::ffi::c_char,
-    pub b_p_vsts_array: *mut colnr_T,
-    pub b_p_vsts_nopaste: *mut ::core::ffi::c_char,
-    pub b_p_vts: *mut ::core::ffi::c_char,
-    pub b_p_vts_array: *mut colnr_T,
-    pub b_p_keymap: *mut ::core::ffi::c_char,
-    pub b_p_gefm: *mut ::core::ffi::c_char,
-    pub b_p_gp: *mut ::core::ffi::c_char,
-    pub b_p_mp: *mut ::core::ffi::c_char,
-    pub b_p_efm: *mut ::core::ffi::c_char,
-    pub b_p_ep: *mut ::core::ffi::c_char,
-    pub b_p_path: *mut ::core::ffi::c_char,
-    pub b_p_ar: ::core::ffi::c_int,
-    pub b_p_tags: *mut ::core::ffi::c_char,
-    pub b_p_tc: *mut ::core::ffi::c_char,
-    pub b_tc_flags: ::core::ffi::c_uint,
-    pub b_p_dict: *mut ::core::ffi::c_char,
-    pub b_p_dia: *mut ::core::ffi::c_char,
-    pub b_p_tsr: *mut ::core::ffi::c_char,
-    pub b_p_tsrfu: *mut ::core::ffi::c_char,
-    pub b_tsrfu_cb: Callback,
-    pub b_p_ul: OptInt,
-    pub b_p_udf: ::core::ffi::c_int,
-    pub b_p_lw: *mut ::core::ffi::c_char,
-    pub b_ind_level: ::core::ffi::c_int,
-    pub b_ind_open_imag: ::core::ffi::c_int,
-    pub b_ind_no_brace: ::core::ffi::c_int,
-    pub b_ind_first_open: ::core::ffi::c_int,
-    pub b_ind_open_extra: ::core::ffi::c_int,
-    pub b_ind_close_extra: ::core::ffi::c_int,
-    pub b_ind_open_left_imag: ::core::ffi::c_int,
-    pub b_ind_jump_label: ::core::ffi::c_int,
-    pub b_ind_case: ::core::ffi::c_int,
-    pub b_ind_case_code: ::core::ffi::c_int,
-    pub b_ind_case_break: ::core::ffi::c_int,
-    pub b_ind_param: ::core::ffi::c_int,
-    pub b_ind_func_type: ::core::ffi::c_int,
-    pub b_ind_comment: ::core::ffi::c_int,
-    pub b_ind_in_comment: ::core::ffi::c_int,
-    pub b_ind_in_comment2: ::core::ffi::c_int,
-    pub b_ind_cpp_baseclass: ::core::ffi::c_int,
-    pub b_ind_continuation: ::core::ffi::c_int,
-    pub b_ind_unclosed: ::core::ffi::c_int,
-    pub b_ind_unclosed2: ::core::ffi::c_int,
-    pub b_ind_unclosed_noignore: ::core::ffi::c_int,
-    pub b_ind_unclosed_wrapped: ::core::ffi::c_int,
-    pub b_ind_unclosed_whiteok: ::core::ffi::c_int,
-    pub b_ind_matching_paren: ::core::ffi::c_int,
-    pub b_ind_paren_prev: ::core::ffi::c_int,
-    pub b_ind_maxparen: ::core::ffi::c_int,
-    pub b_ind_maxcomment: ::core::ffi::c_int,
-    pub b_ind_scopedecl: ::core::ffi::c_int,
-    pub b_ind_scopedecl_code: ::core::ffi::c_int,
-    pub b_ind_java: ::core::ffi::c_int,
-    pub b_ind_js: ::core::ffi::c_int,
-    pub b_ind_keep_case_label: ::core::ffi::c_int,
-    pub b_ind_hash_comment: ::core::ffi::c_int,
-    pub b_ind_cpp_namespace: ::core::ffi::c_int,
-    pub b_ind_if_for_while: ::core::ffi::c_int,
-    pub b_ind_cpp_extern_c: ::core::ffi::c_int,
-    pub b_ind_pragma: ::core::ffi::c_int,
-    pub b_no_eol_lnum: linenr_T,
-    pub b_start_eof: ::core::ffi::c_int,
-    pub b_start_eol: ::core::ffi::c_int,
-    pub b_start_ffc: ::core::ffi::c_int,
-    pub b_start_fenc: *mut ::core::ffi::c_char,
-    pub b_bad_char: ::core::ffi::c_int,
-    pub b_start_bomb: ::core::ffi::c_int,
-    pub b_bufvar: ScopeDictDictItem,
-    pub b_vars: *mut dict_T,
-    pub b_may_swap: bool,
-    pub b_did_warn: bool,
-    pub b_help: bool,
-    pub b_spell: bool,
-    pub b_prompt_text: *mut ::core::ffi::c_char,
-    pub b_prompt_callback: Callback,
-    pub b_prompt_interrupt: Callback,
-    pub b_prompt_append_new_line: bool,
-    pub b_prompt_insert: ::core::ffi::c_int,
-    pub b_prompt_start: fmark_T,
-    pub b_s: synblock_T,
-    pub b_signcols: C2Rust_Unnamed_4,
-    pub terminal: *mut Terminal,
-    pub additional_data: *mut AdditionalData,
-    pub b_mapped_ctrl_c: ::core::ffi::c_int,
-    pub b_marktree: [MarkTree; 1],
-    pub b_extmark_ns: [Map_uint32_t_uint32_t; 1],
-    pub b_prev_line_count: ::core::ffi::c_int,
-    pub update_channels: C2Rust_Unnamed_2,
-    pub update_callbacks: C2Rust_Unnamed_1,
-    pub update_need_codepoints: bool,
-    pub deleted_bytes: size_t,
-    pub deleted_bytes2: size_t,
-    pub deleted_codepoints: size_t,
-    pub deleted_codeunits: size_t,
-    pub flush_count: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_1 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut BufUpdateCallbacks,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_2 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut uint64_t,
-}
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_4 {
-    pub max: ::core::ffi::c_int,
-    pub last_max: ::core::ffi::c_int,
-    pub count: [::core::ffi::c_int; 9],
-    pub autom: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct synblock_T {
-    pub b_keywtab: hashtab_T,
-    pub b_keywtab_ic: hashtab_T,
-    pub b_syn_error: bool,
-    pub b_syn_slow: bool,
-    pub b_syn_ic: ::core::ffi::c_int,
-    pub b_syn_foldlevel: ::core::ffi::c_int,
-    pub b_syn_spell: ::core::ffi::c_int,
-    pub b_syn_patterns: garray_T,
-    pub b_syn_clusters: garray_T,
-    pub b_spell_cluster_id: ::core::ffi::c_int,
-    pub b_nospell_cluster_id: ::core::ffi::c_int,
-    pub b_syn_containedin: ::core::ffi::c_int,
-    pub b_syn_sync_flags: ::core::ffi::c_int,
-    pub b_syn_sync_id: int16_t,
-    pub b_syn_sync_minlines: linenr_T,
-    pub b_syn_sync_maxlines: linenr_T,
-    pub b_syn_sync_linebreaks: linenr_T,
-    pub b_syn_linecont_pat: *mut ::core::ffi::c_char,
-    pub b_syn_linecont_prog: *mut regprog_T,
-    pub b_syn_linecont_time: syn_time_T,
-    pub b_syn_linecont_ic: ::core::ffi::c_int,
-    pub b_syn_topgrp: ::core::ffi::c_int,
-    pub b_syn_conceal: ::core::ffi::c_int,
-    pub b_syn_folditems: ::core::ffi::c_int,
-    pub b_sst_array: *mut synstate_T,
-    pub b_sst_len: ::core::ffi::c_int,
-    pub b_sst_first: *mut synstate_T,
-    pub b_sst_firstfree: *mut synstate_T,
-    pub b_sst_freecount: ::core::ffi::c_int,
-    pub b_sst_check_lnum: linenr_T,
-    pub b_sst_lasttick: disptick_T,
-    pub b_langp: garray_T,
-    pub b_spell_ismw: [bool; 256],
-    pub b_spell_ismw_mb: *mut ::core::ffi::c_char,
-    pub b_p_spc: *mut ::core::ffi::c_char,
-    pub b_cap_prog: *mut regprog_T,
-    pub b_p_spf: *mut ::core::ffi::c_char,
-    pub b_p_spl: *mut ::core::ffi::c_char,
-    pub b_p_spo: *mut ::core::ffi::c_char,
-    pub b_p_spo_flags: ::core::ffi::c_uint,
-    pub b_cjk: ::core::ffi::c_int,
-    pub b_syn_chartab: [uint8_t; 32],
-    pub b_syn_isk: *mut ::core::ffi::c_char,
-}
-pub type regprog_T = regprog;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct regprog {
-    pub engine: *mut regengine_T,
-    pub regflags: ::core::ffi::c_uint,
-    pub re_engine: ::core::ffi::c_uint,
-    pub re_flags: ::core::ffi::c_uint,
-    pub re_in_use: bool,
-}
-pub type regengine_T = regengine;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct regengine {
-    pub regcomp: Option<unsafe extern "C" fn(*mut uint8_t, ::core::ffi::c_int) -> *mut regprog_T>,
-    pub regfree: Option<unsafe extern "C" fn(*mut regprog_T) -> ()>,
-    pub regexec_nl: Option<
-        unsafe extern "C" fn(*mut regmatch_T, *mut uint8_t, colnr_T, bool) -> ::core::ffi::c_int,
-    >,
-    pub regexec_multi: Option<
-        unsafe extern "C" fn(
-            *mut regmmatch_T,
-            *mut win_T,
-            *mut buf_T,
-            linenr_T,
-            colnr_T,
-            *mut proftime_T,
-            *mut ::core::ffi::c_int,
-        ) -> ::core::ffi::c_int,
-    >,
-}
-pub type buf_T = file_buffer;
-pub type win_T = window_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct window_S {
-    pub handle: handle_T,
-    pub w_buffer: *mut buf_T,
-    pub w_s: *mut synblock_T,
-    pub w_ns_hl: ::core::ffi::c_int,
-    pub w_ns_hl_winhl: ::core::ffi::c_int,
-    pub w_ns_hl_active: ::core::ffi::c_int,
-    pub w_ns_hl_attr: *mut ::core::ffi::c_int,
-    pub w_ns_set: Set_uint32_t,
-    pub w_hl_id_normal: ::core::ffi::c_int,
-    pub w_hl_attr_normal: ::core::ffi::c_int,
-    pub w_hl_attr_normalnc: ::core::ffi::c_int,
-    pub w_hl_needs_update: ::core::ffi::c_int,
-    pub w_prev: *mut win_T,
-    pub w_next: *mut win_T,
-    pub w_locked: bool,
-    pub w_frame: *mut frame_T,
-    pub w_cursor: pos_T,
-    pub w_curswant: colnr_T,
-    pub w_set_curswant: ::core::ffi::c_int,
-    pub w_cursorline: linenr_T,
-    pub w_last_cursorline: linenr_T,
-    pub w_old_visual_mode: ::core::ffi::c_char,
-    pub w_old_cursor_lnum: linenr_T,
-    pub w_old_cursor_fcol: colnr_T,
-    pub w_old_cursor_lcol: colnr_T,
-    pub w_old_visual_lnum: linenr_T,
-    pub w_old_visual_col: colnr_T,
-    pub w_old_curswant: colnr_T,
-    pub w_last_cursor_lnum_rnu: linenr_T,
-    pub w_p_lcs_chars: lcs_chars_T,
-    pub w_p_fcs_chars: fcs_chars_T,
-    pub w_topline: linenr_T,
-    pub w_topline_was_set: ::core::ffi::c_char,
-    pub w_topfill: ::core::ffi::c_int,
-    pub w_old_topfill: ::core::ffi::c_int,
-    pub w_botfill: bool,
-    pub w_old_botfill: bool,
-    pub w_leftcol: colnr_T,
-    pub w_skipcol: colnr_T,
-    pub w_last_topline: linenr_T,
-    pub w_last_topfill: ::core::ffi::c_int,
-    pub w_last_leftcol: colnr_T,
-    pub w_last_skipcol: colnr_T,
-    pub w_last_width: ::core::ffi::c_int,
-    pub w_last_height: ::core::ffi::c_int,
-    pub w_winrow: ::core::ffi::c_int,
-    pub w_height: ::core::ffi::c_int,
-    pub w_prev_winrow: ::core::ffi::c_int,
-    pub w_prev_height: ::core::ffi::c_int,
-    pub w_status_height: ::core::ffi::c_int,
-    pub w_winbar_height: ::core::ffi::c_int,
-    pub w_wincol: ::core::ffi::c_int,
-    pub w_width: ::core::ffi::c_int,
-    pub w_hsep_height: ::core::ffi::c_int,
-    pub w_vsep_width: ::core::ffi::c_int,
-    pub w_save_cursor: pos_save_T,
-    pub w_do_win_fix_cursor: bool,
-    pub w_winrow_off: ::core::ffi::c_int,
-    pub w_wincol_off: ::core::ffi::c_int,
-    pub w_view_height: ::core::ffi::c_int,
-    pub w_view_width: ::core::ffi::c_int,
-    pub w_height_request: ::core::ffi::c_int,
-    pub w_width_request: ::core::ffi::c_int,
-    pub w_border_adj: [::core::ffi::c_int; 4],
-    pub w_height_outer: ::core::ffi::c_int,
-    pub w_width_outer: ::core::ffi::c_int,
-    pub w_valid: ::core::ffi::c_int,
-    pub w_valid_cursor: pos_T,
-    pub w_valid_leftcol: colnr_T,
-    pub w_valid_skipcol: colnr_T,
-    pub w_viewport_invalid: bool,
-    pub w_viewport_last_topline: linenr_T,
-    pub w_viewport_last_botline: linenr_T,
-    pub w_viewport_last_topfill: linenr_T,
-    pub w_viewport_last_skipcol: linenr_T,
-    pub w_cline_height: ::core::ffi::c_int,
-    pub w_cline_folded: bool,
-    pub w_cline_row: ::core::ffi::c_int,
-    pub w_virtcol: colnr_T,
-    pub w_wrow: ::core::ffi::c_int,
-    pub w_wcol: ::core::ffi::c_int,
-    pub w_botline: linenr_T,
-    pub w_empty_rows: ::core::ffi::c_int,
-    pub w_filler_rows: ::core::ffi::c_int,
-    pub w_lines_valid: ::core::ffi::c_int,
-    pub w_lines: *mut wline_T,
-    pub w_lines_size: ::core::ffi::c_int,
-    pub w_folds: garray_T,
-    pub w_fold_manual: bool,
-    pub w_foldinvalid: bool,
-    pub w_nrwidth: ::core::ffi::c_int,
-    pub w_scwidth: ::core::ffi::c_int,
-    pub w_minscwidth: ::core::ffi::c_int,
-    pub w_maxscwidth: ::core::ffi::c_int,
-    pub w_redr_type: ::core::ffi::c_int,
-    pub w_upd_rows: ::core::ffi::c_int,
-    pub w_redraw_top: linenr_T,
-    pub w_redraw_bot: linenr_T,
-    pub w_redr_status: bool,
-    pub w_redr_border: bool,
-    pub w_redr_statuscol: bool,
-    pub w_display_tick: disptick_T,
-    pub w_stl_cursor: pos_T,
-    pub w_stl_virtcol: colnr_T,
-    pub w_stl_topline: linenr_T,
-    pub w_stl_line_count: linenr_T,
-    pub w_stl_topfill: ::core::ffi::c_int,
-    pub w_stl_empty: ::core::ffi::c_char,
-    pub w_stl_recording: ::core::ffi::c_int,
-    pub w_stl_state: ::core::ffi::c_int,
-    pub w_stl_visual_mode: ::core::ffi::c_int,
-    pub w_stl_visual_pos: pos_T,
-    pub w_alt_fnum: ::core::ffi::c_int,
-    pub w_alist: *mut alist_T,
-    pub w_arg_idx: ::core::ffi::c_int,
-    pub w_arg_idx_invalid: ::core::ffi::c_int,
-    pub w_localdir: *mut ::core::ffi::c_char,
-    pub w_prevdir: *mut ::core::ffi::c_char,
-    pub w_onebuf_opt: winopt_T,
-    pub w_allbuf_opt: winopt_T,
-    pub w_p_cc_cols: *mut ::core::ffi::c_int,
-    pub w_p_culopt_flags: uint8_t,
-    pub w_briopt_min: ::core::ffi::c_int,
-    pub w_briopt_shift: ::core::ffi::c_int,
-    pub w_briopt_sbr: bool,
-    pub w_briopt_list: ::core::ffi::c_int,
-    pub w_briopt_vcol: ::core::ffi::c_int,
-    pub w_scbind_pos: ::core::ffi::c_int,
-    pub w_winvar: ScopeDictDictItem,
-    pub w_vars: *mut dict_T,
-    pub w_pcmark: pos_T,
-    pub w_prev_pcmark: pos_T,
-    pub w_jumplist: [xfmark_T; 100],
-    pub w_jumplistlen: ::core::ffi::c_int,
-    pub w_jumplistidx: ::core::ffi::c_int,
-    pub w_changelistidx: ::core::ffi::c_int,
-    pub w_match_head: *mut matchitem_T,
-    pub w_next_match_id: ::core::ffi::c_int,
-    pub w_tagstack: [taggy_T; 20],
-    pub w_tagstackidx: ::core::ffi::c_int,
-    pub w_tagstacklen: ::core::ffi::c_int,
-    pub w_grid: GridView,
-    pub w_grid_alloc: ScreenGrid,
-    pub w_pos_changed: bool,
-    pub w_floating: bool,
-    pub w_float_is_info: bool,
-    pub w_config: WinConfig,
-    pub w_fraction: ::core::ffi::c_int,
-    pub w_prev_fraction_row: ::core::ffi::c_int,
-    pub w_nrwidth_line_count: linenr_T,
-    pub w_statuscol_line_count: linenr_T,
-    pub w_nrwidth_width: ::core::ffi::c_int,
-    pub w_llist: *mut qf_info_T,
-    pub w_llist_ref: *mut qf_info_T,
-    pub w_status_click_defs: *mut StlClickDefinition,
-    pub w_status_click_defs_size: size_t,
-    pub w_winbar_click_defs: *mut StlClickDefinition,
-    pub w_winbar_click_defs_size: size_t,
-    pub w_statuscol_click_defs: *mut StlClickDefinition,
-    pub w_statuscol_click_defs_size: size_t,
-}
 pub const kStlClickFuncRun: C2Rust_Unnamed_5 = 3;
 pub const kStlClickTabClose: C2Rust_Unnamed_5 = 2;
 pub const kStlClickTabSwitch: C2Rust_Unnamed_5 = 1;
@@ -662,49 +103,6 @@ pub const kFloatRelativeMouse: FloatRelative = 3;
 pub const kFloatRelativeCursor: FloatRelative = 2;
 pub const kFloatRelativeWindow: FloatRelative = 1;
 pub const kFloatRelativeEditor: FloatRelative = 0;
-pub type matchitem_T = matchitem;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct matchitem {
-    pub mit_next: *mut matchitem_T,
-    pub mit_id: ::core::ffi::c_int,
-    pub mit_priority: ::core::ffi::c_int,
-    pub mit_pattern: *mut ::core::ffi::c_char,
-    pub mit_match: regmmatch_T,
-    pub mit_pos_array: *mut llpos_T,
-    pub mit_pos_count: ::core::ffi::c_int,
-    pub mit_pos_cur: ::core::ffi::c_int,
-    pub mit_toplnum: linenr_T,
-    pub mit_botlnum: linenr_T,
-    pub mit_hl: match_T,
-    pub mit_hlg_id: ::core::ffi::c_int,
-    pub mit_conceal_char: ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct match_T {
-    pub rm: regmmatch_T,
-    pub buf: *mut buf_T,
-    pub lnum: linenr_T,
-    pub attr: ::core::ffi::c_int,
-    pub attr_cur: ::core::ffi::c_int,
-    pub first_lnum: linenr_T,
-    pub startcol: colnr_T,
-    pub endcol: colnr_T,
-    pub is_addpos: bool,
-    pub has_cursor: bool,
-    pub tm: proftime_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct regmmatch_T {
-    pub regprog: *mut regprog_T,
-    pub startpos: [lpos_T; 10],
-    pub endpos: [lpos_T; 10],
-    pub rmm_matchcol: colnr_T,
-    pub rmm_ic: ::core::ffi::c_int,
-    pub rmm_maxcol: colnr_T,
-}
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -725,53 +123,10 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub type frame_T = frame_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct frame_S {
-    pub fr_layout: ::core::ffi::c_char,
-    pub fr_width: ::core::ffi::c_int,
-    pub fr_newwidth: ::core::ffi::c_int,
-    pub fr_height: ::core::ffi::c_int,
-    pub fr_newheight: ::core::ffi::c_int,
-    pub fr_parent: *mut frame_T,
-    pub fr_next: *mut frame_T,
-    pub fr_prev: *mut frame_T,
-    pub fr_child: *mut frame_T,
-    pub fr_win: *mut win_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct regmatch_T {
-    pub regprog: *mut regprog_T,
-    pub startp: [*mut ::core::ffi::c_char; 10],
-    pub endp: [*mut ::core::ffi::c_char; 10],
-    pub rm_matchcol: colnr_T,
-    pub rm_ic: bool,
-}
 pub const kCallbackLua: CallbackType = 3;
 pub const kCallbackPartial: CallbackType = 2;
 pub const kCallbackFuncref: CallbackType = 1;
 pub const kCallbackNone: CallbackType = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_13 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut *mut WinInfo,
-}
-pub type WinInfo = wininfo_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct wininfo_S {
-    pub wi_win: *mut win_T,
-    pub wi_mark: fmark_T,
-    pub wi_optset: bool,
-    pub wi_opt: winopt_T,
-    pub wi_fold_manual: bool,
-    pub wi_folds: garray_T,
-    pub wi_changelistidx: ::core::ffi::c_int,
-}
 pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
@@ -794,19 +149,6 @@ pub const MB_MAXBYTES: C2Rust_Unnamed_17 = 21;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const kCharsizeFast: C2Rust_Unnamed_18 = 1;
 pub const kCharsizeRegular: C2Rust_Unnamed_18 = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct CharsizeArg {
-    pub win: *mut win_T,
-    pub line: *mut ::core::ffi::c_char,
-    pub use_tabstop: bool,
-    pub indent_width: ::core::ffi::c_int,
-    pub virt_row: ::core::ffi::c_int,
-    pub cur_text_width_left: ::core::ffi::c_int,
-    pub cur_text_width_right: ::core::ffi::c_int,
-    pub max_head_vcol: ::core::ffi::c_int,
-    pub iter: [MarkTreeIter; 1],
-}
 pub const CLASS_NONE: C2Rust_Unnamed_26 = 99;
 pub const CLASS_XDIGIT: C2Rust_Unnamed_26 = 11;
 pub const CLASS_UPPER: C2Rust_Unnamed_26 = 10;
@@ -2329,7 +1671,7 @@ unsafe extern "C" fn reg_breakcheck() {
     }
 }
 unsafe extern "C" fn reg_iswordc(mut c: ::core::ffi::c_int) -> bool {
-    return vim_iswordc_buf(c, (*rex.ptr()).reg_buf.cast());
+    return vim_iswordc_buf(c, (*rex.ptr()).reg_buf);
 }
 static can_f_submatch: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static rsm: GlobalCell<regsubmatch_T> = GlobalCell::new(regsubmatch_T {
@@ -7364,7 +6706,7 @@ unsafe extern "C" fn regrepeat(mut p: *mut uint8_t, mut maxcount: int64_t) -> ::
                         while count < maxcount {
                             if vim_iswordp_buf(
                                 scan as *mut ::core::ffi::c_char,
-                                (*rex.ptr()).reg_buf.cast(),
+                                (*rex.ptr()).reg_buf,
                             ) as ::core::ffi::c_int
                                 != 0
                                 && (testval != 0 || !ascii_isdigit(*scan as ::core::ffi::c_int))
@@ -7743,8 +7085,8 @@ unsafe extern "C" fn regmatch(
                                     0 as size_t
                                 };
                                 let mut fm: *mut fmark_T = mark_get(
-                                    (*rex.ptr()).reg_buf.cast(), // local buf_T copy
-                                    curwin.get().cast(),
+                                    (*rex.ptr()).reg_buf,
+                                    curwin.get(),
                                     ::core::ptr::null_mut::<fmark_T>(),
                                     kMarkBufLocal,
                                     mark,
@@ -7965,7 +7307,7 @@ unsafe extern "C" fn regmatch(
                             KWORD => {
                                 if !vim_iswordp_buf(
                                     (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                    (*rex.ptr()).reg_buf.cast(),
+                                    (*rex.ptr()).reg_buf,
                                 ) {
                                     status = RA_NOMATCH;
                                 } else {
@@ -7982,7 +7324,7 @@ unsafe extern "C" fn regmatch(
                                     != 0
                                     || !vim_iswordp_buf(
                                         (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                        (*rex.ptr()).reg_buf.cast(),
+                                        (*rex.ptr()).reg_buf,
                                     )
                                 {
                                     status = RA_NOMATCH;
@@ -23033,7 +22375,7 @@ unsafe extern "C" fn nfa_regmatch(
                                 -914 => {
                                     result = vim_iswordp_buf(
                                         (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                        (*rex.ptr()).reg_buf.cast(),
+                                        (*rex.ptr()).reg_buf,
                                     )
                                         as ::core::ffi::c_int;
                                     if result != 0 {
@@ -23045,7 +22387,7 @@ unsafe extern "C" fn nfa_regmatch(
                                     result = (!ascii_isdigit(curc)
                                         && vim_iswordp_buf(
                                             (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                            (*rex.ptr()).reg_buf.cast(),
+                                            (*rex.ptr()).reg_buf,
                                         )
                                             as ::core::ffi::c_int
                                             != 0)
@@ -23579,8 +22921,8 @@ unsafe extern "C" fn nfa_regmatch(
                                         0 as size_t
                                     };
                                     let mut fm: *mut fmark_T = mark_get(
-                                        (*rex.ptr()).reg_buf.cast(), // local buf_T copy
-                                        curwin.get().cast(),
+                                        (*rex.ptr()).reg_buf,
+                                        curwin.get(),
                                         ::core::ptr::null_mut::<fmark_T>(),
                                         kMarkBufLocal,
                                         (*(*t).state).val,

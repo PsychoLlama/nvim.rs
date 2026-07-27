@@ -499,7 +499,6 @@ pub struct pos_save_T {
     pub w_cursor_save: pos_T,
     pub w_cursor_corr: pos_T,
 }
-pub type qf_info_T = qf_info_S;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct syn_time_T {
