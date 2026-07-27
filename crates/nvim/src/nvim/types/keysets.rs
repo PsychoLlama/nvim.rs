@@ -1,9 +1,82 @@
 #![forbid(unsafe_code)]
 
-// Canonical type definitions, hoisted out of the per-module copies c2rust
-// emitted. One definition per logical type; every module re-exports here.
+//! The keysets: the option-dict layouts the API takes by name.
+//!
+//! Canonical type definitions, hoisted out of the per-module copies c2rust
+//! emitted. One definition per logical type; every module re-exports here.
+//!
+//! These structs are also the source of truth `tools/apigen` generates the
+//! keyset tables from (`crate::src::nvim::api::private::dispatch`), so the
+//! shape here is load-bearing:
+//!
+//! - Declaration order fixes the table order, which fixes each key's
+//!   `opt_index` — the bit it occupies in the leading `is_set__*_` mask.
+//!   Reordering fields renumbers those bits.
+//! - The leading `is_set__<name>_: OptionalKeys` field, when present, says
+//!   the keyset tracks which keys the caller actually set. A keyset without
+//!   one gives every key an `opt_index` of -1.
+//! - The field type picks the `ObjectType` a value must arrive as; `Object`
+//!   accepts any, and `HLGroupID` marks a highlight-group name the converter
+//!   resolves to an id.
+//! - A field whose name on the wire differs from its name here says so in a
+//!   doc comment of the form ``Wire key: `name`.``
+
 use super::*;
 
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict__shada_buflist_item {
+    pub is_set___shada_buflist_item_: OptionalKeys,
+    pub l: Integer,
+    pub c: Integer,
+    pub f: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict__shada_mark {
+    pub is_set___shada_mark_: OptionalKeys,
+    pub n: Integer,
+    pub l: Integer,
+    pub c: Integer,
+    pub f: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict__shada_register {
+    pub is_set___shada_register_: OptionalKeys,
+    pub rc: StringArray,
+    pub ru: Boolean,
+    pub rt: Integer,
+    pub n: Integer,
+    pub rw: Integer,
+}
+/// ShaDa entries spell their keys as two-letter codes, so every field here
+/// names the one it travels under.
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict__shada_search_pat {
+    pub is_set___shada_search_pat_: OptionalKeys,
+    /// Wire key: `sm`.
+    pub magic: Boolean,
+    /// Wire key: `sc`.
+    pub smartcase: Boolean,
+    /// Wire key: `sl`.
+    pub has_line_offset: Boolean,
+    /// Wire key: `se`.
+    pub place_cursor_at_end: Boolean,
+    /// Wire key: `su`.
+    pub is_last_used: Boolean,
+    /// Wire key: `ss`.
+    pub is_substitute_pattern: Boolean,
+    /// Wire key: `sh`.
+    pub highlighted: Boolean,
+    /// Wire key: `sb`.
+    pub search_backward: Boolean,
+    /// Wire key: `so`.
+    pub offset: Integer,
+    /// Wire key: `sp`.
+    pub pat: String_0,
+}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_buf_attach {
@@ -48,6 +121,45 @@ pub struct KeyDict_cmd {
     pub nargs: Object,
     pub addr: String_0,
     pub nextcmd: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_cmd_magic {
+    pub is_set__cmd_magic_: OptionalKeys,
+    pub file: Boolean,
+    pub bar: Boolean,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_cmd_mods {
+    pub is_set__cmd_mods_: OptionalKeys,
+    pub silent: Boolean,
+    pub emsg_silent: Boolean,
+    pub unsilent: Boolean,
+    pub filter: Dict,
+    pub sandbox: Boolean,
+    pub noautocmd: Boolean,
+    pub browse: Boolean,
+    pub confirm: Boolean,
+    pub hide: Boolean,
+    pub horizontal: Boolean,
+    pub keepalt: Boolean,
+    pub keepjumps: Boolean,
+    pub keepmarks: Boolean,
+    pub keeppatterns: Boolean,
+    pub lockmarks: Boolean,
+    pub noswapfile: Boolean,
+    pub tab: Integer,
+    pub verbose: Integer,
+    pub vertical: Boolean,
+    pub split: String_0,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_cmd_mods_filter {
+    pub is_set__cmd_mods_filter_: OptionalKeys,
+    pub pattern: String_0,
+    pub force: Boolean,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -165,6 +277,7 @@ pub struct KeyDict_get_extmarks {
     pub details: Boolean,
     pub hl_name: Boolean,
     pub overlap: Boolean,
+    /// Wire key: `type`.
     pub type_0: String_0,
 }
 #[derive(Copy, Clone)]
@@ -202,6 +315,7 @@ pub struct KeyDict_highlight {
     pub underdotted: Boolean,
     pub underdouble: Boolean,
     pub underline: Boolean,
+    /// Wire key: `default`.
     pub default_: Boolean,
     pub cterm: Dict,
     pub foreground: Object,
@@ -221,6 +335,28 @@ pub struct KeyDict_highlight {
     pub force: Boolean,
     pub update: Boolean,
     pub url: String_0,
+}
+/// The `cterm` sub-dict of a highlight definition. It has no `is_set__` mask:
+/// an unset attribute is simply false.
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_highlight_cterm {
+    pub bold: Boolean,
+    pub standout: Boolean,
+    pub strikethrough: Boolean,
+    pub underline: Boolean,
+    pub undercurl: Boolean,
+    pub underdouble: Boolean,
+    pub underdotted: Boolean,
+    pub underdashed: Boolean,
+    pub italic: Boolean,
+    pub reverse: Boolean,
+    pub altfont: Boolean,
+    pub dim: Boolean,
+    pub blink: Boolean,
+    pub conceal: Boolean,
+    pub overline: Boolean,
+    pub nocombine: Boolean,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -354,6 +490,7 @@ pub struct KeyDict_user_command {
     pub nargs: Object,
     pub preview: Object,
     pub range: Object,
+    /// Wire key: `register`.
     pub register_: Boolean,
 }
 #[derive(Copy, Clone)]
@@ -394,4 +531,21 @@ pub struct KeyDict_win_text_height {
     pub start_vcol: Integer,
     pub end_vcol: Integer,
     pub max_height: Integer,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct KeyDict_xdl_diff {
+    pub is_set__xdl_diff_: OptionalKeys,
+    pub on_hunk: LuaRef,
+    pub result_type: String_0,
+    pub algorithm: String_0,
+    pub ctxlen: Integer,
+    pub interhunkctxlen: Integer,
+    pub linematch: Object,
+    pub ignore_whitespace: Boolean,
+    pub ignore_whitespace_change: Boolean,
+    pub ignore_whitespace_change_at_eol: Boolean,
+    pub ignore_cr_at_eol: Boolean,
+    pub ignore_blank_lines: Boolean,
+    pub indent_heuristic: Boolean,
 }

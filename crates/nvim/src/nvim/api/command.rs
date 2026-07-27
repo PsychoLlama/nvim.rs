@@ -34,11 +34,12 @@ pub use crate::src::nvim::types::{
     DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
     DecorVirtText_data as C2Rust_Unnamed_2, Dict, Direction, Error, ErrorType, ExtmarkUndoObject,
     FieldHashfn, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer, Intersection,
-    KeyDict_cmd, KeyDict_cmd_opts, KeyDict_empty, KeyDict_get_commands, KeyDict_user_command,
-    KeySetLink, KeyValuePair, LineGetter, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t,
-    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, Object,
-    ObjectType, OptInt, OptionalKeys, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t,
-    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts,
+    KeyDict_empty, KeyDict_get_commands, KeyDict_user_command, KeySetLink, KeyValuePair,
+    LineGetter, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, Object, ObjectType, OptInt,
+    OptionalKeys, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
+    Set_uint64_t, SpecialVarValue, StlClickDefinition,
     StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, StringBuilder, Terminal, Timestamp,
     TryState, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
     WinInfo, WinSplit, WinStyle, Window, alist_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T,
@@ -138,45 +139,6 @@ pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct KeyDict_cmd_magic {
-    pub is_set__cmd_magic_: OptionalKeys,
-    pub file: Boolean,
-    pub bar: Boolean,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct KeyDict_cmd_mods {
-    pub is_set__cmd_mods_: OptionalKeys,
-    pub silent: Boolean,
-    pub emsg_silent: Boolean,
-    pub unsilent: Boolean,
-    pub filter: Dict,
-    pub sandbox: Boolean,
-    pub noautocmd: Boolean,
-    pub browse: Boolean,
-    pub confirm: Boolean,
-    pub hide: Boolean,
-    pub horizontal: Boolean,
-    pub keepalt: Boolean,
-    pub keepjumps: Boolean,
-    pub keepmarks: Boolean,
-    pub keeppatterns: Boolean,
-    pub lockmarks: Boolean,
-    pub noswapfile: Boolean,
-    pub tab: Integer,
-    pub verbose: Integer,
-    pub vertical: Boolean,
-    pub split: String_0,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct KeyDict_cmd_mods_filter {
-    pub is_set__cmd_mods_filter_: OptionalKeys,
-    pub pattern: String_0,
-    pub force: Boolean,
-}
 pub const WSP_ABOVE: C2Rust_Unnamed_19 = 128;
 pub const WSP_BELOW: C2Rust_Unnamed_19 = 64;
 pub const WSP_TOP: C2Rust_Unnamed_19 = 8;

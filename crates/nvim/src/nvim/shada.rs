@@ -85,17 +85,19 @@ pub use crate::src::nvim::types::{
     DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
     DecorVirtText_data as C2Rust_Unnamed_4, Dict, ExtmarkUndoObject, FieldHashfn, FileDescriptor,
     FileID, FileInfo, Float, FloatAnchor, FloatRelative, GridView, Integer, Intersection,
-    KeySetLink, KeyValuePair, ListLenSpecials, LuaRef, MHPutStatus, MTKey, MTNode, MTPos,
-    Map_cstr_t_ptr_t, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MapHash, MarkGet, MarkTree, MotionType, Object, ObjectType, OptInt,
-    OptionalKeys, PackerBuffer, PackerBufferFlush, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid,
-    SearchOffset, SearchPattern, Set_cstr_t, Set_int64_t, Set_ptr_t, Set_uint32_t, Set_uint64_t,
-    SpecialVarValue, StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_14, String_0,
-    StringArray, SubReplacementString, Terminal, Timestamp, VarLockStatus, VarType, VimVarIndex,
-    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
-    Window, alist_T, bhdr_T, bln_values, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
-    chunksize_T, colnr_T, cstr_t, dict_T, dictitem_T, dictvar_S, diff_T, diffblock_S, disptick_T,
-    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_5,
+    KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
+    KeyDict__shada_search_pat, KeySetLink, KeyValuePair, ListLenSpecials, LuaRef, MHPutStatus,
+    MTKey, MTNode, MTPos, Map_cstr_t_ptr_t, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkGet, MarkTree, MotionType, Object,
+    ObjectType, OptInt, OptionalKeys, PackerBuffer, PackerBufferFlush, QUEUE, ScopeDictDictItem,
+    ScopeType, ScreenGrid, SearchOffset, SearchPattern, Set_cstr_t, Set_int64_t, Set_ptr_t,
+    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_14, String_0, StringArray, SubReplacementString,
+    Terminal, Timestamp, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk,
+    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, bhdr_T, bln_values,
+    blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, cstr_t, dict_T,
+    dictitem_T, dictvar_S, diff_T, diffblock_S, disptick_T, extmark_undo_vec_t, fcs_chars_T,
+    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_5,
     file_buffer_b_wininfo as C2Rust_Unnamed_13, file_buffer_update_callbacks as C2Rust_Unnamed_2,
     file_buffer_update_channels as C2Rust_Unnamed_3, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_8, funccall_T, garray_T, gid_t, handle_T,
@@ -280,48 +282,6 @@ pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct KeyDict__shada_search_pat {
-    pub is_set___shada_search_pat_: OptionalKeys,
-    pub magic: Boolean,
-    pub smartcase: Boolean,
-    pub has_line_offset: Boolean,
-    pub place_cursor_at_end: Boolean,
-    pub is_last_used: Boolean,
-    pub is_substitute_pattern: Boolean,
-    pub highlighted: Boolean,
-    pub search_backward: Boolean,
-    pub offset: Integer,
-    pub pat: String_0,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct KeyDict__shada_mark {
-    pub is_set___shada_mark_: OptionalKeys,
-    pub n: Integer,
-    pub l: Integer,
-    pub c: Integer,
-    pub f: String_0,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct KeyDict__shada_register {
-    pub is_set___shada_register_: OptionalKeys,
-    pub rc: StringArray,
-    pub ru: Boolean,
-    pub rt: Integer,
-    pub n: Integer,
-    pub rw: Integer,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct KeyDict__shada_buflist_item {
-    pub is_set___shada_buflist_item_: OptionalKeys,
-    pub l: Integer,
-    pub c: Integer,
-    pub f: String_0,
-}
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXLNUM: C2Rust_Unnamed_15 = 2147483647;
 pub const kListLenMayKnow: ListLenSpecials = -3;

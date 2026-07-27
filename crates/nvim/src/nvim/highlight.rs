@@ -37,17 +37,18 @@ pub use crate::src::nvim::types::{
     DecorPriority, DecorProvider, DecorProvider_state as C2Rust_Unnamed_13, DecorVirtText,
     DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, ExtmarkUndoObject, FieldHashfn,
     FileID, Float, FloatAnchor, FloatRelative, GridView, HLGroupID, HlAttrs, HlEntry, HlKind,
-    Integer, Intersection, KeyDict_highlight, KeySetLink, KeyValuePair, LuaRef, LuaRetMode,
-    MHPutStatus, MTKey, MTNode, MTPos, Map_ColorKey_ColorItem, Map_int_ptr_t, Map_int64_t_int64_t,
-    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_int, Map_uint64_t_ptr_t, MapHash,
-    MarkTree, NS, Object, ObjectType, OptInt, OptionalKeys, PackerBuffer, PackerBufferFlush, QUEUE,
-    RemoteUI, RgbValue, ScopeDictDictItem, ScopeType, ScreenGrid, Set_ColorKey, Set_HlEntry,
-    Set_cstr_t, Set_int, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal,
-    Timestamp, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig,
-    WinInfo, WinSplit, WinStyle, Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T,
-    bufstate_T, chunksize_T, colnr_T, consumed_blk, cstr_t, dict_T, dictvar_S, disptick_T,
-    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
+    Integer, Intersection, KeyDict_highlight, KeyDict_highlight_cterm, KeySetLink, KeyValuePair,
+    LuaRef, LuaRetMode, MHPutStatus, MTKey, MTNode, MTPos, Map_ColorKey_ColorItem, Map_int_ptr_t,
+    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_int,
+    Map_uint64_t_ptr_t, MapHash, MarkTree, NS, Object, ObjectType, OptInt, OptionalKeys,
+    PackerBuffer, PackerBufferFlush, QUEUE, RemoteUI, RgbValue, ScopeDictDictItem, ScopeType,
+    ScreenGrid, Set_ColorKey, Set_HlEntry, Set_cstr_t, Set_int, Set_int64_t, Set_uint32_t,
+    Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal, Timestamp, VarLockStatus,
+    VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit,
+    WinStyle, Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
+    chunksize_T, colnr_T, consumed_blk, cstr_t, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t,
+    fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
     file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, handle_T, hash_T,
@@ -131,26 +132,6 @@ pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct KeyDict_highlight_cterm {
-    pub bold: Boolean,
-    pub standout: Boolean,
-    pub strikethrough: Boolean,
-    pub underline: Boolean,
-    pub undercurl: Boolean,
-    pub underdouble: Boolean,
-    pub underdotted: Boolean,
-    pub underdashed: Boolean,
-    pub italic: Boolean,
-    pub reverse: Boolean,
-    pub altfont: Boolean,
-    pub dim: Boolean,
-    pub blink: Boolean,
-    pub conceal: Boolean,
-    pub overline: Boolean,
-    pub nocombine: Boolean,
-}
 pub const kDecorProviderDisabled: C2Rust_Unnamed_13 = 4;
 pub const kDecorProviderRedrawDisabled: C2Rust_Unnamed_13 = 3;
 pub const kDecorProviderWinDisabled: C2Rust_Unnamed_13 = 2;
