@@ -25,7 +25,6 @@
     "crates/nvim/src/nvim/api/vimscript.rs": 94,
     "crates/nvim/src/nvim/api/win_config.rs": 168,
     "crates/nvim/src/nvim/api/window.rs": 37,
-    "crates/nvim/src/nvim/arglist.rs": 10,
     "crates/nvim/src/nvim/autocmd.rs": 268,
     "crates/nvim/src/nvim/base64.rs": 2,
     "crates/nvim/src/nvim/buffer.rs": 139,

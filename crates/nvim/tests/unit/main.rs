@@ -5,6 +5,7 @@
 
 mod support;
 
+mod arglist;
 mod charset;
 mod cmdhist;
 mod digraph;
