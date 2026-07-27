@@ -10,6 +10,7 @@ use crate::src::nvim::drawscreen::{
     redraw_all_later, redraw_curbuf_later, redraw_later, setcursor, show_cursor_info_later,
     showmode, update_screen,
 };
+use crate::src::nvim::eval::typval::tv_list_len;
 use crate::src::nvim::eval::typval::{
     tv_check_for_nonnull_dict_arg, tv_dict_add_nr, tv_dict_alloc_ret, tv_dict_find,
     tv_get_number_chk, tv_get_string_chk, tv_list_find,
@@ -720,13 +721,6 @@ pub const CPO_MATCHBSL: ::core::ffi::c_int = 'M' as ::core::ffi::c_int;
 pub const CPO_LINEOFF: ::core::ffi::c_int = 'o' as ::core::ffi::c_int;
 pub const CPO_MATCH: ::core::ffi::c_int = '%' as ::core::ffi::c_int;
 pub const CPO_SCOLON: ::core::ffi::c_int = ';' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 static e_search_hit_top_without_match_for_str: GlobalCell<[::core::ffi::c_char; 43]> =
     GlobalCell::new(unsafe {

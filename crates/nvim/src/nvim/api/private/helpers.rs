@@ -1,5 +1,6 @@
 use crate::src::nvim::api::private::converter::{object_to_vim, vim_to_object};
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::src::nvim::eval::typval::tv_dict_is_watched;
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_item_alloc_len, tv_dict_item_remove,
     tv_dict_watcher_notify,
@@ -1845,10 +1846,6 @@ pub unsafe extern "C" fn api_set_sctx(mut channel_id: uint64_t) -> sctx_T {
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_dict_is_watched(d: *const dict_T) -> bool {
-    return !d.is_null() && QUEUE_EMPTY(&raw const (*d).watchers) == 0;
-}
 pub const SID_LUA: ::core::ffi::c_int = -8 as ::core::ffi::c_int;
 pub const SID_API_CLIENT: ::core::ffi::c_int = -9 as ::core::ffi::c_int;
 static packed_api_metadata: GlobalCell<[uint8_t; 32041]> = GlobalCell::new([

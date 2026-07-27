@@ -5,6 +5,7 @@ use crate::src::nvim::charset::{
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_get_string_buf_chk, tv_list_alloc, tv_list_append_string, tv_list_init_static10,
 };
+use crate::src::nvim::eval::typval::{tv_list_first, tv_list_len, tv_list_ref};
 use crate::src::nvim::eval::userfunc::call_func;
 use crate::src::nvim::eval_1::{eval_to_string, partial_name};
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init, ga_set_growsize};
@@ -24052,27 +24053,6 @@ pub unsafe extern "C" fn vim_regexec_multi(
 }
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
-    if l.is_null() {
-        return;
-    }
-    (*l).lv_refcount += 1;
-}
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
 pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_argv_func: None,
     fe_firstline: 0 as linenr_T,

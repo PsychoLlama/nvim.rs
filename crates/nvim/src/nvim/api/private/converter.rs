@@ -2,6 +2,10 @@ use crate::src::nvim::api::private::helpers::{arena_array, arena_dict, arena_str
 use crate::src::nvim::eval::decode::decode_string;
 use crate::src::nvim::eval::encode::encode_vim_list_to_buf;
 use crate::src::nvim::eval::typval::{
+    tv_blob_len, tv_list_copyid, tv_list_first, tv_list_last, tv_list_len, tv_list_ref,
+    tv_list_set_copyid,
+};
+use crate::src::nvim::eval::typval::{
     tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_alloc, tv_list_alloc,
     tv_list_append_owned_tv,
 };
@@ -114,49 +118,6 @@ unsafe extern "C" fn _memcpy_free(
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
-    if l.is_null() {
-        return;
-    }
-    (*l).lv_refcount += 1;
-}
-#[inline]
-unsafe extern "C" fn tv_list_set_copyid(l: *mut list_T, copyid: ::core::ffi::c_int) {
-    (*l).lv_copyID = copyid;
-}
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
-#[inline]
-unsafe extern "C" fn tv_list_copyid(l: *const list_T) -> ::core::ffi::c_int {
-    return (*l).lv_copyID;
-}
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
-#[inline]
-unsafe extern "C" fn tv_list_last(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_last;
-}
-#[inline]
-unsafe extern "C" fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
-    if b.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*b).bv_ga.ga_len;
-}
 pub const FC_LUAREF: ::core::ffi::c_int = 0x800 as ::core::ffi::c_int;
 #[inline(always)]
 unsafe extern "C" fn tv_strlen(tv: *const typval_T) -> size_t {
@@ -3808,11 +3769,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                 edata,
                                 &raw mut mpstack,
                                 cur_mpsv,
-                                &raw mut (*(tv_list_first
-                                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                    kv_pair,
-                                ))
-                                .li_tv,
+                                &raw mut (*tv_list_first(kv_pair)).li_tv,
                                 copyID,
                                 objname,
                             ) == FAIL
@@ -3820,11 +3777,7 @@ unsafe extern "C" fn encode_vim_to_object(
                                 break '_encode_vim_to__error_ret;
                             }
                             typval_encode_after_key(edata);
-                            tv = &raw mut (*(tv_list_last
-                                as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                kv_pair,
-                            ))
-                            .li_tv;
+                            tv = &raw mut (*tv_list_last(kv_pair)).li_tv;
                             (*cur_mpsv).data.l.li = (*(*cur_mpsv).data.l.li).li_next;
                         }
                     }

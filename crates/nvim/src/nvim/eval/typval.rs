@@ -272,27 +272,27 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 #[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
+pub unsafe fn tv_list_ref(l: *mut list_T) {
     if l.is_null() {
         return;
     }
     (*l).lv_refcount += 1;
 }
 #[inline(always)]
-unsafe extern "C" fn tv_list_set_ret(tv: *mut typval_T, l: *mut list_T) {
+pub unsafe fn tv_list_set_ret(tv: *mut typval_T, l: *mut list_T) {
     (*tv).v_type = VAR_LIST;
     (*tv).vval.v_list = l;
     tv_list_ref(l);
 }
 #[inline]
-unsafe extern "C" fn tv_list_locked(l: *const list_T) -> VarLockStatus {
+pub unsafe fn tv_list_locked(l: *const list_T) -> VarLockStatus {
     if l.is_null() {
         return VAR_FIXED;
     }
     return (*l).lv_lock;
 }
 #[inline]
-unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
+pub unsafe fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
     if l.is_null() {
         '_c2rust_label: {
             if lock as ::core::ffi::c_uint == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -311,25 +311,22 @@ unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
     (*l).lv_lock = lock;
 }
 #[inline]
-unsafe extern "C" fn tv_list_set_copyid(l: *mut list_T, copyid: ::core::ffi::c_int) {
+pub unsafe fn tv_list_set_copyid(l: *mut list_T, copyid: ::core::ffi::c_int) {
     (*l).lv_copyID = copyid;
 }
 #[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
+pub unsafe fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
     if l.is_null() {
         return 0 as ::core::ffi::c_int;
     }
     return (*l).lv_len;
 }
 #[inline]
-unsafe extern "C" fn tv_list_copyid(l: *const list_T) -> ::core::ffi::c_int {
+pub unsafe fn tv_list_copyid(l: *const list_T) -> ::core::ffi::c_int {
     return (*l).lv_copyID;
 }
 #[inline]
-unsafe extern "C" fn tv_list_uidx(
-    l: *const list_T,
-    mut n: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+pub unsafe fn tv_list_uidx(l: *const list_T, mut n: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if n < 0 as ::core::ffi::c_int {
         n += tv_list_len(l);
     }
@@ -339,21 +336,21 @@ unsafe extern "C" fn tv_list_uidx(
     return n;
 }
 #[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
+pub unsafe fn tv_list_first(l: *const list_T) -> *mut listitem_T {
     if l.is_null() {
         return ::core::ptr::null_mut::<listitem_T>();
     }
     return (*l).lv_first;
 }
 #[inline]
-unsafe extern "C" fn tv_list_last(l: *const list_T) -> *mut listitem_T {
+pub unsafe fn tv_list_last(l: *const list_T) -> *mut listitem_T {
     if l.is_null() {
         return ::core::ptr::null_mut::<listitem_T>();
     }
     return (*l).lv_last;
 }
 #[inline(always)]
-unsafe extern "C" fn tv_dict_set_ret(tv: *mut typval_T, d: *mut dict_T) {
+pub unsafe fn tv_dict_set_ret(tv: *mut typval_T, d: *mut dict_T) {
     (*tv).v_type = VAR_DICT;
     (*tv).vval.v_dict = d;
     if !d.is_null() {
@@ -361,18 +358,18 @@ unsafe extern "C" fn tv_dict_set_ret(tv: *mut typval_T, d: *mut dict_T) {
     }
 }
 #[inline]
-unsafe extern "C" fn tv_dict_len(d: *const dict_T) -> ::core::ffi::c_long {
+pub unsafe fn tv_dict_len(d: *const dict_T) -> ::core::ffi::c_long {
     if d.is_null() {
         return 0 as ::core::ffi::c_long;
     }
     return (*d).dv_hashtab.ht_used as ::core::ffi::c_long;
 }
 #[inline]
-unsafe extern "C" fn tv_dict_is_watched(d: *const dict_T) -> bool {
+pub unsafe fn tv_dict_is_watched(d: *const dict_T) -> bool {
     return !d.is_null() && QUEUE_EMPTY(&raw const (*d).watchers) == 0;
 }
 #[inline(always)]
-unsafe extern "C" fn tv_blob_set_ret(tv: *mut typval_T, b: *mut blob_T) {
+pub unsafe fn tv_blob_set_ret(tv: *mut typval_T, b: *mut blob_T) {
     (*tv).v_type = VAR_BLOB;
     (*tv).vval.v_blob = b;
     if !b.is_null() {
@@ -380,27 +377,27 @@ unsafe extern "C" fn tv_blob_set_ret(tv: *mut typval_T, b: *mut blob_T) {
     }
 }
 #[inline]
-unsafe extern "C" fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
+pub unsafe fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
     if b.is_null() {
         return 0 as ::core::ffi::c_int;
     }
     return (*b).bv_ga.ga_len;
 }
 #[inline(always)]
-unsafe extern "C" fn tv_blob_get(b: *const blob_T, mut idx: ::core::ffi::c_int) -> uint8_t {
+pub unsafe fn tv_blob_get(b: *const blob_T, mut idx: ::core::ffi::c_int) -> uint8_t {
     return *((*b).bv_ga.ga_data as *mut uint8_t).offset(idx as isize);
 }
 #[inline(always)]
-unsafe extern "C" fn tv_blob_set(blob: *mut blob_T, mut idx: ::core::ffi::c_int, mut c: uint8_t) {
+pub unsafe fn tv_blob_set(blob: *mut blob_T, mut idx: ::core::ffi::c_int, mut c: uint8_t) {
     *((*blob).bv_ga.ga_data as *mut uint8_t).offset(idx as isize) = c;
 }
 #[inline(always)]
-unsafe extern "C" fn tv_dict_watcher_node_data(mut q: *mut QUEUE) -> *mut DictWatcher {
+pub unsafe fn tv_dict_watcher_node_data(mut q: *mut QUEUE) -> *mut DictWatcher {
     return (q as *mut ::core::ffi::c_char).offset(-(32 as ::core::ffi::c_ulong as isize))
         as *mut DictWatcher;
 }
 #[inline(always)]
-unsafe extern "C" fn tv_is_func(tv: typval_T) -> bool {
+pub unsafe fn tv_is_func(tv: typval_T) -> bool {
     return tv.v_type as ::core::ffi::c_uint
         == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
         || tv.v_type as ::core::ffi::c_uint
@@ -6432,22 +6429,14 @@ unsafe extern "C" fn encode_vim_to_nothing(
                                 ignored,
                                 &raw mut mpstack,
                                 cur_mpsv,
-                                &raw mut (*(tv_list_first
-                                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                    kv_pair,
-                                ))
-                                .li_tv,
+                                &raw mut (*tv_list_first(kv_pair)).li_tv,
                                 copyID,
                                 objname,
                             ) == FAIL
                             {
                                 break '_encode_vim_to__error_ret;
                             }
-                            tv = &raw mut (*(tv_list_last
-                                as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                kv_pair,
-                            ))
-                            .li_tv;
+                            tv = &raw mut (*tv_list_last(kv_pair)).li_tv;
                             (*cur_mpsv).data.l.li = (*(*cur_mpsv).data.l.li).li_next;
                         }
                     }

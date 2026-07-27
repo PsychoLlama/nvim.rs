@@ -28,6 +28,11 @@ use crate::src::nvim::eval::typval::{
     tv_list_free_list, tv_list_join, tv_list_slice_or_index, tv_list_unref, tv_list_watch_add,
     tv_list_watch_remove, tv2bool, value_check_lock,
 };
+use crate::src::nvim::eval::typval::{
+    tv_blob_get, tv_blob_len, tv_blob_set_ret, tv_dict_is_watched, tv_dict_set_ret,
+    tv_dict_watcher_node_data, tv_is_func, tv_list_copyid, tv_list_first, tv_list_last,
+    tv_list_len, tv_list_ref, tv_list_set_lock, tv_list_set_ret,
+};
 use crate::src::nvim::eval::userfunc::{
     call_func, call_simple_func, call_simple_luafunc, deref_func_name, eval_fname_script,
     find_func, free_unref_funccal, func_init, func_ptr_unref, func_ref, func_unref,
@@ -7341,10 +7346,8 @@ pub unsafe extern "C" fn tv_to_argv(
         emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
         return ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     }
-    let mut arg0: *const ::core::ffi::c_char = tv_get_string_chk(
-        &raw mut (*(tv_list_first as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(argl))
-            .li_tv,
-    );
+    let mut arg0: *const ::core::ffi::c_char =
+        tv_get_string_chk(&raw mut (*tv_list_first(argl)).li_tv);
     let mut exe_resolved: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if arg0.is_null() || !os_can_exe(arg0, &raw mut exe_resolved, true_0 != 0) {
         if !arg0.is_null() && !executable.is_null() {
@@ -10224,50 +10227,6 @@ pub unsafe extern "C" fn typval_tostring(
     }
     return encode_tv2string(arg, ::core::ptr::null_mut::<size_t>());
 }
-#[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
-    if l.is_null() {
-        return;
-    }
-    (*l).lv_refcount += 1;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_list_set_ret(tv: *mut typval_T, l: *mut list_T) {
-    (*tv).v_type = VAR_LIST;
-    (*tv).vval.v_list = l;
-    tv_list_ref(l);
-}
-#[inline]
-unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
-    if l.is_null() {
-        '_c2rust_label: {
-            if lock as ::core::ffi::c_uint == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-            } else {
-                __assert_fail(
-                    b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    76 as ::core::ffi::c_uint,
-                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        return;
-    }
-    (*l).lv_lock = lock;
-}
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
-#[inline]
-unsafe extern "C" fn tv_list_copyid(l: *const list_T) -> ::core::ffi::c_int {
-    return (*l).lv_copyID;
-}
 #[inline]
 unsafe extern "C" fn tv_list_latest_copy(l: *const list_T) -> *mut list_T {
     return (*l).lv_copylist;
@@ -10275,51 +10234,6 @@ unsafe extern "C" fn tv_list_latest_copy(l: *const list_T) -> *mut list_T {
 #[inline]
 unsafe extern "C" fn tv_list_has_watchers(l: *const list_T) -> bool {
     return !l.is_null() && !(*l).lv_watch.is_null();
-}
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
-#[inline]
-unsafe extern "C" fn tv_list_last(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_last;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_dict_set_ret(tv: *mut typval_T, d: *mut dict_T) {
-    (*tv).v_type = VAR_DICT;
-    (*tv).vval.v_dict = d;
-    if !d.is_null() {
-        (*d).dv_refcount += 1;
-    }
-}
-#[inline]
-unsafe extern "C" fn tv_dict_is_watched(d: *const dict_T) -> bool {
-    return !d.is_null() && QUEUE_EMPTY(&raw const (*d).watchers) == 0;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_blob_set_ret(tv: *mut typval_T, b: *mut blob_T) {
-    (*tv).v_type = VAR_BLOB;
-    (*tv).vval.v_blob = b;
-    if !b.is_null() {
-        (*b).bv_refcount += 1;
-    }
-}
-#[inline]
-unsafe extern "C" fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
-    if b.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*b).bv_ga.ga_len;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_blob_get(b: *const blob_T, mut idx: ::core::ffi::c_int) -> uint8_t {
-    return *((*b).bv_ga.ga_data as *mut uint8_t).offset(idx as isize);
 }
 #[inline]
 unsafe extern "C" fn tv_init(tv: *mut typval_T) {
@@ -10330,18 +10244,6 @@ unsafe extern "C" fn tv_init(tv: *mut typval_T) {
             ::core::mem::size_of::<typval_T>(),
         );
     }
-}
-#[inline(always)]
-unsafe extern "C" fn tv_dict_watcher_node_data(mut q: *mut QUEUE) -> *mut DictWatcher {
-    return (q as *mut ::core::ffi::c_char).offset(-(32 as ::core::ffi::c_ulong as isize))
-        as *mut DictWatcher;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_is_func(tv: typval_T) -> bool {
-    return tv.v_type as ::core::ffi::c_uint
-        == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-        || tv.v_type as ::core::ffi::c_uint
-            == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint;
 }
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
 pub const FUNCEXE_INIT: funcexe_T = funcexe_T {

@@ -17,6 +17,7 @@ use crate::src::nvim::cursor::{check_cursor_col, check_cursor_lnum};
 use crate::src::nvim::diff::{diff_buf_add, diff_buf_delete, diff_mode_buf, diffopt_hiddenoff};
 use crate::src::nvim::digraph::{keymap_ga_clear, keymap_init};
 use crate::src::nvim::drawscreen::{redraw_later, redrawing, status_redraw_all};
+use crate::src::nvim::eval::typval::tv_dict_is_watched;
 use crate::src::nvim::eval::typval::{
     callback_free, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_copy,
     tv_dict_watcher_notify,
@@ -6617,10 +6618,6 @@ pub unsafe extern "C" fn read_buffer_into(
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const CPO_INTMOD: ::core::ffi::c_int = 'i' as ::core::ffi::c_int;
 pub const NO_LOCAL_UNDOLEVEL: ::core::ffi::c_int = -123456 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_dict_is_watched(d: *const dict_T) -> bool {
-    return !d.is_null() && QUEUE_EMPTY(&raw const (*d).watchers) == 0;
-}
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const SID_MODELINE: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const SEA_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

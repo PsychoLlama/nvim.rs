@@ -42,6 +42,7 @@ use crate::src::nvim::drawscreen::{
 };
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::fs::modify_fname;
+use crate::src::nvim::eval::typval::tv_list_len;
 use crate::src::nvim::eval::typval::{
     callback_free, tv_clear, tv_get_string, tv_list_copy, tv_list_find, tv_list_find_str,
     tv_list_free,
@@ -2407,13 +2408,6 @@ pub const CPO_ALTREAD: ::core::ffi::c_int = 'a' as ::core::ffi::c_int;
 pub const CPO_BAR: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;
 pub const CPO_EXECBUF: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
 pub const CPO_NOSYMLINKS: ::core::ffi::c_int = '~' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
 static e_ambiguous_use_of_user_defined_command: GlobalCell<[::core::ffi::c_char; 44]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 44], [::core::ffi::c_char; 44]>(

@@ -5,6 +5,7 @@ use crate::src::nvim::charset::{ptr2cells, skipdigits, vim_isblankline};
 use crate::src::nvim::cmdexpand::{ExpandInit, ExpandOne};
 use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::eval::typval::tv_list_first;
 use crate::src::nvim::eval::typval::{
     callback_copy, callback_free, tv_clear, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
     tv_dict_alloc, tv_dict_alloc_lock, tv_dict_find, tv_dict_get_number, tv_dict_get_string,
@@ -1861,13 +1862,6 @@ pub const TAGSTACKSIZE: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CPO_TAGPAT: ::core::ffi::c_int = 't' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 static mt_names: GlobalCell<[*mut ::core::ffi::c_char; 8]> = GlobalCell::new([
     b"FSC\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,

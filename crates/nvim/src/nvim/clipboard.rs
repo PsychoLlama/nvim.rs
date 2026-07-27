@@ -7,6 +7,7 @@
 //! (`eval_has_provider`/`eval_call_provider` run user code that may
 //! reenter this module).
 
+use crate::src::nvim::eval::typval::{tv_list_first, tv_list_last, tv_list_len};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::cb_flags;
 use crate::src::nvim::register::{
@@ -372,25 +373,4 @@ pub fn restore_batch_count(save_count: ::core::ffi::c_int) {
             st.delay_update = true;
         }
     });
-}
-
-unsafe fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0;
-    }
-    (*l).lv_len
-}
-
-unsafe fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut();
-    }
-    (*l).lv_first
-}
-
-unsafe fn tv_list_last(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut();
-    }
-    (*l).lv_last
 }

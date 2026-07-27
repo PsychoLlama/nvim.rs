@@ -11,6 +11,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_item_remove, tv_dict_unref, tv_get_number_chk, tv_list_append, tv_list_init_static,
     value_check_lock,
 };
+use crate::src::nvim::eval::typval::{tv_is_func, tv_list_set_lock};
 use crate::src::nvim::eval::vars::{
     find_var, find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict, list_hashtable_vars,
     skip_var_list, vars_clear, vars_clear_ext,
@@ -1296,33 +1297,6 @@ pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const FNE_INCL_BR: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FNE_CHECK_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
-    if l.is_null() {
-        '_c2rust_label: {
-            if lock as ::core::ffi::c_uint == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-            } else {
-                __assert_fail(
-                    b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/userfunc.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    76 as ::core::ffi::c_uint,
-                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        return;
-    }
-    (*l).lv_lock = lock;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_is_func(tv: typval_T) -> bool {
-    return tv.v_type as ::core::ffi::c_uint
-        == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-        || tv.v_type as ::core::ffi::c_uint
-            == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint;
-}
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
 static func_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T {
     ht_mask: 0,

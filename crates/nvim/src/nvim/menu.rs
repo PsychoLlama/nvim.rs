@@ -2,6 +2,7 @@ use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::apply_autocmds;
 use crate::src::nvim::charset::{getdigits_int, skipwhite};
 use crate::src::nvim::cursor::{check_cursor, gchar_cursor};
+use crate::src::nvim::eval::typval::tv_dict_len;
 use crate::src::nvim::eval::typval::{
     tv_dict_add_allocated_str, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_list,
     tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_alloc_ret, tv_get_string_chk,
@@ -1075,13 +1076,6 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 };
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_dict_len(d: *const dict_T) -> ::core::ffi::c_long {
-    if d.is_null() {
-        return 0 as ::core::ffi::c_long;
-    }
-    return (*d).dv_hashtab.ht_used as ::core::ffi::c_long;
-}
 pub const MNU_HIDDEN_CHAR: ::core::ffi::c_int = ']' as ::core::ffi::c_int;
 pub const MENUDEPTH: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 static menus_locked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);

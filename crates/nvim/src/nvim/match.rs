@@ -9,6 +9,7 @@ use crate::src::nvim::eval::typval::{
     tv_list_append_dict, tv_list_append_number, tv_list_append_string, tv_list_append_tv,
     tv_list_idx_of_item, tv_list_unref,
 };
+use crate::src::nvim::eval::typval::{tv_list_first, tv_list_len, tv_list_ref};
 use crate::src::nvim::eval::window::find_win_by_nr_or_id;
 use crate::src::nvim::ex_docmd::{ends_excmd, ex_errmsg, find_nextcmd, set_no_hlsearch};
 use crate::src::nvim::fold::hasFolding;
@@ -800,27 +801,6 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const CPO_SEARCH: ::core::ffi::c_int = 'c' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
-    if l.is_null() {
-        return;
-    }
-    (*l).lv_refcount += 1;
-}
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
 #[inline]
 unsafe extern "C" fn win_hl_attr(
     mut wp: *mut win_T,

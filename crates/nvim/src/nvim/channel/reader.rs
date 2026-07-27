@@ -9,6 +9,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 
 use crate::src::nvim::eval::encode::encode_list_write;
+use crate::src::nvim::eval::typval::tv_list_ref;
 use crate::src::nvim::eval::typval::{
     callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc, tv_list_append_string,
     tv_list_unref,
@@ -233,10 +234,4 @@ unsafe fn buffer_to_tv_list(buf: *const c_char, len: size_t) -> *mut list_T {
         encode_list_write(l as *mut c_void, buf, len);
     }
     l
-}
-
-unsafe fn tv_list_ref(l: *mut list_T) {
-    if !l.is_null() {
-        (*l).lv_refcount += 1;
-    }
 }

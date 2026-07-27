@@ -7,6 +7,7 @@ use crate::src::nvim::charset::{
 };
 use crate::src::nvim::cmdexpand::globpath;
 use crate::src::nvim::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
+use crate::src::nvim::eval::typval::tv_list_set_ret;
 use crate::src::nvim::eval::typval::{
     tv_check_for_opt_dict_arg, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_func,
     tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_alloc_lock,
@@ -1604,19 +1605,6 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const CPO_CONCAT: ::core::ffi::c_int = 'C' as ::core::ffi::c_int;
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
-    if l.is_null() {
-        return;
-    }
-    (*l).lv_refcount += 1;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_list_set_ret(tv: *mut typval_T, l: *mut list_T) {
-    (*tv).v_type = VAR_LIST;
-    (*tv).vval.v_list = l;
-    tv_list_ref(l);
-}
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_MODELINE: ::core::ffi::c_int = -1;

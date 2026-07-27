@@ -34,6 +34,7 @@ use crate::src::nvim::drawscreen::{
     number_width, redraw_curbuf_later, redraw_later, show_cursor_info_later, update_screen,
 };
 use crate::src::nvim::edit::beginline;
+use crate::src::nvim::eval::typval::tv_list_len;
 use crate::src::nvim::eval::typval::{tv_get_string, tv_list_find_str};
 use crate::src::nvim::eval::vars::{get_vim_var_list, get_vim_var_str, set_vim_var_string};
 use crate::src::nvim::ex_cmds2::{
@@ -1956,13 +1957,6 @@ pub const CPO_ALTWRITE: ::core::ffi::c_int = 'A' as ::core::ffi::c_int;
 pub const CPO_OVERNEW: ::core::ffi::c_int = 'O' as ::core::ffi::c_int;
 pub const CPO_REMMARK: ::core::ffi::c_int = 'R' as ::core::ffi::c_int;
 pub const CPO_UNDO: ::core::ffi::c_int = 'u' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
 static e_non_numeric_argument_to_z: GlobalCell<[::core::ffi::c_char; 33]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(

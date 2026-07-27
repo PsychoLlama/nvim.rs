@@ -6,6 +6,10 @@ use crate::src::nvim::eval::typval::{
     tv_list_find, tv_list_insert_tv, tv_list_item_remove, tv_list_remove, tv_list_reverse,
     tv_list_unref, value_check_lock,
 };
+use crate::src::nvim::eval::typval::{
+    tv_blob_get, tv_blob_len, tv_blob_set, tv_blob_set_ret, tv_list_first, tv_list_len,
+    tv_list_locked, tv_list_set_lock, tv_list_set_ret,
+};
 use crate::src::nvim::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
     set_vim_var_type, var_check_fixed, var_check_ro,
@@ -1472,83 +1476,6 @@ pub unsafe extern "C" fn f_reverse(
             tv_list_set_ret(rettv, l);
         }
     }
-}
-#[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
-    if l.is_null() {
-        return;
-    }
-    (*l).lv_refcount += 1;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_list_set_ret(tv: *mut typval_T, l: *mut list_T) {
-    (*tv).v_type = VAR_LIST;
-    (*tv).vval.v_list = l;
-    tv_list_ref(l);
-}
-#[inline]
-unsafe extern "C" fn tv_list_locked(l: *const list_T) -> VarLockStatus {
-    if l.is_null() {
-        return VAR_FIXED;
-    }
-    return (*l).lv_lock;
-}
-#[inline]
-unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
-    if l.is_null() {
-        '_c2rust_label: {
-            if lock as ::core::ffi::c_uint == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-            } else {
-                __assert_fail(
-                    b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/list.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    76 as ::core::ffi::c_uint,
-                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        return;
-    }
-    (*l).lv_lock = lock;
-}
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_blob_set_ret(tv: *mut typval_T, b: *mut blob_T) {
-    (*tv).v_type = VAR_BLOB;
-    (*tv).vval.v_blob = b;
-    if !b.is_null() {
-        (*b).bv_refcount += 1;
-    }
-}
-#[inline]
-unsafe extern "C" fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
-    if b.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*b).bv_ga.ga_len;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_blob_get(b: *const blob_T, mut idx: ::core::ffi::c_int) -> uint8_t {
-    return *((*b).bv_ga.ga_data as *mut uint8_t).offset(idx as isize);
-}
-#[inline(always)]
-unsafe extern "C" fn tv_blob_set(blob: *mut blob_T, mut idx: ::core::ffi::c_int, mut c: uint8_t) {
-    *((*blob).bv_ga.ga_data as *mut uint8_t).offset(idx as isize) = c;
 }
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;

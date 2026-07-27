@@ -5,6 +5,7 @@ use crate::src::nvim::api::private::helpers::{
     find_window_by_handle, try_enter, try_leave,
 };
 use crate::src::nvim::autocmd::{aucmd_prepbuf, aucmd_restbuf};
+use crate::src::nvim::eval::typval::tv_dict_is_watched;
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_item_alloc_len, tv_dict_item_remove,
     tv_dict_watcher_notify,
@@ -182,10 +183,6 @@ unsafe extern "C-unwind" fn map_get_int_ptr_t(
 #[inline(always)]
 unsafe extern "C-unwind" fn QUEUE_EMPTY(q: *const QUEUE) -> ::core::ffi::c_int {
     return (q == (*q).next as *const QUEUE) as ::core::ffi::c_int;
-}
-#[inline]
-unsafe extern "C-unwind" fn tv_dict_is_watched(d: *const dict_T) -> bool {
-    return !d.is_null() && QUEUE_EMPTY(&raw const (*d).watchers) == 0;
 }
 unsafe extern "C-unwind" fn regex_match(
     mut lstate: *mut lua_State,

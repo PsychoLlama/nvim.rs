@@ -1,5 +1,6 @@
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::{skipwhite, vim_iswordc, vim_iswordp};
+use crate::src::nvim::eval::typval::tv_list_len;
 use crate::src::nvim::eval::typval::{
     callback_free, tv_check_for_nonnull_dict_arg, tv_clear, tv_dict_find, tv_dict_get_callback,
     tv_dict_get_string, tv_dict_has_key, tv_dict_unref, tv_get_number_chk, tv_get_string,
@@ -158,13 +159,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
 pub const SCORE_SCALE: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
 pub unsafe extern "C" fn fuzzy_match(
     str: *mut ::core::ffi::c_char,

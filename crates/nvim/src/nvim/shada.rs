@@ -14,6 +14,7 @@ use crate::src::nvim::cmdhist::{
 };
 use crate::src::nvim::eval::decode::{decode_string, unpack_typval};
 use crate::src::nvim::eval::encode::encode_vim_to_msgpack;
+use crate::src::nvim::eval::typval::tv_list_len;
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_copy, tv_list_alloc, tv_list_append_allocated_string,
 };
@@ -781,13 +782,6 @@ unsafe extern "C" fn file_eof(fp: *const FileDescriptor) -> bool {
 #[inline(always)]
 unsafe extern "C" fn file_fd(fp: *const FileDescriptor) -> ::core::ffi::c_int {
     return (*fp).fd;
-}
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
 }
 #[inline]
 unsafe extern "C" fn mark_global_index(name: ::core::ffi::c_char) -> ::core::ffi::c_int {

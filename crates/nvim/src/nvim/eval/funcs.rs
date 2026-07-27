@@ -80,6 +80,10 @@ use crate::src::nvim::eval::typval::{
     tv_list_copy, tv_list_extend, tv_list_find, tv_list_find_nr, tv_list_flatten,
     tv_list_item_remove, tv_list_unref, value_check_lock,
 };
+use crate::src::nvim::eval::typval::{
+    tv_blob_get, tv_blob_len, tv_dict_len, tv_dict_set_ret, tv_is_func, tv_list_first, tv_list_len,
+    tv_list_locked, tv_list_ref, tv_list_set_lock, tv_list_set_ret, tv_list_uidx,
+};
 use crate::src::nvim::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
     get_func_arity, get_scriptlocal_funcname, get_user_func_name, printable_func_name,
@@ -13538,99 +13542,6 @@ unsafe extern "C" fn f_xor(
         ::core::ptr::null_mut::<bool>(),
     );
 }
-#[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
-    if l.is_null() {
-        return;
-    }
-    (*l).lv_refcount += 1;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_list_set_ret(tv: *mut typval_T, l: *mut list_T) {
-    (*tv).v_type = VAR_LIST;
-    (*tv).vval.v_list = l;
-    tv_list_ref(l);
-}
-#[inline]
-unsafe extern "C" fn tv_list_locked(l: *const list_T) -> VarLockStatus {
-    if l.is_null() {
-        return VAR_FIXED;
-    }
-    return (*l).lv_lock;
-}
-#[inline]
-unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
-    if l.is_null() {
-        '_c2rust_label: {
-            if lock as ::core::ffi::c_uint == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-            } else {
-                __assert_fail(
-                    b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    76 as ::core::ffi::c_uint,
-                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        return;
-    }
-    (*l).lv_lock = lock;
-}
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
-#[inline]
-unsafe extern "C" fn tv_list_uidx(
-    l: *const list_T,
-    mut n: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    if n < 0 as ::core::ffi::c_int {
-        n += tv_list_len(l);
-    }
-    if n < 0 as ::core::ffi::c_int || n >= tv_list_len(l) {
-        return -1 as ::core::ffi::c_int;
-    }
-    return n;
-}
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_dict_set_ret(tv: *mut typval_T, d: *mut dict_T) {
-    (*tv).v_type = VAR_DICT;
-    (*tv).vval.v_dict = d;
-    if !d.is_null() {
-        (*d).dv_refcount += 1;
-    }
-}
-#[inline]
-unsafe extern "C" fn tv_dict_len(d: *const dict_T) -> ::core::ffi::c_long {
-    if d.is_null() {
-        return 0 as ::core::ffi::c_long;
-    }
-    return (*d).dv_hashtab.ht_used as ::core::ffi::c_long;
-}
-#[inline]
-unsafe extern "C" fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
-    if b.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*b).bv_ga.ga_len;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_blob_get(b: *const blob_T, mut idx: ::core::ffi::c_int) -> uint8_t {
-    return *((*b).bv_ga.ga_data as *mut uint8_t).offset(idx as isize);
-}
 #[inline]
 unsafe extern "C" fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) -> bool {
     if (*tv).v_type as ::core::ffi::c_uint == VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -13649,13 +13560,6 @@ unsafe extern "C" fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
         gettext(b"E808: Number or Float required\0".as_ptr() as *const ::core::ffi::c_char),
     );
     return false_0 != 0;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_is_func(tv: typval_T) -> bool {
-    return tv.v_type as ::core::ffi::c_uint
-        == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-        || tv.v_type as ::core::ffi::c_uint
-            == VAR_PARTIAL as ::core::ffi::c_int as ::core::ffi::c_uint;
 }
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 #[inline]

@@ -16,6 +16,7 @@ use crate::src::nvim::diff::{diff_win_options, diffopt_horizontal};
 use crate::src::nvim::drawscreen::{
     default_grid_alloc, redraw_all_later, redraw_later, screenclear,
 };
+use crate::src::nvim::eval::typval::tv_list_set_lock;
 use crate::src::nvim::eval::typval::{tv_list_alloc, tv_list_append_string};
 use crate::src::nvim::eval::userfunc::invoke_all_defer;
 use crate::src::nvim::eval::vars::{
@@ -3117,26 +3118,6 @@ pub static msg_grid_scroll_discount: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 pub static msg_listdo_overwrite: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-#[inline]
-unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
-    if l.is_null() {
-        '_c2rust_label: {
-            if lock as ::core::ffi::c_uint == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-            } else {
-                __assert_fail(
-                    b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/main.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    76 as ::core::ffi::c_uint,
-                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        return;
-    }
-    (*l).lv_lock = lock;
-}
 // TV_CSTRING (SIZE_MAX - 1): c2rust dropped the initializer expression and
 // left 0, which is a valid pointer-sentinel value and would corrupt any
 // caller comparing against it (the unit tests do, via FFI).

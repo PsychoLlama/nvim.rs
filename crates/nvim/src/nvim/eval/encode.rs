@@ -1,4 +1,8 @@
 use crate::src::nvim::eval::typval::{
+    tv_blob_get, tv_blob_len, tv_list_copyid, tv_list_first, tv_list_last, tv_list_len,
+    tv_list_set_copyid,
+};
+use crate::src::nvim::eval::typval::{
     tv_dict_find, tv_list_append_allocated_string, tv_list_idx_of_item,
 };
 use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
@@ -1242,22 +1246,14 @@ pub unsafe extern "C" fn encode_vim_to_msgpack(
                                 packer,
                                 &raw mut mpstack,
                                 cur_mpsv,
-                                &raw mut (*(tv_list_first
-                                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                    kv_pair,
-                                ))
-                                .li_tv,
+                                &raw mut (*tv_list_first(kv_pair)).li_tv,
                                 copyID,
                                 objname,
                             ) == FAIL
                             {
                                 break '_encode_vim_to__error_ret;
                             }
-                            tv = &raw mut (*(tv_list_last
-                                as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                kv_pair,
-                            ))
-                            .li_tv;
+                            tv = &raw mut (*tv_list_last(kv_pair)).li_tv;
                             (*cur_mpsv).data.l.li = (*(*cur_mpsv).data.l.li).li_next;
                         }
                     }
@@ -3343,11 +3339,7 @@ pub unsafe extern "C" fn encode_vim_to_echo(
                                 gap,
                                 &raw mut mpstack,
                                 cur_mpsv,
-                                &raw mut (*(tv_list_first
-                                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                    kv_pair,
-                                ))
-                                .li_tv,
+                                &raw mut (*tv_list_first(kv_pair)).li_tv,
                                 copyID,
                                 objname,
                             ) == FAIL
@@ -3360,11 +3352,7 @@ pub unsafe extern "C" fn encode_vim_to_echo(
                                 ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                     .wrapping_sub(1 as size_t),
                             );
-                            tv = &raw mut (*(tv_list_last
-                                as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                kv_pair,
-                            ))
-                            .li_tv;
+                            tv = &raw mut (*tv_list_last(kv_pair)).li_tv;
                             (*cur_mpsv).data.l.li = (*(*cur_mpsv).data.l.li).li_next;
                         }
                     }
@@ -5480,11 +5468,7 @@ unsafe extern "C" fn encode_vim_to_string(
                                 gap,
                                 &raw mut mpstack,
                                 cur_mpsv,
-                                &raw mut (*(tv_list_first
-                                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                    kv_pair,
-                                ))
-                                .li_tv,
+                                &raw mut (*tv_list_first(kv_pair)).li_tv,
                                 copyID,
                                 objname,
                             ) == FAIL
@@ -5497,11 +5481,7 @@ unsafe extern "C" fn encode_vim_to_string(
                                 ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                     .wrapping_sub(1 as size_t),
                             );
-                            tv = &raw mut (*(tv_list_last
-                                as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                kv_pair,
-                            ))
-                            .li_tv;
+                            tv = &raw mut (*tv_list_last(kv_pair)).li_tv;
                             (*cur_mpsv).data.l.li = (*(*cur_mpsv).data.l.li).li_next;
                         }
                     }
@@ -7285,13 +7265,7 @@ unsafe extern "C" fn encode_vim_to_json(
                                 );
                             }
                             let kv_pair: *const list_T = (*(*cur_mpsv).data.l.li).li_tv.vval.v_list;
-                            if !encode_check_json_key(
-                                &raw mut (*(tv_list_first
-                                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                    kv_pair,
-                                ))
-                                .li_tv,
-                            ) {
+                            if !encode_check_json_key(&raw mut (*tv_list_first(kv_pair)).li_tv) {
                                 emsg(gettext(
                                     b"E474: Invalid key in special dictionary\0".as_ptr()
                                         as *const ::core::ffi::c_char,
@@ -7302,11 +7276,7 @@ unsafe extern "C" fn encode_vim_to_json(
                                     gap,
                                     &raw mut mpstack,
                                     cur_mpsv,
-                                    &raw mut (*(tv_list_first
-                                        as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                        kv_pair,
-                                    ))
-                                    .li_tv,
+                                    &raw mut (*tv_list_first(kv_pair)).li_tv,
                                     copyID,
                                     objname,
                                 ) == FAIL
@@ -7319,11 +7289,7 @@ unsafe extern "C" fn encode_vim_to_json(
                                     ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
                                         .wrapping_sub(1 as size_t),
                                 );
-                                tv = &raw mut (*(tv_list_last
-                                    as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                                    kv_pair,
-                                ))
-                                .li_tv;
+                                tv = &raw mut (*tv_list_last(kv_pair)).li_tv;
                                 (*cur_mpsv).data.l.li = (*(*cur_mpsv).data.l.li).li_next;
                             }
                         }
@@ -8663,46 +8629,6 @@ pub unsafe extern "C" fn encode_init_lrstate(list: *const list_T) -> ListReaderS
             strlen((*tv_list_first(list)).li_tv.vval.v_string)
         },
     };
-}
-#[inline]
-unsafe extern "C" fn tv_list_set_copyid(l: *mut list_T, copyid: ::core::ffi::c_int) {
-    (*l).lv_copyID = copyid;
-}
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
-#[inline]
-unsafe extern "C" fn tv_list_copyid(l: *const list_T) -> ::core::ffi::c_int {
-    return (*l).lv_copyID;
-}
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
-#[inline]
-unsafe extern "C" fn tv_list_last(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_last;
-}
-#[inline]
-unsafe extern "C" fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
-    if b.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*b).bv_ga.ga_len;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_blob_get(b: *const blob_T, mut idx: ::core::ffi::c_int) -> uint8_t {
-    return *((*b).bv_ga.ga_data as *mut uint8_t).offset(idx as isize);
 }
 #[inline(always)]
 unsafe extern "C" fn tv_strlen(tv: *const typval_T) -> size_t {

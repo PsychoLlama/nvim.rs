@@ -1,5 +1,6 @@
 use crate::src::nvim::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::src::nvim::eval::funcs::{f_jobstart, f_jobstop};
+use crate::src::nvim::eval::typval::tv_list_len;
 use crate::src::nvim::eval::typval::{
     tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_get_string,
 };
@@ -433,13 +434,6 @@ pub unsafe extern "C" fn f_termopen(
                 .v_dict,
         );
     }
-}
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

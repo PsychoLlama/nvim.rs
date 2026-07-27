@@ -16,6 +16,7 @@ use crate::src::nvim::drawscreen::{showmode, update_screen};
 use crate::src::nvim::edit::{
     beginline, get_last_insert, get_last_insert_save, oneright, stuff_inserted,
 };
+use crate::src::nvim::eval::typval::tv_list_set_lock;
 use crate::src::nvim::eval::typval::{
     tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str, tv_dict_set_keys_readonly, tv_list_alloc,
     tv_list_append_allocated_string, tv_list_append_string,
@@ -1087,26 +1088,6 @@ pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const CPO_REGAPPEND: ::core::ffi::c_int = '>' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_list_set_lock(l: *mut list_T, lock: VarLockStatus) {
-    if l.is_null() {
-        '_c2rust_label: {
-            if lock as ::core::ffi::c_uint == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-            } else {
-                __assert_fail(
-                    b"lock == VAR_FIXED\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/register.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    76 as ::core::ffi::c_uint,
-                    b"void tv_list_set_lock(list_T *const, const VarLockStatus)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        return;
-    }
-    (*l).lv_lock = lock;
-}
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;

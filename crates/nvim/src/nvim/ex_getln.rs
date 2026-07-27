@@ -37,6 +37,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_get_number, tv_dict_get_string_buf_chk, tv_dict_set_keys_readonly, tv_get_number,
     tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_list_free,
 };
+use crate::src::nvim::eval::typval::{tv_list_first, tv_list_last, tv_list_len};
 use crate::src::nvim::eval::vars::{get_globvar_dict, heredoc_get, set_vim_var_char};
 use crate::src::nvim::eval_1::{
     callback_call, eval_has_provider, get_echo_hl_id, get_v_event, restore_v_event,
@@ -2125,27 +2126,6 @@ unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
 pub const CPO_ESC: ::core::ffi::c_int = 'x' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
-#[inline]
-unsafe extern "C" fn tv_list_last(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_last;
-}
 pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -6579,11 +6559,7 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                             } else {
                                                 let mut error: bool = false;
                                                 let start: varnumber_T = tv_get_number_chk(
-                                                    &raw mut (*(tv_list_first
-                                                        as unsafe extern "C" fn(
-                                                            *const list_T,
-                                                        ) -> *mut listitem_T)(l))
-                                                        .li_tv,
+                                                    &raw mut (*tv_list_first(l)).li_tv,
                                                     &raw mut error,
                                                 );
                                                 if error {
@@ -6679,11 +6655,7 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                                             };
                                                     }
                                                     let end: varnumber_T = tv_get_number_chk(
-                                                        &raw mut (*(*(tv_list_first
-                                                            as unsafe extern "C" fn(
-                                                                *const list_T,
-                                                            ) -> *mut listitem_T)(l))
-                                                            .li_next)
+                                                        &raw mut (*(*tv_list_first(l)).li_next)
                                                             .li_tv,
                                                         &raw mut error,
                                                     );
@@ -6736,13 +6708,10 @@ unsafe extern "C" fn color_cmdline(mut colored_ccline: *mut CmdlineInfo) -> bool
                                                         break '_color_cmdline_error;
                                                     } else {
                                                         prev_end = end;
-                                                        let group: *const ::core::ffi::c_char = tv_get_string_chk(
-                                                            &raw mut (*(tv_list_last
-                                                                as unsafe extern "C" fn(
-                                                                    *const list_T,
-                                                                ) -> *mut listitem_T)(l))
-                                                                .li_tv,
-                                                        );
+                                                        let group: *const ::core::ffi::c_char =
+                                                            tv_get_string_chk(
+                                                                &raw mut (*tv_list_last(l)).li_tv,
+                                                            );
                                                         if group.is_null() {
                                                             break '_color_cmdline_error;
                                                         }

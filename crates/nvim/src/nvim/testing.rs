@@ -5,6 +5,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_add_tv, tv_dict_alloc, tv_dict_find, tv_equal, tv_get_float, tv_get_number_chk,
     tv_get_string, tv_get_string_buf_chk, tv_get_string_chk,
 };
+use crate::src::nvim::eval::typval::{tv_list_first, tv_list_last, tv_list_len};
 use crate::src::nvim::eval::vars::{
     assert_error, get_vim_var_nr, get_vim_var_str, get_vim_var_tv, set_vim_var_string,
 };
@@ -361,27 +362,6 @@ pub const NL: ::core::ffi::c_int = 10;
 pub const FF: ::core::ffi::c_int = 12;
 pub const CAR: ::core::ffi::c_int = 13;
 pub const ESC: ::core::ffi::c_int = 27;
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
-#[inline]
-unsafe extern "C" fn tv_list_last(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_last;
-}
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 static e_assert_fails_second_arg: GlobalCell<[::core::ffi::c_char; 90]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<
@@ -1342,11 +1322,7 @@ pub unsafe extern "C" fn f_assert_fails(
                         (e_assert_fails_second_arg.ptr() as *const _) as *const ::core::ffi::c_char;
                     break '_theend;
                 } else {
-                    let mut tv: *const typval_T = &raw mut (*(tv_list_first
-                        as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                        list
-                    ))
-                    .li_tv;
+                    let mut tv: *const typval_T = &raw mut (*tv_list_first(list)).li_tv;
                     expected = tv_get_string_buf_chk(tv, &raw mut buf as *mut ::core::ffi::c_char);
                     if expected.is_null() {
                         break '_theend;
@@ -1356,11 +1332,7 @@ pub unsafe extern "C" fn f_assert_fails(
                     } else if tv_list_len(list) == 2 as ::core::ffi::c_int {
                         actual = xstrdup(get_vim_var_str(VV_ERRMSG));
                         tofree = actual;
-                        tv = &raw mut (*(tv_list_last
-                            as unsafe extern "C" fn(*const list_T) -> *mut listitem_T)(
-                            list
-                        ))
-                        .li_tv;
+                        tv = &raw mut (*tv_list_last(list)).li_tv;
                         expected =
                             tv_get_string_buf_chk(tv, &raw mut buf as *mut ::core::ffi::c_char);
                         if expected.is_null() {

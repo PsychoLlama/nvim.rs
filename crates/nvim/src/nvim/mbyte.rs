@@ -6,6 +6,7 @@ use crate::src::nvim::eval::typval::{
     tv_check_for_string_arg, tv_get_string, tv_get_string_buf, tv_list_alloc, tv_list_alloc_ret,
     tv_list_append_list, tv_list_append_number,
 };
+use crate::src::nvim::eval::typval::{tv_list_first, tv_list_len};
 use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::schar_from_buf;
@@ -623,20 +624,6 @@ pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const DBCS_JPN: ::core::ffi::c_int = 932 as ::core::ffi::c_int;
 pub const DBCS_JPNU: ::core::ffi::c_int = 9932 as ::core::ffi::c_int;

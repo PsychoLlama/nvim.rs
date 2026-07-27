@@ -5,6 +5,7 @@ use crate::src::nvim::eval::typval::{
     tv_get_string_buf, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc_ret,
     tv_list_append_owned_tv, tv_list_append_string, tv_list_item_remove,
 };
+use crate::src::nvim::eval::typval::{tv_blob_len, tv_list_first, tv_list_len, tv_list_set_ret};
 use crate::src::nvim::eval::userfunc::{add_defer, can_add_defer};
 use crate::src::nvim::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::src::nvim::eval::window::find_win_by_nr;
@@ -2984,40 +2985,6 @@ pub unsafe extern "C" fn f_browsedir(
     mut fptr: EvalFuncData,
 ) {
     f_browse(argvars, rettv, fptr);
-}
-#[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
-    if l.is_null() {
-        return;
-    }
-    (*l).lv_refcount += 1;
-}
-#[inline(always)]
-unsafe extern "C" fn tv_list_set_ret(tv: *mut typval_T, l: *mut list_T) {
-    (*tv).v_type = VAR_LIST;
-    (*tv).vval.v_list = l;
-    tv_list_ref(l);
-}
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
-#[inline]
-unsafe extern "C" fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
-    if b.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*b).bv_ga.ga_len;
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

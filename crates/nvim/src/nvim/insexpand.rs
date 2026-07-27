@@ -21,6 +21,7 @@ use crate::src::nvim::edit::{
     backspace_until_column, get_can_cindent, ins_apply_autocmds, ins_eol, ins_need_undo_get,
     ins_redraw, insertchar, start_arrow, stop_arrow,
 };
+use crate::src::nvim::eval::typval::tv_list_first;
 use crate::src::nvim::eval::typval::{
     callback_copy, callback_free, tv_clear, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_list,
     tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len, tv_dict_add_tv, tv_dict_alloc,
@@ -1418,13 +1419,6 @@ pub const Ctrl_Z: ::core::ffi::c_int = 26 as ::core::ffi::c_int;
 pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const BS_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn tv_list_first(l: *const list_T) -> *mut listitem_T {
-    if l.is_null() {
-        return ::core::ptr::null_mut::<listitem_T>();
-    }
-    return (*l).lv_first;
-}
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const CTRL_X_WANT_IDENT: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 static ctrl_x_msgs: GlobalCell<[*mut ::core::ffi::c_char; 20]> = GlobalCell::new([

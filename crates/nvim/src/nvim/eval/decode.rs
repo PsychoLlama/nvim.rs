@@ -10,6 +10,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_item_alloc_len, tv_list_alloc, tv_list_append_list, tv_list_append_number,
     tv_list_append_owned_tv,
 };
+use crate::src::nvim::eval::typval::{tv_list_len, tv_list_ref};
 use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
 use crate::src::nvim::eval_1::string2float;
 use crate::src::nvim::garray::ga_concat_len;
@@ -2155,19 +2156,5 @@ pub const SURROGATE_HI_END: ::core::ffi::c_int = 0xdbff as ::core::ffi::c_int;
 pub const SURROGATE_LO_START: ::core::ffi::c_int = 0xdc00 as ::core::ffi::c_int;
 pub const SURROGATE_LO_END: ::core::ffi::c_int = 0xdfff as ::core::ffi::c_int;
 pub const SURROGATE_FIRST_CHAR: ::core::ffi::c_int = 0x10000 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
-    if l.is_null() {
-        return;
-    }
-    (*l).lv_refcount += 1;
-}
-#[inline]
-unsafe extern "C" fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
-    if l.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    return (*l).lv_len;
-}
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
