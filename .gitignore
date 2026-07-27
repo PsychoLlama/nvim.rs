@@ -91,6 +91,7 @@ tags
 CMakeUserPresets.json
 
 # Rewriter/generator build artifacts
+/tools/apigen/target/
 /tools/globalize/target/
 /tools/unify/target/
 /tools/ffigen/target/
