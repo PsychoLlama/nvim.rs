@@ -49,10 +49,35 @@ fn only_len(len: c_int) -> Exp {
     }
 }
 
-/// Mirror of the spec's `test_vim_str2nr`: run the call once for every
-/// subset of the expected out-arguments (NULL for the rest) and assert each
-/// passed argument comes back with the expected value.
+/// Under Miri every `vim_str2nr` call is interpreted, and the flag sweeps
+/// below are what made this file the most expensive one in the run. A native
+/// run takes every combination; a Miri run takes the first, the last and one
+/// in the middle, which is enough to walk the same code paths.
+fn sweep(sets: &'static [c_int]) -> Vec<c_int> {
+    if cfg!(miri) && sets.len() > 3 {
+        vec![sets[0], sets[sets.len() / 2], sets[sets.len() - 1]]
+    } else {
+        sets.to_vec()
+    }
+}
+
+/// One case: pass every out-argument the case has an expectation for, and
+/// assert each comes back with the expected value.
 fn t(s: &str, what: c_int, exp: Exp, maxlen: c_int, strict: bool) {
+    run(s, what, exp, maxlen, strict, 0..1);
+}
+
+/// The spec's `test_vim_str2nr` also ran each case once per *subset* of the
+/// out-arguments, with NULL for the rest. That is a property of the writes,
+/// not of the parse, so it is exercised by `null_out_arguments_are_ignored`
+/// over a few inputs rather than by every case — the full sweep is sixteen
+/// interpreted `vim_str2nr` calls per case, and this file used to dominate
+/// `just miri`'s wall clock because of it.
+fn t_all_masks(s: &str, what: c_int, exp: Exp, maxlen: c_int, strict: bool) {
+    run(s, what, exp, maxlen, strict, 0..16);
+}
+
+fn run(s: &str, what: c_int, exp: Exp, maxlen: c_int, strict: bool, masks: std::ops::Range<u32>) {
     let cs = cstr(s);
     // Field indices: 0 = len, 1 = num, 2 = unum, 3 = pre.
     let present: Vec<usize> = [
@@ -66,7 +91,7 @@ fn t(s: &str, what: c_int, exp: Exp, maxlen: c_int, strict: bool) {
     .filter_map(|(i, &p)| p.then_some(i))
     .collect();
 
-    for mask in 0u32..(1 << present.len()) {
+    for mask in masks.take(1 << present.len()) {
         // Sentinels prove vim_str2nr wrote the slot.
         let mut len: c_int = -42;
         let mut num: varnumber_T = -42;
@@ -120,7 +145,7 @@ fn t(s: &str, what: c_int, exp: Exp, maxlen: c_int, strict: bool) {
 
 #[test]
 fn works_fine_when_it_has_nothing_to_do() {
-    for what in [
+    for what in sweep(&[
         0,
         ALL,
         BIN,
@@ -133,14 +158,14 @@ fn works_fine_when_it_has_nothing_to_do() {
         FORCE + OOCT,
         FORCE + OCT + OOCT,
         FORCE + HEX,
-    ] {
+    ]) {
         t("", what, all(0, 0, 0, 0), 0, true);
     }
 }
 
 #[test]
 fn works_with_decimal_numbers() {
-    for flags in [
+    for flags in sweep(&[
         0,
         BIN,
         OCT,
@@ -152,7 +177,7 @@ fn works_with_decimal_numbers() {
         OOCT + HEX,
         ALL,
         FORCE + DEC,
-    ] {
+    ]) {
         // Check that all digits are recognized.
         t("12345", flags, all(5, 12345, 12345, 0), 0, true);
         t("67890", flags, all(5, 67890, 67890, 0), 0, true);
@@ -183,7 +208,7 @@ fn works_with_decimal_numbers() {
 
 #[test]
 fn works_with_binary_numbers() {
-    for flags in [BIN, BIN + OCT, BIN + HEX, ALL, FORCE + BIN] {
+    for flags in sweep(&[BIN, BIN + OCT, BIN + HEX, ALL, FORCE + BIN]) {
         let forced = flags > FORCE;
         let bin = if forced { 0 } else { 'b' as c_int };
         let cap = if forced { 0 } else { 'B' as c_int };
@@ -254,7 +279,7 @@ fn works_with_binary_numbers() {
 
 #[test]
 fn works_with_octal_numbers_zero_prefix() {
-    for flags in [
+    for flags in sweep(&[
         OCT,
         OCT + BIN,
         OCT + HEX,
@@ -263,7 +288,7 @@ fn works_with_octal_numbers_zero_prefix() {
         FORCE + OCT,
         FORCE + OOCT,
         FORCE + OCT + OOCT,
-    ] {
+    ]) {
         let forced = flags > FORCE;
         let oct = if forced { 0 } else { '0' as c_int };
 
@@ -310,7 +335,7 @@ fn works_with_octal_numbers_zero_prefix() {
 
 #[test]
 fn works_with_octal_numbers_0o_prefix() {
-    for flags in [
+    for flags in sweep(&[
         OOCT,
         OOCT + BIN,
         OOCT + HEX,
@@ -321,7 +346,7 @@ fn works_with_octal_numbers_0o_prefix() {
         FORCE + OCT,
         FORCE + OOCT,
         FORCE + OCT + OOCT,
-    ] {
+    ]) {
         let forced = flags > FORCE;
         let oct = if forced { 0 } else { 'o' as c_int };
         let cap = if forced { 0 } else { 'O' as c_int };
@@ -399,7 +424,7 @@ fn works_with_octal_numbers_0o_prefix() {
 
 #[test]
 fn works_with_hexadecimal_numbers() {
-    for flags in [HEX, HEX + BIN, HEX + OCT, ALL, FORCE + HEX] {
+    for flags in sweep(&[HEX, HEX + BIN, HEX + OCT, ALL, FORCE + HEX]) {
         let forced = flags > FORCE;
         let hex = if forced { 0 } else { 'x' as c_int };
         let cap = if forced { 0 } else { 'X' as c_int };
@@ -472,6 +497,17 @@ fn works_with_hexadecimal_numbers() {
             t("-101", flags, all(4, -257, 257, 0), 0, true);
         }
     }
+}
+
+/// Every out-argument is optional, and a NULL one must simply not be
+/// written. One case per shape of the answer: a plain number, a prefixed
+/// one, a rejected one, and one that saturates.
+#[test]
+fn null_out_arguments_are_ignored() {
+    t_all_masks("12345", DEC, all(5, 12345, 12345, 0), 0, true);
+    t_all_masks("0x101", HEX, all(5, 257, 257, 'x' as c_int), 0, true);
+    t_all_masks("-054", OCT, all(4, -44, 44, '0' as c_int), 0, true);
+    t_all_masks("42x", DEC, only_len(0), 0, true);
 }
 
 // Test_str2nr() in test_functions.vim already tests normal usage.
