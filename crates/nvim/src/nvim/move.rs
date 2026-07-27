@@ -1437,9 +1437,9 @@ unsafe extern "C" fn cursor_correct_sms(mut wp: *mut win_T) {
     }
     if col != (*wp).w_virtcol {
         (*wp).w_curswant = col;
-        let mut rc: ::core::ffi::c_int = coladvance(wp, (*wp).w_curswant);
+        let reached = coladvance(wp, (*wp).w_curswant);
         (*wp).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW | VALID_VIRTCOL);
-        if rc == FAIL
+        if !reached
             && (*wp).w_skipcol > 0 as ::core::ffi::c_int
             && (*wp).w_cursor.lnum < (*(*wp).w_buffer).b_ml.ml_line_count
         {

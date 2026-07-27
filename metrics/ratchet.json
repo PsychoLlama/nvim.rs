@@ -1,5 +1,5 @@
 {
-  "internal_exports": 135,
+  "internal_exports": 133,
   "files_without_forbid_unsafe": 217,
   "files_without_deny_unsafe_op": 204,
   "files": {
@@ -43,7 +43,7 @@
     "crates/nvim/src/nvim/cmdexpand.rs": {"lines": 6666, "unsafe": 128},
     "crates/nvim/src/nvim/cmdhist.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/context.rs": {"unsafe": 14},
-    "crates/nvim/src/nvim/cursor.rs": {"no_mangle": 2, "unsafe": 23},
+    "crates/nvim/src/nvim/cursor.rs": {"unsafe": 23},
     "crates/nvim/src/nvim/cursor_shape.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/debugger.rs": {"lines": 2106, "unsafe": 22},
     "crates/nvim/src/nvim/decoration.rs": {"lines": 2569, "unsafe": 53},

@@ -37,7 +37,6 @@
     "crates/nvim/src/nvim/cmdexpand.rs": 151,
     "crates/nvim/src/nvim/cmdhist.rs": 5,
     "crates/nvim/src/nvim/context.rs": 38,
-    "crates/nvim/src/nvim/cursor.rs": 18,
     "crates/nvim/src/nvim/cursor_shape.rs": 76,
     "crates/nvim/src/nvim/debugger.rs": 41,
     "crates/nvim/src/nvim/decoration.rs": 81,

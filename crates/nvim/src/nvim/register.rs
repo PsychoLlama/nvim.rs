@@ -3638,7 +3638,7 @@ pub unsafe extern "C" fn do_put(
                                         col: 0,
                                         coladd: 0,
                                     };
-                                    if getvpos(curwin.get(), &raw mut pos_0, vcol) == OK {
+                                    if getvpos(curwin.get(), &raw mut pos_0, vcol) {
                                         col = pos_0.col;
                                     } else {
                                         col = MAXCOL as ::core::ffi::c_int as colnr_T;

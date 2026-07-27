@@ -25,11 +25,9 @@
 {"symbol":"ccs_tab","kind":"static","file":"crates/nvim/src/nvim/viml/parser/expressions/ast.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"changed","kind":"fn","file":"crates/nvim/src/nvim/change.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"changed_lines","kind":"fn","file":"crates/nvim/src/nvim/change.rs","class":"internal","refs":[]}
-{"symbol":"check_cursor","kind":"fn","file":"crates/nvim/src/nvim/cursor.rs","class":"internal","refs":[]}
 {"symbol":"check_ff_value","kind":"fn","file":"crates/nvim/src/nvim/optionstr.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"close_buffer","kind":"fn","file":"crates/nvim/src/nvim/buffer.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"cmdmod","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"coladvance","kind":"fn","file":"crates/nvim/src/nvim/cursor.rs","class":"internal","refs":[]}
 {"symbol":"convert_setup","kind":"fn","file":"crates/nvim/src/nvim/mbyte.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"copy_loclist_stack","kind":"fn","file":"crates/nvim/src/nvim/quickfix.rs","class":"internal","refs":[]}
 {"symbol":"curbuf","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}

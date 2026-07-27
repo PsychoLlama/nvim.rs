@@ -1,3 +1,4 @@
+// `win_T` here is this module's own layout-identical copy, hence the casts.
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::arglist::get_arglist_exp;
 use crate::src::nvim::autocmd::{
@@ -5,6 +6,7 @@ use crate::src::nvim::autocmd::{
 };
 use crate::src::nvim::buffer::{buflist_getfile, do_modelines, no_write_message};
 use crate::src::nvim::charset::{skipdigits, skipwhite, vim_isprintc};
+use crate::src::nvim::cursor::{check_cursor, coladvance};
 use crate::src::nvim::drawscreen::{redraw_curbuf_later, update_screen};
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::typval::{
@@ -164,8 +166,6 @@ unsafe extern "C" {
         xtra: linenr_T,
         do_buf_event: bool,
     );
-    fn coladvance(wp: *mut win_T, wcol: colnr_T) -> ::core::ffi::c_int;
-    fn check_cursor(wp: *mut win_T);
     fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
     fn redraw_buf_later(buf: *mut buf_T, type_0: ::core::ffi::c_int);
     fn win_id2wp(id: ::core::ffi::c_int) -> *mut win_T;
@@ -5468,12 +5468,12 @@ unsafe extern "C" fn qf_jump_goto_line(
         if qf_col > 0 as ::core::ffi::c_int {
             (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
             if qf_viscol as ::core::ffi::c_int == true_0 {
-                coladvance(curwin.get(), qf_col as colnr_T - 1 as colnr_T);
+                coladvance(curwin.get().cast(), qf_col as colnr_T - 1 as colnr_T);
             } else {
                 (*curwin.get()).w_cursor.col = (qf_col - 1 as ::core::ffi::c_int) as colnr_T;
             }
             (*curwin.get()).w_set_curswant = true_0;
-            check_cursor(curwin.get());
+            check_cursor(curwin.get().cast());
         } else {
             beginline(BL_WHITE as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
         }
@@ -6613,7 +6613,7 @@ pub unsafe extern "C" fn ex_copen(mut eap: *mut exarg_T) {
     decr_quickfix_busy();
     (*curwin.get()).w_cursor.lnum = lnum as linenr_T;
     (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-    check_cursor(curwin.get());
+    check_cursor(curwin.get().cast());
     update_topline(curwin.get());
 }
 unsafe extern "C" fn qf_win_goto(mut win: *mut win_T, mut lnum: linenr_T) {

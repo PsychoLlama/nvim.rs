@@ -2012,7 +2012,7 @@ pub unsafe extern "C" fn jump_to_mouse(
             }
             (*curwin.get()).w_curswant = col as colnr_T;
             (*curwin.get()).w_set_curswant = false_0;
-            if coladvance(curwin.get(), col as colnr_T) == FAIL {
+            if !coladvance(curwin.get(), col as colnr_T) {
                 if !inclusive.is_null() {
                     *inclusive = true_0 != 0;
                 }
