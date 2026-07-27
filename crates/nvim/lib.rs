@@ -37,6 +37,7 @@ pub mod src {
                 pub mod dispatch;
                 pub mod dispatch_wrappers;
                 pub mod helpers;
+                pub mod metadata;
                 pub mod validate;
             } // mod private
             pub mod tabpage;

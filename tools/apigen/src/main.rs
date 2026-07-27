@@ -17,6 +17,13 @@
 //   --lua-dir     the `vim.api` Lua binding: the same conversion job again,
 //                 against the Lua stack rather than an argument `Array`, plus
 //                 the table that hangs the bindings off their names.
+//   --metadata-file
+//                 the packed api-info metadata: the msgpack dict
+//                 `nvim --api-info` and `nvim_get_api_info()` hand back, so
+//                 clients can discover the API. Its sections that no Rust
+//                 source declares — the UI events, the error kinds, the
+//                 handle types and the version's API levels — come from a
+//                 second spec (`--metadata-spec`).
 //
 // A signature alone does not say everything upstream's `FUNC_API_*` markers
 // said: whether a call is refused under textlock, which declared C type name
@@ -124,6 +131,25 @@ enum RetType {
     KeyDict(String),
 }
 
+impl RetType {
+    /// The C name of the return type, as the metadata's `return_type` starts
+    /// from. Only the decorations Rust cannot express need a `ret=` override.
+    fn declared(&self) -> String {
+        match self {
+            RetType::Void => "void".into(),
+            RetType::Boolean => "Boolean".into(),
+            RetType::Integer => "Integer".into(),
+            RetType::Float => "Float".into(),
+            RetType::String => "String".into(),
+            RetType::Array => "Array".into(),
+            RetType::Dict => "Dict".into(),
+            RetType::Object => "Object".into(),
+            RetType::Handle(name) => (*name).into(),
+            RetType::KeyDict(name) => format!("Dict({name})"),
+        }
+    }
+}
+
 /// One `pub unsafe extern "C" fn nvim_*` as parsed out of the crate.
 struct ApiFn {
     name: String,
@@ -165,9 +191,18 @@ struct Spec {
     /// Lua only: the method gets no RPC wrapper and no handler-table row.
     lua_only: bool,
     /// The API level the method appeared at, or -1 for the internal `nvim__*`
-    /// ones. Only the Lua binding reads it, and only to decide how to convert
-    /// the result — see [`Spec::push_special`].
+    /// ones. Required on every `nvim_`-prefixed entry: the metadata publishes
+    /// it, and the Lua binding reads it to decide how to convert the result —
+    /// see [`Spec::push_special`]. The deprecated spellings, which are not
+    /// `nvim_`-prefixed, were all there from the start and are pinned at 0.
     since: Option<i32>,
+    /// The API level the method was deprecated at, if it has been. Only the
+    /// metadata reads it. The deprecated spellings are pinned at 1.
+    deprecated_since: Option<i32>,
+    /// The declared C name of the return type, for returns whose Rust type has
+    /// lost the decoration: `ret=ArrayOf(String)`. Only the metadata reads it
+    /// — nothing in a wrapper depends on what the result is called.
+    ret: Option<String>,
 }
 
 impl Spec {
@@ -193,7 +228,30 @@ impl Spec {
     /// froze that for everything that predates API level 11 because clients
     /// depend on it, and used the modern conversion for newer methods.
     fn push_special(&self) -> bool {
-        self.since.is_some_and(|since| since < 11)
+        self.metadata_since() < 11
+    }
+
+    /// The API level the metadata publishes: the declared one, or 0 for a
+    /// deprecated spelling.
+    fn metadata_since(&self) -> i32 {
+        self.since.unwrap_or(0)
+    }
+
+    /// Whether this entry is one of the deprecated spellings upstream kept
+    /// for clients that predate the `nvim_` naming. They were all present at
+    /// API level 0 and all deprecated at level 1, so neither is spelled out.
+    fn is_legacy_spelling(&self) -> bool {
+        !self.name.starts_with("nvim_")
+    }
+
+    /// Whether the api-info metadata describes this entry. The internal
+    /// `nvim__*` functions and the internal error event are deliberately
+    /// unpublished, and `redraw` is not an API function at all — it is the UI
+    /// client's own notification handler.
+    fn in_metadata(&self) -> bool {
+        !self.name.starts_with("nvim__")
+            && self.name != "nvim_error_event"
+            && self.handler.is_none()
     }
 }
 
@@ -582,6 +640,14 @@ fn parse_spec(path: &Path) -> Result<Vec<Spec>, String> {
                             .map_err(|_| at(format!("bad API level in `{word}`")))?,
                     )
                 }
+                Some(("deprecated_since", value)) => {
+                    spec.deprecated_since = Some(
+                        value
+                            .parse::<i32>()
+                            .map_err(|_| at(format!("bad API level in `{word}`")))?,
+                    )
+                }
+                Some(("ret", value)) => spec.ret = Some(value.replace('_', " ")),
                 Some((key, value)) => match key.strip_prefix("arg") {
                     Some(n) => {
                         let n = n
@@ -619,11 +685,13 @@ fn parse_spec(path: &Path) -> Result<Vec<Spec>, String> {
                 "a lua_only method is not dispatched, so it has no alias or handler".into(),
             ));
         }
-        if spec.has_lua_binding() != spec.since.is_some() {
+        if spec.is_legacy_spelling() && (spec.since.is_some() || spec.deprecated_since.is_some()) {
             return Err(at(
-                "since= is required on everything with a Lua binding, and meaningless elsewhere"
-                    .into(),
+                "a deprecated spelling is pinned at since=0 deprecated_since=1".into(),
             ));
+        }
+        if !spec.is_legacy_spelling() && spec.since.is_none() {
+            return Err(at("since= is required on every nvim_ method".into()));
         }
         out.push(spec);
     }
@@ -2678,6 +2746,605 @@ use known::*;
     Ok(files)
 }
 
+// ---------------------------------------------------------------- metadata
+
+/// One UI event, as the metadata describes it: the parameters are wire types,
+/// which is not quite what the event's own signature says.
+struct UiEvent {
+    name: String,
+    since: i64,
+    params: Vec<(String, String)>,
+}
+
+/// One of the handle types the API takes and returns.
+struct HandleType {
+    name: String,
+    id: i64,
+    /// Method names of this type start with it, which is also what makes
+    /// `method` true in the metadata.
+    prefix: String,
+}
+
+/// The api-info sections that nothing in the crate declares (`--metadata-spec`).
+#[derive(Default)]
+struct Sidecar {
+    api_level: i64,
+    api_compatible: i64,
+    api_prerelease: bool,
+    prerelease: bool,
+    build: String,
+    error_types: Vec<(String, i64)>,
+    handles: Vec<HandleType>,
+    ui_events: Vec<UiEvent>,
+}
+
+fn parse_sidecar(path: &Path) -> Result<Sidecar, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut out = Sidecar::default();
+    let mut versions = 0;
+    for (lineno, line) in text.lines().enumerate() {
+        let line = line.split('#').next().unwrap().trim();
+        if line.is_empty() {
+            continue;
+        }
+        let at = |msg: String| format!("{}:{}: {msg}", path.display(), lineno + 1);
+        let mut words = line.split_whitespace();
+        let section = words.next().unwrap();
+        // Everything but `version` is named; the rest of the line is
+        // key=value pairs, except a ui_event's trailing parameter list.
+        let mut name = String::new();
+        if section != "version" {
+            name = words
+                .next()
+                .ok_or_else(|| at(format!("{section} needs a name")))?
+                .to_string();
+        }
+        let (mut id, mut since, mut prefix) = (None, None, None);
+        let mut params = Vec::new();
+        for word in words {
+            let Some((key, value)) = word.split_once('=') else {
+                let (ty, pname) = word
+                    .split_once(':')
+                    .ok_or_else(|| at(format!("`{word}` is not <type>:<name>")))?;
+                params.push((ty.to_string(), pname.to_string()));
+                continue;
+            };
+            let number = |what: &str| {
+                value
+                    .parse::<i64>()
+                    .map_err(|_| at(format!("bad {what} in `{word}`")))
+            };
+            let flag = || match value {
+                "true" => Ok(true),
+                "false" => Ok(false),
+                _ => Err(at(format!("`{word}` wants true or false"))),
+            };
+            match (section, key) {
+                ("error_type" | "type", "id") => id = Some(number("id")?),
+                ("ui_event", "since") => since = Some(number("API level")?),
+                ("type", "prefix") => prefix = Some(value.to_string()),
+                ("version", "api_level") => out.api_level = number("API level")?,
+                ("version", "api_compatible") => out.api_compatible = number("API level")?,
+                ("version", "api_prerelease") => out.api_prerelease = flag()?,
+                ("version", "prerelease") => out.prerelease = flag()?,
+                ("version", "build") => out.build = value.to_string(),
+                _ => return Err(at(format!("unknown key `{key}` in a {section} line"))),
+            }
+        }
+        let want = |v: Option<i64>, what: &str| v.ok_or_else(|| at(format!("{what} is required")));
+        match section {
+            "version" => versions += 1,
+            "error_type" => out.error_types.push((name, want(id, "id")?)),
+            "type" => out.handles.push(HandleType {
+                name,
+                id: want(id, "id")?,
+                prefix: prefix.ok_or_else(|| at("prefix is required".into()))?,
+            }),
+            "ui_event" => out.ui_events.push(UiEvent {
+                name,
+                since: want(since, "since")?,
+                params,
+            }),
+            other => return Err(at(format!("unknown section `{other}`"))),
+        }
+    }
+    if versions != 1 {
+        return Err(format!("{}: expected one version line", path.display()));
+    }
+    if out.build.is_empty() || out.handles.is_empty() || out.error_types.is_empty() {
+        return Err(format!("{}: a section is empty", path.display()));
+    }
+    Ok(out)
+}
+
+/// Split `Container(inner)` — tolerating the trailing `*` a keyset parameter
+/// is declared with — into its two halves.
+fn split_container(declared: &str) -> Option<(&str, &str)> {
+    let s = declared.trim_end().trim_end_matches('*').trim_end();
+    let open = s.find('(')?;
+    let name = &s[..open];
+    if !s.ends_with(')') || name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return None;
+    }
+    Some((name, &s[open + 1..s.len() - 1]))
+}
+
+/// Split an `ArrayOf` body into its element type and, if the declaration
+/// fixed one, its length. Only a top-level comma separates them: the element
+/// may itself be a container with commas of its own.
+fn split_elem(inner: &str) -> (&str, Option<&str>) {
+    let mut depth = 0;
+    for (i, c) in inner.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                let (elem, size) = (inner[..i].trim(), inner[i + 1..].trim());
+                if !size.is_empty() && size.bytes().all(|b| b.is_ascii_digit()) {
+                    return (elem, Some(size));
+                }
+            }
+            _ => {}
+        }
+    }
+    (inner.trim(), None)
+}
+
+/// The type name the metadata publishes for a declared C type. Upstream's
+/// header grammar recognised a handful of containers that decorate a plain
+/// API type with what it holds; only `ArrayOf` survives into the metadata,
+/// the rest collapse to the wire type they are spelled on top of.
+fn exported_type(declared: &str) -> String {
+    let Some((container, inner)) = split_container(declared) else {
+        return declared.to_string();
+    };
+    match container {
+        "Union" => "Object".into(),
+        "Tuple" => "Array".into(),
+        "Dict" | "DictOf" | "DictAs" => "Dict".into(),
+        "LuaRefOf" => "LuaRef".into(),
+        "Enum" => "String".into(),
+        "ArrayOf" => match split_elem(inner) {
+            (elem, Some(size)) => format!("ArrayOf({}, {size})", exported_type(elem)),
+            (elem, None) => format!("ArrayOf({})", exported_type(elem)),
+        },
+        _ => declared.to_string(),
+    }
+}
+
+/// A minimal msgpack writer: the value kinds the metadata uses, each encoded
+/// the narrowest way, which is what upstream's mpack did.
+#[derive(Default)]
+struct Packer(Vec<u8>);
+
+impl Packer {
+    fn map(&mut self, len: usize) {
+        // Every map in the metadata is a fixmap. Upstream's generator made
+        // the same assumption and would rather stop than emit a wider code
+        // nobody has compared against a client.
+        assert!(len <= 15, "a map of {len} needs a wider code");
+        self.0.push(0x80 | len as u8);
+    }
+
+    fn array(&mut self, len: usize) {
+        if len <= 15 {
+            self.0.push(0x90 | len as u8);
+        } else if let Ok(len) = u16::try_from(len) {
+            self.0.push(0xdc);
+            self.0.extend(len.to_be_bytes());
+        } else {
+            self.0.push(0xdd);
+            self.0.extend((len as u32).to_be_bytes());
+        }
+    }
+
+    fn str(&mut self, s: &str) {
+        let len = s.len();
+        if len < 32 {
+            self.0.push(0xa0 | len as u8);
+        } else if let Ok(len) = u8::try_from(len) {
+            self.0.extend([0xd9, len]);
+        } else if let Ok(len) = u16::try_from(len) {
+            self.0.push(0xda);
+            self.0.extend(len.to_be_bytes());
+        } else {
+            self.0.push(0xdb);
+            self.0.extend((len as u32).to_be_bytes());
+        }
+        self.0.extend(s.as_bytes());
+    }
+
+    fn int(&mut self, v: i64) {
+        if (-32..128).contains(&v) {
+            self.0.push(v as i8 as u8);
+        } else if let Ok(v) = u8::try_from(v) {
+            self.0.extend([0xcc, v]);
+        } else if let Ok(v) = u16::try_from(v) {
+            self.0.push(0xcd);
+            self.0.extend(v.to_be_bytes());
+        } else if let Ok(v) = i8::try_from(v) {
+            self.0.extend([0xd0, v as u8]);
+        } else if let Ok(v) = i16::try_from(v) {
+            self.0.push(0xd1);
+            self.0.extend(v.to_be_bytes());
+        } else if let Ok(v) = u32::try_from(v) {
+            self.0.push(0xce);
+            self.0.extend(v.to_be_bytes());
+        } else if let Ok(v) = i32::try_from(v) {
+            self.0.push(0xd2);
+            self.0.extend(v.to_be_bytes());
+        } else if let Ok(v) = u64::try_from(v) {
+            self.0.push(0xcf);
+            self.0.extend(v.to_be_bytes());
+        } else {
+            self.0.push(0xd3);
+            self.0.extend(v.to_be_bytes());
+        }
+    }
+
+    fn bool(&mut self, v: bool) {
+        self.0.push(if v { 0xc3 } else { 0xc2 });
+    }
+
+    /// A `[type, name]` pair, which is how both a function parameter and a UI
+    /// event parameter travel.
+    fn pair(&mut self, ty: &str, name: &str) {
+        self.array(2);
+        self.str(ty);
+        self.str(name);
+    }
+}
+
+/// Every byte-string literal in an expression, NUL terminator stripped. The
+/// transpiled statics spell a C string table as
+/// `[b"name\0".as_ptr() as *const c_char, …]`.
+fn byte_strings(expr: &syn::Expr, out: &mut Vec<String>) {
+    let mut nested = |e| byte_strings(e, out);
+    match expr {
+        syn::Expr::Lit(lit) => {
+            if let syn::Lit::ByteStr(bytes) = &lit.lit {
+                let bytes = bytes.value();
+                out.push(
+                    String::from_utf8_lossy(&bytes)
+                        .trim_end_matches('\0')
+                        .into(),
+                );
+            }
+        }
+        syn::Expr::Array(array) => array.elems.iter().for_each(nested),
+        syn::Expr::Call(call) => call.args.iter().for_each(nested),
+        syn::Expr::MethodCall(call) => nested(&call.receiver),
+        syn::Expr::Cast(cast) => nested(&cast.expr),
+        syn::Expr::Paren(paren) => nested(&paren.expr),
+        syn::Expr::Reference(reference) => nested(&reference.expr),
+        syn::Expr::Unary(unary) => nested(&unary.expr),
+        _ => {}
+    }
+}
+
+/// The `ui_options` the metadata advertises: the externalisable UI features,
+/// read off `ui_ext_names` — the table `nvim_ui_attach` validates its options
+/// against, so a new one cannot be added without the metadata following.
+/// `rgb` leads, and is not in the table because it is not an extension. Names
+/// that open with an underscore are the tree's own debugging switches and stay
+/// unadvertised.
+fn read_ui_options(root: &Path) -> Result<Vec<String>, String> {
+    let path = root.join("src/nvim/main.rs");
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut names = vec!["rgb".to_string()];
+    let mut found = false;
+    for item in &file.items {
+        let syn::Item::Static(item) = item else {
+            continue;
+        };
+        if item.ident != "ui_ext_names" {
+            continue;
+        }
+        found = true;
+        let mut all = Vec::new();
+        byte_strings(&item.expr, &mut all);
+        names.extend(
+            all.into_iter()
+                .filter(|n| n.starts_with(|c: char| c.is_ascii_lowercase())),
+        );
+    }
+    if !found {
+        return Err(format!("{}: no ui_ext_names table", path.display()));
+    }
+    Ok(names)
+}
+
+/// The three `NVIM_VERSION_*` constants, which are the tree's own statement of
+/// what version it is.
+fn read_version(root: &Path) -> Result<[i64; 3], String> {
+    let path = root.join("src/nvim/version.rs");
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    let wanted = [
+        "NVIM_VERSION_MAJOR",
+        "NVIM_VERSION_MINOR",
+        "NVIM_VERSION_PATCH",
+    ];
+    let mut out = [None; 3];
+    for item in &file.items {
+        let syn::Item::Const(item) = item else {
+            continue;
+        };
+        let Some(slot) = wanted.iter().position(|w| item.ident == w) else {
+            continue;
+        };
+        // `pub const NVIM_VERSION_MAJOR: c_int = 0 as c_int;`
+        let mut expr = &*item.expr;
+        while let syn::Expr::Cast(cast) = expr {
+            expr = &cast.expr;
+        }
+        let syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Int(int),
+            ..
+        }) = expr
+        else {
+            return Err(format!(
+                "{}: {} is not a literal",
+                path.display(),
+                item.ident
+            ));
+        };
+        out[slot] = Some(int.base10_parse::<i64>().map_err(|e| e.to_string())?);
+    }
+    let mut version = [0; 3];
+    for (slot, value) in out.iter().enumerate() {
+        version[slot] = value.ok_or_else(|| format!("{}: no {}", path.display(), wanted[slot]))?;
+    }
+    Ok(version)
+}
+
+/// One entry of the metadata's `functions` array.
+struct MetaFn<'a> {
+    name: &'a str,
+    params: Vec<(String, String)>,
+    ret: String,
+    since: i64,
+    deprecated_since: Option<i64>,
+    /// Whether the method belongs to one of the handle types, which clients
+    /// use to hang it off a Buffer/Window/Tabpage object.
+    method: bool,
+}
+
+/// Describe every method the metadata publishes, in spec order — which is the
+/// order upstream's generator read the API headers in, and the order the
+/// frozen blob lists.
+fn metadata_functions<'a>(
+    api: &BTreeMap<String, ApiFn>,
+    specs: &'a [Spec],
+    handles: &[HandleType],
+) -> Result<Vec<MetaFn<'a>>, String> {
+    let by_name: BTreeMap<&str, &Spec> = specs.iter().map(|s| (s.name.as_str(), s)).collect();
+    let mut out = Vec::new();
+    for spec in specs.iter().filter(|s| s.in_metadata()) {
+        // A deprecated spelling describes the method it stands for, under its
+        // own name and with its own levels.
+        let implementation = match &spec.alias {
+            Some(target) => by_name[target.as_str()],
+            None => spec,
+        };
+        let f = api
+            .get(&implementation.name)
+            .ok_or_else(|| format!("{}: no such API function in the crate", implementation.name))?;
+        let params = f
+            .params
+            .iter()
+            .filter_map(|p| match p {
+                Param::Value { index, ty, name } => Some((
+                    exported_type(
+                        &implementation
+                            .declared
+                            .get(&(index + 1))
+                            .cloned()
+                            .unwrap_or_else(|| ty.declared()),
+                    ),
+                    name.clone(),
+                )),
+                _ => None,
+            })
+            .collect();
+        let declared_ret = spec
+            .ret
+            .clone()
+            .or_else(|| implementation.ret.clone())
+            .unwrap_or_else(|| f.ret.declared());
+        out.push(MetaFn {
+            name: &spec.name,
+            params,
+            ret: exported_type(&declared_ret),
+            since: spec.metadata_since().into(),
+            deprecated_since: match spec.is_legacy_spelling() {
+                true => Some(1),
+                false => spec.deprecated_since.map(i64::from),
+            },
+            method: handles
+                .iter()
+                .any(|h| implementation.name.starts_with(&h.prefix)),
+        });
+    }
+    Ok(out)
+}
+
+/// Pack the whole metadata dict. Key order is upstream's and is load-bearing
+/// only in that the committed bytes have to keep matching: msgpack maps are
+/// unordered, but the blob is checked byte for byte.
+fn pack_metadata(
+    version: [i64; 3],
+    sidecar: &Sidecar,
+    ui_options: &[String],
+    functions: &[MetaFn],
+) -> Vec<u8> {
+    let mut p = Packer::default();
+    p.map(6);
+
+    p.str("version");
+    p.map(8);
+    for (key, value) in [
+        ("major", version[0]),
+        ("minor", version[1]),
+        ("patch", version[2]),
+    ] {
+        p.str(key);
+        p.int(value);
+    }
+    p.str("prerelease");
+    p.bool(sidecar.prerelease);
+    p.str("api_level");
+    p.int(sidecar.api_level);
+    p.str("api_compatible");
+    p.int(sidecar.api_compatible);
+    p.str("api_prerelease");
+    p.bool(sidecar.api_prerelease);
+    p.str("build");
+    p.str(&sidecar.build);
+
+    p.str("functions");
+    p.array(functions.len());
+    for f in functions {
+        p.map(if f.deprecated_since.is_some() { 6 } else { 5 });
+        p.str("parameters");
+        p.array(f.params.len());
+        for (ty, name) in &f.params {
+            p.pair(ty, name);
+        }
+        p.str("since");
+        p.int(f.since);
+        p.str("return_type");
+        p.str(&f.ret);
+        p.str("name");
+        p.str(f.name);
+        p.str("method");
+        p.bool(f.method);
+        if let Some(level) = f.deprecated_since {
+            p.str("deprecated_since");
+            p.int(level);
+        }
+    }
+
+    p.str("ui_events");
+    p.array(sidecar.ui_events.len());
+    for event in &sidecar.ui_events {
+        p.map(3);
+        p.str("name");
+        p.str(&event.name);
+        p.str("parameters");
+        p.array(event.params.len());
+        for (ty, name) in &event.params {
+            p.pair(ty, name);
+        }
+        p.str("since");
+        p.int(event.since);
+    }
+
+    p.str("ui_options");
+    p.array(ui_options.len());
+    for option in ui_options {
+        p.str(option);
+    }
+
+    p.str("error_types");
+    p.map(sidecar.error_types.len());
+    for (name, id) in &sidecar.error_types {
+        p.str(name);
+        p.map(1);
+        p.str("id");
+        p.int(*id);
+    }
+
+    p.str("types");
+    p.map(sidecar.handles.len());
+    for handle in &sidecar.handles {
+        p.str(&handle.name);
+        p.map(2);
+        p.str("id");
+        p.int(handle.id);
+        p.str("prefix");
+        p.str(&handle.prefix);
+    }
+
+    p.0
+}
+
+/// How wide a rendered byte-string line may get before it is continued.
+const LITERAL_WIDTH: usize = 92;
+
+/// Render bytes as a Rust byte-string literal, continued across lines with
+/// the `\<newline>` escape. Most of the blob is the ASCII of method and
+/// parameter names, so the literal stays readable — and diffable — where an
+/// array of 32,000 numbers would not.
+fn byte_literal(data: &[u8]) -> String {
+    let mut out = String::from("b\"");
+    let mut column = out.len();
+    for &byte in data {
+        // A continuation eats the newline *and* the whitespace after it, so a
+        // line may not open with a space of its own.
+        let escaped = match byte {
+            b'"' => "\\\"".to_string(),
+            b'\\' => "\\\\".to_string(),
+            b' ' if column == 0 => "\\x20".to_string(),
+            0x20..=0x7e => (byte as char).to_string(),
+            _ => format!("\\x{byte:02x}"),
+        };
+        if column + escaped.len() > LITERAL_WIDTH {
+            out.push_str("\\\n");
+            column = 0;
+        }
+        column += escaped.len();
+        out.push_str(&escaped);
+    }
+    out.push('"');
+    out
+}
+
+const METADATA_HEADER: &str = r#"//! The API metadata blob.
+//!
+//! `nvim --api-info` and `nvim_get_api_info()` hand this back verbatim: one
+//! msgpack dict describing every method the API publishes, the UI events and
+//! options, the error kinds and the handle types, so that a client can
+//! discover the API rather than hard-code it.
+//!
+//! Generated by tools/apigen from tools/apigen/functions.txt, the API
+//! signatures, tools/apigen/metadata.txt and the tree's own `ui_ext_names`
+//! and `NVIM_VERSION_*`. Do not edit: run `just apigen`.
+#![forbid(unsafe_code)]
+
+"#;
+
+fn generate_metadata(
+    root: &Path,
+    api: &BTreeMap<String, ApiFn>,
+    specs: &[Spec],
+    sidecar: &Sidecar,
+) -> Result<String, String> {
+    let functions = metadata_functions(api, specs, &sidecar.handles)?;
+    let packed = pack_metadata(
+        read_version(root)?,
+        sidecar,
+        &read_ui_options(root)?,
+        &functions,
+    );
+    let mut out = String::from(METADATA_HEADER);
+    writeln!(
+        out,
+        "/// The packed metadata, describing {} methods and {} UI events.",
+        functions.len(),
+        sidecar.ui_events.len(),
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub static PACKED_API_METADATA: &[u8] = {};",
+        byte_literal(&packed)
+    )
+    .unwrap();
+    Ok(out)
+}
+
 // ---------------------------------------------------------------- driver
 
 /// Format a generated module through rustfmt's stdin. `--config-path` is
@@ -2719,9 +3386,11 @@ fn main() {
 fn run() -> Result<(), String> {
     let mut root = None;
     let mut spec_path = None;
+    let mut metadata_spec = None;
     let mut out_dir = None;
     let mut tables_dir = None;
     let mut lua_dir = None;
+    let mut metadata_file = None;
     let mut config = None;
     let mut check = false;
     let mut args = std::env::args().skip(1);
@@ -2730,9 +3399,11 @@ fn run() -> Result<(), String> {
         match arg.as_str() {
             "--root" => root = Some(PathBuf::from(value()?)),
             "--spec" => spec_path = Some(PathBuf::from(value()?)),
+            "--metadata-spec" => metadata_spec = Some(PathBuf::from(value()?)),
             "--out-dir" => out_dir = Some(PathBuf::from(value()?)),
             "--tables-dir" => tables_dir = Some(PathBuf::from(value()?)),
             "--lua-dir" => lua_dir = Some(PathBuf::from(value()?)),
+            "--metadata-file" => metadata_file = Some(PathBuf::from(value()?)),
             "--rustfmt-config" => config = Some(PathBuf::from(value()?)),
             "--check" => check = true,
             other => return Err(format!("unknown argument `{other}`")),
@@ -2740,14 +3411,17 @@ fn run() -> Result<(), String> {
     }
     let root = root.ok_or("--root is required")?;
     let spec_path = spec_path.ok_or("--spec is required")?;
+    let metadata_spec = metadata_spec.ok_or("--metadata-spec is required")?;
     let out_dir = out_dir.ok_or("--out-dir is required")?;
     let tables_dir = tables_dir.ok_or("--tables-dir is required")?;
     let lua_dir = lua_dir.ok_or("--lua-dir is required")?;
+    let metadata_file = metadata_file.ok_or("--metadata-file is required")?;
     let config = config.ok_or("--rustfmt-config is required")?;
 
     let api = collect_api_fns(&root)?;
     let keysets = collect_keysets(&root)?;
     let specs = parse_spec(&spec_path)?;
+    let sidecar = parse_sidecar(&metadata_spec)?;
     let sizes: BTreeMap<String, usize> =
         keysets.iter().map(|k| (k.name.clone(), k.len())).collect();
     let trees = [
@@ -2827,13 +3501,30 @@ fn run() -> Result<(), String> {
             );
         }
     }
+    // The metadata is a single module, not a tree: it lives beside
+    // hand-written ones, so it gets no stale-file sweep.
+    let metadata = rustfmt(&config, &generate_metadata(&root, &api, &specs, &sidecar)?)?;
+    if std::fs::read_to_string(&metadata_file).unwrap_or_default() != metadata {
+        if check {
+            return Err(format!(
+                "{} is stale; run `just apigen`",
+                metadata_file.display()
+            ));
+        }
+        std::fs::write(&metadata_file, &metadata)
+            .map_err(|e| format!("{}: {e}", metadata_file.display()))?;
+        wrote = true;
+        eprintln!("apigen: wrote {} (metadata)", metadata_file.display());
+    }
+
     if wrote {
         eprintln!(
-            "apigen: {} wrappers, {} handlers, {} keysets, {} Lua bindings",
+            "apigen: {} wrappers, {} handlers, {} keysets, {} Lua bindings, {} published methods",
             specs.iter().filter(|s| s.is_wrapper()).count(),
             specs.iter().filter(|s| s.is_method()).count(),
             keysets.len(),
             specs.iter().filter(|s| s.has_lua_binding()).count(),
+            specs.iter().filter(|s| s.in_metadata()).count(),
         );
     }
     Ok(())

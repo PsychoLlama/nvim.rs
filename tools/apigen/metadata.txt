@@ -1,0 +1,111 @@
+# The parts of the api-info metadata blob that no Rust source declares.
+#
+# `nvim --api-info` and `nvim_get_api_info()` return one msgpack dict with six
+# sections. tools/apigen builds the `functions` section from
+# tools/apigen/functions.txt plus the API signatures, and `ui_options` from
+# `ui_ext_names` in crates/nvim/src/nvim/main.rs. The rest have no source of
+# truth in the tree, so they are spelled out here — the point is that one
+# audited encoder produces the blob and the committed bytes are checked, not
+# that every value gains a second home.
+#
+# Lines are `<section> <name> [key=value ...]`.
+
+# The `version` dict, minus major/minor/patch, which are read from
+# NVIM_VERSION_MAJOR/MINOR/PATCH in crates/nvim/src/nvim/version.rs.
+#
+#   api_level       the API level this build implements
+#   api_compatible  the oldest API level it stays compatible with
+#   api_prerelease  whether api_level is still being changed
+#   prerelease      whether this is a development build
+#   build           the build's version string, upstream's NVIM_VERSION_BUILD
+
+version api_level=14 api_compatible=0 api_prerelease=false prerelease=false build=v0.12.4
+
+# The error kinds an RPC error response can carry, by their wire ids.
+
+error_type Exception id=0
+error_type Validation id=1
+
+# The handle types the API takes and returns. `prefix` is also what makes a
+# method a "method" of its type: `method` is true in the metadata for exactly
+# the functions whose name starts with one of these.
+
+type Buffer id=0 prefix=nvim_buf_
+type Window id=1 prefix=nvim_win_
+type Tabpage id=2 prefix=nvim_tabpage_
+
+# The UI events the redraw notification multiplexes, in the order upstream's
+# ui_events.in.h declared them. `since` is the API level the event appeared
+# at; it survives nowhere else in the tree. Parameters are `<type>:<name>` in
+# call order — the wire type, so the events that pass an HlAttrs or a Dict
+# spell it `Dictionary`, which is what clients have always seen.
+
+ui_event mode_info_set since=3 Boolean:enabled Array:cursor_styles
+ui_event update_menu since=3
+ui_event busy_start since=3
+ui_event busy_stop since=3
+ui_event mouse_on since=3
+ui_event mouse_off since=3
+ui_event mode_change since=3 String:mode Integer:mode_idx
+ui_event bell since=3
+ui_event visual_bell since=3
+ui_event flush since=3
+ui_event connect since=14 String:server_addr
+ui_event restart since=14 String:listen_addr
+ui_event suspend since=3
+ui_event set_title since=3 String:title
+ui_event set_icon since=3 String:icon
+ui_event screenshot since=7 String:path
+ui_event option_set since=4 String:name Object:value
+ui_event chdir since=12 String:path
+ui_event ui_send since=14 String:content
+ui_event update_fg since=3 Integer:fg
+ui_event update_bg since=3 Integer:bg
+ui_event update_sp since=3 Integer:sp
+ui_event resize since=3 Integer:width Integer:height
+ui_event clear since=3
+ui_event eol_clear since=3
+ui_event cursor_goto since=3 Integer:row Integer:col
+ui_event highlight_set since=3 Dictionary:attrs
+ui_event put since=3 String:str
+ui_event set_scroll_region since=3 Integer:top Integer:bot Integer:left Integer:right
+ui_event scroll since=3 Integer:count
+ui_event default_colors_set since=4 Integer:rgb_fg Integer:rgb_bg Integer:rgb_sp Integer:cterm_fg Integer:cterm_bg
+ui_event hl_attr_define since=5 Integer:id Dictionary:rgb_attrs Dictionary:cterm_attrs Array:info
+ui_event hl_group_set since=6 String:name Integer:id
+ui_event grid_resize since=5 Integer:grid Integer:width Integer:height
+ui_event grid_clear since=5 Integer:grid
+ui_event grid_cursor_goto since=5 Integer:grid Integer:row Integer:col
+ui_event grid_line since=5 Integer:grid Integer:row Integer:col_start Array:data Boolean:wrap
+ui_event grid_scroll since=5 Integer:grid Integer:top Integer:bot Integer:left Integer:right Integer:rows Integer:cols
+ui_event grid_destroy since=6 Integer:grid
+ui_event win_pos since=6 Integer:grid Window:win Integer:startrow Integer:startcol Integer:width Integer:height
+ui_event win_float_pos since=6 Integer:grid Window:win String:anchor Integer:anchor_grid Float:anchor_row Float:anchor_col Boolean:mouse_enabled Integer:zindex Integer:compindex Integer:screen_row Integer:screen_col
+ui_event win_external_pos since=6 Integer:grid Window:win
+ui_event win_hide since=6 Integer:grid
+ui_event win_close since=6 Integer:grid
+ui_event msg_set_pos since=6 Integer:grid Integer:row Boolean:scrolled String:sep_char Integer:zindex Integer:compindex
+ui_event win_viewport since=7 Integer:grid Window:win Integer:topline Integer:botline Integer:curline Integer:curcol Integer:line_count Integer:scroll_delta
+ui_event win_viewport_margins since=12 Integer:grid Window:win Integer:top Integer:bottom Integer:left Integer:right
+ui_event win_extmark since=10 Integer:grid Window:win Integer:ns_id Integer:mark_id Integer:row Integer:col
+ui_event popupmenu_show since=3 Array:items Integer:selected Integer:row Integer:col Integer:grid
+ui_event popupmenu_hide since=3
+ui_event popupmenu_select since=3 Integer:selected
+ui_event tabline_update since=3 Tabpage:current Array:tabs Buffer:current_buffer Array:buffers
+ui_event cmdline_show since=3 Array:content Integer:pos String:firstc String:prompt Integer:indent Integer:level Integer:hl_id
+ui_event cmdline_pos since=3 Integer:pos Integer:level
+ui_event cmdline_special_char since=3 String:c Boolean:shift Integer:level
+ui_event cmdline_hide since=3 Integer:level Boolean:abort
+ui_event cmdline_block_show since=3 Array:lines
+ui_event cmdline_block_append since=3 Array:lines
+ui_event cmdline_block_hide since=3
+ui_event wildmenu_show since=3 Array:items
+ui_event wildmenu_select since=3 Integer:selected
+ui_event wildmenu_hide since=3
+ui_event msg_show since=6 String:kind Array:content Boolean:replace_last Boolean:history Boolean:append Object:id String:trigger
+ui_event msg_clear since=6
+ui_event msg_showcmd since=6 Array:content
+ui_event msg_showmode since=6 Array:content
+ui_event msg_ruler since=6 Array:content
+ui_event msg_history_show since=6 Array:entries Boolean:prev_cmd
+ui_event error_exit since=12 Integer:status
