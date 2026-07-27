@@ -38,6 +38,14 @@ and this project adheres to [CalVer](https://calver.org/).
   hand-expanded vectors became owned Rust collections. `nvim_parse_expression`
   and the cmdline highlighter report exactly what they did; a leak and an
   aliasing fault in the highlighter's figure-brace handling went with it.
+- The core hash containers (`src/nvim/map`, `src/nvim/hashtab`) collapsed from
+  nine transpiled copies of the same table onto one generic implementation.
+- The extmark store (`src/nvim/marktree`) was split along its concerns — key
+  representation, subtree decoration counts, node layout, intersection sets,
+  rebalancing, iteration, splicing, checking and inspection — and each is
+  written against a named invariant rather than a macro expansion. The mark
+  flag definitions and accessors, which the transpiler had copied into six
+  files, are defined once.
 
 ## [2026.07.26-d0c5cf2147]
 
