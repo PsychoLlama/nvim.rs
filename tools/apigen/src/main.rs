@@ -119,6 +119,8 @@ struct ApiFn {
 /// One line of the spec file: everything the signature cannot tell us.
 #[derive(Default)]
 struct Spec {
+    /// The name the method answers to over RPC. Usually also the name of the
+    /// API function that implements it.
     name: String,
     /// Refuse the call while the text is locked (upstream `FUNC_API_TEXTLOCK`).
     textlock: bool,
@@ -128,6 +130,56 @@ struct Spec {
     /// Declared C type names for arguments whose Rust type has lost the
     /// decoration, keyed by 1-based argument position: `arg1=ArrayOf(Integer, 2)`.
     declared: BTreeMap<usize, String>,
+    /// The handler may run straight from the RPC read callback instead of
+    /// being deferred to the main loop (`FUNC_API_FAST`).
+    fast: bool,
+    /// The result is heap-allocated and the caller frees it, rather than
+    /// belonging to the request arena.
+    ret_alloc: bool,
+    /// This method is a deprecated spelling of another one. It has no wrapper
+    /// of its own: the handler table points it at that method's, and it
+    /// inherits its `fast` and `ret_alloc`.
+    alias: Option<String>,
+    /// A hand-written handler elsewhere in the crate, named by its full path.
+    /// Mutually exclusive with `alias`; either means no wrapper is generated.
+    handler: Option<String>,
+}
+
+impl Spec {
+    /// Whether this entry gets a wrapper of its own.
+    fn is_wrapper(&self) -> bool {
+        self.alias.is_none() && self.handler.is_none()
+    }
+}
+
+/// One key of a keyset, as the tables see it.
+struct Key {
+    /// The name clients spell it with.
+    wire: String,
+    /// The Rust field it fills in.
+    field: String,
+    /// `KeySetLink::type_0`, as one of the `TAG_*` constants the generated
+    /// module defines.
+    tag: &'static str,
+    /// A highlight-group name, which the converter resolves to an id.
+    is_hlgroup: bool,
+}
+
+/// One `KeyDict_*` struct: an options dict the API takes by name.
+struct Keyset {
+    name: String,
+    /// In table order, which is not declaration order — see [`table_order`].
+    keys: Vec<Key>,
+    /// The keyset leads with an `is_set__<name>_` mask, so each key gets an
+    /// `opt_index` naming its bit.
+    has_optional: bool,
+}
+
+impl Keyset {
+    /// Elements of the emitted table: one per key plus the null terminator.
+    fn len(&self) -> usize {
+        self.keys.len() + 1
+    }
 }
 
 // ---------------------------------------------------------------- parsing
@@ -273,46 +325,176 @@ fn collect_api_fns(root: &Path) -> Result<BTreeMap<String, ApiFn>, String> {
     Ok(out)
 }
 
-/// Element counts of the `<name>_table: GlobalCell<[KeySetLink; N]>` statics,
-/// which `api_keydict_to_dict` needs as its bound. They still live in the
-/// hand-maintained dispatch module; reading them keeps the two in step.
-fn collect_keyset_tables(root: &Path) -> Result<BTreeMap<String, usize>, String> {
-    let path = root.join("src/nvim/api/private/dispatch.rs");
+/// The `TAG_*` constant naming the `ObjectType` a value of this Rust type
+/// must arrive as, and whether the type marks a highlight group.
+fn key_tag(ty: &str) -> Option<(&'static str, bool)> {
+    Some(match ty {
+        // A highlight group travels as a name but is stored as the id the
+        // converter resolves it to, so its slot is an Integer.
+        "HLGroupID" => ("TAG_INTEGER", true),
+        "Boolean" => ("TAG_BOOLEAN", false),
+        "Integer" => ("TAG_INTEGER", false),
+        "Float" => ("TAG_FLOAT", false),
+        "String_0" => ("TAG_STRING", false),
+        "Array" => ("TAG_ARRAY", false),
+        "Dict" => ("TAG_DICT", false),
+        "LuaRef" => ("TAG_LUAREF", false),
+        "Buffer" => ("TAG_BUFFER", false),
+        "Window" => ("TAG_WINDOW", false),
+        "Tabpage" => ("TAG_TABPAGE", false),
+        // Anything goes.
+        "Object" => ("TAG_NIL", false),
+        // ShaDa's own unpacked-in-place array of strings.
+        "StringArray" => ("TAG_STRING_ARRAY", false),
+        _ => return None,
+    })
+}
+
+/// The wire name a field carries, when a `Wire key: \`name\`.` doc comment
+/// says it differs from the Rust one.
+fn wire_key_override(attrs: &[syn::Attribute]) -> Option<String> {
+    for attr in attrs {
+        let syn::Meta::NameValue(nv) = &attr.meta else {
+            continue;
+        };
+        if !nv.path.is_ident("doc") {
+            continue;
+        }
+        let syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(s),
+            ..
+        }) = &nv.value
+        else {
+            continue;
+        };
+        let text = s.value();
+        let Some(rest) = text.trim().strip_prefix("Wire key:") else {
+            continue;
+        };
+        let name = rest.trim().trim_end_matches('.').trim_matches('`');
+        if !name.is_empty() {
+            return Some(name.to_string());
+        }
+    }
+    None
+}
+
+/// Read the keysets out of their canonical module. The struct definitions are
+/// the source of truth: declaration order fixes the table order and hence
+/// every key's `opt_index`, the field type fixes the tag, and a wire name that
+/// differs from the Rust field name is recorded in a doc comment there.
+fn collect_keysets(root: &Path) -> Result<Vec<Keyset>, String> {
+    let path = root.join("src/nvim/types/keysets.rs");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-    let mut out = BTreeMap::new();
+    let mut out = Vec::new();
     for item in &file.items {
-        let syn::Item::Static(s) = item else { continue };
+        let syn::Item::Struct(s) = item else { continue };
         let Some(name) = s
             .ident
             .to_string()
-            .strip_suffix("_table")
+            .strip_prefix("KeyDict_")
             .map(str::to_string)
         else {
             continue;
         };
-        // GlobalCell<[KeySetLink; N]>
-        let syn::Type::Path(p) = &*s.ty else { continue };
-        let last = p.path.segments.last().unwrap();
-        let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
-            continue;
-        };
-        let Some(syn::GenericArgument::Type(syn::Type::Array(arr))) = args.args.first() else {
-            continue;
-        };
-        if type_name(&arr.elem).as_deref() != Some("KeySetLink") {
-            continue;
+        let mut keys = Vec::new();
+        let mut has_optional = false;
+        for (i, field) in s.fields.iter().enumerate() {
+            let field_name = field
+                .ident
+                .as_ref()
+                .ok_or_else(|| format!("KeyDict_{name}: tuple struct"))?
+                .to_string();
+            let ty = type_name(&field.ty)
+                .ok_or_else(|| format!("KeyDict_{name}.{field_name}: unreadable type"))?;
+            if field_name == format!("is_set__{name}_") {
+                if i != 0 || ty != "OptionalKeys" {
+                    return Err(format!(
+                        "KeyDict_{name}: is_set__{name}_ must come first and be an OptionalKeys"
+                    ));
+                }
+                has_optional = true;
+                continue;
+            }
+            let (tag, is_hlgroup) = key_tag(&ty)
+                .ok_or_else(|| format!("KeyDict_{name}.{field_name}: unmapped type `{ty}`"))?;
+            keys.push(Key {
+                wire: wire_key_override(&field.attrs).unwrap_or_else(|| field_name.clone()),
+                field: field_name,
+                tag,
+                is_hlgroup,
+            });
         }
-        let syn::Expr::Lit(syn::ExprLit {
-            lit: syn::Lit::Int(n),
-            ..
-        }) = &arr.len
-        else {
-            continue;
-        };
-        out.insert(name, n.base10_parse::<usize>().map_err(|e| e.to_string())?);
+        let order = table_order(&keys.iter().map(|k| k.wire.clone()).collect::<Vec<_>>());
+        let mut ordered: Vec<Option<Key>> = keys.into_iter().map(Some).collect();
+        let keys = order
+            .into_iter()
+            .map(|i| ordered[i].take().expect("each key placed once"))
+            .collect();
+        out.push(Keyset {
+            name,
+            keys,
+            has_optional,
+        });
     }
     Ok(out)
+}
+
+/// The order a table's entries go in, which is *not* declaration order.
+///
+/// Upstream's `src/gen/hashy.lua` grouped the keys by length, picked for each
+/// length the character position that splits it most evenly, and laid the
+/// table out bucket by bucket so a lookup could jump straight to a short run.
+/// The lookup here is a plain `match` on the key bytes instead (see the
+/// generated module's header), but the layout has to survive: a key's position
+/// is its `opt_index`, the bit it owns in the keyset's `is_set__*_` mask, and
+/// call sites all over the crate test those bits by number. The same is true
+/// of the handler table, whose indices `eval/funcs.rs` has baked in.
+///
+/// Returns the permutation: `result[i]` is the index in `names` of the key
+/// that belongs at position `i`.
+fn table_order(names: &[String]) -> Vec<usize> {
+    let max_len = names.iter().map(|s| s.len()).max().unwrap_or(0);
+    let mut out = Vec::with_capacity(names.len());
+    for len in 1..=max_len {
+        let bucket: Vec<usize> = (0..names.len())
+            .filter(|&i| names[i].len() == len)
+            .collect();
+        if bucket.is_empty() {
+            continue;
+        }
+        // The position whose character splits this length's keys into the
+        // smallest worst-case group; ties go to the leftmost.
+        let mut best: Option<(usize, BTreeMap<u8, Vec<usize>>)> = None;
+        let mut best_size = bucket.len() * 2;
+        for pos in 0..len {
+            let mut split: BTreeMap<u8, Vec<usize>> = BTreeMap::new();
+            for &i in &bucket {
+                split.entry(names[i].as_bytes()[pos]).or_default().push(i);
+            }
+            let worst = split.values().map(Vec::len).max().unwrap_or(1).max(1);
+            if worst < best_size {
+                best_size = worst;
+                best = Some((pos, split));
+            }
+        }
+        let (_, split) = best.expect("a non-empty length bucket has a best position");
+        if split.len() > 1 {
+            // Sorted by the discriminating character, as `hashy.switcher`
+            // emitted its `case` labels.
+            for group in split.values() {
+                out.extend(group);
+            }
+        } else {
+            // One group: upstream took only its first member, which is sound
+            // because a single group of one key is all a distinct length can
+            // hold once duplicates are ruled out.
+            out.push(split.values().next().unwrap()[0]);
+        }
+    }
+    assert_eq!(out.len(), names.len(), "every key lands in the table");
+    out
 }
 
 fn parse_spec(path: &Path) -> Result<Vec<Spec>, String> {
@@ -333,6 +515,10 @@ fn parse_spec(path: &Path) -> Result<Vec<Spec>, String> {
             match word.split_once('=') {
                 None if word == "textlock" => spec.textlock = true,
                 None if word == "textlock_allow_cmdwin" => spec.textlock_allow_cmdwin = true,
+                None if word == "fast" => spec.fast = true,
+                None if word == "ret_alloc" => spec.ret_alloc = true,
+                Some(("alias", value)) => spec.alias = Some(value.to_string()),
+                Some(("handler", value)) => spec.handler = Some(value.to_string()),
                 Some((key, value)) => match key.strip_prefix("arg") {
                     Some(n) => {
                         let n = n
@@ -351,7 +537,30 @@ fn parse_spec(path: &Path) -> Result<Vec<Spec>, String> {
         if spec.textlock && spec.textlock_allow_cmdwin {
             return Err(at("textlock and textlock_allow_cmdwin are exclusive".into()));
         }
+        if spec.alias.is_some() && spec.handler.is_some() {
+            return Err(at("alias and handler are exclusive".into()));
+        }
+        if !spec.is_wrapper() && (spec.textlock || spec.textlock_allow_cmdwin) {
+            return Err(at("an entry without a wrapper has nothing to lock".into()));
+        }
+        if spec.alias.is_some() && (spec.fast || spec.ret_alloc) {
+            return Err(at(
+                "an alias inherits fast/ret_alloc from what it aliases".into()
+            ));
+        }
         out.push(spec);
+    }
+    let names: BTreeSet<&str> = out.iter().map(|s| s.name.as_str()).collect();
+    for spec in &out {
+        if let Some(target) = &spec.alias {
+            if !names.contains(target.as_str()) {
+                return Err(format!(
+                    "{}: {} aliases {target}, which is not in the spec",
+                    path.display(),
+                    spec.name
+                ));
+            }
+        }
     }
     Ok(out)
 }
@@ -892,7 +1101,7 @@ fn generate(
     // API source file stem -> the wrappers it gets, in name order so the
     // output does not depend on how the spec file happens to be arranged.
     let mut by_module: BTreeMap<&str, Vec<(&ApiFn, &Spec)>> = BTreeMap::new();
-    for spec in specs {
+    for spec in specs.iter().filter(|s| s.is_wrapper()) {
         let f = api
             .get(&spec.name)
             .ok_or_else(|| format!("{}: no such API function in the crate", spec.name))?;
@@ -952,7 +1161,7 @@ fn generate(
 
     // module path segment -> API functions to import from it
     let mut api_imports: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    for spec in specs {
+    for spec in specs.iter().filter(|s| s.is_wrapper()) {
         let f = &api[&spec.name];
         api_imports
             .entry(f.module.clone())
@@ -1088,6 +1297,576 @@ use known::*;
     Ok(files)
 }
 
+// ------------------------------------------------------- codegen: tables
+
+const TABLES_HEADER: &str = r#"//! The msgpack-RPC dispatch tables.
+//!
+//! GENERATED by tools/apigen from the `KeyDict_*` structs in
+//! `crate::src::nvim::types::keysets` plus `tools/apigen/functions.txt`. Do
+//! not edit; run `just apigen` (`just apigen --check` fails on drift).
+//!
+//! Two lookups live here. `KeyDict_<name>_get_field` turns an options-dict
+//! key into the table row that says where the value goes, and
+//! `msgpack_rpc_get_handler_for` turns a method name into the wrapper that
+//! serves it.
+//!
+//! Upstream generated both with a hand-rolled perfect hash (`src/gen/hashy.lua`
+//! at tag v0.12.4): a switch on the key's length, then on the one character
+//! position that best split that length's keys, then a `memcmp` to confirm.
+//! Here each is a `match` on the key bytes instead. rustc lowers that to the
+//! same shape — a switch on the length and a decision tree over the bytes —
+//! without the confirming compare, and it is one readable line per key rather
+//! than a table plus a switch plus a loop.
+//!
+//! What did survive from `hashy` is the *table order*, because it is not an
+//! implementation detail: a key's row index is its `opt_index`, the bit it
+//! owns in its keyset's `is_set__*_` mask, and a method's row index is what
+//! `eval/funcs.rs` stores to bind the builtin `nvim_*()` Vimscript functions.
+//! `tools/apigen`'s `table_order` reproduces the layout upstream's hash
+//! implied.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+"#;
+
+/// Header for a child module of the tables directory. A chunk that came out
+/// with no `unsafe` in it — the handler table and its lookup are plain data —
+/// forbids it outright rather than settling for the weaker lint.
+fn tables_child_header(what: &str, body: &str) -> String {
+    let attr = if body.contains("unsafe ") {
+        "#![deny(unsafe_op_in_unsafe_fn)]"
+    } else {
+        "#![forbid(unsafe_code)]"
+    };
+    format!(
+        "//! {what}\n\
+         //!\n\
+         //! GENERATED by tools/apigen; see the parent module. Do not edit;\n\
+         //! run `just apigen`.\n\
+         \n\
+         {attr}\n\
+         \n\
+         // A chunk may hold nothing that needs the parent's support code.\n\
+         #[allow(unused_imports)]\n\
+         use super::*;\n\
+         \n"
+    )
+}
+
+/// Shared support for the tables. `key`/`hl_key`/`END` build the rows;
+/// `key_bytes` is how every lookup gets at the bytes it was handed.
+const TABLES_SUPPORT: &str = r#"
+/// One row of a keyset table: the key's name, the offset of the field its
+/// value lands in, the tag that value must arrive as, and the bit it owns in
+/// the keyset's `is_set__*_` mask (-1 when the keyset has no mask).
+const fn key(name: &'static CStr, ptr_off: usize, type_0: c_int, opt_index: c_int) -> KeySetLink {
+    KeySetLink {
+        str: name.as_ptr().cast_mut(),
+        ptr_off,
+        type_0,
+        opt_index,
+        is_hlgroup: false,
+    }
+}
+
+/// A row whose value names a highlight group. It arrives as a String and is
+/// stored as the id the converter resolves it to, so its tag is an Integer.
+const fn hl_key(name: &'static CStr, ptr_off: usize, opt_index: c_int) -> KeySetLink {
+    KeySetLink {
+        str: name.as_ptr().cast_mut(),
+        ptr_off,
+        type_0: TAG_INTEGER,
+        opt_index,
+        is_hlgroup: true,
+    }
+}
+
+/// The null row every keyset table ends with: `api_keydict_to_dict` walks a
+/// table until it sees one.
+const END: KeySetLink = KeySetLink {
+    str: ptr::null_mut(),
+    ptr_off: 0,
+    type_0: TAG_NIL,
+    opt_index: -1,
+    is_hlgroup: false,
+};
+
+/// The key bytes a lookup was handed. An empty key carries no pointer worth
+/// dereferencing — and may carry a null one — so length zero short-circuits.
+///
+/// # Safety
+/// `str` points at `len` readable bytes.
+unsafe fn key_bytes<'a>(str: *const c_char, len: size_t) -> &'a [u8] {
+    if len == 0 {
+        return &[];
+    }
+    // SAFETY: the caller promises `len` readable bytes at `str`.
+    unsafe { slice::from_raw_parts(str.cast::<u8>(), len) }
+}
+
+/// One row of [`method_handlers`]: the name a client calls the method by, the
+/// wrapper that serves it, whether it may run straight from the RPC read
+/// callback instead of being deferred to the main loop, and whether its result
+/// is heap-allocated for the caller to free rather than owned by the request
+/// arena.
+const fn handler(
+    name: &'static CStr,
+    f: unsafe extern "C" fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
+    fast: bool,
+    ret_alloc: bool,
+) -> MsgpackRpcRequestHandler {
+    MsgpackRpcRequestHandler {
+        name: name.as_ptr(),
+        fn_0: Some(f),
+        fast,
+        ret_alloc,
+    }
+}
+
+/// What [`msgpack_rpc_get_handler_for`] returns when it refused; the caller
+/// looks at `*error`.
+const NO_HANDLER: MsgpackRpcRequestHandler = MsgpackRpcRequestHandler {
+    name: ptr::null(),
+    fn_0: None,
+    fast: false,
+    ret_alloc: false,
+};
+
+/// Look a method up by name.
+///
+/// # Safety
+/// `name` points at `name_len` readable bytes; `error` at a live `Error`.
+pub unsafe extern "C" fn msgpack_rpc_get_handler_for(
+    name: *const c_char,
+    name_len: size_t,
+    error: *mut Error,
+) -> MsgpackRpcRequestHandler {
+    // SAFETY: the caller passes a method name of `name_len` bytes.
+    if let Some(index) = handler_index(unsafe { key_bytes(name, name_len) }) {
+        // SAFETY: `handler_index` only ever returns an index into the table.
+        return unsafe { (*method_handlers.ptr())[index] };
+    }
+    // `%.*s`: the name is not NUL-terminated, so its length goes along. The
+    // stand-in for an empty one is, and upstream passed `sizeof("<empty>")`.
+    let (len, text) = if name_len > 0 {
+        (name_len as c_int, name)
+    } else {
+        let empty = c"<empty>";
+        (empty.to_bytes_with_nul().len() as c_int, empty.as_ptr())
+    };
+    // SAFETY: `error` is live and the format string matches its arguments.
+    unsafe {
+        api_set_error(
+            error,
+            kErrorTypeException,
+            c"Invalid method: %.*s".as_ptr(),
+            len,
+            text,
+        );
+    }
+    NO_HANDLER
+}
+"#;
+
+/// The `TAG_*` constants, in tag order. Only the referenced ones are emitted.
+const TAGS: &[(&str, &str, &str)] = &[
+    (
+        "TAG_STRING_ARRAY",
+        "-1",
+        "ShaDa's own unpacked-in-place array of strings",
+    ),
+    ("TAG_NIL", "0", "any Object"),
+    ("TAG_BOOLEAN", "1", ""),
+    ("TAG_INTEGER", "2", ""),
+    ("TAG_FLOAT", "3", ""),
+    ("TAG_STRING", "4", ""),
+    ("TAG_ARRAY", "5", ""),
+    ("TAG_DICT", "6", ""),
+    ("TAG_LUAREF", "7", ""),
+    ("TAG_BUFFER", "8", ""),
+    ("TAG_WINDOW", "9", ""),
+    ("TAG_TABPAGE", "10", ""),
+];
+
+/// One keyset's table plus the lookup that indexes it.
+fn emit_keyset(out: &mut String, k: &Keyset) {
+    let name = &k.name;
+    writeln!(
+        out,
+        "pub static {name}_table: GlobalCell<[KeySetLink; {}]> = GlobalCell::new({{",
+        k.len()
+    )
+    .unwrap();
+    writeln!(out, "    type K = KeyDict_{name};").unwrap();
+    writeln!(out, "    [").unwrap();
+    for (i, key) in k.keys.iter().enumerate() {
+        let opt_index: i64 = if k.has_optional { i as i64 + 1 } else { -1 };
+        let (ctor, tag) = if key.is_hlgroup {
+            ("hl_key", String::new())
+        } else {
+            ("key", format!("{}, ", key.tag))
+        };
+        writeln!(
+            out,
+            "        {ctor}(c\"{}\", offset_of!(K, {}), {tag}{opt_index}),",
+            key.wire, key.field
+        )
+        .unwrap();
+    }
+    writeln!(out, "        END,").unwrap();
+    writeln!(out, "    ]").unwrap();
+    writeln!(out, "}});").unwrap();
+    out.push('\n');
+
+    writeln!(out, "/// Look a key up in [`{name}_table`].").unwrap();
+    writeln!(out, "///").unwrap();
+    writeln!(out, "/// # Safety").unwrap();
+    writeln!(out, "/// `str` points at `len` readable bytes.").unwrap();
+    if k.keys.is_empty() {
+        writeln!(
+            out,
+            "pub unsafe extern \"C\" fn KeyDict_{name}_get_field(_str: *const c_char, _len: size_t) -> *mut KeySetLink {{"
+        )
+        .unwrap();
+        writeln!(out, "    // The keyset has no keys, so nothing matches.").unwrap();
+        writeln!(out, "    ptr::null_mut()").unwrap();
+        writeln!(out, "}}").unwrap();
+        out.push('\n');
+        return;
+    }
+    writeln!(
+        out,
+        "pub unsafe extern \"C\" fn KeyDict_{name}_get_field(str: *const c_char, len: size_t) -> *mut KeySetLink {{"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    // SAFETY: the caller passes a key of `len` bytes."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    let index: usize = match unsafe {{ key_bytes(str, len) }} {{"
+    )
+    .unwrap();
+    for (i, key) in k.keys.iter().enumerate() {
+        writeln!(out, "        b\"{}\" => {i},", key.wire).unwrap();
+    }
+    writeln!(out, "        _ => return ptr::null_mut(),").unwrap();
+    writeln!(out, "    }};").unwrap();
+    writeln!(
+        out,
+        "    let table: *mut KeySetLink = {name}_table.ptr().cast();"
+    )
+    .unwrap();
+    writeln!(out, "    table.wrapping_add(index)").unwrap();
+    writeln!(out, "}}").unwrap();
+    out.push('\n');
+}
+
+/// Cross-check the handler table's layout against the row numbers
+/// `eval/funcs.rs` has baked in.
+///
+/// The builtin `nvim_*()` Vimscript functions do not look their handler up by
+/// name: each `EvalFuncDef` stores `&method_handlers[N]` outright. That makes
+/// the table's order part of the crate's meaning rather than an internal
+/// detail of this generator, and a silent renumbering would bind every one of
+/// those builtins to the wrong API function. So it is an error here, not a
+/// mystery at runtime.
+fn check_eval_indices(root: &Path, order: &BTreeMap<&str, usize>) -> Result<(), String> {
+    let path = root.join("src/nvim/eval/funcs.rs");
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    // Each entry reads `name: b"nvim_foo\0"…` and, further down the same
+    // struct literal, `api_handler: (&raw const method_handlers …).offset(N …)`.
+    let mut name = None;
+    let mut binding = false;
+    let mut checked = 0;
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("name: b\"") {
+            name = rest.split_once("\\0").map(|(n, _)| n.to_string());
+        }
+        if line.starts_with("api_handler: (&raw const method_handlers") {
+            binding = true;
+            continue;
+        }
+        if !binding {
+            continue;
+        }
+        binding = false;
+        let rest = line.strip_prefix(".offset(").ok_or_else(|| {
+            format!("eval/funcs.rs: an api_handler binding lacks an .offset(): {line}")
+        })?;
+        let name = name
+            .take()
+            .ok_or_else(|| "eval/funcs.rs: an api_handler binding has no name".to_string())?;
+        let row = rest
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .parse::<usize>()
+            .map_err(|_| format!("eval/funcs.rs: unreadable handler row in `{line}`"))?;
+        let want = order
+            .get(name.as_str())
+            .ok_or_else(|| format!("eval/funcs.rs binds {name}, which is not an RPC method"))?;
+        if *want != row {
+            return Err(format!(
+                "eval/funcs.rs binds {name} to handler row {row}, but it is now row {want}; \
+                 the table order changed and those bindings have to follow"
+            ));
+        }
+        checked += 1;
+    }
+    if checked == 0 {
+        return Err("eval/funcs.rs bound no handlers; the cross-check has gone blind".into());
+    }
+    Ok(())
+}
+
+/// The handler table and the lookup that indexes it.
+///
+/// The layout is `table_order` over the method names *sorted*, not over the
+/// spec file's arrangement. Upstream fed its own header-declaration order in;
+/// sorting reproduces the same table (checked against the frozen one) while
+/// making the result independent of how `functions.txt` is grouped.
+fn emit_handlers<'a>(out: &mut String, specs: &'a [Spec]) -> BTreeMap<&'a str, usize> {
+    let by_name: BTreeMap<&str, &Spec> = specs.iter().map(|s| (s.name.as_str(), s)).collect();
+    let mut sorted: Vec<&Spec> = specs.iter().collect();
+    sorted.sort_by(|a, b| a.name.cmp(&b.name));
+    let names: Vec<String> = sorted.iter().map(|s| s.name.clone()).collect();
+    let order = table_order(&names);
+    let specs: Vec<&Spec> = sorted;
+
+    writeln!(
+        out,
+        "pub static method_handlers: GlobalCell<[MsgpackRpcRequestHandler; {}]> = GlobalCell::new([",
+        specs.len()
+    )
+    .unwrap();
+    for &i in &order {
+        let spec = &specs[i];
+        // An alias serves its target's wrapper, with its flags.
+        let flags = match &spec.alias {
+            Some(target) => by_name[target.as_str()],
+            None => spec,
+        };
+        let f = match (&spec.alias, &spec.handler) {
+            (Some(target), _) => format!("handle_{target}"),
+            (_, Some(path)) => path.rsplit("::").next().unwrap().to_string(),
+            _ => format!("handle_{}", spec.name),
+        };
+        writeln!(
+            out,
+            "    handler(c\"{}\", {f}, {}, {}),",
+            spec.name, flags.fast, flags.ret_alloc
+        )
+        .unwrap();
+    }
+    writeln!(out, "]);").unwrap();
+    out.push('\n');
+
+    writeln!(
+        out,
+        "/// The row of [`method_handlers`] the method called `name` sits in."
+    )
+    .unwrap();
+    writeln!(out, "pub fn handler_index(name: &[u8]) -> Option<usize> {{").unwrap();
+    writeln!(out, "    Some(match name {{").unwrap();
+    for (row, &i) in order.iter().enumerate() {
+        writeln!(out, "        b\"{}\" => {row},", specs[i].name).unwrap();
+    }
+    writeln!(out, "        _ => return None,").unwrap();
+    writeln!(out, "    }})").unwrap();
+    writeln!(out, "}}").unwrap();
+    out.push('\n');
+    order
+        .iter()
+        .enumerate()
+        .map(|(row, &i)| (specs[i].name.as_str(), row))
+        .collect()
+}
+
+/// Cut formatted top-level items apart on the blank lines between them. The
+/// tables carry doc comments, so `split_items`' "a line starting with `pub`
+/// opens an item" would orphan them.
+fn split_paragraphs(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = vec![String::new()];
+    let mut fresh = false;
+    for line in text.lines() {
+        if fresh && !line.is_empty() {
+            out.push(String::new());
+        }
+        fresh = line.is_empty();
+        out.last_mut().unwrap().push_str(line);
+        out.last_mut().unwrap().push('\n');
+    }
+    out.retain(|s| !s.trim().is_empty());
+    out
+}
+
+/// The dispatch tables module: the keyset tables and their lookups, the
+/// handler table and its lookup.
+fn generate_tables(
+    root: &Path,
+    keysets: &[Keyset],
+    specs: &[Spec],
+    config: &Path,
+) -> Result<Vec<Emitted>, String> {
+    // What goes in which child module, formatted as one batch each so the
+    // chunker can count real lines.
+    let mut sections: Vec<(&str, String)> = Vec::new();
+    let mut all = String::new();
+    for k in keysets {
+        emit_keyset(&mut all, k);
+    }
+    for chunk in chunked(&rustfmt(config, &all)?) {
+        sections.push(("keysets", chunk));
+    }
+    let mut all = String::new();
+    check_eval_indices(root, &emit_handlers(&mut all, specs))?;
+    for chunk in chunked(&rustfmt(config, &all)?) {
+        sections.push(("handlers", chunk));
+    }
+
+    let mut files: Vec<Emitted> = Vec::new();
+    let mut body = String::new();
+    let mut part = 0;
+    for (i, (stem, chunk)) in sections.iter().enumerate() {
+        part = if i > 0 && sections[i - 1].0 == *stem {
+            part + 1
+        } else {
+            1
+        };
+        let name = if part == 1 {
+            format!("{stem}.rs")
+        } else {
+            format!("{stem}_{part}.rs")
+        };
+        let what = match *stem {
+            "keysets" => "The keyset tables: which key fills which field.",
+            _ => "The handler table: which method calls which wrapper.",
+        };
+        body.push_str(chunk);
+        files.push(Emitted {
+            name,
+            text: format!("{}{chunk}", tables_child_header(what, chunk)),
+        });
+    }
+
+    let referenced = idents(&format!("{TABLES_SUPPORT}{body}"));
+    let mut tags = String::new();
+    for (name, value, note) in TAGS {
+        if !referenced.contains(*name) {
+            continue;
+        }
+        let note = if note.is_empty() {
+            String::new()
+        } else {
+            format!(" // {note}")
+        };
+        writeln!(tags, "    pub const {name}: c_int = {value};{note}").unwrap();
+    }
+
+    let mut out = String::from(TABLES_HEADER);
+    out.push('\n');
+    for file in &files {
+        writeln!(out, "mod {};", file.name.strip_suffix(".rs").unwrap()).unwrap();
+    }
+    out.push('\n');
+    for file in &files {
+        writeln!(
+            out,
+            "pub use self::{}::*;",
+            file.name.strip_suffix(".rs").unwrap()
+        )
+        .unwrap();
+    }
+    out.push('\n');
+    out.push_str("use core::ffi::{CStr, c_char, c_int};\n");
+    out.push_str("use core::mem::offset_of;\n");
+    out.push_str("use core::{ptr, slice};\n");
+    out.push('\n');
+    out.push_str("// Every generated wrapper; the handler table names most of them.\n");
+    out.push_str("use crate::src::nvim::api::private::dispatch_wrappers::*;\n");
+    out.push_str("use crate::src::nvim::api::private::helpers::api_set_error;\n");
+    out.push_str("use crate::src::nvim::global_cell::GlobalCell;\n");
+    // Handlers the spec names outright, which live outside the generated
+    // wrappers.
+    let mut externs: BTreeSet<&str> = BTreeSet::new();
+    for spec in specs {
+        if let Some(path) = &spec.handler {
+            externs.insert(path.as_str());
+        }
+    }
+    for path in &externs {
+        writeln!(out, "use {path};").unwrap();
+    }
+    let mut types: Vec<String> = [
+        "Arena",
+        "Array",
+        "Error",
+        "ErrorType",
+        "KeySetLink",
+        "MsgpackRpcRequestHandler",
+        "Object",
+        "size_t",
+        "uint64_t",
+    ]
+    .iter()
+    .map(|s| (*s).to_string())
+    .chain(keysets.iter().map(|k| format!("KeyDict_{}", k.name)))
+    .collect();
+    types.sort();
+    writeln!(
+        out,
+        "use crate::src::nvim::types::{{{}}};",
+        types.join(", ")
+    )
+    .unwrap();
+    write!(
+        out,
+        r#"
+/// Values that belong to other modules; nested so they stay out of the flat
+/// namespace the unit-test header generator collects constants into.
+mod known {{
+    use super::ErrorType;
+    use core::ffi::c_int;
+
+    pub const kErrorTypeException: ErrorType = 0;
+
+    // `KeySetLink::type_0`: the `ObjectType` a key's value must arrive as, as
+    // the `c_int` that field holds.
+{tags}}}
+
+use known::*;
+"#
+    )
+    .unwrap();
+    out.push_str(TABLES_SUPPORT);
+
+    files.insert(
+        0,
+        Emitted {
+            name: "mod.rs".into(),
+            text: out,
+        },
+    );
+    Ok(files)
+}
+
+/// Split formatted item text into files no wider than the budget.
+fn chunked(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut chunk = String::new();
+    for one in split_paragraphs(text) {
+        if !chunk.is_empty() && chunk.lines().count() + one.lines().count() > CHUNK_BUDGET {
+            out.push(std::mem::take(&mut chunk));
+        }
+        chunk.push_str(&one);
+    }
+    out.push(chunk);
+    out
+}
+
 // ---------------------------------------------------------------- driver
 
 /// Format a generated module through rustfmt's stdin. `--config-path` is
@@ -1130,6 +1909,7 @@ fn run() -> Result<(), String> {
     let mut root = None;
     let mut spec_path = None;
     let mut out_dir = None;
+    let mut tables_dir = None;
     let mut config = None;
     let mut check = false;
     let mut args = std::env::args().skip(1);
@@ -1139,6 +1919,7 @@ fn run() -> Result<(), String> {
             "--root" => root = Some(PathBuf::from(value()?)),
             "--spec" => spec_path = Some(PathBuf::from(value()?)),
             "--out-dir" => out_dir = Some(PathBuf::from(value()?)),
+            "--tables-dir" => tables_dir = Some(PathBuf::from(value()?)),
             "--rustfmt-config" => config = Some(PathBuf::from(value()?)),
             "--check" => check = true,
             other => return Err(format!("unknown argument `{other}`")),
@@ -1147,69 +1928,96 @@ fn run() -> Result<(), String> {
     let root = root.ok_or("--root is required")?;
     let spec_path = spec_path.ok_or("--spec is required")?;
     let out_dir = out_dir.ok_or("--out-dir is required")?;
+    let tables_dir = tables_dir.ok_or("--tables-dir is required")?;
     let config = config.ok_or("--rustfmt-config is required")?;
 
     let api = collect_api_fns(&root)?;
-    let tables = collect_keyset_tables(&root)?;
+    let keysets = collect_keysets(&root)?;
     let specs = parse_spec(&spec_path)?;
-    let mut files = generate(&api, &specs, &tables, &config)?;
-    for file in &mut files {
-        file.text = rustfmt(&config, &file.text)?;
-        // The chunker works on unformatted text; if the margin it leaves was
-        // not enough, say so rather than let the ratchet find out.
-        let lines = file.text.lines().count();
-        if lines > 1000 {
-            return Err(format!(
-                "{} came out {lines} lines; lower CHUNK_BUDGET",
-                file.name
-            ));
-        }
-    }
+    let sizes: BTreeMap<String, usize> =
+        keysets.iter().map(|k| (k.name.clone(), k.len())).collect();
+    let trees = [
+        (
+            out_dir,
+            generate(&api, &specs, &sizes, &config)?,
+            "wrappers",
+        ),
+        (
+            tables_dir,
+            generate_tables(&root, &keysets, &specs, &config)?,
+            "tables",
+        ),
+    ];
 
-    let mut stale: BTreeSet<String> = std::fs::read_dir(&out_dir)
-        .map(|dir| {
-            dir.filter_map(|e| e.ok())
-                .map(|e| e.file_name().to_string_lossy().into_owned())
-                .filter(|n| n.ends_with(".rs"))
-                .collect()
-        })
-        .unwrap_or_default();
-    let mut changed = Vec::new();
-    for file in &files {
-        stale.remove(&file.name);
-        let path = out_dir.join(&file.name);
-        if std::fs::read_to_string(&path).unwrap_or_default() != file.text {
-            changed.push(path);
+    let mut wrote = false;
+    for (dir, mut files, what) in trees {
+        for file in &mut files {
+            file.text = rustfmt(&config, &file.text)?;
+            // The chunker works on unformatted text; if the margin it leaves
+            // was not enough, say so rather than let the ratchet find out.
+            let lines = file.text.lines().count();
+            if lines > 1000 {
+                return Err(format!(
+                    "{} came out {lines} lines; lower CHUNK_BUDGET",
+                    file.name
+                ));
+            }
+        }
+
+        let mut stale: BTreeSet<String> = std::fs::read_dir(&dir)
+            .map(|dir| {
+                dir.filter_map(|e| e.ok())
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .filter(|n| n.ends_with(".rs"))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut changed = Vec::new();
+        for file in &files {
+            stale.remove(&file.name);
+            let path = dir.join(&file.name);
+            if std::fs::read_to_string(&path).unwrap_or_default() != file.text {
+                changed.push(path);
+            }
+        }
+        if check {
+            if let Some(path) = changed.first() {
+                return Err(format!("{} is stale; run `just apigen`", path.display()));
+            }
+            if let Some(name) = stale.iter().next() {
+                return Err(format!(
+                    "{} is left over from an older spec; run `just apigen`",
+                    dir.join(name).display()
+                ));
+            }
+            continue;
+        }
+        std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        for file in &files {
+            let path = dir.join(&file.name);
+            if changed.contains(&path) {
+                std::fs::write(&path, &file.text)
+                    .map_err(|e| format!("{}: {e}", path.display()))?;
+            }
+        }
+        for name in &stale {
+            std::fs::remove_file(dir.join(name)).ok();
+        }
+        if !changed.is_empty() || !stale.is_empty() {
+            wrote = true;
+            eprintln!(
+                "apigen: wrote {} ({what}, {} files)",
+                dir.display(),
+                files.len()
+            );
         }
     }
-    if check {
-        if let Some(path) = changed.first() {
-            return Err(format!("{} is stale; run `just apigen`", path.display()));
-        }
-        if let Some(name) = stale.iter().next() {
-            return Err(format!(
-                "{} is left over from an older spec; run `just apigen`",
-                out_dir.join(name).display()
-            ));
-        }
-        return Ok(());
-    }
-    std::fs::create_dir_all(&out_dir).map_err(|e| format!("{}: {e}", out_dir.display()))?;
-    for file in &files {
-        let path = out_dir.join(&file.name);
-        if changed.contains(&path) {
-            std::fs::write(&path, &file.text).map_err(|e| format!("{}: {e}", path.display()))?;
-        }
-    }
-    for name in &stale {
-        std::fs::remove_file(out_dir.join(name)).ok();
-    }
-    if !changed.is_empty() || !stale.is_empty() {
+    if wrote {
         eprintln!(
-            "apigen: wrote {} ({} wrappers in {} files)",
-            out_dir.display(),
+            "apigen: {} wrappers, {} handlers, {} keysets",
+            specs.iter().filter(|s| s.is_wrapper()).count(),
             specs.len(),
-            files.len() - 1
+            keysets.len()
         );
     }
     Ok(())

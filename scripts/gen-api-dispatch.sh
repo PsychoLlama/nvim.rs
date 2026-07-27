@@ -24,5 +24,6 @@ cargo build --release --quiet --manifest-path "$root/tools/apigen/Cargo.toml"
   --root "$root/crates/nvim" \
   --spec "$root/tools/apigen/functions.txt" \
   --out-dir "$root/crates/nvim/src/nvim/api/private/dispatch_wrappers" \
+  --tables-dir "$root/crates/nvim/src/nvim/api/private/dispatch" \
   --rustfmt-config "$root/rustfmt.toml" \
   "$@"
