@@ -1,30 +1,36 @@
-// apigen: generate the msgpack-RPC dispatch wrappers from the Rust API
-// signatures themselves.
+// apigen: generate the msgpack-RPC dispatch layer from the Rust sources
+// themselves.
 //
-// Upstream generated `dispatch_wrappers.generated.h` by parsing the C headers
-// under src/nvim/api/ (src/gen/gen_api_dispatch.lua at tag v0.12.4). The
-// transpile froze that output into one 27k-line Rust module. This tool takes
-// the job back: it reads the real source of truth — the `pub unsafe extern
-// "C" fn nvim_*` signatures in <root>/src/nvim/api/*.rs — and emits the
-// per-function wrapper that validates an `Array` of msgpack arguments,
-// converts them, calls the API function and boxes the result back into an
-// `Object`.
+// Upstream generated `dispatch_wrappers.generated.h` and
+// `keysets_defs.generated.h` by parsing the C headers under src/nvim/api/
+// (src/gen/gen_api_dispatch.lua at tag v0.12.4). The transpile froze that
+// output into one 27k-line Rust module. This tool takes the job back, from
+// the two real sources of truth in the crate:
+//
+//   --out-dir     one wrapper per `pub unsafe extern "C" fn nvim_*` in
+//                 <root>/src/nvim/api/*.rs: it validates an `Array` of
+//                 msgpack arguments, converts them, calls the API function
+//                 and boxes the result back into an `Object`.
+//   --tables-dir  the keyset tables and their key lookups, read off the
+//                 `KeyDict_*` structs in <root>/src/nvim/types/keysets.rs,
+//                 plus the handler table and its method lookup.
 //
 // A signature alone does not say everything upstream's `FUNC_API_*` markers
 // said: whether a call is refused under textlock, which declared C type name
 // appears in a "Wrong type for argument" message ("ArrayOf(Integer, 2)" is a
-// plain `Array` in Rust), and the `since`/`fast`/`ret_alloc` metadata that
-// feeds the handler table and the api-info blob. That lives in the spec file
-// (`--spec`), one line per exported function. The two inputs cross-check: a
-// spec entry naming a function that no longer exists, or whose declared
-// parameter count disagrees with the Rust signature, is a hard error.
+// plain `Array` in Rust), whether a handler may run on the fast path, whether
+// its result is heap-allocated, and which methods are deprecated spellings of
+// which. That lives in the spec file (`--spec`), one line per method. The
+// inputs cross-check: a spec entry naming a function that no longer exists,
+// or whose declared parameter count disagrees with the Rust signature, is a
+// hard error, and so is a handler-table layout that has drifted out from
+// under the row numbers eval/funcs.rs has baked in.
 //
-// Output is committed, rustfmt'd Rust: a module directory whose root holds the
-// shared support code and whose children hold the wrappers, one per API source
-// file, split further when a file would pass the tree's 1,000-line cap.
-// `--check` re-generates in memory and diffs against the committed files, so
-// drift is a build failure rather than a silent hazard
-// (scripts/gen-api-dispatch.sh, `just apigen`).
+// Output is committed, rustfmt'd Rust: module directories whose roots hold
+// the shared support code and whose children hold the bulk, split when a file
+// would pass the tree's 1,000-line cap. `--check` re-generates in memory and
+// diffs against the committed files, so drift is a build failure rather than
+// a silent hazard (scripts/gen-api-dispatch.sh, `just apigen`).
 //
 // Build with the repo dev shell; syn is pinned exactly, as in tools/ffigen.
 
