@@ -53,6 +53,11 @@ and this project adheres to [CalVer](https://calver.org/).
   character-measuring inlines, which the transpiler had copied into eleven
   files, are defined once. `:set vartabstop` no longer clears a buffer's
   tabstops when it rejects the new value.
+- Undo and the argument list (`src/nvim/undo`, `src/nvim/arglist`) were split
+  along their own seams. The undo file's on-disk contract — its magic bytes,
+  its version and its big-endian field encoding — is now a safe module of its
+  own, verified against files written by the previous build; the format itself
+  is unchanged.
 
 ## [2026.07.26-d0c5cf2147]
 
