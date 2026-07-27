@@ -2094,8 +2094,8 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         })
         .collect();
     let argc = values.len();
-    // A function with a Lua implementation of its own may have pushed its
-    // result already, and takes the state to do it with.
+    // Whether the API function has a Lua implementation of its own, which it
+    // needs the state for.
     let has_lua_imp = f.params.contains(&Param::LuaState);
 
     for (index, ty, _) in &values {
@@ -2306,11 +2306,11 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         ret => {
             let (push, by_pointer) = pusher(ret);
             let value = if by_pointer { "&raw mut ret" } else { "ret" };
-            // A function with a Lua implementation pushes its own result when
-            // it has one; only convert what it left behind.
             format!("{push}(lstate, {value}, {flags});")
         }
     };
+    // A function with a Lua implementation of its own may have pushed the
+    // result already; only convert what it left behind.
     if !push.is_empty() && has_lua_imp {
         writeln!(out, "            if lua_gettop(lstate) == 0 {{").unwrap();
         writeln!(out, "                {push}").unwrap();
