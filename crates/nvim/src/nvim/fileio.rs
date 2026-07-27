@@ -1,4 +1,5 @@
 use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::ascii::ascii_isspace;
 use crate::src::nvim::autocmd::{
     apply_autocmds, apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf, augroup_exists,
     do_doautocmd,
@@ -1798,11 +1799,6 @@ pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const Ctrl_Z: ::core::ffi::c_int = 26 as ::core::ffi::c_int;
 pub const PATHSEPSTR: [::core::ffi::c_char; 2] =
     unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"/\0") };
-#[inline(always)]
-unsafe extern "C" fn ascii_isspace(mut c: ::core::ffi::c_int) -> bool {
-    return c >= 9 as ::core::ffi::c_int && c <= 13 as ::core::ffi::c_int
-        || c == ' ' as ::core::ffi::c_int;
-}
 pub const BF_CHECK_RO: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const BF_NOTEDITED: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
 pub const BF_NEW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;

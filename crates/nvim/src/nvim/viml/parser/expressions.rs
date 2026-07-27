@@ -23,7 +23,6 @@ pub use lexer::viml_pexpr_next_token;
 pub use parse::viml_pexpr_parse;
 
 use ast::{east_set_error, node_lvl, viml_pexpr_handle_bop, viml_pexpr_new_node};
-use lexer::ascii_isxdigit;
 use strings::{parse_quoted_string, shifted_pos};
 
 use crate::src::nvim::charset::{hex2nr, vim_str2nr};

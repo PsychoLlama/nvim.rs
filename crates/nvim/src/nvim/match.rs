@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::charset::{skiptowhite, skipwhite};
 use crate::src::nvim::drawscreen::{redraw_later, redraw_win_range_later};
 use crate::src::nvim::eval::funcs::get_optional_window;
@@ -796,10 +797,6 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 56] = unsafe {
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const CPO_SEARCH: ::core::ffi::c_int = 'c' as ::core::ffi::c_int;

@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::buffer::{bt_prompt, bt_quickfix};
 use crate::src::nvim::charset::vim_iswordc;
 use crate::src::nvim::cursor::{coladvance, get_cursor_pos_ptr, set_leftcol};
@@ -370,10 +371,6 @@ pub const Ctrl_R: ::core::ffi::c_int = 18 as ::core::ffi::c_int;
 pub const Ctrl_T: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
 pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const VALID_CROW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const VALID_BOTLINE: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;

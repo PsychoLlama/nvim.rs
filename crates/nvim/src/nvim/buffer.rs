@@ -1,5 +1,6 @@
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::arglist::check_arg_idx;
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_isspace};
 use crate::src::nvim::autocmd::{
     apply_autocmds, apply_autocmds_retval, aubuflocal_remove, aucmd_prepbuf, aucmd_restbuf,
     block_autocmds, is_aucmd_win, unblock_autocmds,
@@ -1662,15 +1663,6 @@ unsafe extern "C" fn map_put_int_ptr_t(
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isspace(mut c: ::core::ffi::c_int) -> bool {
-    return c >= 9 as ::core::ffi::c_int && c <= 13 as ::core::ffi::c_int
-        || c == ' ' as ::core::ffi::c_int;
-}
 #[inline(always)]
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;

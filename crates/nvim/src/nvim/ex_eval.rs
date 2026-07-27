@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::debugger::dbg_check_skipped;
 use crate::src::nvim::eval::typval::{tv_clear, tv_free, tv_list_unref};
@@ -954,10 +955,6 @@ pub const ESTACK_SFILE: estack_arg_T = 1;
 pub const ESTACK_NONE: estack_arg_T = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline(always)]

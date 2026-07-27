@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_isxdigit};
 use crate::src::nvim::charset::{
     getdigits_int, hex2nr, vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordc_buf, vim_iswordp_buf,
 };
@@ -638,20 +639,6 @@ pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const Ctrl_H: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isxdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int
-        || c >= 'a' as ::core::ffi::c_int && c <= 'f' as ::core::ffi::c_int
-        || c >= 'A' as ::core::ffi::c_int && c <= 'F' as ::core::ffi::c_int;
-}
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,

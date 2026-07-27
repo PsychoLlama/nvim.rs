@@ -9,6 +9,7 @@ use crate::src::nvim::api::private::helpers::{
 };
 use crate::src::nvim::api::vim::nvim_feedkeys;
 use crate::src::nvim::arglist::{f_argc, f_argidx, f_arglistid, f_argv};
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{apply_autocmds, au_exists, autocmd_supported};
 use crate::src::nvim::buffer::{
     bt_prompt, buf_close_terminal, buflist_findnr, buflist_findpat, setfname,
@@ -2286,10 +2287,6 @@ unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const EX_NOSPC: ::core::ffi::c_uint = 0x10 as ::core::ffi::c_uint;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

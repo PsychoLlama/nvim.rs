@@ -2,6 +2,7 @@
 //! Lisp indenter behind 'lisp'.
 
 use super::*;
+use crate::src::nvim::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::src::nvim::cursor::{check_cursor, get_cursor_line_ptr};
 use crate::src::nvim::eval::typval::tv_get_lnum;
 use crate::src::nvim::eval::vars::set_vim_var_nr;

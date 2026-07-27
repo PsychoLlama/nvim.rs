@@ -1,3 +1,6 @@
+use crate::src::nvim::ascii::{
+    ascii_isdigit, ascii_isspace, ascii_iswhite, ascii_iswhite_nl_or_nul, ascii_isxdigit,
+};
 use crate::src::nvim::autocmd::{apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event};
 use crate::src::nvim::buffer::{bt_prompt, bt_quickfix, buf_is_empty};
 use crate::src::nvim::change::{
@@ -924,31 +927,6 @@ pub const Ctrl_BSL: ::core::ffi::c_int = 28 as ::core::ffi::c_int;
 pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
 pub const Ctrl_HAT: ::core::ffi::c_int = 30;
 pub const Ctrl__: ::core::ffi::c_int = 31;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite_nl_or_nul(mut c: ::core::ffi::c_int) -> bool {
-    return ascii_iswhite(c) as ::core::ffi::c_int != 0
-        || c == '\n' as ::core::ffi::c_int
-        || c == NUL;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isxdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int
-        || c >= 'a' as ::core::ffi::c_int && c <= 'f' as ::core::ffi::c_int
-        || c >= 'A' as ::core::ffi::c_int && c <= 'F' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isspace(mut c: ::core::ffi::c_int) -> bool {
-    return c >= 9 as ::core::ffi::c_int && c <= 13 as ::core::ffi::c_int
-        || c == ' ' as ::core::ffi::c_int;
-}
 pub const FO_RET_COMS: ::core::ffi::c_int = 'r' as ::core::ffi::c_int;
 pub const FO_INS_LONG: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
 pub const FO_INS_BLANK: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;

@@ -1,5 +1,6 @@
 use crate::src::nvim::api::private::helpers::api_clear_error;
 use crate::src::nvim::api::win_config::parse_winborder;
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{check_ei, get_event_name_no_group};
 use crate::src::nvim::charset::{
     buf_init_chartab, char2cells, check_isopt, getdigits_int, hexhex2nr, init_chartab, ptr2cells,
@@ -718,10 +719,6 @@ pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const HIGHLIGHT_INIT: [::core::ffi::c_char; 779] = unsafe {
     ::core::mem::transmute::<
         [u8; 779],

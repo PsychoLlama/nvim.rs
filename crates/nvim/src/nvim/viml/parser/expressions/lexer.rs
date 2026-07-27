@@ -1,28 +1,6 @@
 use super::*;
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_isident, ascii_iswhite};
 
-#[inline(always)]
-pub(super) fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-pub(super) fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
-#[inline(always)]
-pub(super) fn ascii_isxdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int
-        || c >= 'a' as ::core::ffi::c_int && c <= 'f' as ::core::ffi::c_int
-        || c >= 'A' as ::core::ffi::c_int && c <= 'F' as ::core::ffi::c_int;
-}
-#[inline(always)]
-pub(super) fn ascii_isident(mut c: ::core::ffi::c_int) -> bool {
-    return c as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-        && c as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-        || c as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-            && c as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-        || ascii_isdigit(c)
-        || c == '_' as ::core::ffi::c_int;
-}
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
 #[inline(always)]
 pub(super) fn scale_number(

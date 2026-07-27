@@ -2,6 +2,7 @@ use crate::src::mpack::conv::{
     mpack_unpack_boolean, mpack_unpack_float_fast, mpack_unpack_sint, mpack_unpack_uint,
 };
 use crate::src::mpack::object::{mpack_parse, mpack_parser_init};
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::src::nvim::charset::vim_str2nr;
 use crate::src::nvim::eval::encode::encode_list_write;
 use crate::src::nvim::eval::typval::{
@@ -124,16 +125,6 @@ pub const TAB: ::core::ffi::c_int = 9;
 pub const NL: ::core::ffi::c_int = 10;
 pub const FF: ::core::ffi::c_int = '\u{c}' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = 13;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isxdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int
-        || c >= 'a' as ::core::ffi::c_int && c <= 'f' as ::core::ffi::c_int
-        || c >= 'A' as ::core::ffi::c_int && c <= 'F' as ::core::ffi::c_int;
-}
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

@@ -1,5 +1,6 @@
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::arglist::get_arglist_exp;
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::buffer::buflist_findname_exp;
 use crate::src::nvim::charset::{getdigits_int, skipdigits, skipwhite};
 use crate::src::nvim::drawscreen::redraw_all_later;
@@ -1553,10 +1554,6 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const SPL_FNAME_TMPL: [::core::ffi::c_char; 10] =

@@ -1,4 +1,5 @@
 use crate::src::nvim::api::private::helpers::{cbuf_to_string, copy_string, cstr_as_string};
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::src::nvim::autocmd::{apply_autocmds, has_event};
 use crate::src::nvim::buffer::{buf_spname, buf_valid};
 use crate::src::nvim::change::{
@@ -1415,18 +1416,6 @@ pub const Ctrl_Y: ::core::ffi::c_int = 25 as ::core::ffi::c_int;
 pub const Ctrl_Z: ::core::ffi::c_int = 26 as ::core::ffi::c_int;
 pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite_or_nul(mut c: ::core::ffi::c_int) -> bool {
-    return ascii_iswhite(c) as ::core::ffi::c_int != 0 || c == NUL;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 #[inline(always)]
 unsafe extern "C" fn equalpos(mut a: pos_T, mut b: pos_T) -> bool {
     return a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd;

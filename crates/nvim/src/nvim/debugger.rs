@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::{getdigits_int32, skipwhite};
 use crate::src::nvim::drawscreen::redraw_all_later;
 use crate::src::nvim::eval::typval::tv_free;
@@ -1093,10 +1094,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static debug_greedy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);

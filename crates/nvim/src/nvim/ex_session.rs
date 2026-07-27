@@ -1,4 +1,5 @@
 use crate::src::nvim::arglist::alist_name;
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::apply_autocmds;
 use crate::src::nvim::buffer::{bt_help, bt_nofilename, bt_normal, bt_terminal, buflist_findnr};
 use crate::src::nvim::eval::typval::tv_get_string;
@@ -985,10 +986,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const SESSION_FILE: [::core::ffi::c_char; 12] =
     unsafe { ::core::mem::transmute::<[u8; 12], [::core::ffi::c_char; 12]>(*b"Session.vim\0") };
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

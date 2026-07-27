@@ -1,4 +1,5 @@
 use crate::src::nvim::api::private::helpers::{api_set_error, arena_dict, cstr_as_string};
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::apply_autocmds;
 use crate::src::nvim::charset::{skiptowhite, skipwhite, vim_isprintc, vim_strsize};
 use crate::src::nvim::cursor_shape::cursor_mode_uses_syn_id;
@@ -1033,14 +1034,6 @@ pub const HLATTRS_INIT: HlAttrs = HlAttrs {
     url: -1 as int32_t,
 };
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const MAX_SYN_NAME: ::core::ffi::c_int = 200 as ::core::ffi::c_int;
 static highlight_ga: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
 pub static highlight_arena: GlobalCell<Arena> = GlobalCell::new(ARENA_EMPTY);

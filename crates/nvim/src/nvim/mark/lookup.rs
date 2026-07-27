@@ -13,10 +13,7 @@ pub(super) fn equalpos(a: pos_T, b: pos_T) -> bool {
     a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd
 }
 
-pub(super) fn ascii_isdigit(c: c_int) -> bool {
-    c >= '0' as c_int && c <= '9' as c_int
-}
-
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::buffer::{bt_prompt, buflist_getfile};
 use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::edit::beginline;

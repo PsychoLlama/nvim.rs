@@ -3,6 +3,7 @@ use crate::src::nvim::api::private::helpers::{
     api_free_string, api_set_error, arena_dict, copy_string, cstr_as_string, cstr_to_string,
 };
 use crate::src::nvim::api::private::validate::api_err_invalid;
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, do_filetype_autocmd,
 };
@@ -2300,14 +2301,6 @@ pub const CTRL_F_STR: [::core::ffi::c_char; 2] =
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const PATHSEPSTR: [::core::ffi::c_char; 2] =
     unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"/\0") };
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const FORCE_BIN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const kOptCount: ::core::ffi::c_int = 374 as ::core::ffi::c_int;
 pub const HLATTRS_INIT: HlAttrs = HlAttrs {

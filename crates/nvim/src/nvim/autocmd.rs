@@ -3,6 +3,7 @@ use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_object, api_free_string, copy_object, cstr_as_string, cstr_to_string,
     find_buffer_by_handle,
 };
+use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::buffer::{bt_prompt, buflist_findnr, bufref_valid, do_modelines, set_bufref};
 use crate::src::nvim::charset::{skipdigits, skipwhite};
 use crate::src::nvim::cursor::{check_cursor, check_pos};
@@ -5099,10 +5100,6 @@ pub unsafe extern "C" fn do_filetype_autocmd(mut buf: *mut buf_T, mut force: boo
     return ret;
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
 pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;

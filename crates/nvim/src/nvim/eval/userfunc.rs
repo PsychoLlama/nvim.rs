@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_nl_or_nul};
 use crate::src::nvim::autocmd::apply_autocmds;
 use crate::src::nvim::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
 use crate::src::nvim::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
@@ -1282,20 +1283,6 @@ pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite_nl_or_nul(mut c: ::core::ffi::c_int) -> bool {
-    return ascii_iswhite(c) as ::core::ffi::c_int != 0
-        || c == '\n' as ::core::ffi::c_int
-        || c == NUL;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,

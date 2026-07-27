@@ -1,5 +1,6 @@
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::arglist::{check_arg_idx, do_argfile};
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::{
     apply_autocmds, apply_autocmds_retval, augroup_exists, do_doautocmd,
 };
@@ -1953,14 +1954,6 @@ pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const Ctrl_E: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const Ctrl_Y: ::core::ffi::c_int = 25 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CPO_ALTWRITE: ::core::ffi::c_int = 'A' as ::core::ffi::c_int;
 pub const CPO_OVERNEW: ::core::ffi::c_int = 'O' as ::core::ffi::c_int;

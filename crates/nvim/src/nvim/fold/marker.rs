@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::buffer_updates::buf_updates_send_changes;
 use crate::src::nvim::change::changed_lines;
 use crate::src::nvim::extmark::extmark_splice_cols;

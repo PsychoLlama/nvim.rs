@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::ascii_isspace;
 use crate::src::nvim::autocmd::is_aucmd_win;
 use crate::src::nvim::buffer::{
     buf_hide, buf_is_empty, buf_set_name, buflist_add, buflist_findnr, bufref_valid,
@@ -892,10 +893,6 @@ pub unsafe extern "C" fn alist_name(mut aep: *mut aentry_T) -> *mut c_char {
 }
 pub const NUL: c_int = 0;
 
-/// `ascii_isspace`: space, or one of the five whitespace control characters.
-fn ascii_isspace(c: c_int) -> bool {
-    (9..=13).contains(&c) || c == b' ' as c_int
-}
 pub const ML_EMPTY: c_int = 0x1;
 pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;

@@ -1,4 +1,5 @@
 use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::src::nvim::autocmd::{apply_autocmds, has_event};
 use crate::src::nvim::buffer::{bt_prompt, bt_quickfix, buf_hide, buflist_getfile, fileinfo};
 use crate::src::nvim::change::{
@@ -1647,18 +1648,6 @@ pub const Ctrl_BSL: ::core::ffi::c_int = 28 as ::core::ffi::c_int;
 pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
 pub const Ctrl_HAT: ::core::ffi::c_int = 30 as ::core::ffi::c_int;
 pub const Ctrl__: ::core::ffi::c_int = 31 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite_or_nul(mut c: ::core::ffi::c_int) -> bool {
-    return ascii_iswhite(c) as ::core::ffi::c_int != 0 || c == NUL;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 #[inline(always)]
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;

@@ -1,5 +1,6 @@
 use crate::src::nvim::api::private::converter::vim_to_object;
 use crate::src::nvim::api::private::helpers::{cstr_as_string, cstr_to_string};
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul, ascii_isxdigit};
 use crate::src::nvim::buffer::{bt_prompt, buflist_findnr};
 use crate::src::nvim::change::appended_lines_mark;
 use crate::src::nvim::channel::callback_reader_free;
@@ -2035,24 +2036,6 @@ pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const FF: ::core::ffi::c_int = '\u{c}' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite_or_nul(mut c: ::core::ffi::c_int) -> bool {
-    return ascii_iswhite(c) as ::core::ffi::c_int != 0 || c == NUL;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isxdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int
-        || c >= 'a' as ::core::ffi::c_int && c <= 'f' as ::core::ffi::c_int
-        || c >= 'A' as ::core::ffi::c_int && c <= 'F' as ::core::ffi::c_int;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

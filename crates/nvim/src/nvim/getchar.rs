@@ -1,5 +1,6 @@
 use crate::src::nvim::api::private::helpers::api_clear_error;
 use crate::src::nvim::api::vim::nvim_paste;
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::{ptr2cells, skipwhite};
 use crate::src::nvim::cursor::get_cursor_line_ptr;
 use crate::src::nvim::drawscreen::{setcursor, showmode, unshowmode, update_screen};
@@ -587,14 +588,6 @@ pub const Ctrl_N: ::core::ffi::c_int = 14 as ::core::ffi::c_int;
 pub const Ctrl_O: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
 pub const Ctrl_P: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 static curscript: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 static scriptin: GlobalCell<[FileDescriptor; 15]> = GlobalCell::new([
     FileDescriptor {

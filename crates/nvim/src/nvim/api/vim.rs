@@ -8,6 +8,7 @@ use crate::src::nvim::api::private::helpers::{
     get_default_stl_hl, parse_hl_msg, set_mark, string_to_array, try_enter, try_leave,
 };
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid, api_err_required};
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{
     apply_autocmds, block_autocmds, may_trigger_vim_suspend_resume, unblock_autocmds,
 };
@@ -4544,10 +4545,6 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 #[inline(always)]
 unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;

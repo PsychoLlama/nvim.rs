@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::cursor::{
     coladvance, dec_cursor, gchar_cursor, get_cursor_line_ptr, get_cursor_pos_ptr, inc_cursor,
 };
@@ -128,10 +129,6 @@ pub const FM_FORWARD: C2Rust_Unnamed_14 = 2;
 pub const FM_BACKWARD: C2Rust_Unnamed_14 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline(always)]

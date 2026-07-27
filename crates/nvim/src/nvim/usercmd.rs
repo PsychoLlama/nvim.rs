@@ -1,4 +1,5 @@
 use crate::src::nvim::api::private::helpers::{arena_dict, arena_string, cstr_as_string};
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite};
 use crate::src::nvim::eval_1::last_set_msg;
 use crate::src::nvim::ex_docmd::{do_cmdline, ends_excmd};
@@ -1069,14 +1070,6 @@ pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const EX_RANGE: ::core::ffi::c_uint = 0x1 as ::core::ffi::c_uint;
 pub const EX_BANG: ::core::ffi::c_uint = 0x2 as ::core::ffi::c_uint;
 pub const EX_EXTRA: ::core::ffi::c_uint = 0x4 as ::core::ffi::c_uint;

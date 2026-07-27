@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::{backslash_halve, backslash_halve_save, rem_backslash, skipwhite};
 use crate::src::nvim::cmdexpand::globpath;
 use crate::src::nvim::eval_1::eval_to_string;
@@ -267,10 +268,6 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const PATHSEPSTR: [::core::ffi::c_char; 2] =
     unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"/\0") };
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[unsafe(no_mangle)]

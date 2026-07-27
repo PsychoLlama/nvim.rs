@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::src::nvim::change::{changed_lines, ins_bytes, ins_str};
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::cursor::{coladvance, get_cursor_line_len, get_cursor_line_ptr};

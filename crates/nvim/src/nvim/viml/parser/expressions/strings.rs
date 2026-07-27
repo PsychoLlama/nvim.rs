@@ -1,4 +1,5 @@
 use super::*;
+use crate::src::nvim::ascii::ascii_isxdigit;
 
 #[inline(always)]
 pub(super) fn shifted_pos(pos: ParserPosition, shift: size_t) -> ParserPosition {

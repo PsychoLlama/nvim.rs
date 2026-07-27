@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::{ascii_isspace, ascii_iswhite};
 use crate::src::nvim::change::{
     del_bytes, del_char, get_leader_len, ins_bytes, ins_str, open_line,
 };
@@ -794,15 +795,6 @@ pub const OPT_LOCAL: C2Rust_Unnamed_23 = 2;
 pub const OPT_GLOBAL: C2Rust_Unnamed_23 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isspace(mut c: ::core::ffi::c_int) -> bool {
-    return c >= 9 as ::core::ffi::c_int && c <= 13 as ::core::ffi::c_int
-        || c == ' ' as ::core::ffi::c_int;
-}
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FO_WRAP: ::core::ffi::c_int = 't' as ::core::ffi::c_int;
 pub const FO_WRAP_COMS: ::core::ffi::c_int = 'c' as ::core::ffi::c_int;

@@ -2,6 +2,7 @@ use crate::src::nvim::api::private::helpers::{
     api_free_array, copy_string, cstr_as_string, cstr_to_string, ga_take_string,
 };
 use crate::src::nvim::api::vim::nvim_echo;
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::{apply_autocmds_group, has_event};
 use crate::src::nvim::charset::{
     byte2cells, char2cells, getdigits_int, ptr2cells, skipwhite, transchar_buf, transchar_byte_buf,
@@ -1415,14 +1416,6 @@ pub const ESC: ::core::ffi::c_int = 27;
 pub const Ctrl_B: ::core::ffi::c_int = 2;
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const Ctrl_F: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static confirm_msg_used: GlobalCell<::core::ffi::c_int> = GlobalCell::new(false_0);

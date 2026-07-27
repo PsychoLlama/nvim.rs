@@ -6,6 +6,7 @@ use crate::src::nvim::arglist::{
     arg_all, check_arg_idx, ex_all, ex_argadd, ex_argdedupe, ex_argdelete, ex_argedit, ex_args,
     ex_argument, ex_last, ex_next, ex_previous, ex_rewind,
 };
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::src::nvim::autocmd::{
     apply_autocmds, check_nomodeline, do_augroup, do_autocmd, do_doautocmd, ex_doautoall,
     getnextac, has_event, is_aucmd_win, may_trigger_vim_suspend_resume,
@@ -2396,19 +2397,6 @@ pub const Ctrl_Z: ::core::ffi::c_int = 26;
 pub const Ctrl_RSB: ::core::ffi::c_int = 29;
 pub const Ctrl_HAT: ::core::ffi::c_int = 30;
 pub const Ctrl__: ::core::ffi::c_int = 31;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isspace(mut c: ::core::ffi::c_int) -> bool {
-    return c >= 9 as ::core::ffi::c_int && c <= 13 as ::core::ffi::c_int
-        || c == ' ' as ::core::ffi::c_int;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline(always)]

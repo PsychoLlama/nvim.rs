@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::{rem_backslash, skipwhite, transstr, vim_str2nr};
 use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::src::nvim::eval::typval::{
@@ -95,14 +96,6 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-#[inline(always)]
-fn ascii_iswhite(c: ::core::ffi::c_int) -> bool {
-    c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int
-}
-#[inline(always)]
-fn ascii_isdigit(c: ::core::ffi::c_int) -> bool {
-    c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int
-}
 static e_cannot_mix_positional_and_non_positional_str: GlobalCell<[::core::ffi::c_char; 62]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 62], [::core::ffi::c_char; 62]>(

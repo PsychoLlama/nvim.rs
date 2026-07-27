@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::change::{changed_bytes, get_leader_len};
 use crate::src::nvim::charset::{byte2cells, char2cells, getwhitecols_curline, skipwhite};
 use crate::src::nvim::cursor::{get_cursor_line_len, get_cursor_line_ptr};
@@ -74,18 +75,6 @@ const SIN_NOMARK: ::core::ffi::c_uint = 8;
 const UPD_INVERTED: ::core::ffi::c_int = 20;
 const UPD_NOT_VALID: ::core::ffi::c_int = 40;
 const VV_LNUM: VimVarIndex = 9;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite_or_nul(mut c: ::core::ffi::c_int) -> bool {
-    return ascii_iswhite(c) || c == NUL;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

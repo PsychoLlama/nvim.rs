@@ -7,6 +7,7 @@ use crate::src::nvim::api::private::helpers::{
     try_enter, try_leave,
 };
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid, api_err_required};
+use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::autocmd::{apply_autocmds, has_event};
 use crate::src::nvim::charset::{skiptowhite, skipwhite};
 use crate::src::nvim::ex_docmd::{
@@ -1032,10 +1033,6 @@ pub const KEYSET_OPTIDX_cmd_mods__filter: ::core::ffi::c_int = 5 as ::core::ffi:
 pub const KEYSET_OPTIDX_cmd_mods__verbose: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_cmd_mods_filter__pattern: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
 pub const EX_RANGE: ::core::ffi::c_uint = 0x1 as ::core::ffi::c_uint;
 pub const EX_BANG: ::core::ffi::c_uint = 0x2 as ::core::ffi::c_uint;
 pub const EX_EXTRA: ::core::ffi::c_uint = 0x4 as ::core::ffi::c_uint;

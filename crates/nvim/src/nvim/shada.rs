@@ -5,6 +5,7 @@ use crate::src::nvim::api::private::dispatch::{
 use crate::src::nvim::api::private::helpers::{
     api_free_dict, api_free_string, copy_string, cstr_as_string,
 };
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::buffer::{
     bt_quickfix, bt_terminal, buflist_findnr, buflist_new, buflist_setfpos,
 };
@@ -758,10 +759,6 @@ pub const NULL_STRING: String_0 = String_0 {
     size: 0 as size_t,
 };
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const KEYSET_OPTIDX__shada_search_pat__sp: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX__shada_mark__c: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX__shada_mark__f: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

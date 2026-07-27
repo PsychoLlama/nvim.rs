@@ -1,5 +1,6 @@
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::arglist::get_arglist_exp;
+use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::autocmd::{apply_autocmds, aucmd_prepbuf, aucmd_restbuf};
 use crate::src::nvim::autocmd::{
     au_event_disable, au_event_restore, block_autocmds, unblock_autocmds,
@@ -1682,10 +1683,6 @@ pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const CMDBUFFSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const INVALID_QFIDX: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const INVALID_QFBUFNR: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

@@ -48,6 +48,7 @@ pub mod src {
         pub mod allocator;
         pub mod arabic;
         pub mod arglist;
+        pub mod ascii;
         pub mod autocmd;
         pub mod base64;
         pub mod bitfield;

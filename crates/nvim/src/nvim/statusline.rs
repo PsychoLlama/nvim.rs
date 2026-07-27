@@ -1,6 +1,7 @@
 use crate::src::nvim::api::private::helpers::{
     api_free_array, arena_array, arena_dict, arena_string, cstr_as_string,
 };
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::is_aucmd_win;
 use crate::src::nvim::buffer::{
     append_arg_number, bt_quickfix, buf_spname, calc_percentage, col_print, get_rel_pos,
@@ -837,10 +838,6 @@ pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;

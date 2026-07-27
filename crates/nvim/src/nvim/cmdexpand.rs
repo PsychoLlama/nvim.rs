@@ -1,5 +1,6 @@
 use crate::src::nvim::api::private::helpers::{api_clear_error, api_free_object, cstr_as_string};
 use crate::src::nvim::arglist::get_arglist_name;
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::src::nvim::autocmd::{
     expand_get_augroup_name, expand_get_event_name, set_context_in_autocmd,
 };
@@ -1181,19 +1182,6 @@ pub const Ctrl_N: ::core::ffi::c_int = 14 as ::core::ffi::c_int;
 pub const Ctrl_P: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isspace(mut c: ::core::ffi::c_int) -> bool {
-    return c >= 9 as ::core::ffi::c_int && c <= 13 as ::core::ffi::c_int
-        || c == ' ' as ::core::ffi::c_int;
-}
 static cmd_showtail: GlobalCell<bool> = GlobalCell::new(false);
 static may_expand_pattern: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static pre_incsearch_pos: GlobalCell<pos_T> = GlobalCell::new(pos_T {

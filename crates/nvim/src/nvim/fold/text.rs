@@ -1,5 +1,6 @@
 use crate::src::nvim::api::extmark::parse_virt_text;
 use crate::src::nvim::api::private::helpers::{api_clear_error, api_free_object};
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::{ptr2cells, skipwhite, transstr, vim_isprintc};
 use crate::src::nvim::eval::vars::{set_vim_var_nr, set_vim_var_string};
 use crate::src::nvim::eval_1::eval_foldtext;

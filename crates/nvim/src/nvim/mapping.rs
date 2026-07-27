@@ -3,6 +3,7 @@ use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_object, api_set_error, api_set_sctx, arena_dict,
     arena_take_arraybuilder, cstr_as_string, find_buffer_by_handle, string_to_cstr,
 };
+use crate::src::nvim::ascii::{ascii_isspace, ascii_iswhite};
 use crate::src::nvim::charset::{skipwhite, transchar, vim_iswordp};
 use crate::src::nvim::cmdexpand::cmdline_fuzzy_complete;
 use crate::src::nvim::eval::typval::{
@@ -1629,15 +1630,6 @@ pub const Ctrl_H: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const Ctrl_J: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isspace(mut c: ::core::ffi::c_int) -> bool {
-    return c >= 9 as ::core::ffi::c_int && c <= 13 as ::core::ffi::c_int
-        || c == ' ' as ::core::ffi::c_int;
-}
 pub const CPO_BSLASH: ::core::ffi::c_int = 'B' as ::core::ffi::c_int;
 pub const MAX_MAPHASH: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
 pub const FC_LUAREF: ::core::ffi::c_int = 0x800 as ::core::ffi::c_int;

@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::{ascii_isdigit, ascii_isident};
 use crate::src::nvim::charset::{transchar, vim_isprintc, vim_str2nr};
 use crate::src::nvim::eval::vars::get_var_value;
 use crate::src::nvim::global_cell::GlobalCell;
@@ -3828,18 +3829,5 @@ pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const DEL: ::core::ffi::c_int = 0x7f as ::core::ffi::c_int;
 pub const CSI: ::core::ffi::c_int = 0x9b as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isident(mut c: ::core::ffi::c_int) -> bool {
-    return c as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-        && c as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-        || c as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-            && c as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-        || ascii_isdigit(c) as ::core::ffi::c_int != 0
-        || c == '_' as ::core::ffi::c_int;
-}
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

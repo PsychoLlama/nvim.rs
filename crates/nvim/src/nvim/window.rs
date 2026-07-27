@@ -2,6 +2,7 @@ use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_set_error, cstr_as_string, find_window_by_handle, try_enter, try_leave,
 };
 use crate::src::nvim::arglist::alist_unlink;
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{
     apply_autocmds, block_autocmds, event_ignored, has_event, is_aucmd_win, unblock_autocmds,
 };
@@ -1619,10 +1620,6 @@ pub const Ctrl_Z: ::core::ffi::c_int = 26;
 pub const Ctrl_RSB: ::core::ffi::c_int = 29;
 pub const Ctrl_HAT: ::core::ffi::c_int = 30;
 pub const Ctrl__: ::core::ffi::c_int = 31;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
 pub const K_UP: ::core::ffi::c_int = -30059;
 pub const K_DOWN: ::core::ffi::c_int = -25707;

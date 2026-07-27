@@ -1,3 +1,4 @@
+use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::buffer::maketitle;
 use crate::src::nvim::charset::{skiptowhite, skipwhite};
 use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
@@ -723,10 +724,6 @@ pub const LC_MESSAGES: ::core::ffi::c_int = __LC_MESSAGES;
 pub const LC_ALL: ::core::ffi::c_int = __LC_ALL;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
 unsafe extern "C" fn get_locale_val(mut what: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     let mut loc: *mut ::core::ffi::c_char =
         setlocale(what, ::core::ptr::null::<::core::ffi::c_char>());

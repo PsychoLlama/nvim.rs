@@ -155,14 +155,6 @@ fn ltoreq(a: pos_T, b: pos_T) -> bool {
     lt(a, b) || equalpos(a, b)
 }
 
-fn ascii_iswhite(c: c_int) -> bool {
-    c == ' ' as c_int || c == '\t' as c_int
-}
-
-fn ascii_isdigit(c: c_int) -> bool {
-    c >= '0' as c_int && c <= '9' as c_int
-}
-
 /// The `fold_T` array a `garray_T` holds. Every fold list in the tree — a
 /// window's top level and each fold's `fd_nested` — is an untyped growable
 /// array, so this cast is how the folds are reached.

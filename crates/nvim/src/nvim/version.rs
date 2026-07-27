@@ -1,4 +1,5 @@
 use crate::src::nvim::api::private::helpers::api_free_object;
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::buffer::buf_is_empty;
 use crate::src::nvim::charset::vim_strsize;
 use crate::src::nvim::drawscreen::screenclear;
@@ -806,10 +807,6 @@ pub const LOWEST_WIN_ID: C2Rust_Unnamed_16 = 1000;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub const SYS_VIMRC_FILE: [::core::ffi::c_char; 17] = unsafe {
     ::core::mem::transmute::<[u8; 17], [::core::ffi::c_char; 17]>(*b"$VIM/sysinit.vim\0")
 };

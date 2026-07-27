@@ -1,6 +1,7 @@
 use crate::src::nvim::api::private::helpers::{api_free_object, api_metadata_raw, cstr_as_string};
 use crate::src::nvim::api::ui::remote_ui_wait_for_attach;
 use crate::src::nvim::arglist::{alist_add, alist_init, alist_name};
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{
     apply_autocmds, autocmd_init, block_autocmds, is_autocmd_blocked, unblock_autocmds,
 };
@@ -2043,10 +2044,6 @@ pub static ui_ext_names: GlobalCell<[*const ::core::ffi::c_char; 10]> = GlobalCe
 ]);
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
 pub static last_cursormoved_win: GlobalCell<*mut win_T> =
     GlobalCell::new(::core::ptr::null_mut::<win_T>());
 pub static last_cursormoved: GlobalCell<pos_T> = GlobalCell::new(pos_T {

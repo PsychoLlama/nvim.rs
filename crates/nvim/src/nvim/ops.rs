@@ -1,3 +1,6 @@
+use crate::src::nvim::ascii::{
+    ascii_isbdigit, ascii_isdigit, ascii_isspace, ascii_iswhite, ascii_isxdigit,
+};
 use crate::src::nvim::buffer::col_print;
 use crate::src::nvim::change::{
     appended_lines_mark, changed_bytes, changed_lines, del_bytes, del_char, del_lines,
@@ -861,29 +864,6 @@ pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const Ctrl_A: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
 pub const Ctrl_X: ::core::ffi::c_int = 24 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
-    return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isxdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c >= '0' as ::core::ffi::c_int && c <= '9' as ::core::ffi::c_int
-        || c >= 'a' as ::core::ffi::c_int && c <= 'f' as ::core::ffi::c_int
-        || c >= 'A' as ::core::ffi::c_int && c <= 'F' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isbdigit(mut c: ::core::ffi::c_int) -> bool {
-    return c == '0' as ::core::ffi::c_int || c == '1' as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn ascii_isspace(mut c: ::core::ffi::c_int) -> bool {
-    return c >= 9 as ::core::ffi::c_int && c <= 13 as ::core::ffi::c_int
-        || c == ' ' as ::core::ffi::c_int;
-}
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const OPF_LINES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const OPF_CHANGE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
