@@ -9,9 +9,10 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
-- The msgpack-RPC dispatch wrappers are generated from the API signatures
-  again (`just apigen`) instead of carried as transpiled code, retiring
-  ~18k lines of `api/private/dispatch.rs`.
+- The whole msgpack-RPC dispatch layer — the per-method wrappers, the keyset
+  tables and the handler table — is generated from the API signatures and the
+  keyset structs again (`just apigen`) instead of carried as transpiled code,
+  retiring all 27k lines of `api/private/dispatch.rs`.
 
 ## [2026.07.27-dd16441f3f]
 
