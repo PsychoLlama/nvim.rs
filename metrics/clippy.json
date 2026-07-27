@@ -139,7 +139,6 @@
     "crates/nvim/src/nvim/version.rs": 66,
     "crates/nvim/src/nvim/viml/parser/expressions/ast.rs": 54,
     "crates/nvim/src/nvim/viml/parser/expressions/lexer.rs": 56,
-    "crates/nvim/src/nvim/viml/parser/expressions/parse.rs": 198,
     "crates/nvim/src/nvim/viml/parser/expressions/strings.rs": 29,
     "crates/nvim/src/nvim/window.rs": 129,
     "crates/nvim/src/nvim/winfloat.rs": 27,

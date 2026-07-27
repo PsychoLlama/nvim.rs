@@ -9,12 +9,17 @@
 //! - `ast` owns the node tables, node allocation and teardown, and the
 //!   shunting-yard step that attaches a binary operator to the tree.
 //! - `strings` decodes single- and double-quoted string literals.
-//! - `parse` is the state machine that drives the other three.
+//! - `parse` is the state machine that drives the other three, handing each
+//!   token to a handler in `operators`, `values`, `brackets` or `figure`.
 
 mod ast;
+mod brackets;
+mod figure;
 mod lexer;
+mod operators;
 mod parse;
 mod strings;
+mod values;
 
 pub use ast::{
     ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,
