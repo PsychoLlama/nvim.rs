@@ -29,8 +29,8 @@ use crate::src::nvim::main::{
     Columns, RedrawingDisabled, Rows, State, cia_flags, cmdline_row, cmdline_win, cmdwin_type,
     curbuf, curtab, curwin, default_grid, e_menu_only_exists_in_another_mode, firstwin,
     g_do_tagpreview, hl_attr_active, linebuf_attr, linebuf_char, mouse_col, mouse_grid, mouse_row,
-    must_redraw_pum, no_u_sync, opt_winborder_values, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder,
-    p_pvh, p_pw, pum_grid, textlock,
+    must_redraw_pum, no_u_sync, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder, p_pvh, p_pw, pum_grid,
+    textlock,
 };
 use crate::src::nvim::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::src::nvim::memory::{
@@ -43,6 +43,7 @@ use crate::src::nvim::r#move::{
     update_topline, validate_cheight, validate_cursor, validate_cursor_col,
 };
 use crate::src::nvim::option::set_option_value_give_err;
+use crate::src::nvim::options::opt_winborder_values;
 use crate::src::nvim::os::libc::{__assert_fail, gettext, memset, strchr, strlen};
 use crate::src::nvim::plines::plines_m_win;
 use crate::src::nvim::plines::win_linetabsize;

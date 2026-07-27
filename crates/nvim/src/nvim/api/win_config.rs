@@ -18,13 +18,14 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{syn_check_group, syn_id2name};
 use crate::src::nvim::main::{
     autocmd_no_enter, autocmd_no_leave, cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type,
-    cmdwin_win, curbuf, curtab, curwin, e_cmdwin, e_textlock, float_anchor_str,
-    opt_winborder_values, p_sb, p_spr, p_winborder, textlock,
+    cmdwin_win, curbuf, curtab, curwin, e_cmdwin, e_textlock, float_anchor_str, p_sb, p_spr,
+    p_winborder, textlock,
 };
 use crate::src::nvim::mbyte::{mb_string2cells, mb_string2cells_len};
 use crate::src::nvim::memory::{strequal, xrealloc, xstrdup};
 use crate::src::nvim::r#move::changed_window_setting;
 use crate::src::nvim::option::{copy_option_part, didset_window_options};
+use crate::src::nvim::options::opt_winborder_values;
 use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset, strchr};
 use crate::src::nvim::strings::striequal;
 pub use crate::src::nvim::types::{

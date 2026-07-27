@@ -165,6 +165,7 @@ pub mod src {
         pub mod normal;
         pub mod ops;
         pub mod option;
+        pub mod options;
         pub mod optionstr;
         pub mod os {
             pub mod dl;

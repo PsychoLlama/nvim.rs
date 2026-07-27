@@ -24,6 +24,10 @@
 //                 source declares — the UI events, the error kinds, the
 //                 handle types and the version's API levels — come from a
 //                 second spec (`--metadata-spec`).
+//   --options-dir the option table, from the vendored `options.lua` upstream
+//                 fed to src/gen/gen_options.lua. That one is metadata, not
+//                 Rust, so it is read by the small Lua reader in `lua.rs`
+//                 rather than by syn; see `options.rs`.
 //
 // A signature alone does not say everything upstream's `FUNC_API_*` markers
 // said: whether a call is refused under textlock, which declared C type name
@@ -50,6 +54,9 @@ use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+mod lua;
+mod options;
 
 // ---------------------------------------------------------------- model
 
@@ -3390,6 +3397,8 @@ fn run() -> Result<(), String> {
     let mut out_dir = None;
     let mut tables_dir = None;
     let mut lua_dir = None;
+    let mut options_lua = None;
+    let mut options_dir = None;
     let mut metadata_file = None;
     let mut config = None;
     let mut check = false;
@@ -3403,6 +3412,8 @@ fn run() -> Result<(), String> {
             "--out-dir" => out_dir = Some(PathBuf::from(value()?)),
             "--tables-dir" => tables_dir = Some(PathBuf::from(value()?)),
             "--lua-dir" => lua_dir = Some(PathBuf::from(value()?)),
+            "--options-lua" => options_lua = Some(PathBuf::from(value()?)),
+            "--options-dir" => options_dir = Some(PathBuf::from(value()?)),
             "--metadata-file" => metadata_file = Some(PathBuf::from(value()?)),
             "--rustfmt-config" => config = Some(PathBuf::from(value()?)),
             "--check" => check = true,
@@ -3415,6 +3426,8 @@ fn run() -> Result<(), String> {
     let out_dir = out_dir.ok_or("--out-dir is required")?;
     let tables_dir = tables_dir.ok_or("--tables-dir is required")?;
     let lua_dir = lua_dir.ok_or("--lua-dir is required")?;
+    let options_lua = options_lua.ok_or("--options-lua is required")?;
+    let options_dir = options_dir.ok_or("--options-dir is required")?;
     let metadata_file = metadata_file.ok_or("--metadata-file is required")?;
     let config = config.ok_or("--rustfmt-config is required")?;
 
@@ -3436,6 +3449,11 @@ fn run() -> Result<(), String> {
             "tables",
         ),
         (lua_dir, generate_lua(&api, &specs, &config)?, "Lua binding"),
+        (
+            options_dir.clone(),
+            options::generate(&root, &options_lua, &options_dir, &config)?,
+            "option table",
+        ),
     ];
 
     let mut wrote = false;

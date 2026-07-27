@@ -32,12 +32,10 @@ use crate::src::nvim::main::{
     IObuff, VIsual_active, bkc_flags, breakat_flags, cia_flags, cmdpreview, cot_flags, curtab,
     curwin, didset_vim, didset_vimruntime, e_invalid_format_string_single_percent_s, e_invarg,
     e_leadtab_requires_tab, e_modifiable, e_unsupportedoption, empty_string_option, first_tabpage,
-    firstbuf, firstwin, km_startsel, km_stopsel, opt_bh_values, opt_bkc_values, opt_bt_values,
-    opt_cot_values, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values, opt_scl_values,
-    opt_spo_values, opt_ssop_values, opt_tc_values, opt_ve_values, p_bex, p_bg, p_bkc, p_breakat,
-    p_bs, p_cia, p_cot, p_ei, p_enc, p_fcs, p_fenc, p_hlg, p_isk, p_km, p_lcs, p_mousescroll,
-    p_mousescroll_hor, p_mousescroll_vert, p_pm, p_pumborder, p_ruf, p_shada, p_tc, p_ve,
-    p_winborder, ru_wid, secure, spo_flags, ssop_flags, stl_syntax, tc_flags, ve_flags,
+    firstbuf, firstwin, km_startsel, km_stopsel, p_bex, p_bg, p_bkc, p_breakat, p_bs, p_cia, p_cot,
+    p_ei, p_enc, p_fcs, p_fenc, p_hlg, p_isk, p_km, p_lcs, p_mousescroll, p_mousescroll_hor,
+    p_mousescroll_vert, p_pm, p_pumborder, p_ruf, p_shada, p_tc, p_ve, p_winborder, ru_wid, secure,
+    spo_flags, ssop_flags, stl_syntax, tc_flags, ve_flags,
 };
 use crate::src::nvim::mark::free_fmark;
 use crate::src::nvim::mbyte::{
@@ -53,6 +51,11 @@ use crate::src::nvim::option::{
     copy_option_part, did_set_title, fill_culopt_flags, get_fileformat, get_option,
     get_option_default, get_option_varp_scope_from, p_vfile, parse_winhl_opt, redraw_titles,
     set_iminsert_global, set_imsearch_global, set_option_direct, skip_to_option_part, valid_name,
+};
+use crate::src::nvim::options::{
+    opt_bh_values, opt_bkc_values, opt_bt_values, opt_cot_values, opt_dip_algorithm_values,
+    opt_dip_inline_values, opt_ff_values, opt_scl_values, opt_spo_values, opt_ssop_values,
+    opt_tc_values, opt_ve_values,
 };
 use crate::src::nvim::os::env::vim_unsetenv_ext;
 use crate::src::nvim::os::libc::{
