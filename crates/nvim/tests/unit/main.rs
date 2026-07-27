@@ -14,6 +14,7 @@ mod hashtab;
 mod keycodes;
 mod linematch;
 mod map;
+mod marktree;
 mod memory;
 mod multiqueue;
 mod packer;
