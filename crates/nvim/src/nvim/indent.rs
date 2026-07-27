@@ -1,86 +1,20 @@
-use crate::src::nvim::api::private::helpers::cstr_as_string;
-use crate::src::nvim::change::{changed_bytes, changed_lines, get_leader_len, ins_bytes, ins_str};
-use crate::src::nvim::charset::{
-    byte2cells, char2cells, getdigits, getdigits_int, getwhitecols_curline, skipwhite, vim_strsize,
-};
-use crate::src::nvim::cursor::{
-    check_cursor, coladvance, get_cursor_line_len, get_cursor_line_ptr,
-};
-use crate::src::nvim::drawscreen::redraw_curbuf_later;
-use crate::src::nvim::edit::{
-    backspace_until_column, beginline, get_nolist_virtcol, replace_join, replace_push_nul,
-};
-use crate::src::nvim::eval::typval::tv_get_lnum;
-use crate::src::nvim::eval::vars::set_vim_var_nr;
-use crate::src::nvim::eval_1::eval_to_number;
-use crate::src::nvim::ex_docmd::handle_did_throw;
+use crate::src::nvim::change::{changed_bytes, get_leader_len};
+use crate::src::nvim::charset::{byte2cells, char2cells, getwhitecols_curline, skipwhite};
+use crate::src::nvim::cursor::{get_cursor_line_len, get_cursor_line_ptr};
+use crate::src::nvim::edit::get_nolist_virtcol;
 use crate::src::nvim::extmark::extmark_splice_cols;
-use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::src::nvim::log::logmsg;
-use crate::src::nvim::main::{
-    IObuff, Insstart, State, ai_col, can_si, can_si_back, cmdmod, curbuf, curbuf_splice_pending,
-    current_sctx, curwin, did_ai, did_si, did_throw, dy_flags, e_interr, e_invarg2, e_modifiable,
-    e_positive, e_resulting_text_too_long, empty_string_option, got_int, old_indent, p_debug,
-    p_lispwords, p_paste, p_report, sandbox, saved_cursor, textlock, trylevel,
-};
-use crate::src::nvim::mbyte::{utf_ptr2CharInfo, utf_ptr2StrCharInfo, utfc_next, utfc_ptr2len};
-use crate::src::nvim::memline::{ml_get, ml_get_buf, ml_get_len, ml_get_pos, ml_replace};
-use crate::src::nvim::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
-use crate::src::nvim::message::{emsg, msg_progress, semsg};
-use crate::src::nvim::r#move::{changed_cline_bef_curs, win_col_off, win_col_off2};
-use crate::src::nvim::ops::shift_line;
-use crate::src::nvim::option::{
-    copy_option_part, get_flp_value, get_showbreak_value, set_option_direct, was_set_insecurely,
-};
-use crate::src::nvim::os::input::line_breakcheck;
-use crate::src::nvim::os::libc::{
-    abort, atoi, gettext, memmove, memset, ngettext, snprintf, strcmp, strncmp, strtol,
-};
-use crate::src::nvim::plines::{
-    getvcol, getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize,
-};
-use crate::src::nvim::search::{findmatch, linewhite};
-use crate::src::nvim::strings::{vim_strchr, xstrnsave};
+use crate::src::nvim::main::{State, curbuf, curwin, e_invarg2, e_positive, saved_cursor};
+use crate::src::nvim::memline::{ml_get, ml_get_buf, ml_get_pos, ml_replace};
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::os::libc::{abort, gettext, memmove};
+use crate::src::nvim::plines::getvcol;
 use crate::src::nvim::textformat::has_format_option;
-pub use crate::src::nvim::types::{
-    __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue,
-    Boolean, BufUpdateCallbacks, CMD_index, CSType, Callback, Callback_data as C2Rust_Unnamed_6,
-    CallbackType, ChangedtickDictItem, CharInfo, CharSize, CharsizeArg, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_3, Dict, Error, ErrorType, EvalFuncData, ExtmarkMove,
-    ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkUndoObject, FileID, Float, FloatAnchor,
-    FloatRelative, GridView, IndentGetter, Indenter, Integer, Intersection, KeyValuePair,
-    LineGetter, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, MarkTreeIter,
-    MarkTreeIter_s as C2Rust_Unnamed_15, MotionType, MsgpackRpcRequestHandler, Object, ObjectType,
-    OptIndex, OptInt, OptVal, OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType,
-    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_14, StrCharInfo, String_0, Terminal, Timestamp,
-    TriState, UndoObjectType, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText,
-    VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, bcount_t,
-    bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T,
-    cmdmod_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_17, dict_T, dictvar_S,
-    disptick_T, eslist_T, eslist_elem, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T,
-    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_4,
-    file_buffer_b_wininfo as C2Rust_Unnamed_13, file_buffer_update_callbacks as C2Rust_Unnamed_1,
-    file_buffer_update_channels as C2Rust_Unnamed_2, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
-    funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_7, funccall_T, garray_T, handle_T, hash_T,
-    hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, intmax_t, intptr_t,
-    key_value_pair, lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
-    listwatch_T, llpos_T, lpos_T, mapblock, mapblock_T, match_T, matchitem, matchitem_T, memfile_T,
-    memline_T, mfdirty_T, mtnode_inner_s, mtnode_s, object, object_data as C2Rust_Unnamed_0,
-    oparg_T, partial_S, partial_T, pos_T, pos_save_T, proftime_T, ptr_t, ptrdiff_t, qf_info_S,
-    qf_info_T, queue, reg_extmatch_T, regmatch_T, regmmatch_T, regprog, regprog_T, sattr_T,
-    schar_T, scid_T, sctx_T, size_t, syn_state, syn_state_sst_union as C2Rust_Unnamed_5,
-    syn_time_T, synblock_T, synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union,
-    u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_10,
-    u_header_uh_alt_prev as C2Rust_Unnamed_9, u_header_uh_next as C2Rust_Unnamed_12,
-    u_header_uh_prev as C2Rust_Unnamed_11, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
-    uintptr_t, undo_object, undo_object_data as C2Rust_Unnamed_8, varnumber_T, virt_line,
-    visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
-};
-use crate::src::nvim::undo::{u_clearline, u_save, u_savecommon, u_savesub};
+use crate::src::nvim::types::*;
+
+// `regexp.rs` keeps its own copy of `regprog_T`, so these stay declarations
+// rather than imports. `breakindent.rs` reaches them through `use super::*`.
 unsafe extern "C" {
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
@@ -89,1325 +23,64 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed = 2147483647;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kExtmarkClear: UndoObjectType = 4;
-pub const kExtmarkSavePos: UndoObjectType = 3;
-pub const kExtmarkUpdate: UndoObjectType = 2;
-pub const kExtmarkMove: UndoObjectType = 1;
-pub const kExtmarkSplice: UndoObjectType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_14 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_14 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_14 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_14 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
-pub const MF_DIRTY_YES: mfdirty_T = 1;
-pub const MF_DIRTY_NO: mfdirty_T = 0;
-pub const kOptWritedelay: OptIndex = 373;
-pub const kOptWritebackup: OptIndex = 372;
-pub const kOptWriteany: OptIndex = 371;
-pub const kOptWrite: OptIndex = 370;
-pub const kOptWrapscan: OptIndex = 369;
-pub const kOptWrapmargin: OptIndex = 368;
-pub const kOptWrap: OptIndex = 367;
-pub const kOptWinwidth: OptIndex = 366;
-pub const kOptWinminwidth: OptIndex = 365;
-pub const kOptWinminheight: OptIndex = 364;
-pub const kOptWinhighlight: OptIndex = 363;
-pub const kOptWinheight: OptIndex = 362;
-pub const kOptWinfixwidth: OptIndex = 361;
-pub const kOptWinfixheight: OptIndex = 360;
-pub const kOptWinfixbuf: OptIndex = 359;
-pub const kOptWindow: OptIndex = 358;
-pub const kOptWinborder: OptIndex = 357;
-pub const kOptWinblend: OptIndex = 356;
-pub const kOptWinbar: OptIndex = 355;
-pub const kOptWinaltkeys: OptIndex = 354;
-pub const kOptWildoptions: OptIndex = 353;
-pub const kOptWildmode: OptIndex = 352;
-pub const kOptWildmenu: OptIndex = 351;
-pub const kOptWildignorecase: OptIndex = 350;
-pub const kOptWildignore: OptIndex = 349;
-pub const kOptWildcharm: OptIndex = 348;
-pub const kOptWildchar: OptIndex = 347;
-pub const kOptWhichwrap: OptIndex = 346;
-pub const kOptWarn: OptIndex = 345;
-pub const kOptVisualbell: OptIndex = 344;
-pub const kOptVirtualedit: OptIndex = 343;
-pub const kOptViewoptions: OptIndex = 342;
-pub const kOptViewdir: OptIndex = 341;
-pub const kOptVerbosefile: OptIndex = 340;
-pub const kOptVerbose: OptIndex = 339;
-pub const kOptVartabstop: OptIndex = 338;
-pub const kOptVarsofttabstop: OptIndex = 337;
-pub const kOptUpdatetime: OptIndex = 336;
-pub const kOptUpdatecount: OptIndex = 335;
-pub const kOptUndoreload: OptIndex = 334;
-pub const kOptUndolevels: OptIndex = 333;
-pub const kOptUndofile: OptIndex = 332;
-pub const kOptUndodir: OptIndex = 331;
-pub const kOptTtyfast: OptIndex = 330;
-pub const kOptTtimeoutlen: OptIndex = 329;
-pub const kOptTtimeout: OptIndex = 328;
-pub const kOptTitlestring: OptIndex = 327;
-pub const kOptTitleold: OptIndex = 326;
-pub const kOptTitlelen: OptIndex = 325;
-pub const kOptTitle: OptIndex = 324;
-pub const kOptTimeoutlen: OptIndex = 323;
-pub const kOptTimeout: OptIndex = 322;
-pub const kOptTildeop: OptIndex = 321;
-pub const kOptThesaurusfunc: OptIndex = 320;
-pub const kOptThesaurus: OptIndex = 319;
-pub const kOptTextwidth: OptIndex = 318;
-pub const kOptTerse: OptIndex = 317;
-pub const kOptTermsync: OptIndex = 316;
-pub const kOptTermpastefilter: OptIndex = 315;
-pub const kOptTermguicolors: OptIndex = 314;
-pub const kOptTermencoding: OptIndex = 313;
-pub const kOptTermbidi: OptIndex = 312;
-pub const kOptTagstack: OptIndex = 311;
-pub const kOptTags: OptIndex = 310;
-pub const kOptTagrelative: OptIndex = 309;
-pub const kOptTaglength: OptIndex = 308;
-pub const kOptTagfunc: OptIndex = 307;
-pub const kOptTagcase: OptIndex = 306;
-pub const kOptTagbsearch: OptIndex = 305;
-pub const kOptTabstop: OptIndex = 304;
-pub const kOptTabpagemax: OptIndex = 303;
-pub const kOptTabline: OptIndex = 302;
-pub const kOptTabclose: OptIndex = 301;
-pub const kOptSyntax: OptIndex = 300;
-pub const kOptSynmaxcol: OptIndex = 299;
-pub const kOptSwitchbuf: OptIndex = 298;
-pub const kOptSwapfile: OptIndex = 297;
-pub const kOptSuffixesadd: OptIndex = 296;
-pub const kOptSuffixes: OptIndex = 295;
-pub const kOptStatusline: OptIndex = 294;
-pub const kOptStatuscolumn: OptIndex = 293;
-pub const kOptStartofline: OptIndex = 292;
-pub const kOptSplitright: OptIndex = 291;
-pub const kOptSplitkeep: OptIndex = 290;
-pub const kOptSplitbelow: OptIndex = 289;
-pub const kOptSpellsuggest: OptIndex = 288;
-pub const kOptSpelloptions: OptIndex = 287;
-pub const kOptSpelllang: OptIndex = 286;
-pub const kOptSpellfile: OptIndex = 285;
-pub const kOptSpellcapcheck: OptIndex = 284;
-pub const kOptSpell: OptIndex = 283;
-pub const kOptSofttabstop: OptIndex = 282;
-pub const kOptSmoothscroll: OptIndex = 281;
-pub const kOptSmarttab: OptIndex = 280;
-pub const kOptSmartindent: OptIndex = 279;
-pub const kOptSmartcase: OptIndex = 278;
-pub const kOptSigncolumn: OptIndex = 277;
-pub const kOptSidescrolloff: OptIndex = 276;
-pub const kOptSidescroll: OptIndex = 275;
-pub const kOptShowtabline: OptIndex = 274;
-pub const kOptShowmode: OptIndex = 273;
-pub const kOptShowmatch: OptIndex = 272;
-pub const kOptShowfulltag: OptIndex = 271;
-pub const kOptShowcmdloc: OptIndex = 270;
-pub const kOptShowcmd: OptIndex = 269;
-pub const kOptShowbreak: OptIndex = 268;
-pub const kOptShortmess: OptIndex = 267;
-pub const kOptShiftwidth: OptIndex = 266;
-pub const kOptShiftround: OptIndex = 265;
-pub const kOptShellxquote: OptIndex = 264;
-pub const kOptShellxescape: OptIndex = 263;
-pub const kOptShelltemp: OptIndex = 262;
-pub const kOptShellslash: OptIndex = 261;
-pub const kOptShellredir: OptIndex = 260;
-pub const kOptShellquote: OptIndex = 259;
-pub const kOptShellpipe: OptIndex = 258;
-pub const kOptShellcmdflag: OptIndex = 257;
-pub const kOptShell: OptIndex = 256;
-pub const kOptShadafile: OptIndex = 255;
-pub const kOptShada: OptIndex = 254;
-pub const kOptSessionoptions: OptIndex = 253;
-pub const kOptSelectmode: OptIndex = 252;
-pub const kOptSelection: OptIndex = 251;
-pub const kOptSecure: OptIndex = 250;
-pub const kOptSections: OptIndex = 249;
-pub const kOptScrollopt: OptIndex = 248;
-pub const kOptScrolloff: OptIndex = 247;
-pub const kOptScrolljump: OptIndex = 246;
-pub const kOptScrollbind: OptIndex = 245;
-pub const kOptScrollback: OptIndex = 244;
-pub const kOptScroll: OptIndex = 243;
-pub const kOptRuntimepath: OptIndex = 242;
-pub const kOptRulerformat: OptIndex = 241;
-pub const kOptRuler: OptIndex = 240;
-pub const kOptRightleftcmd: OptIndex = 239;
-pub const kOptRightleft: OptIndex = 238;
-pub const kOptRevins: OptIndex = 237;
-pub const kOptReport: OptIndex = 236;
-pub const kOptRemap: OptIndex = 235;
-pub const kOptRelativenumber: OptIndex = 234;
-pub const kOptRegexpengine: OptIndex = 233;
-pub const kOptRedrawtime: OptIndex = 232;
-pub const kOptRedrawdebug: OptIndex = 231;
-pub const kOptReadonly: OptIndex = 230;
-pub const kOptQuoteescape: OptIndex = 229;
-pub const kOptQuickfixtextfunc: OptIndex = 228;
-pub const kOptPyxversion: OptIndex = 227;
-pub const kOptPumwidth: OptIndex = 226;
-pub const kOptPummaxwidth: OptIndex = 225;
-pub const kOptPumheight: OptIndex = 224;
-pub const kOptPumborder: OptIndex = 223;
-pub const kOptPumblend: OptIndex = 222;
-pub const kOptPrompt: OptIndex = 221;
-pub const kOptPreviewwindow: OptIndex = 220;
-pub const kOptPreviewheight: OptIndex = 219;
-pub const kOptPreserveindent: OptIndex = 218;
-pub const kOptPath: OptIndex = 217;
-pub const kOptPatchmode: OptIndex = 216;
-pub const kOptPatchexpr: OptIndex = 215;
-pub const kOptPastetoggle: OptIndex = 214;
-pub const kOptPaste: OptIndex = 213;
-pub const kOptParagraphs: OptIndex = 212;
-pub const kOptPackpath: OptIndex = 211;
-pub const kOptOperatorfunc: OptIndex = 210;
-pub const kOptOpendevice: OptIndex = 209;
-pub const kOptOmnifunc: OptIndex = 208;
-pub const kOptNumberwidth: OptIndex = 207;
-pub const kOptNumber: OptIndex = 206;
-pub const kOptNrformats: OptIndex = 205;
-pub const kOptMousetime: OptIndex = 204;
-pub const kOptMouseshape: OptIndex = 203;
-pub const kOptMousescroll: OptIndex = 202;
-pub const kOptMousemoveevent: OptIndex = 201;
-pub const kOptMousemodel: OptIndex = 200;
-pub const kOptMousehide: OptIndex = 199;
-pub const kOptMousefocus: OptIndex = 198;
-pub const kOptMouse: OptIndex = 197;
-pub const kOptMore: OptIndex = 196;
-pub const kOptModified: OptIndex = 195;
-pub const kOptModifiable: OptIndex = 194;
-pub const kOptModelines: OptIndex = 193;
-pub const kOptModelineexpr: OptIndex = 192;
-pub const kOptModeline: OptIndex = 191;
-pub const kOptMkspellmem: OptIndex = 190;
-pub const kOptMessagesopt: OptIndex = 189;
-pub const kOptMenuitems: OptIndex = 188;
-pub const kOptMaxsearchcount: OptIndex = 187;
-pub const kOptMaxmempattern: OptIndex = 186;
-pub const kOptMaxmapdepth: OptIndex = 185;
-pub const kOptMaxfuncdepth: OptIndex = 184;
-pub const kOptMaxcombine: OptIndex = 183;
-pub const kOptMatchtime: OptIndex = 182;
-pub const kOptMatchpairs: OptIndex = 181;
-pub const kOptMakeprg: OptIndex = 180;
-pub const kOptMakeencoding: OptIndex = 179;
-pub const kOptMakeef: OptIndex = 178;
-pub const kOptMagic: OptIndex = 177;
-pub const kOptLoadplugins: OptIndex = 176;
-pub const kOptListchars: OptIndex = 175;
-pub const kOptList: OptIndex = 174;
-pub const kOptLispwords: OptIndex = 173;
-pub const kOptLispoptions: OptIndex = 172;
-pub const kOptLisp: OptIndex = 171;
-pub const kOptLinespace: OptIndex = 170;
-pub const kOptLines: OptIndex = 169;
-pub const kOptLinebreak: OptIndex = 168;
-pub const kOptLhistory: OptIndex = 167;
-pub const kOptLazyredraw: OptIndex = 166;
-pub const kOptLaststatus: OptIndex = 165;
-pub const kOptLangremap: OptIndex = 164;
-pub const kOptLangnoremap: OptIndex = 163;
-pub const kOptLangmenu: OptIndex = 162;
-pub const kOptLangmap: OptIndex = 161;
-pub const kOptKeywordprg: OptIndex = 160;
-pub const kOptKeymodel: OptIndex = 159;
-pub const kOptKeymap: OptIndex = 158;
-pub const kOptJumpoptions: OptIndex = 157;
-pub const kOptJoinspaces: OptIndex = 156;
-pub const kOptIsprint: OptIndex = 155;
-pub const kOptIskeyword: OptIndex = 154;
-pub const kOptIsident: OptIndex = 153;
-pub const kOptIsfname: OptIndex = 152;
-pub const kOptInsertmode: OptIndex = 151;
-pub const kOptInfercase: OptIndex = 150;
-pub const kOptIndentkeys: OptIndex = 149;
-pub const kOptIndentexpr: OptIndex = 148;
-pub const kOptIncsearch: OptIndex = 147;
-pub const kOptIncludeexpr: OptIndex = 146;
-pub const kOptInclude: OptIndex = 145;
-pub const kOptInccommand: OptIndex = 144;
-pub const kOptImsearch: OptIndex = 143;
-pub const kOptIminsert: OptIndex = 142;
-pub const kOptImdisable: OptIndex = 141;
-pub const kOptImcmdline: OptIndex = 140;
-pub const kOptIgnorecase: OptIndex = 139;
-pub const kOptIconstring: OptIndex = 138;
-pub const kOptIcon: OptIndex = 137;
-pub const kOptHlsearch: OptIndex = 136;
-pub const kOptHkmapp: OptIndex = 135;
-pub const kOptHkmap: OptIndex = 134;
-pub const kOptHistory: OptIndex = 133;
-pub const kOptHighlight: OptIndex = 132;
-pub const kOptHidden: OptIndex = 131;
-pub const kOptHelplang: OptIndex = 130;
-pub const kOptHelpheight: OptIndex = 129;
-pub const kOptHelpfile: OptIndex = 128;
-pub const kOptGuitabtooltip: OptIndex = 127;
-pub const kOptGuitablabel: OptIndex = 126;
-pub const kOptGuioptions: OptIndex = 125;
-pub const kOptGuifontwide: OptIndex = 124;
-pub const kOptGuifont: OptIndex = 123;
-pub const kOptGuicursor: OptIndex = 122;
-pub const kOptGrepprg: OptIndex = 121;
-pub const kOptGrepformat: OptIndex = 120;
-pub const kOptGdefault: OptIndex = 119;
-pub const kOptFsync: OptIndex = 118;
-pub const kOptFormatprg: OptIndex = 117;
-pub const kOptFormatoptions: OptIndex = 116;
-pub const kOptFormatlistpat: OptIndex = 115;
-pub const kOptFormatexpr: OptIndex = 114;
-pub const kOptFoldtext: OptIndex = 113;
-pub const kOptFoldopen: OptIndex = 112;
-pub const kOptFoldnestmax: OptIndex = 111;
-pub const kOptFoldminlines: OptIndex = 110;
-pub const kOptFoldmethod: OptIndex = 109;
-pub const kOptFoldmarker: OptIndex = 108;
-pub const kOptFoldlevelstart: OptIndex = 107;
-pub const kOptFoldlevel: OptIndex = 106;
-pub const kOptFoldignore: OptIndex = 105;
-pub const kOptFoldexpr: OptIndex = 104;
-pub const kOptFoldenable: OptIndex = 103;
-pub const kOptFoldcolumn: OptIndex = 102;
-pub const kOptFoldclose: OptIndex = 101;
-pub const kOptFixendofline: OptIndex = 100;
-pub const kOptFindfunc: OptIndex = 99;
-pub const kOptFillchars: OptIndex = 98;
-pub const kOptFiletype: OptIndex = 97;
-pub const kOptFileignorecase: OptIndex = 96;
-pub const kOptFileformats: OptIndex = 95;
-pub const kOptFileformat: OptIndex = 94;
-pub const kOptFileencodings: OptIndex = 93;
-pub const kOptFileencoding: OptIndex = 92;
-pub const kOptExrc: OptIndex = 91;
-pub const kOptExpandtab: OptIndex = 90;
-pub const kOptEventignorewin: OptIndex = 89;
-pub const kOptEventignore: OptIndex = 88;
-pub const kOptErrorformat: OptIndex = 87;
-pub const kOptErrorfile: OptIndex = 86;
-pub const kOptErrorbells: OptIndex = 85;
-pub const kOptEqualprg: OptIndex = 84;
-pub const kOptEqualalways: OptIndex = 83;
-pub const kOptEndofline: OptIndex = 82;
-pub const kOptEndoffile: OptIndex = 81;
-pub const kOptEncoding: OptIndex = 80;
-pub const kOptEmoji: OptIndex = 79;
-pub const kOptEdcompatible: OptIndex = 78;
-pub const kOptEadirection: OptIndex = 77;
-pub const kOptDisplay: OptIndex = 76;
-pub const kOptDirectory: OptIndex = 75;
-pub const kOptDigraph: OptIndex = 74;
-pub const kOptDiffopt: OptIndex = 73;
-pub const kOptDiffexpr: OptIndex = 72;
-pub const kOptDiffanchors: OptIndex = 71;
-pub const kOptDiff: OptIndex = 70;
-pub const kOptDictionary: OptIndex = 69;
-pub const kOptDelcombine: OptIndex = 68;
-pub const kOptDefine: OptIndex = 67;
-pub const kOptDebug: OptIndex = 66;
-pub const kOptCursorlineopt: OptIndex = 65;
-pub const kOptCursorline: OptIndex = 64;
-pub const kOptCursorcolumn: OptIndex = 63;
-pub const kOptCursorbind: OptIndex = 62;
-pub const kOptCpoptions: OptIndex = 61;
-pub const kOptCopyindent: OptIndex = 60;
-pub const kOptConfirm: OptIndex = 59;
-pub const kOptConceallevel: OptIndex = 58;
-pub const kOptConcealcursor: OptIndex = 57;
-pub const kOptCompletetimeout: OptIndex = 56;
-pub const kOptCompleteslash: OptIndex = 55;
-pub const kOptCompleteopt: OptIndex = 54;
-pub const kOptCompleteitemalign: OptIndex = 53;
-pub const kOptCompletefunc: OptIndex = 52;
-pub const kOptComplete: OptIndex = 51;
-pub const kOptCompatible: OptIndex = 50;
-pub const kOptCommentstring: OptIndex = 49;
-pub const kOptComments: OptIndex = 48;
-pub const kOptColumns: OptIndex = 47;
-pub const kOptColorcolumn: OptIndex = 46;
-pub const kOptCmdwinheight: OptIndex = 45;
-pub const kOptCmdheight: OptIndex = 44;
-pub const kOptClipboard: OptIndex = 43;
-pub const kOptCinwords: OptIndex = 42;
-pub const kOptCinscopedecls: OptIndex = 41;
-pub const kOptCinoptions: OptIndex = 40;
-pub const kOptCinkeys: OptIndex = 39;
-pub const kOptCindent: OptIndex = 38;
-pub const kOptChistory: OptIndex = 37;
-pub const kOptCharconvert: OptIndex = 36;
-pub const kOptChannel: OptIndex = 35;
-pub const kOptCedit: OptIndex = 34;
-pub const kOptCdpath: OptIndex = 33;
-pub const kOptCdhome: OptIndex = 32;
-pub const kOptCasemap: OptIndex = 31;
-pub const kOptBusy: OptIndex = 30;
-pub const kOptBuftype: OptIndex = 29;
-pub const kOptBuflisted: OptIndex = 28;
-pub const kOptBufhidden: OptIndex = 27;
-pub const kOptBrowsedir: OptIndex = 26;
-pub const kOptBreakindentopt: OptIndex = 25;
-pub const kOptBreakindent: OptIndex = 24;
-pub const kOptBreakat: OptIndex = 23;
-pub const kOptBomb: OptIndex = 22;
-pub const kOptBinary: OptIndex = 21;
-pub const kOptBelloff: OptIndex = 20;
-pub const kOptBackupskip: OptIndex = 19;
-pub const kOptBackupext: OptIndex = 18;
-pub const kOptBackupdir: OptIndex = 17;
-pub const kOptBackupcopy: OptIndex = 16;
-pub const kOptBackup: OptIndex = 15;
-pub const kOptBackspace: OptIndex = 14;
-pub const kOptBackground: OptIndex = 13;
-pub const kOptAutowriteall: OptIndex = 12;
-pub const kOptAutowrite: OptIndex = 11;
-pub const kOptAutoread: OptIndex = 10;
-pub const kOptAutoindent: OptIndex = 9;
-pub const kOptAutocompletetimeout: OptIndex = 8;
-pub const kOptAutocompletedelay: OptIndex = 7;
-pub const kOptAutocomplete: OptIndex = 6;
-pub const kOptAutochdir: OptIndex = 5;
-pub const kOptArabicshape: OptIndex = 4;
-pub const kOptArabic: OptIndex = 3;
-pub const kOptAmbiwidth: OptIndex = 2;
-pub const kOptAllowrevins: OptIndex = 1;
-pub const kOptAleph: OptIndex = 0;
-pub const kOptInvalid: OptIndex = -1;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
-pub const kBufOptWrapmargin: C2Rust_Unnamed_16 = 91;
-pub const kBufOptVartabstop: C2Rust_Unnamed_16 = 90;
-pub const kBufOptVarsofttabstop: C2Rust_Unnamed_16 = 89;
-pub const kBufOptUndolevels: C2Rust_Unnamed_16 = 88;
-pub const kBufOptUndofile: C2Rust_Unnamed_16 = 87;
-pub const kBufOptThesaurusfunc: C2Rust_Unnamed_16 = 86;
-pub const kBufOptThesaurus: C2Rust_Unnamed_16 = 85;
-pub const kBufOptTextwidth: C2Rust_Unnamed_16 = 84;
-pub const kBufOptTags: C2Rust_Unnamed_16 = 83;
-pub const kBufOptTagfunc: C2Rust_Unnamed_16 = 82;
-pub const kBufOptTagcase: C2Rust_Unnamed_16 = 81;
-pub const kBufOptTabstop: C2Rust_Unnamed_16 = 80;
-pub const kBufOptSyntax: C2Rust_Unnamed_16 = 79;
-pub const kBufOptSynmaxcol: C2Rust_Unnamed_16 = 78;
-pub const kBufOptSwapfile: C2Rust_Unnamed_16 = 77;
-pub const kBufOptSuffixesadd: C2Rust_Unnamed_16 = 76;
-pub const kBufOptSpelloptions: C2Rust_Unnamed_16 = 75;
-pub const kBufOptSpelllang: C2Rust_Unnamed_16 = 74;
-pub const kBufOptSpellfile: C2Rust_Unnamed_16 = 73;
-pub const kBufOptSpellcapcheck: C2Rust_Unnamed_16 = 72;
-pub const kBufOptSofttabstop: C2Rust_Unnamed_16 = 71;
-pub const kBufOptSmartindent: C2Rust_Unnamed_16 = 70;
-pub const kBufOptShiftwidth: C2Rust_Unnamed_16 = 69;
-pub const kBufOptScrollback: C2Rust_Unnamed_16 = 68;
-pub const kBufOptReadonly: C2Rust_Unnamed_16 = 67;
-pub const kBufOptQuoteescape: C2Rust_Unnamed_16 = 66;
-pub const kBufOptPreserveindent: C2Rust_Unnamed_16 = 65;
-pub const kBufOptPath: C2Rust_Unnamed_16 = 64;
-pub const kBufOptOmnifunc: C2Rust_Unnamed_16 = 63;
-pub const kBufOptNrformats: C2Rust_Unnamed_16 = 62;
-pub const kBufOptModified: C2Rust_Unnamed_16 = 61;
-pub const kBufOptModifiable: C2Rust_Unnamed_16 = 60;
-pub const kBufOptModeline: C2Rust_Unnamed_16 = 59;
-pub const kBufOptMatchpairs: C2Rust_Unnamed_16 = 58;
-pub const kBufOptMakeprg: C2Rust_Unnamed_16 = 57;
-pub const kBufOptMakeencoding: C2Rust_Unnamed_16 = 56;
-pub const kBufOptLispwords: C2Rust_Unnamed_16 = 55;
-pub const kBufOptLispoptions: C2Rust_Unnamed_16 = 54;
-pub const kBufOptLisp: C2Rust_Unnamed_16 = 53;
-pub const kBufOptKeywordprg: C2Rust_Unnamed_16 = 52;
-pub const kBufOptKeymap: C2Rust_Unnamed_16 = 51;
-pub const kBufOptIskeyword: C2Rust_Unnamed_16 = 50;
-pub const kBufOptInfercase: C2Rust_Unnamed_16 = 49;
-pub const kBufOptIndentkeys: C2Rust_Unnamed_16 = 48;
-pub const kBufOptIndentexpr: C2Rust_Unnamed_16 = 47;
-pub const kBufOptIncludeexpr: C2Rust_Unnamed_16 = 46;
-pub const kBufOptInclude: C2Rust_Unnamed_16 = 45;
-pub const kBufOptImsearch: C2Rust_Unnamed_16 = 44;
-pub const kBufOptIminsert: C2Rust_Unnamed_16 = 43;
-pub const kBufOptGrepprg: C2Rust_Unnamed_16 = 42;
-pub const kBufOptGrepformat: C2Rust_Unnamed_16 = 41;
-pub const kBufOptFsync: C2Rust_Unnamed_16 = 40;
-pub const kBufOptFormatprg: C2Rust_Unnamed_16 = 39;
-pub const kBufOptFormatoptions: C2Rust_Unnamed_16 = 38;
-pub const kBufOptFormatlistpat: C2Rust_Unnamed_16 = 37;
-pub const kBufOptFormatexpr: C2Rust_Unnamed_16 = 36;
-pub const kBufOptFixendofline: C2Rust_Unnamed_16 = 35;
-pub const kBufOptFindfunc: C2Rust_Unnamed_16 = 34;
-pub const kBufOptFiletype: C2Rust_Unnamed_16 = 33;
-pub const kBufOptFileformat: C2Rust_Unnamed_16 = 32;
-pub const kBufOptFileencoding: C2Rust_Unnamed_16 = 31;
-pub const kBufOptExpandtab: C2Rust_Unnamed_16 = 30;
-pub const kBufOptErrorformat: C2Rust_Unnamed_16 = 29;
-pub const kBufOptEqualprg: C2Rust_Unnamed_16 = 28;
-pub const kBufOptEndofline: C2Rust_Unnamed_16 = 27;
-pub const kBufOptEndoffile: C2Rust_Unnamed_16 = 26;
-pub const kBufOptDiffanchors: C2Rust_Unnamed_16 = 25;
-pub const kBufOptDictionary: C2Rust_Unnamed_16 = 24;
-pub const kBufOptDefine: C2Rust_Unnamed_16 = 23;
-pub const kBufOptCopyindent: C2Rust_Unnamed_16 = 22;
-pub const kBufOptCompleteslash: C2Rust_Unnamed_16 = 21;
-pub const kBufOptCompleteopt: C2Rust_Unnamed_16 = 20;
-pub const kBufOptCompletefunc: C2Rust_Unnamed_16 = 19;
-pub const kBufOptComplete: C2Rust_Unnamed_16 = 18;
-pub const kBufOptCommentstring: C2Rust_Unnamed_16 = 17;
-pub const kBufOptComments: C2Rust_Unnamed_16 = 16;
-pub const kBufOptCinwords: C2Rust_Unnamed_16 = 15;
-pub const kBufOptCinscopedecls: C2Rust_Unnamed_16 = 14;
-pub const kBufOptCinoptions: C2Rust_Unnamed_16 = 13;
-pub const kBufOptCinkeys: C2Rust_Unnamed_16 = 12;
-pub const kBufOptCindent: C2Rust_Unnamed_16 = 11;
-pub const kBufOptChannel: C2Rust_Unnamed_16 = 10;
-pub const kBufOptBusy: C2Rust_Unnamed_16 = 9;
-pub const kBufOptBuftype: C2Rust_Unnamed_16 = 8;
-pub const kBufOptBuflisted: C2Rust_Unnamed_16 = 7;
-pub const kBufOptBufhidden: C2Rust_Unnamed_16 = 6;
-pub const kBufOptBomb: C2Rust_Unnamed_16 = 5;
-pub const kBufOptBinary: C2Rust_Unnamed_16 = 4;
-pub const kBufOptBackupcopy: C2Rust_Unnamed_16 = 3;
-pub const kBufOptAutoread: C2Rust_Unnamed_16 = 2;
-pub const kBufOptAutoindent: C2Rust_Unnamed_16 = 1;
-pub const kBufOptAutocomplete: C2Rust_Unnamed_16 = 0;
-pub const kBufOptInvalid: C2Rust_Unnamed_16 = -1;
-pub const kOptValTypeString: OptValType = 2;
-pub const kOptValTypeNumber: OptValType = 1;
-pub const kOptValTypeBoolean: OptValType = 0;
-pub const kOptValTypeNil: OptValType = -1;
-pub const kExtmarkUndoNoRedo: ExtmarkOp = 3;
-pub const kExtmarkNoUndo: ExtmarkOp = 2;
-pub const kExtmarkUndo: ExtmarkOp = 1;
-pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const CMD_USER_BUF: CMD_index = -2;
-pub const CMD_USER: CMD_index = -1;
-pub const CMD_SIZE: CMD_index = 557;
-pub const CMD_Next: CMD_index = 556;
-pub const CMD_tilde: CMD_index = 555;
-pub const CMD_at: CMD_index = 554;
-pub const CMD_rshift: CMD_index = 553;
-pub const CMD_equal: CMD_index = 552;
-pub const CMD_lshift: CMD_index = 551;
-pub const CMD_and: CMD_index = 550;
-pub const CMD_pound: CMD_index = 549;
-pub const CMD_bang: CMD_index = 548;
-pub const CMD_z: CMD_index = 547;
-pub const CMD_yank: CMD_index = 546;
-pub const CMD_xunmenu: CMD_index = 545;
-pub const CMD_xunmap: CMD_index = 544;
-pub const CMD_xnoremenu: CMD_index = 543;
-pub const CMD_xnoremap: CMD_index = 542;
-pub const CMD_xmenu: CMD_index = 541;
-pub const CMD_xmapclear: CMD_index = 540;
-pub const CMD_xmap: CMD_index = 539;
-pub const CMD_xall: CMD_index = 538;
-pub const CMD_xit: CMD_index = 537;
-pub const CMD_wviminfo: CMD_index = 536;
-pub const CMD_wundo: CMD_index = 535;
-pub const CMD_wshada: CMD_index = 534;
-pub const CMD_wqall: CMD_index = 533;
-pub const CMD_wq: CMD_index = 532;
-pub const CMD_wprevious: CMD_index = 531;
-pub const CMD_wnext: CMD_index = 530;
-pub const CMD_winpos: CMD_index = 529;
-pub const CMD_windo: CMD_index = 528;
-pub const CMD_wincmd: CMD_index = 527;
-pub const CMD_winsize: CMD_index = 526;
-pub const CMD_while: CMD_index = 525;
-pub const CMD_wall: CMD_index = 524;
-pub const CMD_wNext: CMD_index = 523;
-pub const CMD_write: CMD_index = 522;
-pub const CMD_vunmenu: CMD_index = 521;
-pub const CMD_vunmap: CMD_index = 520;
-pub const CMD_vsplit: CMD_index = 519;
-pub const CMD_vnoremenu: CMD_index = 518;
-pub const CMD_vnew: CMD_index = 517;
-pub const CMD_vnoremap: CMD_index = 516;
-pub const CMD_vmenu: CMD_index = 515;
-pub const CMD_vmapclear: CMD_index = 514;
-pub const CMD_vmap: CMD_index = 513;
-pub const CMD_viusage: CMD_index = 512;
-pub const CMD_vimgrepadd: CMD_index = 511;
-pub const CMD_vimgrep: CMD_index = 510;
-pub const CMD_view: CMD_index = 509;
-pub const CMD_visual: CMD_index = 508;
-pub const CMD_vertical: CMD_index = 507;
-pub const CMD_verbose: CMD_index = 506;
-pub const CMD_version: CMD_index = 505;
-pub const CMD_vglobal: CMD_index = 504;
-pub const CMD_update: CMD_index = 503;
-pub const CMD_unsilent: CMD_index = 502;
-pub const CMD_unmenu: CMD_index = 501;
-pub const CMD_unmap: CMD_index = 500;
-pub const CMD_unlockvar: CMD_index = 499;
-pub const CMD_unlet: CMD_index = 498;
-pub const CMD_uniq: CMD_index = 497;
-pub const CMD_unhide: CMD_index = 496;
-pub const CMD_unabbreviate: CMD_index = 495;
-pub const CMD_undolist: CMD_index = 494;
-pub const CMD_undojoin: CMD_index = 493;
-pub const CMD_undo: CMD_index = 492;
-pub const CMD_tunmap: CMD_index = 491;
-pub const CMD_tunmenu: CMD_index = 490;
-pub const CMD_tselect: CMD_index = 489;
-pub const CMD_try: CMD_index = 488;
-pub const CMD_trust: CMD_index = 487;
-pub const CMD_trewind: CMD_index = 486;
-pub const CMD_tprevious: CMD_index = 485;
-pub const CMD_topleft: CMD_index = 484;
-pub const CMD_tnoremap: CMD_index = 483;
-pub const CMD_tnext: CMD_index = 482;
-pub const CMD_tmapclear: CMD_index = 481;
-pub const CMD_tmap: CMD_index = 480;
-pub const CMD_tmenu: CMD_index = 479;
-pub const CMD_tlunmenu: CMD_index = 478;
-pub const CMD_tlnoremenu: CMD_index = 477;
-pub const CMD_tlmenu: CMD_index = 476;
-pub const CMD_tlast: CMD_index = 475;
-pub const CMD_tjump: CMD_index = 474;
-pub const CMD_throw: CMD_index = 473;
-pub const CMD_tfirst: CMD_index = 472;
-pub const CMD_terminal: CMD_index = 471;
-pub const CMD_tclfile: CMD_index = 470;
-pub const CMD_tcldo: CMD_index = 469;
-pub const CMD_tcl: CMD_index = 468;
-pub const CMD_tabs: CMD_index = 467;
-pub const CMD_tabrewind: CMD_index = 466;
-pub const CMD_tabNext: CMD_index = 465;
-pub const CMD_tabprevious: CMD_index = 464;
-pub const CMD_tabonly: CMD_index = 463;
-pub const CMD_tabnew: CMD_index = 462;
-pub const CMD_tabnext: CMD_index = 461;
-pub const CMD_tablast: CMD_index = 460;
-pub const CMD_tabmove: CMD_index = 459;
-pub const CMD_tabfirst: CMD_index = 458;
-pub const CMD_tabfind: CMD_index = 457;
-pub const CMD_tabedit: CMD_index = 456;
-pub const CMD_tabdo: CMD_index = 455;
-pub const CMD_tabclose: CMD_index = 454;
-pub const CMD_tab: CMD_index = 453;
-pub const CMD_tags: CMD_index = 452;
-pub const CMD_tag: CMD_index = 451;
-pub const CMD_tNext: CMD_index = 450;
-pub const CMD_tchdir: CMD_index = 449;
-pub const CMD_tcd: CMD_index = 448;
-pub const CMD_t: CMD_index = 447;
-pub const CMD_syncbind: CMD_index = 446;
-pub const CMD_syntime: CMD_index = 445;
-pub const CMD_syntax: CMD_index = 444;
-pub const CMD_swapname: CMD_index = 443;
-pub const CMD_sview: CMD_index = 442;
-pub const CMD_suspend: CMD_index = 441;
-pub const CMD_sunmenu: CMD_index = 440;
-pub const CMD_sunmap: CMD_index = 439;
-pub const CMD_sunhide: CMD_index = 438;
-pub const CMD_stselect: CMD_index = 437;
-pub const CMD_stjump: CMD_index = 436;
-pub const CMD_stopinsert: CMD_index = 435;
-pub const CMD_startreplace: CMD_index = 434;
-pub const CMD_startgreplace: CMD_index = 433;
-pub const CMD_startinsert: CMD_index = 432;
-pub const CMD_stag: CMD_index = 431;
-pub const CMD_stop: CMD_index = 430;
-pub const CMD_srewind: CMD_index = 429;
-pub const CMD_sprevious: CMD_index = 428;
-pub const CMD_spellwrong: CMD_index = 427;
-pub const CMD_spellundo: CMD_index = 426;
-pub const CMD_spellrare: CMD_index = 425;
-pub const CMD_spellrepall: CMD_index = 424;
-pub const CMD_spellinfo: CMD_index = 423;
-pub const CMD_spelldump: CMD_index = 422;
-pub const CMD_spellgood: CMD_index = 421;
-pub const CMD_split: CMD_index = 420;
-pub const CMD_sort: CMD_index = 419;
-pub const CMD_source: CMD_index = 418;
-pub const CMD_snoremenu: CMD_index = 417;
-pub const CMD_snoremap: CMD_index = 416;
-pub const CMD_snomagic: CMD_index = 415;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_smenu: CMD_index = 413;
-pub const CMD_smapclear: CMD_index = 412;
-pub const CMD_smap: CMD_index = 411;
-pub const CMD_smagic: CMD_index = 410;
-pub const CMD_slast: CMD_index = 409;
-pub const CMD_sleep: CMD_index = 408;
-pub const CMD_silent: CMD_index = 407;
-pub const CMD_sign: CMD_index = 406;
-pub const CMD_simalt: CMD_index = 405;
-pub const CMD_sfirst: CMD_index = 404;
-pub const CMD_sfind: CMD_index = 403;
-pub const CMD_setlocal: CMD_index = 402;
-pub const CMD_setglobal: CMD_index = 401;
-pub const CMD_setfiletype: CMD_index = 400;
-pub const CMD_set: CMD_index = 399;
-pub const CMD_scriptencoding: CMD_index = 398;
-pub const CMD_scriptnames: CMD_index = 397;
-pub const CMD_sbrewind: CMD_index = 396;
-pub const CMD_sbprevious: CMD_index = 395;
-pub const CMD_sbnext: CMD_index = 394;
-pub const CMD_sbmodified: CMD_index = 393;
-pub const CMD_sblast: CMD_index = 392;
-pub const CMD_sbfirst: CMD_index = 391;
-pub const CMD_sball: CMD_index = 390;
-pub const CMD_sbNext: CMD_index = 389;
-pub const CMD_sbuffer: CMD_index = 388;
-pub const CMD_saveas: CMD_index = 387;
-pub const CMD_sandbox: CMD_index = 386;
-pub const CMD_sall: CMD_index = 385;
-pub const CMD_sargument: CMD_index = 384;
-pub const CMD_sNext: CMD_index = 383;
-pub const CMD_substitute: CMD_index = 382;
-pub const CMD_rviminfo: CMD_index = 381;
-pub const CMD_rubyfile: CMD_index = 380;
-pub const CMD_rubydo: CMD_index = 379;
-pub const CMD_ruby: CMD_index = 378;
-pub const CMD_rundo: CMD_index = 377;
-pub const CMD_runtime: CMD_index = 376;
-pub const CMD_rshada: CMD_index = 375;
-pub const CMD_rightbelow: CMD_index = 374;
-pub const CMD_right: CMD_index = 373;
-pub const CMD_rewind: CMD_index = 372;
-pub const CMD_return: CMD_index = 371;
-pub const CMD_retab: CMD_index = 370;
-pub const CMD_restart: CMD_index = 369;
-pub const CMD_resize: CMD_index = 368;
-pub const CMD_registers: CMD_index = 367;
-pub const CMD_redrawtabline: CMD_index = 366;
-pub const CMD_redrawstatus: CMD_index = 365;
-pub const CMD_redraw: CMD_index = 364;
-pub const CMD_redir: CMD_index = 363;
-pub const CMD_redo: CMD_index = 362;
-pub const CMD_recover: CMD_index = 361;
-pub const CMD_read: CMD_index = 360;
-pub const CMD_qall: CMD_index = 359;
-pub const CMD_quitall: CMD_index = 358;
-pub const CMD_quit: CMD_index = 357;
-pub const CMD_pyxfile: CMD_index = 356;
-pub const CMD_pythonx: CMD_index = 355;
-pub const CMD_pyxdo: CMD_index = 354;
-pub const CMD_pyx: CMD_index = 353;
-pub const CMD_py3file: CMD_index = 352;
-pub const CMD_python3: CMD_index = 351;
-pub const CMD_py3do: CMD_index = 350;
-pub const CMD_py3: CMD_index = 349;
-pub const CMD_pyfile: CMD_index = 348;
-pub const CMD_pydo: CMD_index = 347;
-pub const CMD_python: CMD_index = 346;
-pub const CMD_pwd: CMD_index = 345;
-pub const CMD_put: CMD_index = 344;
-pub const CMD_ptselect: CMD_index = 343;
-pub const CMD_ptrewind: CMD_index = 342;
-pub const CMD_ptprevious: CMD_index = 341;
-pub const CMD_ptnext: CMD_index = 340;
-pub const CMD_ptlast: CMD_index = 339;
-pub const CMD_ptjump: CMD_index = 338;
-pub const CMD_ptfirst: CMD_index = 337;
-pub const CMD_ptNext: CMD_index = 336;
-pub const CMD_ptag: CMD_index = 335;
-pub const CMD_psearch: CMD_index = 334;
-pub const CMD_profdel: CMD_index = 333;
-pub const CMD_profile: CMD_index = 332;
-pub const CMD_previous: CMD_index = 331;
-pub const CMD_preserve: CMD_index = 330;
-pub const CMD_ppop: CMD_index = 329;
-pub const CMD_popup: CMD_index = 328;
-pub const CMD_pop: CMD_index = 327;
-pub const CMD_pedit: CMD_index = 326;
-pub const CMD_perlfile: CMD_index = 325;
-pub const CMD_perldo: CMD_index = 324;
-pub const CMD_perl: CMD_index = 323;
-pub const CMD_pclose: CMD_index = 322;
-pub const CMD_pbuffer: CMD_index = 321;
-pub const CMD_packloadall: CMD_index = 320;
-pub const CMD_packadd: CMD_index = 319;
-pub const CMD_print: CMD_index = 318;
-pub const CMD_ownsyntax: CMD_index = 317;
-pub const CMD_ounmenu: CMD_index = 316;
-pub const CMD_ounmap: CMD_index = 315;
-pub const CMD_options: CMD_index = 314;
-pub const CMD_onoremenu: CMD_index = 313;
-pub const CMD_onoremap: CMD_index = 312;
-pub const CMD_only: CMD_index = 311;
-pub const CMD_omenu: CMD_index = 310;
-pub const CMD_omapclear: CMD_index = 309;
-pub const CMD_omap: CMD_index = 308;
-pub const CMD_oldfiles: CMD_index = 307;
-pub const CMD_nunmenu: CMD_index = 306;
-pub const CMD_nunmap: CMD_index = 305;
-pub const CMD_number: CMD_index = 304;
-pub const CMD_normal: CMD_index = 303;
-pub const CMD_noswapfile: CMD_index = 302;
-pub const CMD_noremenu: CMD_index = 301;
-pub const CMD_noreabbrev: CMD_index = 300;
-pub const CMD_nohlsearch: CMD_index = 299;
-pub const CMD_noautocmd: CMD_index = 298;
-pub const CMD_noremap: CMD_index = 297;
-pub const CMD_nnoremenu: CMD_index = 296;
-pub const CMD_nnoremap: CMD_index = 295;
-pub const CMD_nmenu: CMD_index = 294;
-pub const CMD_nmapclear: CMD_index = 293;
-pub const CMD_nmap: CMD_index = 292;
-pub const CMD_new: CMD_index = 291;
-pub const CMD_next: CMD_index = 290;
-pub const CMD_mzfile: CMD_index = 289;
-pub const CMD_mzscheme: CMD_index = 288;
-pub const CMD_mode: CMD_index = 287;
-pub const CMD_mkview: CMD_index = 286;
-pub const CMD_mkvimrc: CMD_index = 285;
-pub const CMD_mkspell: CMD_index = 284;
-pub const CMD_mksession: CMD_index = 283;
-pub const CMD_mkexrc: CMD_index = 282;
-pub const CMD_messages: CMD_index = 281;
-pub const CMD_menutranslate: CMD_index = 280;
-pub const CMD_menu: CMD_index = 279;
-pub const CMD_match: CMD_index = 278;
-pub const CMD_marks: CMD_index = 277;
-pub const CMD_mapclear: CMD_index = 276;
-pub const CMD_map: CMD_index = 275;
-pub const CMD_make: CMD_index = 274;
-pub const CMD_mark: CMD_index = 273;
-pub const CMD_move: CMD_index = 272;
-pub const CMD_lsp: CMD_index = 271;
-pub const CMD_ls: CMD_index = 270;
-pub const CMD_lwindow: CMD_index = 269;
-pub const CMD_lvimgrepadd: CMD_index = 268;
-pub const CMD_lvimgrep: CMD_index = 267;
-pub const CMD_luafile: CMD_index = 266;
-pub const CMD_luado: CMD_index = 265;
-pub const CMD_lua: CMD_index = 264;
-pub const CMD_lunmap: CMD_index = 263;
-pub const CMD_ltag: CMD_index = 262;
-pub const CMD_lrewind: CMD_index = 261;
-pub const CMD_lpfile: CMD_index = 260;
-pub const CMD_lprevious: CMD_index = 259;
-pub const CMD_lopen: CMD_index = 258;
-pub const CMD_lolder: CMD_index = 257;
-pub const CMD_lockvar: CMD_index = 256;
-pub const CMD_lockmarks: CMD_index = 255;
-pub const CMD_loadkeymap: CMD_index = 254;
-pub const CMD_loadview: CMD_index = 253;
-pub const CMD_lnfile: CMD_index = 252;
-pub const CMD_lnewer: CMD_index = 251;
-pub const CMD_lnext: CMD_index = 250;
-pub const CMD_lnoremap: CMD_index = 249;
-pub const CMD_lmake: CMD_index = 248;
-pub const CMD_lmapclear: CMD_index = 247;
-pub const CMD_lmap: CMD_index = 246;
-pub const CMD_llist: CMD_index = 245;
-pub const CMD_llast: CMD_index = 244;
-pub const CMD_ll: CMD_index = 243;
-pub const CMD_lhistory: CMD_index = 242;
-pub const CMD_lhelpgrep: CMD_index = 241;
-pub const CMD_lgrepadd: CMD_index = 240;
-pub const CMD_lgrep: CMD_index = 239;
-pub const CMD_lgetexpr: CMD_index = 238;
-pub const CMD_lgetbuffer: CMD_index = 237;
-pub const CMD_lgetfile: CMD_index = 236;
-pub const CMD_lfirst: CMD_index = 235;
-pub const CMD_lfdo: CMD_index = 234;
-pub const CMD_lfile: CMD_index = 233;
-pub const CMD_lexpr: CMD_index = 232;
-pub const CMD_let: CMD_index = 231;
-pub const CMD_leftabove: CMD_index = 230;
-pub const CMD_left: CMD_index = 229;
-pub const CMD_ldo: CMD_index = 228;
-pub const CMD_lclose: CMD_index = 227;
-pub const CMD_lchdir: CMD_index = 226;
-pub const CMD_lcd: CMD_index = 225;
-pub const CMD_lbottom: CMD_index = 224;
-pub const CMD_lbelow: CMD_index = 223;
-pub const CMD_lbefore: CMD_index = 222;
-pub const CMD_lbuffer: CMD_index = 221;
-pub const CMD_later: CMD_index = 220;
-pub const CMD_lafter: CMD_index = 219;
-pub const CMD_laddfile: CMD_index = 218;
-pub const CMD_laddbuffer: CMD_index = 217;
-pub const CMD_laddexpr: CMD_index = 216;
-pub const CMD_language: CMD_index = 215;
-pub const CMD_labove: CMD_index = 214;
-pub const CMD_last: CMD_index = 213;
-pub const CMD_lNfile: CMD_index = 212;
-pub const CMD_lNext: CMD_index = 211;
-pub const CMD_list: CMD_index = 210;
-pub const CMD_keepalt: CMD_index = 209;
-pub const CMD_keeppatterns: CMD_index = 208;
-pub const CMD_keepjumps: CMD_index = 207;
-pub const CMD_keepmarks: CMD_index = 206;
-pub const CMD_k: CMD_index = 205;
-pub const CMD_jumps: CMD_index = 204;
-pub const CMD_join: CMD_index = 203;
-pub const CMD_iunmenu: CMD_index = 202;
-pub const CMD_iunabbrev: CMD_index = 201;
-pub const CMD_iunmap: CMD_index = 200;
-pub const CMD_isplit: CMD_index = 199;
-pub const CMD_isearch: CMD_index = 198;
-pub const CMD_iput: CMD_index = 197;
-pub const CMD_intro: CMD_index = 196;
-pub const CMD_inoremenu: CMD_index = 195;
-pub const CMD_inoreabbrev: CMD_index = 194;
-pub const CMD_inoremap: CMD_index = 193;
-pub const CMD_imenu: CMD_index = 192;
-pub const CMD_imapclear: CMD_index = 191;
-pub const CMD_imap: CMD_index = 190;
-pub const CMD_ilist: CMD_index = 189;
-pub const CMD_ijump: CMD_index = 188;
-pub const CMD_if: CMD_index = 187;
-pub const CMD_iabclear: CMD_index = 186;
-pub const CMD_iabbrev: CMD_index = 185;
-pub const CMD_insert: CMD_index = 184;
-pub const CMD_horizontal: CMD_index = 183;
-pub const CMD_history: CMD_index = 182;
-pub const CMD_hide: CMD_index = 181;
-pub const CMD_highlight: CMD_index = 180;
-pub const CMD_helptags: CMD_index = 179;
-pub const CMD_helpgrep: CMD_index = 178;
-pub const CMD_helpclose: CMD_index = 177;
-pub const CMD_help: CMD_index = 176;
-pub const CMD_gvim: CMD_index = 175;
-pub const CMD_gui: CMD_index = 174;
-pub const CMD_grepadd: CMD_index = 173;
-pub const CMD_grep: CMD_index = 172;
-pub const CMD_goto: CMD_index = 171;
-pub const CMD_global: CMD_index = 170;
-pub const CMD_fclose: CMD_index = 169;
-pub const CMD_function: CMD_index = 168;
-pub const CMD_for: CMD_index = 167;
-pub const CMD_foldopen: CMD_index = 166;
-pub const CMD_folddoclosed: CMD_index = 165;
-pub const CMD_folddoopen: CMD_index = 164;
-pub const CMD_foldclose: CMD_index = 163;
-pub const CMD_fold: CMD_index = 162;
-pub const CMD_first: CMD_index = 161;
-pub const CMD_finish: CMD_index = 160;
-pub const CMD_finally: CMD_index = 159;
-pub const CMD_find: CMD_index = 158;
-pub const CMD_filter: CMD_index = 157;
-pub const CMD_filetype: CMD_index = 156;
-pub const CMD_files: CMD_index = 155;
-pub const CMD_file: CMD_index = 154;
-pub const CMD_exusage: CMD_index = 153;
-pub const CMD_exit: CMD_index = 152;
-pub const CMD_execute: CMD_index = 151;
-pub const CMD_ex: CMD_index = 150;
-pub const CMD_eval: CMD_index = 149;
-pub const CMD_enew: CMD_index = 148;
-pub const CMD_endwhile: CMD_index = 147;
-pub const CMD_endtry: CMD_index = 146;
-pub const CMD_endfor: CMD_index = 145;
-pub const CMD_endfunction: CMD_index = 144;
-pub const CMD_endif: CMD_index = 143;
-pub const CMD_emenu: CMD_index = 142;
-pub const CMD_elseif: CMD_index = 141;
-pub const CMD_else: CMD_index = 140;
-pub const CMD_echon: CMD_index = 139;
-pub const CMD_echomsg: CMD_index = 138;
-pub const CMD_echohl: CMD_index = 137;
-pub const CMD_echoerr: CMD_index = 136;
-pub const CMD_echo: CMD_index = 135;
-pub const CMD_earlier: CMD_index = 134;
-pub const CMD_edit: CMD_index = 133;
-pub const CMD_dsplit: CMD_index = 132;
-pub const CMD_dsearch: CMD_index = 131;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_doautoall: CMD_index = 129;
-pub const CMD_doautocmd: CMD_index = 128;
-pub const CMD_dlist: CMD_index = 127;
-pub const CMD_djump: CMD_index = 126;
-pub const CMD_digraphs: CMD_index = 125;
-pub const CMD_diffthis: CMD_index = 124;
-pub const CMD_diffsplit: CMD_index = 123;
-pub const CMD_diffput: CMD_index = 122;
-pub const CMD_diffpatch: CMD_index = 121;
-pub const CMD_diffoff: CMD_index = 120;
-pub const CMD_diffget: CMD_index = 119;
-pub const CMD_diffupdate: CMD_index = 118;
-pub const CMD_display: CMD_index = 117;
-pub const CMD_detach: CMD_index = 116;
-pub const CMD_delfunction: CMD_index = 115;
-pub const CMD_delcommand: CMD_index = 114;
-pub const CMD_defer: CMD_index = 113;
-pub const CMD_debuggreedy: CMD_index = 112;
-pub const CMD_debug: CMD_index = 111;
-pub const CMD_delmarks: CMD_index = 110;
-pub const CMD_delete: CMD_index = 109;
-pub const CMD_cwindow: CMD_index = 108;
-pub const CMD_cunmenu: CMD_index = 107;
-pub const CMD_cunabbrev: CMD_index = 106;
-pub const CMD_cunmap: CMD_index = 105;
-pub const CMD_crewind: CMD_index = 104;
-pub const CMD_cquit: CMD_index = 103;
-pub const CMD_cpfile: CMD_index = 102;
-pub const CMD_cprevious: CMD_index = 101;
-pub const CMD_copen: CMD_index = 100;
-pub const CMD_const: CMD_index = 99;
-pub const CMD_connect: CMD_index = 98;
-pub const CMD_confirm: CMD_index = 97;
-pub const CMD_continue: CMD_index = 96;
-pub const CMD_compiler: CMD_index = 95;
-pub const CMD_comclear: CMD_index = 94;
-pub const CMD_command: CMD_index = 93;
-pub const CMD_colorscheme: CMD_index = 92;
-pub const CMD_colder: CMD_index = 91;
-pub const CMD_copy: CMD_index = 90;
-pub const CMD_cnoremenu: CMD_index = 89;
-pub const CMD_cnoreabbrev: CMD_index = 88;
-pub const CMD_cnoremap: CMD_index = 87;
-pub const CMD_cnfile: CMD_index = 86;
-pub const CMD_cnewer: CMD_index = 85;
-pub const CMD_cnext: CMD_index = 84;
-pub const CMD_cmenu: CMD_index = 83;
-pub const CMD_cmapclear: CMD_index = 82;
-pub const CMD_cmap: CMD_index = 81;
-pub const CMD_clearjumps: CMD_index = 80;
-pub const CMD_close: CMD_index = 79;
-pub const CMD_clast: CMD_index = 78;
-pub const CMD_clist: CMD_index = 77;
-pub const CMD_chistory: CMD_index = 76;
-pub const CMD_checktime: CMD_index = 75;
-pub const CMD_checkpath: CMD_index = 74;
-pub const CMD_checkhealth: CMD_index = 73;
-pub const CMD_changes: CMD_index = 72;
-pub const CMD_chdir: CMD_index = 71;
-pub const CMD_cgetexpr: CMD_index = 70;
-pub const CMD_cgetbuffer: CMD_index = 69;
-pub const CMD_cgetfile: CMD_index = 68;
-pub const CMD_cfirst: CMD_index = 67;
-pub const CMD_cfdo: CMD_index = 66;
-pub const CMD_cfile: CMD_index = 65;
-pub const CMD_cexpr: CMD_index = 64;
-pub const CMD_center: CMD_index = 63;
-pub const CMD_cdo: CMD_index = 62;
-pub const CMD_cd: CMD_index = 61;
-pub const CMD_cclose: CMD_index = 60;
-pub const CMD_cc: CMD_index = 59;
-pub const CMD_cbottom: CMD_index = 58;
-pub const CMD_cbelow: CMD_index = 57;
-pub const CMD_cbefore: CMD_index = 56;
-pub const CMD_cbuffer: CMD_index = 55;
-pub const CMD_catch: CMD_index = 54;
-pub const CMD_call: CMD_index = 53;
-pub const CMD_cafter: CMD_index = 52;
-pub const CMD_caddfile: CMD_index = 51;
-pub const CMD_caddexpr: CMD_index = 50;
-pub const CMD_caddbuffer: CMD_index = 49;
-pub const CMD_cabove: CMD_index = 48;
-pub const CMD_cabclear: CMD_index = 47;
-pub const CMD_cabbrev: CMD_index = 46;
-pub const CMD_cNfile: CMD_index = 45;
-pub const CMD_cNext: CMD_index = 44;
-pub const CMD_change: CMD_index = 43;
-pub const CMD_bwipeout: CMD_index = 42;
-pub const CMD_bunload: CMD_index = 41;
-pub const CMD_bufdo: CMD_index = 40;
-pub const CMD_buffers: CMD_index = 39;
-pub const CMD_browse: CMD_index = 38;
-pub const CMD_breaklist: CMD_index = 37;
-pub const CMD_breakdel: CMD_index = 36;
-pub const CMD_breakadd: CMD_index = 35;
-pub const CMD_break: CMD_index = 34;
-pub const CMD_brewind: CMD_index = 33;
-pub const CMD_bprevious: CMD_index = 32;
-pub const CMD_botright: CMD_index = 31;
-pub const CMD_bnext: CMD_index = 30;
-pub const CMD_bmodified: CMD_index = 29;
-pub const CMD_blast: CMD_index = 28;
-pub const CMD_bfirst: CMD_index = 27;
-pub const CMD_belowright: CMD_index = 26;
-pub const CMD_bdelete: CMD_index = 25;
-pub const CMD_balt: CMD_index = 24;
-pub const CMD_badd: CMD_index = 23;
-pub const CMD_ball: CMD_index = 22;
-pub const CMD_bNext: CMD_index = 21;
-pub const CMD_buffer: CMD_index = 20;
-pub const CMD_aunmenu: CMD_index = 19;
-pub const CMD_augroup: CMD_index = 18;
-pub const CMD_autocmd: CMD_index = 17;
-pub const CMD_ascii: CMD_index = 16;
-pub const CMD_argument: CMD_index = 15;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argedit: CMD_index = 12;
-pub const CMD_argdedupe: CMD_index = 11;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_argdelete: CMD_index = 9;
-pub const CMD_argadd: CMD_index = 8;
-pub const CMD_args: CMD_index = 7;
-pub const CMD_anoremenu: CMD_index = 6;
-pub const CMD_amenu: CMD_index = 5;
-pub const CMD_all: CMD_index = 4;
-pub const CMD_aboveleft: CMD_index = 3;
-pub const CMD_abclear: CMD_index = 2;
-pub const CMD_abbreviate: CMD_index = 1;
-pub const CMD_append: CMD_index = 0;
-pub const ADDR_NONE: cmd_addr_T = 11;
-pub const ADDR_OTHER: cmd_addr_T = 10;
-pub const ADDR_UNSIGNED: cmd_addr_T = 9;
-pub const ADDR_QUICKFIX: cmd_addr_T = 8;
-pub const ADDR_QUICKFIX_VALID: cmd_addr_T = 7;
-pub const ADDR_TABS_RELATIVE: cmd_addr_T = 6;
-pub const ADDR_TABS: cmd_addr_T = 5;
-pub const ADDR_BUFFERS: cmd_addr_T = 4;
-pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
-pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
-pub const ADDR_WINDOWS: cmd_addr_T = 1;
-pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_18 = 8192;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_18 = 4096;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_18 = 2048;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_18 = 1024;
-pub const CMOD_KEEPMARKS: C2Rust_Unnamed_18 = 512;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_18 = 256;
-pub const CMOD_CONFIRM: C2Rust_Unnamed_18 = 128;
-pub const CMOD_BROWSE: C2Rust_Unnamed_18 = 64;
-pub const CMOD_HIDE: C2Rust_Unnamed_18 = 32;
-pub const CMOD_NOAUTOCMD: C2Rust_Unnamed_18 = 16;
-pub const CMOD_UNSILENT: C2Rust_Unnamed_18 = 8;
-pub const CMOD_ERRSILENT: C2Rust_Unnamed_18 = 4;
-pub const CMOD_SILENT: C2Rust_Unnamed_18 = 2;
-pub const CMOD_SANDBOX: C2Rust_Unnamed_18 = 1;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kOptDyFlagMsgsep: C2Rust_Unnamed_19 = 8;
-pub const kOptDyFlagUhex: C2Rust_Unnamed_19 = 4;
-pub const kOptDyFlagTruncate: C2Rust_Unnamed_19 = 2;
-pub const kOptDyFlagLastline: C2Rust_Unnamed_19 = 1;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_20 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_20 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_20 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_20 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_20 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_20 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_20 = 10;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const INDENT_DEC: C2Rust_Unnamed_21 = 3;
-pub const INDENT_INC: C2Rust_Unnamed_21 = 2;
-pub const INDENT_SET: C2Rust_Unnamed_21 = 1;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const BL_FIX: C2Rust_Unnamed_22 = 4;
-pub const BL_SOL: C2Rust_Unnamed_22 = 2;
-pub const BL_WHITE: C2Rust_Unnamed_22 = 1;
-pub const VV_EXITREASON: VimVarIndex = 105;
-pub const VV_STARTTIME: VimVarIndex = 104;
-pub const VV_VIRTNUM: VimVarIndex = 103;
-pub const VV_RELNUM: VimVarIndex = 102;
-pub const VV_LUA: VimVarIndex = 101;
-pub const VV__NULL_BLOB: VimVarIndex = 100;
-pub const VV__NULL_DICT: VimVarIndex = 99;
-pub const VV__NULL_LIST: VimVarIndex = 98;
-pub const VV__NULL_STRING: VimVarIndex = 97;
-pub const VV_MSGPACK_TYPES: VimVarIndex = 96;
-pub const VV_STDERR: VimVarIndex = 95;
-pub const VV_VIM_DID_INIT: VimVarIndex = 94;
-pub const VV_STACKTRACE: VimVarIndex = 93;
-pub const VV_MAXCOL: VimVarIndex = 92;
-pub const VV_EXITING: VimVarIndex = 91;
-pub const VV_COLLATE: VimVarIndex = 90;
-pub const VV_ARGV: VimVarIndex = 89;
-pub const VV_ARGF: VimVarIndex = 88;
-pub const VV_ECHOSPACE: VimVarIndex = 87;
-pub const VV_VERSIONLONG: VimVarIndex = 86;
-pub const VV_EVENT: VimVarIndex = 85;
-pub const VV_TYPE_BLOB: VimVarIndex = 84;
-pub const VV_TYPE_BOOL: VimVarIndex = 83;
-pub const VV_TYPE_FLOAT: VimVarIndex = 82;
-pub const VV_TYPE_DICT: VimVarIndex = 81;
-pub const VV_TYPE_LIST: VimVarIndex = 80;
-pub const VV_TYPE_FUNC: VimVarIndex = 79;
-pub const VV_TYPE_STRING: VimVarIndex = 78;
-pub const VV_TYPE_NUMBER: VimVarIndex = 77;
-pub const VV_TESTING: VimVarIndex = 76;
-pub const VV_VIM_DID_ENTER: VimVarIndex = 75;
-pub const VV_NUMBERSIZE: VimVarIndex = 74;
-pub const VV_NUMBERMIN: VimVarIndex = 73;
-pub const VV_NUMBERMAX: VimVarIndex = 72;
-pub const VV_NULL: VimVarIndex = 71;
-pub const VV_TRUE: VimVarIndex = 70;
-pub const VV_FALSE: VimVarIndex = 69;
-pub const VV_ERRORS: VimVarIndex = 68;
-pub const VV_OPTION_TYPE: VimVarIndex = 67;
-pub const VV_OPTION_COMMAND: VimVarIndex = 66;
-pub const VV_OPTION_OLDGLOBAL: VimVarIndex = 65;
-pub const VV_OPTION_OLDLOCAL: VimVarIndex = 64;
-pub const VV_OPTION_OLD: VimVarIndex = 63;
-pub const VV_OPTION_NEW: VimVarIndex = 62;
-pub const VV_COMPLETED_ITEM: VimVarIndex = 61;
-pub const VV_PROGPATH: VimVarIndex = 60;
-pub const VV_WINDOWID: VimVarIndex = 59;
-pub const VV_OLDFILES: VimVarIndex = 58;
-pub const VV_HLSEARCH: VimVarIndex = 57;
-pub const VV_SEARCHFORWARD: VimVarIndex = 56;
-pub const VV_OP: VimVarIndex = 55;
-pub const VV_MOUSE_COL: VimVarIndex = 54;
-pub const VV_MOUSE_LNUM: VimVarIndex = 53;
-pub const VV_MOUSE_WINID: VimVarIndex = 52;
-pub const VV_MOUSE_WIN: VimVarIndex = 51;
-pub const VV_CHAR: VimVarIndex = 50;
-pub const VV_SWAPCOMMAND: VimVarIndex = 49;
-pub const VV_SWAPCHOICE: VimVarIndex = 48;
-pub const VV_SWAPNAME: VimVarIndex = 47;
-pub const VV_SCROLLSTART: VimVarIndex = 46;
-pub const VV_BEVAL_TEXT: VimVarIndex = 45;
-pub const VV_BEVAL_COL: VimVarIndex = 44;
-pub const VV_BEVAL_LNUM: VimVarIndex = 43;
-pub const VV_BEVAL_WINID: VimVarIndex = 42;
-pub const VV_BEVAL_WINNR: VimVarIndex = 41;
-pub const VV_BEVAL_BUFNR: VimVarIndex = 40;
-pub const VV_FCS_CHOICE: VimVarIndex = 39;
-pub const VV_FCS_REASON: VimVarIndex = 38;
-pub const VV_PROFILING: VimVarIndex = 37;
-pub const VV_KEY: VimVarIndex = 36;
-pub const VV_VAL: VimVarIndex = 35;
-pub const VV_INSERTMODE: VimVarIndex = 34;
-pub const VV_CMDBANG: VimVarIndex = 33;
-pub const VV_REG: VimVarIndex = 32;
-pub const VV_THROWPOINT: VimVarIndex = 31;
-pub const VV_EXCEPTION: VimVarIndex = 30;
-pub const VV_DYING: VimVarIndex = 29;
-pub const VV_SEND_SERVER: VimVarIndex = 28;
-pub const VV_PROGNAME: VimVarIndex = 27;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_CMDARG: VimVarIndex = 22;
-pub const VV_FNAME_DIFF: VimVarIndex = 21;
-pub const VV_FNAME_NEW: VimVarIndex = 20;
-pub const VV_FNAME_OUT: VimVarIndex = 19;
-pub const VV_FNAME_IN: VimVarIndex = 18;
-pub const VV_CC_TO: VimVarIndex = 17;
-pub const VV_CC_FROM: VimVarIndex = 16;
-pub const VV_CTYPE: VimVarIndex = 15;
-pub const VV_LC_TIME: VimVarIndex = 14;
-pub const VV_LANG: VimVarIndex = 13;
-pub const VV_FNAME: VimVarIndex = 12;
-pub const VV_TERMRESPONSE: VimVarIndex = 11;
-pub const VV_TERMREQUEST: VimVarIndex = 10;
-pub const VV_LNUM: VimVarIndex = 9;
-pub const VV_VERSION: VimVarIndex = 8;
-pub const VV_THIS_SESSION: VimVarIndex = 7;
-pub const VV_SHELL_ERROR: VimVarIndex = 6;
-pub const VV_STATUSMSG: VimVarIndex = 5;
-pub const VV_WARNINGMSG: VimVarIndex = 4;
-pub const VV_ERRMSG: VimVarIndex = 3;
-pub const VV_PREVCOUNT: VimVarIndex = 2;
-pub const VV_COUNT1: VimVarIndex = 1;
-pub const VV_COUNT: VimVarIndex = 0;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_23 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_23 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_23 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_23 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_23 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_23 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_23 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_23 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_23 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_23 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_23 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_23 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_23 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_23 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_23 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_23 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_23 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_23 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_23 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_23 = 1;
-pub const kMTUnknown: MotionType = -1;
-pub const kMTBlockWise: MotionType = 2;
-pub const kMTLineWise: MotionType = 1;
-pub const kMTCharWise: MotionType = 0;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const SIN_NOMARK: C2Rust_Unnamed_24 = 8;
-pub const SIN_UNDO: C2Rust_Unnamed_24 = 4;
-pub const SIN_INSERT: C2Rust_Unnamed_24 = 2;
-pub const SIN_CHANGED: C2Rust_Unnamed_24 = 1;
-pub const kCharsizeFast: C2Rust_Unnamed_26 = 1;
-pub const OPT_LOCAL: C2Rust_Unnamed_25 = 2;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
-pub const OPT_SKIPRTP: C2Rust_Unnamed_25 = 128;
-pub const OPT_NO_REDRAW: C2Rust_Unnamed_25 = 64;
-pub const OPT_ONECOLUMN: C2Rust_Unnamed_25 = 32;
-pub const OPT_NOWIN: C2Rust_Unnamed_25 = 16;
-pub const OPT_WINONLY: C2Rust_Unnamed_25 = 8;
-pub const OPT_MODELINE: C2Rust_Unnamed_25 = 4;
-pub const OPT_GLOBAL: C2Rust_Unnamed_25 = 1;
-pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const kCharsizeRegular: C2Rust_Unnamed_26 = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
+use crate::src::nvim::undo::u_savesub;
+
+pub mod breakindent;
+pub mod edit;
+pub mod expr;
+pub mod tabstop;
+
+// Split out for size. The names below are what the rest of the tree calls,
+// and it calls them as `indent::*`.
+pub use breakindent::{briopt_check, get_breakindent_win};
+pub use edit::{
+    change_indent, copy_indent, ex_retab, inindent, ins_try_si, may_do_si, op_reindent,
+    preprocs_left,
+};
+pub use expr::{
+    f_indent, f_lispindent, fix_indent, fixthisline, get_expr_indent, get_lisp_indent,
+    use_indentexpr_for_lisp,
+};
+
+// The handful of enum constants this module reads. c2rust gave every
+// translation unit a copy of all 1,545 names it could see; these are the ones
+// the code below names.
+type C2Rust_Unnamed_15 = MarkTreeIter_s;
+const BL_WHITE: ::core::ffi::c_int = 1;
+const BL_SOL: ::core::ffi::c_int = 2;
+const BL_FIX: ::core::ffi::c_int = 4;
+const CMOD_LOCKMARKS: ::core::ffi::c_uint = 2048;
+const INDENT_SET: ::core::ffi::c_uint = 1;
+const INDENT_INC: ::core::ffi::c_uint = 2;
+const INDENT_DEC: ::core::ffi::c_uint = 3;
+const kBufOptIndentexpr: ::core::ffi::c_uint = 47;
+const kExtmarkUndo: ExtmarkOp = 1;
+const kOptDyFlagUhex: ::core::ffi::c_uint = 4;
+const kOptIndentexpr: OptIndex = 148;
+const kOptValTypeString: OptValType = 2;
+const kOptVartabstop: OptIndex = 338;
+const MAXCOL: ::core::ffi::c_int = 2147483647;
+const MODE_INSERT: ::core::ffi::c_int = 16;
+const REPLACE_FLAG: ::core::ffi::c_int = 256;
+const VREPLACE_FLAG: ::core::ffi::c_int = 512;
+const NUL: ::core::ffi::c_int = 0;
+const TAB: ::core::ffi::c_int = 9;
+const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+const OPT_LOCAL: ::core::ffi::c_int = 2;
+const SIN_CHANGED: ::core::ffi::c_uint = 1;
+const SIN_INSERT: ::core::ffi::c_uint = 2;
+const SIN_UNDO: ::core::ffi::c_uint = 4;
+const SIN_NOMARK: ::core::ffi::c_uint = 8;
+const UPD_INVERTED: ::core::ffi::c_int = 20;
+const UPD_NOT_VALID: ::core::ffi::c_int = 40;
+const VV_LNUM: VimVarIndex = 9;
 #[inline(always)]
 unsafe extern "C" fn ascii_iswhite(mut c: ::core::ffi::c_int) -> bool {
     return c == ' ' as ::core::ffi::c_int || c == '\t' as ::core::ffi::c_int;
 }
 #[inline(always)]
 unsafe extern "C" fn ascii_iswhite_or_nul(mut c: ::core::ffi::c_int) -> bool {
-    return ascii_iswhite(c) as ::core::ffi::c_int != 0 || c == NUL;
+    return ascii_iswhite(c) || c == NUL;
 }
 #[inline(always)]
 unsafe extern "C" fn ascii_isdigit(mut c: ::core::ffi::c_int) -> bool {
@@ -1431,297 +104,150 @@ unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
 pub const FO_Q_COMS: ::core::ffi::c_int = 'q' as ::core::ffi::c_int;
-pub const TABSTOP_MAX: ::core::ffi::c_int = 9999 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub unsafe extern "C" fn tabstop_set(
-    mut var: *mut ::core::ffi::c_char,
-    mut array: *mut *mut colnr_T,
-) -> bool {
-    let mut valcount: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    if *var.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-        || *var.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '0' as ::core::ffi::c_int
-            && *var.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-    {
-        *array = ::core::ptr::null_mut::<colnr_T>();
-        return true_0 != 0;
+
+/// Borrow a 'vartabstop' array as a slice. `None` when the option is unset
+/// or names no stops, which is every caller's "use the uniform width" case.
+///
+/// # Safety
+/// `vts`, if not null, must point at a count-prefixed array of that length.
+unsafe fn tabstops<'a>(vts: *const colnr_T) -> Option<tabstop::TabStops<'a>> {
+    if vts.is_null() {
+        return None;
     }
-    let mut cp: *mut ::core::ffi::c_char = var;
-    while *cp as ::core::ffi::c_int != NUL {
-        if cp == var
-            || *cp.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == ',' as ::core::ffi::c_int
-        {
-            let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            if strtol(cp, &raw mut end, 10 as ::core::ffi::c_int) <= 0 as ::core::ffi::c_long {
-                if cp != end {
-                    emsg(gettext(&raw const e_positive as *const ::core::ffi::c_char));
-                } else {
-                    semsg(
-                        gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                        cp,
-                    );
-                }
-                return false_0 != 0;
-            }
+    let count = *vts;
+    tabstop::TabStops::new(::core::slice::from_raw_parts(vts, count as usize + 1))
+}
+
+/// Parse a 'vartabstop'-style option value into `array`, reporting the
+/// message the option code expects when it is malformed.
+///
+/// # Safety
+/// `var` must be NUL-terminated and `array` must own its current value.
+pub unsafe fn tabstop_set(var: *mut ::core::ffi::c_char, array: *mut *mut colnr_T) -> bool {
+    let text = ::core::ffi::CStr::from_ptr(var).to_bytes();
+    let parsed = match tabstop::parse(text) {
+        Ok(parsed) => parsed,
+        Err(tabstop::ParseError::NotPositive(_)) => {
+            emsg(gettext(&raw const e_positive as *const ::core::ffi::c_char));
+            return false;
         }
-        if !ascii_isdigit(*cp as ::core::ffi::c_int) {
-            if *cp.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == ',' as ::core::ffi::c_int
-                && cp > var
-                && *cp.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != ',' as ::core::ffi::c_int
-                && *cp.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-            {
-                valcount += 1;
-            } else {
-                semsg(
-                    gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                    var,
-                );
-                return false_0 != 0;
-            }
-        }
-        cp = cp.offset(1);
-    }
-    *array = xmalloc(
-        ((valcount + 1 as ::core::ffi::c_int) as ::core::ffi::c_uint as size_t)
-            .wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
-    ) as *mut colnr_T;
-    *(*array).offset(0 as ::core::ffi::c_int as isize) = valcount;
-    let mut t: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    let mut cp_0: *mut ::core::ffi::c_char = var;
-    while *cp_0 as ::core::ffi::c_int != NUL {
-        let mut n: ::core::ffi::c_int = atoi(cp_0);
-        if n <= 0 as ::core::ffi::c_int || n > TABSTOP_MAX {
+        Err(tabstop::ParseError::Malformed(at) | tabstop::ParseError::OutOfRange(at)) => {
             semsg(
                 gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                cp_0,
+                var.add(at),
             );
-            let mut ptr_: *mut *mut ::core::ffi::c_void = array as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL;
-            let _ = *ptr_;
-            return false_0 != 0;
+            return false;
         }
-        let c2rust_fresh0 = t;
-        t = t + 1;
-        *(*array).offset(c2rust_fresh0 as isize) = n as colnr_T;
-        while *cp_0 as ::core::ffi::c_int != NUL
-            && *cp_0 as ::core::ffi::c_int != ',' as ::core::ffi::c_int
-        {
-            cp_0 = cp_0.offset(1);
-        }
-        if *cp_0 as ::core::ffi::c_int != NUL {
-            cp_0 = cp_0.offset(1);
-        }
-    }
-    return true_0 != 0;
-}
-pub unsafe extern "C" fn tabstop_padding(
-    mut col: colnr_T,
-    mut ts_arg: OptInt,
-    mut vts: *const colnr_T,
-) -> ::core::ffi::c_int {
-    let mut ts: OptInt = if ts_arg == 0 as OptInt {
-        8 as OptInt
-    } else {
-        ts_arg
     };
-    let mut tabcol: colnr_T = 0 as colnr_T;
-    let mut t: ::core::ffi::c_int = 0;
-    let mut padding: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if vts.is_null() || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int {
-        return (ts - col as OptInt % ts) as ::core::ffi::c_int;
-    }
-    let tabcount: ::core::ffi::c_int =
-        *vts.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
-    t = 1 as ::core::ffi::c_int;
-    while t <= tabcount {
-        tabcol += *vts.offset(t as isize);
-        if tabcol > col {
-            padding = (tabcol - col) as ::core::ffi::c_int;
-            break;
-        } else {
-            t += 1;
+    // The option owns a malloc'd array, so hand one over rather than a Vec.
+    *array = match parsed {
+        None => ::core::ptr::null_mut(),
+        Some(stops) => {
+            let out = xmalloc(size_of::<colnr_T>() * stops.len()) as *mut colnr_T;
+            ::core::ptr::copy_nonoverlapping(stops.as_ptr(), out, stops.len());
+            out
         }
-    }
-    if t > tabcount {
-        padding = (*vts.offset(tabcount as isize) - (col - tabcol) % *vts.offset(tabcount as isize))
-            as ::core::ffi::c_int;
-    }
-    return padding;
+    };
+    true
 }
-pub unsafe extern "C" fn tabstop_at(
-    mut col: colnr_T,
-    mut ts: OptInt,
-    mut vts: *const colnr_T,
-    mut left: bool,
+
+/// How many columns from `col` to the next tabstop.
+///
+/// # Safety
+/// `vts` must be a valid tabstop array or null.
+pub unsafe fn tabstop_padding(col: colnr_T, ts: OptInt, vts: *const colnr_T) -> ::core::ffi::c_int {
+    match tabstops(vts) {
+        Some(stops) => stops.padding(col),
+        None => tabstop::uniform_padding(col, ts),
+    }
+}
+
+/// The width of the tabstop at `col`; with `left`, of the one a cursor
+/// moving back would cross.
+///
+/// # Safety
+/// `vts` must be a valid tabstop array or null.
+pub unsafe fn tabstop_at(
+    col: colnr_T,
+    ts: OptInt,
+    vts: *const colnr_T,
+    left: bool,
 ) -> ::core::ffi::c_int {
-    if vts.is_null() || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int {
-        return ts as ::core::ffi::c_int;
+    match tabstops(vts) {
+        Some(stops) => stops.at(col, left),
+        None => ts as ::core::ffi::c_int,
     }
-    let mut tabcol: colnr_T = 0 as colnr_T;
-    let mut t: ::core::ffi::c_int = 0;
-    let mut tab_size: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let tabcount: ::core::ffi::c_int =
-        *vts.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
-    t = 1 as ::core::ffi::c_int;
-    while t <= tabcount {
-        tabcol += *vts.offset(t as isize);
-        if tabcol > col {
-            if left as ::core::ffi::c_int != 0 && t == 1 as ::core::ffi::c_int {
-                tab_size = col as ::core::ffi::c_int;
-            } else {
-                tab_size = *vts.offset(
-                    (t - (if left as ::core::ffi::c_int != 0 {
-                        1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    })) as isize,
-                ) as ::core::ffi::c_int;
-            }
-            break;
-        } else {
-            t += 1;
-        }
-    }
-    if t > tabcount {
-        tab_size = *vts.offset(tabcount as isize) as ::core::ffi::c_int;
-    }
-    return tab_size;
 }
-pub unsafe extern "C" fn tabstop_start(
-    mut col: colnr_T,
-    mut ts: ::core::ffi::c_int,
-    mut vts: *mut colnr_T,
-) -> colnr_T {
-    let mut tabcol: colnr_T = 0 as colnr_T;
-    if vts.is_null() || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int {
-        return col - col % ts as colnr_T;
+
+/// The column the tabstop containing `col` starts at.
+///
+/// # Safety
+/// `vts` must be a valid tabstop array or null.
+pub unsafe fn tabstop_start(col: colnr_T, ts: ::core::ffi::c_int, vts: *mut colnr_T) -> colnr_T {
+    match tabstops(vts) {
+        Some(stops) => stops.start(col),
+        None => col - col % ts,
     }
-    let tabcount: ::core::ffi::c_int =
-        *vts.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
-    let mut t: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while t <= tabcount {
-        tabcol += *vts.offset(t as isize);
-        if tabcol > col {
-            return tabcol - *vts.offset(t as isize);
-        }
-        t += 1;
-    }
-    let excess: ::core::ffi::c_int =
-        tabcol as ::core::ffi::c_int % *vts.offset(tabcount as isize) as ::core::ffi::c_int;
-    return col - (col - excess as colnr_T) % *vts.offset(tabcount as isize);
 }
-pub unsafe extern "C" fn tabstop_fromto(
-    mut start_col: colnr_T,
-    mut end_col: colnr_T,
-    mut ts_arg: ::core::ffi::c_int,
-    mut vts: *const colnr_T,
-    mut ntabs: *mut ::core::ffi::c_int,
-    mut nspcs: *mut ::core::ffi::c_int,
+
+/// The tabs and trailing spaces that fill the columns `start_col` to
+/// `end_col`. A zero `ts_arg` means the current buffer's 'tabstop'.
+///
+/// # Safety
+/// `vts` must be a valid tabstop array or null; the out-pointers must be
+/// writable.
+pub unsafe fn tabstop_fromto(
+    start_col: colnr_T,
+    end_col: colnr_T,
+    ts_arg: ::core::ffi::c_int,
+    vts: *const colnr_T,
+    ntabs: *mut ::core::ffi::c_int,
+    nspcs: *mut ::core::ffi::c_int,
 ) {
-    let mut spaces: ::core::ffi::c_int =
-        end_col as ::core::ffi::c_int - start_col as ::core::ffi::c_int;
-    let mut tabcol: colnr_T = 0 as colnr_T;
-    let mut padding: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut t: ::core::ffi::c_int = 0;
-    let mut ts: ::core::ffi::c_int = if ts_arg == 0 as ::core::ffi::c_int {
+    let ts = if ts_arg == 0 {
         (*curbuf.get()).b_p_ts as ::core::ffi::c_int
     } else {
         ts_arg
     };
-    assert!(ts != 0 as ::core::ffi::c_int);
-    if vts.is_null() || *vts.offset(0 as ::core::ffi::c_int as isize) == 0 as ::core::ffi::c_int {
-        let mut tabs: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let initspc: ::core::ffi::c_int = ts - start_col as ::core::ffi::c_int % ts;
-        if spaces >= initspc {
-            spaces -= initspc;
-            tabs += 1;
-        }
-        tabs += spaces / ts;
-        spaces -= spaces / ts * ts;
-        *ntabs = tabs;
-        *nspcs = spaces;
-        return;
-    }
-    let tabcount: ::core::ffi::c_int =
-        *vts.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int;
-    t = 1 as ::core::ffi::c_int;
-    while t <= tabcount {
-        tabcol += *vts.offset(t as isize);
-        if tabcol > start_col {
-            padding = (tabcol - start_col) as ::core::ffi::c_int;
-            break;
-        } else {
-            t += 1;
-        }
-    }
-    if t > tabcount {
-        padding = (*vts.offset(tabcount as isize)
-            - (start_col - tabcol) % *vts.offset(tabcount as isize))
-            as ::core::ffi::c_int;
-    }
-    if spaces < padding {
-        *ntabs = 0 as ::core::ffi::c_int;
-        *nspcs = spaces;
-        return;
-    }
-    *ntabs = 1 as ::core::ffi::c_int;
-    spaces -= padding;
-    while spaces != 0 as ::core::ffi::c_int && {
-        t += 1;
-        t <= tabcount
-    } {
-        padding = *vts.offset(t as isize) as ::core::ffi::c_int;
-        if spaces < padding {
-            *nspcs = spaces;
-            return;
-        }
-        *ntabs += 1 as ::core::ffi::c_int;
-        spaces -= padding;
-    }
-    *ntabs += spaces / *vts.offset(tabcount as isize);
-    *nspcs = spaces % *vts.offset(tabcount as isize);
-}
-unsafe extern "C" fn tabstop_eq(mut ts1: *const colnr_T, mut ts2: *const colnr_T) -> bool {
-    if ts1.is_null() && !ts2.is_null() || !ts1.is_null() && ts2.is_null() {
-        return false_0 != 0;
-    }
-    if ts1 == ts2 {
-        return true_0 != 0;
-    }
-    if *ts1.offset(0 as ::core::ffi::c_int as isize)
-        != *ts2.offset(0 as ::core::ffi::c_int as isize)
-    {
-        return false_0 != 0;
-    }
-    let mut t: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while t <= *ts1.offset(0 as ::core::ffi::c_int as isize) {
-        if *ts1.offset(t as isize) != *ts2.offset(t as isize) {
-            return false_0 != 0;
-        }
-        t += 1;
-    }
-    return true_0 != 0;
-}
-pub unsafe extern "C" fn tabstop_count(mut ts: *mut colnr_T) -> ::core::ffi::c_int {
-    return if !ts.is_null() {
-        *ts.offset(0 as ::core::ffi::c_int as isize)
-    } else {
-        0 as ::core::ffi::c_int
+    assert!(ts != 0);
+    let (tabs, spaces) = match tabstops(vts) {
+        Some(stops) => stops.from_to(start_col, end_col),
+        None => tabstop::uniform_from_to(start_col, end_col, ts),
     };
+    *ntabs = tabs;
+    *nspcs = spaces;
 }
-pub unsafe extern "C" fn tabstop_first(mut ts: *mut colnr_T) -> ::core::ffi::c_int {
-    return if !ts.is_null() {
-        *ts.offset(1 as ::core::ffi::c_int as isize)
-    } else {
-        8 as ::core::ffi::c_int
+
+/// Whether two 'vartabstop' arrays name the same stops.
+///
+/// # Safety
+/// Both must be valid tabstop arrays or null.
+unsafe fn tabstop_eq(ts1: *const colnr_T, ts2: *const colnr_T) -> bool {
+    let borrow = |ts: *const colnr_T| {
+        (!ts.is_null()).then(|| ::core::slice::from_raw_parts(ts, *ts as usize + 1))
     };
+    tabstop::eq(borrow(ts1), borrow(ts2))
 }
+
+/// How many stops `ts` names, or zero when it names none.
+///
+/// # Safety
+/// `ts` must be a valid tabstop array or null.
+pub unsafe fn tabstop_count(ts: *mut colnr_T) -> ::core::ffi::c_int {
+    if ts.is_null() { 0 } else { *ts }
+}
+
+/// The first stop's width, or the default of eight.
+///
+/// # Safety
+/// `ts` must be a valid tabstop array or null.
+pub unsafe fn tabstop_first(ts: *mut colnr_T) -> ::core::ffi::c_int {
+    if ts.is_null() { 8 } else { *ts.offset(1) }
+}
+
 pub unsafe extern "C" fn get_sw_value(mut buf: *mut buf_T) -> ::core::ffi::c_int {
-    let mut result: ::core::ffi::c_int = get_sw_value_col(buf, 0 as colnr_T, false_0 != 0);
+    let mut result: ::core::ffi::c_int = get_sw_value_col(buf, 0 as colnr_T, false);
     return result;
 }
 unsafe extern "C" fn get_sw_value_pos(
@@ -1871,10 +397,10 @@ pub unsafe extern "C" fn set_indent(
     let mut newline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut oldline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut doit: ::core::ffi::c_int = false_0;
+    let mut doit = false;
     let mut ind_done: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut tab_pad: ::core::ffi::c_int = 0;
-    let mut retval: bool = false_0 != 0;
+    let mut retval: bool = false;
     let mut orig_char_len: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let mut todo: ::core::ffi::c_int = size;
     let mut ind_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -1887,9 +413,7 @@ pub unsafe extern "C" fn set_indent(
         let mut ind_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         if flags & SIN_INSERT as ::core::ffi::c_int == 0 && (*curbuf.get()).b_p_pi != 0 {
             ind_done = 0 as ::core::ffi::c_int;
-            while todo > 0 as ::core::ffi::c_int
-                && ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-            {
+            while todo > 0 as ::core::ffi::c_int && ascii_iswhite(*p as ::core::ffi::c_int) {
                 if *p as ::core::ffi::c_int == TAB {
                     tab_pad = tabstop_padding(
                         ind_done as colnr_T,
@@ -1919,7 +443,7 @@ pub unsafe extern "C" fn set_indent(
                 (*curbuf.get()).b_p_vts_array,
             );
             if todo >= tab_pad && orig_char_len == -1 as ::core::ffi::c_int {
-                doit = true_0;
+                doit = true;
                 todo -= tab_pad;
                 ind_len += 1;
                 ind_col += tab_pad;
@@ -1935,7 +459,7 @@ pub unsafe extern "C" fn set_indent(
                 break;
             }
             if *p as ::core::ffi::c_int != TAB {
-                doit = true_0;
+                doit = true;
             } else {
                 p = p.offset(1);
             }
@@ -1946,18 +470,18 @@ pub unsafe extern "C" fn set_indent(
     }
     while todo > 0 as ::core::ffi::c_int {
         if *p as ::core::ffi::c_int != ' ' as ::core::ffi::c_int {
-            doit = true_0;
+            doit = true;
         } else {
             p = p.offset(1);
         }
         todo -= 1;
         ind_len += 1;
     }
-    if doit == 0
+    if !doit
         && !ascii_iswhite(*p as ::core::ffi::c_int)
         && flags & SIN_INSERT as ::core::ffi::c_int == 0
     {
-        return false_0 != 0;
+        return false;
     }
     if flags & SIN_INSERT as ::core::ffi::c_int != 0 {
         p = oldline;
@@ -1976,7 +500,7 @@ pub unsafe extern "C" fn set_indent(
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 b"set_indent\0".as_ptr() as *const ::core::ffi::c_char,
                 598 as ::core::ffi::c_int,
-                true_0 != 0,
+                true,
                 b"STRICT_ADD overflow\0".as_ptr() as *const ::core::ffi::c_char,
             );
             abort();
@@ -1989,7 +513,7 @@ pub unsafe extern "C" fn set_indent(
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 b"set_indent\0".as_ptr() as *const ::core::ffi::c_char,
                 599 as ::core::ffi::c_int,
-                true_0 != 0,
+                true,
                 b"STRICT_SUB overflow\0".as_ptr() as *const ::core::ffi::c_char,
             );
             abort();
@@ -2002,7 +526,7 @@ pub unsafe extern "C" fn set_indent(
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 b"set_indent\0".as_ptr() as *const ::core::ffi::c_char,
                 600 as ::core::ffi::c_int,
-                true_0 != 0,
+                true,
                 b"STRICT_ADD overflow\0".as_ptr() as *const ::core::ffi::c_char,
             );
             abort();
@@ -2039,7 +563,7 @@ pub unsafe extern "C" fn set_indent(
                 ::core::ptr::null::<::core::ffi::c_char>(),
                 b"set_indent\0".as_ptr() as *const ::core::ffi::c_char,
                 626 as ::core::ffi::c_int,
-                true_0 != 0,
+                true,
                 b"STRICT_ADD overflow\0".as_ptr() as *const ::core::ffi::c_char,
             );
             abort();
@@ -2051,9 +575,7 @@ pub unsafe extern "C" fn set_indent(
         if flags & SIN_INSERT as ::core::ffi::c_int == 0 && (*curbuf.get()).b_p_pi != 0 {
             p = oldline;
             ind_done = 0 as ::core::ffi::c_int;
-            while todo > 0 as ::core::ffi::c_int
-                && ascii_iswhite(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-            {
+            while todo > 0 as ::core::ffi::c_int && ascii_iswhite(*p as ::core::ffi::c_int) {
                 if *p as ::core::ffi::c_int == TAB {
                     tab_pad = tabstop_padding(
                         ind_done as colnr_T,
@@ -2121,7 +643,7 @@ pub unsafe extern "C" fn set_indent(
     {
         let old_offset: colnr_T = p.offset_from(oldline) as colnr_T;
         let new_offset: colnr_T = s.offset_from(newline) as colnr_T;
-        ml_replace((*curwin.get()).w_cursor.lnum, newline, false_0 != 0);
+        ml_replace((*curwin.get()).w_cursor.lnum, newline, false);
         if flags & SIN_NOMARK as ::core::ffi::c_int == 0 {
             extmark_splice_cols(
                 curbuf.get(),
@@ -2143,7 +665,7 @@ pub unsafe extern "C" fn set_indent(
                 (*saved_cursor.ptr()).col = new_offset;
             }
         }
-        retval = true_0 != 0;
+        retval = true;
     } else {
         xfree(newline as *mut ::core::ffi::c_void);
     }
@@ -2169,19 +691,17 @@ pub unsafe extern "C" fn get_number_indent(mut lnum: linenr_T) -> ::core::ffi::c
         return -1 as ::core::ffi::c_int;
     }
     pos.lnum = 0 as ::core::ffi::c_int as linenr_T;
-    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
-        || has_format_option(FO_Q_COMS) as ::core::ffi::c_int != 0
-    {
+    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 || has_format_option(FO_Q_COMS) {
         lead_len = get_leader_len(
             ml_get(lnum),
             ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            false_0 != 0,
-            true_0 != 0,
+            false,
+            true,
         );
     }
     regmatch.regprog = vim_regcomp((*curbuf.get()).b_p_flp, RE_MAGIC);
     if !regmatch.regprog.is_null() {
-        regmatch.rm_ic = false_0 != 0;
+        regmatch.rm_ic = false;
         if vim_regexec(
             &raw mut regmatch,
             ml_get(lnum).offset(lead_len as isize),
@@ -2206,1396 +726,6 @@ pub unsafe extern "C" fn get_number_indent(mut lnum: linenr_T) -> ::core::ffi::c
     );
     return col;
 }
-pub unsafe extern "C" fn briopt_check(
-    mut briopt: *mut ::core::ffi::c_char,
-    mut wp: *mut win_T,
-) -> bool {
-    let mut bri_shift: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut bri_min: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-    let mut bri_sbr: bool = false_0 != 0;
-    let mut bri_list: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut bri_vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut p: *mut ::core::ffi::c_char = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-    if !briopt.is_null() {
-        p = briopt;
-    } else if !wp.is_null() {
-        p = (*wp).w_onebuf_opt.wo_briopt;
-    }
-    while *p as ::core::ffi::c_int != NUL {
-        if strncmp(
-            p,
-            b"shift:\0".as_ptr() as *const ::core::ffi::c_char,
-            6 as size_t,
-        ) == 0 as ::core::ffi::c_int
-            && (*p.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '-' as ::core::ffi::c_int
-                && ascii_isdigit(*p.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                    as ::core::ffi::c_int
-                    != 0
-                || ascii_isdigit(*p.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                    as ::core::ffi::c_int
-                    != 0)
-        {
-            p = p.offset(6 as ::core::ffi::c_int as isize);
-            bri_shift = getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int);
-        } else if strncmp(
-            p,
-            b"min:\0".as_ptr() as *const ::core::ffi::c_char,
-            4 as size_t,
-        ) == 0 as ::core::ffi::c_int
-            && ascii_isdigit(*p.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                as ::core::ffi::c_int
-                != 0
-        {
-            p = p.offset(4 as ::core::ffi::c_int as isize);
-            bri_min = getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int);
-        } else if strncmp(
-            p,
-            b"sbr\0".as_ptr() as *const ::core::ffi::c_char,
-            3 as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            p = p.offset(3 as ::core::ffi::c_int as isize);
-            bri_sbr = true_0 != 0;
-        } else if strncmp(
-            p,
-            b"list:\0".as_ptr() as *const ::core::ffi::c_char,
-            5 as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            p = p.offset(5 as ::core::ffi::c_int as isize);
-            bri_list = getdigits(&raw mut p, false_0 != 0, 0 as intmax_t) as ::core::ffi::c_int;
-        } else if strncmp(
-            p,
-            b"column:\0".as_ptr() as *const ::core::ffi::c_char,
-            7 as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            p = p.offset(7 as ::core::ffi::c_int as isize);
-            bri_vcol = getdigits(&raw mut p, false_0 != 0, 0 as intmax_t) as ::core::ffi::c_int;
-        }
-        if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int && *p as ::core::ffi::c_int != NUL
-        {
-            return false_0 != 0;
-        }
-        if *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
-            p = p.offset(1);
-        }
-    }
-    if wp.is_null() {
-        return OK != 0;
-    }
-    (*wp).w_briopt_shift = bri_shift;
-    (*wp).w_briopt_min = bri_min;
-    (*wp).w_briopt_sbr = bri_sbr;
-    (*wp).w_briopt_list = bri_list;
-    (*wp).w_briopt_vcol = bri_vcol;
-    return true_0 != 0;
-}
-pub unsafe extern "C" fn get_breakindent_win(
-    mut wp: *mut win_T,
-    mut line: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    /// Cached result for the last (buffer, line, options) combination.
-    struct BreakindentCache {
-        indent: ::core::ffi::c_int,
-        ts: OptInt,
-        vts: *mut colnr_T,
-        fnum: ::core::ffi::c_int,
-        line: *mut ::core::ffi::c_char,
-        tick: varnumber_T,
-        list: ::core::ffi::c_int,
-        listopt: ::core::ffi::c_int,
-        no_ts: bool,
-        dy_uhex: ::core::ffi::c_uint,
-        flp: *mut ::core::ffi::c_char,
-    }
-    static CACHE: GlobalCell<BreakindentCache> = GlobalCell::new(BreakindentCache {
-        indent: 0,
-        ts: 0,
-        vts: ::core::ptr::null_mut(),
-        fnum: 0,
-        line: ::core::ptr::null_mut(),
-        tick: 0,
-        list: 0,
-        listopt: 0,
-        no_ts: false,
-        dy_uhex: 0,
-        flp: ::core::ptr::null_mut(),
-    });
-    let eff_wwidth: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp) + win_col_off2(wp);
-    let no_ts: bool = (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.tab1 == NUL as schar_T;
-    // One exclusive borrow for the whole computation: nothing below calls
-    // back into this function (the regex engine and chartabsize helpers run
-    // no user code), and debug builds will catch it if that ever changes.
-    let mut bri: ::core::ffi::c_int = CACHE.with_mut(|prev| {
-        if prev.fnum != (*(*wp).w_buffer).handle
-            || prev.ts != (*(*wp).w_buffer).b_p_ts
-            || prev.vts != (*(*wp).w_buffer).b_p_vts_array
-            || prev.tick != buf_get_changedtick((*wp).w_buffer)
-            || prev.listopt != (*wp).w_briopt_list
-            || prev.no_ts != no_ts
-            || prev.dy_uhex
-                != dy_flags.get() & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint
-            || prev.flp.is_null()
-            || strcmp(prev.flp, get_flp_value((*wp).w_buffer)) != 0 as ::core::ffi::c_int
-            || prev.line.is_null()
-            || strcmp(prev.line, line) != 0 as ::core::ffi::c_int
-        {
-            prev.fnum = (*(*wp).w_buffer).handle;
-            xfree(prev.line as *mut ::core::ffi::c_void);
-            prev.line = xstrdup(line);
-            prev.ts = (*(*wp).w_buffer).b_p_ts;
-            prev.vts = (*(*wp).w_buffer).b_p_vts_array;
-            if (*wp).w_briopt_vcol == 0 as ::core::ffi::c_int {
-                if no_ts {
-                    prev.indent = indent_size_no_ts(line);
-                } else {
-                    prev.indent = indent_size_ts(
-                        line,
-                        (*(*wp).w_buffer).b_p_ts,
-                        (*(*wp).w_buffer).b_p_vts_array,
-                    );
-                }
-            }
-            prev.tick = buf_get_changedtick((*wp).w_buffer);
-            prev.listopt = (*wp).w_briopt_list;
-            prev.list = 0 as ::core::ffi::c_int;
-            prev.no_ts = no_ts;
-            prev.dy_uhex =
-                dy_flags.get() & kOptDyFlagUhex as ::core::ffi::c_int as ::core::ffi::c_uint;
-            xfree(prev.flp as *mut ::core::ffi::c_void);
-            prev.flp = xstrdup(get_flp_value((*wp).w_buffer));
-            if (*wp).w_briopt_list != 0 as ::core::ffi::c_int
-                && (*wp).w_briopt_vcol == 0 as ::core::ffi::c_int
-            {
-                let mut regmatch: regmatch_T = regmatch_T {
-                    regprog: vim_regcomp(prev.flp, RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT),
-                    startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-                    endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-                    rm_matchcol: 0,
-                    rm_ic: false,
-                };
-                if !regmatch.regprog.is_null() {
-                    regmatch.rm_ic = false_0 != 0;
-                    if vim_regexec(&raw mut regmatch, line, 0 as colnr_T) {
-                        if (*wp).w_briopt_list > 0 as ::core::ffi::c_int {
-                            prev.list += (*wp).w_briopt_list;
-                        } else {
-                            let mut ptr: *mut ::core::ffi::c_char = regmatch.startp[0];
-                            let end_ptr: *mut ::core::ffi::c_char = regmatch.endp[0];
-                            let mut indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            while ptr < end_ptr {
-                                indent += win_chartabsize(wp, ptr, indent as colnr_T);
-                                ptr = ptr.offset(utfc_ptr2len(ptr) as isize);
-                            }
-                            prev.indent = indent;
-                        }
-                    }
-                    vim_regfree(regmatch.regprog);
-                }
-            }
-        }
-        let mut bri = if (*wp).w_briopt_vcol != 0 as ::core::ffi::c_int {
-            prev.list = 0 as ::core::ffi::c_int;
-            (*wp).w_briopt_vcol
-        } else {
-            prev.indent + (*wp).w_briopt_shift
-        };
-        bri += win_col_off2(wp);
-        if (*wp).w_briopt_list > 0 as ::core::ffi::c_int {
-            bri += prev.list;
-        }
-        bri
-    });
-    if (*wp).w_briopt_sbr {
-        bri -= vim_strsize(get_showbreak_value(wp));
-    }
-    if bri < 0 as ::core::ffi::c_int {
-        bri = 0 as ::core::ffi::c_int;
-    } else if bri > eff_wwidth - (*wp).w_briopt_min {
-        bri = if eff_wwidth - (*wp).w_briopt_min < 0 as ::core::ffi::c_int {
-            0 as ::core::ffi::c_int
-        } else {
-            eff_wwidth - (*wp).w_briopt_min
-        };
-    }
-    return bri;
-}
-pub unsafe extern "C" fn inindent(mut extra: ::core::ffi::c_int) -> bool {
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut col: colnr_T = 0;
-    col = 0 as ::core::ffi::c_int as colnr_T;
-    ptr = get_cursor_line_ptr();
-    while ascii_iswhite(*ptr as ::core::ffi::c_int) {
-        ptr = ptr.offset(1);
-        col += 1;
-    }
-    if col >= (*curwin.get()).w_cursor.col as ::core::ffi::c_int + extra {
-        return true_0 != 0;
-    }
-    return false_0 != 0;
-}
-pub unsafe extern "C" fn op_reindent(mut oap: *mut oparg_T, mut how: Indenter) {
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut first_changed: linenr_T = 0 as linenr_T;
-    let mut last_changed: linenr_T = 0 as linenr_T;
-    let mut start_lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
-    if (*curbuf.get()).b_p_ma == 0 {
-        emsg(gettext(
-            &raw const e_modifiable as *const ::core::ffi::c_char,
-        ));
-        return;
-    }
-    if u_savecommon(
-        curbuf.get(),
-        start_lnum - 1 as linenr_T,
-        start_lnum + (*oap).line_count,
-        start_lnum + (*oap).line_count,
-        false_0 != 0,
-    ) == OK
-    {
-        let mut amount: ::core::ffi::c_int = 0;
-        i = ((*oap).line_count - 1 as linenr_T) as ::core::ffi::c_int;
-        while i >= 0 as ::core::ffi::c_int && !got_int.get() {
-            if i > 1 as ::core::ffi::c_int
-                && (i % 50 as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-                    || i as linenr_T == (*oap).line_count - 1 as linenr_T)
-                && (*oap).line_count as OptInt > p_report.get()
-            {
-                snprintf(
-                    IObuff.ptr() as *mut ::core::ffi::c_char,
-                    IOSIZE as size_t,
-                    gettext(b"%ld lines to indent... \0".as_ptr() as *const ::core::ffi::c_char),
-                    i as int64_t,
-                );
-                let mut save_lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
-                (*curwin.get()).w_cursor.lnum = start_lnum;
-                msg_progress(
-                    IObuff.ptr() as *mut ::core::ffi::c_char,
-                    b"indent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"running\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    0 as ::core::ffi::c_int,
-                    true_0 != 0,
-                    false_0 != 0,
-                );
-                (*curwin.get()).w_cursor.lnum = save_lnum;
-            }
-            if i as linenr_T != (*oap).line_count - 1 as linenr_T
-                || (*oap).line_count == 1 as linenr_T
-                || !how.is_some_and(|f| {
-                    ::core::ptr::fn_addr_eq(
-                        f,
-                        get_lisp_indent as unsafe extern "C" fn() -> ::core::ffi::c_int,
-                    )
-                })
-            {
-                let mut l: *mut ::core::ffi::c_char = skipwhite(get_cursor_line_ptr());
-                amount = if *l as ::core::ffi::c_int == NUL {
-                    0 as ::core::ffi::c_int
-                } else {
-                    how.expect("non-null function pointer")()
-                };
-                if amount >= 0 as ::core::ffi::c_int
-                    && set_indent(amount, 0 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-                {
-                    if first_changed == 0 as linenr_T {
-                        first_changed = (*curwin.get()).w_cursor.lnum;
-                    }
-                    last_changed = (*curwin.get()).w_cursor.lnum;
-                }
-            }
-            (*curwin.get()).w_cursor.lnum += 1;
-            (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-            i -= 1;
-        }
-    }
-    (*curwin.get()).w_cursor.lnum = start_lnum;
-    beginline(BL_SOL as ::core::ffi::c_int | BL_FIX as ::core::ffi::c_int);
-    if last_changed != 0 as linenr_T {
-        changed_lines(
-            curbuf.get(),
-            first_changed,
-            0 as colnr_T,
-            if (*oap).is_VIsual as ::core::ffi::c_int != 0 {
-                start_lnum + (*oap).line_count
-            } else {
-                last_changed + 1 as linenr_T
-            },
-            0 as linenr_T,
-            true_0 != 0,
-        );
-    } else if (*oap).is_VIsual {
-        redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
-    }
-    if (*oap).line_count as OptInt > p_report.get() {
-        i = ((*oap).line_count - (i as linenr_T + 1 as linenr_T)) as ::core::ffi::c_int;
-        snprintf(
-            IObuff.ptr() as *mut ::core::ffi::c_char,
-            IOSIZE as size_t,
-            ngettext(
-                b"%ld line indented \0".as_ptr() as *const ::core::ffi::c_char,
-                b"%ld lines indented \0".as_ptr() as *const ::core::ffi::c_char,
-                i as ::core::ffi::c_ulong,
-            ),
-            i as int64_t,
-        );
-        msg_progress(
-            IObuff.ptr() as *mut ::core::ffi::c_char,
-            b"indent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            b"success\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            0 as ::core::ffi::c_int,
-            true_0 != 0,
-            false_0 != 0,
-        );
-    }
-    if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-    {
-        (*curbuf.get()).b_op_start = (*oap).start;
-        (*curbuf.get()).b_op_end = (*oap).end;
-    }
-}
-pub unsafe extern "C" fn preprocs_left() -> bool {
-    return (*curbuf.get()).b_p_si != 0 && (*curbuf.get()).b_p_cin == 0
-        || (*curbuf.get()).b_p_cin != 0
-            && in_cinkeys(
-                '#' as ::core::ffi::c_int,
-                ' ' as ::core::ffi::c_int,
-                true_0 != 0,
-            ) as ::core::ffi::c_int
-                != 0
-            && (*curbuf.get()).b_ind_hash_comment == 0 as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn may_do_si() -> bool {
-    return (*curbuf.get()).b_p_si != 0
-        && (*curbuf.get()).b_p_cin == 0
-        && *(*curbuf.get()).b_p_inde as ::core::ffi::c_int == NUL
-        && p_paste.get() == 0;
-}
-pub unsafe extern "C" fn ins_try_si(mut c: ::core::ffi::c_int) {
-    let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-    if (did_si.get() as ::core::ffi::c_int != 0 || can_si_back.get() as ::core::ffi::c_int != 0)
-        && c == '{' as ::core::ffi::c_int
-        || can_si.get() as ::core::ffi::c_int != 0
-            && c == '}' as ::core::ffi::c_int
-            && inindent(0 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-    {
-        let mut old_pos: pos_T = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut i: ::core::ffi::c_int = 0;
-        let mut temp: bool = false;
-        if c == '}' as ::core::ffi::c_int && {
-            pos = findmatch(
-                ::core::ptr::null_mut::<oparg_T>(),
-                '{' as ::core::ffi::c_int,
-            );
-            !pos.is_null()
-        } {
-            old_pos = (*curwin.get()).w_cursor;
-            ptr = ml_get((*pos).lnum);
-            i = (*pos).col as ::core::ffi::c_int;
-            if i > 0 as ::core::ffi::c_int {
-                loop {
-                    i -= 1;
-                    if !(i > 0 as ::core::ffi::c_int
-                        && ascii_iswhite(*ptr.offset(i as isize) as ::core::ffi::c_int)
-                            as ::core::ffi::c_int
-                            != 0)
-                    {
-                        break;
-                    }
-                }
-            }
-            (*curwin.get()).w_cursor.lnum = (*pos).lnum;
-            (*curwin.get()).w_cursor.col = i as colnr_T;
-            if *ptr.offset(i as isize) as ::core::ffi::c_int == ')' as ::core::ffi::c_int && {
-                pos = findmatch(
-                    ::core::ptr::null_mut::<oparg_T>(),
-                    '(' as ::core::ffi::c_int,
-                );
-                !pos.is_null()
-            } {
-                (*curwin.get()).w_cursor = *pos;
-            }
-            i = get_indent();
-            (*curwin.get()).w_cursor = old_pos;
-            if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
-                change_indent(INDENT_SET as ::core::ffi::c_int, i, false_0, true_0 != 0);
-            } else {
-                set_indent(i, SIN_CHANGED as ::core::ffi::c_int);
-            }
-        } else if (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int {
-            temp = true_0 != 0;
-            if c == '{' as ::core::ffi::c_int
-                && can_si_back.get() as ::core::ffi::c_int != 0
-                && (*curwin.get()).w_cursor.lnum > 1 as linenr_T
-            {
-                old_pos = (*curwin.get()).w_cursor;
-                i = get_indent();
-                while (*curwin.get()).w_cursor.lnum > 1 as linenr_T {
-                    (*curwin.get()).w_cursor.lnum -= 1;
-                    ptr = skipwhite(ml_get((*curwin.get()).w_cursor.lnum));
-                    if *ptr as ::core::ffi::c_int != '#' as ::core::ffi::c_int
-                        && *ptr as ::core::ffi::c_int != NUL
-                    {
-                        break;
-                    }
-                }
-                if get_indent() >= i {
-                    temp = false_0 != 0;
-                }
-                (*curwin.get()).w_cursor = old_pos;
-            }
-            if temp {
-                shift_line(true_0 != 0, false_0 != 0, 1 as ::core::ffi::c_int, true_0);
-            }
-        }
-    }
-    if (*curwin.get()).w_cursor.col > 0 as ::core::ffi::c_int
-        && can_si.get() as ::core::ffi::c_int != 0
-        && c == '#' as ::core::ffi::c_int
-        && inindent(0 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-    {
-        old_indent.set(get_indent());
-        set_indent(0 as ::core::ffi::c_int, SIN_CHANGED as ::core::ffi::c_int);
-    }
-    ai_col.set(if ai_col.get() < (*curwin.get()).w_cursor.col {
-        ai_col.get()
-    } else {
-        (*curwin.get()).w_cursor.col
-    });
-}
-pub unsafe extern "C" fn change_indent(
-    mut type_0: ::core::ffi::c_int,
-    mut amount: ::core::ffi::c_int,
-    mut round: ::core::ffi::c_int,
-    mut call_changed_bytes: bool,
-) {
-    let mut insstart_less: ::core::ffi::c_int = 0;
-    let mut orig_col: colnr_T = 0 as colnr_T;
-    let mut orig_line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
-        orig_line = xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
-        orig_col = (*curwin.get()).w_cursor.col;
-    }
-    let mut save_p_list: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_list;
-    (*curwin.get()).w_onebuf_opt.wo_list = false_0;
-    let mut vc: colnr_T = getvcol_nolist(&raw mut (*curwin.get()).w_cursor);
-    let mut vcol: ::core::ffi::c_int = vc as ::core::ffi::c_int;
-    let mut start_col: ::core::ffi::c_int = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-    let mut new_cursor_col: ::core::ffi::c_int = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-    beginline(BL_WHITE as ::core::ffi::c_int);
-    new_cursor_col -= (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-    insstart_less = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-    if new_cursor_col < 0 as ::core::ffi::c_int {
-        vcol = get_indent() - vcol;
-    }
-    if new_cursor_col > 0 as ::core::ffi::c_int {
-        start_col = -1 as ::core::ffi::c_int;
-    }
-    if type_0 == INDENT_SET as ::core::ffi::c_int {
-        set_indent(
-            amount,
-            if call_changed_bytes as ::core::ffi::c_int != 0 {
-                SIN_CHANGED as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            },
-        );
-    } else {
-        let mut save_State: ::core::ffi::c_int = State.get();
-        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
-            State.set(MODE_INSERT as ::core::ffi::c_int);
-        }
-        shift_line(
-            type_0 == INDENT_DEC as ::core::ffi::c_int,
-            round != 0,
-            1 as ::core::ffi::c_int,
-            call_changed_bytes as ::core::ffi::c_int,
-        );
-        State.set(save_State);
-    }
-    insstart_less -= (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-    if new_cursor_col >= 0 as ::core::ffi::c_int {
-        if new_cursor_col == 0 as ::core::ffi::c_int {
-            insstart_less = MAXCOL as ::core::ffi::c_int;
-        }
-        new_cursor_col += (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-    } else if State.get() & MODE_INSERT as ::core::ffi::c_int == 0 {
-        new_cursor_col = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-    } else {
-        vcol = get_indent() - vcol;
-        let end_vcol: ::core::ffi::c_int = if vcol < 0 as ::core::ffi::c_int {
-            0 as ::core::ffi::c_int
-        } else {
-            vcol
-        };
-        (*curwin.get()).w_virtcol = end_vcol as colnr_T;
-        new_cursor_col = 0 as ::core::ffi::c_int;
-        let line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-        vcol = 0 as ::core::ffi::c_int;
-        if *line as ::core::ffi::c_int != NUL {
-            let mut csarg: CharsizeArg = CharsizeArg {
-                win: ::core::ptr::null_mut::<win_T>(),
-                line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                use_tabstop: false,
-                indent_width: 0,
-                virt_row: 0,
-                cur_text_width_left: 0,
-                cur_text_width_right: 0,
-                max_head_vcol: 0,
-                iter: [MarkTreeIter {
-                    pos: MTPos { row: 0, col: 0 },
-                    lvl: 0,
-                    x: ::core::ptr::null_mut::<MTNode>(),
-                    i: 0,
-                    s: [C2Rust_Unnamed_15 { oldcol: 0, i: 0 }; 20],
-                    intersect_idx: 0,
-                    intersect_pos: MTPos { row: 0, col: 0 },
-                    intersect_pos_x: MTPos { row: 0, col: 0 },
-                }; 1],
-            };
-            let mut cstype: CSType =
-                init_charsize_arg(&raw mut csarg, curwin.get(), 0 as linenr_T, line);
-            let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
-            loop {
-                let mut next_vcol: ::core::ffi::c_int =
-                    vcol + win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &raw mut csarg).width;
-                if next_vcol > end_vcol {
-                    break;
-                }
-                vcol = next_vcol;
-                ci = utfc_next(ci);
-                if *ci.ptr as ::core::ffi::c_int == NUL {
-                    break;
-                }
-            }
-            new_cursor_col = ci.ptr.offset_from(line) as ::core::ffi::c_int;
-        }
-        if vcol != (*curwin.get()).w_virtcol {
-            (*curwin.get()).w_cursor.col = new_cursor_col;
-            let ptrlen: size_t = ((*curwin.get()).w_virtcol as ::core::ffi::c_int - vcol) as size_t;
-            let mut ptr: *mut ::core::ffi::c_char = xmallocz(ptrlen) as *mut ::core::ffi::c_char;
-            memset(
-                ptr as *mut ::core::ffi::c_void,
-                ' ' as ::core::ffi::c_int,
-                ptrlen,
-            );
-            new_cursor_col += ptrlen as ::core::ffi::c_int;
-            ins_str(ptr, ptrlen);
-            xfree(ptr as *mut ::core::ffi::c_void);
-        }
-        insstart_less = MAXCOL as ::core::ffi::c_int;
-    }
-    (*curwin.get()).w_onebuf_opt.wo_list = save_p_list;
-    (*curwin.get()).w_cursor.col = (if 0 as ::core::ffi::c_int > new_cursor_col {
-        0 as ::core::ffi::c_int
-    } else {
-        new_cursor_col
-    }) as colnr_T;
-    (*curwin.get()).w_set_curswant = true_0;
-    changed_cline_bef_curs(curwin.get());
-    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
-        if (*curwin.get()).w_cursor.lnum == (*Insstart.ptr()).lnum
-            && (*Insstart.ptr()).col != 0 as ::core::ffi::c_int
-        {
-            if (*Insstart.ptr()).col <= insstart_less {
-                (*Insstart.ptr()).col = 0 as ::core::ffi::c_int as colnr_T;
-            } else {
-                (*Insstart.ptr()).col -= insstart_less;
-            }
-        }
-        if ai_col.get() <= insstart_less {
-            ai_col.set(0 as ::core::ffi::c_int as colnr_T);
-        } else {
-            (*ai_col.ptr()) -= insstart_less;
-        }
-    }
-    if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
-        && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0
-        && start_col >= 0 as ::core::ffi::c_int
-    {
-        while start_col > (*curwin.get()).w_cursor.col {
-            replace_join(0 as ::core::ffi::c_int);
-            start_col -= 1;
-        }
-        while start_col < (*curwin.get()).w_cursor.col {
-            replace_push_nul();
-            start_col += 1;
-        }
-    }
-    if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
-        let mut new_line: *mut ::core::ffi::c_char =
-            xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
-        *new_line.offset((*curwin.get()).w_cursor.col as isize) = NUL as ::core::ffi::c_char;
-        let mut new_col: ::core::ffi::c_int = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-        ml_replace((*curwin.get()).w_cursor.lnum, orig_line, false_0 != 0);
-        (*curwin.get()).w_cursor.col = orig_col;
-        (*curbuf_splice_pending.ptr()) += 1;
-        backspace_until_column(0 as ::core::ffi::c_int);
-        ins_bytes(new_line);
-        xfree(new_line as *mut ::core::ffi::c_void);
-        (*curbuf_splice_pending.ptr()) -= 1;
-        let mut delta: ::core::ffi::c_int = orig_col as ::core::ffi::c_int - new_col;
-        extmark_splice_cols(
-            curbuf.get(),
-            (*curwin.get()).w_cursor.lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-            new_col as colnr_T,
-            if delta < 0 as ::core::ffi::c_int {
-                -(delta as colnr_T)
-            } else {
-                0 as colnr_T
-            },
-            if delta > 0 as ::core::ffi::c_int {
-                delta as colnr_T
-            } else {
-                0 as colnr_T
-            },
-            kExtmarkUndo,
-        );
-    }
-}
-pub unsafe extern "C" fn copy_indent(
-    mut size: ::core::ffi::c_int,
-    mut src: *mut ::core::ffi::c_char,
-) -> bool {
-    let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut ind_len: ::core::ffi::c_int = 0;
-    let mut line_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut tab_pad: ::core::ffi::c_int = 0;
-    let mut round: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while round <= 2 as ::core::ffi::c_int {
-        let mut todo: ::core::ffi::c_int = size;
-        ind_len = 0 as ::core::ffi::c_int;
-        let mut ind_done: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut ind_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut s: *mut ::core::ffi::c_char = src;
-        while todo > 0 as ::core::ffi::c_int
-            && ascii_iswhite(*s as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-        {
-            if *s as ::core::ffi::c_int == TAB {
-                tab_pad = tabstop_padding(
-                    ind_done as colnr_T,
-                    (*curbuf.get()).b_p_ts,
-                    (*curbuf.get()).b_p_vts_array,
-                );
-                if todo < tab_pad {
-                    break;
-                }
-                todo -= tab_pad;
-                ind_done += tab_pad;
-                ind_col += tab_pad;
-            } else {
-                todo -= 1;
-                ind_done += 1;
-                ind_col += 1;
-            }
-            ind_len += 1;
-            if !p.is_null() {
-                let c2rust_fresh12 = p;
-                p = p.offset(1);
-                *c2rust_fresh12 = *s;
-            }
-            s = s.offset(1);
-        }
-        tab_pad = tabstop_padding(
-            ind_done as colnr_T,
-            (*curbuf.get()).b_p_ts,
-            (*curbuf.get()).b_p_vts_array,
-        );
-        if todo >= tab_pad && (*curbuf.get()).b_p_et == 0 {
-            todo -= tab_pad;
-            ind_len += 1;
-            ind_col += tab_pad;
-            if !p.is_null() {
-                let c2rust_fresh13 = p;
-                p = p.offset(1);
-                *c2rust_fresh13 = TAB as ::core::ffi::c_char;
-            }
-        }
-        if (*curbuf.get()).b_p_et == 0 {
-            loop {
-                tab_pad = tabstop_padding(
-                    ind_col as colnr_T,
-                    (*curbuf.get()).b_p_ts,
-                    (*curbuf.get()).b_p_vts_array,
-                );
-                if todo < tab_pad {
-                    break;
-                }
-                todo -= tab_pad;
-                ind_len += 1;
-                ind_col += tab_pad;
-                if !p.is_null() {
-                    let c2rust_fresh14 = p;
-                    p = p.offset(1);
-                    *c2rust_fresh14 = TAB as ::core::ffi::c_char;
-                }
-            }
-        }
-        while todo > 0 as ::core::ffi::c_int {
-            todo -= 1;
-            ind_len += 1;
-            if !p.is_null() {
-                let c2rust_fresh15 = p;
-                p = p.offset(1);
-                *c2rust_fresh15 = ' ' as ::core::ffi::c_char;
-            }
-        }
-        if p.is_null() {
-            line_len = get_cursor_line_len() + 1 as ::core::ffi::c_int;
-            assert!(ind_len + line_len >= 0 as ::core::ffi::c_int);
-            let mut line_size: size_t = 0;
-            let (c2rust_result, c2rust_overflowed) =
-                (ind_len as i128).overflowing_add(line_len as i128);
-            let c2rust_result_narrow = c2rust_result as size_t;
-            *&raw mut line_size = c2rust_result_narrow;
-            if c2rust_overflowed || c2rust_result_narrow as i128 != c2rust_result {
-                logmsg(
-                    LOGLVL_ERR,
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    b"copy_indent\0".as_ptr() as *const ::core::ffi::c_char,
-                    1443 as ::core::ffi::c_int,
-                    true_0 != 0,
-                    b"STRICT_ADD overflow\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-                abort();
-            }
-            line = xmalloc(line_size) as *mut ::core::ffi::c_char;
-            p = line;
-        }
-        round += 1;
-    }
-    memmove(
-        p as *mut ::core::ffi::c_void,
-        get_cursor_line_ptr() as *const ::core::ffi::c_void,
-        line_len as size_t,
-    );
-    ml_replace((*curwin.get()).w_cursor.lnum, line, false_0 != 0);
-    (*curwin.get()).w_cursor.col = ind_len as colnr_T;
-    return true_0 != 0;
-}
-unsafe extern "C" fn emsg_text_too_long() {
-    emsg(gettext(
-        &raw const e_resulting_text_too_long as *const ::core::ffi::c_char,
-    ));
-    if trylevel.get() == 0 as ::core::ffi::c_int {
-        got_int.set(true_0 != 0);
-    }
-}
-pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
-    let mut got_tab: bool = false_0 != 0;
-    let mut num_spaces: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut start_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut start_vcol: int64_t = 0 as int64_t;
-    let mut new_line: *mut ::core::ffi::c_char = ::core::ptr::with_exposed_provenance_mut::<
-        ::core::ffi::c_char,
-    >(1 as ::core::ffi::c_int as usize);
-    let mut new_vts_array: *mut colnr_T = ::core::ptr::null_mut::<colnr_T>();
-    let mut new_ts_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut first_line: linenr_T = 0 as linenr_T;
-    let mut last_line: linenr_T = 0 as linenr_T;
-    let mut is_indent_only: bool = false_0 != 0;
-    let mut save_list: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_list;
-    (*curwin.get()).w_onebuf_opt.wo_list = 0 as ::core::ffi::c_int;
-    let mut ptr: *mut ::core::ffi::c_char = (*eap).arg;
-    if strncmp(
-        ptr,
-        b"-indentonly\0".as_ptr() as *const ::core::ffi::c_char,
-        11 as size_t,
-    ) == 0 as ::core::ffi::c_int
-        && ascii_iswhite_or_nul(*ptr.offset(11 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-            as ::core::ffi::c_int
-            != 0
-    {
-        is_indent_only = true_0 != 0;
-        ptr = skipwhite(ptr.offset(11 as ::core::ffi::c_int as isize));
-    }
-    new_ts_str = ptr;
-    if !tabstop_set(ptr, &raw mut new_vts_array) {
-        return;
-    }
-    while ascii_isdigit(*ptr as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-        || *ptr as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-    {
-        ptr = ptr.offset(1);
-    }
-    if new_vts_array.is_null() {
-        new_vts_array = (*curbuf.get()).b_p_vts_array;
-        new_ts_str = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    } else {
-        new_ts_str = xmemdupz(
-            new_ts_str as *const ::core::ffi::c_void,
-            ptr.offset_from(new_ts_str) as size_t,
-        ) as *mut ::core::ffi::c_char;
-    }
-    let mut lnum: linenr_T = (*eap).line1;
-    while !got_int.get() && lnum <= (*eap).line2 {
-        ptr = ml_get(lnum);
-        let mut old_len: ::core::ffi::c_int = ml_get_len(lnum);
-        let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut vcol: int64_t = 0 as int64_t;
-        let mut did_undo: bool = false_0 != 0;
-        loop {
-            if ascii_iswhite(*ptr.offset(col as isize) as ::core::ffi::c_int) {
-                if !got_tab && num_spaces == 0 as ::core::ffi::c_int {
-                    start_vcol = vcol;
-                    start_col = col;
-                }
-                if *ptr.offset(col as isize) as ::core::ffi::c_int == ' ' as ::core::ffi::c_int {
-                    num_spaces += 1;
-                } else {
-                    got_tab = true_0 != 0;
-                }
-            } else {
-                if got_tab as ::core::ffi::c_int != 0
-                    || (*eap).forceit != 0 && num_spaces > 1 as ::core::ffi::c_int
-                {
-                    num_spaces = (vcol - start_vcol) as ::core::ffi::c_int;
-                    let mut len: ::core::ffi::c_int = num_spaces;
-                    let mut num_tabs: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    if (*curbuf.get()).b_p_et == 0 {
-                        let mut t: ::core::ffi::c_int = 0;
-                        let mut s: ::core::ffi::c_int = 0;
-                        tabstop_fromto(
-                            start_vcol as colnr_T,
-                            vcol as colnr_T,
-                            (*curbuf.get()).b_p_ts as ::core::ffi::c_int,
-                            new_vts_array,
-                            &raw mut t,
-                            &raw mut s,
-                        );
-                        num_tabs = t;
-                        num_spaces = s;
-                    }
-                    if (*curbuf.get()).b_p_et != 0
-                        || got_tab as ::core::ffi::c_int != 0
-                        || num_spaces + num_tabs < len
-                    {
-                        if did_undo as ::core::ffi::c_int == false_0 {
-                            did_undo = true_0 != 0;
-                            if u_save(lnum - 1 as linenr_T, lnum + 1 as linenr_T) == FAIL {
-                                new_line = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                                break;
-                            }
-                        }
-                        len = num_spaces + num_tabs;
-                        let new_len: ::core::ffi::c_int =
-                            old_len - col + start_col + len + 1 as ::core::ffi::c_int;
-                        if new_len <= 0 as ::core::ffi::c_int
-                            || new_len >= MAXCOL as ::core::ffi::c_int
-                        {
-                            emsg_text_too_long();
-                            break;
-                        } else {
-                            new_line = xmalloc(new_len as size_t) as *mut ::core::ffi::c_char;
-                            if start_col > 0 as ::core::ffi::c_int {
-                                memmove(
-                                    new_line as *mut ::core::ffi::c_void,
-                                    ptr as *const ::core::ffi::c_void,
-                                    start_col as size_t,
-                                );
-                            }
-                            memmove(
-                                new_line.offset(start_col as isize).offset(len as isize)
-                                    as *mut ::core::ffi::c_void,
-                                ptr.offset(col as isize) as *const ::core::ffi::c_void,
-                                (old_len as size_t)
-                                    .wrapping_sub(col as size_t)
-                                    .wrapping_add(1 as size_t),
-                            );
-                            ptr = new_line.offset(start_col as isize);
-                            col = 0 as ::core::ffi::c_int;
-                            while col < len {
-                                *ptr.offset(col as isize) = (if col < num_tabs {
-                                    '\t' as ::core::ffi::c_int
-                                } else {
-                                    ' ' as ::core::ffi::c_int
-                                })
-                                    as ::core::ffi::c_char;
-                                col += 1;
-                            }
-                            if ml_replace(lnum, new_line, false_0 != 0) == OK {
-                                new_line = (*curbuf.get()).b_ml.ml_line_ptr;
-                                extmark_splice_cols(
-                                    curbuf.get(),
-                                    lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                                    0 as colnr_T,
-                                    old_len,
-                                    new_len - 1 as colnr_T,
-                                    kExtmarkUndo,
-                                );
-                            }
-                            if first_line == 0 as linenr_T {
-                                first_line = lnum;
-                            }
-                            last_line = lnum;
-                            ptr = new_line;
-                            old_len = new_len - 1 as ::core::ffi::c_int;
-                            col = start_col + len;
-                        }
-                    }
-                }
-                got_tab = false_0 != 0;
-                num_spaces = 0 as ::core::ffi::c_int;
-                if is_indent_only {
-                    break;
-                }
-            }
-            if *ptr.offset(col as isize) as ::core::ffi::c_int == NUL {
-                break;
-            }
-            vcol +=
-                win_chartabsize(curwin.get(), ptr.offset(col as isize), vcol as colnr_T) as int64_t;
-            if vcol >= MAXCOL as ::core::ffi::c_int as int64_t {
-                emsg_text_too_long();
-                break;
-            } else {
-                col += utfc_ptr2len(ptr.offset(col as isize));
-            }
-        }
-        if new_line.is_null() {
-            break;
-        }
-        line_breakcheck();
-        lnum += 1;
-    }
-    if got_int.get() {
-        emsg(gettext(&raw const e_interr as *const ::core::ffi::c_char));
-    }
-    if !(tabstop_count((*curbuf.get()).b_p_vts_array) == 0 as ::core::ffi::c_int
-        && tabstop_count(new_vts_array) == 1 as ::core::ffi::c_int
-        && (*curbuf.get()).b_p_ts == tabstop_first(new_vts_array) as OptInt)
-    {
-        if !(tabstop_count((*curbuf.get()).b_p_vts_array) > 0 as ::core::ffi::c_int
-            && tabstop_eq((*curbuf.get()).b_p_vts_array, new_vts_array) as ::core::ffi::c_int != 0)
-        {
-            redraw_curbuf_later(UPD_NOT_VALID as ::core::ffi::c_int);
-        }
-    }
-    if first_line != 0 as linenr_T {
-        changed_lines(
-            curbuf.get(),
-            first_line,
-            0 as colnr_T,
-            last_line + 1 as linenr_T,
-            0 as linenr_T,
-            true_0 != 0,
-        );
-    }
-    (*curwin.get()).w_onebuf_opt.wo_list = save_list;
-    if !new_ts_str.is_null() {
-        let mut old_vts_ary: *mut colnr_T = (*curbuf.get()).b_p_vts_array;
-        if tabstop_count(old_vts_ary) > 0 as ::core::ffi::c_int
-            || tabstop_count(new_vts_array) > 1 as ::core::ffi::c_int
-        {
-            set_option_direct(
-                kOptVartabstop,
-                OptVal {
-                    type_0: kOptValTypeString,
-                    data: OptValData {
-                        string: cstr_as_string(new_ts_str),
-                    },
-                },
-                OPT_LOCAL as ::core::ffi::c_int,
-                0 as scid_T,
-            );
-            (*curbuf.get()).b_p_vts_array = new_vts_array;
-            xfree(old_vts_ary as *mut ::core::ffi::c_void);
-        } else {
-            (*curbuf.get()).b_p_ts = tabstop_first(new_vts_array) as OptInt;
-            xfree(new_vts_array as *mut ::core::ffi::c_void);
-        }
-        xfree(new_ts_str as *mut ::core::ffi::c_void);
-    }
-    coladvance(curwin.get(), (*curwin.get()).w_curswant);
-    u_clearline(curbuf.get());
-}
-pub unsafe extern "C" fn get_expr_indent() -> ::core::ffi::c_int {
-    let mut use_sandbox: bool = was_set_insecurely(
-        curwin.get(),
-        kOptIndentexpr,
-        OPT_LOCAL as ::core::ffi::c_int,
-    ) != 0;
-    let save_sctx: sctx_T = current_sctx.get();
-    let mut save_pos: pos_T = (*curwin.get()).w_cursor;
-    let mut save_curswant: colnr_T = (*curwin.get()).w_curswant;
-    let mut save_set_curswant: bool = (*curwin.get()).w_set_curswant != 0;
-    set_vim_var_nr(VV_LNUM, (*curwin.get()).w_cursor.lnum as varnumber_T);
-    if use_sandbox {
-        (*sandbox.ptr()) += 1;
-    }
-    (*textlock.ptr()) += 1;
-    current_sctx
-        .set((*curbuf.get()).b_p_script_ctx[kBufOptIndentexpr as ::core::ffi::c_int as usize]);
-    let mut inde_copy: *mut ::core::ffi::c_char = xstrdup((*curbuf.get()).b_p_inde);
-    let mut indent: ::core::ffi::c_int =
-        eval_to_number(inde_copy, true_0 != 0) as ::core::ffi::c_int;
-    xfree(inde_copy as *mut ::core::ffi::c_void);
-    if use_sandbox {
-        (*sandbox.ptr()) -= 1;
-    }
-    (*textlock.ptr()) -= 1;
-    current_sctx.set(save_sctx);
-    let mut save_State: ::core::ffi::c_int = State.get();
-    State.set(MODE_INSERT as ::core::ffi::c_int);
-    (*curwin.get()).w_cursor = save_pos;
-    (*curwin.get()).w_curswant = save_curswant;
-    (*curwin.get()).w_set_curswant = save_set_curswant as ::core::ffi::c_int;
-    check_cursor(curwin.get());
-    State.set(save_State);
-    if did_throw.get() as ::core::ffi::c_int != 0
-        && (vim_strchr(p_debug.get(), 't' as ::core::ffi::c_int).is_null()
-            || trylevel.get() == 0 as ::core::ffi::c_int)
-    {
-        handle_did_throw();
-        did_throw.set(false_0 != 0);
-    }
-    if indent < 0 as ::core::ffi::c_int {
-        indent = get_indent();
-    }
-    return indent;
-}
-pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
-    let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-    let mut paren: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut amount: ::core::ffi::c_int = 0;
-    let mut realpos: pos_T = (*curwin.get()).w_cursor;
-    (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-    pos = findmatch(
-        ::core::ptr::null_mut::<oparg_T>(),
-        '(' as ::core::ffi::c_int,
-    );
-    if pos.is_null() {
-        pos = findmatch(
-            ::core::ptr::null_mut::<oparg_T>(),
-            '[' as ::core::ffi::c_int,
-        );
-    } else {
-        paren = *pos;
-        pos = findmatch(
-            ::core::ptr::null_mut::<oparg_T>(),
-            '[' as ::core::ffi::c_int,
-        );
-        if pos.is_null() || lt(*pos, paren) as ::core::ffi::c_int != 0 {
-            pos = &raw mut paren;
-        }
-    }
-    if !pos.is_null() {
-        amount = -1 as ::core::ffi::c_int;
-        let mut parencount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        loop {
-            (*curwin.get()).w_cursor.lnum -= 1;
-            if (*curwin.get()).w_cursor.lnum < (*pos).lnum {
-                break;
-            }
-            if linewhite((*curwin.get()).w_cursor.lnum) {
-                continue;
-            }
-            let mut that: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-            while *that as ::core::ffi::c_int != NUL {
-                if *that as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
-                    while *that.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        != NUL
-                    {
-                        that = that.offset(1);
-                    }
-                } else if *that as ::core::ffi::c_int == '\\' as ::core::ffi::c_int {
-                    if *that.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
-                        that = that.offset(1);
-                    }
-                } else {
-                    if *that as ::core::ffi::c_int == '"' as ::core::ffi::c_int
-                        && *that.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            != NUL
-                    {
-                        loop {
-                            that = that.offset(1);
-                            if !(*that as ::core::ffi::c_int != 0
-                                && *that as ::core::ffi::c_int != '"' as ::core::ffi::c_int)
-                            {
-                                break;
-                            }
-                            if *that as ::core::ffi::c_int != '\\' as ::core::ffi::c_int {
-                                continue;
-                            }
-                            that = that.offset(1);
-                            if *that as ::core::ffi::c_int == NUL {
-                                break;
-                            }
-                            if *that.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                                != NUL
-                            {
-                                continue;
-                            }
-                            that = that.offset(1);
-                            break;
-                        }
-                        if *that as ::core::ffi::c_int == NUL {
-                            break;
-                        }
-                    }
-                    if *that as ::core::ffi::c_int == '(' as ::core::ffi::c_int
-                        || *that as ::core::ffi::c_int == '[' as ::core::ffi::c_int
-                    {
-                        parencount += 1;
-                    } else if *that as ::core::ffi::c_int == ')' as ::core::ffi::c_int
-                        || *that as ::core::ffi::c_int == ']' as ::core::ffi::c_int
-                    {
-                        parencount -= 1;
-                    }
-                }
-                that = that.offset(1);
-            }
-            if parencount != 0 as ::core::ffi::c_int {
-                continue;
-            }
-            amount = get_indent();
-            break;
-        }
-        if amount == -1 as ::core::ffi::c_int {
-            (*curwin.get()).w_cursor.lnum = (*pos).lnum;
-            (*curwin.get()).w_cursor.col = (*pos).col;
-            let mut col: colnr_T = (*pos).col;
-            let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-            let mut csarg: CharsizeArg = CharsizeArg {
-                win: ::core::ptr::null_mut::<win_T>(),
-                line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                use_tabstop: false,
-                indent_width: 0,
-                virt_row: 0,
-                cur_text_width_left: 0,
-                cur_text_width_right: 0,
-                max_head_vcol: 0,
-                iter: [MarkTreeIter {
-                    pos: MTPos { row: 0, col: 0 },
-                    lvl: 0,
-                    x: ::core::ptr::null_mut::<MTNode>(),
-                    i: 0,
-                    s: [C2Rust_Unnamed_15 { oldcol: 0, i: 0 }; 20],
-                    intersect_idx: 0,
-                    intersect_pos: MTPos { row: 0, col: 0 },
-                    intersect_pos_x: MTPos { row: 0, col: 0 },
-                }; 1],
-            };
-            let mut cstype: CSType =
-                init_charsize_arg(&raw mut csarg, curwin.get(), (*pos).lnum, line);
-            let mut sci: StrCharInfo = utf_ptr2StrCharInfo(line);
-            amount = 0 as ::core::ffi::c_int;
-            while *sci.ptr as ::core::ffi::c_int != NUL && col > 0 as ::core::ffi::c_int {
-                amount +=
-                    win_charsize(cstype, amount, sci.ptr, sci.chr.value, &raw mut csarg).width;
-                sci = utfc_next(sci);
-                col -= 1;
-            }
-            let mut that_0: *mut ::core::ffi::c_char = sci.ptr;
-            if (*that_0 as ::core::ffi::c_int == '(' as ::core::ffi::c_int
-                || *that_0 as ::core::ffi::c_int == '[' as ::core::ffi::c_int)
-                && lisp_match(that_0.offset(1 as ::core::ffi::c_int as isize)) != 0
-            {
-                amount += 2 as ::core::ffi::c_int;
-            } else {
-                if *that_0 as ::core::ffi::c_int != NUL {
-                    that_0 = that_0.offset(1);
-                    amount += 1;
-                }
-                let mut firsttry: colnr_T = amount as colnr_T;
-                while ascii_iswhite(*that_0 as ::core::ffi::c_int) {
-                    amount += win_charsize(
-                        cstype,
-                        amount,
-                        that_0,
-                        *that_0 as uint8_t as int32_t,
-                        &raw mut csarg,
-                    )
-                    .width;
-                    that_0 = that_0.offset(1);
-                }
-                if *that_0 as ::core::ffi::c_int != 0
-                    && *that_0 as ::core::ffi::c_int != ';' as ::core::ffi::c_int
-                {
-                    if *that_0 as ::core::ffi::c_int != '(' as ::core::ffi::c_int
-                        && *that_0 as ::core::ffi::c_int != '[' as ::core::ffi::c_int
-                    {
-                        firsttry += 1;
-                    }
-                    parencount = 0 as ::core::ffi::c_int;
-                    let mut ci: CharInfo = utf_ptr2CharInfo(that_0);
-                    if ci.value != '"' as int32_t
-                        && ci.value != '\'' as int32_t
-                        && ci.value != '#' as int32_t
-                        && (ci.value < '0' as int32_t || ci.value > '9' as int32_t)
-                    {
-                        let mut quotecount: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        while *that_0 as ::core::ffi::c_int != 0
-                            && (!ascii_iswhite(ci.value as ::core::ffi::c_int)
-                                || quotecount != 0
-                                || parencount != 0)
-                        {
-                            if ci.value == '"' as int32_t {
-                                quotecount = (quotecount == 0) as ::core::ffi::c_int;
-                            }
-                            if (ci.value == '(' as int32_t || ci.value == '[' as int32_t)
-                                && quotecount == 0
-                            {
-                                parencount += 1;
-                            }
-                            if (ci.value == ')' as int32_t || ci.value == ']' as int32_t)
-                                && quotecount == 0
-                            {
-                                parencount -= 1;
-                            }
-                            if ci.value == '\\' as int32_t
-                                && *that_0.offset(1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int
-                                    != NUL
-                            {
-                                amount +=
-                                    win_charsize(cstype, amount, that_0, ci.value, &raw mut csarg)
-                                        .width;
-                                let mut next_sci: StrCharInfo = utfc_next(StrCharInfo {
-                                    ptr: that_0,
-                                    chr: ci,
-                                });
-                                that_0 = next_sci.ptr;
-                                ci = next_sci.chr;
-                            }
-                            amount +=
-                                win_charsize(cstype, amount, that_0, ci.value, &raw mut csarg)
-                                    .width;
-                            let mut next_sci_0: StrCharInfo = utfc_next(StrCharInfo {
-                                ptr: that_0,
-                                chr: ci,
-                            });
-                            that_0 = next_sci_0.ptr;
-                            ci = next_sci_0.chr;
-                        }
-                    }
-                    while ascii_iswhite(*that_0 as ::core::ffi::c_int) {
-                        amount += win_charsize(
-                            cstype,
-                            amount,
-                            that_0,
-                            *that_0 as uint8_t as int32_t,
-                            &raw mut csarg,
-                        )
-                        .width;
-                        that_0 = that_0.offset(1);
-                    }
-                    if *that_0 == 0 || *that_0 as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
-                        amount = firsttry as ::core::ffi::c_int;
-                    }
-                }
-            }
-        }
-    } else {
-        amount = 0 as ::core::ffi::c_int;
-    }
-    (*curwin.get()).w_cursor = realpos;
-    return amount;
-}
-unsafe extern "C" fn lisp_match(mut p: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    let mut buf: [::core::ffi::c_char; 512] = [0; 512];
-    let mut word: *mut ::core::ffi::c_char = if *(*curbuf.get()).b_p_lw as ::core::ffi::c_int != NUL
-    {
-        (*curbuf.get()).b_p_lw
-    } else {
-        p_lispwords.get()
-    };
-    while *word as ::core::ffi::c_int != NUL {
-        let mut len: size_t = copy_option_part(
-            &raw mut word,
-            &raw mut buf as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 512]>(),
-            b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        );
-        if strncmp(&raw mut buf as *mut ::core::ffi::c_char, p, len) == 0 as ::core::ffi::c_int
-            && ascii_iswhite_or_nul(*p.offset(len as isize) as ::core::ffi::c_int)
-                as ::core::ffi::c_int
-                != 0
-        {
-            return true_0;
-        }
-    }
-    return false_0;
-}
-pub unsafe extern "C" fn fixthisline(mut get_the_indent: IndentGetter) {
-    let mut amount: ::core::ffi::c_int = get_the_indent.expect("non-null function pointer")();
-    if amount < 0 as ::core::ffi::c_int {
-        return;
-    }
-    change_indent(
-        INDENT_SET as ::core::ffi::c_int,
-        amount,
-        false_0,
-        true_0 != 0,
-    );
-    if linewhite((*curwin.get()).w_cursor.lnum) {
-        did_ai.set(true_0 != 0);
-    }
-}
-pub unsafe extern "C" fn use_indentexpr_for_lisp() -> bool {
-    return (*curbuf.get()).b_p_lisp != 0
-        && *(*curbuf.get()).b_p_inde as ::core::ffi::c_int != NUL
-        && strcmp(
-            (*curbuf.get()).b_p_lop,
-            b"expr:1\0".as_ptr() as *const ::core::ffi::c_char,
-        ) == 0 as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn fix_indent() {
-    if p_paste.get() != 0 {
-        return;
-    }
-    if (*curbuf.get()).b_p_lisp != 0 && (*curbuf.get()).b_p_ai != 0 {
-        if use_indentexpr_for_lisp() {
-            do_c_expr_indent();
-        } else {
-            fixthisline(Some(
-                get_lisp_indent as unsafe extern "C" fn() -> ::core::ffi::c_int,
-            ));
-        }
-    } else if cindent_on() {
-        do_c_expr_indent();
-    }
-}
-pub unsafe extern "C" fn f_indent(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    let lnum: linenr_T = tv_get_lnum(argvars);
-    if lnum >= 1 as linenr_T && lnum <= (*curbuf.get()).b_ml.ml_line_count {
-        (*rettv).vval.v_number = get_indent_lnum(lnum) as varnumber_T;
-    } else {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-    };
-}
-pub unsafe extern "C" fn f_lispindent(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    let pos: pos_T = (*curwin.get()).w_cursor;
-    let lnum: linenr_T = tv_get_lnum(argvars);
-    if lnum >= 1 as linenr_T && lnum <= (*curbuf.get()).b_ml.ml_line_count {
-        (*curwin.get()).w_cursor.lnum = lnum;
-        (*rettv).vval.v_number = get_lisp_indent() as varnumber_T;
-        (*curwin.get()).w_cursor = pos;
-    } else {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-    };
-}
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const RE_STRING: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const RE_STRICT: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
