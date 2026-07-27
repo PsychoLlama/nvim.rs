@@ -2,8 +2,9 @@
 # Regenerate the msgpack-RPC dispatch wrappers from the Rust API signatures.
 #
 # tools/apigen parses crates/nvim/src/nvim/api/*.rs plus the attribute spec
-# (tools/apigen/functions.txt) and writes
-# crates/nvim/src/nvim/api/private/dispatch_wrappers.rs. Unlike the unit-test
+# (tools/apigen/functions.txt) and writes the module directory
+# crates/nvim/src/nvim/api/private/dispatch_wrappers/ — a root holding the
+# shared support code and one child per API source file. Unlike the unit-test
 # cdefs, the output is committed: it is ordinary crate source that has to
 # compile, be formatted and be measured by the ratchet like everything else.
 #
@@ -22,5 +23,6 @@ cargo build --release --quiet --manifest-path "$root/tools/apigen/Cargo.toml"
 "$root/tools/apigen/target/release/apigen" \
   --root "$root/crates/nvim" \
   --spec "$root/tools/apigen/functions.txt" \
-  --out "$root/crates/nvim/src/nvim/api/private/dispatch_wrappers.rs" \
+  --out-dir "$root/crates/nvim/src/nvim/api/private/dispatch_wrappers" \
+  --rustfmt-config "$root/rustfmt.toml" \
   "$@"
