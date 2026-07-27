@@ -1993,7 +1993,7 @@ pub unsafe extern "C" fn prepare_help_buffer() {
             0 as scid_T,
         );
         check_buf_options(curbuf.get());
-        buf_init_chartab(curbuf.get(), false_0 != 0);
+        buf_init_chartab(curbuf.get(), false);
     }
     set_option_direct(
         kOptFoldmethod,

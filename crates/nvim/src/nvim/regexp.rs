@@ -1,4 +1,7 @@
-use crate::src::nvim::charset::{getdigits_int, hex2nr, vim_isIDc, vim_isfilec, vim_isprintc};
+// `buf_T` here is this module's own layout-identical copy, hence the casts.
+use crate::src::nvim::charset::{
+    getdigits_int, hex2nr, vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordc_buf, vim_iswordp_buf,
+};
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_get_string_buf_chk, tv_list_alloc, tv_list_append_string, tv_list_init_static10,
 };
@@ -62,8 +65,6 @@ pub use crate::src::nvim::types::{
 // the 5a parity suite); the nominal decl/decl mismatch is expected.
 #[allow(clashing_extern_declarations)]
 unsafe extern "C" {
-    fn vim_iswordc_buf(c: ::core::ffi::c_int, buf: *mut buf_T) -> bool;
-    fn vim_iswordp_buf(p: *const ::core::ffi::c_char, buf: *mut buf_T) -> bool;
     static curwin: GlobalCell<*mut win_T>;
     static curbuf: GlobalCell<*mut buf_T>;
     fn mark_get(
@@ -2334,7 +2335,7 @@ unsafe extern "C" fn reg_breakcheck() {
     }
 }
 unsafe extern "C" fn reg_iswordc(mut c: ::core::ffi::c_int) -> bool {
-    return vim_iswordc_buf(c, (*rex.ptr()).reg_buf);
+    return vim_iswordc_buf(c, (*rex.ptr()).reg_buf.cast());
 }
 static can_f_submatch: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static rsm: GlobalCell<regsubmatch_T> = GlobalCell::new(regsubmatch_T {
@@ -2696,18 +2697,7 @@ unsafe extern "C" fn match_with_backref(
             (*rex.ptr()).line = reg_tofree.get();
         }
         p = reg_getline(clnum);
-        '_c2rust_label: {
-            if !p.is_null() {
-            } else {
-                __assert_fail(
-                    b"p\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/regexp.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1618 as ::core::ffi::c_uint,
-                    b"int match_with_backref(linenr_T, colnr_T, linenr_T, colnr_T, int *)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        assert!(!p.is_null(), "p");
         if clnum == end_lnum {
             len = (end_col - ccol) as ::core::ffi::c_int;
         } else {
@@ -5338,19 +5328,12 @@ unsafe extern "C" fn reginsert_nr(
     let c2rust_fresh1486 = place;
     place = place.offset(1);
     *c2rust_fresh1486 = NUL as uint8_t;
-    '_c2rust_label: {
-        if val >= 0 as int64_t && val as uintmax_t <= 4294967295 as uintmax_t {
-        } else {
-            __assert_fail(
-                b"val >= 0 && (uintmax_t)val <= UINT32_MAX\0".as_ptr()
+    assert!(
+        val >= 0 as int64_t && val as uintmax_t <= 4294967295 as uintmax_t,
+        "val >= 0 && (uintmax_t)val <= UINT32_MAX\0\".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"src/nvim/regexp.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4182 as ::core::ffi::c_uint,
-                b"void reginsert_nr(int, int64_t, uint8_t *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+                b\"src/nvim/regexp.rs"
+    );
     re_put_uint32(place, val as uint32_t);
 }
 unsafe extern "C" fn reginsert_limits(
@@ -5384,33 +5367,19 @@ unsafe extern "C" fn reginsert_limits(
     let c2rust_fresh1479 = place;
     place = place.offset(1);
     *c2rust_fresh1479 = NUL as uint8_t;
-    '_c2rust_label: {
-        if minval >= 0 as int64_t && minval as uintmax_t <= 4294967295 as uintmax_t {
-        } else {
-            __assert_fail(
-                b"minval >= 0 && (uintmax_t)minval <= UINT32_MAX\0".as_ptr()
+    assert!(
+        minval >= 0 as int64_t && minval as uintmax_t <= 4294967295 as uintmax_t,
+        "minval >= 0 && (uintmax_t)minval <= UINT32_MAX\0\".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"src/nvim/regexp.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4211 as ::core::ffi::c_uint,
-                b"void reginsert_limits(int, int64_t, int64_t, uint8_t *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+                b\"src/nvim/regexp.rs"
+    );
     place = re_put_uint32(place, minval as uint32_t);
-    '_c2rust_label_0: {
-        if maxval >= 0 as int64_t && maxval as uintmax_t <= 4294967295 as uintmax_t {
-        } else {
-            __assert_fail(
-                b"maxval >= 0 && (uintmax_t)maxval <= UINT32_MAX\0".as_ptr()
+    assert!(
+        maxval >= 0 as int64_t && maxval as uintmax_t <= 4294967295 as uintmax_t,
+        "maxval >= 0 && (uintmax_t)maxval <= UINT32_MAX\0\".as_ptr()
                     as *const ::core::ffi::c_char,
-                b"src/nvim/regexp.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4213 as ::core::ffi::c_uint,
-                b"void reginsert_limits(int, int64_t, int64_t, uint8_t *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+                b\"src/nvim/regexp.rs"
+    );
     place = re_put_uint32(place, maxval as uint32_t);
     regtail(opnd, place);
 }
@@ -7401,7 +7370,7 @@ unsafe extern "C" fn regrepeat(mut p: *mut uint8_t, mut maxcount: int64_t) -> ::
                         while count < maxcount {
                             if vim_iswordp_buf(
                                 scan as *mut ::core::ffi::c_char,
-                                (*rex.ptr()).reg_buf,
+                                (*rex.ptr()).reg_buf.cast(),
                             ) as ::core::ffi::c_int
                                 != 0
                                 && (testval != 0 || !ascii_isdigit(*scan as ::core::ffi::c_int))
@@ -8002,7 +7971,7 @@ unsafe extern "C" fn regmatch(
                             KWORD => {
                                 if !vim_iswordp_buf(
                                     (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                    (*rex.ptr()).reg_buf,
+                                    (*rex.ptr()).reg_buf.cast(),
                                 ) {
                                     status = RA_NOMATCH;
                                 } else {
@@ -8019,7 +7988,7 @@ unsafe extern "C" fn regmatch(
                                     != 0
                                     || !vim_iswordp_buf(
                                         (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                        (*rex.ptr()).reg_buf,
+                                        (*rex.ptr()).reg_buf.cast(),
                                     )
                                 {
                                     status = RA_NOMATCH;
@@ -9785,18 +9754,7 @@ unsafe extern "C" fn bt_regexec_nl(
         ::core::ptr::null_mut::<proftime_T>(),
         ::core::ptr::null_mut::<::core::ffi::c_int>(),
     ) as int64_t;
-    '_c2rust_label: {
-        if r <= 2147483647 as int64_t {
-        } else {
-            __assert_fail(
-                b"r <= INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/regexp.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                7779 as ::core::ffi::c_uint,
-                b"int bt_regexec_nl(regmatch_T *, uint8_t *, colnr_T, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(r <= 2147483647 as int64_t, "r <= INT_MAX");
     return r as ::core::ffi::c_int;
 }
 unsafe extern "C" fn bt_regexec_multi(
@@ -23081,7 +23039,7 @@ unsafe extern "C" fn nfa_regmatch(
                                 -914 => {
                                     result = vim_iswordp_buf(
                                         (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                        (*rex.ptr()).reg_buf,
+                                        (*rex.ptr()).reg_buf.cast(),
                                     )
                                         as ::core::ffi::c_int;
                                     if result != 0 {
@@ -23093,7 +23051,7 @@ unsafe extern "C" fn nfa_regmatch(
                                     result = (!ascii_isdigit(curc)
                                         && vim_iswordp_buf(
                                             (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                            (*rex.ptr()).reg_buf,
+                                            (*rex.ptr()).reg_buf.cast(),
                                         )
                                             as ::core::ffi::c_int
                                             != 0)

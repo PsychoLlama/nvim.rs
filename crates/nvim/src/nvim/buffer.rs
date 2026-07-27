@@ -1925,7 +1925,7 @@ pub unsafe extern "C" fn open_buffer(
         (*(*curbuf.get()).b_ml.ml_mfp).mf_dirty = MF_DIRTY_YES;
     }
     if (*curbuf.get()).b_flags & BF_NEVERLOADED != 0 {
-        buf_init_chartab(curbuf.get(), false_0 != 0);
+        buf_init_chartab(curbuf.get(), false);
         parse_cino(curbuf.get());
     }
     if got_int.get() as ::core::ffi::c_int != 0 && !vim_strchr(p_cpo.get(), CPO_INTMOD).is_null()

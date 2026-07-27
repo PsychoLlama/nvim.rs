@@ -4027,7 +4027,7 @@ unsafe extern "C" fn syn_cmd_iskeyword(mut eap: *mut exarg_T, mut _syncing: ::co
         );
         save_isk = (*curbuf.get()).b_p_isk;
         (*curbuf.get()).b_p_isk = xstrdup(arg);
-        buf_init_chartab(curbuf.get(), false_0 != 0);
+        buf_init_chartab(curbuf.get(), false);
         memmove(
             &raw mut (*(*curwin.get()).w_s).b_syn_chartab as *mut uint8_t
                 as *mut ::core::ffi::c_void,

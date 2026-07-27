@@ -5117,7 +5117,7 @@ unsafe extern "C" fn did_set_lines_or_columns(
 }
 unsafe extern "C" fn did_set_lisp(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
-    buf_init_chartab(buf, false_0 != 0);
+    buf_init_chartab(buf, false);
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn did_set_modifiable(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
@@ -6441,7 +6441,7 @@ unsafe extern "C" fn did_set_option(
     if !errmsg.is_null() {
         set_option_varp(opt_idx, varp, old_value, true_0 != 0);
         if restore_chartab {
-            buf_init_chartab(curbuf.get(), true_0 != 0);
+            buf_init_chartab(curbuf.get(), true);
         }
         return errmsg;
     }
@@ -8640,7 +8640,7 @@ pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core
     }
     check_buf_options(buf);
     if did_isk {
-        buf_init_chartab(buf, false_0 != 0);
+        buf_init_chartab(buf, false);
     }
 }
 pub unsafe extern "C" fn reset_modifiable() {

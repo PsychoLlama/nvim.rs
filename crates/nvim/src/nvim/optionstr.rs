@@ -2605,7 +2605,7 @@ pub unsafe extern "C" fn did_set_iskeyword(mut args: *mut optset_T) -> *const ::
 }
 pub unsafe extern "C" fn did_set_isopt(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
-    if buf_init_chartab(buf, true_0 != 0) == FAIL {
+    if !buf_init_chartab(buf, true) {
         (*args).os_restore_chartab = true_0 != 0;
         return &raw const e_invarg as *const ::core::ffi::c_char;
     }
