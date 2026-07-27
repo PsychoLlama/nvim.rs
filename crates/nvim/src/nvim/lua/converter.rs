@@ -18,6 +18,7 @@ use crate::src::nvim::eval_1::{get_copyID, partial_name};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::highlight_group::syn_check_group;
+use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_pushref, nlua_ref_global};
 use crate::src::nvim::lua::ffi::{
     lua_checkstack, lua_createtable, lua_getmetatable, lua_gettop, lua_next, lua_pushboolean,
@@ -154,19 +155,6 @@ pub const INT64_MIN: ::core::ffi::c_long =
 pub const INT8_MAX: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-#[inline(always)]
-unsafe extern "C-unwind" fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return dest;
-}
 pub const API_INTEGER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const API_INTEGER_MIN: ::core::ffi::c_long = INT64_MIN;
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;

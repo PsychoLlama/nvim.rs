@@ -6,9 +6,8 @@ use crate::src::nvim::charset::{
     getwhitecols, skipbin, skipdigits, skiphex, skipwhite, vim_is_fname_char,
 };
 use crate::src::nvim::cursor::{get_cursor_line_len, get_cursor_line_ptr};
-use crate::src::nvim::decoration::{
-    decor_redraw_col_impl, decor_redraw_line, decor_redraw_reset, decor_state_free,
-};
+use crate::src::nvim::decoration::decor_redraw_col;
+use crate::src::nvim::decoration::{decor_redraw_line, decor_redraw_reset, decor_state_free};
 use crate::src::nvim::decoration_provider::decor_providers_invoke_spell;
 use crate::src::nvim::drawscreen::redraw_later;
 use crate::src::nvim::ex_cmds::do_sub_msg;
@@ -1519,20 +1518,6 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn decor_redraw_col(
-    mut wp: *mut win_T,
-    mut col: ::core::ffi::c_int,
-    mut win_col: ::core::ffi::c_int,
-    mut hidden: bool,
-    mut state: *mut DecorState,
-    mut max_col_last: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    if col <= (*state).col_last {
-        return (*state).current;
-    }
-    return decor_redraw_col_impl(wp, col, win_col, hidden, state, max_col_last);
-}
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub static first_lang: GlobalCell<*mut slang_T> =
     GlobalCell::new(::core::ptr::null_mut::<slang_T>());

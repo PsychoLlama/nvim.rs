@@ -13,7 +13,7 @@ use core::ptr;
 
 use crate::src::nvim::cursor::get_cursor_line_ptr;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::main::{curbuf, dy_flags, p_isf, p_isi, p_isp};
+use crate::src::nvim::main::{breakat_flags, curbuf, dy_flags, p_isf, p_isi, p_isp};
 use crate::src::nvim::mbyte::{
     mb_islower, mb_isupper, mb_ptr2char_adv, utf_class_tab, utf_printable, utf_ptr2char,
     utf8len_tab,
@@ -897,4 +897,9 @@ pub unsafe fn backslash_halve_save(p: *const c_char) -> *mut c_char {
     }
     *dst = NUL as c_char;
     res
+}
+
+/// Whether a line may be broken before `c`, per the 'breakat' option.
+pub fn vim_isbreak(c: ::core::ffi::c_int) -> bool {
+    breakat_flags.with(|flags| flags[c as uint8_t as usize] != 0)
 }

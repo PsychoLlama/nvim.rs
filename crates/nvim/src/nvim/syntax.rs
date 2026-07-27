@@ -1,5 +1,6 @@
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::charset::{
     buf_init_chartab, getdigits_int, getdigits_int32, skiptowhite, skipwhite, str_foldcase,
     vim_isprintc, vim_iswordp_buf,
@@ -1217,10 +1218,6 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EX_XFILE: ::core::ffi::c_uint = 0x8 as ::core::ffi::c_uint;
 pub const EX_NOSPC: ::core::ffi::c_uint = 0x10 as ::core::ffi::c_uint;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 pub const SYNSPL_DEFAULT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SYNSPL_TOP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SYNSPL_NOTOP: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

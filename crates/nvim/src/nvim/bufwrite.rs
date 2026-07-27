@@ -1,4 +1,5 @@
 use crate::src::nvim::autocmd::{apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf};
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::{bt_nofilename, buf_set_file_id, bufref_valid, set_bufref};
 use crate::src::nvim::change::unchanged;
 use crate::src::nvim::drawscreen::status_redraw_all;
@@ -1117,10 +1118,6 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 126] = unsafe {
         *b"int buf_write_make_backup(char *, _Bool, FileInfo *, vim_acl_T, int, unsigned int, _Bool, _Bool, _Bool *, char **, Error_T *)\0",
     )
 };
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 static err_readonly: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
     b"is read-only (cannot override: \"W\" in 'cpoptions')\0".as_ptr()
         as *const ::core::ffi::c_char,

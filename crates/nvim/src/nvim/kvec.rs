@@ -14,6 +14,8 @@ use core::ffi::c_void;
 use core::{mem, ptr, slice};
 
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
+use crate::src::nvim::os::libc::memcpy;
+use crate::src::nvim::types::size_t;
 
 pub struct InitVec<'a, T> {
     size: &'a mut usize,
@@ -248,4 +250,18 @@ mod tests {
         assert!(v.view().is_inline());
         assert_eq!(v.view().as_slice(), &[7]);
     }
+}
+
+/// Copy `size` bytes from `src` to `dest`, then free `src`. klib's kvec
+/// spells this inline in every `kv_concat`-shaped macro.
+pub unsafe fn _memcpy_free(
+    dest: *mut ::core::ffi::c_void,
+    src: *mut ::core::ffi::c_void,
+    size: size_t,
+) -> *mut ::core::ffi::c_void {
+    unsafe {
+        memcpy(dest, src, size);
+        xfree(src);
+    }
+    dest
 }

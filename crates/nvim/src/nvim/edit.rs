@@ -3,6 +3,7 @@ use crate::src::nvim::ascii::{
 };
 use crate::src::nvim::autocmd::{apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event};
 use crate::src::nvim::buffer::{bt_prompt, bt_quickfix, buf_is_empty};
+use crate::src::nvim::buffer::{buf_get_changedtick, buf_meta_total};
 use crate::src::nvim::change::{
     appended_lines_mark, change_warning, changed_bytes, del_bytes, del_char, get_leader_len,
     ins_bytes_len, ins_char, ins_char_bytes, ins_str, inserted_bytes, open_line,
@@ -100,12 +101,13 @@ use crate::src::nvim::option::{
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{__ctype_b_loc, gettext, memcpy, memmove, memset, strcmp, strlen};
 use crate::src::nvim::os::time::os_time;
+use crate::src::nvim::plines::linetabsize_str;
 use crate::src::nvim::plines::{
-    charsize_nowrap, getvcol, getvcol_nolist, init_charsize_arg, linetabsize_col, win_charsize,
-    win_chartabsize,
+    charsize_nowrap, getvcol, getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize,
 };
 use crate::src::nvim::popupmenu::{pum_check_clear, pum_visible};
 use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::register::is_literal_register;
 use crate::src::nvim::register::{
     do_put, get_expr_register, get_yank_register, insert_reg, valid_yank_reg,
 };
@@ -877,14 +879,6 @@ pub const ML_LINE_DIRTY: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const ML_ALLOCATED: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
-#[inline]
-unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> uint32_t {
-    return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
-}
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
@@ -5138,19 +5132,5 @@ pub const NULL_STRING: String_0 = String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     size: 0 as size_t,
 };
-#[inline(always)]
-unsafe extern "C" fn linetabsize_str(mut s: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    return linetabsize_col(0 as ::core::ffi::c_int, s);
-}
-#[inline]
-unsafe extern "C" fn is_literal_register(regname: ::core::ffi::c_int) -> bool {
-    return regname == '*' as ::core::ffi::c_int
-        || regname == '+' as ::core::ffi::c_int
-        || (regname as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-            && regname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-            || regname as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                && regname as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-            || ascii_isdigit(regname) as ::core::ffi::c_int != 0);
-}
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

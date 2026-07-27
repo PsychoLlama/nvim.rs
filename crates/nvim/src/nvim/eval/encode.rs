@@ -10,6 +10,7 @@ use crate::src::nvim::eval_1::{get_copyID, partial_name};
 use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::main::IObuff;
 use crate::src::nvim::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
 use crate::src::nvim::memory::{memchrsub, memcnt, xfree, xmalloc, xmemdupz, xmemscan, xrealloc};
@@ -73,19 +74,6 @@ pub const INT8_MIN: ::core::ffi::c_int = -128 as ::core::ffi::c_int;
 pub const INT8_MAX: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[inline(always)]
-unsafe extern "C" fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return dest;
-}
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const BS: ::core::ffi::c_int = 8;
 pub const TAB: ::core::ffi::c_int = 9;

@@ -12,6 +12,7 @@ use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{
     apply_autocmds, block_autocmds, may_trigger_vim_suspend_resume, unblock_autocmds,
 };
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::{
     buf_close_terminal, buflist_new, buflist_nr2name, bufref_valid, do_buffer, read_buffer_into,
     set_bufref,
@@ -49,6 +50,7 @@ use crate::src::nvim::highlight_group::{
 };
 use crate::src::nvim::insexpand::get_cot_flags;
 use crate::src::nvim::keycodes::{name_to_mod_mask, replace_termcodes, vim_strsave_escape_ks};
+use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::{
     api_free_luaref, nlua_call_ref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
@@ -1275,19 +1277,6 @@ pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
-#[inline(always)]
-unsafe extern "C" fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return dest;
-}
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const STRING_INIT: String_0 = String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -4545,10 +4534,6 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 pub const CONTEXT_INIT: Context = Context {
     regs: STRING_INIT,
     jumps: STRING_INIT,

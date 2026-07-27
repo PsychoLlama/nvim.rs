@@ -33,7 +33,8 @@ use crate::src::nvim::os::libc::{
     __assert_fail, __ctype_b_loc, bsearch, gettext, memmove, memset, strcpy, strlen, strncmp,
     strncpy,
 };
-use crate::src::nvim::plines::{getvvcol, init_charsize_arg, linesize_fast, linesize_regular};
+use crate::src::nvim::plines::getvvcol;
+use crate::src::nvim::plines::win_linetabsize;
 use crate::src::nvim::pos::lt;
 use crate::src::nvim::profile::profile_passed_limit;
 use crate::src::nvim::strings::{cmp_keyvalue_value_n, vim_strchr, vim_strsave_escaped, xstrnsave};
@@ -24068,40 +24069,6 @@ pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const GRAPHEME_STATE_INIT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const MAX_MCO: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const CPO_LITERAL: ::core::ffi::c_int = 'l' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn win_linetabsize(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut line: *mut ::core::ffi::c_char,
-    mut len: colnr_T,
-) -> ::core::ffi::c_int {
-    let mut csarg: CharsizeArg = CharsizeArg {
-        win: ::core::ptr::null_mut::<win_T>(),
-        line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        use_tabstop: false,
-        indent_width: 0,
-        virt_row: 0,
-        cur_text_width_left: 0,
-        cur_text_width_right: 0,
-        max_head_vcol: 0,
-        iter: [MarkTreeIter {
-            pos: MTPos { row: 0, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }; 1],
-    };
-    let cstype: CSType = init_charsize_arg(&raw mut csarg, wp, lnum, line);
-    if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return linesize_fast(&raw mut csarg, 0 as ::core::ffi::c_int, len);
-    } else {
-        return linesize_regular(&raw mut csarg, 0 as ::core::ffi::c_int, len);
-    };
-}
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

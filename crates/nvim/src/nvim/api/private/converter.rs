@@ -14,6 +14,7 @@ use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
 use crate::src::nvim::eval_1::{get_copyID, partial_name};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::api_new_luaref;
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::src::nvim::message::internal_error;
@@ -102,19 +103,6 @@ pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INT8_MIN: ::core::ffi::c_int = -128 as ::core::ffi::c_int;
 pub const INT8_MAX: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return dest;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

@@ -1,5 +1,6 @@
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::buffer::buf_meta_total;
 use crate::src::nvim::buffer::{bt_dontwrite, bt_prompt, buf_inc_changedtick};
 use crate::src::nvim::buffer_updates::buf_updates_send_changes;
 use crate::src::nvim::charset::{
@@ -597,10 +598,6 @@ pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> uint32_t {
-    return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
-}
 pub unsafe extern "C" fn change_warning(mut buf: *mut buf_T, mut col: ::core::ffi::c_int) {
     static w_readonly: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
         b"W10: Warning: Changing a readonly file\0".as_ptr() as *const ::core::ffi::c_char,

@@ -5,6 +5,7 @@ use crate::src::nvim::autocmd::{
     apply_autocmds, apply_autocmds_group, aucmd_prepbuf, aucmd_restbuf, is_aucmd_win,
 };
 use crate::src::nvim::autocmd::{block_autocmds, has_event, is_autocmd_blocked, unblock_autocmds};
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::do_buffer;
 use crate::src::nvim::change::{appended_lines_buf, changed_lines, deleted_lines_buf};
 use crate::src::nvim::cursor::coladvance;
@@ -1892,10 +1893,6 @@ pub const Ctrl_M: ::core::ffi::c_int = 13;
 pub const Ctrl_N: ::core::ffi::c_int = 14;
 pub const Ctrl_O: ::core::ffi::c_int = 15;
 pub const Ctrl_BSL: ::core::ffi::c_int = 28 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 pub const REFRESH_DELAY: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 pub const SELECTIONBUF_SIZE: ::core::ffi::c_int = 0x400 as ::core::ffi::c_int;
 static refresh_timer: GlobalCell<TimeWatcher> = GlobalCell::new(TimeWatcher {

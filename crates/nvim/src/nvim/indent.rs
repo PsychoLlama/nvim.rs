@@ -78,10 +78,6 @@ const VV_LNUM: VimVarIndex = 9;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 pub const FO_Q_COMS: ::core::ffi::c_int = 'q' as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 

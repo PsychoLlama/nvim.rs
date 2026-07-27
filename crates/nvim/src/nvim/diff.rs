@@ -2,6 +2,7 @@ use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, augroup_exists, block_autocmds, unblock_autocmds,
 };
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::{
     bt_prompt, buf_is_empty, buf_valid, buflist_findnr, buflist_findpat, bufref_valid, set_bufref,
 };
@@ -1489,10 +1490,6 @@ pub const DB_COUNT: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 static diff_busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static diff_need_update: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const DIFF_FILLER: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;

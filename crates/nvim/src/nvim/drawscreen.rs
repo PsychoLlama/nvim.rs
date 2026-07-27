@@ -1,4 +1,5 @@
 use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::buffer::buf_meta_total;
 use crate::src::nvim::buffer::maketitle;
 use crate::src::nvim::charset::{vim_isprintc, vim_strsize};
 use crate::src::nvim::cmdexpand::cmdline_pum_display;
@@ -26,6 +27,7 @@ use crate::src::nvim::grid::{
     grid_line_getchar, grid_line_mirror, grid_line_put_schar, grid_line_start,
     schar_cache_clear_if_full, win_grid_alloc,
 };
+use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight::{
     hl_combine_attr, update_window_hl, win_bg_attr, win_check_ns_hl,
 };
@@ -645,10 +647,6 @@ pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> uint32_t {
-    return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
-}
 pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
@@ -3867,18 +3865,6 @@ pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const STL_IN_ICON: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const STL_IN_TITLE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn win_hl_attr(
-    mut wp: *mut win_T,
-    mut hlf: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 as ::core::ffi::c_int {
-        (*wp).w_ns_hl_attr
-    } else {
-        hl_attr_active.get()
-    }
-    .offset(hlf as isize);
-}
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

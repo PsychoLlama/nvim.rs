@@ -1,5 +1,6 @@
 use crate::src::nvim::api::buffer::buf_collect_lines;
 use crate::src::nvim::api::private::helpers::arena_array;
+use crate::src::nvim::buffer::buf_get_changedtick;
 
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
@@ -125,10 +126,6 @@ pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uint64_t);
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 pub unsafe extern "C" fn buf_updates_register(
     mut buf: *mut buf_T,
     mut channel_id: uint64_t,

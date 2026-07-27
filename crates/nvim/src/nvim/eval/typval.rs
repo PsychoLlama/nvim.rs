@@ -22,6 +22,7 @@ use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::hashtab::{
     hash_add, hash_clear, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_unlock,
 };
+use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
 use crate::src::nvim::main::{
     curwin, did_emsg, e_blobidx, e_cannot_change_value, e_cannot_change_value_of_str, e_dictkey,
@@ -235,24 +236,11 @@ pub const INT8_MAX: ::core::ffi::c_int = 127 as ::core::ffi::c_int;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 #[inline(always)]
-unsafe extern "C" fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return dest;
-}
-#[inline(always)]
-unsafe extern "C" fn QUEUE_EMPTY(q: *const QUEUE) -> ::core::ffi::c_int {
+pub unsafe fn QUEUE_EMPTY(q: *const QUEUE) -> ::core::ffi::c_int {
     return (q == (*q).next as *const QUEUE) as ::core::ffi::c_int;
 }
 #[inline(always)]
-unsafe extern "C" fn QUEUE_INIT(q: *mut QUEUE) {
+pub unsafe fn QUEUE_INIT(q: *mut QUEUE) {
     (*q).next = q as *mut queue;
     (*q).prev = q as *mut queue;
 }

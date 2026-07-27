@@ -10,6 +10,7 @@ use crate::src::nvim::eval_1::{clear_evalarg, eval0};
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::garray::{ga_clear, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::main::{
     EVALARG_EVALUATE, capture_ga, current_sctx, curwin, did_emsg, did_throw, force_abort, msg_col,
     msg_silent, redir_off, suppress_errthrow,
@@ -812,19 +813,6 @@ pub const KV_INITIAL_VALUE: Dict = Dict {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<KeyValuePair>(),
 };
-#[inline(always)]
-unsafe extern "C" fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return dest;
-}
 pub const ARRAY_DICT_INIT: Dict = KV_INITIAL_VALUE;
 pub const STRING_INIT: String_0 = String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),

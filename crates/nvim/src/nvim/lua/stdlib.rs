@@ -180,10 +180,6 @@ unsafe extern "C-unwind" fn map_get_int_ptr_t(
         *(*map).values.offset(k as isize)
     };
 }
-#[inline(always)]
-unsafe extern "C-unwind" fn QUEUE_EMPTY(q: *const QUEUE) -> ::core::ffi::c_int {
-    return (q == (*q).next as *const QUEUE) as ::core::ffi::c_int;
-}
 unsafe extern "C-unwind" fn regex_match(
     mut lstate: *mut lua_State,
     mut prog: *mut *mut regprog_T,

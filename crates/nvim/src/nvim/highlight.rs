@@ -28,7 +28,7 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::option::check_blending;
-use crate::src::nvim::os::libc::{__assert_fail, gettext, memset, strcasecmp, strlen};
+use crate::src::nvim::os::libc::{gettext, memset, strcasecmp, strlen};
 use crate::src::nvim::popupmenu::pum_drawn;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
@@ -601,18 +601,7 @@ pub unsafe extern "C" fn ns_hl_def(
     mut dict: *mut KeyDict_highlight,
 ) {
     if ns_id == 0 as ::core::ffi::c_int {
-        '_c2rust_label: {
-            if !dict.is_null() {
-            } else {
-                __assert_fail(
-                    b"dict\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/highlight.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    161 as ::core::ffi::c_uint,
-                    b"void ns_hl_def(NS, int, HlAttrs, int, KeyDict_highlight *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        assert!(!dict.is_null(), "dict");
         set_hl_group(hl_id, attrs, dict, link_id);
         return;
     }
@@ -1141,17 +1130,7 @@ pub unsafe extern "C" fn hl_add_url(
     return hl_combine_attr(attr, new);
 }
 pub unsafe extern "C" fn hl_get_url(mut index: uint32_t) -> *const ::core::ffi::c_char {
-    '_c2rust_label: {
-        if !(*urls.ptr()).keys.is_null() {
-        } else {
-            __assert_fail(
-                b"urls.keys\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/highlight.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                535 as ::core::ffi::c_uint,
-                b"const char *hl_get_url(uint32_t)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(!(*urls.ptr()).keys.is_null(), "urls.keys");
     return *(*urls.ptr()).keys.offset(index as isize) as *const ::core::ffi::c_char;
 }
 pub unsafe extern "C" fn hl_get_term_attr(mut aep: *mut HlAttrs) -> ::core::ffi::c_int {
@@ -1666,30 +1645,14 @@ pub unsafe extern "C" fn hlattrs2dict(
     mut short_keys: bool,
 ) {
     hl_attrs = if !hl_attrs.is_null() { hl_attrs } else { hl };
-    '_c2rust_label: {
-        if (*hl).capacity >= HLATTRS_DICT_SIZE as ::core::ffi::c_int as size_t {
-        } else {
-            __assert_fail(
-                b"hl->capacity >= HLATTRS_DICT_SIZE\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/highlight.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                919 as ::core::ffi::c_uint,
-                b"void hlattrs2dict(Dict *, Dict *, HlAttrs, _Bool, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    '_c2rust_label_0: {
-        if (*hl_attrs).capacity >= HLATTRS_DICT_SIZE as ::core::ffi::c_int as size_t {
-        } else {
-            __assert_fail(
-                b"hl_attrs->capacity >= HLATTRS_DICT_SIZE\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/highlight.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                920 as ::core::ffi::c_uint,
-                b"void hlattrs2dict(Dict *, Dict *, HlAttrs, _Bool, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(
+        (*hl).capacity >= HLATTRS_DICT_SIZE as ::core::ffi::c_int as size_t,
+        "hl->capacity >= HLATTRS_DICT_SIZE"
+    );
+    assert!(
+        (*hl_attrs).capacity >= HLATTRS_DICT_SIZE as ::core::ffi::c_int as size_t,
+        "hl_attrs->capacity >= HLATTRS_DICT_SIZE"
+    );
     let mut mask: ::core::ffi::c_int = if use_rgb as ::core::ffi::c_int != 0 {
         ae.rgb_ae_attr as ::core::ffi::c_int
     } else {
@@ -2954,3 +2917,14 @@ unsafe extern "C" fn hl_inspect_impl(
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+/// The attribute the window resolves highlight group `hlf` to: its own
+/// namespace's table when one is active, otherwise the global one.
+pub unsafe fn win_hl_attr(wp: *mut win_T, hlf: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 as ::core::ffi::c_int {
+        (*wp).w_ns_hl_attr
+    } else {
+        hl_attr_active.get()
+    }
+    .offset(hlf as isize)
+}

@@ -7,6 +7,7 @@ use crate::src::nvim::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::src::nvim::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, block_autocmds, has_event, unblock_autocmds,
 };
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::{
     buf_clear, buf_open_scratch, buf_set_changedtick, buf_valid, buflist_findnr, bufref_valid,
     close_buffer, do_buffer, set_bufref,
@@ -112,6 +113,7 @@ use crate::src::nvim::popupmenu::{pum_check_clear, pum_undisplay};
 use crate::src::nvim::pos::{clearpos, equalpos, lt};
 use crate::src::nvim::profile::profile_setlimit;
 use crate::src::nvim::regexp::skip_regexp_ex;
+use crate::src::nvim::register::is_literal_register;
 use crate::src::nvim::register::{
     cmdline_paste_reg, get_expr_line, get_expr_register, get_spec_reg, valid_yank_reg,
 };
@@ -2121,10 +2123,6 @@ pub const Ctrl_HAT: ::core::ffi::c_int = 30;
 pub const Ctrl__: ::core::ffi::c_int = 31;
 pub const EX_RANGE: ::core::ffi::c_uint = 0x1 as ::core::ffi::c_uint;
 pub const EX_PREVIEW: ::core::ffi::c_uint = 0x8000000 as ::core::ffi::c_uint;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 pub const CPO_ESC: ::core::ffi::c_int = 'x' as ::core::ffi::c_int;
 pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -8742,16 +8740,6 @@ pub const K_MOUSELEFT: ::core::ffi::c_int = -19965;
 pub const K_MOUSERIGHT: ::core::ffi::c_int = -20221;
 pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn is_literal_register(regname: ::core::ffi::c_int) -> bool {
-    return regname == '*' as ::core::ffi::c_int
-        || regname == '+' as ::core::ffi::c_int
-        || (regname as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-            && regname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-            || regname as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                && regname as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-            || ascii_isdigit(regname) as ::core::ffi::c_int != 0);
-}
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)
     .wrapping_mul(2 as ::core::ffi::c_uint)

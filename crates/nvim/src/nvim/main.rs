@@ -5,6 +5,7 @@ use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{
     apply_autocmds, autocmd_init, block_autocmds, is_autocmd_blocked, unblock_autocmds,
 };
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::{
     buf_is_empty, buf_set_changedtick, buf_valid, buflist_new, bufref_valid, do_autochdir,
     do_modelines, handle_swap_exists, open_buffer, set_buflisted, set_bufref, set_curbuf, setfname,
@@ -2087,10 +2088,6 @@ pub static msg_loclist: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
 pub static msg_qflist: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
     b"[Quickfix List]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
 );
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 pub static channels: GlobalCell<Map_uint64_t_ptr_t> = GlobalCell::new(Map_uint64_t_ptr_t {
     set: Set_uint64_t {
         h: MapHash {

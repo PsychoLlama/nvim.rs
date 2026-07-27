@@ -2030,10 +2030,6 @@ unsafe extern "C" fn map_put_uint64_t_ptr_t(
 }
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
-#[inline(always)]
-unsafe extern "C" fn QUEUE_EMPTY(q: *const QUEUE) -> ::core::ffi::c_int {
-    return (q == (*q).next as *const QUEUE) as ::core::ffi::c_int;
-}
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const BS: ::core::ffi::c_int = '\u{8}' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;

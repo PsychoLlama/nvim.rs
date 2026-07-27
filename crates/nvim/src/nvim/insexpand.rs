@@ -82,6 +82,7 @@ use crate::src::nvim::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,
 };
 use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::register::get_register_name;
 use crate::src::nvim::register::{copy_register, free_register, valid_yank_reg};
 use crate::src::nvim::search::{find_pattern_in_path, ignorecase, search_for_exact_line, searchit};
 use crate::src::nvim::spell::{
@@ -8655,22 +8656,6 @@ pub const K_KENTER: ::core::ffi::c_int =
     -('K' as ::core::ffi::c_int + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_SELECT: ::core::ffi::c_int =
     -(245 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-#[inline]
-unsafe extern "C" fn get_register_name(mut num: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    if num == -1 as ::core::ffi::c_int {
-        return '"' as ::core::ffi::c_int;
-    } else if num < 10 as ::core::ffi::c_int {
-        return num + '0' as ::core::ffi::c_int;
-    } else if num == DELETION_REGISTER as ::core::ffi::c_int {
-        return '-' as ::core::ffi::c_int;
-    } else if num == STAR_REGISTER as ::core::ffi::c_int {
-        return '*' as ::core::ffi::c_int;
-    } else if num == PLUS_REGISTER as ::core::ffi::c_int {
-        return '+' as ::core::ffi::c_int;
-    } else {
-        return num + 'a' as ::core::ffi::c_int - 10 as ::core::ffi::c_int;
-    };
-}
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

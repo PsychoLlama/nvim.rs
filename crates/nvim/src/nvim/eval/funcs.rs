@@ -243,6 +243,7 @@ use crate::src::nvim::profile::{
 };
 use crate::src::nvim::quickfix::{f_getloclist, f_getqflist, f_setloclist, f_setqflist};
 use crate::src::nvim::regexp::{reg_submatch, reg_submatch_list};
+use crate::src::nvim::register::get_register_name;
 use crate::src::nvim::register::{
     format_reg_type, get_reg_contents, get_reg_type, get_unname_register, get_yank_register,
     op_reg_set_previous, write_reg_contents_ex, write_reg_contents_lst,
@@ -13562,22 +13563,6 @@ unsafe extern "C" fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
     return false_0 != 0;
 }
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
-#[inline]
-unsafe extern "C" fn get_register_name(mut num: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    if num == -1 as ::core::ffi::c_int {
-        return '"' as ::core::ffi::c_int;
-    } else if num < 10 as ::core::ffi::c_int {
-        return num + '0' as ::core::ffi::c_int;
-    } else if num == DELETION_REGISTER as ::core::ffi::c_int {
-        return '-' as ::core::ffi::c_int;
-    } else if num == STAR_REGISTER as ::core::ffi::c_int {
-        return '*' as ::core::ffi::c_int;
-    } else if num == PLUS_REGISTER as ::core::ffi::c_int {
-        return '+' as ::core::ffi::c_int;
-    } else {
-        return num + 'a' as ::core::ffi::c_int - 10 as ::core::ffi::c_int;
-    };
-}
 pub const FNE_CHECK_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
 static functions: GlobalCell<[EvalFuncDef; 644]> = GlobalCell::new(

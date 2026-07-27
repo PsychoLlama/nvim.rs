@@ -4746,7 +4746,7 @@ pub unsafe extern "C" fn finish_yankreg_from_object(
     update_yankreg_width(reg);
 }
 #[inline]
-unsafe extern "C" fn is_literal_register(regname: ::core::ffi::c_int) -> bool {
+pub unsafe fn is_literal_register(regname: ::core::ffi::c_int) -> bool {
     return regname == '*' as ::core::ffi::c_int
         || regname == '+' as ::core::ffi::c_int
         || (regname as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
@@ -4756,7 +4756,7 @@ unsafe extern "C" fn is_literal_register(regname: ::core::ffi::c_int) -> bool {
             || ascii_isdigit(regname) as ::core::ffi::c_int != 0);
 }
 #[inline]
-unsafe extern "C" fn op_reg_index(regname: ::core::ffi::c_int) -> ::core::ffi::c_int {
+pub unsafe fn op_reg_index(regname: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if ascii_isdigit(regname) {
         return regname - '0' as ::core::ffi::c_int;
     } else if regname as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
@@ -4785,7 +4785,7 @@ unsafe extern "C" fn is_append_register(mut regname: ::core::ffi::c_int) -> bool
         && regname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint;
 }
 #[inline]
-unsafe extern "C" fn get_register_name(mut num: ::core::ffi::c_int) -> ::core::ffi::c_int {
+pub unsafe fn get_register_name(mut num: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if num == -1 as ::core::ffi::c_int {
         return '"' as ::core::ffi::c_int;
     } else if num < 10 as ::core::ffi::c_int {

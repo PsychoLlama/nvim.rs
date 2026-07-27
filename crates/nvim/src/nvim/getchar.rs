@@ -23,6 +23,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::input::get_keystroke;
 use crate::src::nvim::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
 use crate::src::nvim::keycodes::special_to_buf;
+use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::src::nvim::main::{
     KeyStuffed, KeyTyped, NameBuff, State, VIsual, VIsual_active, VIsual_reselect, VIsual_select,
@@ -549,19 +550,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-#[inline(always)]
-unsafe extern "C" fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return dest;
-}
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
     << ::core::mem::size_of::<uint64_t>()

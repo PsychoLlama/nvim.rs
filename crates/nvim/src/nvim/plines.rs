@@ -1,12 +1,12 @@
+use crate::src::nvim::buffer::buf_meta_total;
+use crate::src::nvim::charset::vim_isbreak;
 use crate::src::nvim::charset::{ptr2cells, vim_isprintc, vim_strsize};
 use crate::src::nvim::decoration::{decor_conceal_line, decor_virt_lines};
 use crate::src::nvim::diff::{diff_check_fill, diffopt_filler};
 use crate::src::nvim::fold::{hasFolding, hasFoldingWin, lineFolded};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::indent::{get_breakindent_win, tabstop_padding};
-use crate::src::nvim::main::{
-    State, VIsual, VIsual_active, breakat_flags, curwin, namespace_localscope, p_sel,
-};
+use crate::src::nvim::main::{State, VIsual, VIsual_active, curwin, namespace_localscope, p_sel};
 use crate::src::nvim::map::mh_get_uint32_t;
 use crate::src::nvim::marktree::key::{kMTFilterSelect, mt_decor, mt_invalid, mt_right};
 use crate::src::nvim::marktree::{
@@ -155,14 +155,6 @@ unsafe extern "C" fn ns_in_win(mut ns_id: uint32_t, mut wp: *mut win_T) -> bool 
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> uint32_t {
-    return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
-}
-#[inline(always)]
-unsafe extern "C" fn vim_isbreak(mut c: ::core::ffi::c_int) -> bool {
-    return (*breakat_flags.ptr())[c as uint8_t as usize] != 0;
-}
 /// The display size of the character at `ptr`, taking the fast path when
 /// `init_charsize_arg` decided the line has nothing that needs the slow one.
 ///
@@ -183,7 +175,7 @@ pub unsafe fn win_charsize(
     }
 }
 #[inline(always)]
-unsafe extern "C" fn win_linetabsize(
+pub unsafe fn win_linetabsize(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
     mut line: *mut ::core::ffi::c_char,
@@ -1346,3 +1338,8 @@ pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
+
+/// The screen width of a whole line, starting from virtual column zero.
+pub unsafe fn linetabsize_str(s: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
+    linetabsize_col(0 as ::core::ffi::c_int, s)
+}

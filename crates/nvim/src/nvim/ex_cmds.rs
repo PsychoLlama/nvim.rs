@@ -115,7 +115,8 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::shell::call_shell;
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::path::{fix_fname, invocation_path_tail};
-use crate::src::nvim::plines::{getvcol, linetabsize_col, plines_m_win_fill};
+use crate::src::nvim::plines::linetabsize_str;
+use crate::src::nvim::plines::{getvcol, plines_m_win_fill};
 use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};
 use crate::src::nvim::regexp::{regtilde, skip_regexp, skip_regexp_err, skip_regexp_ex};
@@ -7630,10 +7631,6 @@ pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core:
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const SEA_DIALOG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn linetabsize_str(mut s: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    return linetabsize_col(0 as ::core::ffi::c_int, s);
-}
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const DBL_MAX: ::core::ffi::c_double = __DBL_MAX__;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

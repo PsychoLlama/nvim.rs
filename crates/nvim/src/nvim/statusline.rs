@@ -22,14 +22,15 @@ use crate::src::nvim::grid::{
     grid_line_start, schar_get, schar_get_adv, schar_len, screengrid_line_start,
 };
 use crate::src::nvim::highlight::hl_combine_attr;
+use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight_group::{syn_id2attr, syn_name2id_len};
 use crate::src::nvim::main::{
     Columns, KeyTyped, NameBuff, Rows, State, VIsual_active, curbuf, curtab, curwin, default_grid,
     default_gridview, did_emsg, edit_submode, first_tabpage, firstbuf, firstwin, highlight_stlnc,
-    highlight_user, hl_attr_active, msg_col, msg_grid_adj, msg_loclist, msg_qflist, msg_row,
-    ns_hl_fast, p_ch, p_ru, p_ruf, p_sc, p_sloc, p_stl, p_tal, p_wbr, redraw_cmdline,
-    redraw_not_allowed, redraw_tabline, ru_col, showcmd_buf, t_colors, tab_page_click_defs,
-    tab_page_click_defs_size, topframe, updating_screen, wild_menu_showing,
+    highlight_user, hl_attr_active, msg_col, msg_grid_adj, msg_loclist, msg_qflist, msg_row, p_ch,
+    p_ru, p_ruf, p_sc, p_sloc, p_stl, p_tal, p_wbr, redraw_cmdline, redraw_not_allowed,
+    redraw_tabline, ru_col, showcmd_buf, t_colors, tab_page_click_defs, tab_page_click_defs_size,
+    topframe, updating_screen, wild_menu_showing,
 };
 use crate::src::nvim::mbyte::{utf_ptr2cells, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memline::{ml_find_line_or_offset, ml_get_buf, ml_get_buf_len};
@@ -843,18 +844,6 @@ pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const SID_ERROR: ::core::ffi::c_int = -5 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn win_hl_attr(
-    mut wp: *mut win_T,
-    mut hlf: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 as ::core::ffi::c_int {
-        (*wp).w_ns_hl_attr
-    } else {
-        hl_attr_active.get()
-    }
-    .offset(hlf as isize);
-}
 pub const MAX_STL_EVAL_DEPTH: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub unsafe extern "C" fn win_redr_status(mut wp: *mut win_T) {
     let mut is_stl_global: bool = global_stl_height() > 0 as ::core::ffi::c_int;

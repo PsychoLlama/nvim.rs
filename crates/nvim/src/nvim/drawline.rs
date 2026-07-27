@@ -1,15 +1,18 @@
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::buffer::bt_quickfix;
+use crate::src::nvim::buffer::buf_meta_total;
+use crate::src::nvim::charset::vim_isbreak;
 use crate::src::nvim::charset::{
     byte2cells, rl_mirror_ascii, skiptowhite, skipwhite, transchar_buf, transchar_hex,
     transstr_buf, vim_isprintc,
 };
 use crate::src::nvim::cursor::get_cursor_rel_lnum;
 use crate::src::nvim::cursor_shape::cursor_is_block_during_visual;
+use crate::src::nvim::decoration::decor_redraw_col;
 use crate::src::nvim::decoration::{
     clear_virttext, decor_has_more_decorations, decor_init_draw_col, decor_recheck_draw_col,
-    decor_redraw_col_impl, decor_redraw_eol, decor_redraw_line, decor_redraw_signs,
-    decor_virt_lines, decor_virt_pos, decor_virt_pos_kind, next_virt_text_chunk,
+    decor_redraw_eol, decor_redraw_line, decor_redraw_signs, decor_virt_lines, decor_virt_pos,
+    decor_virt_pos_kind, next_virt_text_chunk,
 };
 use crate::src::nvim::decoration_provider::{
     decor_providers_invoke_line, decor_providers_invoke_range,
@@ -25,6 +28,7 @@ use crate::src::nvim::grid::{
     grid_adjust, grid_put_linebuf, linebuf_mirror, schar_cells, schar_from_char, schar_get_adv,
     schar_get_ascii, schar_get_first_codepoint, schar_len,
 };
+use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight::{
     hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr,
 };
@@ -34,11 +38,10 @@ use crate::src::nvim::insexpand::{
     ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active,
 };
 use crate::src::nvim::main::{
-    State, VIsual, VIsual_active, VIsual_mode, breakat_flags, cmdwin_type, cmdwin_win,
-    cterm_normal_bg_color, curwin, decor_state, did_emsg, dollar_vcol, dy_flags, highlight_attr,
-    highlight_match, hl_attr_active, linebuf_attr, linebuf_char, linebuf_vcol, normal_bg,
-    ns_hl_fast, p_cpo, p_sel, screen_search_hl, search_match_endcol, search_match_lines,
-    spell_redraw_lnum,
+    State, VIsual, VIsual_active, VIsual_mode, cmdwin_type, cmdwin_win, cterm_normal_bg_color,
+    curwin, decor_state, did_emsg, dollar_vcol, dy_flags, highlight_attr, highlight_match,
+    hl_attr_active, linebuf_attr, linebuf_char, linebuf_vcol, normal_bg, p_cpo, p_sel,
+    screen_search_hl, search_match_endcol, search_match_lines, spell_redraw_lnum,
 };
 use crate::src::nvim::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
@@ -588,36 +591,14 @@ pub const VIRTTEXT_EMPTY: VirtText = VirtText {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<VirtTextChunk>(),
 };
-#[inline]
-unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> uint32_t {
-    return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
-}
 pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn vim_isbreak(mut c: ::core::ffi::c_int) -> bool {
-    return (*breakat_flags.ptr())[c as uint8_t as usize] != 0;
-}
 pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const VALID_CHEIGHT: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
 pub const VALID_CROW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn decor_redraw_col(
-    mut wp: *mut win_T,
-    mut col: ::core::ffi::c_int,
-    mut win_col: ::core::ffi::c_int,
-    mut hidden: bool,
-    mut state: *mut DecorState,
-    mut max_col_last: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    if col <= (*state).col_last {
-        return (*state).current;
-    }
-    return decor_redraw_col_impl(wp, col, win_col, hidden, state, max_col_last);
-}
 static extra_buf: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static extra_buf_size: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
@@ -4873,18 +4854,6 @@ unsafe extern "C" fn invoke_range_next(
         new_col = INT_MAX as colnr_T;
     }
     return new_col as ::core::ffi::c_int;
-}
-#[inline]
-unsafe extern "C" fn win_hl_attr(
-    mut wp: *mut win_T,
-    mut hlf: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 as ::core::ffi::c_int {
-        (*wp).w_ns_hl_attr
-    } else {
-        hl_attr_active.get()
-    }
-    .offset(hlf as isize);
 }
 pub const INT_MIN: ::core::ffi::c_int = -INT_MAX - 1 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

@@ -5,6 +5,7 @@ use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite};
 use crate::src::nvim::drawscreen::redraw_all_later;
 use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::src::nvim::eval::funcs::{tv_get_buf, tv_get_buf_from_arg};
+use crate::src::nvim::eval::typval::QUEUE_INIT;
 use crate::src::nvim::eval::typval::{
     tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_alloc_lock,
     tv_dict_item_alloc, tv_dict_item_remove, tv_dict_set_keys_readonly, tv_dict_unref,
@@ -1360,15 +1361,6 @@ pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
-#[inline(always)]
-unsafe extern "C" fn QUEUE_EMPTY(q: *const QUEUE) -> ::core::ffi::c_int {
-    return (q == (*q).next as *const QUEUE) as ::core::ffi::c_int;
-}
-#[inline(always)]
-unsafe extern "C" fn QUEUE_INIT(q: *mut QUEUE) {
-    (*q).next = q as *mut queue;
-    (*q).prev = q as *mut queue;
-}
 pub const BAD_KEEP: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const BAD_DROP: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const FORCE_BIN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

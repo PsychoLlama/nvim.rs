@@ -1,6 +1,7 @@
 use crate::src::nvim::ascii::{
     ascii_isbdigit, ascii_isdigit, ascii_isspace, ascii_iswhite, ascii_isxdigit,
 };
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::col_print;
 use crate::src::nvim::change::{
     appended_lines_mark, changed_bytes, changed_lines, del_bytes, del_char, del_lines,
@@ -64,9 +65,8 @@ use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
     __assert_fail, __ctype_b_loc, abort, gettext, memmove, memset, ngettext, strcpy, strlen,
 };
-use crate::src::nvim::plines::{
-    getvcol, getvcols, getvvcol, init_charsize_arg, linetabsize_col, win_charsize,
-};
+use crate::src::nvim::plines::linetabsize_str;
+use crate::src::nvim::plines::{getvcol, getvcols, getvvcol, init_charsize_arg, win_charsize};
 use crate::src::nvim::pos::{equalpos, lt, ltoreq};
 use crate::src::nvim::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,
@@ -822,10 +822,6 @@ pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FO_MBYTE_JOIN: ::core::ffi::c_int = 'M' as ::core::ffi::c_int;
 pub const FO_MBYTE_JOIN2: ::core::ffi::c_int = 'B' as ::core::ffi::c_int;
@@ -5661,10 +5657,6 @@ pub unsafe extern "C" fn get_region_bytecount(
         return deleted_bytes;
     }
     return deleted_bytes + end_col as bcount_t;
-}
-#[inline(always)]
-unsafe extern "C" fn linetabsize_str(mut s: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    return linetabsize_col(0 as ::core::ffi::c_int, s);
 }
 #[inline]
 unsafe extern "C" fn is_append_register(mut regname: ::core::ffi::c_int) -> bool {

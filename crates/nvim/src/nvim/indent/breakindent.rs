@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::src::nvim::ascii::ascii_isdigit;
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::charset::{getdigits, getdigits_int, vim_strsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{dy_flags, empty_string_option};

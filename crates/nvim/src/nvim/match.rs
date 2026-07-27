@@ -13,12 +13,13 @@ use crate::src::nvim::eval::typval::{tv_list_first, tv_list_len, tv_list_ref};
 use crate::src::nvim::eval::window::find_win_by_nr_or_id;
 use crate::src::nvim::ex_docmd::{ends_excmd, ex_errmsg, find_nextcmd, set_no_hlsearch};
 use crate::src::nvim::fold::hasFolding;
+use crate::src::nvim::highlight::win_hl_attr;
 
 use crate::src::nvim::highlight_group::{syn_check_group, syn_id2attr, syn_id2name, syn_name2id};
 use crate::src::nvim::main::{
     called_emsg, curwin, e_dictreq, e_invalwindow, e_invarg2, e_invcmd, e_listarg, e_listreq,
-    e_trailing_arg, got_int, hl_attr_active, ns_hl_fast, p_cpo, p_rdt, search_first_line,
-    search_hl_has_cursor_lnum, search_last_line,
+    e_trailing_arg, got_int, p_cpo, p_rdt, search_first_line, search_hl_has_cursor_lnum,
+    search_last_line,
 };
 use crate::src::nvim::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memline::ml_get_buf;
@@ -801,18 +802,6 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const CPO_SEARCH: ::core::ffi::c_int = 'c' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn win_hl_attr(
-    mut wp: *mut win_T,
-    mut hlf: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 as ::core::ffi::c_int {
-        (*wp).w_ns_hl_attr
-    } else {
-        hl_attr_active.get()
-    }
-    .offset(hlf as isize);
-}
 pub const SEARCH_HL_PRIORITY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 unsafe extern "C" fn match_add(
     mut wp: *mut win_T,

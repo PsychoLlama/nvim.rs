@@ -15,6 +15,7 @@ use crate::src::nvim::autocmd::{
 use crate::src::nvim::buffer::do_modelines;
 use crate::src::nvim::eval::typval::{callback_free, callback_to_string};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{api_new_luaref, nlua_ref_is_function};
 use crate::src::nvim::main::{curbuf, current_sctx};
 use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc};
@@ -850,19 +851,6 @@ pub const AUGROUP_DELETED: C2Rust_Unnamed_14 = -4;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return dest;
-}
 pub const KEYSET_OPTIDX_clear_autocmds__buf: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_clear_autocmds__buffer: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_create_autocmd__buf: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

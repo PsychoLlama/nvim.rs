@@ -1,6 +1,7 @@
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::src::nvim::autocmd::{apply_autocmds, has_event};
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::{bt_prompt, bt_quickfix, buf_hide, buflist_getfile, fileinfo};
 use crate::src::nvim::change::{
     changed_lines, del_chars, deleted_lines, get_leader_len, ins_char, ins_char_bytes, open_line,
@@ -51,6 +52,7 @@ use crate::src::nvim::getchar::{
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{grid_line_flush, grid_line_puts, grid_line_start};
 use crate::src::nvim::help::ex_help;
+use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::keycodes::simplify_key;
 use crate::src::nvim::main::{
     KeyStuffed, KeyTyped, Rows, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
@@ -64,12 +66,12 @@ use crate::src::nvim::main::{
     last_cursormoved_win, may_garbage_collect, mod_mask, mode_displayed, motion_force,
     mouse_dragging, msg_col, msg_didany, msg_didout, msg_grid_adj, msg_hist_off, msg_nowait,
     msg_scroll, msg_silent, must_redraw, need_check_timestamps, need_fileinfo, need_wait_return,
-    no_hlsearch, no_mapping, no_smartcase, no_u_sync, no_zero_mapping, ns_hl_fast, opcount, p_ch,
-    p_cpo, p_hls, p_kp, p_langmap, p_lrm, p_sbo, p_sbr, p_sc, p_scs, p_sel, p_slm, p_sloc, p_smd,
-    p_sta, p_tm, p_to, p_ttm, p_ws, p_ww, quit_more, redraw_cmdline, redraw_mode, redraw_tabline,
-    reg_executing, reg_recorded, reg_recording, resel_VIsual_line_count, resel_VIsual_mode,
-    resel_VIsual_vcol, restart_VIsual_select, restart_edit, sc_col, showcmd_buf, skip_redraw,
-    time_fd, typebuf_was_empty, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    no_hlsearch, no_mapping, no_smartcase, no_u_sync, no_zero_mapping, opcount, p_ch, p_cpo, p_hls,
+    p_kp, p_langmap, p_lrm, p_sbo, p_sbr, p_sc, p_scs, p_sel, p_slm, p_sloc, p_smd, p_sta, p_tm,
+    p_to, p_ttm, p_ws, p_ww, quit_more, redraw_cmdline, redraw_mode, redraw_tabline, reg_executing,
+    reg_recorded, reg_recording, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
+    restart_VIsual_select, restart_edit, sc_col, showcmd_buf, skip_redraw, time_fd,
+    typebuf_was_empty, vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
 use crate::src::nvim::mapping::{add_map, langmap_adjust_mb};
 use crate::src::nvim::mark::{
@@ -1629,28 +1631,12 @@ pub const Ctrl_BSL: ::core::ffi::c_int = 28 as ::core::ffi::c_int;
 pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
 pub const Ctrl_HAT: ::core::ffi::c_int = 30 as ::core::ffi::c_int;
 pub const Ctrl__: ::core::ffi::c_int = 31 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 pub const FO_OPEN_COMS: ::core::ffi::c_int = 'o' as ::core::ffi::c_int;
 pub const CPO_DIGRAPH: ::core::ffi::c_int = 'D' as ::core::ffi::c_int;
 pub const CPO_CHANGEW: ::core::ffi::c_int = '_' as ::core::ffi::c_int;
 pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const VALID_CROW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn win_hl_attr(
-    mut wp: *mut win_T,
-    mut hlf: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 as ::core::ffi::c_int {
-        (*wp).w_ns_hl_attr
-    } else {
-        hl_attr_active.get()
-    }
-    .offset(hlf as isize);
-}
 pub const K_ZERO: ::core::ffi::c_int =
     -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_UP: ::core::ffi::c_int = -30059;

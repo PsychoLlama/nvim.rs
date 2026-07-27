@@ -6,6 +6,7 @@ use crate::src::nvim::api::private::helpers::{
 use crate::src::nvim::api::private::validate::{api_err_invalid, check_string_array};
 use crate::src::nvim::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::src::nvim::buffer::{buf_ensure_loaded, do_buffer};
+use crate::src::nvim::buffer::{buf_get_changedtick, buf_meta_total};
 use crate::src::nvim::buffer_updates::{buf_updates_register, buf_updates_unregister};
 use crate::src::nvim::change::changed_lines;
 use crate::src::nvim::cursor::{check_cursor_col, check_cursor_lnum, check_visual_pos};
@@ -217,14 +218,6 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
-#[inline]
-unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> uint32_t {
-    return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
-}
 pub const VALID_BOTLINE_AP: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const BUF_UPDATE_CALLBACKS_INIT: BufUpdateCallbacks = BufUpdateCallbacks {
     on_lines: LUA_NOREF,

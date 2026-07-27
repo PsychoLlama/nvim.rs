@@ -1,5 +1,6 @@
 use crate::src::nvim::api::extmark::virt_text_to_array;
 use crate::src::nvim::api::private::helpers::{arena_array, arena_string, cstr_as_string};
+use crate::src::nvim::buffer::buf_meta_total;
 use crate::src::nvim::change::changed_lines_invalidate_buf;
 use crate::src::nvim::decoration_provider::decor_providers_invoke_conceal_line;
 use crate::src::nvim::drawscreen::{
@@ -247,10 +248,6 @@ unsafe extern "C" fn ns_in_win(mut ns_id: uint32_t, mut wp: *mut win_T) -> bool 
     return set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id);
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> uint32_t {
-    return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
-}
 pub static decor_freelist: GlobalCell<uint32_t> = GlobalCell::new(UINT32_MAX as uint32_t);
 pub static to_free_virt: GlobalCell<*mut DecorVirtText> =
     GlobalCell::new(::core::ptr::null_mut::<DecorVirtText>());
@@ -2540,7 +2537,7 @@ pub unsafe extern "C" fn hl_group_name(mut hl_id: ::core::ffi::c_int, mut hl_nam
     };
 }
 #[inline(always)]
-unsafe extern "C" fn decor_redraw_col(
+pub unsafe fn decor_redraw_col(
     mut wp: *mut win_T,
     mut col: ::core::ffi::c_int,
     mut win_col: ::core::ffi::c_int,

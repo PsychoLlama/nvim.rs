@@ -19,6 +19,7 @@ use crate::src::nvim::grid::{
     grid_invalidate, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
     schar_from_str, screengrid_line_start,
 };
+use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight::{hl_combine_attr, hl_get_ui_attr};
 use crate::src::nvim::highlight_group::syn_check_group;
 use crate::src::nvim::insexpand::{
@@ -28,8 +29,8 @@ use crate::src::nvim::main::{
     Columns, RedrawingDisabled, Rows, State, cia_flags, cmdline_row, cmdline_win, cmdwin_type,
     curbuf, curtab, curwin, default_grid, e_menu_only_exists_in_another_mode, firstwin,
     g_do_tagpreview, hl_attr_active, linebuf_attr, linebuf_char, mouse_col, mouse_grid, mouse_row,
-    must_redraw_pum, no_u_sync, ns_hl_fast, opt_winborder_values, p_mousemev, p_pb, p_ph, p_pmw,
-    p_pumborder, p_pvh, p_pw, pum_grid, textlock,
+    must_redraw_pum, no_u_sync, opt_winborder_values, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder,
+    p_pvh, p_pw, pum_grid, textlock,
 };
 use crate::src::nvim::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::src::nvim::memory::{
@@ -43,7 +44,8 @@ use crate::src::nvim::r#move::{
 };
 use crate::src::nvim::option::set_option_value_give_err;
 use crate::src::nvim::os::libc::{__assert_fail, gettext, memset, strchr, strlen};
-use crate::src::nvim::plines::{init_charsize_arg, linesize_fast, linesize_regular, plines_m_win};
+use crate::src::nvim::plines::plines_m_win;
+use crate::src::nvim::plines::win_linetabsize;
 use crate::src::nvim::strings::reverse_text;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
@@ -1393,56 +1395,10 @@ pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn win_hl_attr(
-    mut wp: *mut win_T,
-    mut hlf: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 as ::core::ffi::c_int {
-        (*wp).w_ns_hl_attr
-    } else {
-        hl_attr_active.get()
-    }
-    .offset(hlf as isize);
-}
 pub const K_UP: ::core::ffi::c_int =
     -('k' as ::core::ffi::c_int + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const K_DOWN: ::core::ffi::c_int =
     -('k' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-#[inline(always)]
-unsafe extern "C" fn win_linetabsize(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut line: *mut ::core::ffi::c_char,
-    mut len: colnr_T,
-) -> ::core::ffi::c_int {
-    let mut csarg: CharsizeArg = CharsizeArg {
-        win: ::core::ptr::null_mut::<win_T>(),
-        line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        use_tabstop: false,
-        indent_width: 0,
-        virt_row: 0,
-        cur_text_width_left: 0,
-        cur_text_width_right: 0,
-        max_head_vcol: 0,
-        iter: [MarkTreeIter {
-            pos: MTPos { row: 0, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_15 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }; 1],
-    };
-    let cstype: CSType = init_charsize_arg(&raw mut csarg, wp, lnum, line);
-    if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return linesize_fast(&raw mut csarg, 0 as ::core::ffi::c_int, len);
-    } else {
-        return linesize_regular(&raw mut csarg, 0 as ::core::ffi::c_int, len);
-    };
-}
 static pum_array: GlobalCell<*mut pumitem_T> =
     GlobalCell::new(::core::ptr::null_mut::<pumitem_T>());
 static pum_size: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

@@ -11,6 +11,7 @@ use crate::src::nvim::ex_eval::{
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{highlight_num_groups, syn_check_group, syn_id2name};
+use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::src::nvim::main::{
     buffer_handles, curbuf, current_exception, current_sctx, curtab, curwin, did_emsg, did_throw,
@@ -221,19 +222,6 @@ pub const ET_USER: except_type_T = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-#[inline(always)]
-unsafe extern "C" fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return dest;
-}
 pub const STRING_INIT: String_0 = String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     size: 0 as size_t,
@@ -244,10 +232,6 @@ pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
         .wrapping_sub(1 as usize);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uint64_t);
-#[inline(always)]
-unsafe extern "C" fn QUEUE_EMPTY(q: *const QUEUE) -> ::core::ffi::c_int {
-    return (q == (*q).next as *const QUEUE) as ::core::ffi::c_int;
-}
 static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]

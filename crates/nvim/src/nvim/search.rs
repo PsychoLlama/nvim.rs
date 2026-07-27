@@ -1,5 +1,6 @@
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::change::get_leader_len;
 use crate::src::nvim::charset::{skipwhite, vim_isfilec, vim_iswordc, vim_iswordp};
 use crate::src::nvim::cmdhist::add_to_history;
@@ -711,10 +712,6 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 pub const CPO_SEARCH: ::core::ffi::c_int = 'c' as ::core::ffi::c_int;
 pub const CPO_SHOWMATCH: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub const CPO_MATCHBSL: ::core::ffi::c_int = 'M' as ::core::ffi::c_int;

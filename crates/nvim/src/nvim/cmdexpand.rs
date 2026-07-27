@@ -38,6 +38,7 @@ use crate::src::nvim::grid::{grid_line_fill, grid_line_flush, grid_line_puts, gr
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup};
 use crate::src::nvim::help::{cleanup_help_tags, find_help_tags};
+use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight_group::{get_highlight_name, set_context_in_highlight_cmd};
 use crate::src::nvim::insexpand::find_word_end;
 use crate::src::nvim::lua::executor::{
@@ -47,9 +48,8 @@ use crate::src::nvim::main::{
     Columns, KeyTyped, NameBuff, RedrawingDisabled, Rows, cmd_silent, cmdline_row, cmdline_win,
     curbuf, current_sctx, curwin, default_gridview, e_invarg, e_invarg2, e_nomatch2, e_toomany,
     emsg_off, got_int, hl_attr_active, lastwin, msg_col, msg_didany, msg_grid_adj, msg_row,
-    msg_scrolled, msg_silent, ns_hl_fast, p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu,
-    save_p_ls, save_p_wmh, search_first_line, search_last_line, topframe, wild_menu_showing,
-    wop_flags,
+    msg_scrolled, msg_silent, p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu, save_p_ls,
+    save_p_wmh, search_first_line, search_last_line, topframe, wild_menu_showing, wop_flags,
 };
 use crate::src::nvim::mapping::{ExpandMappings, set_context_in_map_cmd};
 use crate::src::nvim::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
@@ -6607,18 +6607,6 @@ unsafe extern "C" fn expand_pattern_in_buf(
     }
     ga_clear_strings(&raw mut ga);
     return FAIL;
-}
-#[inline]
-unsafe extern "C" fn win_hl_attr(
-    mut wp: *mut win_T,
-    mut hlf: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    return *if !(*wp).w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 as ::core::ffi::c_int {
-        (*wp).w_ns_hl_attr
-    } else {
-        hl_attr_active.get()
-    }
-    .offset(hlf as isize);
 }
 pub const K_UP: ::core::ffi::c_int =
     -('k' as ::core::ffi::c_int + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));

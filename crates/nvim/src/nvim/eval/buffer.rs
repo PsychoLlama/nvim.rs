@@ -94,12 +94,6 @@ struct SavedBufferState {
     using_aco: bool,
     save_visual_active: bool,
 }
-/// The buffer's `b:changedtick`.
-fn buf_get_changedtick(buf: &buf_T) -> varnumber_T {
-    // SAFETY-free: `changedtick_di` holds the count inline, so no pointer is
-    // followed. The union read is the one `tv_dict_add_nr` would do anyway.
-    unsafe { buf.changedtick_di.di_tv.vval.v_number }
-}
 /// Visit every window of every tab page, in `FOR_ALL_TAB_WINDOWS` order: the
 /// current tab page reports the live window list rather than its saved one.
 unsafe fn for_all_tab_windows(mut visit: impl FnMut(*mut win_T)) {

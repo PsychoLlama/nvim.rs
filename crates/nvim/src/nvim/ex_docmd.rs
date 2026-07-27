@@ -11,6 +11,7 @@ use crate::src::nvim::autocmd::{
     apply_autocmds, check_nomodeline, do_augroup, do_autocmd, do_doautocmd, ex_doautoall,
     getnextac, has_event, is_aucmd_win, may_trigger_vim_suspend_resume,
 };
+use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::{
     bt_prompt, bt_quickfix, buf_hide, buf_spname, buflist_findnr, buflist_findpat, buflist_list,
     bufref_valid, do_bufdel, do_modelines, ex_buffer_all, get_highest_fnum, goto_buffer, maketitle,
@@ -2400,10 +2401,6 @@ pub const Ctrl_HAT: ::core::ffi::c_int = 30;
 pub const Ctrl__: ::core::ffi::c_int = 31;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
-    return (*buf).changedtick_di.di_tv.vval.v_number;
-}
 pub const CPO_ALTREAD: ::core::ffi::c_int = 'a' as ::core::ffi::c_int;
 pub const CPO_BAR: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;
 pub const CPO_EXECBUF: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;

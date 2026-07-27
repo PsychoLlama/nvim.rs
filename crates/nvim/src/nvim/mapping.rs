@@ -23,6 +23,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::keycodes::{
     get_special_key_name, replace_termcodes, vim_strsave_escape_ks, vim_unescape_ks,
 };
+use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{
     api_free_luaref, api_new_luaref, nlua_call_ref, nlua_funcref_str, nlua_set_sctx,
 };
@@ -1594,19 +1595,6 @@ pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return dest;
-}
 pub const ARRAY_DICT_INIT: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,

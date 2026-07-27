@@ -72,6 +72,7 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::regexp::regtilde;
 use crate::src::nvim::register::op_reg_get;
+use crate::src::nvim::register::op_reg_index;
 use crate::src::nvim::search::{
     get_search_pattern, get_substitute_pattern, search_was_last_used, set_last_used_pattern,
     set_search_pattern, set_substitute_pattern,
@@ -817,30 +818,6 @@ unsafe extern "C" fn file_space(mut fp: *mut FileDescriptor) -> size_t {
         .buffer
         .offset(ARENA_BLOCK_SIZE as isize)
         .offset_from((*fp).write_pos) as size_t;
-}
-#[inline]
-unsafe extern "C" fn op_reg_index(regname: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    if ascii_isdigit(regname) {
-        return regname - '0' as ::core::ffi::c_int;
-    } else if regname as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-        && regname as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-    {
-        return regname as uint8_t as ::core::ffi::c_int - 'a' as ::core::ffi::c_int
-            + 10 as ::core::ffi::c_int;
-    } else if regname as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-        && regname as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-    {
-        return regname as uint8_t as ::core::ffi::c_int - 'A' as ::core::ffi::c_int
-            + 10 as ::core::ffi::c_int;
-    } else if regname == '-' as ::core::ffi::c_int {
-        return DELETION_REGISTER as ::core::ffi::c_int;
-    } else if regname == '*' as ::core::ffi::c_int {
-        return STAR_REGISTER as ::core::ffi::c_int;
-    } else if regname == '+' as ::core::ffi::c_int {
-        return PLUS_REGISTER as ::core::ffi::c_int;
-    } else {
-        return -1 as ::core::ffi::c_int;
-    };
 }
 pub const DEFAULT_POS: pos_T = pos_T {
     lnum: 1 as linenr_T,

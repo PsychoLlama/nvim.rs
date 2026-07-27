@@ -86,8 +86,8 @@ use crate::src::nvim::os::env::{home_replace, home_replace_save};
 use crate::src::nvim::os::fs::{os_fileid, os_fileid_equal, os_getperm};
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, gettext, memcpy, memmove, memset, ngettext, qsort, strcmp,
-    strcpy, strlen, strncmp, time,
+    __ctype_b_loc, gettext, memcpy, memmove, memset, ngettext, qsort, strcmp, strcpy, strlen,
+    strncmp, time,
 };
 use crate::src::nvim::path::{FullName_save, fix_fname, path_fnamecmp, path_tail};
 use crate::src::nvim::plines::win_get_fill;
@@ -106,9 +106,9 @@ pub use crate::src::nvim::types::{
     ExtmarkSplice, ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer,
     Intersection, KeyValuePair, LineGetter, LuaRef, MTKey, MTNode, MTPos, Map_int_ptr_t,
     Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
-    MarkAdjustMode, MarkTree, Object, ObjectType, OptIndex, OptInt, OptVal, OptValData, OptValType,
-    QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int, Set_int64_t, Set_uint32_t,
-    Set_uint64_t, SignTextAttrs, SpecialVarValue, StlClickDefinition,
+    MarkAdjustMode, MarkTree, MetaIndex, Object, ObjectType, OptIndex, OptInt, OptVal, OptValData,
+    OptValType, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int, Set_int64_t,
+    Set_uint32_t, Set_uint64_t, SignTextAttrs, SpecialVarValue, StlClickDefinition,
     StlClickDefinition_type_0 as C2Rust_Unnamed_14, StlClickRecord, StlFlag, String_0,
     StringBuilder, Terminal, Timestamp, TriState, UIExtension, UndoObjectType, VarLockStatus,
     VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit,
@@ -1628,10 +1628,6 @@ pub const BF_WRITE_MASK: ::core::ffi::c_int = BF_NOTEDITED + BF_NEW + BF_READERR
 pub const KEYMAP_INIT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NMARKS: ::core::ffi::c_int =
     'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn QUEUE_EMPTY(q: *const QUEUE) -> ::core::ffi::c_int {
-    return (q == (*q).next as *const QUEUE) as ::core::ffi::c_int;
-}
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
@@ -1665,7 +1661,7 @@ unsafe extern "C" fn map_put_int_ptr_t(
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 #[inline(always)]
-unsafe extern "C" fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
+pub unsafe fn buf_get_changedtick(buf: *const buf_T) -> varnumber_T {
     return (*buf).changedtick_di.di_tv.vval.v_number;
 }
 static e_attempt_to_delete_buffer_that_is_in_use_str: GlobalCell<[::core::ffi::c_char; 52]> =
@@ -2061,17 +2057,7 @@ unsafe extern "C" fn can_unload_buffer(mut buf: *mut buf_T) -> bool {
     return can_unload;
 }
 pub unsafe extern "C" fn buf_close_terminal(mut buf: *mut buf_T) {
-    '_c2rust_label: {
-        if !(*buf).terminal.is_null() {
-        } else {
-            __assert_fail(
-                b"buf->terminal\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                521 as ::core::ffi::c_uint,
-                b"void buf_close_terminal(buf_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(!(*buf).terminal.is_null(), "buf->terminal");
     (*buf).b_locked += 1;
     terminal_close(&raw mut (*buf).terminal, -1 as ::core::ffi::c_int);
     (*buf).b_locked -= 1;
@@ -2543,17 +2529,7 @@ unsafe extern "C" fn free_buffer_stuff(mut buf: *mut buf_T, mut free_flags: ::co
         &raw mut (*(*buf).b_vars).dv_hashtab,
         b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
     );
-    '_c2rust_label: {
-        if !changedtick_hi.is_null() {
-        } else {
-            __assert_fail(
-                b"changedtick_hi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1000 as ::core::ffi::c_uint,
-                b"void free_buffer_stuff(buf_T *, int)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(!changedtick_hi.is_null(), "changedtick_hi != NULL");
     hash_remove(&raw mut (*(*buf).b_vars).dv_hashtab, changedtick_hi);
     vars_clear(&raw mut (*(*buf).b_vars).dv_hashtab);
     hash_init(&raw mut (*(*buf).b_vars).dv_hashtab);
@@ -3711,18 +3687,7 @@ pub unsafe extern "C" fn buflist_new(
             br_fnum: 0,
             br_buf_free_count: 0,
         };
-        '_c2rust_label: {
-            if !(*curbuf.ptr()).is_null() {
-            } else {
-                __assert_fail(
-                    b"curbuf != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1998 as ::core::ffi::c_uint,
-                    b"buf_T *buflist_new(char *, char *, linenr_T, int)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        assert!(!(*curbuf.ptr()).is_null(), "curbuf != NULL");
         buf = curbuf.get();
         set_bufref(&raw mut bufref_0, buf);
         trigger_undo_ftplugin(buf, curwin.get());
@@ -6399,76 +6364,26 @@ pub unsafe extern "C" fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnu
         b"changedtick\0".as_ptr() as *const ::core::ffi::c_char,
         ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as usize) as ptrdiff_t,
     );
-    '_c2rust_label: {
-        if !changedtick_di.is_null() {
-        } else {
-            __assert_fail(
-                b"changedtick_di != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4260 as ::core::ffi::c_uint,
-                b"void buf_set_changedtick(buf_T *const, const varnumber_T)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    '_c2rust_label_0: {
-        if (*changedtick_di).di_tv.v_type as ::core::ffi::c_uint
-            == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-        } else {
-            __assert_fail(
-                b"changedtick_di->di_tv.v_type == VAR_NUMBER\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4261 as ::core::ffi::c_uint,
-                b"void buf_set_changedtick(buf_T *const, const varnumber_T)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    '_c2rust_label_1: {
-        if (*changedtick_di).di_tv.v_lock as ::core::ffi::c_uint
-            == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-        } else {
-            __assert_fail(
-                b"changedtick_di->di_tv.v_lock == VAR_FIXED\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4262 as ::core::ffi::c_uint,
-                b"void buf_set_changedtick(buf_T *const, const varnumber_T)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    '_c2rust_label_2: {
-        if (*changedtick_di).di_flags as ::core::ffi::c_int
-            == DI_FLAGS_RO as ::core::ffi::c_int | DI_FLAGS_FIX as ::core::ffi::c_int
-        {
-        } else {
-            __assert_fail(
-                b"changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4265 as ::core::ffi::c_uint,
-                b"void buf_set_changedtick(buf_T *const, const varnumber_T)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    '_c2rust_label_3: {
-        if changedtick_di == &raw mut (*buf).changedtick_di as *mut dictitem_T {
-        } else {
-            __assert_fail(
-                b"changedtick_di == (dictitem_T *)&buf->changedtick_di\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4267 as ::core::ffi::c_uint,
-                b"void buf_set_changedtick(buf_T *const, const varnumber_T)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(!changedtick_di.is_null(), "changedtick_di != NULL");
+    assert!(
+        (*changedtick_di).di_tv.v_type as ::core::ffi::c_uint
+            == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint,
+        "changedtick_di->di_tv.v_type == VAR_NUMBER"
+    );
+    assert!(
+        (*changedtick_di).di_tv.v_lock as ::core::ffi::c_uint
+            == VAR_FIXED as ::core::ffi::c_int as ::core::ffi::c_uint,
+        "changedtick_di->di_tv.v_lock == VAR_FIXED"
+    );
+    assert!(
+        (*changedtick_di).di_flags as ::core::ffi::c_int
+            == DI_FLAGS_RO as ::core::ffi::c_int | DI_FLAGS_FIX as ::core::ffi::c_int,
+        "changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX)"
+    );
+    assert!(
+        changedtick_di == &raw mut (*buf).changedtick_di as *mut dictitem_T,
+        "changedtick_di == (dictitem_T *)&buf->changedtick_di"
+    );
     (*buf).changedtick_di.di_tv.vval.v_number = changedtick;
     if tv_dict_is_watched((*buf).b_vars) {
         (*buf).b_locked += 1;
@@ -6487,30 +6402,8 @@ pub unsafe extern "C" fn read_buffer_into(
     mut end: linenr_T,
     mut sb: *mut StringBuilder,
 ) {
-    '_c2rust_label: {
-        if !buf.is_null() {
-        } else {
-            __assert_fail(
-                b"buf\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4285 as ::core::ffi::c_uint,
-                b"void read_buffer_into(buf_T *, linenr_T, linenr_T, StringBuilder *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    '_c2rust_label_0: {
-        if !sb.is_null() {
-        } else {
-            __assert_fail(
-                b"sb\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4286 as ::core::ffi::c_uint,
-                b"void read_buffer_into(buf_T *, linenr_T, linenr_T, StringBuilder *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(!buf.is_null(), "buf");
+    assert!(!sb.is_null(), "sb");
     if (*buf).b_ml.ml_flags & ML_EMPTY != 0 {
         return;
     }
@@ -6561,18 +6454,7 @@ pub unsafe extern "C" fn read_buffer_into(
                         ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul((*sb).capacity),
                     ) as *mut ::core::ffi::c_char;
                 }
-                '_c2rust_label_1: {
-                    if !(*sb).items.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"(*sb).items\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/buffer.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            4308 as ::core::ffi::c_uint,
-                            b"void read_buffer_into(buf_T *, linenr_T, linenr_T, StringBuilder *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
+                assert!(!(*sb).items.is_null(), "(*sb).items");
                 memcpy(
                     (*sb).items.offset((*sb).size as isize) as *mut ::core::ffi::c_void,
                     lp.offset(written as isize) as *const ::core::ffi::c_void,
@@ -6630,3 +6512,9 @@ pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
 pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+
+/// The buffer's running total of one kind of extmark metadata, kept at the
+/// root of its marktree. `buffer.h` had this as a `static inline`.
+pub unsafe fn buf_meta_total(b: *const buf_T, m: MetaIndex) -> uint32_t {
+    (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize]
+}

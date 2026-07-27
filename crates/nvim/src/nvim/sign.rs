@@ -1,6 +1,7 @@
 use crate::src::nvim::api::extmark::{describe_ns, nvim_create_namespace};
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::src::nvim::buffer::buf_meta_total;
 use crate::src::nvim::buffer::{buflist_findname_exp, buflist_findnr};
 use crate::src::nvim::charset::{
     backslash_halve, getdigits_int, skiptowhite, skiptowhite_esc, skipwhite, vim_isprintc,
@@ -1030,10 +1031,6 @@ pub const DECOR_SIGN_HIGHLIGHT_INIT: DecorSignHighlight = DecorSignHighlight {
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn buf_meta_total(mut b: *const buf_T, mut m: MetaIndex) -> uint32_t {
-    return (*(&raw const (*b).b_marktree as *const MarkTree)).meta_root[m as usize];
-}
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
 static sign_map: GlobalCell<Map_cstr_t_ptr_t> = GlobalCell::new(MAP_INIT);
 static sign_ns: GlobalCell<C2Rust_Unnamed_24> = GlobalCell::new(C2Rust_Unnamed_24 {
