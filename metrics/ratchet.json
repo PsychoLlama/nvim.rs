@@ -1,5 +1,5 @@
 {
-  "internal_exports": 127,
+  "internal_exports": 125,
   "files_without_forbid_unsafe": 250,
   "files_without_deny_unsafe_op": 237,
   "files": {
@@ -75,7 +75,7 @@
     "crates/nvim/src/nvim/eval/vars.rs": {"lines": 9011, "unsafe": 132},
     "crates/nvim/src/nvim/eval/window.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/eval/window/info.rs": {"unsafe": 8},
-    "crates/nvim/src/nvim/eval/window/resolve.rs": {"no_mangle": 2, "unsafe": 15},
+    "crates/nvim/src/nvim/eval/window/resolve.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/eval/window/switch.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/eval/window/view.rs": {"unsafe": 14},
     "crates/nvim/src/nvim/event/libuv.rs": {"unsafe": 1},

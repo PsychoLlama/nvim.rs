@@ -1,6 +1,5 @@
 use super::*;
 
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn win_id2wp(id: c_int) -> *mut win_T {
     win_id2wp_tp(id, ptr::null_mut())
 }
@@ -57,7 +56,6 @@ pub unsafe extern "C" fn find_win_by_nr(vp: *mut typval_T, tp: *mut tabpage_T) -
 /// Find a window: When using a Window ID in any tab page, when using a number
 /// in the current tab page.
 /// Returns NULL when not found.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn find_win_by_nr_or_id(vp: *mut typval_T) -> *mut win_T {
     let mut nr: c_int = tv_get_number_chk(vp, ptr::null_mut()) as c_int;
     if nr >= LOWEST_WIN_ID as c_int {

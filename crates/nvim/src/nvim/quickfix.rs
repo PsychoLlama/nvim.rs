@@ -17,6 +17,7 @@ use crate::src::nvim::eval::typval::{
     tv_get_number_chk, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict,
 };
 use crate::src::nvim::eval::vars::set_internal_string_var;
+use crate::src::nvim::eval::window::{find_win_by_nr_or_id, win_id2wp}; // .cast(): this file keeps its own layout-identical win_T
 use crate::src::nvim::eval_1::{
     callback_call, callback_from_typval, eval_expr, set_ref_in_callback, set_ref_in_item,
 };
@@ -169,8 +170,6 @@ unsafe extern "C" {
     );
     fn redraw_later(wp: *mut win_T, type_0: ::core::ffi::c_int);
     fn redraw_buf_later(buf: *mut buf_T, type_0: ::core::ffi::c_int);
-    fn win_id2wp(id: ::core::ffi::c_int) -> *mut win_T;
-    fn find_win_by_nr_or_id(vp: *mut typval_T) -> *mut win_T;
     fn do_ecmd(
         fnum: ::core::ffi::c_int,
         ffname: *mut ::core::ffi::c_char,
@@ -5418,7 +5417,7 @@ unsafe extern "C" fn qf_jump_edit_buffer(
     }
     if qfl_type as ::core::ffi::c_uint == QFLT_LOCATION as ::core::ffi::c_int as ::core::ffi::c_uint
     {
-        let mut wp: *mut win_T = win_id2wp(prev_winid);
+        let mut wp: *mut win_T = win_id2wp(prev_winid).cast();
         if wp.is_null() && (*curwin.get()).w_llist != qi {
             emsg(gettext(
                 b"E924: Current window was closed\0".as_ptr() as *const ::core::ffi::c_char
@@ -11194,7 +11193,8 @@ pub unsafe extern "C" fn f_getloclist(
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
+    let mut wp: *mut win_T =
+        find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize)).cast();
     get_qf_loc_list(
         false_0 != 0,
         wp,
@@ -11315,7 +11315,7 @@ pub unsafe extern "C" fn f_setloclist(
 ) {
     (*rettv).vval.v_number = -1 as varnumber_T;
     let mut win: *mut win_T =
-        find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
+        find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize)).cast();
     if !win.is_null() {
         set_qf_ll_list(win, argvars.offset(1 as ::core::ffi::c_int as isize), rettv);
     }
