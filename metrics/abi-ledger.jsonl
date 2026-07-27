@@ -85,8 +85,6 @@
 {"symbol":"linesize_fast","kind":"fn","file":"crates/nvim/src/nvim/plines.rs","class":"internal","refs":[]}
 {"symbol":"linesize_regular","kind":"fn","file":"crates/nvim/src/nvim/plines.rs","class":"internal","refs":[]}
 {"symbol":"ll_resize_stack","kind":"fn","file":"crates/nvim/src/nvim/quickfix.rs","class":"internal","refs":[]}
-{"symbol":"mark_adjust_buf","kind":"fn","file":"crates/nvim/src/nvim/mark.rs","class":"internal","refs":[]}
-{"symbol":"mark_get","kind":"fn","file":"crates/nvim/src/nvim/mark.rs","class":"internal","refs":[]}
 {"symbol":"marktree_check","kind":"fn","file":"crates/nvim/src/nvim/marktree/check.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"marktree_check_intersections","kind":"fn","file":"crates/nvim/src/nvim/marktree/check.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"marktree_clear","kind":"fn","file":"crates/nvim/src/nvim/marktree.rs","class":"test","refs":["unit-specs"]}

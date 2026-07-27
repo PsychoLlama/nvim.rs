@@ -15,6 +15,7 @@ use crate::src::nvim::main::{
     p_cpo, p_mmp, p_re, p_sel, p_verbose, rc_did_emsg, re_extmatch_in, re_extmatch_out,
     reg_do_extmatch,
 };
+use crate::src::nvim::mark::mark_get;
 use crate::src::nvim::mbyte::{
     mb_get_class_tab, mb_islower, mb_isupper, mb_ptr2char_adv, mb_strnicmp, mb_tolower, mb_toupper,
     utf_char2bytes, utf_char2len, utf_composinglike, utf_fold, utf_head_off,
@@ -67,13 +68,6 @@ pub use crate::src::nvim::types::{
 unsafe extern "C" {
     static curwin: GlobalCell<*mut win_T>;
     static curbuf: GlobalCell<*mut buf_T>;
-    fn mark_get(
-        buf: *mut buf_T,
-        win: *mut win_T,
-        fmp: *mut fmark_T,
-        flag: MarkGet,
-        name: ::core::ffi::c_int,
-    ) -> *mut fmark_T;
     fn ml_get_buf(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ffi::c_char;
     fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T;
     fn init_charsize_arg(
@@ -7749,8 +7743,8 @@ unsafe extern "C" fn regmatch(
                                     0 as size_t
                                 };
                                 let mut fm: *mut fmark_T = mark_get(
-                                    (*rex.ptr()).reg_buf,
-                                    curwin.get(),
+                                    (*rex.ptr()).reg_buf.cast(), // local buf_T copy
+                                    curwin.get().cast(),
                                     ::core::ptr::null_mut::<fmark_T>(),
                                     kMarkBufLocal,
                                     mark,
@@ -23585,8 +23579,8 @@ unsafe extern "C" fn nfa_regmatch(
                                         0 as size_t
                                     };
                                     let mut fm: *mut fmark_T = mark_get(
-                                        (*rex.ptr()).reg_buf,
-                                        curwin.get(),
+                                        (*rex.ptr()).reg_buf.cast(), // local buf_T copy
+                                        curwin.get().cast(),
                                         ::core::ptr::null_mut::<fmark_T>(),
                                         kMarkBufLocal,
                                         (*(*t).state).val,
