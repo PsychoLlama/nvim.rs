@@ -58,6 +58,13 @@ and this project adheres to [CalVer](https://calver.org/).
   its version and its big-endian field encoding — is now a safe module of its
   own, verified against files written by the previous build; the format itself
   is unchanged.
+- Folding and marks (`src/nvim/fold`, `src/nvim/mark`) were split along the
+  structures they maintain: the fold tree's level computation, open/closed
+  state, markers, fold text and line bookkeeping are separate modules, as are
+  the mark stores, the jumplist, mark lookup and the shada iteration surface.
+  The C's fold-array indexing and its four mark-adjustment macros, which the
+  transpiler had expanded at 111 sites between them, are each written once and
+  tested.
 
 ## [2026.07.26-d0c5cf2147]
 
