@@ -2293,7 +2293,10 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         )
         .unwrap(),
     }
-    let flags = if spec.push_special() {
+    // A function with a Lua implementation converts its own result, so this
+    // is only the fallback path, and upstream left it on the old conversion
+    // whatever the API level says.
+    let flags = if spec.push_special() || has_lua_imp {
         "PUSH_SPECIAL"
     } else {
         "PUSH"
