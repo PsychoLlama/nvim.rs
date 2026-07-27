@@ -95,7 +95,6 @@
     "crates/nvim/src/nvim/map_glyph_cache.rs": 1,
     "crates/nvim/src/nvim/mapping.rs": 161,
     "crates/nvim/src/nvim/mark.rs": 87,
-    "crates/nvim/src/nvim/marktree.rs": 31,
     "crates/nvim/src/nvim/match.rs": 44,
     "crates/nvim/src/nvim/mbyte.rs": 206,
     "crates/nvim/src/nvim/memfile.rs": 17,
