@@ -46,6 +46,13 @@ and this project adheres to [CalVer](https://calver.org/).
   written against a named invariant rather than a macro expansion. The mark
   flag definitions and accessors, which the transpiler had copied into six
   files, are defined once.
+- Character classification, display translation, cursor motion and indenting
+  (`src/nvim/charset`, `src/nvim/cursor`, `src/nvim/indent`) were rewritten.
+  The `<xx>`/`^X` renderings, the number parser's radix arithmetic and the
+  'vartabstop' math are pure, tested modules; `mbyte.h`'s and `plines.h`'s
+  character-measuring inlines, which the transpiler had copied into eleven
+  files, are defined once. `:set vartabstop` no longer clears a buffer's
+  tabstops when it rejects the new value.
 
 ## [2026.07.26-d0c5cf2147]
 
