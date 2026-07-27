@@ -7,73 +7,37 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+Ongoing migration of the transpiled code toward safe, idiomatic Rust.
+Behavior-preserving except where noted under Fixed.
+
 ### Changed
 
-- The embedded terminal emulator (`src/nvim/vterm`) was rewritten from its
-  transpiled form into safe, idiomatic Rust, and split along the lines of the
-  protocol it implements. Several latent crashes and hangs reachable from any
-  program running under `:terminal` went with it.
-- The terminal key-input library (`src/nvim/tui/termkey`) likewise: its key
-  parsing, tables and formatting are now safe modules, and the plugin
-  machinery it carried for drivers this editor never had is gone. Four
-  out-of-bounds writes and reads reachable from terminal input went with it.
-- Terminal descriptions (`src/nvim/tui/terminfo`) were rewritten the same way:
-  the capability slots every part of the TUI indexes by are now defined once,
-  the built-in terminal descriptions are data modules pinned by a checksum
-  against the C original, and the parameterised-string interpreter renders its
-  own conversions instead of assembling `printf` formats at runtime.
-- The event loop and job control (`src/nvim/event`, `src/nvim/os/pty_proc_unix`)
-  were rewritten over their libuv boundary: the queues, streams, watchers,
-  sockets and child processes are safe Rust above a single set of foreign
-  declarations, and the loop's intrusive lists and hand-rolled vectors are now
-  owned Rust collections.
-- msgpack-rpc and channels (`src/nvim/msgpack_rpc`, `src/nvim/channel`) were
-  rewritten: the wire format, the request/response dispatch and the channel
-  lifecycle are now safe Rust with tested pure cores, and the transpiler's
-  per-translation-unit copies of `Channel`, `Terminal`, `Unpacker` and
-  `TermInput` were folded onto single definitions, so the two halves of a
-  boundary can no longer disagree about a layout.
-- The Vimscript expression parser (`src/nvim/viml/parser`) was split into a
-  lexer, an AST module, a string decoder and the parse state machine, whose
-  token loop is in turn a handler per token class instead of one 3,500-line
-  function, and its hand-expanded vectors became owned Rust collections.
-  `nvim_parse_expression` and the cmdline highlighter report exactly what they
-  did; a leak and an aliasing fault in the highlighter's figure-brace handling
-  went with it.
-- The core hash containers (`src/nvim/map`, `src/nvim/hashtab`) collapsed from
-  nine transpiled copies of the same table onto one generic implementation.
-- The extmark store (`src/nvim/marktree`) was split along its concerns — key
-  representation, subtree decoration counts, node layout, intersection sets,
-  rebalancing, iteration, splicing, checking and inspection — and each is
-  written against a named invariant rather than a macro expansion. The mark
-  flag definitions and accessors, which the transpiler had copied into six
-  files, are defined once.
-- Character classification, display translation, cursor motion and indenting
-  (`src/nvim/charset`, `src/nvim/cursor`, `src/nvim/indent`) were rewritten.
-  The `<xx>`/`^X` renderings, the number parser's radix arithmetic and the
-  'vartabstop' math are pure, tested modules; `mbyte.h`'s and `plines.h`'s
-  character-measuring inlines, which the transpiler had copied into eleven
-  files, are defined once. `:set vartabstop` no longer clears a buffer's
-  tabstops when it rejects the new value.
-- Undo and the argument list (`src/nvim/undo`, `src/nvim/arglist`) were split
-  along their own seams. The undo file's on-disk contract — its magic bytes,
-  its version and its big-endian field encoding — is now a safe module of its
-  own, verified against files written by the previous build; the format itself
-  is unchanged.
-- Folding and marks (`src/nvim/fold`, `src/nvim/mark`) were split along the
-  structures they maintain: the fold tree's level computation, open/closed
-  state, markers, fold text and line bookkeeping are separate modules, as are
-  the mark stores, the jumplist, mark lookup and the shada iteration surface.
-  The C's fold-array indexing and its four mark-adjustment macros, which the
-  transpiler had expanded at 111 sites between them, are each written once and
-  tested.
-- The buffer, window and compound-assignment builtins (`src/nvim/eval/buffer`,
-  `src/nvim/eval/window`, `src/nvim/eval/executor`) were rewritten and split by
-  what each function asks of the editor: resolving a buffer or window argument,
-  reading and writing lines, describing the layout, saving and restoring a
-  view, and switching windows for the duration of a call. `:let n += 1` at the
-  largest representable number now wraps as documented instead of aborting a
-  debug build.
+- Rewrote the terminal stack (`vterm`, `termkey`, `terminfo`), covering
+  `:terminal`, terminal key input, and TUI rendering.
+- Rewrote the event loop, job control, msgpack-rpc, and channels, covering
+  jobs, pty processes, RPC clients, and UI attachments.
+- Rewrote the Vimscript expression parser, covering expression evaluation,
+  `nvim_parse_expression`, and cmdline highlighting.
+- Rewrote the extmark store and the core hash containers, covering extmarks,
+  signs, decorations, and virtual text.
+- Rewrote character classification, display translation, cursor motion, and
+  indenting, covering unprintable rendering, `'vartabstop'`, and cursor
+  movement.
+- Rewrote undo, the argument list, folds, and marks, covering undo files
+  (format unchanged), `:args`, folding, marks, the jumplist, and shada.
+- Rewrote the buffer, window, and compound-assignment builtins, covering the
+  `*bufline*()` and `win_*()` function families and `:let x += y`.
+
+### Fixed
+
+- Several crashes and hangs reachable from any program running under
+  `:terminal`.
+- Four out-of-bounds reads and writes reachable from terminal key input.
+- A leak and an aliasing fault in cmdline highlighting of figure braces.
+- `:set vartabstop` no longer clears a buffer's tabstops when it rejects the
+  new value.
+- `:let n += 1` at the largest representable number wraps as documented
+  instead of aborting a debug build.
 
 ## [2026.07.26-d0c5cf2147]
 
