@@ -65,6 +65,13 @@ and this project adheres to [CalVer](https://calver.org/).
   The C's fold-array indexing and its four mark-adjustment macros, which the
   transpiler had expanded at 111 sites between them, are each written once and
   tested.
+- The buffer, window and compound-assignment builtins (`src/nvim/eval/buffer`,
+  `src/nvim/eval/window`, `src/nvim/eval/executor`) were rewritten and split by
+  what each function asks of the editor: resolving a buffer or window argument,
+  reading and writing lines, describing the layout, saving and restoring a
+  view, and switching windows for the duration of a call. `:let n += 1` at the
+  largest representable number now wraps as documented instead of aborting a
+  debug build.
 
 ## [2026.07.26-d0c5cf2147]
 
