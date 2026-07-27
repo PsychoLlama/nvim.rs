@@ -1,3 +1,4 @@
+pub mod intersect;
 pub mod key;
 pub mod meta;
 pub mod node;
@@ -9,10 +10,11 @@ use crate::src::nvim::map::{
     map_del_uint64_t_ptr_t, map_put_ref_ptr_t_ptr_t, map_put_ref_uint64_t_MTDamagePair,
     mh_get_ptr_t,
 };
+use crate::src::nvim::marktree::intersect::*;
 use crate::src::nvim::marktree::key::*;
 use crate::src::nvim::marktree::meta::*;
 use crate::src::nvim::marktree::node::*;
-use crate::src::nvim::memory::{xfree, xmalloc, xmemdup, xrealloc};
+use crate::src::nvim::memory::{xfree, xmemdup, xrealloc};
 use crate::src::nvim::os::libc::{abort, memcmp, memcpy, memmove, snprintf};
 pub use crate::src::nvim::types::{
     DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
@@ -38,19 +40,6 @@ pub const KV_INITIAL_VALUE: C2Rust_Unnamed_3 = C2Rust_Unnamed_3 {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<MTKey>(),
 };
-#[inline(always)]
-unsafe extern "C" fn _memcpy_free(
-    dest: *mut ::core::ffi::c_void,
-    src: *mut ::core::ffi::c_void,
-    size: size_t,
-) -> *mut ::core::ffi::c_void {
-    memcpy(dest, src, size);
-    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw const src as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL;
-    let _ = *ptr_;
-    return dest;
-}
 static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
@@ -85,7 +74,48 @@ unsafe extern "C" fn map_get_ptr_t_ptr_t(mut map: *mut Map_ptr_t_ptr_t, mut key:
         *(*map).values.offset(k as isize)
     };
 }
+/// The set of paired-mark ids whose ranges cover the whole of node `x`.
 #[inline]
+unsafe fn ix(x: *mut MTNode) -> IdSet {
+    IdSet::new(&raw mut (*x).intersect)
+}
+
+/// Record that the range `id` covers the whole of `x`.
+fn intersect_node(x: *mut MTNode, id: uint64_t) {
+    assert!(id & MARKTREE_END_FLAG == 0, "!(id & MARKTREE_END_FLAG)");
+    unsafe { ix(x) }.insert_sorted(id);
+}
+
+/// Drop that record. `strict` asserts the id was there to drop.
+fn unintersect_node(x: *mut MTNode, id: uint64_t, strict: bool) {
+    assert!(id & MARKTREE_END_FLAG == 0, "!(id & MARKTREE_END_FLAG)");
+    unsafe { ix(x) }.remove(id, strict);
+}
+
+/// `x` shrank, or is one half of a split. Ranges that used to cover every one
+/// of its children now cover `x` itself, so hoist them one level.
+fn bubble_up(x: *mut MTNode) {
+    let mut common = Intersection {
+        size: 0,
+        capacity: 0,
+        items: ::core::ptr::null_mut(),
+        init_array: [0; 4],
+    };
+    let common = unsafe { IdSet::new(&raw mut common) };
+    common.init();
+    unsafe {
+        let first = ix((*inner(x)).i_ptr[0]);
+        let last = ix((*inner(x)).i_ptr[(*x).n as usize]);
+        intersect_common(&common, &first, &last);
+        if !common.is_empty() {
+            for i in 0..=(*x).n as usize {
+                intersect_sub(&ix((*inner(x)).i_ptr[i]), &common);
+            }
+            intersect_add(&ix(x), &common);
+        }
+        xfree(common.take_heap());
+    }
+}
 unsafe extern "C" fn split_node(
     mut b: *mut MarkTree,
     mut x: *mut MTNode,
@@ -101,73 +131,10 @@ unsafe extern "C" fn split_node(
     } else {
         MARKTREE_END_FLAG
     };
-    if (*z).intersect.capacity < (*y).intersect.size {
-        (*z).intersect.capacity = if (*y).intersect.size
-            > ::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_div(::core::mem::size_of::<uint64_t>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) {
-            (*y).intersect.size
-        } else {
-            ::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_div(::core::mem::size_of::<uint64_t>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                        == 0) as ::core::ffi::c_int as size_t,
-                )
-        };
-        (*z).intersect.items = (if (*z).intersect.capacity
-            == ::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_div(::core::mem::size_of::<uint64_t>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) {
-            if (*z).intersect.items == &raw mut (*z).intersect.init_array as *mut uint64_t {
-                (*z).intersect.items as *mut ::core::ffi::c_void
-            } else {
-                _memcpy_free(
-                    &raw mut (*z).intersect.init_array as *mut uint64_t as *mut ::core::ffi::c_void,
-                    (*z).intersect.items as *mut ::core::ffi::c_void,
-                    (*z).intersect
-                        .size
-                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                )
-            }
-        } else {
-            if (*z).intersect.items == &raw mut (*z).intersect.init_array as *mut uint64_t {
-                memcpy(
-                    xmalloc(
-                        (*z).intersect
-                            .capacity
-                            .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    ),
-                    (*z).intersect.items as *const ::core::ffi::c_void,
-                    (*z).intersect
-                        .size
-                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                )
-            } else {
-                xrealloc(
-                    (*z).intersect.items as *mut ::core::ffi::c_void,
-                    (*z).intersect
-                        .capacity
-                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                )
-            }
-        }) as *mut uint64_t;
-    }
-    (*z).intersect.size = (*y).intersect.size;
-    memcpy(
-        (*z).intersect.items as *mut ::core::ffi::c_void,
-        (*y).intersect.items as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<uint64_t>().wrapping_mul((*y).intersect.size),
-    );
+    // z inherits everything y intersected: the split does not change which
+    // ranges cover either half.
+    ix(z).clear();
+    ix(z).extend_from_slice(ix(y).as_slice());
     if (*y).level == 0 {
         let mut pi: uint64_t = pseudo_index(y, 0 as ::core::ffi::c_int);
         let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -178,7 +145,7 @@ unsafe extern "C" fn split_node(
                 && pi_end > pi
                 && mt_lookup_key(k) != last_start
             {
-                intersect_node(b, z, mt_lookup_id(k.ns, k.id, false));
+                intersect_node(z, mt_lookup_id(k.ns, k.id, false));
             }
             j += 1;
         }
@@ -192,7 +159,7 @@ unsafe extern "C" fn split_node(
             let mut pi_start: uint64_t =
                 pseudo_index_for_id(b, mt_lookup_id(k_0.ns, k_0.id, false), true);
             if mt_end(k_0) as ::core::ffi::c_int != 0 && pi_start > 0 as uint64_t && pi_start < pi {
-                intersect_node(b, y, mt_lookup_id(k_0.ns, k_0.id, false));
+                intersect_node(y, mt_lookup_id(k_0.ns, k_0.id, false));
             }
             j_0 += 1;
         }
@@ -423,143 +390,6 @@ pub unsafe extern "C" fn marktree_put(
         );
     }
 }
-unsafe extern "C" fn intersection_has(mut x: *mut Intersection, mut id: uint64_t) -> bool {
-    let mut i: size_t = 0 as size_t;
-    while i < (*x).size {
-        if *(*x).items.offset(i as isize) == id {
-            return true;
-        } else if *(*x).items.offset(i as isize) >= id {
-            return false;
-        }
-        i = i.wrapping_add(1);
-    }
-    return false;
-}
-unsafe extern "C" fn intersect_node(mut _b: *mut MarkTree, mut x: *mut MTNode, mut id: uint64_t) {
-    assert!(
-        id & 1 as ::core::ffi::c_int as uint64_t == 0,
-        "!(id & MARKTREE_END_FLAG)"
-    );
-    if (*x).intersect.size == (*x).intersect.capacity {
-        (*x).intersect.capacity = if (*x).intersect.capacity << 1 as ::core::ffi::c_int
-            > ::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_div(::core::mem::size_of::<uint64_t>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) {
-            (*x).intersect.capacity << 1 as ::core::ffi::c_int
-        } else {
-            ::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_div(::core::mem::size_of::<uint64_t>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                        == 0) as ::core::ffi::c_int as size_t,
-                )
-        };
-        (*x).intersect.items = (if (*x).intersect.capacity
-            == ::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_div(::core::mem::size_of::<uint64_t>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) {
-            if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
-                (*x).intersect.items as *mut ::core::ffi::c_void
-            } else {
-                _memcpy_free(
-                    &raw mut (*x).intersect.init_array as *mut uint64_t as *mut ::core::ffi::c_void,
-                    (*x).intersect.items as *mut ::core::ffi::c_void,
-                    (*x).intersect
-                        .size
-                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                )
-            }
-        } else {
-            if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
-                memcpy(
-                    xmalloc(
-                        (*x).intersect
-                            .capacity
-                            .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    ),
-                    (*x).intersect.items as *const ::core::ffi::c_void,
-                    (*x).intersect
-                        .size
-                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                )
-            } else {
-                xrealloc(
-                    (*x).intersect.items as *mut ::core::ffi::c_void,
-                    (*x).intersect
-                        .capacity
-                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                )
-            }
-        }) as *mut uint64_t;
-    } else {
-    };
-    (*x).intersect.size = (*x).intersect.size.wrapping_add(1);
-    let mut i: ssize_t = (*x).intersect.size as ssize_t - 1 as ssize_t;
-    while i >= 0 as ssize_t {
-        if i > 0 as ssize_t && *(*x).intersect.items.offset((i - 1 as ssize_t) as isize) > id {
-            *(*x).intersect.items.offset(i as isize) =
-                *(*x).intersect.items.offset((i - 1 as ssize_t) as isize);
-            i -= 1;
-        } else {
-            *(*x).intersect.items.offset(i as isize) = id;
-            break;
-        }
-    }
-}
-unsafe extern "C" fn unintersect_node(
-    mut _b: *mut MarkTree,
-    mut x: *mut MTNode,
-    mut id: uint64_t,
-    mut strict: bool,
-) {
-    assert!(
-        id & 1 as ::core::ffi::c_int as uint64_t == 0,
-        "!(id & MARKTREE_END_FLAG)"
-    );
-    let mut seen: bool = false;
-    let mut i: size_t = 0;
-    i = 0 as size_t;
-    while i < (*x).intersect.size {
-        if *(*x).intersect.items.offset(i as isize) < id {
-            i = i.wrapping_add(1);
-        } else {
-            if *(*x).intersect.items.offset(i as isize) != id {
-                break;
-            }
-            seen = true;
-            break;
-        }
-    }
-    if strict {
-        assert!(seen, "seen");
-    }
-    if seen {
-        if i < (*x).intersect.size.wrapping_sub(1 as size_t) {
-            memmove(
-                (*x).intersect.items.offset(i as isize) as *mut ::core::ffi::c_void,
-                (*x).intersect
-                    .items
-                    .offset(i.wrapping_add(1 as size_t) as isize)
-                    as *const ::core::ffi::c_void,
-                (*x).intersect
-                    .size
-                    .wrapping_sub(i)
-                    .wrapping_sub(1 as size_t)
-                    .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-            );
-        }
-        (*x).intersect.size = (*x).intersect.size.wrapping_sub(1);
-    }
-}
 pub unsafe extern "C" fn marktree_intersect_pair(
     mut b: *mut MarkTree,
     mut id: uint64_t,
@@ -625,9 +455,9 @@ pub unsafe extern "C" fn marktree_intersect_pair(
                 let mut x: *mut MTNode =
                     (*inner((*itr).x)).i_ptr[((*itr).i + 1 as ::core::ffi::c_int) as usize];
                 if delete {
-                    unintersect_node(b, x, id, true);
+                    unintersect_node(x, id, true);
                 } else {
-                    intersect_node(b, x, id);
+                    intersect_node(x, id);
                 }
             }
         }
@@ -763,12 +593,7 @@ pub unsafe extern "C" fn marktree_del_itr(
                 );
             }
             if p != cur && start_id != 0 {
-                if intersection_has(
-                    &raw mut (**(&raw mut (*inner(p)).i_ptr as *mut *mut MTNode)
-                        .offset(0 as ::core::ffi::c_int as isize))
-                    .intersect,
-                    start_id,
-                ) {
+                if ix((*inner(p)).i_ptr[0]).contains(start_id) {
                     let mut last: ::core::ffi::c_int = if lnode != x {
                         1 as ::core::ffi::c_int
                     } else {
@@ -776,10 +601,10 @@ pub unsafe extern "C" fn marktree_del_itr(
                     };
                     let mut k: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     while (k as int32_t) < (*p).n + last as int32_t {
-                        unintersect_node(b, (*inner(p)).i_ptr[k as usize], start_id, true);
+                        unintersect_node((*inner(p)).i_ptr[k as usize], start_id, true);
                         k += 1;
                     }
-                    intersect_node(b, p, start_id);
+                    intersect_node(p, start_id);
                     did_bubble = true;
                 }
             }
@@ -798,7 +623,7 @@ pub unsafe extern "C" fn marktree_del_itr(
             let mut pi: uint64_t = pseudo_index(x, 0 as ::core::ffi::c_int);
             let mut pi_start: uint64_t = pseudo_index_for_id(b, start_id, true);
             if pi_start > 0 as uint64_t && pi_start < pi {
-                intersect_node(b, x, start_id);
+                intersect_node(x, start_id);
             }
         }
         relative(intkey.pos, &mut deleted.pos);
@@ -966,458 +791,6 @@ pub unsafe extern "C" fn marktree_revise_meta(
     }
     meta_apply_delta(&mut (*b).meta_root, &meta_new, &meta_old);
 }
-unsafe extern "C" fn intersect_merge(
-    mut m: *mut Intersection,
-    mut x: *mut Intersection,
-    mut y: *mut Intersection,
-) {
-    let mut xi: size_t = 0 as size_t;
-    let mut yi: size_t = 0 as size_t;
-    let mut xn: size_t = 0 as size_t;
-    let mut yn: size_t = 0 as size_t;
-    while xi < (*x).size && yi < (*y).size {
-        if *(*x).items.offset(xi as isize) == *(*y).items.offset(yi as isize) {
-            if (*m).size == (*m).capacity {
-                (*m).capacity = if (*m).capacity << 1 as ::core::ffi::c_int
-                    > ::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_div(::core::mem::size_of::<uint64_t>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        ) {
-                    (*m).capacity << 1 as ::core::ffi::c_int
-                } else {
-                    ::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_div(::core::mem::size_of::<uint64_t>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                == 0) as ::core::ffi::c_int as size_t,
-                        )
-                };
-                (*m).items = (if (*m).capacity
-                    == ::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_div(::core::mem::size_of::<uint64_t>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        ) {
-                    if (*m).items == &raw mut (*m).init_array as *mut uint64_t {
-                        (*m).items as *mut ::core::ffi::c_void
-                    } else {
-                        _memcpy_free(
-                            &raw mut (*m).init_array as *mut uint64_t as *mut ::core::ffi::c_void,
-                            (*m).items as *mut ::core::ffi::c_void,
-                            (*m).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        )
-                    }
-                } else {
-                    if (*m).items == &raw mut (*m).init_array as *mut uint64_t {
-                        memcpy(
-                            xmalloc(
-                                (*m).capacity
-                                    .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                            ),
-                            (*m).items as *const ::core::ffi::c_void,
-                            (*m).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        )
-                    } else {
-                        xrealloc(
-                            (*m).items as *mut ::core::ffi::c_void,
-                            (*m).capacity
-                                .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        )
-                    }
-                }) as *mut uint64_t;
-            } else {
-            };
-            let c2rust_fresh3 = (*m).size;
-            (*m).size = (*m).size.wrapping_add(1);
-            *(*m).items.offset(c2rust_fresh3 as isize) = *(*x).items.offset(xi as isize);
-            xi = xi.wrapping_add(1);
-            yi = yi.wrapping_add(1);
-        } else if *(*x).items.offset(xi as isize) < *(*y).items.offset(yi as isize) {
-            let c2rust_fresh4 = xi;
-            xi = xi.wrapping_add(1);
-            let c2rust_fresh5 = xn;
-            xn = xn.wrapping_add(1);
-            *(*x).items.offset(c2rust_fresh5 as isize) = *(*x).items.offset(c2rust_fresh4 as isize);
-        } else {
-            let c2rust_fresh6 = yi;
-            yi = yi.wrapping_add(1);
-            let c2rust_fresh7 = yn;
-            yn = yn.wrapping_add(1);
-            *(*y).items.offset(c2rust_fresh7 as isize) = *(*y).items.offset(c2rust_fresh6 as isize);
-        }
-    }
-    if xi < (*x).size {
-        memmove(
-            (*x).items.offset(xn as isize) as *mut ::core::ffi::c_void,
-            (*x).items.offset(xi as isize) as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<uint64_t>().wrapping_mul((*x).size.wrapping_sub(xi)),
-        );
-        xn = xn.wrapping_add((*x).size.wrapping_sub(xi));
-    }
-    if yi < (*y).size {
-        memmove(
-            (*y).items.offset(yn as isize) as *mut ::core::ffi::c_void,
-            (*y).items.offset(yi as isize) as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<uint64_t>().wrapping_mul((*y).size.wrapping_sub(yi)),
-        );
-        yn = yn.wrapping_add((*y).size.wrapping_sub(yi));
-    }
-    (*x).size = xn;
-    (*y).size = yn;
-}
-unsafe extern "C" fn intersect_mov(
-    mut x: *mut Intersection,
-    mut y: *mut Intersection,
-    mut w: *mut Intersection,
-    mut d: *mut Intersection,
-) {
-    let mut wi: size_t = 0 as size_t;
-    let mut yi: size_t = 0 as size_t;
-    let mut wn: size_t = 0 as size_t;
-    let mut yn: size_t = 0 as size_t;
-    let mut xi: size_t = 0 as size_t;
-    while wi < (*w).size || xi < (*x).size {
-        if wi < (*w).size
-            && (xi >= (*x).size
-                || *(*x).items.offset(xi as isize) >= *(*w).items.offset(wi as isize))
-        {
-            if xi < (*x).size && *(*x).items.offset(xi as isize) == *(*w).items.offset(wi as isize)
-            {
-                xi = xi.wrapping_add(1);
-            }
-            while yi < (*y).size
-                && *(*y).items.offset(yi as isize) < *(*w).items.offset(wi as isize)
-            {
-                if (*d).size == (*d).capacity {
-                    (*d).capacity = if (*d).capacity << 1 as ::core::ffi::c_int
-                        > ::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_div(::core::mem::size_of::<uint64_t>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        (*d).capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        ::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_div(::core::mem::size_of::<uint64_t>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                    == 0) as ::core::ffi::c_int
-                                    as size_t,
-                            )
-                    };
-                    (*d).items = (if (*d).capacity
-                        == ::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_div(::core::mem::size_of::<uint64_t>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
-                            (*d).items as *mut ::core::ffi::c_void
-                        } else {
-                            _memcpy_free(
-                                &raw mut (*d).init_array as *mut uint64_t
-                                    as *mut ::core::ffi::c_void,
-                                (*d).items as *mut ::core::ffi::c_void,
-                                (*d).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                            )
-                        }
-                    } else {
-                        if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
-                            memcpy(
-                                xmalloc(
-                                    (*d).capacity
-                                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                                ),
-                                (*d).items as *const ::core::ffi::c_void,
-                                (*d).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                            )
-                        } else {
-                            xrealloc(
-                                (*d).items as *mut ::core::ffi::c_void,
-                                (*d).capacity
-                                    .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                            )
-                        }
-                    }) as *mut uint64_t;
-                } else {
-                };
-                let c2rust_fresh8 = (*d).size;
-                (*d).size = (*d).size.wrapping_add(1);
-                *(*d).items.offset(c2rust_fresh8 as isize) = *(*y).items.offset(yi as isize);
-                yi = yi.wrapping_add(1);
-            }
-            if yi < (*y).size && *(*y).items.offset(yi as isize) == *(*w).items.offset(wi as isize)
-            {
-                let c2rust_fresh9 = yi;
-                yi = yi.wrapping_add(1);
-                let c2rust_fresh10 = yn;
-                yn = yn.wrapping_add(1);
-                *(*y).items.offset(c2rust_fresh10 as isize) =
-                    *(*y).items.offset(c2rust_fresh9 as isize);
-                wi = wi.wrapping_add(1);
-            } else {
-                let c2rust_fresh11 = wi;
-                wi = wi.wrapping_add(1);
-                let c2rust_fresh12 = wn;
-                wn = wn.wrapping_add(1);
-                *(*w).items.offset(c2rust_fresh12 as isize) =
-                    *(*w).items.offset(c2rust_fresh11 as isize);
-            }
-        } else {
-            while yi < (*y).size
-                && *(*y).items.offset(yi as isize) < *(*x).items.offset(xi as isize)
-            {
-                if (*d).size == (*d).capacity {
-                    (*d).capacity = if (*d).capacity << 1 as ::core::ffi::c_int
-                        > ::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_div(::core::mem::size_of::<uint64_t>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        (*d).capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        ::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_div(::core::mem::size_of::<uint64_t>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                    == 0) as ::core::ffi::c_int
-                                    as size_t,
-                            )
-                    };
-                    (*d).items = (if (*d).capacity
-                        == ::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_div(::core::mem::size_of::<uint64_t>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[uint64_t; 4]>()
-                                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) {
-                        if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
-                            (*d).items as *mut ::core::ffi::c_void
-                        } else {
-                            _memcpy_free(
-                                &raw mut (*d).init_array as *mut uint64_t
-                                    as *mut ::core::ffi::c_void,
-                                (*d).items as *mut ::core::ffi::c_void,
-                                (*d).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                            )
-                        }
-                    } else {
-                        if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
-                            memcpy(
-                                xmalloc(
-                                    (*d).capacity
-                                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                                ),
-                                (*d).items as *const ::core::ffi::c_void,
-                                (*d).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                            )
-                        } else {
-                            xrealloc(
-                                (*d).items as *mut ::core::ffi::c_void,
-                                (*d).capacity
-                                    .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                            )
-                        }
-                    }) as *mut uint64_t;
-                } else {
-                };
-                let c2rust_fresh13 = (*d).size;
-                (*d).size = (*d).size.wrapping_add(1);
-                *(*d).items.offset(c2rust_fresh13 as isize) = *(*y).items.offset(yi as isize);
-                yi = yi.wrapping_add(1);
-            }
-            if yi < (*y).size && *(*y).items.offset(yi as isize) == *(*x).items.offset(xi as isize)
-            {
-                let c2rust_fresh14 = yi;
-                yi = yi.wrapping_add(1);
-                let c2rust_fresh15 = yn;
-                yn = yn.wrapping_add(1);
-                *(*y).items.offset(c2rust_fresh15 as isize) =
-                    *(*y).items.offset(c2rust_fresh14 as isize);
-                xi = xi.wrapping_add(1);
-            } else {
-                if wi == wn {
-                    let mut n: size_t = (*w).size.wrapping_sub(wn);
-                    if (*w).size == (*w).capacity {
-                        (*w).capacity = if (*w).capacity << 1 as ::core::ffi::c_int
-                            > ::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_div(::core::mem::size_of::<uint64_t>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[uint64_t; 4]>()
-                                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            (*w).capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            ::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_div(::core::mem::size_of::<uint64_t>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[uint64_t; 4]>()
-                                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                )
-                        };
-                        (*w).items = (if (*w).capacity
-                            == ::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_div(::core::mem::size_of::<uint64_t>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[uint64_t; 4]>()
-                                        .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as usize,
-                                ) {
-                            if (*w).items == &raw mut (*w).init_array as *mut uint64_t {
-                                (*w).items as *mut ::core::ffi::c_void
-                            } else {
-                                _memcpy_free(
-                                    &raw mut (*w).init_array as *mut uint64_t
-                                        as *mut ::core::ffi::c_void,
-                                    (*w).items as *mut ::core::ffi::c_void,
-                                    (*w).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                                )
-                            }
-                        } else {
-                            if (*w).items == &raw mut (*w).init_array as *mut uint64_t {
-                                memcpy(
-                                    xmalloc(
-                                        (*w).capacity
-                                            .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                                    ),
-                                    (*w).items as *const ::core::ffi::c_void,
-                                    (*w).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                                )
-                            } else {
-                                xrealloc(
-                                    (*w).items as *mut ::core::ffi::c_void,
-                                    (*w).capacity
-                                        .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                                )
-                            }
-                        }) as *mut uint64_t;
-                    } else {
-                    };
-                    let _ = *w;
-                    (*w).size = (*w).size.wrapping_add(1);
-                    if n > 0 as size_t {
-                        memmove(
-                            (*w).items.offset(wn.wrapping_add(1 as size_t) as isize)
-                                as *mut ::core::ffi::c_void,
-                            (*w).items.offset(wn as isize) as *const ::core::ffi::c_void,
-                            n.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        );
-                    }
-                    *(*w).items.offset(wi as isize) = *(*x).items.offset(xi as isize);
-                    wn = wn.wrapping_add(1);
-                    wi = wi.wrapping_add(1);
-                } else {
-                    assert!(wn < wi, "wn < wi");
-                    let c2rust_fresh16 = wn;
-                    wn = wn.wrapping_add(1);
-                    *(*w).items.offset(c2rust_fresh16 as isize) = *(*x).items.offset(xi as isize);
-                }
-                xi = xi.wrapping_add(1);
-            }
-        }
-    }
-    if yi < (*y).size {
-        let mut n_0: size_t = (*y).size.wrapping_sub(yi);
-        if (*d).capacity < (*d).size.wrapping_add(n_0) {
-            (*d).capacity = (*d).size.wrapping_add(n_0);
-            (*d).capacity = (*d).capacity.wrapping_sub(1);
-            (*d).capacity |= (*d).capacity >> 1 as ::core::ffi::c_int;
-            (*d).capacity |= (*d).capacity >> 2 as ::core::ffi::c_int;
-            (*d).capacity |= (*d).capacity >> 4 as ::core::ffi::c_int;
-            (*d).capacity |= (*d).capacity >> 8 as ::core::ffi::c_int;
-            (*d).capacity |= (*d).capacity >> 16 as ::core::ffi::c_int;
-            (*d).capacity = (*d).capacity.wrapping_add(1);
-            (*d).capacity = if (*d).capacity
-                > ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                (*d).capacity
-            } else {
-                ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as size_t,
-                    )
-            };
-            (*d).items = (if (*d).capacity
-                == ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
-                    (*d).items as *mut ::core::ffi::c_void
-                } else {
-                    _memcpy_free(
-                        &raw mut (*d).init_array as *mut uint64_t as *mut ::core::ffi::c_void,
-                        (*d).items as *mut ::core::ffi::c_void,
-                        (*d).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                }
-            } else {
-                if (*d).items == &raw mut (*d).init_array as *mut uint64_t {
-                    memcpy(
-                        xmalloc(
-                            (*d).capacity
-                                .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        ),
-                        (*d).items as *const ::core::ffi::c_void,
-                        (*d).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                } else {
-                    xrealloc(
-                        (*d).items as *mut ::core::ffi::c_void,
-                        (*d).capacity
-                            .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                }
-            }) as *mut uint64_t;
-        }
-        memcpy(
-            (*d).items.offset((*d).size as isize) as *mut ::core::ffi::c_void,
-            (*y).items.offset(yi as isize) as *const ::core::ffi::c_void,
-            n_0.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-        );
-        (*d).size = (*d).size.wrapping_add(n_0);
-    }
-    (*w).size = wn;
-    (*y).size = yn;
-}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn intersect_mov_test(
     mut x: *const uint64_t,
@@ -1431,429 +804,51 @@ pub unsafe extern "C" fn intersect_mov_test(
     mut dout: *mut uint64_t,
     mut ndout: *mut size_t,
 ) -> bool {
-    let mut xi: Intersection = Intersection {
+    // x is immutable as far as intersect_mov is concerned, and y may shrink —
+    // whatever it loses shows up in d. Neither is ever grown, so borrowing the
+    // caller's arrays as sets is enough.
+    let mut xs = Intersection {
         size: nx,
         capacity: 0,
         items: x as *mut uint64_t,
         init_array: [0; 4],
     };
-    let mut yi: Intersection = Intersection {
+    let mut ys = Intersection {
         size: ny,
         capacity: 0,
         items: y as *mut uint64_t,
         init_array: [0; 4],
     };
-    let mut w: Intersection = Intersection {
+    let mut ws = Intersection {
         size: 0,
         capacity: 0,
-        items: ::core::ptr::null_mut::<uint64_t>(),
+        items: ::core::ptr::null_mut(),
         init_array: [0; 4],
     };
-    w.capacity = ::core::mem::size_of::<[uint64_t; 4]>()
-        .wrapping_div(::core::mem::size_of::<uint64_t>())
-        .wrapping_div(
-            (::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
-    w.size = 0 as size_t;
-    w.items = &raw mut w.init_array as *mut uint64_t;
-    let mut i: size_t = 0 as size_t;
-    while i < nwin {
-        if w.size == w.capacity {
-            w.capacity = if w.capacity << 1 as ::core::ffi::c_int
-                > ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                w.capacity << 1 as ::core::ffi::c_int
-            } else {
-                ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as size_t,
-                    )
-            };
-            w.items = (if w.capacity
-                == ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                if w.items == &raw mut w.init_array as *mut uint64_t {
-                    w.items as *mut ::core::ffi::c_void
-                } else {
-                    _memcpy_free(
-                        &raw mut w.init_array as *mut uint64_t as *mut ::core::ffi::c_void,
-                        w.items as *mut ::core::ffi::c_void,
-                        w.size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                }
-            } else {
-                if w.items == &raw mut w.init_array as *mut uint64_t {
-                    memcpy(
-                        xmalloc(w.capacity.wrapping_mul(::core::mem::size_of::<uint64_t>())),
-                        w.items as *const ::core::ffi::c_void,
-                        w.size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                } else {
-                    xrealloc(
-                        w.items as *mut ::core::ffi::c_void,
-                        w.capacity.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                }
-            }) as *mut uint64_t;
-        } else {
-        };
-        let c2rust_fresh17 = w.size;
-        w.size = w.size.wrapping_add(1);
-        *w.items.offset(c2rust_fresh17 as isize) = *win.offset(i as isize);
-        i = i.wrapping_add(1);
-    }
-    let mut d: Intersection = Intersection {
+    let mut ds = Intersection {
         size: 0,
         capacity: 0,
-        items: ::core::ptr::null_mut::<uint64_t>(),
+        items: ::core::ptr::null_mut(),
         init_array: [0; 4],
     };
-    d.capacity = ::core::mem::size_of::<[uint64_t; 4]>()
-        .wrapping_div(::core::mem::size_of::<uint64_t>())
-        .wrapping_div(
-            (::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
-    d.size = 0 as size_t;
-    d.items = &raw mut d.init_array as *mut uint64_t;
-    intersect_mov(&raw mut xi, &raw mut yi, &raw mut w, &raw mut d);
-    if w.size > *nwout || d.size > *ndout {
-        return false;
+    let (xs, ys) = (IdSet::new(&raw mut xs), IdSet::new(&raw mut ys));
+    let (ws, ds) = (IdSet::new(&raw mut ws), IdSet::new(&raw mut ds));
+    ws.init();
+    ds.init();
+    ws.extend_from_slice(::core::slice::from_raw_parts(win, nwin));
+
+    intersect_mov(&xs, &ys, &ws, &ds);
+
+    let fits = ws.len() <= *nwout && ds.len() <= *ndout;
+    if fits {
+        ::core::ptr::copy_nonoverlapping(ws.as_slice().as_ptr(), wout, ws.len());
+        *nwout = ws.len();
+        ::core::ptr::copy_nonoverlapping(ds.as_slice().as_ptr(), dout, ds.len());
+        *ndout = ds.len();
     }
-    memcpy(
-        wout as *mut ::core::ffi::c_void,
-        w.items as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<uint64_t>().wrapping_mul(w.size),
-    );
-    *nwout = w.size;
-    memcpy(
-        dout as *mut ::core::ffi::c_void,
-        d.items as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<uint64_t>().wrapping_mul(d.size),
-    );
-    *ndout = d.size;
-    return true;
-}
-unsafe extern "C" fn intersect_common(
-    mut i: *mut Intersection,
-    mut x: *mut Intersection,
-    mut y: *mut Intersection,
-) {
-    let mut xi: size_t = 0 as size_t;
-    let mut yi: size_t = 0 as size_t;
-    while xi < (*x).size && yi < (*y).size {
-        if *(*x).items.offset(xi as isize) == *(*y).items.offset(yi as isize) {
-            if (*i).size == (*i).capacity {
-                (*i).capacity = if (*i).capacity << 1 as ::core::ffi::c_int
-                    > ::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_div(::core::mem::size_of::<uint64_t>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        ) {
-                    (*i).capacity << 1 as ::core::ffi::c_int
-                } else {
-                    ::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_div(::core::mem::size_of::<uint64_t>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                == 0) as ::core::ffi::c_int as size_t,
-                        )
-                };
-                (*i).items = (if (*i).capacity
-                    == ::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_div(::core::mem::size_of::<uint64_t>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        ) {
-                    if (*i).items == &raw mut (*i).init_array as *mut uint64_t {
-                        (*i).items as *mut ::core::ffi::c_void
-                    } else {
-                        _memcpy_free(
-                            &raw mut (*i).init_array as *mut uint64_t as *mut ::core::ffi::c_void,
-                            (*i).items as *mut ::core::ffi::c_void,
-                            (*i).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        )
-                    }
-                } else {
-                    if (*i).items == &raw mut (*i).init_array as *mut uint64_t {
-                        memcpy(
-                            xmalloc(
-                                (*i).capacity
-                                    .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                            ),
-                            (*i).items as *const ::core::ffi::c_void,
-                            (*i).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        )
-                    } else {
-                        xrealloc(
-                            (*i).items as *mut ::core::ffi::c_void,
-                            (*i).capacity
-                                .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        )
-                    }
-                }) as *mut uint64_t;
-            } else {
-            };
-            let c2rust_fresh2 = (*i).size;
-            (*i).size = (*i).size.wrapping_add(1);
-            *(*i).items.offset(c2rust_fresh2 as isize) = *(*x).items.offset(xi as isize);
-            xi = xi.wrapping_add(1);
-            yi = yi.wrapping_add(1);
-        } else if *(*x).items.offset(xi as isize) < *(*y).items.offset(yi as isize) {
-            xi = xi.wrapping_add(1);
-        } else {
-            yi = yi.wrapping_add(1);
-        }
-    }
-}
-unsafe extern "C" fn intersect_add(mut x: *mut Intersection, mut y: *mut Intersection) {
-    let mut xi: size_t = 0 as size_t;
-    let mut yi: size_t = 0 as size_t;
-    while xi < (*x).size && yi < (*y).size {
-        if *(*x).items.offset(xi as isize) == *(*y).items.offset(yi as isize) {
-            xi = xi.wrapping_add(1);
-            yi = yi.wrapping_add(1);
-        } else if *(*y).items.offset(yi as isize) < *(*x).items.offset(xi as isize) {
-            let mut n: size_t = (*x).size.wrapping_sub(xi);
-            if (*x).size == (*x).capacity {
-                (*x).capacity = if (*x).capacity << 1 as ::core::ffi::c_int
-                    > ::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_div(::core::mem::size_of::<uint64_t>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        ) {
-                    (*x).capacity << 1 as ::core::ffi::c_int
-                } else {
-                    ::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_div(::core::mem::size_of::<uint64_t>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                == 0) as ::core::ffi::c_int as size_t,
-                        )
-                };
-                (*x).items = (if (*x).capacity
-                    == ::core::mem::size_of::<[uint64_t; 4]>()
-                        .wrapping_div(::core::mem::size_of::<uint64_t>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[uint64_t; 4]>()
-                                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        ) {
-                    if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
-                        (*x).items as *mut ::core::ffi::c_void
-                    } else {
-                        _memcpy_free(
-                            &raw mut (*x).init_array as *mut uint64_t as *mut ::core::ffi::c_void,
-                            (*x).items as *mut ::core::ffi::c_void,
-                            (*x).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        )
-                    }
-                } else {
-                    if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
-                        memcpy(
-                            xmalloc(
-                                (*x).capacity
-                                    .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                            ),
-                            (*x).items as *const ::core::ffi::c_void,
-                            (*x).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        )
-                    } else {
-                        xrealloc(
-                            (*x).items as *mut ::core::ffi::c_void,
-                            (*x).capacity
-                                .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        )
-                    }
-                }) as *mut uint64_t;
-            } else {
-            };
-            let _ = *x;
-            (*x).size = (*x).size.wrapping_add(1);
-            memmove(
-                (*x).items.offset(xi.wrapping_add(1 as size_t) as isize)
-                    as *mut ::core::ffi::c_void,
-                (*x).items.offset(xi as isize) as *const ::core::ffi::c_void,
-                n.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-            );
-            *(*x).items.offset(xi as isize) = *(*y).items.offset(yi as isize);
-            xi = xi.wrapping_add(1);
-            yi = yi.wrapping_add(1);
-        } else {
-            xi = xi.wrapping_add(1);
-        }
-    }
-    if yi < (*y).size {
-        let mut n_0: size_t = (*y).size.wrapping_sub(yi);
-        if (*x).capacity < (*x).size.wrapping_add(n_0) {
-            (*x).capacity = (*x).size.wrapping_add(n_0);
-            (*x).capacity = (*x).capacity.wrapping_sub(1);
-            (*x).capacity |= (*x).capacity >> 1 as ::core::ffi::c_int;
-            (*x).capacity |= (*x).capacity >> 2 as ::core::ffi::c_int;
-            (*x).capacity |= (*x).capacity >> 4 as ::core::ffi::c_int;
-            (*x).capacity |= (*x).capacity >> 8 as ::core::ffi::c_int;
-            (*x).capacity |= (*x).capacity >> 16 as ::core::ffi::c_int;
-            (*x).capacity = (*x).capacity.wrapping_add(1);
-            (*x).capacity = if (*x).capacity
-                > ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                (*x).capacity
-            } else {
-                ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as size_t,
-                    )
-            };
-            (*x).items = (if (*x).capacity
-                == ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
-                    (*x).items as *mut ::core::ffi::c_void
-                } else {
-                    _memcpy_free(
-                        &raw mut (*x).init_array as *mut uint64_t as *mut ::core::ffi::c_void,
-                        (*x).items as *mut ::core::ffi::c_void,
-                        (*x).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                }
-            } else {
-                if (*x).items == &raw mut (*x).init_array as *mut uint64_t {
-                    memcpy(
-                        xmalloc(
-                            (*x).capacity
-                                .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        ),
-                        (*x).items as *const ::core::ffi::c_void,
-                        (*x).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                } else {
-                    xrealloc(
-                        (*x).items as *mut ::core::ffi::c_void,
-                        (*x).capacity
-                            .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                }
-            }) as *mut uint64_t;
-        }
-        memcpy(
-            (*x).items.offset((*x).size as isize) as *mut ::core::ffi::c_void,
-            (*y).items.offset(yi as isize) as *const ::core::ffi::c_void,
-            n_0.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-        );
-        (*x).size = (*x).size.wrapping_add(n_0);
-    }
-}
-unsafe extern "C" fn intersect_sub(mut x: *mut Intersection, mut y: *mut Intersection) {
-    let mut xi: size_t = 0 as size_t;
-    let mut yi: size_t = 0 as size_t;
-    let mut xn: size_t = 0 as size_t;
-    while xi < (*x).size && yi < (*y).size {
-        if *(*x).items.offset(xi as isize) == *(*y).items.offset(yi as isize) {
-            xi = xi.wrapping_add(1);
-            yi = yi.wrapping_add(1);
-        } else if *(*x).items.offset(xi as isize) < *(*y).items.offset(yi as isize) {
-            let c2rust_fresh0 = xi;
-            xi = xi.wrapping_add(1);
-            let c2rust_fresh1 = xn;
-            xn = xn.wrapping_add(1);
-            *(*x).items.offset(c2rust_fresh1 as isize) = *(*x).items.offset(c2rust_fresh0 as isize);
-        } else {
-            yi = yi.wrapping_add(1);
-        }
-    }
-    if xi < (*x).size {
-        let mut n: size_t = (*x).size.wrapping_sub(xi);
-        if xn < xi {
-            memmove(
-                (*x).items.offset(xn as isize) as *mut ::core::ffi::c_void,
-                (*x).items.offset(xi as isize) as *const ::core::ffi::c_void,
-                n.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-            );
-        }
-        xn = xn.wrapping_add(n);
-    }
-    (*x).size = xn;
-}
-unsafe extern "C" fn bubble_up(mut x: *mut MTNode) {
-    let mut xi: Intersection = Intersection {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<uint64_t>(),
-        init_array: [0; 4],
-    };
-    xi.capacity = ::core::mem::size_of::<[uint64_t; 4]>()
-        .wrapping_div(::core::mem::size_of::<uint64_t>())
-        .wrapping_div(
-            (::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
-    xi.size = 0 as size_t;
-    xi.items = &raw mut xi.init_array as *mut uint64_t;
-    intersect_common(
-        &raw mut xi,
-        &raw mut (**(&raw mut (*inner(x)).i_ptr as *mut *mut MTNode)
-            .offset(0 as ::core::ffi::c_int as isize))
-        .intersect,
-        &raw mut (**(&raw mut (*inner(x)).i_ptr as *mut *mut MTNode).offset((*x).n as isize))
-            .intersect,
-    );
-    if xi.size != 0 {
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while (i as int32_t) < (*x).n + 1 as int32_t {
-            intersect_sub(
-                &raw mut (**(&raw mut (*inner(x)).i_ptr as *mut *mut MTNode).offset(i as isize))
-                    .intersect,
-                &raw mut xi,
-            );
-            i += 1;
-        }
-        intersect_add(&raw mut (*x).intersect, &raw mut xi);
-    }
-    if xi.items != &raw mut xi.init_array as *mut uint64_t {
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut xi.items as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL;
-        let _ = *ptr_;
-    }
+    xfree(ws.take_heap());
+    xfree(ds.take_heap());
+    return fits;
 }
 unsafe extern "C" fn merge_node(
     mut b: *mut MarkTree,
@@ -1862,26 +857,17 @@ unsafe extern "C" fn merge_node(
 ) -> *mut MTNode {
     let mut x: *mut MTNode = (*inner(p)).i_ptr[i as usize];
     let mut y: *mut MTNode = (*inner(p)).i_ptr[(i + 1 as ::core::ffi::c_int) as usize];
-    let mut mi: Intersection = Intersection {
+    // What x and y both intersected becomes the merged node's own set; what
+    // only one of them did stays on that half's keys.
+    let mut merged = Intersection {
         size: 0,
         capacity: 0,
-        items: ::core::ptr::null_mut::<uint64_t>(),
+        items: ::core::ptr::null_mut(),
         init_array: [0; 4],
     };
-    mi.capacity = ::core::mem::size_of::<[uint64_t; 4]>()
-        .wrapping_div(::core::mem::size_of::<uint64_t>())
-        .wrapping_div(
-            (::core::mem::size_of::<[uint64_t; 4]>()
-                .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
-    mi.size = 0 as size_t;
-    mi.items = &raw mut mi.init_array as *mut uint64_t;
-    intersect_merge(
-        &raw mut mi,
-        &raw mut (*x).intersect,
-        &raw mut (*y).intersect,
-    );
+    let merged = IdSet::new(&raw mut merged);
+    merged.init();
+    intersect_merge(&merged, &ix(x), &ix(y));
     (*x).key[(*x).n as usize] = (*p).key[i as usize];
     refkey(b, x, (*x).n as ::core::ffi::c_int);
     if i > 0 as ::core::ffi::c_int {
@@ -1931,14 +917,8 @@ unsafe extern "C" fn merge_node(
         );
         let mut k_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while (k_0 as int32_t) < (*x).n + 1 as int32_t {
-            let mut idx: size_t = 0 as size_t;
-            while idx < (*x).intersect.size {
-                intersect_node(
-                    b,
-                    (*inner(x)).i_ptr[k_0 as usize],
-                    *(*x).intersect.items.offset(idx as isize),
-                );
-                idx = idx.wrapping_add(1);
+            for &id in ix(x).as_slice() {
+                intersect_node((*inner(x)).i_ptr[k_0 as usize], id);
             }
             k_0 += 1;
         }
@@ -1948,14 +928,8 @@ unsafe extern "C" fn merge_node(
                 (*x).n as ::core::ffi::c_int + ky + 1 as ::core::ffi::c_int;
             (*(*inner(x)).i_ptr[k_1 as usize]).parent = x;
             (*(*inner(x)).i_ptr[k_1 as usize]).p_idx = k_1 as int16_t;
-            let mut idx_0: size_t = 0 as size_t;
-            while idx_0 < (*y).intersect.size {
-                intersect_node(
-                    b,
-                    (*inner(x)).i_ptr[k_1 as usize],
-                    *(*y).intersect.items.offset(idx_0 as isize),
-                );
-                idx_0 = idx_0.wrapping_add(1);
+            for &id in ix(y).as_slice() {
+                intersect_node((*inner(x)).i_ptr[k_1 as usize], id);
             }
             ky += 1;
         }
@@ -1995,29 +969,9 @@ unsafe extern "C" fn merge_node(
     }
     (*p).n -= 1;
     marktree_free_node(b, y);
-    if (*x).intersect.items != &raw mut (*x).intersect.init_array as *mut uint64_t {
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut (*x).intersect.items as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL;
-        let _ = *ptr_;
-    }
-    kvi_move(&raw mut (*x).intersect, &raw mut mi);
+    xfree(ix(x).take_heap());
+    ix(x).move_from(&merged);
     return x;
-}
-pub unsafe extern "C" fn kvi_move(mut dest: *mut Intersection, mut src: *mut Intersection) {
-    (*dest).size = (*src).size;
-    (*dest).capacity = (*src).capacity;
-    if (*src).items == &raw mut (*src).init_array as *mut uint64_t {
-        memcpy(
-            &raw mut (*dest).init_array as *mut uint64_t as *mut ::core::ffi::c_void,
-            &raw mut (*src).init_array as *mut uint64_t as *const ::core::ffi::c_void,
-            (*src).size.wrapping_mul(::core::mem::size_of::<uint64_t>()),
-        );
-        (*dest).items = &raw mut (*dest).init_array as *mut uint64_t;
-    } else {
-        (*dest).items = (*src).items;
-    };
 }
 unsafe extern "C" fn pivot_right(
     mut b: *mut MarkTree,
@@ -2101,48 +1055,23 @@ unsafe extern "C" fn pivot_right(
         k += 1;
     }
     if (*x).level != 0 {
-        let mut d: Intersection = Intersection {
+        // Ids y's other children have to take on themselves, now that the
+        // moved child no longer shares them.
+        let mut demoted = Intersection {
             size: 0,
             capacity: 0,
-            items: ::core::ptr::null_mut::<uint64_t>(),
+            items: ::core::ptr::null_mut(),
             init_array: [0; 4],
         };
-        d.capacity = ::core::mem::size_of::<[uint64_t; 4]>()
-            .wrapping_div(::core::mem::size_of::<uint64_t>())
-            .wrapping_div(
-                (::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                    == 0) as ::core::ffi::c_int as usize,
-            ) as size_t;
-        d.size = 0 as size_t;
-        d.items = &raw mut d.init_array as *mut uint64_t;
-        intersect_mov(
-            &raw mut (*x).intersect,
-            &raw mut (*y).intersect,
-            &raw mut (**(&raw mut (*inner(y)).i_ptr as *mut *mut MTNode)
-                .offset(0 as ::core::ffi::c_int as isize))
-            .intersect,
-            &raw mut d,
-        );
-        if d.size != 0 {
-            let mut yi: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            while (yi as int32_t) < (*y).n + 1 as int32_t {
-                intersect_add(
-                    &raw mut (**(&raw mut (*inner(y)).i_ptr as *mut *mut MTNode)
-                        .offset(yi as isize))
-                    .intersect,
-                    &raw mut d,
-                );
-                yi += 1;
+        let demoted = IdSet::new(&raw mut demoted);
+        demoted.init();
+        intersect_mov(&ix(x), &ix(y), &ix((*inner(y)).i_ptr[0]), &demoted);
+        if !demoted.is_empty() {
+            for yi in 1..=(*y).n as usize {
+                intersect_add(&ix((*inner(y)).i_ptr[yi]), &demoted);
             }
         }
-        if d.items != &raw mut d.init_array as *mut uint64_t {
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut d.items as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL;
-            let _ = *ptr_;
-        }
+        xfree(demoted.take_heap());
         bubble_up(x);
     } else {
         if mt_end((*p).key[i as usize]) {
@@ -2150,12 +1079,11 @@ unsafe extern "C" fn pivot_right(
             let mut start_id: uint64_t = mt_lookup_key_side((*p).key[i as usize], false);
             let mut pi_start: uint64_t = pseudo_index_for_id(b, start_id, true);
             if pi_start > 0 as uint64_t && pi_start < pi {
-                intersect_node(b, x, start_id);
+                intersect_node(x, start_id);
             }
         }
         if mt_start((*y).key[0 as ::core::ffi::c_int as usize]) {
             unintersect_node(
-                b,
                 y,
                 mt_lookup_key((*y).key[0 as ::core::ffi::c_int as usize]),
                 false,
@@ -2244,47 +1172,28 @@ unsafe extern "C" fn pivot_left(
     (*x).n += 1;
     (*y).n -= 1;
     if (*x).level != 0 {
-        let mut d: Intersection = Intersection {
+        // Ids y's other children have to take on themselves, now that the
+        // moved child no longer shares them.
+        let mut demoted = Intersection {
             size: 0,
             capacity: 0,
-            items: ::core::ptr::null_mut::<uint64_t>(),
+            items: ::core::ptr::null_mut(),
             init_array: [0; 4],
         };
-        d.capacity = ::core::mem::size_of::<[uint64_t; 4]>()
-            .wrapping_div(::core::mem::size_of::<uint64_t>())
-            .wrapping_div(
-                (::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                    == 0) as ::core::ffi::c_int as usize,
-            ) as size_t;
-        d.size = 0 as size_t;
-        d.items = &raw mut d.init_array as *mut uint64_t;
+        let demoted = IdSet::new(&raw mut demoted);
+        demoted.init();
         intersect_mov(
-            &raw mut (*y).intersect,
-            &raw mut (*x).intersect,
-            &raw mut (**(&raw mut (*inner(x)).i_ptr as *mut *mut MTNode).offset((*x).n as isize))
-                .intersect,
-            &raw mut d,
+            &ix(y),
+            &ix(x),
+            &ix((*inner(x)).i_ptr[(*x).n as usize]),
+            &demoted,
         );
-        if d.size != 0 {
-            let mut xi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while (xi as int32_t) < (*x).n {
-                intersect_add(
-                    &raw mut (**(&raw mut (*inner(x)).i_ptr as *mut *mut MTNode)
-                        .offset(xi as isize))
-                    .intersect,
-                    &raw mut d,
-                );
-                xi += 1;
+        if !demoted.is_empty() {
+            for xi in 0..(*x).n as usize {
+                intersect_add(&ix((*inner(x)).i_ptr[xi]), &demoted);
             }
         }
-        if d.items != &raw mut d.init_array as *mut uint64_t {
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut d.items as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL;
-            let _ = *ptr_;
-        }
+        xfree(demoted.take_heap());
         bubble_up(y);
     } else {
         if mt_start((*p).key[i as usize]) {
@@ -2292,12 +1201,11 @@ unsafe extern "C" fn pivot_left(
             let mut end_id: uint64_t = mt_lookup_key_side((*p).key[i as usize], true);
             let mut pi_end: uint64_t = pseudo_index_for_id(b, end_id, true);
             if pi_end > pi {
-                intersect_node(b, y, mt_lookup_key((*p).key[i as usize]));
+                intersect_node(y, mt_lookup_key((*p).key[i as usize]));
             }
         }
         if mt_end((*x).key[((*x).n - 1 as int32_t) as usize]) {
             unintersect_node(
-                b,
                 x,
                 mt_lookup_key_side((*x).key[((*x).n - 1 as int32_t) as usize], false),
                 false,
@@ -2911,10 +1819,9 @@ pub unsafe extern "C" fn marktree_itr_step_overlap(
     mut pair: *mut MTPair,
 ) -> bool {
     while (*itr).i == -1 as ::core::ffi::c_int {
-        if (*itr).intersect_idx < (*(*itr).x).intersect.size {
-            let c2rust_fresh18 = (*itr).intersect_idx;
-            (*itr).intersect_idx = (*itr).intersect_idx.wrapping_add(1);
-            let mut id: uint64_t = *(*(*itr).x).intersect.items.offset(c2rust_fresh18 as isize);
+        if (*itr).intersect_idx < ix((*itr).x).len() {
+            let id = ix((*itr).x).as_slice()[(*itr).intersect_idx];
+            (*itr).intersect_idx += 1;
             *pair = mtpair_from(
                 marktree_lookup(b, id, ::core::ptr::null_mut::<MarkTreeIter>()),
                 marktree_lookup(
@@ -4113,96 +3020,22 @@ pub unsafe extern "C" fn marktree_check_intersections(mut b: *mut MarkTree) -> b
     let _ = *ptr_;
     return status;
 }
-pub unsafe extern "C" fn mt_recurse_nodes(mut x: *mut MTNode, mut checked: *mut Map_ptr_t_ptr_t) {
-    if (*x).intersect.size != 0 {
-        if (*x).intersect.size == (*x).intersect.capacity {
-            (*x).intersect.capacity = if (*x).intersect.capacity << 1 as ::core::ffi::c_int
-                > ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                (*x).intersect.capacity << 1 as ::core::ffi::c_int
-            } else {
-                ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as size_t,
-                    )
-            };
-            (*x).intersect.items = (if (*x).intersect.capacity
-                == ::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_div(::core::mem::size_of::<uint64_t>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[uint64_t; 4]>()
-                            .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
-                    (*x).intersect.items as *mut ::core::ffi::c_void
-                } else {
-                    _memcpy_free(
-                        &raw mut (*x).intersect.init_array as *mut uint64_t
-                            as *mut ::core::ffi::c_void,
-                        (*x).intersect.items as *mut ::core::ffi::c_void,
-                        (*x).intersect
-                            .size
-                            .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                }
-            } else {
-                if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
-                    memcpy(
-                        xmalloc(
-                            (*x).intersect
-                                .capacity
-                                .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                        ),
-                        (*x).intersect.items as *const ::core::ffi::c_void,
-                        (*x).intersect
-                            .size
-                            .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                } else {
-                    xrealloc(
-                        (*x).intersect.items as *mut ::core::ffi::c_void,
-                        (*x).intersect
-                            .capacity
-                            .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-                    )
-                }
-            }) as *mut uint64_t;
+pub unsafe fn mt_recurse_nodes(x: *mut MTNode, checked: *mut Map_ptr_t_ptr_t) {
+    let set = ix(x);
+    if !set.is_empty() {
+        // Record what this node intersects and then empty it, so the walk that
+        // rebuilds the sets from scratch can be compared against the record.
+        // The recorded copy is terminated with a sentinel no id can equal.
+        set.push(uint64_t::MAX);
+        let bytes = set.len() * size_of::<uint64_t>();
+        let copy = if set.is_inline() {
+            xmemdup(set.as_slice().as_ptr().cast(), bytes)
         } else {
+            NULL
         };
-        let c2rust_fresh22 = (*x).intersect.size;
-        (*x).intersect.size = (*x).intersect.size.wrapping_add(1);
-        *(*x).intersect.items.offset(c2rust_fresh22 as isize) =
-            -1 as ::core::ffi::c_int as uint64_t;
-        let mut val: *mut uint64_t = ::core::ptr::null_mut::<uint64_t>();
-        if (*x).intersect.items == &raw mut (*x).intersect.init_array as *mut uint64_t {
-            val = xmemdup(
-                (*x).intersect.items as *const ::core::ffi::c_void,
-                (*x).intersect
-                    .size
-                    .wrapping_mul(::core::mem::size_of::<uint64_t>()),
-            ) as *mut uint64_t;
-        } else {
-            val = (*x).intersect.items;
-        }
-        map_put_ptr_t_ptr_t(checked, x as ptr_t, val as ptr_t);
-        (*x).intersect.capacity = ::core::mem::size_of::<[uint64_t; 4]>()
-            .wrapping_div(::core::mem::size_of::<uint64_t>())
-            .wrapping_div(
-                (::core::mem::size_of::<[uint64_t; 4]>()
-                    .wrapping_rem(::core::mem::size_of::<uint64_t>())
-                    == 0) as ::core::ffi::c_int as usize,
-            ) as size_t;
-        (*x).intersect.size = 0 as size_t;
-        (*x).intersect.items = &raw mut (*x).intersect.init_array as *mut uint64_t;
+        let heap = set.take_heap();
+        let owned = if heap.is_null() { copy } else { heap };
+        map_put_ptr_t_ptr_t(checked, x as ptr_t, owned);
     }
     if (*x).level != 0 {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -4212,41 +3045,41 @@ pub unsafe extern "C" fn mt_recurse_nodes(mut x: *mut MTNode, mut checked: *mut 
         }
     }
 }
-pub unsafe extern "C" fn mt_recurse_nodes_compare(
-    mut x: *mut MTNode,
-    mut checked: *mut Map_ptr_t_ptr_t,
-) -> bool {
-    let mut ref_0: *mut uint64_t = map_get_ptr_t_ptr_t(checked, x as ptr_t) as *mut uint64_t;
-    if !ref_0.is_null() {
-        let mut i: size_t = 0 as size_t;
+/// Does `x`'s rebuilt intersection set match what `mt_recurse_nodes` recorded
+/// for it? Recurses over the whole subtree.
+pub unsafe fn mt_recurse_nodes_compare(x: *mut MTNode, checked: *mut Map_ptr_t_ptr_t) -> bool {
+    let recorded: *mut uint64_t = map_get_ptr_t_ptr_t(checked, x as ptr_t) as *mut uint64_t;
+    let rebuilt = ix(x);
+    if recorded.is_null() {
+        if !rebuilt.is_empty() {
+            return false;
+        }
+    } else {
+        // The record is sentinel-terminated; a node with an empty set was
+        // never recorded at all.
+        let mut i = 0;
         loop {
-            if *ref_0.offset(i as isize) == -1 as ::core::ffi::c_int as uint64_t {
-                if i != (*x).intersect.size {
+            let id = *recorded.add(i);
+            if id == uint64_t::MAX {
+                if i != rebuilt.len() {
                     return false;
                 }
                 break;
-            } else {
-                if (*x).intersect.size <= i
-                    || *ref_0.offset(i as isize) != *(*x).intersect.items.offset(i as isize)
-                {
-                    return false;
-                }
-                i = i.wrapping_add(1);
             }
-        }
-    } else if (*x).intersect.size != 0 {
-        return false;
-    }
-    if (*x).level != 0 {
-        let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while (i_0 as int32_t) < (*x).n + 1 as int32_t {
-            if !mt_recurse_nodes_compare((*inner(x)).i_ptr[i_0 as usize], checked) {
+            if rebuilt.len() <= i || id != rebuilt.as_slice()[i] {
                 return false;
             }
-            i_0 += 1;
+            i += 1;
         }
     }
-    return true;
+    if (*x).level != 0 {
+        for i in 0..=(*x).n as usize {
+            if !mt_recurse_nodes_compare((*inner(x)).i_ptr[i], checked) {
+                return false;
+            }
+        }
+    }
+    true
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mt_inspect(
@@ -4310,25 +3143,17 @@ unsafe extern "C" fn mt_inspect_node(
         ga,
         b"[\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     );
-    if keys as ::core::ffi::c_int != 0 && (*n).intersect.size != 0 {
-        let mut i: size_t = 0 as size_t;
-        while i < (*n).intersect.size {
-            ga_concat(
-                ga,
-                (if i == 0 as size_t {
-                    b"{\0".as_ptr() as *const ::core::ffi::c_char
-                } else {
-                    b";\0".as_ptr() as *const ::core::ffi::c_char
-                }) as *mut ::core::ffi::c_char,
-            );
+    if keys as ::core::ffi::c_int != 0 && !ix(n).is_empty() {
+        for (i, &id) in ix(n).as_slice().iter().enumerate() {
+            let sep = if i == 0 { c"{" } else { c";" };
+            ga_concat(ga, sep.as_ptr() as *mut ::core::ffi::c_char);
             snprintf(
                 buf.ptr() as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>(),
-                b"%lu\0".as_ptr() as *const ::core::ffi::c_char,
-                mt_dbg_id(*(*n).intersect.items.offset(i as isize)),
+                size_of::<[::core::ffi::c_char; 1024]>(),
+                c"%lu".as_ptr(),
+                mt_dbg_id(id),
             );
             ga_concat(ga, buf.ptr() as *mut ::core::ffi::c_char);
-            i = i.wrapping_add(1);
         }
         ga_concat(
             ga,
@@ -4434,27 +3259,22 @@ unsafe extern "C" fn mt_inspect_dotfile_node(
         b"    <table border='0' cellborder='1' cellspacing='0'>\n\0".as_ptr()
             as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
     );
-    if (*n).intersect.size != 0 {
+    if !ix(n).is_empty() {
         ga_concat(
             ga,
             b"    <tr><td>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
         );
-        let mut i: size_t = 0 as size_t;
-        while i < (*n).intersect.size {
-            if i > 0 as size_t {
-                ga_concat(
-                    ga,
-                    b", \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                );
+        for (i, &id) in ix(n).as_slice().iter().enumerate() {
+            if i > 0 {
+                ga_concat(ga, c", ".as_ptr() as *mut ::core::ffi::c_char);
             }
             snprintf(
                 buf.ptr() as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 1024]>(),
-                b"%lu\0".as_ptr() as *const ::core::ffi::c_char,
-                mt_dbg_id(*(*n).intersect.items.offset(i as isize)),
+                size_of::<[::core::ffi::c_char; 1024]>(),
+                c"%lu".as_ptr(),
+                mt_dbg_id(id),
             );
             ga_concat(ga, buf.ptr() as *mut ::core::ffi::c_char);
-            i = i.wrapping_add(1);
         }
         ga_concat(
             ga,

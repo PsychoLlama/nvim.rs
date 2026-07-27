@@ -1,7 +1,7 @@
 {
   "internal_exports": 135,
-  "files_without_forbid_unsafe": 211,
-  "files_without_deny_unsafe_op": 198,
+  "files_without_forbid_unsafe": 212,
+  "files_without_deny_unsafe_op": 199,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -120,7 +120,8 @@
     "crates/nvim/src/nvim/map_glyph_cache.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/mapping.rs": {"lines": 6059, "unsafe": 55},
     "crates/nvim/src/nvim/mark.rs": {"lines": 4006, "no_mangle": 2, "unsafe": 60},
-    "crates/nvim/src/nvim/marktree.rs": {"lines": 4542, "no_mangle": 20, "unsafe": 66},
+    "crates/nvim/src/nvim/marktree.rs": {"lines": 3362, "no_mangle": 20, "unsafe": 60},
+    "crates/nvim/src/nvim/marktree/intersect.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/marktree/node.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/match.rs": {"lines": 2304, "unsafe": 29},
     "crates/nvim/src/nvim/mbyte.rs": {"lines": 5081, "no_mangle": 11, "unsafe": 102},
