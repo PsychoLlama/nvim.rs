@@ -26,7 +26,7 @@ use crate::src::nvim::main::{
     tab_page_click_defs, topframe, where_paste_started,
 };
 use crate::src::nvim::mbyte::{
-    mb_get_class, utf_head_off, utf_ptr2CharInfo_impl, utf8len_tab, utfc_next_impl, utfc_ptr2len,
+    mb_get_class, utf_head_off, utf_ptr2StrCharInfo, utf8len_tab, utfc_next, utfc_ptr2len,
 };
 use crate::src::nvim::memline::{gchar_pos, inc, ml_get, ml_get_buf};
 use crate::src::nvim::menu::show_popupmenu;
@@ -41,8 +41,8 @@ use crate::src::nvim::ops::clear_oparg;
 use crate::src::nvim::option::get_scrolloff_value;
 use crate::src::nvim::os::libc::{__assert_fail, abs, memset, strcmp};
 use crate::src::nvim::plines::{
-    charsize_fast, charsize_regular, getvcol, getvcols, init_charsize_arg, plines_win,
-    plines_win_nofill, win_chartabsize, win_get_fill, win_may_fill,
+    getvcol, getvcols, init_charsize_arg, plines_win, plines_win_nofill, win_charsize,
+    win_chartabsize, win_get_fill, win_may_fill,
 };
 use crate::src::nvim::popupmenu::pum_visible;
 use crate::src::nvim::register::{do_put, insert_reg, yank_register_mline};
@@ -411,52 +411,6 @@ pub const MOD_MASK_3CLICK: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
 pub const MOD_MASK_4CLICK: ::core::ffi::c_int = 0x60 as ::core::ffi::c_int;
 pub const MOD_MASK_MULTI_CLICK: ::core::ffi::c_int =
     MOD_MASK_2CLICK | MOD_MASK_3CLICK | MOD_MASK_4CLICK;
-#[inline(always)]
-unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharInfo {
-    let p: *const uint8_t = p_in as *const uint8_t;
-    let first: uint8_t = *p;
-    if (first as ::core::ffi::c_int) < 0x80 as ::core::ffi::c_int {
-        return CharInfo {
-            value: first as int32_t,
-            len: 1 as ::core::ffi::c_int,
-        };
-    } else {
-        let mut len: ::core::ffi::c_int =
-            (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
-        let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
-        if code_point < 0 as int32_t {
-            len = 1 as ::core::ffi::c_int;
-        }
-        return CharInfo {
-            value: code_point,
-            len: len,
-        };
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
-    let mut next: *mut uint8_t = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
-    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint) as ::core::ffi::c_int
-        as ::core::ffi::c_long
-        != 0
-    {
-        return StrCharInfo {
-            ptr: next as *mut ::core::ffi::c_char,
-            chr: CharInfo {
-                value: *next as int32_t,
-                len: 1 as ::core::ffi::c_int,
-            },
-        };
-    }
-    return utfc_next_impl(cur);
-}
-#[inline(always)]
-unsafe extern "C" fn utf_ptr2StrCharInfo(mut ptr: *mut ::core::ffi::c_char) -> StrCharInfo {
-    return StrCharInfo {
-        ptr: ptr,
-        chr: utf_ptr2CharInfo(ptr),
-    };
-}
 static orig_topline: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
 static orig_topfill: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 unsafe extern "C" fn get_mouse_class(mut p: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
@@ -2577,20 +2531,6 @@ pub unsafe extern "C" fn f_getmousepos(
         ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
         coladd as varnumber_T,
     );
-}
-#[inline(always)]
-unsafe extern "C" fn win_charsize(
-    mut cstype: CSType,
-    mut vcol: ::core::ffi::c_int,
-    mut ptr: *mut ::core::ffi::c_char,
-    mut chr: int32_t,
-    mut csarg: *mut CharsizeArg,
-) -> CharSize {
-    if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return charsize_fast(csarg, ptr, vcol as colnr_T, chr);
-    } else {
-        return charsize_regular(csarg, ptr, vcol as colnr_T, chr);
-    };
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

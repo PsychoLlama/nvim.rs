@@ -5,9 +5,7 @@ use crate::src::nvim::fold::{hasAnyFolding, hasFolding};
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::{State, VIsual, VIsual_active, curbuf, curwin, p_sel, restart_edit};
 use crate::src::nvim::mark::mark_mb_adjustpos;
-use crate::src::nvim::mbyte::{
-    utf_head_off, utf_ptr2CharInfo_impl, utf_ptr2char, utf8len_tab, utfc_next_impl,
-};
+use crate::src::nvim::mbyte::{utf_head_off, utf_ptr2StrCharInfo, utf_ptr2char, utfc_next};
 use crate::src::nvim::memline::{
     dec, inc, ml_get_buf, ml_get_buf_len, ml_get_buf_mut, ml_get_len, ml_replace,
 };
@@ -18,8 +16,7 @@ use crate::src::nvim::r#move::{
 use crate::src::nvim::option::{get_sidescrolloff_value, get_ve_flags};
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memset};
 use crate::src::nvim::plines::{
-    charsize_fast, charsize_regular, getvcol, getvvcol, init_charsize_arg, linetabsize,
-    linetabsize_eol,
+    getvcol, getvvcol, init_charsize_arg, linetabsize, linetabsize_eol, win_charsize,
 };
 use crate::src::nvim::state::virtual_active;
 pub use crate::src::nvim::types::{
@@ -706,66 +703,6 @@ pub unsafe extern "C" fn get_cursor_line_len() -> colnr_T {
 pub unsafe extern "C" fn get_cursor_pos_len() -> colnr_T {
     return ml_get_buf_len(curbuf.get(), (*curwin.get()).w_cursor.lnum)
         - (*curwin.get()).w_cursor.col;
-}
-#[inline(always)]
-unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharInfo {
-    let p: *const uint8_t = p_in as *const uint8_t;
-    let first: uint8_t = *p;
-    if (first as ::core::ffi::c_int) < 0x80 as ::core::ffi::c_int {
-        return CharInfo {
-            value: first as int32_t,
-            len: 1 as ::core::ffi::c_int,
-        };
-    } else {
-        let mut len: ::core::ffi::c_int =
-            (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
-        let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
-        if code_point < 0 as int32_t {
-            len = 1 as ::core::ffi::c_int;
-        }
-        return CharInfo {
-            value: code_point,
-            len: len,
-        };
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
-    let mut next: *mut uint8_t = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
-    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint) as ::core::ffi::c_int
-        as ::core::ffi::c_long
-        != 0
-    {
-        return StrCharInfo {
-            ptr: next as *mut ::core::ffi::c_char,
-            chr: CharInfo {
-                value: *next as int32_t,
-                len: 1 as ::core::ffi::c_int,
-            },
-        };
-    }
-    return utfc_next_impl(cur);
-}
-#[inline(always)]
-unsafe extern "C" fn utf_ptr2StrCharInfo(mut ptr: *mut ::core::ffi::c_char) -> StrCharInfo {
-    return StrCharInfo {
-        ptr: ptr,
-        chr: utf_ptr2CharInfo(ptr),
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn win_charsize(
-    mut cstype: CSType,
-    mut vcol: ::core::ffi::c_int,
-    mut ptr: *mut ::core::ffi::c_char,
-    mut chr: int32_t,
-    mut csarg: *mut CharsizeArg,
-) -> CharSize {
-    if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return charsize_fast(csarg, ptr, vcol as colnr_T, chr);
-    } else {
-        return charsize_regular(csarg, ptr, vcol as colnr_T, chr);
-    };
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

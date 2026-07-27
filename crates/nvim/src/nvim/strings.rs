@@ -12,8 +12,8 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{e_invarg, e_invarg2, e_using_number_as_bool_nr, e_val_too_large_len};
 use crate::src::nvim::mbyte::{
     mb_copy_char, mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, mb_tolower, mb_toupper,
-    utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2CharInfo_impl, utf_ptr2cells, utf_ptr2char,
-    utf_ptr2len, utf8len_tab, utfc_ptr2len,
+    utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2CharInfo, utf_ptr2cells, utf_ptr2char,
+    utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{
     arena_alloc, arena_alloc_block, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xmemscan,
@@ -3955,28 +3955,6 @@ pub unsafe extern "C" fn cmp_keyvalue_value_n(
             (*kv2).length
         },
     );
-}
-#[inline(always)]
-unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharInfo {
-    let p: *const uint8_t = p_in as *const uint8_t;
-    let first: uint8_t = *p;
-    if (first as ::core::ffi::c_int) < 0x80 as ::core::ffi::c_int {
-        return CharInfo {
-            value: first as int32_t,
-            len: 1 as ::core::ffi::c_int,
-        };
-    } else {
-        let mut len: ::core::ffi::c_int =
-            (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
-        let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
-        if code_point < 0 as int32_t {
-            len = 1 as ::core::ffi::c_int;
-        }
-        return CharInfo {
-            value: code_point,
-            len: len,
-        };
-    };
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

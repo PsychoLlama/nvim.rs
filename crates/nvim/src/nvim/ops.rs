@@ -39,8 +39,8 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mark::{mark_col_adjust, mark_mb_adjustpos};
 use crate::src::nvim::mbyte::{
     bomb_size, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_char2bytes, utf_char2cells,
-    utf_char2len, utf_eat_space, utf_head_off, utf_ptr2CharInfo_impl, utf_ptr2char, utf_ptr2len,
-    utf8len_tab, utfc_next_impl, utfc_ptr2len,
+    utf_char2len, utf_eat_space, utf_head_off, utf_ptr2StrCharInfo, utf_ptr2char, utf_ptr2len,
+    utfc_next, utfc_ptr2len,
 };
 use crate::src::nvim::memline::{
     dec, decl, gchar_pos, inc, ml_append, ml_get, ml_get_buf_len, ml_get_buf_mut, ml_get_len,
@@ -62,8 +62,7 @@ use crate::src::nvim::os::libc::{
     __assert_fail, __ctype_b_loc, abort, gettext, memmove, memset, ngettext, strcpy, strlen,
 };
 use crate::src::nvim::plines::{
-    charsize_fast, charsize_regular, getvcol, getvcols, getvvcol, init_charsize_arg,
-    linetabsize_col,
+    getvcol, getvcols, getvvcol, init_charsize_arg, linetabsize_col, win_charsize,
 };
 use crate::src::nvim::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,
@@ -886,52 +885,6 @@ unsafe extern "C" fn ascii_isspace(mut c: ::core::ffi::c_int) -> bool {
         || c == ' ' as ::core::ffi::c_int;
 }
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-#[inline(always)]
-unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharInfo {
-    let p: *const uint8_t = p_in as *const uint8_t;
-    let first: uint8_t = *p;
-    if (first as ::core::ffi::c_int) < 0x80 as ::core::ffi::c_int {
-        return CharInfo {
-            value: first as int32_t,
-            len: 1 as ::core::ffi::c_int,
-        };
-    } else {
-        let mut len: ::core::ffi::c_int =
-            (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
-        let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
-        if code_point < 0 as int32_t {
-            len = 1 as ::core::ffi::c_int;
-        }
-        return CharInfo {
-            value: code_point,
-            len: len,
-        };
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
-    let mut next: *mut uint8_t = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
-    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint) as ::core::ffi::c_int
-        as ::core::ffi::c_long
-        != 0
-    {
-        return StrCharInfo {
-            ptr: next as *mut ::core::ffi::c_char,
-            chr: CharInfo {
-                value: *next as int32_t,
-                len: 1 as ::core::ffi::c_int,
-            },
-        };
-    }
-    return utfc_next_impl(cur);
-}
-#[inline(always)]
-unsafe extern "C" fn utf_ptr2StrCharInfo(mut ptr: *mut ::core::ffi::c_char) -> StrCharInfo {
-    return StrCharInfo {
-        ptr: ptr,
-        chr: utf_ptr2CharInfo(ptr),
-    };
-}
 pub const OPF_LINES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const OPF_CHANGE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static opchars: GlobalCell<[[::core::ffi::c_char; 3]; 30]> = GlobalCell::new([
@@ -5745,20 +5698,6 @@ pub unsafe extern "C" fn get_region_bytecount(
         return deleted_bytes;
     }
     return deleted_bytes + end_col as bcount_t;
-}
-#[inline(always)]
-unsafe extern "C" fn win_charsize(
-    mut cstype: CSType,
-    mut vcol: ::core::ffi::c_int,
-    mut ptr: *mut ::core::ffi::c_char,
-    mut chr: int32_t,
-    mut csarg: *mut CharsizeArg,
-) -> CharSize {
-    if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return charsize_fast(csarg, ptr, vcol as colnr_T, chr);
-    } else {
-        return charsize_regular(csarg, ptr, vcol as colnr_T, chr);
-    };
 }
 #[inline(always)]
 unsafe extern "C" fn linetabsize_str(mut s: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {

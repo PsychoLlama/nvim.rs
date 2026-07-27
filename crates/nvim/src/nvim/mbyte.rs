@@ -19,9 +19,9 @@ use crate::src::nvim::r#move::changed_window_setting_all;
 use crate::src::nvim::optionstr::check_chars_options;
 use crate::src::nvim::os::env::os_getenv_noalloc;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, __errno_location, gettext, iconv, iconv_close, iconv_open,
-    memcmp, memcpy, memmove, qsort, setlocale, snprintf, strchr, strcmp, strcpy, strlen,
-    strncasecmp, strncmp, tolower, toupper,
+    __ctype_b_loc, __errno_location, gettext, iconv, iconv_close, iconv_open, memcmp, memcpy,
+    memmove, qsort, setlocale, snprintf, strchr, strcmp, strcpy, strlen, strncasecmp, strncmp,
+    tolower, toupper,
 };
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
@@ -1942,17 +1942,7 @@ pub unsafe extern "C" fn utf_char2cells(mut c: ::core::ffi::c_int) -> ::core::ff
         return 1 as ::core::ffi::c_int;
     }
     if !vim_isprintc(c) {
-        '_c2rust_label: {
-            if c <= 0xffff as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"c <= 0xFFFF\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    462 as ::core::ffi::c_uint,
-                    b"int utf_char2cells(int)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        assert!(c <= 0xffff as ::core::ffi::c_int, "c <= 0xFFFF");
         return if c > 0xff as ::core::ffi::c_int {
             6 as ::core::ffi::c_int
         } else {
@@ -2521,7 +2511,7 @@ pub unsafe extern "C" fn utfc_ptr2len_len(
     }
     return len;
 }
-pub unsafe extern "C" fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int {
+pub fn utf_char2len(c: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if c < 0x80 as ::core::ffi::c_int {
         return 1 as ::core::ffi::c_int;
     } else if c < 0x800 as ::core::ffi::c_int {
@@ -2626,33 +2616,14 @@ unsafe extern "C" fn intable(
     mut n_items: size_t,
     mut c: ::core::ffi::c_int,
 ) -> bool {
-    '_c2rust_label: {
-        if n_items > 0 as size_t {
-        } else {
-            __assert_fail(
-                b"n_items > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1177 as ::core::ffi::c_uint,
-                b"_Bool intable(const struct interval *, size_t, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(n_items > 0 as size_t, "n_items > 0");
     if c < (*table.offset(0 as ::core::ffi::c_int as isize)).first {
         return false_0 != 0;
     }
-    '_c2rust_label_0: {
-        if n_items <= (18446744073709551615 as size_t).wrapping_div(2 as size_t) {
-        } else {
-            __assert_fail(
-                b"n_items <= SIZE_MAX / 2\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1183 as ::core::ffi::c_uint,
-                b"_Bool intable(const struct interval *, size_t, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(
+        n_items <= (18446744073709551615 as size_t).wrapping_div(2 as size_t),
+        "n_items <= SIZE_MAX / 2"
+    );
     let mut bot: size_t = 0 as size_t;
     let mut top: size_t = n_items;
     loop {
@@ -3377,17 +3348,10 @@ pub unsafe extern "C" fn show_utf8() {
             }
             clen = utf_ptr2len(line.offset(i as isize));
         }
-        '_c2rust_label: {
-            if (1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t > rlen {
-            } else {
-                __assert_fail(
-                    b"IOSIZE > rlen\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1726 as ::core::ffi::c_uint,
-                    b"void show_utf8(void)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        assert!(
+            (1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t > rlen,
+            "IOSIZE > rlen"
+        );
         snprintf(
             (IObuff.ptr() as *mut ::core::ffi::c_char).offset(rlen as isize),
             (IOSIZE as size_t).wrapping_sub(rlen),
@@ -3412,13 +3376,10 @@ pub unsafe extern "C" fn show_utf8() {
         0 as ::core::ffi::c_int,
     );
 }
-unsafe extern "C" fn always_break(mut bc: ::core::ffi::c_int) -> bool {
+fn always_break(mut bc: ::core::ffi::c_int) -> bool {
     return bc == UTF8PROC_BOUNDCLASS_CONTROL as ::core::ffi::c_int;
 }
-unsafe extern "C" fn always_break_two(
-    mut bc1: ::core::ffi::c_int,
-    mut bc2: ::core::ffi::c_int,
-) -> bool {
+fn always_break_two(mut bc1: ::core::ffi::c_int, mut bc2: ::core::ffi::c_int) -> bool {
     return bc1 != UTF8PROC_BOUNDCLASS_PREPEND as ::core::ffi::c_int
         && bc2 == UTF8PROC_BOUNDCLASS_OTHER as ::core::ffi::c_int
         || bc1 >= UTF8PROC_BOUNDCLASS_CR as ::core::ffi::c_int
@@ -3517,17 +3478,10 @@ pub unsafe extern "C" fn utfc_next_impl(mut cur: StrCharInfo) -> StrCharInfo {
     let mut prev_code: int32_t = cur.chr.value;
     let mut next: *mut uint8_t = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
     let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-    '_c2rust_label: {
-        if *next as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"*next >= 0x80\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1855 as ::core::ffi::c_uint,
-                b"StrCharInfo utfc_next_impl(StrCharInfo)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(
+        *next as ::core::ffi::c_int >= 0x80 as ::core::ffi::c_int,
+        "*next >= 0x80"
+    );
     loop {
         let next_len: uint8_t = (*utf8len_tab.ptr())[*next as usize];
         let next_code: int32_t = utf_ptr2CharInfo_impl(next, next_len as uintptr_t);
@@ -3722,18 +3676,10 @@ pub unsafe extern "C" fn utf_cp_bounds_len(
     mut p_in: *const ::core::ffi::c_char,
     mut p_len: ::core::ffi::c_int,
 ) -> CharBoundsOff {
-    '_c2rust_label: {
-        if base <= p_in && p_len > 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"base <= p_in && p_len > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/mbyte.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                2053 as ::core::ffi::c_uint,
-                b"CharBoundsOff utf_cp_bounds_len(const char *, const char *, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
+    assert!(
+        base <= p_in && p_len > 0 as ::core::ffi::c_int,
+        "base <= p_in && p_len > 0"
+    );
     let b: *const uint8_t = base as *mut uint8_t;
     let p: *const uint8_t = p_in as *mut uint8_t;
     if (*p as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint {
@@ -5006,32 +4952,64 @@ pub unsafe extern "C" fn mb_strcmp_ic(
 }
 pub const GRAPHEME_STATE_INIT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline(always)]
-unsafe extern "C" fn utf_is_trail_byte(byte: uint8_t) -> bool {
+fn utf_is_trail_byte(byte: uint8_t) -> bool {
     return (byte as ::core::ffi::c_uint & 0xc0 as ::core::ffi::c_uint) as uint8_t
         as ::core::ffi::c_uint
         == 0x80 as ::core::ffi::c_uint;
 }
+/// The codepoint at `p` and the number of bytes it occupies. An invalid
+/// sequence reports its first byte negated, with a length of one.
+///
+/// # Safety
+/// `p` must point into a NUL-terminated string.
 #[inline(always)]
-unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharInfo {
-    let p: *const uint8_t = p_in as *const uint8_t;
-    let first: uint8_t = *p;
-    if (first as ::core::ffi::c_int) < 0x80 as ::core::ffi::c_int {
+pub unsafe fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharInfo {
+    let p = p_in as *const uint8_t;
+    let first = *p;
+    if first < 0x80 {
         return CharInfo {
             value: first as int32_t,
-            len: 1 as ::core::ffi::c_int,
+            len: 1,
         };
-    } else {
-        let mut len: ::core::ffi::c_int =
-            (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
-        let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
-        if code_point < 0 as int32_t {
-            len = 1 as ::core::ffi::c_int;
-        }
-        return CharInfo {
-            value: code_point,
-            len: len,
+    }
+    let len = (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
+    let code_point = utf_ptr2CharInfo_impl(p, len as uintptr_t);
+    CharInfo {
+        value: code_point,
+        len: if code_point < 0 { 1 } else { len },
+    }
+}
+/// `cur` paired with its codepoint: the start of a character and the
+/// character itself. Composing characters are not consulted.
+///
+/// # Safety
+/// `ptr` must point into a NUL-terminated string.
+#[inline(always)]
+pub unsafe fn utf_ptr2StrCharInfo(ptr: *mut ::core::ffi::c_char) -> StrCharInfo {
+    StrCharInfo {
+        ptr,
+        chr: utf_ptr2CharInfo(ptr),
+    }
+}
+/// The character after `cur`, treating a following composing character as
+/// part of the *current* one. The ASCII case is inlined; everything else
+/// defers to `utfc_next_impl`.
+///
+/// # Safety
+/// `cur.ptr` must point into a NUL-terminated string, at a character start.
+#[inline(always)]
+pub unsafe fn utfc_next(cur: StrCharInfo) -> StrCharInfo {
+    let next = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
+    if *next < 0x80 {
+        return StrCharInfo {
+            ptr: next as *mut ::core::ffi::c_char,
+            chr: CharInfo {
+                value: *next as int32_t,
+                len: 1,
+            },
         };
-    };
+    }
+    utfc_next_impl(cur)
 }
 pub const E2BIG: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
 pub const EINVAL: ::core::ffi::c_int = 22 as ::core::ffi::c_int;

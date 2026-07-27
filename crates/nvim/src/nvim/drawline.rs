@@ -43,17 +43,15 @@ use crate::src::nvim::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
 };
 use crate::src::nvim::mbyte::{
-    mb_charlen, mb_off_next, mb_ptr2char_adv, mb_string2cells, utf_head_off, utf_ptr2CharInfo_impl,
-    utf_ptr2cells, utf8len_tab, utfc_next_impl, utfc_ptr2len, utfc_ptr2schar,
+    mb_charlen, mb_off_next, mb_ptr2char_adv, mb_string2cells, utf_head_off, utf_ptr2CharInfo,
+    utf_ptr2StrCharInfo, utf_ptr2cells, utfc_next, utfc_ptr2len, utfc_ptr2schar,
 };
 use crate::src::nvim::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
 use crate::src::nvim::r#move::{set_empty_rows, validate_virtcol, win_col_off, win_col_off2};
 use crate::src::nvim::option::get_showbreak_value;
 use crate::src::nvim::os::libc::{__assert_fail, abs, memcpy, memmove, memset, snprintf, strlen};
-use crate::src::nvim::plines::{
-    charsize_fast, charsize_regular, getvcol, getvvcol, init_charsize_arg,
-};
+use crate::src::nvim::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
 use crate::src::nvim::spell::{
     check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end,
 };
@@ -4911,66 +4909,6 @@ unsafe extern "C" fn win_hl_attr(
         hl_attr_active.get()
     }
     .offset(hlf as isize);
-}
-#[inline(always)]
-unsafe extern "C" fn utf_ptr2CharInfo(p_in: *const ::core::ffi::c_char) -> CharInfo {
-    let p: *const uint8_t = p_in as *const uint8_t;
-    let first: uint8_t = *p;
-    if (first as ::core::ffi::c_int) < 0x80 as ::core::ffi::c_int {
-        return CharInfo {
-            value: first as int32_t,
-            len: 1 as ::core::ffi::c_int,
-        };
-    } else {
-        let mut len: ::core::ffi::c_int =
-            (*utf8len_tab.ptr())[first as usize] as ::core::ffi::c_int;
-        let code_point: int32_t = utf_ptr2CharInfo_impl(p, len as uintptr_t);
-        if code_point < 0 as int32_t {
-            len = 1 as ::core::ffi::c_int;
-        }
-        return CharInfo {
-            value: code_point,
-            len: len,
-        };
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn utfc_next(mut cur: StrCharInfo) -> StrCharInfo {
-    let mut next: *mut uint8_t = cur.ptr.offset(cur.chr.len as isize) as *mut uint8_t;
-    if ((*next as ::core::ffi::c_uint) < 0x80 as ::core::ffi::c_uint) as ::core::ffi::c_int
-        as ::core::ffi::c_long
-        != 0
-    {
-        return StrCharInfo {
-            ptr: next as *mut ::core::ffi::c_char,
-            chr: CharInfo {
-                value: *next as int32_t,
-                len: 1 as ::core::ffi::c_int,
-            },
-        };
-    }
-    return utfc_next_impl(cur);
-}
-#[inline(always)]
-unsafe extern "C" fn utf_ptr2StrCharInfo(mut ptr: *mut ::core::ffi::c_char) -> StrCharInfo {
-    return StrCharInfo {
-        ptr: ptr,
-        chr: utf_ptr2CharInfo(ptr),
-    };
-}
-#[inline(always)]
-unsafe extern "C" fn win_charsize(
-    mut cstype: CSType,
-    mut vcol: ::core::ffi::c_int,
-    mut ptr: *mut ::core::ffi::c_char,
-    mut chr: int32_t,
-    mut csarg: *mut CharsizeArg,
-) -> CharSize {
-    if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
-        return charsize_fast(csarg, ptr, vcol as colnr_T, chr);
-    } else {
-        return charsize_regular(csarg, ptr, vcol as colnr_T, chr);
-    };
 }
 pub const INT_MIN: ::core::ffi::c_int = -INT_MAX - 1 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
