@@ -1,299 +1,243 @@
+//! Compound assignment for vimscript values: the `+=`, `-=`, `*=`, `/=`, `%=`
+//! and `.=`/`..=` half of `:let`.
+//!
+//! [`eexe_mod_op`] dispatches on the *left* operand's type; each arm decides
+//! for itself whether the operator and the right operand make sense, and
+//! answers `FAIL` when they do not so the caller reports one error message.
+//!
+//! The entry points take raw pointers rather than references because the two
+//! operands can be the same object: `:let l[0:1] += l[0:1]` reaches here from
+//! `tv_list_assign_range` with `tv1` and `tv2` aliasing, so a `&mut`/`&` pair
+//! would be unsound.
+
 use crate::src::nvim::eval::typval::{
-    tv_clear, tv_get_number, tv_get_string, tv_get_string_buf, tv_list_extend,
+    FAIL, OK, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
+    VAR_STRING, VAR_UNKNOWN, tv_clear, tv_get_number, tv_get_string, tv_get_string_buf,
+    tv_list_extend,
 };
 use crate::src::nvim::eval_1::{grow_string_tv, num_divide, num_modulus};
 use crate::src::nvim::garray::ga_grow;
-use crate::src::nvim::main::e_letwrong;
-use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{abort, memmove};
-use crate::src::nvim::strings::{concat_str, vim_strchr};
-pub use crate::src::nvim::types::{
-    BoolVarValue, LuaRef, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, VarLockStatus,
-    VarType, blob_T, blobvar_S, dict_T, dictvar_S, float_T, funccall_S,
-    funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
-    int32_t, int64_t, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
-    listwatch_T, partial_S, partial_T, proftime_T, queue, scid_T, sctx_T, size_t, typval_T,
-    typval_vval_union, ufunc_S, ufunc_T, uint8_t, uint64_t, varnumber_T,
-};
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-unsafe extern "C" fn tv_op_blob(
-    mut tv1: *mut typval_T,
-    mut tv2: *const typval_T,
-    mut op: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if *op as ::core::ffi::c_int != '+' as ::core::ffi::c_int
-        || (*tv2).v_type as ::core::ffi::c_uint
-            != VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+use crate::src::nvim::strings::concat_str;
+use crate::src::nvim::types::{blob_T, float_T, listitem_T, typval_T, uint8_t, varnumber_T};
+use core::ffi::{CStr, c_char, c_int};
+
+/// The size of the buffer `tv_get_string_buf` formats a number into.
+const NUMBUFLEN: usize = 65;
+
+/// Is `op` one of the arithmetic operators, i.e. everything but concatenation?
+///
+/// Upstream asks `vim_strchr("+-*/%", op)`, which answers NULL for a NUL byte
+/// (`vim_strchr` rejects non-positive characters before reaching `strchr`), so
+/// an empty operator concatenates.
+fn is_arithmetic(op: u8) -> bool {
+    matches!(op, b'+' | b'-' | b'*' | b'/' | b'%')
+}
+
+/// Fold `rhs` into `lhs` with a float operator. `%` and `.` never reach here;
+/// any other unrecognised operator leaves `lhs` alone, as upstream's `switch`
+/// with no default did.
+fn float_op(lhs: float_T, op: u8, rhs: float_T) -> float_T {
+    match op {
+        b'+' => lhs + rhs,
+        b'-' => lhs - rhs,
+        b'*' => lhs * rhs,
+        b'/' => lhs / rhs,
+        _ => lhs,
+    }
+}
+
+/// `blob1 += blob2`.
+unsafe fn tv_op_blob(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int {
+    if op != b'+' || (*tv2).v_type != VAR_BLOB {
         return FAIL;
     }
-    if (*tv2).vval.v_blob.is_null() {
-        return OK;
-    }
-    if (*tv1).vval.v_blob.is_null() {
-        (*tv1).vval.v_blob = (*tv2).vval.v_blob;
-        (*(*tv1).vval.v_blob).bv_refcount += 1;
+    let b2: *mut blob_T = (*tv2).vval.v_blob;
+    if b2.is_null() {
         return OK;
     }
     let b1: *mut blob_T = (*tv1).vval.v_blob;
-    let b2: *mut blob_T = (*tv2).vval.v_blob;
-    let len: ::core::ffi::c_int = tv_blob_len(b2);
-    if len > 0 as ::core::ffi::c_int {
+    if b1.is_null() {
+        // Appending to an unallocated blob shares the right-hand one rather
+        // than copying it.
+        (*tv1).vval.v_blob = b2;
+        (*b2).bv_refcount += 1;
+        return OK;
+    }
+    let len = (*b2).bv_ga.ga_len;
+    if len > 0 {
         ga_grow(&raw mut (*b1).bv_ga, len);
         memmove(
-            ((*b1).bv_ga.ga_data as *mut uint8_t).offset((*b1).bv_ga.ga_len as isize)
-                as *mut ::core::ffi::c_void,
-            (*b2).bv_ga.ga_data as *mut uint8_t as *const ::core::ffi::c_void,
-            len as size_t,
+            ((*b1).bv_ga.ga_data as *mut uint8_t)
+                .offset((*b1).bv_ga.ga_len as isize)
+                .cast(),
+            (*b2).bv_ga.ga_data,
+            len as usize,
         );
         (*b1).bv_ga.ga_len += len;
     }
-    return OK;
+    OK
 }
-unsafe extern "C" fn tv_op_list(
-    mut tv1: *mut typval_T,
-    mut tv2: *const typval_T,
-    mut op: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if *op as ::core::ffi::c_int != '+' as ::core::ffi::c_int
-        || (*tv2).v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+
+/// `list1 += list2`.
+unsafe fn tv_op_list(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int {
+    if op != b'+' || (*tv2).v_type != VAR_LIST {
         return FAIL;
     }
-    if (*tv2).vval.v_list.is_null() {
+    let l2 = (*tv2).vval.v_list;
+    if l2.is_null() {
         return OK;
     }
-    if (*tv1).vval.v_list.is_null() {
-        (*tv1).vval.v_list = (*tv2).vval.v_list;
-        tv_list_ref((*tv1).vval.v_list);
+    let l1 = (*tv1).vval.v_list;
+    if l1.is_null() {
+        // Appending to an unallocated list shares the right-hand one rather
+        // than copying it.
+        (*tv1).vval.v_list = l2;
+        (*l2).lv_refcount += 1;
     } else {
-        tv_list_extend(
-            (*tv1).vval.v_list,
-            (*tv2).vval.v_list,
-            ::core::ptr::null_mut::<listitem_T>(),
-        );
+        tv_list_extend(l1, l2, ::core::ptr::null_mut::<listitem_T>());
     }
-    return OK;
+    OK
 }
-unsafe extern "C" fn tv_op_number(
-    mut tv1: *mut typval_T,
-    mut tv2: *const typval_T,
-    mut op: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut n: varnumber_T = tv_get_number(tv1);
-    if (*tv2).v_type as ::core::ffi::c_uint
-        == VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut f: float_T = n as float_T;
-        if *op as ::core::ffi::c_int == '%' as ::core::ffi::c_int {
+
+/// `nr += nr`, `nr -= nr`, `nr *= nr`, `nr /= nr`, `nr %= nr`.
+///
+/// A float on the right promotes the result to a float, except for `%`, which
+/// has no float form and fails.
+unsafe fn tv_op_number(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int {
+    let n: varnumber_T = tv_get_number(tv1);
+    if (*tv2).v_type == VAR_FLOAT {
+        if op == b'%' {
             return FAIL;
         }
-        match *op as ::core::ffi::c_int {
-            43 => {
-                f += (*tv2).vval.v_float;
-            }
-            45 => {
-                f -= (*tv2).vval.v_float;
-            }
-            42 => {
-                f *= (*tv2).vval.v_float;
-            }
-            47 => {
-                f /= (*tv2).vval.v_float;
-            }
-            _ => {}
-        }
+        let f = float_op(n as float_T, op, (*tv2).vval.v_float);
         tv_clear(tv1);
         (*tv1).v_type = VAR_FLOAT;
         (*tv1).vval.v_float = f;
     } else {
-        match *op as ::core::ffi::c_int {
-            43 => {
-                n += tv_get_number(tv2);
-            }
-            45 => {
-                n -= tv_get_number(tv2);
-            }
-            42 => {
-                n *= tv_get_number(tv2);
-            }
-            47 => {
-                n = num_divide(n, tv_get_number(tv2));
-            }
-            37 => {
-                n = num_modulus(n, tv_get_number(tv2));
-            }
-            _ => {}
-        }
+        let n = match op {
+            b'+' => n.wrapping_add(tv_get_number(tv2)),
+            b'-' => n.wrapping_sub(tv_get_number(tv2)),
+            b'*' => n.wrapping_mul(tv_get_number(tv2)),
+            b'/' => num_divide(n, tv_get_number(tv2)),
+            b'%' => num_modulus(n, tv_get_number(tv2)),
+            _ => n,
+        };
         tv_clear(tv1);
         (*tv1).v_type = VAR_NUMBER;
         (*tv1).vval.v_number = n;
     }
-    return OK;
+    OK
 }
-unsafe extern "C" fn tv_op_string(
-    mut tv1: *mut typval_T,
-    mut tv2: *const typval_T,
-    mut _op: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if (*tv2).v_type as ::core::ffi::c_uint
-        == VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+
+/// `str1 .= str2`.
+unsafe fn tv_op_string(tv1: *mut typval_T, tv2: *const typval_T) -> c_int {
+    if (*tv2).v_type == VAR_FLOAT {
         return FAIL;
     }
-    let mut numbuf: [::core::ffi::c_char; 65] = [0; 65];
-    let mut s2: *const ::core::ffi::c_char =
-        tv_get_string_buf(tv2, &raw mut numbuf as *mut ::core::ffi::c_char);
+    let mut numbuf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
+    let s2 = tv_get_string_buf(tv2, numbuf.as_mut_ptr());
+    // An owned string with room to spare is extended in place.
     if grow_string_tv(tv1, s2) == OK {
         return OK;
     }
-    let mut tvs: *const ::core::ffi::c_char = tv_get_string(tv1);
-    let s: *mut ::core::ffi::c_char = concat_str(tvs, s2);
+    let s = concat_str(tv_get_string(tv1), s2);
     tv_clear(tv1);
     (*tv1).v_type = VAR_STRING;
     (*tv1).vval.v_string = s;
-    return OK;
+    OK
 }
-unsafe extern "C" fn tv_op_nr_or_string(
-    mut tv1: *mut typval_T,
-    mut tv2: *const typval_T,
-    mut op: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if (*tv2).v_type as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
+
+/// `f1 += f2`, `f1 -= f2`, `f1 *= f2`, `f1 /= f2`.
+unsafe fn tv_op_float(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int {
+    let rhs_type = (*tv2).v_type;
+    if op == b'%'
+        || op == b'.'
+        || (rhs_type != VAR_FLOAT && rhs_type != VAR_NUMBER && rhs_type != VAR_STRING)
     {
         return FAIL;
     }
-    if !vim_strchr(
-        b"+-*/%\0".as_ptr() as *const ::core::ffi::c_char,
-        *op as uint8_t as ::core::ffi::c_int,
-    )
-    .is_null()
-    {
-        return tv_op_number(tv1, tv2, op);
-    }
-    return tv_op_string(tv1, tv2, op);
-}
-unsafe extern "C" fn tv_op_float(
-    mut tv1: *mut typval_T,
-    mut tv2: *const typval_T,
-    mut op: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if *op as ::core::ffi::c_int == '%' as ::core::ffi::c_int
-        || *op as ::core::ffi::c_int == '.' as ::core::ffi::c_int
-        || (*tv2).v_type as ::core::ffi::c_uint
-            != VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*tv2).v_type as ::core::ffi::c_uint
-                != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*tv2).v_type as ::core::ffi::c_uint
-                != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        return FAIL;
-    }
-    let f: float_T = if (*tv2).v_type as ::core::ffi::c_uint
-        == VAR_FLOAT as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    let f = if rhs_type == VAR_FLOAT {
         (*tv2).vval.v_float
     } else {
+        // A string operand goes through the usual "leading number" parse.
         tv_get_number(tv2) as float_T
     };
-    match *op as ::core::ffi::c_int {
-        43 => {
-            (*tv1).vval.v_float += f;
-        }
-        45 => {
-            (*tv1).vval.v_float -= f;
-        }
-        42 => {
-            (*tv1).vval.v_float *= f;
-        }
-        47 => {
-            (*tv1).vval.v_float /= f;
-        }
-        _ => {}
-    }
-    return OK;
+    (*tv1).vval.v_float = float_op((*tv1).vval.v_float, op, f);
+    OK
 }
-pub unsafe extern "C" fn eexe_mod_op(
-    tv1: *mut typval_T,
-    tv2: *const typval_T,
-    op: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if (*tv2).v_type as ::core::ffi::c_uint == VAR_FUNC as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*tv2).v_type as ::core::ffi::c_uint
-            == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        || ((*tv2).v_type as ::core::ffi::c_uint
-            == VAR_BOOL as ::core::ffi::c_int as ::core::ffi::c_uint
-            || (*tv2).v_type as ::core::ffi::c_uint
-                == VAR_SPECIAL as ::core::ffi::c_int as ::core::ffi::c_uint)
-            && *op as ::core::ffi::c_int == '.' as ::core::ffi::c_int
+
+/// `tv1 += tv2`, `-=`, `*=`, `/=`, `%=`, `.=`. Returns `OK` or `FAIL`; on
+/// `FAIL` the "wrong variable type" error has already been reported.
+///
+/// # Safety
+///
+/// `tv1` and `tv2` must point at initialised typvals; `op` must point at a
+/// NUL-terminated operator. The two typvals may alias.
+pub unsafe fn eexe_mod_op(tv1: *mut typval_T, tv2: *const typval_T, op: *const c_char) -> c_int {
+    let op = CStr::from_ptr(op);
+    let op_byte = op.to_bytes().first().copied().unwrap_or(0);
+    let rhs_type = (*tv2).v_type;
+    // Nothing works with a Funcref or a Dict on the right, and v:true and
+    // friends only work with "..=".
+    if rhs_type == VAR_FUNC
+        || rhs_type == VAR_DICT
+        || ((rhs_type == VAR_BOOL || rhs_type == VAR_SPECIAL) && op_byte == b'.')
     {
-        semsg(
-            &raw const e_letwrong as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            op,
-        );
+        report_wrong_type(op);
         return FAIL;
     }
-    let mut retval: ::core::ffi::c_int = FAIL;
-    match (*tv1).v_type as ::core::ffi::c_uint {
-        10 => {
-            retval = tv_op_blob(tv1, tv2, op);
+
+    let retval = match (*tv1).v_type {
+        VAR_BLOB => tv_op_blob(tv1, tv2, op_byte),
+        VAR_LIST => tv_op_list(tv1, tv2, op_byte),
+        VAR_NUMBER | VAR_STRING => {
+            if rhs_type == VAR_LIST {
+                FAIL
+            } else if is_arithmetic(op_byte) {
+                tv_op_number(tv1, tv2, op_byte)
+            } else {
+                tv_op_string(tv1, tv2)
+            }
         }
-        4 => {
-            retval = tv_op_list(tv1, tv2, op);
-        }
-        1 | 2 => {
-            retval = tv_op_nr_or_string(tv1, tv2, op);
-        }
-        6 => {
-            retval = tv_op_float(tv1, tv2, op);
-        }
-        0 => {
-            abort();
-        }
-        5 | 3 | 9 | 7 | 8 | _ => {}
-    }
+        VAR_FLOAT => tv_op_float(tv1, tv2, op_byte),
+        VAR_UNKNOWN => abort(),
+        // Dict, Funcref, Partial, Bool and Special have no compound form.
+        _ => FAIL,
+    };
+
     if retval != OK {
-        semsg(
-            &raw const e_letwrong as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            op,
-        );
+        report_wrong_type(op);
     }
-    return retval;
+    retval
 }
-#[inline(always)]
-unsafe extern "C" fn tv_list_ref(l: *mut list_T) {
-    if l.is_null() {
-        return;
-    }
-    (*l).lv_refcount += 1;
+
+/// Report `E734` naming the operator that was refused.
+fn report_wrong_type(op: &CStr) {
+    crate::semsg!("E734: Wrong variable type for {}=", op.to_string_lossy());
 }
-#[inline]
-unsafe extern "C" fn tv_blob_len(b: *const blob_T) -> ::core::ffi::c_int {
-    if b.is_null() {
-        return 0 as ::core::ffi::c_int;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn concatenation_is_the_only_non_arithmetic_operator() {
+        for op in [b'+', b'-', b'*', b'/', b'%'] {
+            assert!(is_arithmetic(op));
+        }
+        assert!(!is_arithmetic(b'.'));
+        // vim_strchr() answers NULL for a NUL byte, so an empty operator
+        // concatenates rather than adding.
+        assert!(!is_arithmetic(0));
     }
-    return (*b).bv_ga.ga_len;
+
+    #[test]
+    fn an_unrecognised_float_operator_leaves_the_value_alone() {
+        assert_eq!(float_op(1.5, b'+', 2.0), 3.5);
+        assert_eq!(float_op(1.5, b'-', 2.0), -0.5);
+        assert_eq!(float_op(1.5, b'*', 2.0), 3.0);
+        assert_eq!(float_op(3.0, b'/', 2.0), 1.5);
+        assert_eq!(float_op(1.5, b'?', 2.0), 1.5);
+    }
 }

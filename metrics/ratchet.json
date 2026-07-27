@@ -61,7 +61,7 @@
     "crates/nvim/src/nvim/eval/decode.rs": {"lines": 2182, "no_mangle": 1, "unsafe": 19},
     "crates/nvim/src/nvim/eval/deprecated.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/eval/encode.rs": {"lines": 8730, "no_mangle": 1, "unsafe": 42},
-    "crates/nvim/src/nvim/eval/executor.rs": {"unsafe": 9},
+    "crates/nvim/src/nvim/eval/executor.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/eval/fs.rs": {"lines": 3026, "unsafe": 50},
     "crates/nvim/src/nvim/eval/funcs.rs": {"lines": 23532, "unsafe": 950},
     "crates/nvim/src/nvim/eval/gc.rs": {"no_mangle": 1},
