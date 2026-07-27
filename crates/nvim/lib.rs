@@ -35,6 +35,7 @@ pub mod src {
             pub mod private {
                 pub mod converter;
                 pub mod dispatch;
+                pub mod dispatch_wrappers;
                 pub mod helpers;
                 pub mod validate;
             } // mod private

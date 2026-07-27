@@ -4,9 +4,8 @@ use crate::src::nvim::api::autocmd::{
 };
 use crate::src::nvim::api::buffer::{
     nvim__buf_stats, nvim_buf_attach, nvim_buf_del_keymap, nvim_buf_del_mark, nvim_buf_del_var,
-    nvim_buf_delete, nvim_buf_detach, nvim_buf_get_changedtick, nvim_buf_get_keymap,
-    nvim_buf_get_lines, nvim_buf_get_mark, nvim_buf_get_name, nvim_buf_get_offset,
-    nvim_buf_get_text, nvim_buf_get_var, nvim_buf_is_loaded, nvim_buf_is_valid,
+    nvim_buf_detach, nvim_buf_get_changedtick, nvim_buf_get_keymap, nvim_buf_get_mark,
+    nvim_buf_get_offset, nvim_buf_get_text, nvim_buf_get_var, nvim_buf_is_loaded,
     nvim_buf_line_count, nvim_buf_set_keymap, nvim_buf_set_lines, nvim_buf_set_mark,
     nvim_buf_set_name, nvim_buf_set_text, nvim_buf_set_var,
 };
@@ -33,13 +32,19 @@ use crate::src::nvim::api::extmark::{
 use crate::src::nvim::api::options::{
     nvim_get_all_options_info, nvim_get_option_info2, nvim_get_option_value, nvim_set_option_value,
 };
+use crate::src::nvim::api::private::dispatch_wrappers::{
+    handle_nvim__id, handle_nvim__id_array, handle_nvim__id_dict, handle_nvim__id_float,
+    handle_nvim_buf_delete, handle_nvim_buf_get_lines, handle_nvim_buf_get_name,
+    handle_nvim_buf_is_valid, handle_nvim_get_api_info, handle_nvim_get_current_buf,
+    handle_nvim_get_mode, handle_nvim_set_current_line, handle_nvim_tabpage_is_valid,
+    handle_nvim_win_get_config, handle_nvim_win_set_cursor,
+};
 use crate::src::nvim::api::private::helpers::{
     api_dict_to_keydict, api_keydict_to_dict, api_set_error,
 };
 use crate::src::nvim::api::tabpage::{
     nvim_open_tabpage, nvim_tabpage_del_var, nvim_tabpage_get_number, nvim_tabpage_get_var,
-    nvim_tabpage_get_win, nvim_tabpage_is_valid, nvim_tabpage_list_wins, nvim_tabpage_set_var,
-    nvim_tabpage_set_win,
+    nvim_tabpage_get_win, nvim_tabpage_list_wins, nvim_tabpage_set_var, nvim_tabpage_set_win,
 };
 use crate::src::nvim::api::ui::{
     nvim_ui_attach, nvim_ui_detach, nvim_ui_pum_set_bounds, nvim_ui_pum_set_height, nvim_ui_send,
@@ -47,33 +52,31 @@ use crate::src::nvim::api::ui::{
 };
 use crate::src::nvim::api::vim::{
     nvim__chan_set_detach, nvim__complete_set, nvim__exec_lua_fast, nvim__get_lib_dir,
-    nvim__get_runtime, nvim__id, nvim__id_array, nvim__id_dict, nvim__id_float, nvim__inspect_cell,
-    nvim__invalidate_glyph_cache, nvim__redraw, nvim__runtime_inspect, nvim__screenshot,
-    nvim__stats, nvim__unpack, nvim_chan_send, nvim_create_buf, nvim_del_current_line,
-    nvim_del_keymap, nvim_del_mark, nvim_del_var, nvim_echo, nvim_eval_statusline, nvim_exec_lua,
-    nvim_feedkeys, nvim_get_api_info, nvim_get_chan_info, nvim_get_color_by_name,
-    nvim_get_color_map, nvim_get_context, nvim_get_current_buf, nvim_get_current_line,
+    nvim__get_runtime, nvim__inspect_cell, nvim__invalidate_glyph_cache, nvim__redraw,
+    nvim__runtime_inspect, nvim__screenshot, nvim__stats, nvim__unpack, nvim_chan_send,
+    nvim_create_buf, nvim_del_current_line, nvim_del_keymap, nvim_del_mark, nvim_del_var,
+    nvim_echo, nvim_eval_statusline, nvim_exec_lua, nvim_feedkeys, nvim_get_chan_info,
+    nvim_get_color_by_name, nvim_get_color_map, nvim_get_context, nvim_get_current_line,
     nvim_get_current_tabpage, nvim_get_current_win, nvim_get_hl, nvim_get_hl_id_by_name,
-    nvim_get_hl_ns, nvim_get_keymap, nvim_get_mark, nvim_get_mode, nvim_get_proc,
-    nvim_get_proc_children, nvim_get_runtime_file, nvim_get_var, nvim_get_vvar, nvim_input,
-    nvim_input_mouse, nvim_list_bufs, nvim_list_chans, nvim_list_runtime_paths, nvim_list_tabpages,
-    nvim_list_uis, nvim_list_wins, nvim_load_context, nvim_open_term, nvim_paste, nvim_put,
+    nvim_get_hl_ns, nvim_get_keymap, nvim_get_mark, nvim_get_proc, nvim_get_proc_children,
+    nvim_get_runtime_file, nvim_get_var, nvim_get_vvar, nvim_input, nvim_input_mouse,
+    nvim_list_bufs, nvim_list_chans, nvim_list_runtime_paths, nvim_list_tabpages, nvim_list_uis,
+    nvim_list_wins, nvim_load_context, nvim_open_term, nvim_paste, nvim_put,
     nvim_replace_termcodes, nvim_select_popupmenu_item, nvim_set_client_info, nvim_set_current_buf,
-    nvim_set_current_dir, nvim_set_current_line, nvim_set_current_tabpage, nvim_set_current_win,
-    nvim_set_hl, nvim_set_hl_ns, nvim_set_hl_ns_fast, nvim_set_keymap, nvim_set_var, nvim_set_vvar,
+    nvim_set_current_dir, nvim_set_current_tabpage, nvim_set_current_win, nvim_set_hl,
+    nvim_set_hl_ns, nvim_set_hl_ns_fast, nvim_set_keymap, nvim_set_var, nvim_set_vvar,
     nvim_strwidth,
 };
 use crate::src::nvim::api::vimscript::{
     nvim_call_dict_function, nvim_call_function, nvim_command, nvim_eval, nvim_exec2,
     nvim_parse_expression,
 };
-use crate::src::nvim::api::win_config::{nvim_open_win, nvim_win_get_config, nvim_win_set_config};
+use crate::src::nvim::api::win_config::{nvim_open_win, nvim_win_set_config};
 use crate::src::nvim::api::window::{
     nvim_win_close, nvim_win_del_var, nvim_win_get_buf, nvim_win_get_cursor, nvim_win_get_height,
     nvim_win_get_number, nvim_win_get_position, nvim_win_get_tabpage, nvim_win_get_var,
-    nvim_win_get_width, nvim_win_hide, nvim_win_is_valid, nvim_win_set_buf, nvim_win_set_cursor,
-    nvim_win_set_height, nvim_win_set_hl_ns, nvim_win_set_var, nvim_win_set_width,
-    nvim_win_text_height,
+    nvim_win_get_width, nvim_win_hide, nvim_win_is_valid, nvim_win_set_buf, nvim_win_set_height,
+    nvim_win_set_hl_ns, nvim_win_set_var, nvim_win_set_width, nvim_win_text_height,
 };
 use crate::src::nvim::ex_docmd::expr_map_locked;
 use crate::src::nvim::ex_getln::{get_text_locked_msg, text_locked};
@@ -5982,152 +5985,6 @@ pub unsafe extern "C" fn handle_nvim_buf_detach(
     }
     return ret;
 }
-pub unsafe extern "C" fn handle_nvim_buf_get_lines(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: Array = Array {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim_buf_get_lines\0".as_ptr() as *const ::core::ffi::c_char,
-        2393 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim_buf_get_lines\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: Buffer = 0;
-    let mut arg_2: Integer = 0;
-    let mut arg_3: Integer = 0;
-    let mut arg_4: Boolean = false;
-    '_cleanup: {
-        if args.size != 4 as size_t {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                b"Wrong number of arguments: expecting 4 but got %zu\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                args.size,
-            );
-        } else {
-            if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeBuffer as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Buffer;
-            } else if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Buffer;
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 1 when calling nvim_buf_get_lines, expecting Buffer\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                break '_cleanup;
-            }
-            if (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                arg_2 = (*args.items.offset(1 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer;
-                if (*args.items.offset(2 as ::core::ffi::c_int as isize)).type_0
-                    as ::core::ffi::c_uint
-                    == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    arg_3 = (*args.items.offset(2 as ::core::ffi::c_int as isize))
-                        .data
-                        .integer;
-                    if (*args.items.offset(3 as ::core::ffi::c_int as isize)).type_0
-                        as ::core::ffi::c_uint
-                        == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        arg_4 = (*args.items.offset(3 as ::core::ffi::c_int as isize))
-                            .data
-                            .boolean;
-                    } else if (*args.items.offset(3 as ::core::ffi::c_int as isize)).type_0
-                        as ::core::ffi::c_uint
-                        == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                        && (*args.items.offset(3 as ::core::ffi::c_int as isize))
-                            .data
-                            .integer
-                            >= 0 as Integer
-                    {
-                        arg_4 = (*args.items.offset(3 as ::core::ffi::c_int as isize))
-                            .data
-                            .integer as handle_T
-                            != 0;
-                    } else {
-                        api_set_error(
-                            error,
-                            kErrorTypeException,
-                            b"Wrong type for argument 4 when calling nvim_buf_get_lines, expecting Boolean\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                        break '_cleanup;
-                    }
-                    rv = nvim_buf_get_lines(
-                        channel_id,
-                        arg_1,
-                        arg_2,
-                        arg_3,
-                        arg_4,
-                        arena,
-                        ::core::ptr::null_mut::<lua_State>(),
-                        error,
-                    );
-                    if (*error).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int
-                    {
-                        ret = object {
-                            type_0: kObjectTypeArray,
-                            data: C2Rust_Unnamed { array: rv },
-                        };
-                    }
-                } else {
-                    api_set_error(
-                        error,
-                        kErrorTypeException,
-                        b"Wrong type for argument 3 when calling nvim_buf_get_lines, expecting Integer\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 2 when calling nvim_buf_get_lines, expecting Integer\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        }
-    }
-    return ret;
-}
 pub unsafe extern "C" fn handle_nvim_buf_set_lines(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7471,81 +7328,6 @@ pub unsafe extern "C" fn handle_nvim_buf_del_var(
     }
     return ret;
 }
-pub unsafe extern "C" fn handle_nvim_buf_get_name(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut _arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: String_0 = String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    };
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim_buf_get_name\0".as_ptr() as *const ::core::ffi::c_char,
-        3098 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim_buf_get_name\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: Buffer = 0;
-    '_cleanup: {
-        if args.size != 1 as size_t {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                b"Wrong number of arguments: expecting 1 but got %zu\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                args.size,
-            );
-        } else {
-            if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeBuffer as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Buffer;
-            } else if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Buffer;
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 1 when calling nvim_buf_get_name, expecting Buffer\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                break '_cleanup;
-            }
-            rv = nvim_buf_get_name(arg_1, error);
-            if (*error).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-                ret = object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed { string: rv },
-                };
-            }
-        }
-    }
-    return ret;
-}
 pub unsafe extern "C" fn handle_nvim_buf_set_name(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -7693,204 +7475,6 @@ pub unsafe extern "C" fn handle_nvim_buf_is_loaded(
                 break '_cleanup;
             }
             rv = nvim_buf_is_loaded(arg_1);
-            ret = object {
-                type_0: kObjectTypeBoolean,
-                data: C2Rust_Unnamed { boolean: rv },
-            };
-        }
-    }
-    return ret;
-}
-pub unsafe extern "C" fn handle_nvim_buf_delete(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut _arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim_buf_delete\0".as_ptr() as *const ::core::ffi::c_char,
-        3210 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim_buf_delete\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: Buffer = 0;
-    let mut arg_2: KeyDict_buf_delete = KeyDict_buf_delete {
-        is_set__buf_delete_: 0,
-        force: false,
-        unload: false,
-    };
-    '_cleanup: {
-        if args.size != 2 as size_t {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                b"Wrong number of arguments: expecting 2 but got %zu\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                args.size,
-            );
-        } else {
-            if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeBuffer as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Buffer;
-            } else if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Buffer;
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 1 when calling nvim_buf_delete, expecting Buffer\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                break '_cleanup;
-            }
-            if (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                memset(
-                    &raw mut arg_2 as *mut ::core::ffi::c_void,
-                    0 as ::core::ffi::c_int,
-                    ::core::mem::size_of::<KeyDict_buf_delete>(),
-                );
-                if !api_dict_to_keydict(
-                    &raw mut arg_2 as *mut ::core::ffi::c_void,
-                    Some(
-                        KeyDict_buf_delete_get_field
-                            as unsafe extern "C" fn(
-                                *const ::core::ffi::c_char,
-                                size_t,
-                            ) -> *mut KeySetLink,
-                    ),
-                    (*args.items.offset(1 as ::core::ffi::c_int as isize))
-                        .data
-                        .dict,
-                    error,
-                ) {
-                    break '_cleanup;
-                }
-            } else if (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
-                == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(1 as ::core::ffi::c_int as isize))
-                    .data
-                    .array
-                    .size
-                    == 0 as size_t
-            {
-                memset(
-                    &raw mut arg_2 as *mut ::core::ffi::c_void,
-                    0 as ::core::ffi::c_int,
-                    ::core::mem::size_of::<KeyDict_buf_delete>(),
-                );
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 2 when calling nvim_buf_delete, expecting Dict(buf_delete) *\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                break '_cleanup;
-            }
-            if text_locked() {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    get_text_locked_msg(),
-                );
-            } else {
-                nvim_buf_delete(arg_1, &raw mut arg_2, error);
-                let _ =
-                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
-            }
-        }
-    }
-    return ret;
-}
-pub unsafe extern "C" fn handle_nvim_buf_is_valid(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut _arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: Boolean = false;
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim_buf_is_valid\0".as_ptr() as *const ::core::ffi::c_char,
-        3264 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim_buf_is_valid\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: Buffer = 0;
-    '_cleanup: {
-        if args.size != 1 as size_t {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                b"Wrong number of arguments: expecting 1 but got %zu\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                args.size,
-            );
-        } else {
-            if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeBuffer as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Buffer;
-            } else if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Buffer;
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 1 when calling nvim_buf_is_valid, expecting Buffer\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                break '_cleanup;
-            }
-            rv = nvim_buf_is_valid(arg_1);
             ret = object {
                 type_0: kObjectTypeBoolean,
                 data: C2Rust_Unnamed { boolean: rv },
@@ -14894,76 +14478,6 @@ pub unsafe extern "C" fn handle_nvim_tabpage_get_number(
     }
     return ret;
 }
-pub unsafe extern "C" fn handle_nvim_tabpage_is_valid(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut _arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: Boolean = false;
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim_tabpage_is_valid\0".as_ptr() as *const ::core::ffi::c_char,
-        6622 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim_tabpage_is_valid\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: Tabpage = 0;
-    '_cleanup: {
-        if args.size != 1 as size_t {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                b"Wrong number of arguments: expecting 1 but got %zu\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                args.size,
-            );
-        } else {
-            if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeTabpage as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Tabpage;
-            } else if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Tabpage;
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 1 when calling nvim_tabpage_is_valid, expecting Tabpage\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                break '_cleanup;
-            }
-            rv = nvim_tabpage_is_valid(arg_1);
-            ret = object {
-                type_0: kObjectTypeBoolean,
-                data: C2Rust_Unnamed { boolean: rv },
-            };
-        }
-    }
-    return ret;
-}
 pub unsafe extern "C" fn handle_nvim_open_tabpage(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -17445,65 +16959,6 @@ pub unsafe extern "C" fn handle_nvim_get_current_line(
     }
     return ret;
 }
-pub unsafe extern "C" fn handle_nvim_set_current_line(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim_set_current_line\0".as_ptr() as *const ::core::ffi::c_char,
-        7956 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim_set_current_line\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: String_0 = String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    };
-    if args.size != 1 as size_t {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            b"Wrong number of arguments: expecting 1 but got %zu\0".as_ptr()
-                as *const ::core::ffi::c_char,
-            args.size,
-        );
-    } else if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-        == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-            .data
-            .string;
-        if textlock.get() != 0 as ::core::ffi::c_int || expr_map_locked() as ::core::ffi::c_int != 0
-        {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                &raw const e_textlock as *const ::core::ffi::c_char,
-            );
-        } else {
-            nvim_set_current_line(arg_1, arena, error);
-            let _ = (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
-        }
-    } else {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            b"Wrong type for argument 1 when calling nvim_set_current_line, expecting String\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        );
-    }
-    return ret;
-}
 pub unsafe extern "C" fn handle_nvim_del_current_line(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -18016,45 +17471,6 @@ pub unsafe extern "C" fn handle_nvim_list_bufs(
         ret = object {
             type_0: kObjectTypeArray,
             data: C2Rust_Unnamed { array: rv },
-        };
-    }
-    return ret;
-}
-pub unsafe extern "C" fn handle_nvim_get_current_buf(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut _arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: Buffer = 0;
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim_get_current_buf\0".as_ptr() as *const ::core::ffi::c_char,
-        8276 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim_get_current_buf\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    if args.size != 0 as size_t {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            b"Wrong number of arguments: expecting 0 but got %zu\0".as_ptr()
-                as *const ::core::ffi::c_char,
-            args.size,
-        );
-    } else {
-        rv = nvim_get_current_buf();
-        ret = object {
-            type_0: kObjectTypeBuffer,
-            data: C2Rust_Unnamed {
-                integer: rv as Integer,
-            },
         };
     }
     return ret;
@@ -19264,47 +18680,6 @@ pub unsafe extern "C" fn handle_nvim_load_context(
     }
     return ret;
 }
-pub unsafe extern "C" fn handle_nvim_get_mode(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: Dict = Dict {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<KeyValuePair>(),
-    };
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim_get_mode\0".as_ptr() as *const ::core::ffi::c_char,
-        8899 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim_get_mode\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    if args.size != 0 as size_t {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            b"Wrong number of arguments: expecting 0 but got %zu\0".as_ptr()
-                as *const ::core::ffi::c_char,
-            args.size,
-        );
-    } else {
-        rv = nvim_get_mode(arena);
-        ret = object {
-            type_0: kObjectTypeDict,
-            data: C2Rust_Unnamed { dict: rv },
-        };
-    }
-    return ret;
-}
 pub unsafe extern "C" fn handle_nvim_get_keymap(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -19580,47 +18955,6 @@ pub unsafe extern "C" fn handle_nvim_del_keymap(
             b"Wrong type for argument 1 when calling nvim_del_keymap, expecting String\0".as_ptr()
                 as *const ::core::ffi::c_char,
         );
-    }
-    return ret;
-}
-pub unsafe extern "C" fn handle_nvim_get_api_info(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: Array = Array {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim_get_api_info\0".as_ptr() as *const ::core::ffi::c_char,
-        9057 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim_get_api_info\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    if args.size != 0 as size_t {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            b"Wrong number of arguments: expecting 0 but got %zu\0".as_ptr()
-                as *const ::core::ffi::c_char,
-            args.size,
-        );
-    } else {
-        rv = nvim_get_api_info(channel_id, arena);
-        ret = object {
-            type_0: kObjectTypeArray,
-            data: C2Rust_Unnamed { array: rv },
-        };
     }
     return ret;
 }
@@ -19944,241 +19278,6 @@ pub unsafe extern "C" fn handle_nvim_list_chans(
             type_0: kObjectTypeArray,
             data: C2Rust_Unnamed { array: rv },
         };
-    }
-    return ret;
-}
-pub unsafe extern "C" fn handle_nvim__id(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: Object = Object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim__id\0".as_ptr() as *const ::core::ffi::c_char,
-        9243 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim__id\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: Object = Object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    if args.size != 1 as size_t {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            b"Wrong number of arguments: expecting 1 but got %zu\0".as_ptr()
-                as *const ::core::ffi::c_char,
-            args.size,
-        );
-    } else {
-        arg_1 = *args.items.offset(0 as ::core::ffi::c_int as isize);
-        rv = nvim__id(arg_1, arena);
-        ret = rv;
-    }
-    return ret;
-}
-pub unsafe extern "C" fn handle_nvim__id_array(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: Array = Array {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim__id_array\0".as_ptr() as *const ::core::ffi::c_char,
-        9267 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim__id_array\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: Array = Array {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    if args.size != 1 as size_t {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            b"Wrong number of arguments: expecting 1 but got %zu\0".as_ptr()
-                as *const ::core::ffi::c_char,
-            args.size,
-        );
-    } else if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-        == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-            .data
-            .array;
-        rv = nvim__id_array(arg_1, arena);
-        ret = object {
-            type_0: kObjectTypeArray,
-            data: C2Rust_Unnamed { array: rv },
-        };
-    } else {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            b"Wrong type for argument 1 when calling nvim__id_array, expecting Array\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        );
-    }
-    return ret;
-}
-pub unsafe extern "C" fn handle_nvim__id_dict(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: Dict = Dict {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<KeyValuePair>(),
-    };
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim__id_dict\0".as_ptr() as *const ::core::ffi::c_char,
-        9297 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim__id_dict\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: Dict = Dict {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<KeyValuePair>(),
-    };
-    '_cleanup: {
-        if args.size != 1 as size_t {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                b"Wrong number of arguments: expecting 1 but got %zu\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                args.size,
-            );
-        } else {
-            if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .dict;
-            } else if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
-                == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .array
-                    .size
-                    == 0 as size_t
-            {
-                arg_1 = ARRAY_DICT_INIT;
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 1 when calling nvim__id_dict, expecting Dict\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                break '_cleanup;
-            }
-            rv = nvim__id_dict(arg_1, arena);
-            ret = object {
-                type_0: kObjectTypeDict,
-                data: C2Rust_Unnamed { dict: rv },
-            };
-        }
-    }
-    return ret;
-}
-pub unsafe extern "C" fn handle_nvim__id_float(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut _arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: Float = 0.;
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim__id_float\0".as_ptr() as *const ::core::ffi::c_char,
-        9329 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim__id_float\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: Float = 0.;
-    '_cleanup: {
-        if args.size != 1 as size_t {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                b"Wrong number of arguments: expecting 1 but got %zu\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                args.size,
-            );
-        } else {
-            if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeFloat as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .floating;
-            } else if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as Float;
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 1 when calling nvim__id_float, expecting Float\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                break '_cleanup;
-            }
-            rv = nvim__id_float(arg_1);
-            ret = object {
-                type_0: kObjectTypeFloat,
-                data: C2Rust_Unnamed { floating: rv },
-            };
-        }
     }
     return ret;
 }
@@ -22113,150 +21212,6 @@ pub unsafe extern "C" fn handle_nvim_win_set_config(
     }
     return ret;
 }
-pub unsafe extern "C" fn handle_nvim_win_get_config(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    let mut rv: KeyDict_win_config = KeyDict_win_config {
-        is_set__win_config_: 0,
-        external: false,
-        fixed: false,
-        focusable: false,
-        footer: Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        },
-        footer_pos: String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0,
-        },
-        hide: false,
-        height: 0,
-        mouse: false,
-        relative: String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0,
-        },
-        row: 0.,
-        style: String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0,
-        },
-        noautocmd: false,
-        vertical: false,
-        win: 0,
-        width: 0,
-        zindex: 0,
-        anchor: String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0,
-        },
-        border: Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        },
-        bufpos: Array {
-            size: 0,
-            capacity: 0,
-            items: ::core::ptr::null_mut::<Object>(),
-        },
-        col: 0.,
-        split: String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0,
-        },
-        title: Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        },
-        title_pos: String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0,
-        },
-        _cmdline_offset: 0,
-    };
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim_win_get_config\0".as_ptr() as *const ::core::ffi::c_char,
-        10264 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim_win_get_config\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: Window = 0;
-    '_cleanup: {
-        if args.size != 1 as size_t {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                b"Wrong number of arguments: expecting 1 but got %zu\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                args.size,
-            );
-        } else {
-            if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeWindow as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Window;
-            } else if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Window;
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 1 when calling nvim_win_get_config, expecting Window\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                break '_cleanup;
-            }
-            rv = nvim_win_get_config(arg_1, arena, error);
-            if (*error).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-                ret = object {
-                    type_0: kObjectTypeDict,
-                    data: C2Rust_Unnamed {
-                        dict: api_keydict_to_dict(
-                            &raw mut rv as *mut ::core::ffi::c_void,
-                            win_config_table.ptr() as *mut KeySetLink,
-                            ::core::mem::size_of::<[KeySetLink; 25]>()
-                                .wrapping_div(::core::mem::size_of::<KeySetLink>())
-                                .wrapping_div(
-                                    (::core::mem::size_of::<[KeySetLink; 25]>()
-                                        .wrapping_rem(::core::mem::size_of::<KeySetLink>())
-                                        == 0)
-                                        as ::core::ffi::c_int
-                                        as size_t,
-                                ),
-                            arena,
-                        ),
-                    },
-                };
-            }
-        }
-    }
-    return ret;
-}
 pub unsafe extern "C" fn handle_nvim_win_get_buf(
     mut channel_id: uint64_t,
     mut args: Array,
@@ -22511,92 +21466,6 @@ pub unsafe extern "C" fn handle_nvim_win_get_cursor(
                     type_0: kObjectTypeArray,
                     data: C2Rust_Unnamed { array: rv },
                 };
-            }
-        }
-    }
-    return ret;
-}
-pub unsafe extern "C" fn handle_nvim_win_set_cursor(
-    mut channel_id: uint64_t,
-    mut args: Array,
-    mut _arena: *mut Arena,
-    mut error: *mut Error,
-) -> Object {
-    logmsg(
-        LOGLVL_DBG,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"handle_nvim_win_set_cursor\0".as_ptr() as *const ::core::ffi::c_char,
-        10423 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"RPC: ch %lu: invoke nvim_win_set_cursor\0".as_ptr() as *const ::core::ffi::c_char,
-        channel_id,
-    );
-    let mut ret: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut arg_1: Window = 0;
-    let mut arg_2: Array = Array {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    '_cleanup: {
-        if args.size != 2 as size_t {
-            api_set_error(
-                error,
-                kErrorTypeException,
-                b"Wrong number of arguments: expecting 2 but got %zu\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                args.size,
-            );
-        } else {
-            if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeWindow as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Window;
-            } else if (*args.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer
-                    >= 0 as Integer
-            {
-                arg_1 = (*args.items.offset(0 as ::core::ffi::c_int as isize))
-                    .data
-                    .integer as handle_T as Window;
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 1 when calling nvim_win_set_cursor, expecting Window\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-                break '_cleanup;
-            }
-            if (*args.items.offset(1 as ::core::ffi::c_int as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                arg_2 = (*args.items.offset(1 as ::core::ffi::c_int as isize))
-                    .data
-                    .array;
-                nvim_win_set_cursor(arg_1, arg_2, error);
-                let _ =
-                    (*error).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int;
-            } else {
-                api_set_error(
-                    error,
-                    kErrorTypeException,
-                    b"Wrong type for argument 2 when calling nvim_win_set_cursor, expecting ArrayOf(Integer, 2)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
             }
         }
     }

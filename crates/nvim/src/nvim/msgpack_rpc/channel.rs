@@ -16,7 +16,8 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
-use crate::src::nvim::api::private::dispatch::{handle_nvim_get_mode, handle_nvim_ui_try_resize};
+use crate::src::nvim::api::private::dispatch::handle_nvim_ui_try_resize;
+use crate::src::nvim::api::private::dispatch_wrappers::handle_nvim_get_mode;
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_dict, api_free_object, api_set_error, arena_string, cstr_as_string,
 };
