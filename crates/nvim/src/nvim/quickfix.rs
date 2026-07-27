@@ -110,6 +110,7 @@ pub use crate::src::nvim::types::{
     winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::ui::ui_flush;
+use crate::src::nvim::undo::u_clearallandblockfree;
 use crate::src::nvim::window::{
     check_can_set_curbuf_forceit, check_lnums, tabline_height, win_setheight, win_setwidth,
     win_split,
@@ -239,7 +240,6 @@ unsafe extern "C" {
         tm: *mut proftime_T,
         timed_out: *mut ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn u_clearallandblockfree(buf: *mut buf_T);
     fn win_valid(win: *const win_T) -> bool;
     fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> ::core::ffi::c_int;
     fn goto_tabpage_win(tp: *mut tabpage_T, wp: *mut win_T);
@@ -7086,7 +7086,7 @@ unsafe extern "C" fn qf_fill_buffer(
             }
             tp = (*tp).tp_next as *mut tabpage_T;
         }
-        u_clearallandblockfree(curbuf.get());
+        u_clearallandblockfree(curbuf.get().cast()); // cast: local `buf_T` copy
     }
     if !qfl.is_null() && !(*qfl).qf_start.is_null() {
         let mut dirname: [::core::ffi::c_char; 4096] = [0; 4096];

@@ -140,7 +140,7 @@
     "crates/nvim/src/nvim/ui.rs": 184,
     "crates/nvim/src/nvim/ui_client.rs": 127,
     "crates/nvim/src/nvim/ui_compositor.rs": 76,
-    "crates/nvim/src/nvim/undo.rs": 100,
+    "crates/nvim/src/nvim/undo/file.rs": 2,
     "crates/nvim/src/nvim/usercmd.rs": 251,
     "crates/nvim/src/nvim/version.rs": 66,
     "crates/nvim/src/nvim/viml/parser/expressions/ast.rs": 54,
