@@ -9,10 +9,11 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
-- The whole msgpack-RPC dispatch layer — the per-method wrappers, the keyset
-  tables and the handler table — is generated from the API signatures and the
-  keyset structs again (`just apigen`) instead of carried as transpiled code,
-  retiring all 27k lines of `api/private/dispatch.rs`.
+- The whole API dispatch layer — the per-method msgpack-RPC wrappers, the
+  keyset tables, the handler table and the `vim.api` Lua binding — is
+  generated from the API signatures and the keyset structs again
+  (`just apigen`) instead of carried as transpiled code, retiring all 27k
+  lines of `api/private/dispatch.rs` and 18k of `lua/api_wrappers.rs`.
 
 ## [2026.07.27-dd16441f3f]
 

@@ -77,7 +77,6 @@
     "crates/nvim/src/nvim/insexpand.rs": 204,
     "crates/nvim/src/nvim/keycodes.rs": 418,
     "crates/nvim/src/nvim/log.rs": 31,
-    "crates/nvim/src/nvim/lua/api_wrappers.rs": 1199,
     "crates/nvim/src/nvim/lua/converter.rs": 145,
     "crates/nvim/src/nvim/lua/executor.rs": 253,
     "crates/nvim/src/nvim/lua/stdlib.rs": 92,

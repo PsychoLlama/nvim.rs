@@ -14,13 +14,17 @@
 //   --tables-dir  the keyset tables and their key lookups, read off the
 //                 `KeyDict_*` structs in <root>/src/nvim/types/keysets.rs,
 //                 plus the handler table and its method lookup.
+//   --lua-dir     the `vim.api` Lua binding: the same conversion job again,
+//                 against the Lua stack rather than an argument `Array`, plus
+//                 the table that hangs the bindings off their names.
 //
 // A signature alone does not say everything upstream's `FUNC_API_*` markers
 // said: whether a call is refused under textlock, which declared C type name
 // appears in a "Wrong type for argument" message ("ArrayOf(Integer, 2)" is a
 // plain `Array` in Rust), whether a handler may run on the fast path, whether
-// its result is heap-allocated, and which methods are deprecated spellings of
-// which. That lives in the spec file (`--spec`), one line per method. The
+// its result is heap-allocated, which of the two callers a method is reachable
+// from, and which methods are deprecated spellings of which. That lives in the
+// spec file (`--spec`), one line per method. The
 // inputs cross-check: a spec entry naming a function that no longer exists,
 // or whose declared parameter count disagrees with the Rust signature, is a
 // hard error, and so is a handler-table layout that has drifted out from
@@ -58,7 +62,14 @@ enum Param {
     LuaState,
     /// A value the client sends, at 0-based position `index` of the argument
     /// array.
-    Value { index: usize, ty: ApiType },
+    Value {
+        index: usize,
+        ty: ApiType,
+        /// What to call the parameter when a conversion fails. The Lua
+        /// binding names it in the message; the RPC wrapper numbers the
+        /// argument instead.
+        name: String,
+    },
 }
 
 /// The msgpack-visible type of a client-supplied parameter.
@@ -149,12 +160,40 @@ struct Spec {
     /// A hand-written handler elsewhere in the crate, named by its full path.
     /// Mutually exclusive with `alias`; either means no wrapper is generated.
     handler: Option<String>,
+    /// RPC clients only: the method gets no Lua binding.
+    remote_only: bool,
+    /// Lua only: the method gets no RPC wrapper and no handler-table row.
+    lua_only: bool,
+    /// The API level the method appeared at, or -1 for the internal `nvim__*`
+    /// ones. Only the Lua binding reads it, and only to decide how to convert
+    /// the result — see [`Spec::push_special`].
+    since: Option<i32>,
 }
 
 impl Spec {
-    /// Whether this entry gets a wrapper of its own.
+    /// Whether this entry gets an RPC wrapper of its own.
     fn is_wrapper(&self) -> bool {
-        self.alias.is_none() && self.handler.is_none()
+        self.alias.is_none() && self.handler.is_none() && !self.lua_only
+    }
+
+    /// Whether this entry is one of the methods the RPC dispatcher answers
+    /// to, and so takes a row in the handler table.
+    fn is_method(&self) -> bool {
+        !self.lua_only
+    }
+
+    /// Whether this entry gets a `vim.api.<name>` Lua binding. A deprecated
+    /// spelling does not: upstream exposed the old names over RPC only.
+    fn has_lua_binding(&self) -> bool {
+        self.alias.is_none() && self.handler.is_none() && !self.remote_only
+    }
+
+    /// Whether the Lua binding converts this method's result the pre-0.11 way
+    /// — `nil` and the other special values keep their old spelling. Upstream
+    /// froze that for everything that predates API level 11 because clients
+    /// depend on it, and used the modern conversion for newer methods.
+    fn push_special(&self) -> bool {
+        self.since.is_some_and(|since| since < 11)
     }
 }
 
@@ -276,7 +315,16 @@ fn classify(sig: &syn::Signature) -> Result<Vec<Param>, String> {
             _ => {
                 let ty = value_type(&arg.ty)
                     .ok_or_else(|| format!("parameter `{name}` has an unmapped type"))?;
-                let param = Param::Value { index, ty };
+                let param = Param::Value {
+                    index,
+                    ty,
+                    // c2rust suffixed any C name that is a Rust keyword or
+                    // collides with something in scope (`type` -> `type_0`,
+                    // `fn` -> `fn_0`, `msg` -> `msg_0`); no API parameter is
+                    // spelled with that suffix, so undoing it recovers the
+                    // name the API documents.
+                    name: name.trim_start_matches('_').trim_end_matches("_0").into(),
+                };
                 index += 1;
                 param
             }
@@ -523,8 +571,17 @@ fn parse_spec(path: &Path) -> Result<Vec<Spec>, String> {
                 None if word == "textlock_allow_cmdwin" => spec.textlock_allow_cmdwin = true,
                 None if word == "fast" => spec.fast = true,
                 None if word == "ret_alloc" => spec.ret_alloc = true,
+                None if word == "remote_only" => spec.remote_only = true,
+                None if word == "lua_only" => spec.lua_only = true,
                 Some(("alias", value)) => spec.alias = Some(value.to_string()),
                 Some(("handler", value)) => spec.handler = Some(value.to_string()),
+                Some(("since", value)) => {
+                    spec.since = Some(
+                        value
+                            .parse::<i32>()
+                            .map_err(|_| at(format!("bad API level in `{word}`")))?,
+                    )
+                }
                 Some((key, value)) => match key.strip_prefix("arg") {
                     Some(n) => {
                         let n = n
@@ -552,6 +609,20 @@ fn parse_spec(path: &Path) -> Result<Vec<Spec>, String> {
         if spec.alias.is_some() && (spec.fast || spec.ret_alloc) {
             return Err(at(
                 "an alias inherits fast/ret_alloc from what it aliases".into()
+            ));
+        }
+        if spec.remote_only && spec.lua_only {
+            return Err(at("remote_only and lua_only are exclusive".into()));
+        }
+        if spec.lua_only && (spec.alias.is_some() || spec.handler.is_some()) {
+            return Err(at(
+                "a lua_only method is not dispatched, so it has no alias or handler".into(),
+            ));
+        }
+        if spec.has_lua_binding() != spec.since.is_some() {
+            return Err(at(
+                "since= is required on everything with a Lua binding, and meaningless elsewhere"
+                    .into(),
             ));
         }
         out.push(spec);
@@ -618,7 +689,7 @@ fn emit_fn(
         .params
         .iter()
         .filter_map(|p| match p {
-            Param::Value { index, ty } => Some((*index, ty)),
+            Param::Value { index, ty, .. } => Some((*index, ty)),
             _ => None,
         })
         .collect();
@@ -737,6 +808,7 @@ fn emit_fn(
             Param::Value {
                 index,
                 ty: ApiType::KeyDict(_),
+                ..
             } => format!("&raw mut arg_{}", index + 1),
             Param::Value { index, .. } => format!("arg_{}", index + 1),
         })
@@ -1636,7 +1708,8 @@ fn check_eval_indices(root: &Path, order: &BTreeMap<&str, usize>) -> Result<(), 
 /// making the result independent of how `functions.txt` is grouped.
 fn emit_handlers<'a>(out: &mut String, specs: &'a [Spec]) -> BTreeMap<&'a str, usize> {
     let by_name: BTreeMap<&str, &Spec> = specs.iter().map(|s| (s.name.as_str(), s)).collect();
-    let mut sorted: Vec<&Spec> = specs.iter().collect();
+    // A lua_only method is not dispatched, so it takes no row.
+    let mut sorted: Vec<&Spec> = specs.iter().filter(|s| s.is_method()).collect();
     sorted.sort_by(|a, b| a.name.cmp(&b.name));
     let names: Vec<String> = sorted.iter().map(|s| s.name.clone()).collect();
     let order = table_order(&names);
@@ -1873,6 +1946,735 @@ fn chunked(text: &str) -> Vec<String> {
     out
 }
 
+// ---------------------------------------------------- codegen: lua binding
+
+const LUA_HEADER: &str = r#"//! The `vim.api` Lua binding.
+//!
+//! GENERATED by tools/apigen from the `nvim_*` signatures under
+//! `crate::src::nvim::api` plus `tools/apigen/functions.txt`. Do not edit;
+//! run `just apigen` (`just apigen --check` fails on drift).
+//!
+//! One `lua_CFunction` per API function, plus [`nlua_add_api_functions`],
+//! which builds the table they hang off. A binding checks that it was handed
+//! exactly the arguments the API function declares, pops each one off the Lua
+//! stack and converts it, calls the function, and converts the result back.
+//!
+//! Everything that fails — the wrong number of arguments, a value Lua cannot
+//! convert, the API function itself — leaves its reason in one `Error`, and
+//! the binding raises it as a Lua error on the way out. Getting there means
+//! unwinding past whatever was already converted, which is what the labelled
+//! blocks in each binding are for: breaking out of one runs the releases
+//! between it and the end, and nothing else. That is the shape upstream's
+//! generator built out of `goto exit_N` (src/gen/gen_api_dispatch.lua at tag
+//! v0.12.4).
+//!
+//! This module holds the shared support code and the imports; the bindings
+//! themselves live in one child module per API source file, re-exported here
+//! so callers see one flat namespace. A source file whose bindings would
+//! overflow the tree's 1,000-line file cap is split into numbered parts.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+"#;
+
+/// The fixed part of the Lua binding support code.
+const LUA_SUPPORT: &str = r#"
+/// A fresh, unset error.
+const ERROR_INIT: Error = Error {
+    type_0: kErrorTypeNone,
+    msg: ptr::null_mut(),
+};
+
+/// Flags for handing a result back to Lua.
+///
+/// `kNluaPushFreeRefs` always applies: the binding owns the value and
+/// releases the Lua references it holds as it converts. `kNluaPushSpecial`
+/// additionally converts `nil` and the other special values the pre-0.11
+/// way, which is what clients of methods older than API level 11 expect.
+const PUSH: c_int = kNluaPushFreeRefs as c_int;
+const PUSH_SPECIAL: c_int = (kNluaPushSpecial | kNluaPushFreeRefs) as c_int;
+
+/// Release the request arena and, if the call failed, stage the Lua error:
+/// the source position, the parameter a failed conversion blamed, and the
+/// message itself, left on the stack as one string. Returns whether the
+/// caller must now raise it — which it has to do itself, so that the
+/// non-returning `lua_error` unwinds out of the binding's own frame.
+///
+/// # Safety
+/// `lstate` is the running Lua state; `arena` and `err` point at the
+/// binding's own locals; `err_param`, when set, points at a NUL-terminated
+/// name that outlives the call.
+unsafe fn finish(
+    lstate: *mut lua_State,
+    arena: *mut Arena,
+    err: *mut Error,
+    err_param: *const c_char,
+) -> bool {
+    unsafe {
+        arena_mem_free(arena_finish(arena));
+        if (*err).type_0 == kErrorTypeNone {
+            return false;
+        }
+        luaL_where(lstate, 1);
+        if !err_param.is_null() {
+            lua_pushstring(lstate, c"Invalid '".as_ptr());
+            lua_pushstring(lstate, err_param);
+            lua_pushstring(lstate, c"': ".as_ptr());
+            lua_pushstring(lstate, (*err).msg);
+            api_clear_error(err);
+            lua_concat(lstate, 5);
+        } else {
+            lua_pushstring(lstate, (*err).msg);
+            api_clear_error(err);
+            lua_concat(lstate, 2);
+        }
+        true
+    }
+}
+
+/// One entry of the `vim.api` table.
+///
+/// # Safety
+/// `lstate` has the table under construction on top of its stack.
+unsafe fn bind(
+    lstate: *mut lua_State,
+    f: unsafe extern "C-unwind" fn(*mut lua_State) -> c_int,
+    name: &CStr,
+) {
+    unsafe {
+        lua_pushcclosure(lstate, Some(f), 0);
+        lua_setfield(lstate, -2, name.as_ptr());
+    }
+}
+"#;
+
+/// The `nlua_pop_*` that turns the top of the Lua stack into a parameter, and
+/// whatever leading argument it takes beyond the state.
+fn popper(ty: &ApiType) -> (String, &'static str) {
+    match ty {
+        ApiType::Boolean => ("nlua_pop_Boolean".into(), ""),
+        ApiType::Integer => ("nlua_pop_Integer".into(), ""),
+        ApiType::Float => ("nlua_pop_Float".into(), ""),
+        ApiType::String => ("nlua_pop_String".into(), ""),
+        ApiType::Array => ("nlua_pop_Array".into(), ""),
+        // The flag says whether to keep Lua references to the functions the
+        // value holds. Only a `DictOf(LuaRef)` parameter wants them.
+        ApiType::Dict => ("nlua_pop_Dict".into(), "false, "),
+        ApiType::Object => ("nlua_pop_Object".into(), "true, "),
+        ApiType::LuaRef => ("nlua_pop_LuaRef".into(), ""),
+        ApiType::Handle(_) => ("nlua_pop_handle".into(), ""),
+        ApiType::KeyDict(_) => unreachable!("keysets are filled in place"),
+    }
+}
+
+/// The `nlua_push_*` that hands a result back, and whether it takes the value
+/// by pointer.
+fn pusher(ret: &RetType) -> (String, bool) {
+    match ret {
+        RetType::Boolean => ("nlua_push_Boolean".into(), false),
+        RetType::Integer => ("nlua_push_Integer".into(), false),
+        RetType::Float => ("nlua_push_Float".into(), false),
+        RetType::String => ("nlua_push_String".into(), false),
+        RetType::Array => ("nlua_push_Array".into(), false),
+        RetType::Dict => ("nlua_push_Dict".into(), false),
+        RetType::Object => ("nlua_push_Object".into(), true),
+        RetType::Handle(_) => ("nlua_push_handle".into(), false),
+        RetType::Void | RetType::KeyDict(_) => unreachable!("handled separately"),
+    }
+}
+
+/// One `lua_CFunction`.
+fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
+    let name = &f.name;
+    let values: Vec<(usize, &ApiType, &str)> = f
+        .params
+        .iter()
+        .filter_map(|p| match p {
+            Param::Value { index, ty, name } => Some((*index, ty, name.as_str())),
+            _ => None,
+        })
+        .collect();
+    let argc = values.len();
+    // A function with a Lua implementation of its own may have pushed its
+    // result already, and takes the state to do it with.
+    let has_lua_imp = f.params.contains(&Param::LuaState);
+
+    for (index, ty, _) in &values {
+        if matches!(ty, ApiType::Dict)
+            && spec
+                .declared
+                .get(&(index + 1))
+                .is_some_and(|d| d.contains("LuaRef"))
+        {
+            return Err(format!(
+                "{name}: a DictOf(LuaRef) parameter has to keep its Lua references; \
+                 nothing needed that when this was written"
+            ));
+        }
+    }
+
+    // Slot (1-based) -> what releases the value that pop left behind. The
+    // rest own nothing: their arena memory goes back with the arena.
+    let mut frees: BTreeMap<usize, String> = BTreeMap::new();
+    for (index, ty, _) in &values {
+        let slot = index + 1;
+        let code = match ty {
+            ApiType::Object => format!("api_luarefs_free_object(arg_{slot});"),
+            ApiType::LuaRef => format!("api_free_luaref(arg_{slot});"),
+            ApiType::KeyDict(keyset) => format!(
+                "api_luarefs_free_keydict((&raw mut arg_{slot}).cast(), {keyset}_table.ptr().cast());"
+            ),
+            _ => continue,
+        };
+        frees.insert(slot, code);
+    }
+
+    // Where a failed pop breaks to: the outermost release still pending.
+    // A keyset may have been half filled before it failed, so its own
+    // release counts; every other pop leaves nothing behind when it fails.
+    let pending = |slot: usize, keyset: bool| {
+        frees
+            .range(slot + usize::from(!keyset)..)
+            .next()
+            .map(|(pending, _)| *pending)
+    };
+    let target = |slot: usize, keyset: bool| match pending(slot, keyset) {
+        Some(pending) => format!("'free_arg_{pending}"),
+        None => "'done".to_string(),
+    };
+    // A release the pops can never skip past needs no block of its own: it
+    // sits on the one path that reaches it.
+    let jumped_to: BTreeSet<usize> = values
+        .iter()
+        .filter_map(|(index, ty, _)| pending(index + 1, matches!(ty, ApiType::KeyDict(_))))
+        .collect();
+
+    writeln!(
+        out,
+        "pub unsafe extern \"C-unwind\" fn nlua_api_{name}(lstate: *mut lua_State) -> c_int {{"
+    )
+    .unwrap();
+    writeln!(out, "    unsafe {{").unwrap();
+    writeln!(out, "        let mut err = ERROR_INIT;").unwrap();
+    writeln!(out, "        let mut arena = ARENA_EMPTY;").unwrap();
+    writeln!(
+        out,
+        "        let mut err_param: *mut c_char = ptr::null_mut();"
+    )
+    .unwrap();
+    writeln!(out, "        'done: {{").unwrap();
+    writeln!(out, "            if lua_gettop(lstate) != {argc} {{").unwrap();
+    writeln!(
+        out,
+        "                api_set_error(&raw mut err, kErrorTypeValidation, c\"Expected {argc} argument{}\".as_ptr());",
+        if argc == 1 { "" } else { "s" }
+    )
+    .unwrap();
+    writeln!(out, "                break 'done;").unwrap();
+    writeln!(out, "            }}").unwrap();
+    if !spec.fast {
+        writeln!(out, "            if !nlua_is_deferred_safe() {{").unwrap();
+        writeln!(
+            out,
+            "                return luaL_error(lstate, (&raw const e_fast_api_disabled).cast(), c\"{name}\".as_ptr());"
+        )
+        .unwrap();
+        writeln!(out, "            }}").unwrap();
+    }
+    if spec.textlock {
+        writeln!(out, "            if text_locked() {{").unwrap();
+        writeln!(
+            out,
+            "                api_set_error(&raw mut err, kErrorTypeException, c\"%s\".as_ptr(), get_text_locked_msg());"
+        )
+        .unwrap();
+        writeln!(out, "                break 'done;").unwrap();
+        writeln!(out, "            }}").unwrap();
+    } else if spec.textlock_allow_cmdwin {
+        writeln!(
+            out,
+            "            if textlock.get() != 0 || expr_map_locked() {{"
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "                api_set_error(&raw mut err, kErrorTypeException, c\"%s\".as_ptr(), &raw const e_textlock);"
+        )
+        .unwrap();
+        writeln!(out, "                break 'done;").unwrap();
+        writeln!(out, "            }}").unwrap();
+    }
+
+    // Anything a release touches outlives the block that filled it, so it is
+    // declared out here. A keyset is also zeroed here: the pop fills it field
+    // by field and a partial fill still has to be walkable.
+    let types: BTreeMap<usize, &ApiType> = values.iter().map(|(i, ty, _)| (i + 1, *ty)).collect();
+    for slot in frees.keys().rev() {
+        match types[slot] {
+            ApiType::KeyDict(keyset) => writeln!(
+                out,
+                "            let mut arg_{slot}: KeyDict_{keyset} = core::mem::zeroed();"
+            ),
+            ApiType::LuaRef => writeln!(out, "            let arg_{slot}: LuaRef;"),
+            _ => writeln!(out, "            let arg_{slot}: Object;"),
+        }
+        .unwrap();
+    }
+    for slot in frees.keys().rev().filter(|slot| jumped_to.contains(slot)) {
+        writeln!(out, "            'free_arg_{slot}: {{").unwrap();
+    }
+
+    // The Lua stack hands the arguments back last first.
+    for (index, ty, param) in values.iter().rev() {
+        let slot = index + 1;
+        if let ApiType::KeyDict(keyset) = ty {
+            writeln!(out, "            nlua_pop_keydict(").unwrap();
+            writeln!(out, "                lstate,").unwrap();
+            writeln!(out, "                (&raw mut arg_{slot}).cast(),").unwrap();
+            writeln!(out, "                Some(KeyDict_{keyset}_get_field),").unwrap();
+            // The keyset pop names the offending key itself.
+            writeln!(out, "                &raw mut err_param,").unwrap();
+            writeln!(out, "                &raw mut arena,").unwrap();
+            writeln!(out, "                &raw mut err,").unwrap();
+            writeln!(out, "            );").unwrap();
+            writeln!(out, "            if err.type_0 != kErrorTypeNone {{").unwrap();
+            writeln!(out, "                break {};", target(slot, true)).unwrap();
+            writeln!(out, "            }}").unwrap();
+            continue;
+        }
+        let (pop, extra) = popper(ty);
+        let bind = if frees.contains_key(&slot) {
+            format!("arg_{slot} = ")
+        } else {
+            format!("let arg_{slot} = ")
+        };
+        writeln!(
+            out,
+            "            {bind}{pop}(lstate, {extra}&raw mut arena, &raw mut err);"
+        )
+        .unwrap();
+        writeln!(out, "            if err.type_0 != kErrorTypeNone {{").unwrap();
+        writeln!(
+            out,
+            "                err_param = c\"{param}\".as_ptr().cast_mut();"
+        )
+        .unwrap();
+        writeln!(out, "                break {};", target(slot, false)).unwrap();
+        writeln!(out, "            }}").unwrap();
+    }
+
+    let call_args: Vec<String> = f
+        .params
+        .iter()
+        .map(|p| match p {
+            Param::ChannelId => "LUA_INTERNAL_CALL".into(),
+            Param::Arena => "&raw mut arena".into(),
+            Param::Error => "&raw mut err".into(),
+            Param::LuaState => "lstate".into(),
+            Param::Value {
+                index,
+                ty: ApiType::KeyDict(_),
+                ..
+            } => format!("&raw mut arg_{}", index + 1),
+            Param::Value { index, .. } => format!("arg_{}", index + 1),
+        })
+        .collect();
+    let call = format!("{name}({})", call_args.join(", "));
+    // The API function may reach back into Lua; while it runs, this is the
+    // state it reaches into.
+    writeln!(out, "            let saved_lstate = active_lstate.get();").unwrap();
+    writeln!(out, "            active_lstate.set(lstate);").unwrap();
+    let by_pointer = matches!(f.ret, RetType::Object | RetType::KeyDict(_));
+    match f.ret {
+        RetType::Void => writeln!(out, "            {call};").unwrap(),
+        _ => writeln!(
+            out,
+            "            let {}ret = {call};",
+            if by_pointer { "mut " } else { "" }
+        )
+        .unwrap(),
+    }
+    let flags = if spec.push_special() {
+        "PUSH_SPECIAL"
+    } else {
+        "PUSH"
+    };
+    let push = match &f.ret {
+        RetType::Void => String::new(),
+        RetType::KeyDict(keyset) => format!(
+            "nlua_push_keydict(lstate, (&raw mut ret).cast(), {keyset}_table.ptr().cast());"
+        ),
+        ret => {
+            let (push, by_pointer) = pusher(ret);
+            let value = if by_pointer { "&raw mut ret" } else { "ret" };
+            // A function with a Lua implementation pushes its own result when
+            // it has one; only convert what it left behind.
+            format!("{push}(lstate, {value}, {flags});")
+        }
+    };
+    if !push.is_empty() && has_lua_imp {
+        writeln!(out, "            if lua_gettop(lstate) == 0 {{").unwrap();
+        writeln!(out, "                {push}").unwrap();
+        writeln!(out, "            }}").unwrap();
+    } else if !push.is_empty() {
+        writeln!(out, "            {push}").unwrap();
+    }
+    writeln!(out, "            active_lstate.set(saved_lstate);").unwrap();
+    if spec.ret_alloc {
+        let free = match &f.ret {
+            RetType::String => "api_free_string",
+            RetType::Object => "api_free_object",
+            RetType::Dict => "api_free_dict",
+            RetType::Array => "api_free_array",
+            other => return Err(format!("{name}: nothing frees a {other:?} result")),
+        };
+        writeln!(out, "            {free}(ret);").unwrap();
+    }
+
+    for (slot, free) in frees.iter() {
+        if jumped_to.contains(slot) {
+            writeln!(out, "            }}").unwrap();
+        }
+        writeln!(out, "            {free}").unwrap();
+    }
+    writeln!(out, "        }}").unwrap();
+    writeln!(
+        out,
+        "        if finish(lstate, &raw mut arena, &raw mut err, err_param) {{"
+    )
+    .unwrap();
+    writeln!(out, "            return lua_error(lstate);").unwrap();
+    writeln!(out, "        }}").unwrap();
+    writeln!(
+        out,
+        "        {}",
+        if f.ret == RetType::Void { 0 } else { 1 }
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}").unwrap();
+    Ok(())
+}
+
+/// The table `vim.api` is: one entry per binding.
+fn emit_lua_registration(out: &mut String, bound: &[&str]) {
+    writeln!(
+        out,
+        "/// Build the `vim.api` table and set it on the table at the top of the stack."
+    )
+    .unwrap();
+    writeln!(out, "///").unwrap();
+    writeln!(out, "/// # Safety").unwrap();
+    writeln!(
+        out,
+        "/// `lstate` is the running Lua state, with a table on top."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub unsafe extern \"C-unwind\" fn nlua_add_api_functions(lstate: *mut lua_State) {{"
+    )
+    .unwrap();
+    writeln!(out, "    unsafe {{").unwrap();
+    writeln!(out, "        lua_createtable(lstate, 0, {});", bound.len()).unwrap();
+    for name in bound {
+        writeln!(out, "        bind(lstate, nlua_api_{name}, c\"{name}\");").unwrap();
+    }
+    writeln!(out, "        lua_setfield(lstate, -2, c\"api\".as_ptr());").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}").unwrap();
+}
+
+/// Header for a child module of the Lua binding directory.
+fn lua_child_header(what: &str) -> String {
+    format!(
+        "//! {what}\n\
+         //!\n\
+         //! GENERATED by tools/apigen; see the parent module. Do not edit;\n\
+         //! run `just apigen`.\n\
+         \n\
+         #![deny(unsafe_op_in_unsafe_fn)]\n\
+         \n\
+         use super::*;\n\
+         \n"
+    )
+}
+
+/// The `vim.api` Lua binding module.
+fn generate_lua(
+    api: &BTreeMap<String, ApiFn>,
+    specs: &[Spec],
+    config: &Path,
+) -> Result<Vec<Emitted>, String> {
+    let bound: Vec<(&ApiFn, &Spec)> = specs
+        .iter()
+        .filter(|s| s.has_lua_binding())
+        .map(|spec| {
+            api.get(&spec.name)
+                .map(|f| (f, spec))
+                .ok_or_else(|| format!("{}: no such API function in the crate", spec.name))
+        })
+        .collect::<Result<_, _>>()?;
+
+    let mut by_module: BTreeMap<&str, Vec<(&ApiFn, &Spec)>> = BTreeMap::new();
+    for (f, spec) in &bound {
+        by_module
+            .entry(f.module.as_str())
+            .or_default()
+            .push((f, spec));
+    }
+    for fns in by_module.values_mut() {
+        fns.sort_by(|a, b| a.0.name.cmp(&b.0.name));
+    }
+
+    // As in the RPC wrappers: format one API source file's bindings as a
+    // batch, then split them on their openers, so the 1,000-line cap is
+    // measured on the text that actually lands on disk.
+    let mut children: Vec<(&str, String)> = Vec::new();
+    for (module, fns) in &by_module {
+        let mut all = String::new();
+        for (f, spec) in fns {
+            emit_lua_fn(&mut all, f, spec)?;
+            all.push('\n');
+        }
+        let mut chunk = String::new();
+        for one in split_items(&rustfmt(config, &all)?) {
+            if !chunk.is_empty() && chunk.lines().count() + one.lines().count() > CHUNK_BUDGET {
+                children.push((module, std::mem::take(&mut chunk)));
+            }
+            chunk.push_str(&one);
+        }
+        children.push((module, chunk));
+    }
+
+    let mut files: Vec<Emitted> = Vec::new();
+    let mut body = String::new();
+    let mut part = 0;
+    for (i, (module, chunk)) in children.iter().enumerate() {
+        let parts = children.iter().filter(|(m, _)| m == module).count();
+        part = if i > 0 && children[i - 1].0 == *module {
+            part + 1
+        } else {
+            1
+        };
+        let name = if part == 1 {
+            format!("{module}.rs")
+        } else {
+            format!("{module}_{part}.rs")
+        };
+        let of = if parts > 1 {
+            format!(", part {part} of {parts}")
+        } else {
+            String::new()
+        };
+        body.push_str(chunk);
+        files.push(Emitted {
+            name,
+            text: format!(
+                "{}{chunk}",
+                lua_child_header(&format!(
+                    "Lua bindings for `crate::src::nvim::api::{module}`{of}."
+                ))
+            ),
+        });
+    }
+
+    let mut names: Vec<&str> = bound.iter().map(|(f, _)| f.name.as_str()).collect();
+    names.sort();
+    let mut registration = String::new();
+    emit_lua_registration(&mut registration, &names);
+    let registration = rustfmt(config, &registration)?;
+    body.push_str(&registration);
+    files.push(Emitted {
+        name: "register.rs".into(),
+        text: format!(
+            "{}{registration}",
+            lua_child_header("The `vim.api` table: which name calls which binding.")
+        ),
+    });
+
+    // module path segment -> API functions to import from it
+    let mut api_imports: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for (f, _) in &bound {
+        api_imports
+            .entry(f.module.as_str())
+            .or_default()
+            .insert(f.name.as_str());
+    }
+
+    let referenced = idents(&format!("{LUA_SUPPORT}{body}"));
+    let referenced_names = |names: &[&str]| -> Vec<String> {
+        names
+            .iter()
+            .filter(|n| referenced.contains(**n))
+            .map(|n| (*n).to_string())
+            .collect()
+    };
+    let mut uses: Vec<String> = Vec::new();
+    uses.push("use core::ffi::{CStr, c_char, c_int};".into());
+    uses.push("use core::ptr;".into());
+    for (module, names) in &api_imports {
+        uses.push(format!(
+            "use crate::src::nvim::api::{module}::{{{}}};",
+            names.iter().copied().collect::<Vec<_>>().join(", ")
+        ));
+    }
+    let dispatch: Vec<String> = referenced
+        .iter()
+        .filter(|n| n.ends_with("_get_field") || n.ends_with("_table"))
+        .cloned()
+        .collect();
+    if !dispatch.is_empty() {
+        uses.push(format!(
+            "use crate::src::nvim::api::private::dispatch::{{{}}};",
+            dispatch.join(", ")
+        ));
+    }
+    uses.push(format!(
+        "use crate::src::nvim::api::private::helpers::{{{}}};",
+        referenced_names(&[
+            "api_clear_error",
+            "api_free_dict",
+            "api_free_object",
+            "api_free_string",
+            "api_luarefs_free_keydict",
+            "api_luarefs_free_object",
+            "api_set_error",
+        ])
+        .join(", ")
+    ));
+    if referenced.contains("expr_map_locked") {
+        uses.push("use crate::src::nvim::ex_docmd::expr_map_locked;".into());
+    }
+    if referenced.contains("text_locked") {
+        uses.push("use crate::src::nvim::ex_getln::{get_text_locked_msg, text_locked};".into());
+    }
+    uses.push(format!(
+        "use crate::src::nvim::lua::converter::{{{}}};",
+        referenced_names(&[
+            "kNluaPushFreeRefs",
+            "kNluaPushSpecial",
+            "nlua_pop_Array",
+            "nlua_pop_Boolean",
+            "nlua_pop_Dict",
+            "nlua_pop_Float",
+            "nlua_pop_Integer",
+            "nlua_pop_LuaRef",
+            "nlua_pop_Object",
+            "nlua_pop_String",
+            "nlua_pop_handle",
+            "nlua_pop_keydict",
+            "nlua_push_Array",
+            "nlua_push_Boolean",
+            "nlua_push_Dict",
+            "nlua_push_Float",
+            "nlua_push_Integer",
+            "nlua_push_Object",
+            "nlua_push_String",
+            "nlua_push_handle",
+            "nlua_push_keydict",
+        ])
+        .join(", ")
+    ));
+    uses.push(format!(
+        "use crate::src::nvim::lua::executor::{{{}}};",
+        referenced_names(&[
+            "LUA_INTERNAL_CALL",
+            "active_lstate",
+            "api_free_luaref",
+            "nlua_is_deferred_safe",
+        ])
+        .join(", ")
+    ));
+    uses.push(format!(
+        "use crate::src::nvim::lua::ffi::{{{}}};",
+        referenced_names(&[
+            "lua_concat",
+            "lua_createtable",
+            "lua_error",
+            "lua_gettop",
+            "lua_pushcclosure",
+            "lua_pushstring",
+            "lua_setfield",
+            "luaL_error",
+            "luaL_where",
+        ])
+        .join(", ")
+    ));
+    uses.push(format!(
+        "use crate::src::nvim::main::{{{}}};",
+        referenced_names(&["e_fast_api_disabled", "e_textlock", "textlock"]).join(", ")
+    ));
+    uses.push("use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};".into());
+    // `ErrorType` is unconditional: `mod known` names it, and that block is
+    // outside the text the reference scan covers.
+    let types: Vec<String> = ["ErrorType"]
+        .iter()
+        .map(|s| (*s).to_string())
+        .chain(referenced_names(&[
+            "Arena",
+            "Error",
+            "LuaRef",
+            "Object",
+            "lua_State",
+        ]))
+        .chain(
+            referenced
+                .iter()
+                .filter(|n| n.starts_with("KeyDict_") && !n.ends_with("_get_field"))
+                .cloned(),
+        )
+        .collect();
+    uses.push(format!(
+        "use crate::src::nvim::types::{{{}}};",
+        types.join(", ")
+    ));
+
+    let mut out = String::from(LUA_HEADER);
+    out.push('\n');
+    for file in &files {
+        writeln!(out, "mod {};", file.name.strip_suffix(".rs").unwrap()).unwrap();
+    }
+    out.push('\n');
+    for file in &files {
+        writeln!(
+            out,
+            "pub use self::{}::*;",
+            file.name.strip_suffix(".rs").unwrap()
+        )
+        .unwrap();
+    }
+    out.push('\n');
+    for line in uses {
+        out.push_str(&line);
+        out.push('\n');
+    }
+    out.push_str(
+        r#"
+/// Values that belong to other modules; nested so they stay out of the flat
+/// namespace the unit-test header generator collects constants into.
+mod known {
+    use super::ErrorType;
+
+    pub const kErrorTypeNone: ErrorType = -1;
+    pub const kErrorTypeException: ErrorType = 0;
+    pub const kErrorTypeValidation: ErrorType = 1;
+}
+
+use known::*;
+"#,
+    );
+    out.push_str(LUA_SUPPORT);
+
+    files.insert(
+        0,
+        Emitted {
+            name: "mod.rs".into(),
+            text: out,
+        },
+    );
+    Ok(files)
+}
+
 // ---------------------------------------------------------------- driver
 
 /// Format a generated module through rustfmt's stdin. `--config-path` is
@@ -1916,6 +2718,7 @@ fn run() -> Result<(), String> {
     let mut spec_path = None;
     let mut out_dir = None;
     let mut tables_dir = None;
+    let mut lua_dir = None;
     let mut config = None;
     let mut check = false;
     let mut args = std::env::args().skip(1);
@@ -1926,6 +2729,7 @@ fn run() -> Result<(), String> {
             "--spec" => spec_path = Some(PathBuf::from(value()?)),
             "--out-dir" => out_dir = Some(PathBuf::from(value()?)),
             "--tables-dir" => tables_dir = Some(PathBuf::from(value()?)),
+            "--lua-dir" => lua_dir = Some(PathBuf::from(value()?)),
             "--rustfmt-config" => config = Some(PathBuf::from(value()?)),
             "--check" => check = true,
             other => return Err(format!("unknown argument `{other}`")),
@@ -1935,6 +2739,7 @@ fn run() -> Result<(), String> {
     let spec_path = spec_path.ok_or("--spec is required")?;
     let out_dir = out_dir.ok_or("--out-dir is required")?;
     let tables_dir = tables_dir.ok_or("--tables-dir is required")?;
+    let lua_dir = lua_dir.ok_or("--lua-dir is required")?;
     let config = config.ok_or("--rustfmt-config is required")?;
 
     let api = collect_api_fns(&root)?;
@@ -1953,6 +2758,7 @@ fn run() -> Result<(), String> {
             generate_tables(&root, &keysets, &specs, &config)?,
             "tables",
         ),
+        (lua_dir, generate_lua(&api, &specs, &config)?, "Lua binding"),
     ];
 
     let mut wrote = false;
@@ -2020,10 +2826,11 @@ fn run() -> Result<(), String> {
     }
     if wrote {
         eprintln!(
-            "apigen: {} wrappers, {} handlers, {} keysets",
+            "apigen: {} wrappers, {} handlers, {} keysets, {} Lua bindings",
             specs.iter().filter(|s| s.is_wrapper()).count(),
-            specs.len(),
-            keysets.len()
+            specs.iter().filter(|s| s.is_method()).count(),
+            keysets.len(),
+            specs.iter().filter(|s| s.has_lua_binding()).count(),
         );
     }
     Ok(())
