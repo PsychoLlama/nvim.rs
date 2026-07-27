@@ -114,7 +114,7 @@ miri *args:
   MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib --tests {{ args }}
 
 # Regenerate the committed msgpack-RPC dispatch wrappers
-# (crates/nvim/src/nvim/api/private/dispatch_wrappers.rs) from the `nvim_*`
+# (crates/nvim/src/nvim/api/private/dispatch_wrappers/) from the `nvim_*`
 # signatures themselves plus tools/apigen/functions.txt, the attributes the
 # signatures can't carry. `--check` fails on drift instead of writing.
 apigen *args:

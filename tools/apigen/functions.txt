@@ -17,21 +17,246 @@
 #                decoration Rust cannot express (ArrayOf(Integer, 2) is a
 #                plain Array here). Underscores stand for spaces.
 #
-# The list is being migrated a batch at a time; the wrappers not named here
-# are still the transpiled ones in api/private/dispatch.rs.
+# Deprecated aliases (vim_eval -> nvim_eval) are absent on purpose: an alias
+# shares its implementation's wrapper and only needs an entry in the handler
+# table. Grouped by the API source file, which is also how the generated
+# modules are split.
 
+# api/autocmd.rs
+nvim_clear_autocmds
+nvim_create_augroup
+nvim_create_autocmd
+nvim_del_augroup_by_id
+nvim_del_augroup_by_name
+nvim_del_autocmd
+nvim_exec_autocmds
+nvim_get_autocmds
+
+# api/buffer.rs
+nvim__buf_stats
+nvim_buf_attach
+nvim_buf_del_keymap
+nvim_buf_del_mark
+nvim_buf_del_var
+nvim_buf_delete textlock
+nvim_buf_detach
+nvim_buf_get_changedtick
+nvim_buf_get_keymap
+nvim_buf_get_lines
+nvim_buf_get_mark
+nvim_buf_get_name
+nvim_buf_get_offset
+nvim_buf_get_text
+nvim_buf_get_var
+nvim_buf_is_loaded
+nvim_buf_is_valid
+nvim_buf_line_count
+nvim_buf_set_keymap
+nvim_buf_set_lines textlock_allow_cmdwin arg5=ArrayOf(String)
+nvim_buf_set_mark
+nvim_buf_set_name
+nvim_buf_set_text textlock_allow_cmdwin arg6=ArrayOf(String)
+nvim_buf_set_var
+
+# api/command.rs
+nvim_buf_create_user_command
+nvim_buf_del_user_command
+nvim_buf_get_commands
+nvim_cmd
+nvim_create_user_command
+nvim_del_user_command
+nvim_get_commands
+nvim_parse_cmd
+
+# api/deprecated.rs
+buffer_del_line
+buffer_del_var
+buffer_get_line
+buffer_get_line_slice
+buffer_insert arg3=ArrayOf(String)
+buffer_set_line
+buffer_set_line_slice arg6=ArrayOf(String)
+buffer_set_var
+nvim_buf_add_highlight
+nvim_buf_clear_highlight
+nvim_buf_get_number
+nvim_buf_get_option
+nvim_buf_set_option
+nvim_buf_set_virtual_text
+nvim_call_atomic
+nvim_command_output
+nvim_err_write
+nvim_err_writeln
+nvim_exec
+nvim_execute_lua
+nvim_get_hl_by_id
+nvim_get_hl_by_name
+nvim_get_option
+nvim_get_option_info
+nvim_notify
+nvim_out_write
+nvim_set_option
+nvim_subscribe
+nvim_unsubscribe
+nvim_win_get_option
+nvim_win_set_option
+tabpage_del_var
+tabpage_set_var
+vim_del_var
+vim_set_var
+window_del_var
+window_set_var
+
+# api/events.rs
+nvim_error_event
+nvim_ui_term_event
+
+# api/extmark.rs
+nvim__buf_debug_extmarks
+nvim__ns_get
+nvim__ns_set
+nvim_buf_clear_namespace
+nvim_buf_del_extmark
+nvim_buf_get_extmark_by_id
+nvim_buf_get_extmarks
+nvim_buf_set_extmark
+nvim_create_namespace
+nvim_get_namespaces
+
+# api/options.rs
+nvim_get_all_options_info
+nvim_get_option_info2
+nvim_get_option_value
+nvim_set_option_value
+
+# api/tabpage.rs
+nvim_open_tabpage textlock_allow_cmdwin
+nvim_tabpage_del_var
+nvim_tabpage_get_number
+nvim_tabpage_get_var
+nvim_tabpage_get_win
+nvim_tabpage_is_valid
+nvim_tabpage_list_wins
+nvim_tabpage_set_var
+nvim_tabpage_set_win
+
+# api/ui.rs
+nvim_ui_attach
+nvim_ui_detach
+nvim_ui_pum_set_bounds
+nvim_ui_pum_set_height
+nvim_ui_send
+nvim_ui_set_focus
+nvim_ui_set_option
+nvim_ui_try_resize
+nvim_ui_try_resize_grid
+ui_attach
+
+# api/vim.rs
+nvim__chan_set_detach
+nvim__complete_set
+nvim__exec_lua_fast
+nvim__get_lib_dir
+nvim__get_runtime arg1=ArrayOf(String)
 nvim__id
 nvim__id_array
 nvim__id_dict
 nvim__id_float
-nvim_buf_delete textlock
-nvim_buf_get_lines
-nvim_buf_get_name
-nvim_buf_is_valid
+nvim__inspect_cell
+nvim__invalidate_glyph_cache
+nvim__redraw
+nvim__runtime_inspect
+nvim__screenshot
+nvim__stats
+nvim__unpack
+nvim_chan_send
+nvim_create_buf
+nvim_del_current_line textlock_allow_cmdwin
+nvim_del_keymap
+nvim_del_mark
+nvim_del_var
+nvim_echo arg1=ArrayOf(Tuple(String,_*HLGroupID))
+nvim_eval_statusline
+nvim_exec_lua
+nvim_feedkeys
 nvim_get_api_info
+nvim_get_chan_info
+nvim_get_color_by_name
+nvim_get_color_map
+nvim_get_context
 nvim_get_current_buf
+nvim_get_current_line
+nvim_get_current_tabpage
+nvim_get_current_win
+nvim_get_hl
+nvim_get_hl_id_by_name
+nvim_get_hl_ns
+nvim_get_keymap
+nvim_get_mark
 nvim_get_mode
+nvim_get_proc
+nvim_get_proc_children
+nvim_get_runtime_file
+nvim_get_var
+nvim_get_vvar
+nvim_input
+nvim_input_mouse
+nvim_list_bufs
+nvim_list_chans
+nvim_list_runtime_paths
+nvim_list_tabpages
+nvim_list_uis
+nvim_list_wins
+nvim_load_context
+nvim_open_term textlock_allow_cmdwin
+nvim_paste textlock_allow_cmdwin
+nvim_put textlock_allow_cmdwin arg1=ArrayOf(String)
+nvim_replace_termcodes
+nvim_select_popupmenu_item
+nvim_set_client_info
+nvim_set_current_buf textlock
+nvim_set_current_dir
 nvim_set_current_line textlock_allow_cmdwin
-nvim_tabpage_is_valid
+nvim_set_current_tabpage textlock
+nvim_set_current_win textlock
+nvim_set_hl
+nvim_set_hl_ns
+nvim_set_hl_ns_fast
+nvim_set_keymap
+nvim_set_var
+nvim_set_vvar
+nvim_strwidth
+
+# api/vimscript.rs
+nvim_call_dict_function
+nvim_call_function
+nvim_command
+nvim_eval
+nvim_exec2
+nvim_parse_expression
+
+# api/win_config.rs
+nvim_open_win textlock_allow_cmdwin
 nvim_win_get_config
+nvim_win_set_config
+
+# api/window.rs
+nvim_win_close textlock_allow_cmdwin
+nvim_win_del_var
+nvim_win_get_buf
+nvim_win_get_cursor
+nvim_win_get_height
+nvim_win_get_number
+nvim_win_get_position
+nvim_win_get_tabpage
+nvim_win_get_var
+nvim_win_get_width
+nvim_win_hide textlock_allow_cmdwin
+nvim_win_is_valid
+nvim_win_set_buf textlock_allow_cmdwin
 nvim_win_set_cursor arg2=ArrayOf(Integer,_2)
+nvim_win_set_height
+nvim_win_set_hl_ns
+nvim_win_set_var
+nvim_win_set_width
+nvim_win_text_height

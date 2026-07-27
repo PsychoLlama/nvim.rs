@@ -7,6 +7,12 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The msgpack-RPC dispatch wrappers are generated from the API signatures
+  again (`just apigen`) instead of carried as transpiled code, retiring
+  ~18k lines of `api/private/dispatch.rs`.
+
 ## [2026.07.27-dd16441f3f]
 
 Ongoing migration of the transpiled code toward safe, idiomatic Rust.

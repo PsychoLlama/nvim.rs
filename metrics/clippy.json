@@ -16,7 +16,7 @@
     "crates/nvim/src/nvim/api/extmark.rs": 145,
     "crates/nvim/src/nvim/api/options.rs": 34,
     "crates/nvim/src/nvim/api/private/converter.rs": 116,
-    "crates/nvim/src/nvim/api/private/dispatch.rs": 1558,
+    "crates/nvim/src/nvim/api/private/dispatch.rs": 587,
     "crates/nvim/src/nvim/api/private/helpers.rs": 101,
     "crates/nvim/src/nvim/api/private/validate.rs": 21,
     "crates/nvim/src/nvim/api/tabpage.rs": 7,

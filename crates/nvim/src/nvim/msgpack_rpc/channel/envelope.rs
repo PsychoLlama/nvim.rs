@@ -8,7 +8,7 @@
 use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 
-use crate::src::nvim::api::private::dispatch::handle_nvim_paste;
+use crate::src::nvim::api::private::dispatch_wrappers::handle_nvim_paste;
 use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string};
 use crate::src::nvim::api::ui::remote_ui_flush_pending_data;
 use crate::src::nvim::event::wstream::wstream_new_buffer;
