@@ -112,7 +112,7 @@ pub unsafe extern "C" fn u_read_undo(
             && file_info_orig.stat.st_uid != file_info_undo.stat.st_uid
             && file_info_undo.stat.st_uid != getuid() as uint64_t
         {
-            if p_verbose.get() > 0 as OptInt {
+            if p_verbose.get() > 0 {
                 verbose_enter();
                 smsg(
                     0,
@@ -126,7 +126,7 @@ pub unsafe extern "C" fn u_read_undo(
     } else {
         file_name = name;
     }
-    if p_verbose.get() > 0 as OptInt {
+    if p_verbose.get() > 0 {
         verbose_enter();
         smsg(0, gettext(c"Reading undo file: %s".as_ptr()), file_name);
         verbose_leave();
@@ -135,7 +135,7 @@ pub unsafe extern "C" fn u_read_undo(
     '_theend: {
         '_error: {
             if fp.is_null() {
-                if !name.is_null() || p_verbose.get() > 0 as OptInt {
+                if !name.is_null() || p_verbose.get() > 0 {
                     semsg(
                         gettext(c"E822: Cannot open undo file for reading: %s".as_ptr()),
                         file_name,
@@ -150,9 +150,9 @@ pub unsafe extern "C" fn u_read_undo(
                 if fread(
                     &raw mut magic_buf as *mut c_char as *mut c_void,
                     UF_START_MAGIC_LEN as size_t,
-                    1 as size_t,
+                    1,
                     fp,
-                ) != 1 as c_ulong
+                ) != 1
                     || memcmp(
                         &raw mut magic_buf as *mut c_char as *const c_void,
                         UF_START_MAGIC.as_ptr() as *const c_void,
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn u_read_undo(
                             ) != 0
                                 || line_count != (*curbuf.get()).b_ml.ml_line_count
                             {
-                                if p_verbose.get() > 0 as OptInt || !name.is_null() {
+                                if p_verbose.get() > 0 || !name.is_null() {
                                     if name.is_null() {
                                         verbose_enter();
                                     }
@@ -207,7 +207,7 @@ pub unsafe extern "C" fn u_read_undo(
                                     }
                                     line_lnum = undo_read_4c(&raw mut bi) as linenr_T;
                                     line_colnr = undo_read_4c(&raw mut bi);
-                                    if line_lnum < 0 as linenr_T || line_colnr < 0 {
+                                    if line_lnum < 0 || line_colnr < 0 {
                                         corruption_error(c"line lnum/col".as_ptr(), file_name);
                                     } else {
                                         old_header_seq = undo_read_4c(&raw mut bi);

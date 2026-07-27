@@ -83,7 +83,7 @@ pub(crate) unsafe extern "C" fn u_doit(
         if undo_undoes.get() {
             if (*curbuf.get()).b_u_curhead.is_null() {
                 (*curbuf.get()).b_u_curhead = (*curbuf.get()).b_u_newhead;
-            } else if get_undolevel(curbuf.get()) > 0 as OptInt {
+            } else if get_undolevel(curbuf.get()) > 0 {
                 (*curbuf.get()).b_u_curhead = (*(*curbuf.get()).b_u_curhead).uh_next.ptr;
             }
             if (*curbuf.get()).b_u_numhead == 0 || (*curbuf.get()).b_u_curhead.is_null() {
@@ -97,9 +97,7 @@ pub(crate) unsafe extern "C" fn u_doit(
             } else {
                 u_undoredo(true, do_buf_event);
             }
-        } else if (*curbuf.get()).b_u_curhead.is_null()
-            || get_undolevel(curbuf.get()) <= 0 as OptInt
-        {
+        } else if (*curbuf.get()).b_u_curhead.is_null() || get_undolevel(curbuf.get()) <= 0 {
             beep_flush();
             if count == startcount - 1 {
                 msg(gettext(c"Already at newest change".as_ptr()), 0);
@@ -434,38 +432,38 @@ pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: boo
     );
     let mut visualinfo: visualinfo_T = (*curbuf.get()).b_visual;
     (*curbuf.get()).b_op_start.lnum = (*curbuf.get()).b_ml.ml_line_count;
-    (*curbuf.get()).b_op_start.col = 0 as colnr_T;
-    (*curbuf.get()).b_op_end.lnum = 0 as linenr_T;
-    (*curbuf.get()).b_op_end.col = 0 as colnr_T;
+    (*curbuf.get()).b_op_start.col = 0;
+    (*curbuf.get()).b_op_end.lnum = 0;
+    (*curbuf.get()).b_op_end.col = 0;
     let mut uep: *mut u_entry_T = (*curhead).uh_entry;
     while !uep.is_null() {
         let mut top: linenr_T = (*uep).ue_top;
         let mut bot: linenr_T = (*uep).ue_bot;
-        if bot == 0 as linenr_T {
-            bot = (*curbuf.get()).b_ml.ml_line_count + 1 as linenr_T;
+        if bot == 0 {
+            bot = (*curbuf.get()).b_ml.ml_line_count + 1;
         }
         if top > (*curbuf.get()).b_ml.ml_line_count
             || top >= bot
-            || bot > (*curbuf.get()).b_ml.ml_line_count + 1 as linenr_T
+            || bot > (*curbuf.get()).b_ml.ml_line_count + 1
         {
             unblock_autocmds();
             iemsg(gettext(c"E438: u_undo: line numbers wrong".as_ptr()));
             changed(curbuf.get());
             return;
         }
-        let mut oldsize: linenr_T = bot - top - 1 as linenr_T;
+        let mut oldsize: linenr_T = bot - top - 1;
         let mut newsize: linenr_T = (*uep).ue_size;
         let mut lnum: linenr_T = (*curhead).uh_cursor.lnum;
-        if lnum >= top && lnum <= top + newsize + 1 as linenr_T {
+        if lnum >= top && lnum <= top + newsize + 1 {
             new_curpos = (*curhead).uh_cursor;
-            newlnum = -1 as linenr_T;
+            newlnum = -1;
         } else if top < newlnum {
             let mut i: c_int = 0;
             i = 0;
             while (i as linenr_T) < newsize && (i as linenr_T) < oldsize {
                 if strcmp(
                     *(*uep).ue_array.offset(i as isize),
-                    ml_get(top + 1 as linenr_T + i as linenr_T),
+                    ml_get(top + 1 + i as linenr_T),
                 ) != 0
                 {
                     break;
@@ -477,19 +475,19 @@ pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: boo
                 && (*uep).ue_next.is_null()
             {
                 newlnum = top;
-                new_curpos.lnum = newlnum + 1 as linenr_T;
+                new_curpos.lnum = newlnum + 1;
             } else if (i as linenr_T) < newsize {
                 newlnum = top + i as linenr_T;
-                new_curpos.lnum = newlnum + 1 as linenr_T;
+                new_curpos.lnum = newlnum + 1;
             }
         }
         let mut empty_buffer: bool = false;
-        if oldsize > 0 as linenr_T {
+        if oldsize > 0 {
             newarray = xmalloc(size_of::<*mut c_char>().wrapping_mul(oldsize as size_t))
                 as *mut *mut c_char;
             let mut i_0: c_int = 0;
             let mut lnum_0: linenr_T = 0;
-            lnum_0 = bot - 1 as linenr_T;
+            lnum_0 = bot - 1;
             i_0 = oldsize as c_int;
             loop {
                 i_0 -= 1;
@@ -497,7 +495,7 @@ pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: boo
                     break;
                 }
                 *newarray.offset(i_0 as isize) = u_save_line(lnum_0);
-                if (*curbuf.get()).b_ml.ml_line_count == 1 as linenr_T {
+                if (*curbuf.get()).b_ml.ml_line_count == 1 {
                     empty_buffer = true;
                 }
                 ml_delete(lnum_0);
@@ -513,15 +511,10 @@ pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: boo
             lnum_1 = top;
             i_1 = 0;
             while (i_1 as linenr_T) < newsize {
-                if empty_buffer && lnum_1 == 0 as linenr_T {
-                    ml_replace(1 as linenr_T, *(*uep).ue_array.offset(i_1 as isize), true);
+                if empty_buffer && lnum_1 == 0 {
+                    ml_replace(1, *(*uep).ue_array.offset(i_1 as isize), true);
                 } else {
-                    ml_append_flags(
-                        lnum_1,
-                        *(*uep).ue_array.offset(i_1 as isize),
-                        0 as colnr_T,
-                        0,
-                    );
+                    ml_append_flags(lnum_1, *(*uep).ue_array.offset(i_1 as isize), 0, 0);
                 }
                 xfree(*(*uep).ue_array.offset(i_1 as isize) as *mut c_void);
                 i_1 += 1;
@@ -531,7 +524,7 @@ pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: boo
         }
         if oldsize != newsize {
             mark_adjust(
-                top + 1 as linenr_T,
+                top + 1,
                 top + oldsize,
                 MAXLNUM as c_int as linenr_T,
                 newsize - oldsize,
@@ -544,11 +537,11 @@ pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: boo
                 (*curbuf.get()).b_op_end.lnum += newsize - oldsize;
             }
         }
-        if oldsize > 0 as linenr_T || newsize > 0 as linenr_T {
+        if oldsize > 0 || newsize > 0 {
             changed_lines(
                 curbuf.get(),
-                top + 1 as linenr_T,
-                0 as colnr_T,
+                top + 1,
+                0,
                 bot,
                 newsize - oldsize,
                 do_buf_event,
@@ -557,13 +550,13 @@ pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: boo
                 redrawWinline(curwin.get(), bot);
             }
         }
-        (*curbuf.get()).b_op_start.lnum = if (*curbuf.get()).b_op_start.lnum < top + 1 as linenr_T {
+        (*curbuf.get()).b_op_start.lnum = if (*curbuf.get()).b_op_start.lnum < top + 1 {
             (*curbuf.get()).b_op_start.lnum
         } else {
-            top + 1 as linenr_T
+            top + 1
         };
-        if newsize == 0 as linenr_T && top + 1 as linenr_T > (*curbuf.get()).b_op_end.lnum {
-            (*curbuf.get()).b_op_end.lnum = top + 1 as linenr_T;
+        if newsize == 0 && top + 1 > (*curbuf.get()).b_op_end.lnum {
+            (*curbuf.get()).b_op_end.lnum = top + 1;
         } else if top + newsize > (*curbuf.get()).b_op_end.lnum {
             (*curbuf.get()).b_op_end.lnum = top + newsize;
         }
@@ -571,7 +564,7 @@ pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: boo
         (*u_oldcount.ptr()) += oldsize as c_int;
         (*uep).ue_size = oldsize;
         (*uep).ue_array = newarray;
-        (*uep).ue_bot = top + newsize + 1 as linenr_T;
+        (*uep).ue_bot = top + newsize + 1;
         nuep = (*uep).ue_next;
         (*uep).ue_next = newlist;
         newlist = uep;
@@ -622,23 +615,23 @@ pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: boo
     }
     let mut i_4: c_int = 0;
     while i_4 < NMARKS {
-        if (*curhead).uh_namedm[i_4 as usize].mark.lnum != 0 as linenr_T {
+        if (*curhead).uh_namedm[i_4 as usize].mark.lnum != 0 {
             free_fmark((*curbuf.get()).b_namedm[i_4 as usize]);
             (*curbuf.get()).b_namedm[i_4 as usize] = (*curhead).uh_namedm[i_4 as usize];
         }
-        if namedm[i_4 as usize].mark.lnum != 0 as linenr_T {
+        if namedm[i_4 as usize].mark.lnum != 0 {
             (*curhead).uh_namedm[i_4 as usize] = namedm[i_4 as usize];
         } else {
-            (*curhead).uh_namedm[i_4 as usize].mark.lnum = 0 as linenr_T;
+            (*curhead).uh_namedm[i_4 as usize].mark.lnum = 0;
         }
         i_4 += 1;
     }
-    if (*curhead).uh_visual.vi_start.lnum != 0 as linenr_T {
+    if (*curhead).uh_visual.vi_start.lnum != 0 {
         (*curbuf.get()).b_visual = (*curhead).uh_visual;
         (*curhead).uh_visual = visualinfo;
     }
-    if (*curhead).uh_cursor.lnum + 1 as linenr_T == (*curwin.get()).w_cursor.lnum
-        && (*curwin.get()).w_cursor.lnum > 1 as linenr_T
+    if (*curhead).uh_cursor.lnum + 1 == (*curwin.get()).w_cursor.lnum
+        && (*curwin.get()).w_cursor.lnum > 1
     {
         (*curwin.get()).w_cursor.lnum -= 1;
     }
@@ -648,14 +641,14 @@ pub(crate) unsafe extern "C" fn u_undoredo(mut undo: bool, mut do_buf_event: boo
             if virtual_active(curwin.get()) && (*curhead).uh_cursor_vcol >= 0 {
                 coladvance(curwin.get(), (*curhead).uh_cursor_vcol);
             } else {
-                (*curwin.get()).w_cursor.coladd = 0 as colnr_T;
+                (*curwin.get()).w_cursor.coladd = 0;
             }
         } else {
             beginline(BL_SOL as c_int | BL_FIX as c_int);
         }
     } else {
-        (*curwin.get()).w_cursor.col = 0 as colnr_T;
-        (*curwin.get()).w_cursor.coladd = 0 as colnr_T;
+        (*curwin.get()).w_cursor.col = 0;
+        (*curwin.get()).w_cursor.coladd = 0;
     }
     check_cursor(curwin.get());
     (*curbuf.get()).b_u_seq_cur = (*curhead).uh_seq;
@@ -737,7 +730,7 @@ pub(crate) unsafe extern "C" fn u_undo_end(
         (*curtab.get()).tp_firstwin
     };
     while !wp.is_null() {
-        if (*wp).w_buffer == curbuf.get() && (*wp).w_onebuf_opt.wo_cole > 0 as OptInt {
+        if (*wp).w_buffer == curbuf.get() && (*wp).w_onebuf_opt.wo_cole > 0 {
             redraw_later(wp, UPD_NOT_VALID as c_int);
         }
         wp = (*wp).w_next;

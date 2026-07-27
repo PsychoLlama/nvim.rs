@@ -109,7 +109,7 @@ use header::*;
 mod apply;
 mod eval;
 mod file;
-mod format;
+pub mod format;
 mod read;
 mod tree;
 mod write;
@@ -134,9 +134,9 @@ pub struct bufinfo_T {
 }
 #[inline(always)]
 unsafe extern "C" fn clearpos(mut a: *mut pos_T) {
-    (*a).lnum = 0 as linenr_T;
-    (*a).col = 0 as colnr_T;
-    (*a).coladd = 0 as colnr_T;
+    (*a).lnum = 0;
+    (*a).col = 0;
+    (*a).coladd = 0;
 }
 pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
@@ -149,12 +149,8 @@ static undo_undoes: GlobalCell<bool> = GlobalCell::new(false);
 static lastmark: GlobalCell<c_int> = GlobalCell::new(0);
 pub unsafe extern "C" fn u_save_cursor() -> c_int {
     let mut cur: linenr_T = (*curwin.get()).w_cursor.lnum;
-    let mut top: linenr_T = if cur > 0 as linenr_T {
-        cur - 1 as linenr_T
-    } else {
-        0 as linenr_T
-    };
-    let mut bot: linenr_T = cur + 1 as linenr_T;
+    let mut top: linenr_T = if cur > 0 { cur - 1 } else { 0 };
+    let mut bot: linenr_T = cur + 1;
     return u_save(top, bot);
 }
 pub unsafe extern "C" fn u_save(mut top: linenr_T, mut bot: linenr_T) -> c_int {
@@ -165,39 +161,27 @@ pub unsafe extern "C" fn u_save_buf(
     mut top: linenr_T,
     mut bot: linenr_T,
 ) -> c_int {
-    if top >= bot || bot > (*buf).b_ml.ml_line_count + 1 as linenr_T {
+    if top >= bot || bot > (*buf).b_ml.ml_line_count + 1 {
         return FAIL;
     }
-    if top + 2 as linenr_T == bot {
-        u_saveline(buf, top + 1 as linenr_T);
+    if top + 2 == bot {
+        u_saveline(buf, top + 1);
     }
-    return u_savecommon(buf, top, bot, 0 as linenr_T, false);
+    return u_savecommon(buf, top, bot, 0, false);
 }
 pub unsafe extern "C" fn u_savesub(mut lnum: linenr_T) -> c_int {
-    return u_savecommon(
-        curbuf.get(),
-        lnum - 1 as linenr_T,
-        lnum + 1 as linenr_T,
-        lnum + 1 as linenr_T,
-        false,
-    );
+    return u_savecommon(curbuf.get(), lnum - 1, lnum + 1, lnum + 1, false);
 }
 pub unsafe extern "C" fn u_inssub(mut lnum: linenr_T) -> c_int {
-    return u_savecommon(
-        curbuf.get(),
-        lnum - 1 as linenr_T,
-        lnum,
-        lnum + 1 as linenr_T,
-        false,
-    );
+    return u_savecommon(curbuf.get(), lnum - 1, lnum, lnum + 1, false);
 }
 pub unsafe extern "C" fn u_savedel(mut lnum: linenr_T, mut nlines: linenr_T) -> c_int {
     return u_savecommon(
         curbuf.get(),
-        lnum - 1 as linenr_T,
+        lnum - 1,
         lnum + nlines,
         if nlines == (*curbuf.get()).b_ml.ml_line_count {
-            2 as linenr_T
+            2
         } else {
             lnum
         },
@@ -227,7 +211,7 @@ unsafe extern "C" fn get_undolevel(mut buf: *mut buf_T) -> OptInt {
 }
 #[inline]
 unsafe extern "C" fn zero_fmark_additional_data(mut fmarks: *mut fmark_T) {
-    let mut i: size_t = 0 as size_t;
+    let mut i: size_t = 0;
     while i < NMARKS as size_t {
         let slot = &raw mut (*fmarks.add(i)).additional_data;
         xfree((*slot).cast());
@@ -249,20 +233,20 @@ pub unsafe extern "C" fn u_savecommon(
         if buf == curbuf.get() {
             change_warning(buf, 0);
         }
-        if bot > (*buf).b_ml.ml_line_count + 1 as linenr_T {
+        if bot > (*buf).b_ml.ml_line_count + 1 {
             emsg(gettext(c"E881: Line count changed unexpectedly".as_ptr()));
             return FAIL;
         }
     }
     let mut uep: *mut u_entry_T = ptr::null_mut();
     let mut prev_uep: *mut u_entry_T = ptr::null_mut();
-    let mut size: linenr_T = bot - top - 1 as linenr_T;
+    let mut size: linenr_T = bot - top - 1;
     if (*buf).b_u_synced {
         (*buf).b_new_change = true;
         let mut uhp: *mut u_header_T = ptr::null_mut();
-        if get_undolevel(buf) >= 0 as OptInt {
+        if get_undolevel(buf) >= 0 {
             uhp = xmalloc(size_of::<u_header_T>()) as *mut u_header_T;
-            (*uhp).uh_extmark.capacity = 0 as size_t;
+            (*uhp).uh_extmark.capacity = 0;
             (*uhp).uh_extmark.size = (*uhp).uh_extmark.capacity;
             (*uhp).uh_extmark.items = ptr::null_mut();
         } else {
@@ -316,7 +300,7 @@ pub unsafe extern "C" fn u_savecommon(
         (*buf).b_u_seq_cur = (*uhp).uh_seq;
         (*uhp).uh_time = time(ptr::null_mut());
         (*uhp).uh_save_nr = 0;
-        (*buf).b_u_time_cur = (*uhp).uh_time + 1 as time_t;
+        (*buf).b_u_time_cur = (*uhp).uh_time + 1;
         (*uhp).uh_walk = 0;
         (*uhp).uh_entry = ptr::null_mut();
         (*uhp).uh_getbot_entry = ptr::null_mut();
@@ -324,7 +308,7 @@ pub unsafe extern "C" fn u_savecommon(
         if virtual_active(curwin.get()) && (*curwin.get()).w_cursor.coladd > 0 {
             (*uhp).uh_cursor_vcol = getviscol() as colnr_T;
         } else {
-            (*uhp).uh_cursor_vcol = -1 as colnr_T;
+            (*uhp).uh_cursor_vcol = -1;
         }
         (*uhp).uh_flags = (if (*buf).b_changed != 0 {
             UH_CHANGED as c_int
@@ -348,10 +332,10 @@ pub unsafe extern "C" fn u_savecommon(
         }
         (*buf).b_u_numhead += 1;
     } else {
-        if get_undolevel(buf) < 0 as OptInt {
+        if get_undolevel(buf) < 0 {
             return OK;
         }
-        if size == 1 as linenr_T {
+        if size == 1 {
             uep = u_get_headentry(buf);
             prev_uep = ptr::null_mut();
             let mut i: c_int = 0;
@@ -360,22 +344,22 @@ pub unsafe extern "C" fn u_savecommon(
                     break;
                 }
                 if (if (*(*buf).b_u_newhead).uh_getbot_entry != uep {
-                    ((*uep).ue_top + (*uep).ue_size + 1 as linenr_T
-                        != (if (*uep).ue_bot == 0 as linenr_T {
-                            (*buf).b_ml.ml_line_count + 1 as linenr_T
+                    ((*uep).ue_top + (*uep).ue_size + 1
+                        != (if (*uep).ue_bot == 0 {
+                            (*buf).b_ml.ml_line_count + 1
                         } else {
                             (*uep).ue_bot
                         })) as c_int
                 } else {
                     ((*uep).ue_lcount != (*buf).b_ml.ml_line_count) as c_int
                 }) != 0
-                    || (*uep).ue_size > 1 as linenr_T
+                    || (*uep).ue_size > 1
                         && top >= (*uep).ue_top
-                        && top + 2 as linenr_T <= (*uep).ue_top + (*uep).ue_size + 1 as linenr_T
+                        && top + 2 <= (*uep).ue_top + (*uep).ue_size + 1
                 {
                     break;
                 }
-                if (*uep).ue_size == 1 as linenr_T && (*uep).ue_top == top {
+                if (*uep).ue_size == 1 && (*uep).ue_top == top {
                     if i > 0 {
                         u_getbot(buf);
                         (*buf).b_u_synced = false;
@@ -383,10 +367,10 @@ pub unsafe extern "C" fn u_savecommon(
                         (*uep).ue_next = (*(*buf).b_u_newhead).uh_entry;
                         (*(*buf).b_u_newhead).uh_entry = uep;
                     }
-                    if newbot != 0 as linenr_T {
+                    if newbot != 0 {
                         (*uep).ue_bot = newbot;
                     } else if bot > (*buf).b_ml.ml_line_count {
-                        (*uep).ue_bot = 0 as linenr_T;
+                        (*uep).ue_bot = 0;
                     } else {
                         (*uep).ue_lcount = (*buf).b_ml.ml_line_count;
                         (*(*buf).b_u_newhead).uh_getbot_entry = uep;
@@ -404,21 +388,21 @@ pub unsafe extern "C" fn u_savecommon(
     memset(uep as *mut c_void, 0, size_of::<u_entry_T>());
     (*uep).ue_size = size;
     (*uep).ue_top = top;
-    if newbot != 0 as linenr_T {
+    if newbot != 0 {
         (*uep).ue_bot = newbot;
     } else if bot > (*buf).b_ml.ml_line_count {
-        (*uep).ue_bot = 0 as linenr_T;
+        (*uep).ue_bot = 0;
     } else {
         (*uep).ue_lcount = (*buf).b_ml.ml_line_count;
         (*(*buf).b_u_newhead).uh_getbot_entry = uep;
     }
-    if size > 0 as linenr_T {
+    if size > 0 {
         (*uep).ue_array =
             xmalloc(size_of::<*mut c_char>().wrapping_mul(size as size_t)) as *mut *mut c_char;
         let mut lnum: linenr_T = 0;
         let mut i_0: c_int = 0;
         i_0 = 0;
-        lnum = top + 1 as linenr_T;
+        lnum = top + 1;
         while (i_0 as linenr_T) < size {
             fast_breakcheck();
             if got_int.get() {
@@ -443,7 +427,7 @@ pub unsafe extern "C" fn u_savecommon(
     return OK;
 }
 pub unsafe extern "C" fn undo_fmt_time(mut buf: *mut c_char, mut buflen: size_t, mut tt: time_t) {
-    if time(ptr::null_mut()) - tt >= 100 as time_t {
+    if time(ptr::null_mut()) - tt >= 100 {
         let mut curtime: tm = tm_zeroed();
         os_localtime_r(tt, &mut curtime);
         let mut n: size_t = 0;
@@ -452,7 +436,7 @@ pub unsafe extern "C" fn undo_fmt_time(mut buf: *mut c_char, mut buflen: size_t,
         } else {
             n = strftime(buf, buflen, c"%Y/%m/%d %H:%M:%S".as_ptr(), &raw mut curtime);
         }
-        if n == 0 as size_t {
+        if n == 0 {
             *buf.offset(0) = NUL as c_char;
         }
     } else {
@@ -473,7 +457,7 @@ pub unsafe extern "C" fn u_sync(mut force: bool) {
     if (*curbuf.get()).b_u_synced || !force && no_u_sync.get() > 0 {
         return;
     }
-    if get_undolevel(curbuf.get()) < 0 as OptInt {
+    if get_undolevel(curbuf.get()) < 0 {
         (*curbuf.get()).b_u_synced = true;
     } else {
         u_getbot(curbuf.get());
@@ -493,7 +477,7 @@ pub unsafe extern "C" fn ex_undojoin(mut _eap: *mut exarg_T) {
     if !(*curbuf.get()).b_u_synced {
         return;
     }
-    if get_undolevel(curbuf.get()) < 0 as OptInt {
+    if get_undolevel(curbuf.get()) < 0 {
         return;
     }
     (*curbuf.get()).b_u_synced = false;
@@ -508,15 +492,15 @@ pub unsafe extern "C" fn u_find_first_changed() {
         return;
     }
     let mut uep: *mut u_entry_T = (*uhp).uh_entry;
-    if (*uep).ue_top != 0 as linenr_T || (*uep).ue_bot != 0 as linenr_T {
+    if (*uep).ue_top != 0 || (*uep).ue_bot != 0 {
         return;
     }
     let mut lnum: linenr_T = 0;
-    lnum = 1 as linenr_T;
+    lnum = 1;
     while lnum < (*curbuf.get()).b_ml.ml_line_count && lnum <= (*uep).ue_size {
         if strcmp(
             ml_get_buf(curbuf.get(), lnum),
-            *(*uep).ue_array.offset((lnum - 1 as linenr_T) as isize),
+            *(*uep).ue_array.offset((lnum - 1) as isize),
         ) != 0
         {
             clearpos(&raw mut (*uhp).uh_cursor);

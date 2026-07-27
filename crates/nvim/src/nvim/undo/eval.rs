@@ -33,7 +33,7 @@ pub unsafe extern "C" fn ex_undolist(mut _eap: *mut exarg_T) {
                 (*uhp).uh_time,
             );
             if (*uhp).uh_save_nr > 0 {
-                while strlen(IObuff.ptr() as *mut c_char) < 33 as size_t {
+                while strlen(IObuff.ptr() as *mut c_char) < 33 {
                     xstrlcat(IObuff.ptr() as *mut c_char, c" ".as_ptr(), IOSIZE as size_t);
                 }
                 vim_snprintf_add(
@@ -112,20 +112,20 @@ pub(crate) unsafe extern "C" fn u_eval_tree(
         tv_dict_add_nr(
             dict,
             c"seq".as_ptr(),
-            size_of::<[c_char; 4]>().wrapping_sub(1 as size_t),
+            size_of::<[c_char; 4]>().wrapping_sub(1),
             (*uhp).uh_seq as varnumber_T,
         );
         tv_dict_add_nr(
             dict,
             c"time".as_ptr(),
-            size_of::<[c_char; 5]>().wrapping_sub(1 as size_t),
+            size_of::<[c_char; 5]>().wrapping_sub(1),
             (*uhp).uh_time as varnumber_T,
         );
         if uhp == (*buf).b_u_newhead as *const u_header_T {
             tv_dict_add_nr(
                 dict,
                 c"newhead".as_ptr(),
-                size_of::<[c_char; 8]>().wrapping_sub(1 as size_t),
+                size_of::<[c_char; 8]>().wrapping_sub(1),
                 1 as varnumber_T,
             );
         }
@@ -133,7 +133,7 @@ pub(crate) unsafe extern "C" fn u_eval_tree(
             tv_dict_add_nr(
                 dict,
                 c"curhead".as_ptr(),
-                size_of::<[c_char; 8]>().wrapping_sub(1 as size_t),
+                size_of::<[c_char; 8]>().wrapping_sub(1),
                 1 as varnumber_T,
             );
         }
@@ -141,7 +141,7 @@ pub(crate) unsafe extern "C" fn u_eval_tree(
             tv_dict_add_nr(
                 dict,
                 c"save".as_ptr(),
-                size_of::<[c_char; 5]>().wrapping_sub(1 as size_t),
+                size_of::<[c_char; 5]>().wrapping_sub(1),
                 (*uhp).uh_save_nr as varnumber_T,
             );
         }
@@ -149,7 +149,7 @@ pub(crate) unsafe extern "C" fn u_eval_tree(
             tv_dict_add_list(
                 dict,
                 c"alt".as_ptr(),
-                size_of::<[c_char; 4]>().wrapping_sub(1 as size_t),
+                size_of::<[c_char; 4]>().wrapping_sub(1),
                 u_eval_tree(buf, (*uhp).uh_alt_next.ptr),
             );
         }
@@ -194,43 +194,43 @@ pub unsafe extern "C" fn f_undotree(
     tv_dict_add_nr(
         dict,
         c"synced".as_ptr(),
-        size_of::<[c_char; 7]>().wrapping_sub(1 as size_t),
+        size_of::<[c_char; 7]>().wrapping_sub(1),
         (*buf).b_u_synced as varnumber_T,
     );
     tv_dict_add_nr(
         dict,
         c"seq_last".as_ptr(),
-        size_of::<[c_char; 9]>().wrapping_sub(1 as size_t),
+        size_of::<[c_char; 9]>().wrapping_sub(1),
         (*buf).b_u_seq_last as varnumber_T,
     );
     tv_dict_add_nr(
         dict,
         c"save_last".as_ptr(),
-        size_of::<[c_char; 10]>().wrapping_sub(1 as size_t),
+        size_of::<[c_char; 10]>().wrapping_sub(1),
         (*buf).b_u_save_nr_last as varnumber_T,
     );
     tv_dict_add_nr(
         dict,
         c"seq_cur".as_ptr(),
-        size_of::<[c_char; 8]>().wrapping_sub(1 as size_t),
+        size_of::<[c_char; 8]>().wrapping_sub(1),
         (*buf).b_u_seq_cur as varnumber_T,
     );
     tv_dict_add_nr(
         dict,
         c"time_cur".as_ptr(),
-        size_of::<[c_char; 9]>().wrapping_sub(1 as size_t),
+        size_of::<[c_char; 9]>().wrapping_sub(1),
         (*buf).b_u_time_cur as varnumber_T,
     );
     tv_dict_add_nr(
         dict,
         c"save_cur".as_ptr(),
-        size_of::<[c_char; 9]>().wrapping_sub(1 as size_t),
+        size_of::<[c_char; 9]>().wrapping_sub(1),
         (*buf).b_u_save_nr_cur as varnumber_T,
     );
     tv_dict_add_list(
         dict,
         c"entries".as_ptr(),
-        size_of::<[c_char; 8]>().wrapping_sub(1 as size_t),
+        size_of::<[c_char; 8]>().wrapping_sub(1),
         u_eval_tree(buf, (*buf).b_u_oldhead),
     );
 }
@@ -242,11 +242,11 @@ pub unsafe extern "C" fn u_force_get_undo_header(mut buf: *mut buf_T) -> *mut u_
         uhp = (*buf).b_u_newhead;
     }
     if uhp.is_null() {
-        u_savecommon(buf, 0 as linenr_T, 1 as linenr_T, 1 as linenr_T, true);
+        u_savecommon(buf, 0, 1, 1, true);
         uhp = (*buf).b_u_curhead;
         if uhp.is_null() {
             uhp = (*buf).b_u_newhead;
-            if get_undolevel(buf) > 0 as OptInt && uhp.is_null() {
+            if get_undolevel(buf) > 0 && uhp.is_null() {
                 abort();
             }
         }

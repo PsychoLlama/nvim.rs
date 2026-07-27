@@ -88,7 +88,7 @@ pub unsafe extern "C" fn u_write_undo(
     if name.is_null() {
         file_name = u_get_undo_file_name((*buf).b_ffname, false);
         if file_name.is_null() {
-            if p_verbose.get() > 0 as OptInt {
+            if p_verbose.get() > 0 {
                 verbose_enter();
                 smsg(
                     0,
@@ -115,7 +115,7 @@ pub unsafe extern "C" fn u_write_undo(
             if name.is_null() || !forceit {
                 let mut fd: c_int = os_open(file_name, O_RDONLY, 0);
                 if fd < 0 {
-                    if !name.is_null() || p_verbose.get() > 0 as OptInt {
+                    if !name.is_null() || p_verbose.get() > 0 {
                         if name.is_null() {
                             verbose_enter();
                         }
@@ -144,7 +144,7 @@ pub unsafe extern "C" fn u_write_undo(
                             UF_START_MAGIC_LEN as size_t,
                         ) != 0
                     {
-                        if !name.is_null() || p_verbose.get() > 0 as OptInt {
+                        if !name.is_null() || p_verbose.get() > 0 {
                             if name.is_null() {
                                 verbose_enter();
                             }
@@ -166,7 +166,7 @@ pub unsafe extern "C" fn u_write_undo(
             os_remove(file_name);
         }
         if (*buf).b_u_numhead == 0 && (*buf).b_u_line_ptr.is_null() {
-            if p_verbose.get() > 0 as OptInt {
+            if p_verbose.get() > 0 {
                 verb_msg(gettext(
                     c"Skipping undo file write, nothing to undo".as_ptr(),
                 ));
@@ -180,7 +180,7 @@ pub unsafe extern "C" fn u_write_undo(
                 );
             } else {
                 os_setperm(file_name, perm);
-                if p_verbose.get() > 0 as OptInt {
+                if p_verbose.get() > 0 {
                     verbose_enter();
                     smsg(0, gettext(c"Writing undo file: %s".as_ptr()), file_name);
                     verbose_leave();
@@ -306,11 +306,7 @@ pub unsafe extern "C" fn u_write_undo(
                                     uhp = (*uhp).uh_next.ptr;
                                 }
                             }
-                            if undo_write_bytes(
-                                &raw mut bi,
-                                UF_HEADER_END_MAGIC as uintmax_t,
-                                2 as size_t,
-                            ) {
+                            if undo_write_bytes(&raw mut bi, UF_HEADER_END_MAGIC as uintmax_t, 2) {
                                 write_ok = true;
                             }
                             if (if (*buf).b_p_fs >= 0 {

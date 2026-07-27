@@ -8,7 +8,7 @@ use super::*;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn u_compute_hash(mut buf: *mut buf_T, mut hash: *mut uint8_t) {
     let mut ctx = Sha256::new();
-    let mut lnum: linenr_T = 1 as linenr_T;
+    let mut lnum: linenr_T = 1;
     while lnum <= (*buf).b_ml.ml_line_count {
         let mut p: *mut c_char = ml_get_buf(buf, lnum);
         // Include the terminating NUL as a line separator.
@@ -41,20 +41,20 @@ pub unsafe extern "C" fn u_get_undo_file_name(
             MAXPATHL as size_t,
             c",".as_ptr() as *mut c_char,
         );
-        if dir_len == 1 as size_t && dir_name[0] as c_int == '.' as c_int {
+        if dir_len == 1 && dir_name[0] as c_int == '.' as c_int {
             let ffname_len: size_t = strlen(ffname);
-            undo_file_name = xmalloc(ffname_len.wrapping_add(6 as size_t)) as *mut c_char;
+            undo_file_name = xmalloc(ffname_len.wrapping_add(6)) as *mut c_char;
             memmove(
                 undo_file_name as *mut c_void,
                 ffname as *const c_void,
-                ffname_len.wrapping_add(1 as size_t),
+                ffname_len.wrapping_add(1),
             );
             let tail: *mut c_char = path_tail(undo_file_name);
             let tail_len: size_t = strlen(tail);
             memmove(
                 tail.offset(1) as *mut c_void,
                 tail as *const c_void,
-                tail_len.wrapping_add(1 as size_t),
+                tail_len.wrapping_add(1),
             );
             *tail = '.' as c_char;
             memmove(
@@ -65,8 +65,8 @@ pub unsafe extern "C" fn u_get_undo_file_name(
         } else {
             dir_name[dir_len as usize] = NUL as c_char;
             let mut p: *mut c_char =
-                (&raw mut dir_name as *mut c_char).add(dir_len.wrapping_sub(1 as size_t));
-            while dir_len > 1 as size_t && vim_ispathsep(*p as c_int) {
+                (&raw mut dir_name as *mut c_char).add(dir_len.wrapping_sub(1));
+            while dir_len > 1 && vim_ispathsep(*p as c_int) {
                 let c2rust_fresh1 = p;
                 p = p.offset(-1);
                 *c2rust_fresh1 = NUL as c_char;
@@ -142,34 +142,34 @@ pub(crate) unsafe extern "C" fn serialize_header(
     if fwrite(
         UF_START_MAGIC.as_ptr() as *const c_void,
         UF_START_MAGIC_LEN as size_t,
-        1 as size_t,
+        1,
         fp,
-    ) != 1 as c_ulong
+    ) != 1
     {
         return false;
     }
-    undo_write_bytes(bi, UF_VERSION as uintmax_t, 2 as size_t);
+    undo_write_bytes(bi, UF_VERSION as uintmax_t, 2);
     if !undo_write(bi, hash, UNDO_HASH_SIZE as c_int as size_t) {
         return false;
     }
-    undo_write_bytes(bi, (*buf).b_ml.ml_line_count as uintmax_t, 4 as size_t);
+    undo_write_bytes(bi, (*buf).b_ml.ml_line_count as uintmax_t, 4);
     let mut len: size_t = if !(*buf).b_u_line_ptr.is_null() {
         strlen((*buf).b_u_line_ptr)
     } else {
-        0 as size_t
+        0
     };
-    undo_write_bytes(bi, len as uintmax_t, 4 as size_t);
-    if len > 0 as size_t && !undo_write(bi, (*buf).b_u_line_ptr as *mut uint8_t, len) {
+    undo_write_bytes(bi, len as uintmax_t, 4);
+    if len > 0 && !undo_write(bi, (*buf).b_u_line_ptr as *mut uint8_t, len) {
         return false;
     }
-    undo_write_bytes(bi, (*buf).b_u_line_lnum as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, (*buf).b_u_line_colnr as uintmax_t, 4 as size_t);
+    undo_write_bytes(bi, (*buf).b_u_line_lnum as uintmax_t, 4);
+    undo_write_bytes(bi, (*buf).b_u_line_colnr as uintmax_t, 4);
     put_header_ptr(bi, (*buf).b_u_oldhead);
     put_header_ptr(bi, (*buf).b_u_newhead);
     put_header_ptr(bi, (*buf).b_u_curhead);
-    undo_write_bytes(bi, (*buf).b_u_numhead as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, (*buf).b_u_seq_last as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, (*buf).b_u_seq_cur as uintmax_t, 4 as size_t);
+    undo_write_bytes(bi, (*buf).b_u_numhead as uintmax_t, 4);
+    undo_write_bytes(bi, (*buf).b_u_seq_last as uintmax_t, 4);
+    undo_write_bytes(bi, (*buf).b_u_seq_cur as uintmax_t, 4);
     let mut time_buf: [uint8_t; 8] = [0; 8];
     time_to_bytes((*buf).b_u_time_cur, &raw mut time_buf as *mut uint8_t);
     undo_write(
@@ -177,28 +177,28 @@ pub(crate) unsafe extern "C" fn serialize_header(
         &raw mut time_buf as *mut uint8_t,
         size_of::<[uint8_t; 8]>(),
     );
-    undo_write_bytes(bi, 4 as uintmax_t, 1 as size_t);
-    undo_write_bytes(bi, UF_LAST_SAVE_NR as uintmax_t, 1 as size_t);
-    undo_write_bytes(bi, (*buf).b_u_save_nr_last as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, 0 as uintmax_t, 1 as size_t);
+    undo_write_bytes(bi, 4, 1);
+    undo_write_bytes(bi, UF_LAST_SAVE_NR as uintmax_t, 1);
+    undo_write_bytes(bi, (*buf).b_u_save_nr_last as uintmax_t, 4);
+    undo_write_bytes(bi, 0, 1);
     return true;
 }
 pub(crate) unsafe extern "C" fn serialize_uhp(
     mut bi: *mut bufinfo_T,
     mut uhp: *mut u_header_T,
 ) -> bool {
-    if !undo_write_bytes(bi, UF_HEADER_MAGIC as uintmax_t, 2 as size_t) {
+    if !undo_write_bytes(bi, UF_HEADER_MAGIC as uintmax_t, 2) {
         return false;
     }
     put_header_ptr(bi, (*uhp).uh_next.ptr);
     put_header_ptr(bi, (*uhp).uh_prev.ptr);
     put_header_ptr(bi, (*uhp).uh_alt_next.ptr);
     put_header_ptr(bi, (*uhp).uh_alt_prev.ptr);
-    undo_write_bytes(bi, (*uhp).uh_seq as uintmax_t, 4 as size_t);
+    undo_write_bytes(bi, (*uhp).uh_seq as uintmax_t, 4);
     serialize_pos(bi, (*uhp).uh_cursor);
-    undo_write_bytes(bi, (*uhp).uh_cursor_vcol as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, (*uhp).uh_flags as uintmax_t, 2 as size_t);
-    let mut i: size_t = 0 as size_t;
+    undo_write_bytes(bi, (*uhp).uh_cursor_vcol as uintmax_t, 4);
+    undo_write_bytes(bi, (*uhp).uh_flags as uintmax_t, 2);
+    let mut i: size_t = 0;
     while i < NMARKS as size_t {
         serialize_pos(bi, (*uhp).uh_namedm[i as usize].mark);
         i = i.wrapping_add(1);
@@ -211,27 +211,27 @@ pub(crate) unsafe extern "C" fn serialize_uhp(
         &raw mut time_buf as *mut uint8_t,
         size_of::<[uint8_t; 8]>(),
     );
-    undo_write_bytes(bi, 4 as uintmax_t, 1 as size_t);
-    undo_write_bytes(bi, UHP_SAVE_NR as uintmax_t, 1 as size_t);
-    undo_write_bytes(bi, (*uhp).uh_save_nr as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, 0 as uintmax_t, 1 as size_t);
+    undo_write_bytes(bi, 4, 1);
+    undo_write_bytes(bi, UHP_SAVE_NR as uintmax_t, 1);
+    undo_write_bytes(bi, (*uhp).uh_save_nr as uintmax_t, 4);
+    undo_write_bytes(bi, 0, 1);
     let mut uep: *mut u_entry_T = (*uhp).uh_entry;
     while !uep.is_null() {
-        undo_write_bytes(bi, UF_ENTRY_MAGIC as uintmax_t, 2 as size_t);
+        undo_write_bytes(bi, UF_ENTRY_MAGIC as uintmax_t, 2);
         if !serialize_uep(bi, uep) {
             return false;
         }
         uep = (*uep).ue_next;
     }
-    undo_write_bytes(bi, UF_ENTRY_END_MAGIC as uintmax_t, 2 as size_t);
-    let mut i_0: size_t = 0 as size_t;
+    undo_write_bytes(bi, UF_ENTRY_END_MAGIC as uintmax_t, 2);
+    let mut i_0: size_t = 0;
     while i_0 < (*uhp).uh_extmark.size {
         if !serialize_extmark(bi, *(*uhp).uh_extmark.items.add(i_0)) {
             return false;
         }
         i_0 = i_0.wrapping_add(1);
     }
-    undo_write_bytes(bi, UF_ENTRY_END_MAGIC as uintmax_t, 2 as size_t);
+    undo_write_bytes(bi, UF_ENTRY_END_MAGIC as uintmax_t, 2);
     return true;
 }
 pub(crate) unsafe extern "C" fn unserialize_uhp(
@@ -254,7 +254,7 @@ pub(crate) unsafe extern "C" fn unserialize_uhp(
     (*uhp).uh_cursor_vcol = undo_read_4c(bi) as colnr_T;
     (*uhp).uh_flags = undo_read_2c(bi);
     let cur_timestamp: Timestamp = os_time();
-    let mut i: size_t = 0 as size_t;
+    let mut i: size_t = 0;
     while i < NMARKS as size_t {
         unserialize_pos(
             bi,
@@ -315,7 +315,7 @@ pub(crate) unsafe extern "C" fn unserialize_uhp(
         u_free_uhp(uhp);
         return ptr::null_mut();
     }
-    (*uhp).uh_extmark.capacity = 0 as size_t;
+    (*uhp).uh_extmark.capacity = 0;
     (*uhp).uh_extmark.size = (*uhp).uh_extmark.capacity;
     (*uhp).uh_extmark.items = ptr::null_mut();
     loop {
@@ -328,7 +328,7 @@ pub(crate) unsafe extern "C" fn unserialize_uhp(
             unserialize_extmark(bi, &raw mut error_0, file_name);
         if error_0 {
             xfree((*uhp).uh_extmark.items as *mut c_void);
-            (*uhp).uh_extmark.capacity = 0 as size_t;
+            (*uhp).uh_extmark.capacity = 0;
             (*uhp).uh_extmark.size = (*uhp).uh_extmark.capacity;
             (*uhp).uh_extmark.items = ptr::null_mut();
             xfree(extup as *mut c_void);
@@ -338,7 +338,7 @@ pub(crate) unsafe extern "C" fn unserialize_uhp(
             (*uhp).uh_extmark.capacity = if (*uhp).uh_extmark.capacity != 0 {
                 (*uhp).uh_extmark.capacity << 1
             } else {
-                8 as size_t
+                8
             };
             (*uhp).uh_extmark.items = xrealloc(
                 (*uhp).uh_extmark.items as *mut c_void,
@@ -363,8 +363,8 @@ pub(crate) unsafe extern "C" fn serialize_extmark(
     mut extup: ExtmarkUndoObject,
 ) -> bool {
     if extup.type_0 as c_uint == kExtmarkSplice as c_int as c_uint {
-        undo_write_bytes(bi, UF_ENTRY_MAGIC as uintmax_t, 2 as size_t);
-        undo_write_bytes(bi, extup.type_0 as uintmax_t, 4 as size_t);
+        undo_write_bytes(bi, UF_ENTRY_MAGIC as uintmax_t, 2);
+        undo_write_bytes(bi, extup.type_0 as uintmax_t, 4);
         if !undo_write(
             bi,
             &raw mut extup.data.splice as *mut uint8_t,
@@ -373,8 +373,8 @@ pub(crate) unsafe extern "C" fn serialize_extmark(
             return false;
         }
     } else if extup.type_0 as c_uint == kExtmarkMove as c_int as c_uint {
-        undo_write_bytes(bi, UF_ENTRY_MAGIC as uintmax_t, 2 as size_t);
-        undo_write_bytes(bi, extup.type_0 as uintmax_t, 4 as size_t);
+        undo_write_bytes(bi, UF_ENTRY_MAGIC as uintmax_t, 2);
+        undo_write_bytes(bi, extup.type_0 as uintmax_t, 4);
         if !undo_write(
             bi,
             &raw mut extup.data.move_0 as *mut uint8_t,
@@ -429,17 +429,17 @@ pub(crate) unsafe extern "C" fn serialize_uep(
     mut bi: *mut bufinfo_T,
     mut uep: *mut u_entry_T,
 ) -> bool {
-    undo_write_bytes(bi, (*uep).ue_top as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, (*uep).ue_bot as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, (*uep).ue_lcount as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, (*uep).ue_size as uintmax_t, 4 as size_t);
-    let mut i: size_t = 0 as size_t;
+    undo_write_bytes(bi, (*uep).ue_top as uintmax_t, 4);
+    undo_write_bytes(bi, (*uep).ue_bot as uintmax_t, 4);
+    undo_write_bytes(bi, (*uep).ue_lcount as uintmax_t, 4);
+    undo_write_bytes(bi, (*uep).ue_size as uintmax_t, 4);
+    let mut i: size_t = 0;
     while i < (*uep).ue_size as size_t {
         let mut len: size_t = strlen(*(*uep).ue_array.add(i));
-        if !undo_write_bytes(bi, len as uintmax_t, 4 as size_t) {
+        if !undo_write_bytes(bi, len as uintmax_t, 4) {
             return false;
         }
-        if len > 0 as size_t && !undo_write(bi, *(*uep).ue_array.add(i) as *mut uint8_t, len) {
+        if len > 0 && !undo_write(bi, *(*uep).ue_array.add(i) as *mut uint8_t, len) {
             return false;
         }
         i = i.wrapping_add(1);
@@ -458,7 +458,7 @@ pub(crate) unsafe extern "C" fn unserialize_uep(
     (*uep).ue_lcount = undo_read_4c(bi) as linenr_T;
     (*uep).ue_size = undo_read_4c(bi) as linenr_T;
     let mut array: *mut *mut c_char = ptr::null_mut();
-    if (*uep).ue_size > 0 as linenr_T {
+    if (*uep).ue_size > 0 {
         if ((*uep).ue_size as size_t) < (SIZE_MAX as usize).wrapping_div(size_of::<*mut c_char>()) {
             array = xmalloc(size_of::<*mut c_char>().wrapping_mul((*uep).ue_size as size_t))
                 as *mut *mut c_char;
@@ -470,7 +470,7 @@ pub(crate) unsafe extern "C" fn unserialize_uep(
         }
     }
     (*uep).ue_array = array;
-    let mut i: size_t = 0 as size_t;
+    let mut i: size_t = 0;
     while i < (*uep).ue_size as size_t {
         let mut line_len: c_int = undo_read_4c(bi);
         let mut line: *mut c_char = ptr::null_mut();
@@ -490,17 +490,13 @@ pub(crate) unsafe extern "C" fn unserialize_uep(
     return uep;
 }
 pub(crate) unsafe extern "C" fn serialize_pos(mut bi: *mut bufinfo_T, mut pos: pos_T) {
-    undo_write_bytes(bi, pos.lnum as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, pos.col as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, pos.coladd as uintmax_t, 4 as size_t);
+    undo_write_bytes(bi, pos.lnum as uintmax_t, 4);
+    undo_write_bytes(bi, pos.col as uintmax_t, 4);
+    undo_write_bytes(bi, pos.coladd as uintmax_t, 4);
 }
 pub(crate) unsafe extern "C" fn unserialize_pos(mut bi: *mut bufinfo_T, mut pos: *mut pos_T) {
     (*pos).lnum = undo_read_4c(bi) as linenr_T;
-    (*pos).lnum = if (*pos).lnum > 0 as linenr_T {
-        (*pos).lnum
-    } else {
-        0 as linenr_T
-    };
+    (*pos).lnum = if (*pos).lnum > 0 { (*pos).lnum } else { 0 };
     (*pos).col = undo_read_4c(bi) as colnr_T;
     (*pos).col = (if (*pos).col > 0 {
         (*pos).col as c_int
@@ -520,8 +516,8 @@ pub(crate) unsafe extern "C" fn serialize_visualinfo(
 ) {
     serialize_pos(bi, (*info).vi_start);
     serialize_pos(bi, (*info).vi_end);
-    undo_write_bytes(bi, (*info).vi_mode as uintmax_t, 4 as size_t);
-    undo_write_bytes(bi, (*info).vi_curswant as uintmax_t, 4 as size_t);
+    undo_write_bytes(bi, (*info).vi_mode as uintmax_t, 4);
+    undo_write_bytes(bi, (*info).vi_curswant as uintmax_t, 4);
 }
 pub(crate) unsafe extern "C" fn unserialize_visualinfo(
     mut bi: *mut bufinfo_T,
@@ -537,14 +533,15 @@ pub(crate) unsafe extern "C" fn undo_write(
     mut ptr: *mut uint8_t,
     mut len: size_t,
 ) -> bool {
-    return fwrite(ptr as *const c_void, len, 1 as size_t, (*bi).bi_fp) == 1 as c_ulong;
+    return fwrite(ptr as *const c_void, len, 1, (*bi).bi_fp) == 1;
 }
+/// Writes `nr` as a `len`-byte big-endian field. See [`encode_be`].
 pub(crate) unsafe extern "C" fn undo_write_bytes(
-    mut bi: *mut bufinfo_T,
-    mut nr: uintmax_t,
-    mut len: size_t,
+    bi: *mut bufinfo_T,
+    nr: uintmax_t,
+    len: size_t,
 ) -> bool {
-    let mut buf = encode_be(nr as u64, len as usize);
+    let mut buf = encode_be(nr, len);
     undo_write(bi, buf.as_mut_ptr(), len)
 }
 pub(crate) unsafe extern "C" fn put_header_ptr(mut bi: *mut bufinfo_T, mut uhp: *mut u_header_T) {
@@ -555,7 +552,7 @@ pub(crate) unsafe extern "C" fn put_header_ptr(mut bi: *mut bufinfo_T, mut uhp: 
     undo_write_bytes(
         bi,
         (if !uhp.is_null() { (*uhp).uh_seq } else { 0 }) as uintmax_t,
-        4 as size_t,
+        4,
     );
 }
 pub(crate) unsafe extern "C" fn undo_read_4c(mut bi: *mut bufinfo_T) -> c_int {
@@ -575,7 +572,7 @@ pub(crate) unsafe extern "C" fn undo_read(
     mut buffer: *mut uint8_t,
     mut size: size_t,
 ) -> bool {
-    let retval: bool = fread(buffer as *mut c_void, size, 1 as size_t, (*bi).bi_fp) == 1 as c_ulong;
+    let retval: bool = fread(buffer as *mut c_void, size, 1, (*bi).bi_fp) == 1;
     if !retval {
         memset(buffer as *mut c_void, 0, size);
     }
@@ -586,7 +583,7 @@ pub(crate) unsafe extern "C" fn undo_read_string(
     mut len: size_t,
 ) -> *mut c_char {
     let mut ptr: *mut c_char = xmallocz(len) as *mut c_char;
-    if len > 0 as size_t && !undo_read(bi, ptr as *mut uint8_t, len) {
+    if len > 0 && !undo_read(bi, ptr as *mut uint8_t, len) {
         xfree(ptr as *mut c_void);
         return ptr::null_mut();
     }

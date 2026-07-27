@@ -28,10 +28,10 @@ pub(crate) unsafe extern "C" fn u_getbot(mut buf: *mut buf_T) {
     uep = (*(*buf).b_u_newhead).uh_getbot_entry;
     if !uep.is_null() {
         let mut extra: linenr_T = (*buf).b_ml.ml_line_count - (*uep).ue_lcount;
-        (*uep).ue_bot = (*uep).ue_top + (*uep).ue_size + 1 as linenr_T + extra;
-        if (*uep).ue_bot < 1 as linenr_T || (*uep).ue_bot > (*buf).b_ml.ml_line_count {
+        (*uep).ue_bot = (*uep).ue_top + (*uep).ue_size + 1 + extra;
+        if (*uep).ue_bot < 1 || (*uep).ue_bot > (*buf).b_ml.ml_line_count {
             iemsg(gettext(c"E440: Undo line missing".as_ptr()));
-            (*uep).ue_bot = (*uep).ue_top + 1 as linenr_T;
+            (*uep).ue_bot = (*uep).ue_top + 1;
         }
         (*(*buf).b_u_newhead).uh_getbot_entry = ptr::null_mut();
     }
@@ -110,7 +110,7 @@ pub(crate) unsafe extern "C" fn u_freeentries(
         uep = nuep;
     }
     xfree((*uhp).uh_extmark.items as *mut c_void);
-    (*uhp).uh_extmark.capacity = 0 as size_t;
+    (*uhp).uh_extmark.capacity = 0;
     (*uhp).uh_extmark.size = (*uhp).uh_extmark.capacity;
     (*uhp).uh_extmark.items = ptr::null_mut();
     xfree(uhp as *mut c_void);
@@ -131,7 +131,7 @@ pub unsafe extern "C" fn u_clearall(mut buf: *mut buf_T) {
     (*buf).b_u_synced = true;
     (*buf).b_u_numhead = 0;
     (*buf).b_u_line_ptr = ptr::null_mut();
-    (*buf).b_u_line_lnum = 0 as linenr_T;
+    (*buf).b_u_line_lnum = 0;
 }
 pub unsafe extern "C" fn u_blockfree(mut buf: *mut buf_T) {
     while !(*buf).b_u_oldhead.is_null() {
@@ -152,7 +152,7 @@ pub(crate) unsafe extern "C" fn u_saveline(mut buf: *mut buf_T, mut lnum: linenr
     if lnum == (*buf).b_u_line_lnum {
         return;
     }
-    if lnum < 1 as linenr_T || lnum > (*buf).b_ml.ml_line_count {
+    if lnum < 1 || lnum > (*buf).b_ml.ml_line_count {
         return;
     }
     u_clearline(buf);
@@ -160,7 +160,7 @@ pub(crate) unsafe extern "C" fn u_saveline(mut buf: *mut buf_T, mut lnum: linenr
     if (*curwin.get()).w_buffer == buf && (*curwin.get()).w_cursor.lnum == lnum {
         (*buf).b_u_line_colnr = (*curwin.get()).w_cursor.col;
     } else {
-        (*buf).b_u_line_colnr = 0 as colnr_T;
+        (*buf).b_u_line_colnr = 0;
     }
     (*buf).b_u_line_ptr = u_save_line_buf(buf, lnum);
 }
@@ -170,7 +170,7 @@ pub unsafe extern "C" fn u_clearline(mut buf: *mut buf_T) {
     }
     xfree((*buf).b_u_line_ptr.cast());
     (*buf).b_u_line_ptr = ptr::null_mut();
-    (*buf).b_u_line_lnum = 0 as linenr_T;
+    (*buf).b_u_line_lnum = 0;
 }
 pub unsafe extern "C" fn u_undoline() {
     if (*curbuf.get()).b_u_line_ptr.is_null()
@@ -181,9 +181,9 @@ pub unsafe extern "C" fn u_undoline() {
     }
     if u_savecommon(
         curbuf.get(),
-        (*curbuf.get()).b_u_line_lnum - 1 as linenr_T,
-        (*curbuf.get()).b_u_line_lnum + 1 as linenr_T,
-        0 as linenr_T,
+        (*curbuf.get()).b_u_line_lnum - 1,
+        (*curbuf.get()).b_u_line_lnum + 1,
+        0,
         false,
     ) == FAIL
     {
@@ -198,12 +198,12 @@ pub unsafe extern "C" fn u_undoline() {
     extmark_splice_cols(
         curbuf.get(),
         (*curbuf.get()).b_u_line_lnum as c_int - 1,
-        0 as colnr_T,
+        0,
         strlen(oldp) as colnr_T,
         strlen((*curbuf.get()).b_u_line_ptr) as colnr_T,
         kExtmarkUndo,
     );
-    changed_bytes((*curbuf.get()).b_u_line_lnum, 0 as colnr_T);
+    changed_bytes((*curbuf.get()).b_u_line_lnum, 0);
     xfree((*curbuf.get()).b_u_line_ptr as *mut c_void);
     (*curbuf.get()).b_u_line_ptr = oldp;
     let mut t: colnr_T = (*curbuf.get()).b_u_line_colnr;
