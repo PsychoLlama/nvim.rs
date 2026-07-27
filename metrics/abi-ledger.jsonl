@@ -64,7 +64,6 @@
 {"symbol":"find_window_by_handle","kind":"fn","file":"crates/nvim/src/nvim/api/private/helpers.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"first_tabpage","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"firstwin","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"internal","refs":[]}
-{"symbol":"foldUpdateAll","kind":"fn","file":"crates/nvim/src/nvim/fold.rs","class":"internal","refs":[]}
 {"symbol":"ga_clear","kind":"fn","file":"crates/nvim/src/nvim/garray.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"ga_init","kind":"fn","file":"crates/nvim/src/nvim/garray.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"gc_first_list","kind":"static","file":"crates/nvim/src/nvim/eval/gc.rs","class":"test","refs":["functional-specs"]}

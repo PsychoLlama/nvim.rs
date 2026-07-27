@@ -7745,10 +7745,10 @@ pub unsafe extern "C" fn win_alloc(mut after: *mut win_T, mut hidden: bool) -> *
     (*new_wp).w_next_match_id = 1000 as ::core::ffi::c_int;
     return new_wp;
 }
-pub unsafe extern "C" fn free_wininfo(mut wip: *mut WinInfo, mut bp: *mut buf_T) {
+pub unsafe extern "C" fn free_wininfo(mut wip: *mut WinInfo) {
     if (*wip).wi_optset {
         clear_winopt(&raw mut (*wip).wi_opt);
-        deleteFoldRecurse(bp, &raw mut (*wip).wi_folds);
+        deleteFoldRecurse(&raw mut (*wip).wi_folds);
     }
     xfree(wip as *mut ::core::ffi::c_void);
 }
@@ -7821,7 +7821,7 @@ pub unsafe extern "C" fn win_free(mut wp: *mut win_T, mut tp: *mut tabpage_T) {
                 && (*wip_wp).wi_optset as ::core::ffi::c_int != 0
             {
                 clear_winopt(&raw mut (*wip_wp).wi_opt);
-                deleteFoldRecurse(buf, &raw mut (*wip_wp).wi_folds);
+                deleteFoldRecurse(&raw mut (*wip_wp).wi_folds);
                 (*wip_wp).wi_optset = false_0 != 0;
             }
             if pos_null < (*buf).b_wininfo.size {
@@ -7830,7 +7830,7 @@ pub unsafe extern "C" fn win_free(mut wp: *mut win_T, mut tp: *mut tabpage_T) {
                 } else {
                     pos_wip
                 };
-                free_wininfo(*(*buf).b_wininfo.items.offset(pos_delete as isize), buf);
+                free_wininfo(*(*buf).b_wininfo.items.offset(pos_delete as isize));
                 (*buf).b_wininfo.size = (*buf).b_wininfo.size.wrapping_sub(1 as size_t);
                 (pos_delete < (*buf).b_wininfo.size
                     && !memmove(

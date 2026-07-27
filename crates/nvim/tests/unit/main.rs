@@ -10,6 +10,7 @@ mod charset;
 mod cmdhist;
 mod digraph;
 mod expressions;
+mod fold;
 mod garray;
 mod hashtab;
 mod keycodes;

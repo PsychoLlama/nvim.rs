@@ -26,7 +26,7 @@ use crate::src::nvim::ex_docmd::{do_cmdline_cmd, ex_cd, is_loclist_cmd};
 use crate::src::nvim::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::src::nvim::ex_getln::get_list_range;
 use crate::src::nvim::fileio::{readfile, shorten_fnames, vim_fgets, vim_tempname};
-use crate::src::nvim::fold::foldOpenCursor;
+use crate::src::nvim::fold::{foldOpenCursor, foldUpdateAll};
 use crate::src::nvim::fuzzy::fuzzy_match;
 use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
@@ -193,7 +193,6 @@ unsafe extern "C" {
         new_byte: bcount_t,
         undo: ExtmarkOp,
     );
-    fn foldUpdateAll(win: *mut win_T);
     fn shorten_buf_fname(
         buf: *mut buf_T,
         dirname: *mut ::core::ffi::c_char,
@@ -8806,7 +8805,7 @@ pub unsafe extern "C" fn ex_vimgrep(mut eap: *mut exarg_T) {
                 }
                 decr_quickfix_busy();
                 if redraw_for_dummy {
-                    foldUpdateAll(curwin.get());
+                    foldUpdateAll(curwin.get().cast()); // this file keeps its own win_T
                 }
             }
         }

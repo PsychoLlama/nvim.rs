@@ -2535,7 +2535,7 @@ unsafe extern "C" fn free_buffer(mut buf: *mut buf_T) {
 unsafe extern "C" fn clear_wininfo(mut buf: *mut buf_T) {
     let mut i: size_t = 0 as size_t;
     while i < (*buf).b_wininfo.size {
-        free_wininfo(*(*buf).b_wininfo.items.offset(i as isize), buf);
+        free_wininfo(*(*buf).b_wininfo.items.offset(i as isize));
         i = i.wrapping_add(1);
     }
     (*buf).b_wininfo.size = 0 as size_t;
@@ -4602,7 +4602,7 @@ pub unsafe extern "C" fn buflist_setfpos(
             .is_null()) as ::core::ffi::c_int;
         if copy_options as ::core::ffi::c_int != 0 && (*wip).wi_optset as ::core::ffi::c_int != 0 {
             clear_winopt(&raw mut (*wip).wi_opt);
-            deleteFoldRecurse(buf, &raw mut (*wip).wi_folds);
+            deleteFoldRecurse(&raw mut (*wip).wi_folds);
         }
     }
     if lnum != 0 as linenr_T {
