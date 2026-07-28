@@ -131,7 +131,6 @@
     "crates/nvim/src/nvim/optionstr/check.rs": 1,
     "crates/nvim/src/nvim/optionstr/complete.rs": 10,
     "crates/nvim/src/nvim/optionstr/display.rs": 9,
-    "crates/nvim/src/nvim/optionstr/expand.rs": 10,
     "crates/nvim/src/nvim/optionstr/flags.rs": 1,
     "crates/nvim/src/nvim/optionstr/statusline.rs": 6,
     "crates/nvim/src/nvim/os/env.rs": 90,

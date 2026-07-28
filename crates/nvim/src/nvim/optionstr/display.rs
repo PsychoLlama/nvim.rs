@@ -111,7 +111,7 @@ pub unsafe extern "C" fn did_set_concealcursor(mut args: *mut optset_T) -> *cons
     let mut varp: *mut *mut c_char = (*args).os_varp as *mut *mut c_char;
     return did_set_option_listflag(
         *varp,
-        COCU_ALL.as_ptr() as *mut c_char,
+        COCU_ALL.as_ptr().cast_mut(),
         (*args).os_errbuf,
         (*args).os_errbuflen,
     );
@@ -183,7 +183,7 @@ pub unsafe extern "C" fn did_set_mouse(mut args: *mut optset_T) -> *const c_char
     let mut varp: *mut *mut c_char = (*args).os_varp as *mut *mut c_char;
     return did_set_option_listflag(
         *varp,
-        MOUSE_ALL.as_ptr() as *mut c_char,
+        MOUSE_ALL.as_ptr().cast_mut(),
         (*args).os_errbuf,
         (*args).os_errbuflen,
     );

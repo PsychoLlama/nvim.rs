@@ -202,7 +202,7 @@ pub unsafe extern "C" fn did_set_cpoptions(mut args: *mut optset_T) -> *const c_
     let mut varp: *mut *mut c_char = (*args).os_varp as *mut *mut c_char;
     return did_set_option_listflag(
         *varp,
-        CPO_VI.as_ptr() as *mut c_char,
+        CPO_VI.as_ptr().cast_mut(),
         (*args).os_errbuf,
         (*args).os_errbuflen,
     );
@@ -342,7 +342,7 @@ pub unsafe extern "C" fn did_set_formatoptions(mut args: *mut optset_T) -> *cons
     let mut varp: *mut *mut c_char = (*args).os_varp as *mut *mut c_char;
     return did_set_option_listflag(
         *varp,
-        FO_ALL.as_ptr() as *mut c_char,
+        FO_ALL.as_ptr().cast_mut(),
         (*args).os_errbuf,
         (*args).os_errbuflen,
     );

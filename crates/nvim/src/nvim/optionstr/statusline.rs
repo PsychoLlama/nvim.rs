@@ -135,7 +135,7 @@ pub unsafe extern "C" fn did_set_shortmess(mut args: *mut optset_T) -> *const c_
     let mut varp: *mut *mut c_char = (*args).os_varp as *mut *mut c_char;
     return did_set_option_listflag(
         *varp,
-        SHM_ALL.ptr() as *mut c_char,
+        SHM_ALL.as_ptr().cast_mut(),
         (*args).os_errbuf,
         (*args).os_errbuflen,
     );

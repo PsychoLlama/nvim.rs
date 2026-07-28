@@ -1,12 +1,11 @@
 use crate::src::nvim::api::private::helpers::api_clear_error;
 use crate::src::nvim::api::win_config::parse_winborder;
 use crate::src::nvim::ascii::ascii_isdigit;
-use crate::src::nvim::autocmd::{check_ei, get_event_name_no_group};
+use crate::src::nvim::autocmd::check_ei;
 use crate::src::nvim::charset::{
     buf_init_chartab, char2cells, check_isopt, getdigits_int, hexhex2nr, init_chartab, ptr2cells,
     transchar_byte,
 };
-use crate::src::nvim::cmdexpand::ExpandGeneric;
 use crate::src::nvim::cursor::coladvance;
 use crate::src::nvim::cursor_shape::parse_shape_opt;
 use crate::src::nvim::diff::{diffanchors_changed, diffopt_changed};
@@ -24,25 +23,23 @@ use crate::src::nvim::fold::{
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{schar_from_char, schar_from_str};
-use crate::src::nvim::highlight_group::{get_highlight_name, init_highlight};
+use crate::src::nvim::highlight_group::init_highlight;
 use crate::src::nvim::indent::{briopt_check, tabstop_set};
 use crate::src::nvim::indent_c::parse_cino;
 use crate::src::nvim::insexpand::set_cpt_callbacks;
 use crate::src::nvim::main::{
-    IObuff, VIsual_active, bkc_flags, breakat_flags, cia_flags, cmdpreview, cot_flags, curtab,
-    curwin, didset_vim, didset_vimruntime, e_invalid_format_string_single_percent_s, e_invarg,
+    VIsual_active, bkc_flags, breakat_flags, cia_flags, cmdpreview, cot_flags, curtab, curwin,
+    didset_vim, didset_vimruntime, e_invalid_format_string_single_percent_s, e_invarg,
     e_leadtab_requires_tab, e_modifiable, e_unsupportedoption, first_tabpage, firstbuf, firstwin,
-    km_startsel, km_stopsel, p_bex, p_bg, p_bkc, p_breakat, p_bs, p_cia, p_cot, p_ei, p_enc, p_fcs,
+    km_startsel, km_stopsel, p_bex, p_bg, p_bkc, p_breakat, p_bs, p_cia, p_cot, p_enc, p_fcs,
     p_fenc, p_hlg, p_isk, p_km, p_lcs, p_mousescroll, p_mousescroll_hor, p_mousescroll_vert, p_pm,
     p_pumborder, p_ruf, p_shada, p_tc, p_ve, p_winborder, ru_wid, secure, spo_flags, ssop_flags,
     stl_syntax, tc_flags, ve_flags,
 };
 use crate::src::nvim::mark::free_fmark;
-use crate::src::nvim::mbyte::{
-    enc_canonize, get_encoding_name, utf_ptr2char, utfc_ptr2len, utfc_ptr2schar,
-};
+use crate::src::nvim::mbyte::{enc_canonize, utf_ptr2char, utfc_ptr2len, utfc_ptr2schar};
 use crate::src::nvim::memline::ml_setflags;
-use crate::src::nvim::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup};
+use crate::src::nvim::memory::{strequal, xfree, xmalloc, xstrdup};
 use crate::src::nvim::message::{
     messagesopt_changed, msg_grid_validate, verbose_open, verbose_stop,
 };
@@ -55,13 +52,10 @@ use crate::src::nvim::option::{
 use crate::src::nvim::options::{
     kOptAmbiwidth, kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments,
     kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_bh_values, opt_bkc_values,
-    opt_bt_values, opt_cot_values, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
-    opt_spo_values, opt_ssop_values, opt_tc_values, opt_ve_values,
+    opt_bt_values, opt_cot_values, opt_spo_values, opt_ssop_values, opt_tc_values, opt_ve_values,
 };
 use crate::src::nvim::os::env::vim_unsetenv_ext;
-use crate::src::nvim::os::libc::{
-    gettext, memcmp, memset, snprintf, strcmp, strlen, strncmp, strstr,
-};
+use crate::src::nvim::os::libc::{gettext, memcmp, memset, strcmp, strlen, strncmp, strstr};
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::shada::get_shada_parameter;
 use crate::src::nvim::spell::{
@@ -71,15 +65,15 @@ use crate::src::nvim::spellfile::spell_check_msm;
 use crate::src::nvim::spellsuggest::spell_check_sps;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, CharsOption, CompleteListItemGetter, Error, ErrorType,
-    FloatAnchor, FloatRelative, OptInt, OptVal, OptValData, OptValType, String_0, Terminal,
-    VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, buf_T, colnr_T, expand_T, fcs_chars_T,
-    fmark_T, fmarkv_T, int64_t, lcs_chars_T, linenr_T, lpos_T, optexpand_T, optset_T, pos_T,
-    regmatch_T, schar_T, size_t, tabpage_T, uint8_t, win_T,
+    AdditionalData, AlignTextPos, CharsOption, Error, ErrorType, FloatAnchor, FloatRelative,
+    OptInt, OptVal, OptValData, OptValType, String_0, Terminal, VirtText, VirtTextChunk, WinConfig,
+    WinSplit, WinStyle, buf_T, colnr_T, expand_T, fcs_chars_T, fmark_T, fmarkv_T, int64_t,
+    lcs_chars_T, linenr_T, lpos_T, optset_T, pos_T, regmatch_T, schar_T, size_t, tabpage_T,
+    uint8_t, win_T,
 };
 use crate::src::nvim::window::{check_colorcolumn, global_stl_height};
 use crate::src::nvim::winfloat::win_config_float;
-use core::ffi::{c_char, c_double, c_int, c_uchar, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_double, c_int, c_uchar, c_uint, c_void};
 
 // The carve of a 4,000-line transpiled module; see the child docs.
 mod check;
@@ -217,23 +211,20 @@ pub const HIGHLIGHT_INIT: [c_char; 779] = unsafe {
     )
 };
 pub const EOL_MAC: c_int = 2 as c_int;
-pub const FO_ALL: [c_char; 22] =
-    unsafe { ::core::mem::transmute::<[u8; 22], [c_char; 22]>(*b"tcro/q2vlb1mMBn,aw]jp\0") };
-pub const CPO_VI: [c_char; 47] = unsafe {
-    ::core::mem::transmute::<[u8; 47], [c_char; 47]>(
-        *b"aAbBcCdDeEfFiIJKlLmMnoOpPqrRsStuvWxXyZ$!%+>;~_\0",
-    )
-};
-pub const WW_ALL: [c_char; 10] =
-    unsafe { ::core::mem::transmute::<[u8; 10], [c_char; 10]>(*b"bshl<>[]~\0") };
-pub const MOUSE_ALL: [c_char; 8] =
-    unsafe { ::core::mem::transmute::<[u8; 8], [c_char; 8]>(*b"anvichr\0") };
+/// The letters 'formatoptions' accepts.
+pub const FO_ALL: &CStr = c"tcro/q2vlb1mMBn,aw]jp";
+/// The letters 'cpoptions' accepts.
+pub const CPO_VI: &CStr = c"aAbBcCdDeEfFiIJKlLmMnoOpPqrRsStuvWxXyZ$!%+>;~_";
+/// The letters 'whichwrap' accepts.
+pub const WW_ALL: &CStr = c"bshl<>[]~";
+/// The letters 'mouse' accepts.
+pub const MOUSE_ALL: &CStr = c"anvichr";
 pub const MOUSESCROLL_VERT_DFLT: c_int = 3 as c_int;
 pub const MOUSESCROLL_HOR_DFLT: c_int = 6 as c_int;
-pub const COCU_ALL: [c_char; 5] =
-    unsafe { ::core::mem::transmute::<[u8; 5], [c_char; 5]>(*b"nvic\0") };
-pub const COM_ALL: [c_char; 11] =
-    unsafe { ::core::mem::transmute::<[u8; 11], [c_char; 11]>(*b"nbsmexflrO\0") };
+/// The letters 'concealcursor' accepts.
+pub const COCU_ALL: &CStr = c"nvic";
+/// The flag letters a 'comments' part may carry before its own separator.
+pub const COM_ALL: &CStr = c"nbsmexflrO";
 pub const SCL_NO: c_int = -1 as c_int;
 pub const SCL_NUM: c_int = -2 as c_int;
 pub const SHAPE_CURSOR: c_int = 2 as c_int;
@@ -275,37 +266,9 @@ static e_wrong_character_width_for_field_str: GlobalCell<[c_char; 44]> = GlobalC
         *b"E1512: Wrong character width for field \"%s\"\0",
     )
 });
-static SHM_ALL: GlobalCell<[c_char; 23]> = GlobalCell::new([
-    SHM_RO as c_int as c_char,
-    SHM_MOD as c_int as c_char,
-    SHM_LINES as c_int as c_char,
-    SHM_WRI as c_int as c_char,
-    SHM_ABBREVIATIONS as c_int as c_char,
-    SHM_WRITE as c_int as c_char,
-    SHM_TRUNC as c_int as c_char,
-    SHM_TRUNCALL as c_int as c_char,
-    SHM_OVER as c_int as c_char,
-    SHM_OVERALL as c_int as c_char,
-    SHM_SEARCH as c_int as c_char,
-    SHM_ATTENTION as c_int as c_char,
-    SHM_INTRO as c_int as c_char,
-    SHM_COMPLETIONMENU as c_int as c_char,
-    SHM_COMPLETIONSCAN as c_int as c_char,
-    SHM_RECORDING as c_int as c_char,
-    SHM_FILEINFO as c_int as c_char,
-    SHM_SEARCHCOUNT as c_int as c_char,
-    'n' as c_char,
-    'f' as c_char,
-    'x' as c_char,
-    'i' as c_char,
-    0 as c_char,
-]);
-static set_opt_callback_orig_option: GlobalCell<*mut c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<c_char>());
-static set_opt_callback_func: GlobalCell<
-    Option<unsafe extern "C" fn(*mut expand_T, c_int) -> *mut c_char>,
-> = GlobalCell::new(None);
-static expand_eiw: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+/// The letters 'shortmess' accepts. The trailing "nfxi" were removed
+/// as flags and are now silently ignored.
+pub const SHM_ALL: &CStr = c"rmlwaWtToOsAIcCqFSnfxi";
 static e_conflicts_with_value_of_listchars: GlobalCell<[c_char; 42]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 42], [c_char; 42]>(
         *b"E834: Conflicts with value of 'listchars'\0",
