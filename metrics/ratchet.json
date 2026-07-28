@@ -267,7 +267,7 @@
     "crates/nvim/src/nvim/regexp/nfa/atom.rs": {"lines": 1318, "unsafe": 1},
     "crates/nvim/src/nvim/regexp/nfa/build.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/regexp/nfa/compile.rs": {"unsafe": 6},
-    "crates/nvim/src/nvim/regexp/nfa/equi_class.rs": {"lines": 8234, "unsafe": 1},
+    "crates/nvim/src/nvim/regexp/nfa/equi_class.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/regexp/nfa/exec.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/regexp/nfa/matcher.rs": {"lines": 1664, "unsafe": 1},
     "crates/nvim/src/nvim/regexp/nfa/parse.rs": {"unsafe": 5},

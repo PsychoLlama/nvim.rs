@@ -59,14 +59,14 @@ pub use crate::src::nvim::types::{
     window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
 
-// The bodies, along the seam upstream's `#include`s left in regexp.c.
-// Each child opens with `use super::*`, so the transpiled preamble
-// above is its import list.
+// The bodies, along the seam upstream's `#include`s left in regexp.c. A child
+// still opening with `use super::*` reads the preamble above as its imports.
 
 mod api;
 mod bt;
 mod chars;
 mod context;
+mod equi_class;
 mod mbyte;
 mod nfa;
 mod parse;
