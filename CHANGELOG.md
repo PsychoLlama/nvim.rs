@@ -17,7 +17,8 @@ and this project adheres to [CalVer](https://calver.org/).
   `lua/api_wrappers.rs` and 32k of frozen metadata bytes in
   `api/private/helpers.rs`.
 - The option table — every option's name, type, scopes, flags, default and
-  callbacks, plus the name lookup and the arrays of valid values — is
+  callbacks, plus the name lookup, the arrays of valid values and the flag
+  enums a string option's value parses into — is
   generated from `options.lua` again (`just apigen`) instead of carried as
   transpiled data, taking 19k lines out of `option.rs` and leaving the
   `:set`/`did_set` logic behind on a table that can no longer drift.
