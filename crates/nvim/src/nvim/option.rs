@@ -6,45 +6,15 @@
 //! Everything an option *is* — its name, type, scopes, flags, variable and
 //! default — lives in the generated [`crate::src::nvim::options`] table.
 
-use crate::src::nvim::api::private::helpers::cstr_as_string;
-use crate::src::nvim::ascii::ascii_isdigit;
-use crate::src::nvim::charset::{transchar, vim_strsize};
-use crate::src::nvim::cmdexpand::cmdline_fuzzy_complete;
-use crate::src::nvim::ex_session::{put_eol, put_line};
-use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
-use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::keycodes::{
-    find_special_key_in_table, get_special_key_code, get_special_key_name,
-};
-use crate::src::nvim::main::{
-    Columns, NameBuff, curbuf, curwin, empty_string_option, escape_chars, got_int, info_message,
-    p_bdir, p_cdpath, p_dir, p_ft, p_keymap, p_mouse, p_path, p_pp, p_rtp, p_sps, p_syn, p_tags,
-    p_vdir, p_wc, p_wcm, silent_mode,
-};
-use crate::src::nvim::mapping::put_escstr;
-use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy};
-use crate::src::nvim::message::{
-    message_filtered, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts,
-    msg_puts_title,
-};
-use crate::src::nvim::mouse::setmouse;
+use crate::src::nvim::main::empty_string_option;
 use crate::src::nvim::options::*;
 use crate::src::nvim::optionstr::set_chars_option;
-use crate::src::nvim::os::env::{expand_env_esc, home_replace};
-use crate::src::nvim::os::input::os_breakcheck;
-use crate::src::nvim::os::libc::{
-    __assert_fail, abort, fprintf, fputs, gettext, snprintf, strcmp, strlen, strncmp,
-};
-use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped};
 use crate::src::nvim::types::{
-    CMD_index, CallbackType, CharsOption, ErrorType, FILE, HlAttrs, Object, ObjectType, OptIndex,
-    OptInt, OptScope, OptVal, OptValType, RgbValue, String_0, Terminal, TriState, VarType,
-    VimVarIndex, auto_event, buf_T, colnr_T, expand_T, fuzmatch_str_T, garray_T, int16_t, int32_t,
-    optexpand_T, regmatch_T, size_t, uint8_t, uint32_t, uint64_t, vimoption_T, win_T, xp_prefix_T,
+    CMD_index, CallbackType, CharsOption, ErrorType, HlAttrs, ObjectType, OptIndex, OptInt,
+    OptScope, OptValType, RgbValue, String_0, Terminal, TriState, VarType, VimVarIndex, auto_event,
+    colnr_T, int16_t, int32_t, regmatch_T, size_t, vimoption_T, win_T, xp_prefix_T,
 };
-use crate::src::nvim::ui::ui_call_option_set;
-use crate::src::nvim::undo::curbufIsChanged;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 // The carve of a 9,000-line transpiled module; see the child docs.

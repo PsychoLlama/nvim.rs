@@ -117,8 +117,6 @@
     "crates/nvim/src/nvim/msgpack_rpc/unpacker.rs": 1,
     "crates/nvim/src/nvim/normal.rs": 146,
     "crates/nvim/src/nvim/ops.rs": 75,
-    "crates/nvim/src/nvim/option/expand.rs": 11,
-    "crates/nvim/src/nvim/option/show.rs": 37,
     "crates/nvim/src/nvim/optionstr/check.rs": 1,
     "crates/nvim/src/nvim/optionstr/flags.rs": 1,
     "crates/nvim/src/nvim/os/env.rs": 90,
