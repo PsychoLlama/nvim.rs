@@ -4,6 +4,7 @@
 //! Moved out of the parent module as it stood after transpilation;
 //! the bodies are unchanged.
 
+use super::build::Pass;
 use super::*;
 
 pub(crate) unsafe extern "C" fn nfa_regtry(
@@ -317,14 +318,14 @@ pub(crate) unsafe extern "C" fn nfa_regcomp(
     let built = re2post();
     '_out: {
         if built != FAIL {
-            postfix::with_items(|items| post2nfa(items, true_0));
+            postfix::with_items(|items| post2nfa(items, Pass::Count));
             prog_size = (80 as size_t).wrapping_add(
                 ::core::mem::size_of::<nfa_state_T>().wrapping_mul(nstate.get() as size_t),
             );
             prog = xmalloc(prog_size) as *mut nfa_regprog_T;
             state_ptr.set(&raw mut (*prog).state as *mut nfa_state_T);
             (*prog).re_in_use = false_0 != 0;
-            (*prog).start = postfix::with_items(|items| post2nfa(items, false_0));
+            (*prog).start = postfix::with_items(|items| post2nfa(items, Pass::Build));
             if !(*prog).start.is_null() {
                 (*prog).regflags = regflags.get();
                 (*prog).engine = nfa_regengine.ptr();

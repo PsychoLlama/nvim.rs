@@ -1,818 +1,633 @@
-//! Postfix form to state machine: the state allocator, the fragment
-//! stack `post2nfa` runs on and the width analysis over the result.
+//! Postfix form to state machine.
 //!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! Thompson's construction: the postfix program is run on a stack of
+//! *fragments*, each an entry state plus the list of `out` pointers that are
+//! still dangling. An operand pushes a one-state fragment; an operator pops
+//! its operands, wires them together and pushes the result. The last
+//! fragment left is the machine.
+//!
+//! It runs twice per compile. The first pass only counts states, because the
+//! program is allocated as one block with the states inline; the second
+//! builds into that block.
 
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub(crate) unsafe extern "C" fn alloc_state(
-    mut c: ::core::ffi::c_int,
-    mut out: *mut nfa_state_T,
-    mut out1: *mut nfa_state_T,
-) -> *mut nfa_state_T {
-    let mut s: *mut nfa_state_T = ::core::ptr::null_mut::<nfa_state_T>();
+use core::ffi::c_int;
+
+use super::run::failure_chance;
+use super::sub::match_follows;
+use crate::semsg;
+use crate::src::nvim::main::rc_did_emsg;
+use crate::src::nvim::mbyte::utf_char2len;
+use crate::src::nvim::regexp::{
+    MB_MAXBYTES, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BOL, NFA_COMPOSING, NFA_CONCAT,
+    NFA_CURSOR, NFA_DIGIT, NFA_EMPTY, NFA_END_COLL, NFA_END_COMPOSING, NFA_END_INVISIBLE,
+    NFA_END_INVISIBLE_NEG, NFA_END_NEG_COLL, NFA_END_PATTERN, NFA_EOF, NFA_HEX, NFA_IDENT,
+    NFA_LNUM, NFA_MARK_LT, NFA_MATCH, NFA_MOPEN, NFA_MOPEN9, NFA_NCLOSE, NFA_NEWL, NFA_NOPEN,
+    NFA_NUPPER_IC, NFA_OCTAL, NFA_OPT_CHARS, NFA_OR, NFA_PREV_ATOM_JUST_BEFORE,
+    NFA_PREV_ATOM_JUST_BEFORE_NEG, NFA_PREV_ATOM_LIKE_PATTERN, NFA_PREV_ATOM_NO_WIDTH,
+    NFA_PREV_ATOM_NO_WIDTH_NEG, NFA_QUEST, NFA_QUEST_NONGREEDY, NFA_RANGE, NFA_RANGE_MAX,
+    NFA_RANGE_MIN, NFA_SKIP, NFA_SPLIT, NFA_STAR, NFA_STAR_NONGREEDY, NFA_START_COLL,
+    NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE, NFA_START_INVISIBLE_BEFORE_NEG,
+    NFA_START_INVISIBLE_NEG, NFA_START_NEG_COLL, NFA_START_PATTERN, NFA_VISUAL, NFA_WHITE,
+    NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZREF9, NFA_ZSTART, NSUBEXP,
+    istate, nfa_regprog_T, nfa_state_T, nstate, state_ptr,
+};
+
+/// How far the width walk follows a `NFA_SPLIT` before giving up.
+const MAX_DEPTH: c_int = 4;
+
+/// A list of `out` pointers waiting to be patched, threaded through the
+/// slots themselves: each unset `out`/`out1` field holds the address of the
+/// next one in the list rather than a state. That is why this is a union and
+/// not a `Vec` — the storage is the machine's own half-built edges.
+#[repr(C)]
+union Ptrlist {
+    next: *mut Ptrlist,
+    state: *mut nfa_state_T,
+}
+
+/// A partly built machine: where it starts, and every edge out of it that
+/// still has to be told where to go.
+#[derive(Clone, Copy)]
+struct Frag {
+    start: *mut nfa_state_T,
+    out: *mut Ptrlist,
+}
+
+/// Take the next state out of the program's inline array.
+///
+/// `None` once the counting pass's estimate is used up, which the callers
+/// treat as "give up on this pattern" — silently, as upstream does.
+fn state(c: c_int, out: *mut nfa_state_T, out1: *mut nfa_state_T) -> Option<*mut nfa_state_T> {
     if istate.get() >= nstate.get() {
-        return ::core::ptr::null_mut::<nfa_state_T>();
+        return None;
     }
-    let c2rust_fresh15 = istate.get();
-    istate.set(istate.get() + 1);
-    s = (*state_ptr.ptr()).offset(c2rust_fresh15 as isize);
-    (*s).c = c;
-    (*s).out = out;
-    (*s).out1 = out1;
-    (*s).val = 0 as ::core::ffi::c_int;
-    (*s).id = istate.get();
-    (*s).lastlist[0 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_int;
-    (*s).lastlist[1 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_int;
-    return s;
-}
-pub(crate) unsafe extern "C" fn frag(mut start: *mut nfa_state_T, mut out: *mut Ptrlist) -> Frag_T {
-    let mut n: Frag_T = Frag_T {
-        start: ::core::ptr::null_mut::<nfa_state_T>(),
-        out: ::core::ptr::null_mut::<Ptrlist>(),
-    };
-    n.start = start;
-    n.out = out;
-    return n;
-}
-pub(crate) unsafe extern "C" fn list1(mut outp: *mut *mut nfa_state_T) -> *mut Ptrlist {
-    let mut l: *mut Ptrlist = ::core::ptr::null_mut::<Ptrlist>();
-    l = outp as *mut Ptrlist;
-    (*l).next = ::core::ptr::null_mut::<Ptrlist>();
-    return l;
-}
-pub(crate) unsafe extern "C" fn patch(mut l: *mut Ptrlist, mut s: *mut nfa_state_T) {
-    let mut next: *mut Ptrlist = ::core::ptr::null_mut::<Ptrlist>();
-    while !l.is_null() {
-        next = (*l).next;
-        (*l).s = s;
-        l = next;
+    // SAFETY: `state_ptr` is the program's state array and `istate` is
+    // below `nstate`, its length.
+    unsafe {
+        let s = state_ptr.get().offset(istate.get() as isize);
+        istate.set(istate.get() + 1);
+        (*s).c = c;
+        (*s).out = out;
+        (*s).out1 = out1;
+        (*s).val = 0;
+        (*s).id = istate.get();
+        (*s).lastlist = [0, 0];
+        Some(s)
     }
 }
-pub(crate) unsafe extern "C" fn append(mut l1: *mut Ptrlist, mut l2: *mut Ptrlist) -> *mut Ptrlist {
-    let mut oldl1: *mut Ptrlist = ::core::ptr::null_mut::<Ptrlist>();
-    oldl1 = l1;
-    while !(*l1).next.is_null() {
-        l1 = (*l1).next;
+
+/// A one-element patch list over the edge slot `slot`.
+fn list1(slot: *mut *mut nfa_state_T) -> *mut Ptrlist {
+    // SAFETY: `slot` is an `out`/`out1` field of a live state; writing a
+    // list link into it is what the union is for, and `patch` overwrites it
+    // with a state before the machine runs.
+    unsafe {
+        let list = slot.cast::<Ptrlist>();
+        (*list).next = core::ptr::null_mut();
+        list
     }
-    (*l1).next = l2;
-    return oldl1;
 }
-pub(crate) unsafe extern "C" fn st_error(
-    mut _postfix: *mut ::core::ffi::c_int,
-    mut _end: *mut ::core::ffi::c_int,
-    mut _p: *mut ::core::ffi::c_int,
-) {
-    emsg(gettext(
-        b"E874: (NFA) Could not pop the stack!\0".as_ptr() as *const ::core::ffi::c_char
-    ));
-}
-pub(crate) unsafe extern "C" fn st_push(
-    mut s: Frag_T,
-    mut p: *mut *mut Frag_T,
-    mut stack_end: *mut Frag_T,
-) {
-    let mut stackp: *mut Frag_T = *p;
-    if stackp >= stack_end {
-        return;
+
+/// Point every edge in `list` at `state`.
+fn patch(list: *mut Ptrlist, state: *mut nfa_state_T) {
+    // SAFETY: every node in the chain is an edge slot of a live state.
+    unsafe {
+        let mut node = list;
+        while !node.is_null() {
+            let next = (*node).next;
+            (*node).state = state;
+            node = next;
+        }
     }
-    *stackp = s;
-    *p = (*p).offset(1 as ::core::ffi::c_int as isize);
 }
-pub(crate) unsafe extern "C" fn st_pop(mut p: *mut *mut Frag_T, mut stack: *mut Frag_T) -> Frag_T {
-    let mut stackp: *mut Frag_T = ::core::ptr::null_mut::<Frag_T>();
-    *p = (*p).offset(-(1 as ::core::ffi::c_int as isize));
-    stackp = *p;
-    if stackp < stack {
-        return empty.get();
+
+/// Concatenate two patch lists, returning the first.
+fn append(first: *mut Ptrlist, second: *mut Ptrlist) -> *mut Ptrlist {
+    // SAFETY: as `patch`; `first` is never empty where this is called.
+    unsafe {
+        let mut last = first;
+        while !(*last).next.is_null() {
+            last = (*last).next;
+        }
+        (*last).next = second;
+        first
     }
-    return **p;
 }
-pub(crate) unsafe extern "C" fn nfa_max_width(
-    mut startstate: *mut nfa_state_T,
-    mut depth: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut l: ::core::ffi::c_int = 0;
-    let mut r: ::core::ffi::c_int = 0;
-    let mut state: *mut nfa_state_T = startstate;
-    let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if depth > 4 as ::core::ffi::c_int {
-        return -1 as ::core::ffi::c_int;
+
+fn out_edge(s: *mut nfa_state_T) -> *mut *mut nfa_state_T {
+    // SAFETY: `s` is a live state; this only takes the field's address.
+    unsafe { &raw mut (*s).out }
+}
+
+fn out1_edge(s: *mut nfa_state_T) -> *mut *mut nfa_state_T {
+    // SAFETY: as `out_edge`.
+    unsafe { &raw mut (*s).out1 }
+}
+
+/// The fragment stack.
+///
+/// Capped at the state count the counting pass produced, as upstream's is: a
+/// push past the cap is silently dropped rather than growing the stack.
+struct Stack {
+    frags: Vec<Frag>,
+    cap: usize,
+}
+
+impl Stack {
+    fn push(&mut self, start: *mut nfa_state_T, out: *mut Ptrlist) {
+        if self.frags.len() < self.cap {
+            self.frags.push(Frag { start, out });
+        }
     }
-    while !state.is_null() {
-        match (*state).c {
-            -988 | -987 => return len,
-            -1024 => {
-                l = nfa_max_width((*state).out, depth + 1 as ::core::ffi::c_int);
-                r = nfa_max_width((*state).out1, depth + 1 as ::core::ffi::c_int);
-                if l < 0 as ::core::ffi::c_int || r < 0 as ::core::ffi::c_int {
-                    return -1 as ::core::ffi::c_int;
-                }
-                return len + (if l > r { l } else { r });
-            }
-            -917 | -1021 | -1019 => {
-                len += MB_MAXBYTES as ::core::ffi::c_int;
-                if (*state).c != NFA_ANY as ::core::ffi::c_int {
-                    if (*state).out1.is_null() || (*(*state).out1).out.is_null() {
-                        return -1 as ::core::ffi::c_int;
+
+    /// Pop, reporting E874 when the program asks for an operand that is not
+    /// there.
+    fn pop(&mut self) -> Option<Frag> {
+        let frag = self.frags.pop();
+        if frag.is_none() {
+            semsg!("E874: (NFA) Could not pop the stack!");
+        }
+        frag
+    }
+}
+
+/// Which of the two passes is running.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum Pass {
+    /// Only add up the states the program needs, into `nstate`.
+    Count,
+    /// Build into the program's state array.
+    Build,
+}
+
+/// The widest match the machine from `startstate` can make, or -1 when that
+/// cannot be bounded. Backs `\@<=`, which has to know how far back to start.
+fn nfa_max_width(startstate: *mut nfa_state_T, depth: c_int) -> c_int {
+    if depth > MAX_DEPTH {
+        return -1;
+    }
+    let mut len = 0;
+    let mut state = startstate;
+    // SAFETY: the walk stays inside the program `startstate` belongs to.
+    unsafe {
+        while !state.is_null() {
+            match (*state).c {
+                // The end of the lookbehind's own pattern.
+                NFA_END_INVISIBLE | NFA_END_INVISIBLE_NEG => return len,
+                NFA_SPLIT => {
+                    let l = nfa_max_width((*state).out, depth + 1);
+                    let r = nfa_max_width((*state).out1, depth + 1);
+                    if l < 0 || r < 0 {
+                        return -1;
                     }
+                    return len + l.max(r);
+                }
+                // Any character, so as wide as a character gets. A
+                // collection continues past its `NFA_END_COLL`, which is
+                // where `out1` points.
+                c @ (NFA_ANY | NFA_START_COLL | NFA_START_NEG_COLL) => {
+                    len += MB_MAXBYTES as c_int;
+                    if c != NFA_ANY {
+                        if (*state).out1.is_null() || (*(*state).out1).out.is_null() {
+                            return -1;
+                        }
+                        state = (*(*state).out1).out;
+                        continue;
+                    }
+                }
+                // The ASCII-only classes are one byte.
+                NFA_DIGIT | NFA_WHITE | NFA_HEX | NFA_OCTAL => len += 1,
+                // The rest can match a multibyte character, which upstream
+                // bounds at three bytes rather than `MB_MAXBYTES`.
+                NFA_IDENT..=NFA_NUPPER_IC | NFA_ANY_COMPOSING => len += 3,
+                // A nested lookaround matches no input of its own; step
+                // over it to what follows.
+                NFA_START_INVISIBLE
+                | NFA_START_INVISIBLE_NEG
+                | NFA_START_INVISIBLE_BEFORE
+                | NFA_START_INVISIBLE_BEFORE_NEG => {
                     state = (*(*state).out1).out;
                     continue;
                 }
-            }
-            -906 | -908 | -904 | -902 => {
-                len += 1;
-            }
-            -916 | -915 | -914 | -913 | -912 | -911 | -910 | -909 | -907 | -905 | -903 | -901
-            | -900 | -899 | -898 | -897 | -896 | -895 | -894 | -893 | -892 | -891 | -890 | -889
-            | -888 | -887 | -983 => {
-                len += 3 as ::core::ffi::c_int;
-            }
-            -997 | -995 | -993 | -991 => {
-                state = (*(*state).out1).out;
-                continue;
-            }
-            -976 | -975 | -974 | -973 | -972 | -971 | -970 | -969 | -968 | -967 | -966 | -965
-            | -964 | -963 | -962 | -961 | -960 | -959 | -1002 | -958 => {
-                return -1 as ::core::ffi::c_int;
-            }
-            -1008 | -1007 | -1004 | -1003 | -1006 | -1005 | -957 | -956 | -955 | -954 | -953
-            | -952 | -951 | -950 | -949 | -948 | -937 | -936 | -935 | -934 | -933 | -932 | -931
-            | -930 | -929 | -928 | -927 | -926 | -925 | -924 | -923 | -922 | -921 | -920 | -919
-            | -918 | -947 | -946 | -945 | -944 | -943 | -942 | -941 | -940 | -939 | -938 | -999
-            | -998 | -853 | -852 | -850 | -849 | -847 | -846 | -844 | -843 | -842 | -854 | -855
-            | -851 | -848 | -845 | -1001 | -1000 | -982 | -1022 | -989 | -986 | -985 | -984 => {}
-            _ => {
-                if (*state).c < 0 as ::core::ffi::c_int {
-                    return -1 as ::core::ffi::c_int;
+                // A back-reference is as wide as whatever it captured, and a
+                // line break or a skip is unbounded.
+                NFA_BACKREF1..=NFA_ZREF9 | NFA_NEWL | NFA_SKIP => return -1,
+                // Zero width.
+                NFA_BOL..=NFA_EOF
+                | NFA_MOPEN..=NFA_ZCLOSE9
+                | NFA_NOPEN..=NFA_NCLOSE
+                | NFA_CURSOR..=NFA_VISUAL
+                | NFA_ZSTART..=NFA_ZEND
+                | NFA_OPT_CHARS
+                | NFA_EMPTY
+                | NFA_START_PATTERN
+                | NFA_END_PATTERN
+                | NFA_COMPOSING
+                | NFA_END_COMPOSING => {}
+                // A literal character; any opcode not named above is one
+                // this walk cannot reason about.
+                c => {
+                    if c < 0 {
+                        return -1;
+                    }
+                    len += utf_char2len(c);
                 }
-                len += utf_char2len((*state).c);
             }
+            state = (*state).out;
         }
-        state = (*state).out;
+        -1
     }
-    return -1 as ::core::ffi::c_int;
 }
-pub(crate) unsafe fn post2nfa(
-    items: &[::core::ffi::c_int],
-    mut nfa_calc_size: ::core::ffi::c_int,
-) -> *mut nfa_state_T {
-    let postfix: *mut ::core::ffi::c_int = items.as_ptr().cast_mut();
-    let end: *mut ::core::ffi::c_int = postfix.wrapping_add(items.len());
-    let mut p: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
-    let mut mopen: ::core::ffi::c_int = 0;
-    let mut mclose: ::core::ffi::c_int = 0;
-    let mut stack: *mut Frag_T = ::core::ptr::null_mut::<Frag_T>();
-    let mut stackp: *mut Frag_T = ::core::ptr::null_mut::<Frag_T>();
-    let mut stack_end: *mut Frag_T = ::core::ptr::null_mut::<Frag_T>();
-    let mut e1: Frag_T = Frag_T {
-        start: ::core::ptr::null_mut::<nfa_state_T>(),
-        out: ::core::ptr::null_mut::<Ptrlist>(),
+
+/// Run the postfix program.
+///
+/// [`Pass::Count`] only adds up `nstate` and returns null; [`Pass::Build`]
+/// returns the machine's entry state, or null once it has said why not.
+pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
+    let counting = pass == Pass::Count;
+    let cap = if counting {
+        0
+    } else {
+        nstate.get() as usize + 1
     };
-    let mut e2: Frag_T = Frag_T {
-        start: ::core::ptr::null_mut::<nfa_state_T>(),
-        out: ::core::ptr::null_mut::<Ptrlist>(),
+    let mut stack = Stack {
+        frags: Vec::with_capacity(cap),
+        cap,
     };
-    let mut e: Frag_T = Frag_T {
-        start: ::core::ptr::null_mut::<nfa_state_T>(),
-        out: ::core::ptr::null_mut::<Ptrlist>(),
-    };
-    let mut s: *mut nfa_state_T = ::core::ptr::null_mut::<nfa_state_T>();
-    let mut s1: *mut nfa_state_T = ::core::ptr::null_mut::<nfa_state_T>();
-    let mut matchstate: *mut nfa_state_T = ::core::ptr::null_mut::<nfa_state_T>();
-    let mut ret: *mut nfa_state_T = ::core::ptr::null_mut::<nfa_state_T>();
-    if nfa_calc_size == false_0 {
-        stack = xmalloc(
-            ((nstate.get() + 1 as ::core::ffi::c_int) as size_t)
-                .wrapping_mul(::core::mem::size_of::<Frag_T>()),
-        ) as *mut Frag_T;
-        stackp = stack;
-        stack_end = stack.offset((nstate.get() + 1 as ::core::ffi::c_int) as isize);
-    }
-    p = postfix;
-    '_theend: {
-        while p < end {
-            match *p {
-                -1014 => {
-                    if nfa_calc_size != true_0 {
-                        e2 = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        e1 = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        patch(e1.out, e2.start);
-                        st_push(frag(e1.start, e2.out), &raw mut stackp, stack_end);
-                    }
-                }
-                -1013 => {
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += 1;
-                    } else {
-                        e2 = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        e1 = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        s = alloc_state(NFA_SPLIT as ::core::ffi::c_int, e1.start, e2.start);
-                        if s.is_null() {
-                            break '_theend;
-                        }
-                        st_push(frag(s, append(e1.out, e2.out)), &raw mut stackp, stack_end);
-                    }
-                }
-                -1012 => {
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += 1;
-                    } else {
-                        e = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        s = alloc_state(
-                            NFA_SPLIT as ::core::ffi::c_int,
-                            e.start,
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                        );
-                        if s.is_null() {
-                            break '_theend;
-                        }
-                        patch(e.out, s);
-                        st_push(
-                            frag(s, list1(&raw mut (*s).out1)),
-                            &raw mut stackp,
-                            stack_end,
-                        );
-                    }
-                }
-                -1011 => {
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += 1;
-                    } else {
-                        e = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        s = alloc_state(
-                            NFA_SPLIT as ::core::ffi::c_int,
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                            e.start,
-                        );
-                        if s.is_null() {
-                            break '_theend;
-                        }
-                        patch(e.out, s);
-                        st_push(
-                            frag(s, list1(&raw mut (*s).out)),
-                            &raw mut stackp,
-                            stack_end,
-                        );
-                    }
-                }
-                -1010 => {
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += 1;
-                    } else {
-                        e = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        s = alloc_state(
-                            NFA_SPLIT as ::core::ffi::c_int,
-                            e.start,
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                        );
-                        if s.is_null() {
-                            break '_theend;
-                        }
-                        st_push(
-                            frag(s, append(e.out, list1(&raw mut (*s).out1))),
-                            &raw mut stackp,
-                            stack_end,
-                        );
-                    }
-                }
-                -1009 => {
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += 1;
-                    } else {
-                        e = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        s = alloc_state(
-                            NFA_SPLIT as ::core::ffi::c_int,
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                            e.start,
-                        );
-                        if s.is_null() {
-                            break '_theend;
-                        }
-                        st_push(
-                            frag(s, append(e.out, list1(&raw mut (*s).out))),
-                            &raw mut stackp,
-                            stack_end,
-                        );
-                    }
-                }
-                -1020 | -1018 => {
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += 1;
-                    } else {
-                        e = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        s = alloc_state(
-                            NFA_END_COLL as ::core::ffi::c_int,
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                        );
-                        if s.is_null() {
-                            break '_theend;
-                        }
-                        patch(e.out, s);
-                        (*e.start).out1 = s;
-                        st_push(
-                            frag(e.start, list1(&raw mut (*s).out)),
-                            &raw mut stackp,
-                            stack_end,
-                        );
-                    }
-                }
-                -1017 => {
-                    if nfa_calc_size != true_0 {
-                        e2 = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        e1 = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        (*e2.start).val = (*e2.start).c;
-                        (*e2.start).c = NFA_RANGE_MAX as ::core::ffi::c_int;
-                        (*e1.start).val = (*e1.start).c;
-                        (*e1.start).c = NFA_RANGE_MIN as ::core::ffi::c_int;
-                        patch(e1.out, e2.start);
-                        st_push(frag(e1.start, e2.out), &raw mut stackp, stack_end);
-                    }
-                }
-                -1022 => {
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += 1;
-                    } else {
-                        s = alloc_state(
-                            NFA_EMPTY as ::core::ffi::c_int,
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                        );
-                        if s.is_null() {
-                            break '_theend;
-                        }
-                        st_push(
-                            frag(s, list1(&raw mut (*s).out)),
-                            &raw mut stackp,
-                            stack_end,
-                        );
-                    }
-                }
-                -982 => {
-                    let mut n: ::core::ffi::c_int = 0;
-                    p = p.offset(1);
-                    n = *p;
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += n;
-                    } else {
-                        s = ::core::ptr::null_mut::<nfa_state_T>();
-                        e1.out = ::core::ptr::null_mut::<Ptrlist>();
-                        s1 = ::core::ptr::null_mut::<nfa_state_T>();
-                        loop {
-                            let c2rust_fresh13 = n;
-                            n = n - 1;
-                            if c2rust_fresh13 <= 0 as ::core::ffi::c_int {
-                                break;
-                            }
-                            e = st_pop(&raw mut stackp, stack);
-                            if stackp < stack {
-                                st_error(postfix, end, p);
-                                xfree(stack as *mut ::core::ffi::c_void);
-                                return ::core::ptr::null_mut::<nfa_state_T>();
-                            }
-                            s = alloc_state(
-                                NFA_SPLIT as ::core::ffi::c_int,
-                                e.start,
-                                ::core::ptr::null_mut::<nfa_state_T>(),
-                            );
-                            if s.is_null() {
-                                break '_theend;
-                            }
-                            if e1.out.is_null() {
-                                e1 = e;
-                            }
-                            patch(e.out, s1);
-                            append(e1.out, list1(&raw mut (*s).out1));
-                            s1 = s;
-                        }
-                        st_push(frag(s, e1.out), &raw mut stackp, stack_end);
-                    }
-                }
-                -981 | -980 | -979 | -978 | -977 => {
-                    let mut before: ::core::ffi::c_int = (*p
-                        == NFA_PREV_ATOM_JUST_BEFORE as ::core::ffi::c_int
-                        || *p == NFA_PREV_ATOM_JUST_BEFORE_NEG as ::core::ffi::c_int)
-                        as ::core::ffi::c_int;
-                    let mut pattern: ::core::ffi::c_int = (*p
-                        == NFA_PREV_ATOM_LIKE_PATTERN as ::core::ffi::c_int)
-                        as ::core::ffi::c_int;
-                    let mut start_state: ::core::ffi::c_int = 0;
-                    let mut end_state: ::core::ffi::c_int = 0;
-                    let mut n_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    let mut zend: *mut nfa_state_T = ::core::ptr::null_mut::<nfa_state_T>();
-                    let mut skip: *mut nfa_state_T = ::core::ptr::null_mut::<nfa_state_T>();
-                    match *p {
-                        -981 => {
-                            start_state = NFA_START_INVISIBLE as ::core::ffi::c_int;
-                            end_state = NFA_END_INVISIBLE as ::core::ffi::c_int;
-                        }
-                        -980 => {
-                            start_state = NFA_START_INVISIBLE_NEG as ::core::ffi::c_int;
-                            end_state = NFA_END_INVISIBLE_NEG as ::core::ffi::c_int;
-                        }
-                        -979 => {
-                            start_state = NFA_START_INVISIBLE_BEFORE as ::core::ffi::c_int;
-                            end_state = NFA_END_INVISIBLE as ::core::ffi::c_int;
-                        }
-                        -978 => {
-                            start_state = NFA_START_INVISIBLE_BEFORE_NEG as ::core::ffi::c_int;
-                            end_state = NFA_END_INVISIBLE_NEG as ::core::ffi::c_int;
-                        }
-                        _ => {
-                            start_state = NFA_START_PATTERN as ::core::ffi::c_int;
-                            end_state = NFA_END_PATTERN as ::core::ffi::c_int;
-                        }
-                    }
-                    if before != 0 {
-                        p = p.offset(1);
-                        n_0 = *p;
-                    }
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += if pattern != 0 {
-                            4 as ::core::ffi::c_int
-                        } else {
-                            2 as ::core::ffi::c_int
-                        };
-                    } else {
-                        e = st_pop(&raw mut stackp, stack);
-                        if stackp < stack {
-                            st_error(postfix, end, p);
-                            xfree(stack as *mut ::core::ffi::c_void);
-                            return ::core::ptr::null_mut::<nfa_state_T>();
-                        }
-                        s1 = alloc_state(
-                            end_state,
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                        );
-                        if s1.is_null() {
-                            break '_theend;
-                        }
-                        s = alloc_state(start_state, e.start, s1);
-                        if s.is_null() {
-                            break '_theend;
-                        }
-                        if pattern != 0 {
-                            skip = alloc_state(
-                                NFA_SKIP as ::core::ffi::c_int,
-                                ::core::ptr::null_mut::<nfa_state_T>(),
-                                ::core::ptr::null_mut::<nfa_state_T>(),
-                            );
-                            if skip.is_null() {
-                                break '_theend;
-                            }
-                            zend = alloc_state(
-                                NFA_ZEND as ::core::ffi::c_int,
-                                s1,
-                                ::core::ptr::null_mut::<nfa_state_T>(),
-                            );
-                            if zend.is_null() {
-                                break '_theend;
-                            }
-                            (*s1).out = skip;
-                            patch(e.out, zend);
-                            st_push(
-                                frag(s, list1(&raw mut (*skip).out)),
-                                &raw mut stackp,
-                                stack_end,
-                            );
-                        } else {
-                            patch(e.out, s1);
-                            st_push(
-                                frag(s, list1(&raw mut (*s1).out)),
-                                &raw mut stackp,
-                                stack_end,
-                            );
-                            if before != 0 {
-                                if n_0 <= 0 as ::core::ffi::c_int {
-                                    n_0 = nfa_max_width(e.start, 0 as ::core::ffi::c_int);
-                                }
-                                (*s).val = n_0;
-                            }
-                        }
-                    }
-                }
-                -985 | -957 | -956 | -955 | -954 | -953 | -952 | -951 | -950 | -949 | -948
-                | -937 | -936 | -935 | -934 | -933 | -932 | -931 | -930 | -929 | -928 | -999 => {
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += 2 as ::core::ffi::c_int;
-                    } else {
-                        mopen = *p;
-                        match *p {
-                            -999 => {
-                                mclose = NFA_NCLOSE as ::core::ffi::c_int;
-                            }
-                            -937 => {
-                                mclose = NFA_ZCLOSE as ::core::ffi::c_int;
-                            }
-                            -936 => {
-                                mclose = NFA_ZCLOSE1 as ::core::ffi::c_int;
-                            }
-                            -935 => {
-                                mclose = NFA_ZCLOSE2 as ::core::ffi::c_int;
-                            }
-                            -934 => {
-                                mclose = NFA_ZCLOSE3 as ::core::ffi::c_int;
-                            }
-                            -933 => {
-                                mclose = NFA_ZCLOSE4 as ::core::ffi::c_int;
-                            }
-                            -932 => {
-                                mclose = NFA_ZCLOSE5 as ::core::ffi::c_int;
-                            }
-                            -931 => {
-                                mclose = NFA_ZCLOSE6 as ::core::ffi::c_int;
-                            }
-                            -930 => {
-                                mclose = NFA_ZCLOSE7 as ::core::ffi::c_int;
-                            }
-                            -929 => {
-                                mclose = NFA_ZCLOSE8 as ::core::ffi::c_int;
-                            }
-                            -928 => {
-                                mclose = NFA_ZCLOSE9 as ::core::ffi::c_int;
-                            }
-                            -985 => {
-                                mclose = NFA_END_COMPOSING as ::core::ffi::c_int;
-                            }
-                            _ => {
-                                mclose = *p + NSUBEXP as ::core::ffi::c_int;
-                            }
-                        }
-                        if stackp == stack {
-                            s = alloc_state(
-                                mopen,
-                                ::core::ptr::null_mut::<nfa_state_T>(),
-                                ::core::ptr::null_mut::<nfa_state_T>(),
-                            );
-                            if s.is_null() {
-                                break '_theend;
-                            }
-                            s1 = alloc_state(
-                                mclose,
-                                ::core::ptr::null_mut::<nfa_state_T>(),
-                                ::core::ptr::null_mut::<nfa_state_T>(),
-                            );
-                            if s1.is_null() {
-                                break '_theend;
-                            }
-                            patch(list1(&raw mut (*s).out), s1);
-                            st_push(
-                                frag(s, list1(&raw mut (*s1).out)),
-                                &raw mut stackp,
-                                stack_end,
-                            );
-                        } else {
-                            e = st_pop(&raw mut stackp, stack);
-                            if stackp < stack {
-                                st_error(postfix, end, p);
-                                xfree(stack as *mut ::core::ffi::c_void);
-                                return ::core::ptr::null_mut::<nfa_state_T>();
-                            }
-                            s = alloc_state(mopen, e.start, ::core::ptr::null_mut::<nfa_state_T>());
-                            if s.is_null() {
-                                break '_theend;
-                            }
-                            s1 = alloc_state(
-                                mclose,
-                                ::core::ptr::null_mut::<nfa_state_T>(),
-                                ::core::ptr::null_mut::<nfa_state_T>(),
-                            );
-                            if s1.is_null() {
-                                break '_theend;
-                            }
-                            patch(e.out, s1);
-                            if mopen == NFA_COMPOSING as ::core::ffi::c_int {
-                                patch(list1(&raw mut (*s).out1), s1);
-                            }
-                            st_push(
-                                frag(s, list1(&raw mut (*s1).out)),
-                                &raw mut stackp,
-                                stack_end,
-                            );
-                        }
-                    }
-                }
-                -976 | -975 | -974 | -973 | -972 | -971 | -970 | -969 | -968 | -967 | -966
-                | -965 | -964 | -963 | -962 | -961 | -960 | -959 => {
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += 2 as ::core::ffi::c_int;
-                    } else {
-                        s = alloc_state(
-                            *p,
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                        );
-                        if s.is_null() {
-                            break '_theend;
-                        }
-                        s1 = alloc_state(
-                            NFA_SKIP as ::core::ffi::c_int,
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                        );
-                        if s1.is_null() {
-                            break '_theend;
-                        }
-                        patch(list1(&raw mut (*s).out), s1);
-                        st_push(
-                            frag(s, list1(&raw mut (*s1).out)),
-                            &raw mut stackp,
-                            stack_end,
-                        );
-                    }
-                }
-                -854 | -853 | -852 | -848 | -847 | -846 | -851 | -850 | -849 | -845 | -844
-                | -843 => {
-                    p = p.offset(1);
-                    let mut n_1: ::core::ffi::c_int = *p;
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += 1 as ::core::ffi::c_int;
-                    } else {
-                        s = alloc_state(
-                            *p.offset(-1 as ::core::ffi::c_int as isize),
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                        );
-                        if s.is_null() {
-                            break '_theend;
-                        }
-                        (*s).val = n_1;
-                        st_push(
-                            frag(s, list1(&raw mut (*s).out)),
-                            &raw mut stackp,
-                            stack_end,
-                        );
-                    }
-                }
-                -1001 | -1000 | _ => {
-                    if nfa_calc_size == true_0 {
-                        (*nstate.ptr()) += 1;
-                    } else {
-                        s = alloc_state(
-                            *p,
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                            ::core::ptr::null_mut::<nfa_state_T>(),
-                        );
-                        if s.is_null() {
-                            break '_theend;
-                        }
-                        st_push(
-                            frag(s, list1(&raw mut (*s).out)),
-                            &raw mut stackp,
-                            stack_end,
-                        );
-                    }
-                }
-            }
-            p = p.offset(1);
-        }
-        if nfa_calc_size == true_0 {
-            (*nstate.ptr()) += 1;
+
+    let mut i = 0;
+    while i < items.len() {
+        let item = items[i];
+        // The two operators that carry an inline operand read it here, so
+        // that both passes step over it.
+        let operand = if matches!(
+            item,
+            NFA_OPT_CHARS | NFA_PREV_ATOM_JUST_BEFORE | NFA_PREV_ATOM_JUST_BEFORE_NEG | NFA_LNUM
+                ..=NFA_MARK_LT
+        ) {
+            i += 1;
+            items[i]
         } else {
-            e = st_pop(&raw mut stackp, stack);
-            if stackp < stack {
-                st_error(postfix, end, p);
-                xfree(stack as *mut ::core::ffi::c_void);
-                return ::core::ptr::null_mut::<nfa_state_T>();
-            }
-            if stackp != stack {
-                xfree(stack as *mut ::core::ffi::c_void);
-                emsg(
-                    gettext(
-                        b"E875: (NFA regexp) (While converting from postfix to NFA),too many states left on stack\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    ),
-                );
-                rc_did_emsg.set(true_0 != 0);
-                return NULL_0 as *mut nfa_state_T;
-            }
-            if istate.get() >= nstate.get() {
-                xfree(stack as *mut ::core::ffi::c_void);
-                emsg(gettext(
-                    b"E876: (NFA regexp) Not enough space to store the whole NFA \0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ));
-                rc_did_emsg.set(true_0 != 0);
-                return NULL_0 as *mut nfa_state_T;
-            }
-            let c2rust_fresh14 = istate.get();
-            istate.set(istate.get() + 1);
-            matchstate = (*state_ptr.ptr()).offset(c2rust_fresh14 as isize);
-            (*matchstate).c = NFA_MATCH as ::core::ffi::c_int;
-            (*matchstate).out1 = ::core::ptr::null_mut::<nfa_state_T>();
-            (*matchstate).out = (*matchstate).out1;
-            (*matchstate).id = 0 as ::core::ffi::c_int;
-            patch(e.out, matchstate);
-            ret = e.start;
+            0
+        };
+
+        if counting {
+            nstate.set(nstate.get() + count_for(item, operand));
+            i += 1;
+            continue;
         }
-    }
-    xfree(stack as *mut ::core::ffi::c_void);
-    return ret;
-}
-pub(crate) unsafe extern "C" fn nfa_postprocess(mut prog: *mut nfa_regprog_T) {
-    let mut i: ::core::ffi::c_int = 0;
-    let mut c: ::core::ffi::c_int = 0;
-    i = 0 as ::core::ffi::c_int;
-    while i < (*prog).nstate {
-        c = (*(&raw mut (*prog).state as *mut nfa_state_T).offset(i as isize)).c;
-        if c == NFA_START_INVISIBLE as ::core::ffi::c_int
-            || c == NFA_START_INVISIBLE_NEG as ::core::ffi::c_int
-            || c == NFA_START_INVISIBLE_BEFORE as ::core::ffi::c_int
-            || c == NFA_START_INVISIBLE_BEFORE_NEG as ::core::ffi::c_int
-        {
-            let mut directly: ::core::ffi::c_int = 0;
-            if match_follows(
-                (*(*(&raw mut (*prog).state as *mut nfa_state_T).offset(i as isize)).out1).out,
-                0 as ::core::ffi::c_int,
-            ) {
-                directly = true_0;
-            } else {
-                let mut ch_invisible: ::core::ffi::c_int = failure_chance(
-                    (*(&raw mut (*prog).state as *mut nfa_state_T).offset(i as isize)).out,
-                    0 as ::core::ffi::c_int,
-                );
-                let mut ch_follows: ::core::ffi::c_int = failure_chance(
-                    (*(*(&raw mut (*prog).state as *mut nfa_state_T).offset(i as isize)).out1).out,
-                    0 as ::core::ffi::c_int,
-                );
-                if c == NFA_START_INVISIBLE_BEFORE as ::core::ffi::c_int
-                    || c == NFA_START_INVISIBLE_BEFORE_NEG as ::core::ffi::c_int
-                {
-                    if (*(&raw mut (*prog).state as *mut nfa_state_T).offset(i as isize)).val
-                        <= 0 as ::core::ffi::c_int
-                        && ch_follows > 0 as ::core::ffi::c_int
-                    {
-                        directly = false_0;
-                    } else {
-                        directly = ((ch_follows * 10 as ::core::ffi::c_int) < ch_invisible)
-                            as ::core::ffi::c_int;
-                    }
+
+        match item {
+            NFA_CONCAT => {
+                // Two fragments run one after the other: the first's loose
+                // ends go to the second's start.
+                let (Some(e2), Some(e1)) = (stack.pop(), stack.pop()) else {
+                    return core::ptr::null_mut();
+                };
+                patch(e1.out, e2.start);
+                stack.push(e1.start, e2.out);
+            }
+            NFA_OR => {
+                // A choice between two fragments.
+                let (Some(e2), Some(e1)) = (stack.pop(), stack.pop()) else {
+                    return core::ptr::null_mut();
+                };
+                let Some(s) = state(NFA_SPLIT, e1.start, e2.start) else {
+                    return core::ptr::null_mut();
+                };
+                stack.push(s, append(e1.out, e2.out));
+            }
+            // A repeat is a split whose taken branch loops back to it; `\?`
+            // is the same split without the loop. Which of the two edges is
+            // the body and which the exit decides whether it is greedy.
+            NFA_STAR | NFA_STAR_NONGREEDY | NFA_QUEST | NFA_QUEST_NONGREEDY => {
+                let Some(e) = stack.pop() else {
+                    return core::ptr::null_mut();
+                };
+                let greedy = matches!(item, NFA_STAR | NFA_QUEST);
+                let (out, out1) = if greedy {
+                    (e.start, core::ptr::null_mut())
                 } else {
-                    directly = (ch_follows < ch_invisible) as ::core::ffi::c_int;
+                    (core::ptr::null_mut(), e.start)
+                };
+                let Some(s) = state(NFA_SPLIT, out, out1) else {
+                    return core::ptr::null_mut();
+                };
+                let exit = list1(if greedy { out1_edge(s) } else { out_edge(s) });
+                if matches!(item, NFA_STAR | NFA_STAR_NONGREEDY) {
+                    patch(e.out, s);
+                    stack.push(s, exit);
+                } else {
+                    stack.push(s, append(e.out, exit));
                 }
             }
-            if directly != 0 {
-                (*(&raw mut (*prog).state as *mut nfa_state_T).offset(i as isize)).c += 1;
+            NFA_END_COLL | NFA_END_NEG_COLL => {
+                // The collection's members are already chained; close them
+                // off with the state the matcher stops at, and point the
+                // opening state's `out1` at it so a walk can skip over the
+                // whole collection.
+                let Some(e) = stack.pop() else {
+                    return core::ptr::null_mut();
+                };
+                let Some(s) = state(NFA_END_COLL, core::ptr::null_mut(), core::ptr::null_mut())
+                else {
+                    return core::ptr::null_mut();
+                };
+                patch(e.out, s);
+                // SAFETY: `e.start` is the collection's opening state.
+                unsafe { (*e.start).out1 = s };
+                stack.push(e.start, list1(out_edge(s)));
+            }
+            NFA_RANGE => {
+                // Two members become a range: their character values move
+                // into `val` and the opcodes say which end each one is.
+                let (Some(e2), Some(e1)) = (stack.pop(), stack.pop()) else {
+                    return core::ptr::null_mut();
+                };
+                // SAFETY: both fragments are single member states.
+                unsafe {
+                    (*e2.start).val = (*e2.start).c;
+                    (*e2.start).c = NFA_RANGE_MAX;
+                    (*e1.start).val = (*e1.start).c;
+                    (*e1.start).c = NFA_RANGE_MIN;
+                }
+                patch(e1.out, e2.start);
+                stack.push(e1.start, e2.out);
+            }
+            NFA_OPT_CHARS => {
+                // `\%[abc]`: `operand` members, each of which becomes a
+                // split that can leave the sequence, so every prefix
+                // matches.
+                let mut n = operand;
+                let mut s = core::ptr::null_mut();
+                let mut s1 = core::ptr::null_mut();
+                let mut first_out = core::ptr::null_mut::<Ptrlist>();
+                while n > 0 {
+                    n -= 1;
+                    let Some(e) = stack.pop() else {
+                        return core::ptr::null_mut();
+                    };
+                    let Some(new) = state(NFA_SPLIT, e.start, core::ptr::null_mut()) else {
+                        return core::ptr::null_mut();
+                    };
+                    if first_out.is_null() {
+                        first_out = e.out;
+                    }
+                    patch(e.out, s1);
+                    append(first_out, list1(out1_edge(new)));
+                    s1 = new;
+                    s = new;
+                }
+                stack.push(s, first_out);
+            }
+            // The lookarounds: the operand becomes a machine of its own,
+            // entered from an `NFA_START_*` state and ended by the matching
+            // `NFA_END_*`.
+            NFA_PREV_ATOM_NO_WIDTH
+            | NFA_PREV_ATOM_NO_WIDTH_NEG
+            | NFA_PREV_ATOM_JUST_BEFORE
+            | NFA_PREV_ATOM_JUST_BEFORE_NEG
+            | NFA_PREV_ATOM_LIKE_PATTERN => {
+                let (start_state, end_state) = lookaround_states(item);
+                let before = matches!(
+                    item,
+                    NFA_PREV_ATOM_JUST_BEFORE | NFA_PREV_ATOM_JUST_BEFORE_NEG
+                );
+                let pattern = item == NFA_PREV_ATOM_LIKE_PATTERN;
+                let Some(e) = stack.pop() else {
+                    return core::ptr::null_mut();
+                };
+                let Some(end) = state(end_state, core::ptr::null_mut(), core::ptr::null_mut())
+                else {
+                    return core::ptr::null_mut();
+                };
+                let Some(s) = state(start_state, e.start, end) else {
+                    return core::ptr::null_mut();
+                };
+                if pattern {
+                    // `\@>` keeps what it matched, so the sub-match's end is
+                    // recorded and the outer match resumes past it.
+                    let Some(skip) = state(NFA_SKIP, core::ptr::null_mut(), core::ptr::null_mut())
+                    else {
+                        return core::ptr::null_mut();
+                    };
+                    let Some(zend) = state(NFA_ZEND, end, core::ptr::null_mut()) else {
+                        return core::ptr::null_mut();
+                    };
+                    // SAFETY: `end` is a state allocated just above.
+                    unsafe { (*end).out = skip };
+                    patch(e.out, zend);
+                    stack.push(s, list1(out_edge(skip)));
+                } else {
+                    patch(e.out, end);
+                    stack.push(s, list1(out_edge(end)));
+                    if before {
+                        // With no explicit `\@123<=` width, work out how far
+                        // back the pattern could possibly start.
+                        let width = if operand <= 0 {
+                            nfa_max_width(e.start, 0)
+                        } else {
+                            operand
+                        };
+                        // SAFETY: `s` is a state allocated just above.
+                        unsafe { (*s).val = width };
+                    }
+                }
+            }
+            // A bracket: an opening state, the operand, and the closing
+            // state that pairs with it.
+            NFA_COMPOSING | NFA_MOPEN..=NFA_MOPEN9 | NFA_ZOPEN..=NFA_ZOPEN9 | NFA_NOPEN => {
+                let mclose = closing_bracket(item);
+                // An empty stack means an empty group, `\(\)`.
+                let inner = if stack.frags.is_empty() {
+                    None
+                } else {
+                    match stack.pop() {
+                        Some(e) => Some(e),
+                        None => return core::ptr::null_mut(),
+                    }
+                };
+                let start = inner.map_or(core::ptr::null_mut(), |e| e.start);
+                let Some(s) = state(item, start, core::ptr::null_mut()) else {
+                    return core::ptr::null_mut();
+                };
+                let Some(s1) = state(mclose, core::ptr::null_mut(), core::ptr::null_mut()) else {
+                    return core::ptr::null_mut();
+                };
+                match inner {
+                    None => patch(list1(out_edge(s)), s1),
+                    Some(e) => {
+                        patch(e.out, s1);
+                        if item == NFA_COMPOSING {
+                            // The matcher reaches the group's end through
+                            // `out1`, so that edge has to be wired too.
+                            patch(list1(out1_edge(s)), s1);
+                        }
+                    }
+                }
+                stack.push(s, list1(out_edge(s1)));
+            }
+            // A back-reference matches a run whose length is only known at
+            // match time, so an `NFA_SKIP` follows it to consume the rest.
+            NFA_BACKREF1..=NFA_ZREF9 => {
+                let Some(s) = state(item, core::ptr::null_mut(), core::ptr::null_mut()) else {
+                    return core::ptr::null_mut();
+                };
+                let Some(s1) = state(NFA_SKIP, core::ptr::null_mut(), core::ptr::null_mut()) else {
+                    return core::ptr::null_mut();
+                };
+                patch(list1(out_edge(s)), s1);
+                stack.push(s, list1(out_edge(s1)));
+            }
+            // Everything else — a literal character, a class, a boundary, a
+            // position assertion — is one state that stands alone. The
+            // assertions keep their operand in `val`.
+            _ => {
+                let Some(s) = state(item, core::ptr::null_mut(), core::ptr::null_mut()) else {
+                    return core::ptr::null_mut();
+                };
+                if operand != 0 {
+                    // SAFETY: `s` is a state allocated just above.
+                    unsafe { (*s).val = operand };
+                }
+                stack.push(s, list1(out_edge(s)));
             }
         }
         i += 1;
+    }
+
+    if counting {
+        // One more for the accepting state added below.
+        nstate.set(nstate.get() + 1);
+        return core::ptr::null_mut();
+    }
+
+    let Some(e) = stack.pop() else {
+        return core::ptr::null_mut();
+    };
+    if !stack.frags.is_empty() {
+        semsg!(
+            "E875: (NFA regexp) (While converting from postfix to NFA),too many states left on stack"
+        );
+        rc_did_emsg.set(true);
+        return core::ptr::null_mut();
+    }
+    if istate.get() >= nstate.get() {
+        semsg!("E876: (NFA regexp) Not enough space to store the whole NFA ");
+        rc_did_emsg.set(true);
+        return core::ptr::null_mut();
+    }
+    // The accepting state, taken by hand rather than through `state`: it
+    // must have id 0, which is how the matcher recognises it.
+    // SAFETY: `istate` is below `nstate`, checked just above.
+    unsafe {
+        let matchstate = state_ptr.get().offset(istate.get() as isize);
+        istate.set(istate.get() + 1);
+        (*matchstate).c = NFA_MATCH;
+        (*matchstate).out = core::ptr::null_mut();
+        (*matchstate).out1 = core::ptr::null_mut();
+        (*matchstate).id = 0;
+        patch(e.out, matchstate);
+    }
+    e.start
+}
+
+/// How many states one program item needs.
+fn count_for(item: c_int, operand: c_int) -> c_int {
+    match item {
+        // Wire-ups: no state of their own.
+        NFA_CONCAT | NFA_RANGE => 0,
+        NFA_OPT_CHARS => operand,
+        // Two states for a bracket pair, a back-reference plus its skip, and
+        // a lookaround's start and end — four for `\@>`, which also needs
+        // the skip and the `\ze` marker.
+        NFA_PREV_ATOM_LIKE_PATTERN => 4,
+        NFA_PREV_ATOM_NO_WIDTH
+        | NFA_PREV_ATOM_NO_WIDTH_NEG
+        | NFA_PREV_ATOM_JUST_BEFORE
+        | NFA_PREV_ATOM_JUST_BEFORE_NEG => 2,
+        NFA_COMPOSING | NFA_MOPEN..=NFA_MOPEN9 | NFA_ZOPEN..=NFA_ZOPEN9 | NFA_NOPEN => 2,
+        NFA_BACKREF1..=NFA_ZREF9 => 2,
+        _ => 1,
+    }
+}
+
+/// The `NFA_START_*`/`NFA_END_*` pair one lookaround operator compiles to.
+fn lookaround_states(op: c_int) -> (c_int, c_int) {
+    match op {
+        NFA_PREV_ATOM_NO_WIDTH => (NFA_START_INVISIBLE, NFA_END_INVISIBLE),
+        NFA_PREV_ATOM_NO_WIDTH_NEG => (NFA_START_INVISIBLE_NEG, NFA_END_INVISIBLE_NEG),
+        NFA_PREV_ATOM_JUST_BEFORE => (NFA_START_INVISIBLE_BEFORE, NFA_END_INVISIBLE),
+        NFA_PREV_ATOM_JUST_BEFORE_NEG => (NFA_START_INVISIBLE_BEFORE_NEG, NFA_END_INVISIBLE_NEG),
+        _ => (NFA_START_PATTERN, NFA_END_PATTERN),
+    }
+}
+
+/// The closing opcode that pairs with an opening bracket.
+fn closing_bracket(mopen: c_int) -> c_int {
+    match mopen {
+        NFA_NOPEN => NFA_NCLOSE,
+        NFA_COMPOSING => NFA_END_COMPOSING,
+        // The `\z(` groups have their own close; the numbered groups are a
+        // fixed distance from theirs.
+        c if (NFA_ZOPEN..=NFA_ZOPEN9).contains(&c) => NFA_ZCLOSE + (c - NFA_ZOPEN),
+        c => c + NSUBEXP as c_int,
+    }
+}
+
+/// Decide, for each lookaround in the finished machine, whether to run it as
+/// soon as it is reached or to postpone it until the rest of the pattern has
+/// been tried — the "postponed invisible match" the matcher carries around.
+///
+/// Postponing pays when the lookaround is expensive and what follows it is
+/// cheap, because the cheap test rejects most positions first.
+pub(crate) fn nfa_postprocess(prog: *mut nfa_regprog_T) {
+    // SAFETY: `prog` is a program this module just built, with `nstate`
+    // states inline.
+    unsafe {
+        let states = &raw mut (*prog).state as *mut nfa_state_T;
+        for i in 0..(*prog).nstate {
+            let s = states.offset(i as isize);
+            let c = (*s).c;
+            if !matches!(
+                c,
+                NFA_START_INVISIBLE
+                    | NFA_START_INVISIBLE_NEG
+                    | NFA_START_INVISIBLE_BEFORE
+                    | NFA_START_INVISIBLE_BEFORE_NEG
+            ) {
+                continue;
+            }
+            let follows = (*(*s).out1).out;
+            let directly = if match_follows(follows, 0) {
+                // The pattern ends right after it, so there is nothing
+                // cheaper to try first.
+                true
+            } else {
+                let ch_invisible = failure_chance((*s).out, 0);
+                let ch_follows = failure_chance(follows, 0);
+                if matches!(
+                    c,
+                    NFA_START_INVISIBLE_BEFORE | NFA_START_INVISIBLE_BEFORE_NEG
+                ) {
+                    // A lookbehind of unknown width has to be retried from
+                    // every start position, so postpone it unless what
+                    // follows is very much cheaper.
+                    if (*s).val <= 0 && ch_follows > 0 {
+                        false
+                    } else {
+                        ch_follows * 10 < ch_invisible
+                    }
+                } else {
+                    ch_follows < ch_invisible
+                }
+            };
+            if directly {
+                // The `_FIRST` variant of each opcode is the next one along.
+                (*s).c += 1;
+            }
+        }
     }
 }

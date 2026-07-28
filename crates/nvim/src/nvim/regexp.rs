@@ -10,8 +10,7 @@ use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::main::{
-    e_null, e_re_damg, e_resulting_text_too_long, got_int, p_mmp, rc_did_emsg, re_extmatch_in,
-    re_extmatch_out,
+    e_null, e_re_damg, e_resulting_text_too_long, got_int, p_mmp, re_extmatch_in, re_extmatch_out,
 };
 use crate::src::nvim::mark::mark_get;
 use crate::src::nvim::mbyte::{
