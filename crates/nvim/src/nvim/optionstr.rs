@@ -1,78 +1,56 @@
-use crate::src::nvim::api::private::helpers::api_clear_error;
-use crate::src::nvim::api::win_config::parse_winborder;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::check_ei;
-use crate::src::nvim::charset::{
-    buf_init_chartab, check_isopt, getdigits_int, init_chartab, ptr2cells, transchar_byte,
-};
-use crate::src::nvim::cursor::coladvance;
-use crate::src::nvim::cursor_shape::parse_shape_opt;
+use crate::src::nvim::charset::{buf_init_chartab, check_isopt};
 use crate::src::nvim::diff::{diffanchors_changed, diffopt_changed};
 use crate::src::nvim::digraph::keymap_init;
-use crate::src::nvim::drawscreen::{
-    comp_col, redraw_all_later, redraw_buf_later, redraw_curbuf_later, redraw_later, redrawWinline,
-    status_redraw_buf,
-};
+use crate::src::nvim::drawscreen::{redraw_buf_later, redraw_later, status_redraw_buf};
 use crate::src::nvim::eval::userfunc::get_scriptlocal_funcname;
-use crate::src::nvim::eval::vars::{do_unlet, get_var_value};
-use crate::src::nvim::ex_getln::check_opt_wim;
 use crate::src::nvim::fold::{
     foldUpdateAll, foldmethodIsDiff, foldmethodIsExpr, foldmethodIsIndent, foldmethodIsMarker,
     newFoldLevel,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::highlight_group::init_highlight;
-use crate::src::nvim::indent::{briopt_check, tabstop_set};
+use crate::src::nvim::indent::tabstop_set;
 use crate::src::nvim::indent_c::parse_cino;
 use crate::src::nvim::insexpand::set_cpt_callbacks;
 use crate::src::nvim::main::{
-    VIsual_active, bkc_flags, breakat_flags, cia_flags, cmdpreview, cot_flags, curwin, didset_vim,
-    didset_vimruntime, e_invalid_format_string_single_percent_s, e_invarg, e_modifiable,
-    e_unsupportedoption, firstbuf, km_startsel, km_stopsel, p_bex, p_bg, p_bkc, p_breakat, p_bs,
-    p_cia, p_cot, p_enc, p_fenc, p_hlg, p_isk, p_km, p_mousescroll, p_mousescroll_hor,
-    p_mousescroll_vert, p_pm, p_pumborder, p_ruf, p_shada, p_tc, p_ve, p_winborder, ru_wid, secure,
-    spo_flags, ssop_flags, stl_syntax, tc_flags, ve_flags,
+    bkc_flags, cia_flags, cot_flags, didset_vim, didset_vimruntime, e_invarg, e_modifiable,
+    e_unsupportedoption, p_bex, p_bkc, p_bs, p_cia, p_cot, p_enc, p_fenc, p_hlg, p_isk, p_pm, p_tc,
+    secure, spo_flags, tc_flags,
 };
 use crate::src::nvim::mark::free_fmark;
 use crate::src::nvim::mbyte::{enc_canonize, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memline::ml_setflags;
-use crate::src::nvim::memory::{strequal, xfree, xstrdup};
-use crate::src::nvim::message::{
-    messagesopt_changed, msg_grid_validate, verbose_open, verbose_stop,
-};
-use crate::src::nvim::r#move::validate_virtcol;
+use crate::src::nvim::memory::{strequal, xfree};
 use crate::src::nvim::option::{
-    copy_option_part, did_set_title, fill_culopt_flags, get_fileformat, get_option_default,
-    get_option_varp_scope_from, p_vfile, parse_winhl_opt, redraw_titles, set_iminsert_global,
-    set_imsearch_global, set_option_direct, skip_to_option_part,
+    copy_option_part, get_fileformat, get_option_varp_scope_from, redraw_titles,
+    set_iminsert_global, set_imsearch_global, set_option_direct, skip_to_option_part,
 };
 use crate::src::nvim::options::{
-    kOptAmbiwidth, kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments,
-    kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_bh_values, opt_bkc_values,
-    opt_bt_values, opt_cot_values, opt_spo_values, opt_ssop_values, opt_tc_values, opt_ve_values,
+    kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments, opt_bh_values, opt_bkc_values,
+    opt_bt_values, opt_cot_values, opt_spo_values, opt_tc_values,
 };
 use crate::src::nvim::os::env::vim_unsetenv_ext;
-use crate::src::nvim::os::libc::{gettext, memcmp, memset, strcmp, strlen, strstr};
+use crate::src::nvim::os::libc::{memset, strcmp, strstr};
 use crate::src::nvim::os::time::os_time;
-use crate::src::nvim::shada::get_shada_parameter;
 use crate::src::nvim::spell::{
     compile_cap_prog, did_set_spell_option, spell_reload, valid_spellfile, valid_spelllang,
 };
 use crate::src::nvim::spellfile::spell_check_msm;
 use crate::src::nvim::spellsuggest::spell_check_sps;
-use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
+use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    AdditionalData, AlignTextPos, CharsOption, Error, ErrorType, FloatAnchor, FloatRelative,
-    OptInt, OptVal, OptValData, OptValType, String_0, Terminal, VirtText, VirtTextChunk, WinConfig,
-    WinSplit, WinStyle, buf_T, colnr_T, fcs_chars_T, fmark_T, fmarkv_T, lcs_chars_T, linenr_T,
-    lpos_T, optset_T, pos_T, regmatch_T, schar_T, size_t, uint8_t, win_T,
+    AdditionalData, AlignTextPos, CharsOption, ErrorType, FloatRelative, OptInt, OptVal,
+    OptValData, OptValType, String_0, Terminal, WinSplit, WinStyle, buf_T, colnr_T, fcs_chars_T,
+    fmark_T, fmarkv_T, lcs_chars_T, linenr_T, optset_T, pos_T, regmatch_T, schar_T, size_t,
+    uint8_t, win_T,
 };
-use crate::src::nvim::window::{check_colorcolumn, global_stl_height};
-use crate::src::nvim::winfloat::win_config_float;
-use core::ffi::{CStr, c_char, c_double, c_int, c_uchar, c_uint, c_void};
+use crate::src::nvim::window::global_stl_height;
+use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};
 
 // The carve of a 4,000-line transpiled module; see the child docs.
 mod check;
+mod frame;
 pub use self::check::*;
 mod flags;
 pub use self::flags::*;

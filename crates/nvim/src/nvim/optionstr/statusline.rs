@@ -1,238 +1,324 @@
 //! The callbacks for the options holding a format string, and for the
 //! session/history/shell specs alongside them.
 //!
-//! They are `pub` only so the generated option table can name them.
+//! They are `pub` only so the generated option table can name them; see
+//! [`super::frame`] for what they are handed.
 
-#[allow(unused_imports)]
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub unsafe extern "C" fn did_set_iconstring(mut args: *mut optset_T) -> *const c_char {
-    return did_set_titleiconstring(args, STL_IN_ICON);
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ptr;
+
+use crate::src::nvim::ascii::ascii_isdigit;
+use crate::src::nvim::charset::{getdigits_int, transchar_byte};
+use crate::src::nvim::drawscreen::comp_col;
+use crate::src::nvim::main::{
+    e_invalid_format_string_single_percent_s, p_ruf, p_shada, ru_wid, ssop_flags, stl_syntax,
+};
+use crate::src::nvim::memory::{xfree, xstrdup};
+use crate::src::nvim::message::{verbose_open, verbose_stop};
+use crate::src::nvim::option::{did_set_title, get_option_default, p_vfile};
+use crate::src::nvim::options::{
+    kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values,
+};
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::shada::get_shada_parameter;
+use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
+use crate::src::nvim::types::{linenr_T, optset_T};
+use crate::src::nvim::winfloat::win_config_float;
+
+use super::frame::{errbuf, invalid, old_value, varp, win};
+use super::{
+    FAIL, NUL, OPT_GLOBAL, OPT_LOCAL, SHM_ALL, STL_IN_ICON, STL_IN_TITLE, check_stl_option,
+    did_set_option_listflag, did_set_str_generic, illegal_char, opt_strings_flags,
+};
+
+/// # Safety
+/// `args` points at the option table's call frame.
+pub unsafe extern "C" fn did_set_iconstring(args: *mut optset_T) -> *const c_char {
+    unsafe { did_set_titleiconstring(args, STL_IN_ICON) }
 }
 
-pub unsafe extern "C" fn did_set_rulerformat(mut args: *mut optset_T) -> *const c_char {
-    return did_set_statustabline_rulerformat(args, true_0 != 0, false_0 != 0);
+/// # Safety
+/// `args` points at the option table's call frame.
+pub unsafe extern "C" fn did_set_titlestring(args: *mut optset_T) -> *const c_char {
+    unsafe { did_set_titleiconstring(args, STL_IN_TITLE) }
 }
 
-pub unsafe extern "C" fn did_set_sessionoptions(mut args: *mut optset_T) -> *const c_char {
-    let mut errmsg: *const c_char = did_set_str_generic(args);
+/// 'title' and 'icon' strings are only run through the statusline formatter
+/// when they contain a `%` *and* that format is valid; otherwise they are
+/// shown literally, so a bad format is not an error here.
+///
+/// # Safety
+/// `args` points at the option table's call frame.
+pub(crate) unsafe fn did_set_titleiconstring(args: *mut optset_T, flagval: c_int) -> *const c_char {
+    // SAFETY: the frame's value is a C string.
+    unsafe {
+        let value = *varp(args);
+        let formatted =
+            !vim_strchr(value, c_int::from(b'%')).is_null() && check_stl_option(value).is_null();
+        if formatted {
+            *stl_syntax.ptr() |= flagval;
+        } else {
+            *stl_syntax.ptr() &= !flagval;
+        }
+        did_set_title();
+    }
+    ptr::null()
+}
+
+/// # Safety
+/// `args` points at the option table's call frame.
+pub unsafe extern "C" fn did_set_rulerformat(args: *mut optset_T) -> *const c_char {
+    unsafe { did_set_statustabline_rulerformat(args, true, false) }
+}
+
+/// # Safety
+/// `args` points at the option table's call frame.
+pub unsafe extern "C" fn did_set_statuscolumn(args: *mut optset_T) -> *const c_char {
+    unsafe { did_set_statustabline_rulerformat(args, false, true) }
+}
+
+/// # Safety
+/// `args` points at the option table's call frame.
+pub unsafe extern "C" fn did_set_statusline(args: *mut optset_T) -> *const c_char {
+    unsafe { did_set_statustabline_rulerformat(args, false, false) }
+}
+
+/// # Safety
+/// `args` points at the option table's call frame.
+pub unsafe extern "C" fn did_set_tabline(args: *mut optset_T) -> *const c_char {
+    unsafe { did_set_statustabline_rulerformat(args, false, false) }
+}
+
+/// The shared check for every option holding a 'statusline' format:
+/// 'statusline', 'tabline', 'winbar', 'statuscolumn' and 'rulerformat'.
+///
+/// Three of them need something extra. 'rulerformat' may open with
+/// `%<width>(`, which reserves that many columns on the last line.
+/// 'statuscolumn' caches a number width per window, which a new format
+/// invalidates. And an empty *global* 'statusline' means "use the built-in
+/// one", so it is replaced by the default rather than left blank.
+///
+/// A format that opens with `%!` is an expression producing the real
+/// format, so there is nothing to check until it is evaluated.
+///
+/// # Safety
+/// `args` points at the option table's call frame.
+pub(crate) unsafe fn did_set_statustabline_rulerformat(
+    args: *mut optset_T,
+    rulerformat: bool,
+    statuscolumn: bool,
+) -> *const c_char {
+    let (wp, varp) = unsafe { (win(args), varp(args)) };
+    if rulerformat {
+        ru_wid.set(0);
+    } else if statuscolumn {
+        // SAFETY: the frame's window.
+        unsafe { (*wp).w_nrwidth_line_count = 0 as linenr_T };
+    }
+
+    // SAFETY: the frame and its C string value.
+    let mut s = unsafe { *varp };
+    let (idx, flags) = unsafe { ((*args).os_idx, (*args).os_flags) };
+    let is_stl = idx as c_int == kOptStatusline as c_int;
+    let global = flags & OPT_GLOBAL as c_int != 0 || flags & OPT_LOCAL as c_int == 0;
+    if is_stl && global && unsafe { c_int::from(*s) } == NUL {
+        // SAFETY: the option's own variable, and the table's default for
+        // it, which is a string.
+        unsafe {
+            xfree((*varp).cast::<c_void>());
+            *varp = xstrdup(get_option_default(idx, flags).data.string.data);
+            s = *varp;
+        }
+    }
+    // A floating window's status line is part of its frame.
+    if is_stl && !wp.is_null() && unsafe { (*wp).w_floating } {
+        // SAFETY: the frame's window and its own configuration.
+        unsafe { win_config_float(wp, (*wp).w_config) };
+    }
+
+    let mut errmsg: *const c_char = ptr::null();
+    // SAFETY: `s` is a C string throughout.
+    unsafe {
+        if rulerformat && c_int::from(*s) == c_int::from(b'%') {
+            s = s.add(1);
+            if c_int::from(*s) == c_int::from(b'-') {
+                s = s.add(1);
+            }
+            let wid = getdigits_int(&raw mut s, true, 0);
+            if wid != 0 && c_int::from(*s) == c_int::from(b'(') && {
+                errmsg = check_stl_option(p_ruf.get());
+                errmsg.is_null()
+            } {
+                ru_wid.set(wid);
+            } else if c_int::from(*(*varp).add(1)) != c_int::from(b'!') {
+                // Not a width group and not an expression: check the whole
+                // format after all.
+                errmsg = check_stl_option(p_ruf.get());
+            }
+        } else if rulerformat
+            || c_int::from(*s) != c_int::from(b'%')
+            || c_int::from(*s.add(1)) != c_int::from(b'!')
+        {
+            errmsg = check_stl_option(s);
+        }
+    }
+    if rulerformat && errmsg.is_null() {
+        // The ruler's width decides where the last line's columns start.
+        // SAFETY: recomputes a global from the editor's own state.
+        unsafe { comp_col() };
+    }
+    errmsg
+}
+
+/// 'sessionoptions' cannot ask for both "curdir" and "sesdir".
+///
+/// The check runs after the mask has already been rebuilt, so rejecting the
+/// value means rebuilding the mask from the old one — the caller restores
+/// the string but not anything derived from it.
+///
+/// # Safety
+/// `args` points at the option table's call frame.
+pub unsafe extern "C" fn did_set_sessionoptions(args: *mut optset_T) -> *const c_char {
+    let errmsg = unsafe { did_set_str_generic(args) };
     if !errmsg.is_null() {
         return errmsg;
     }
-    if ssop_flags.get() & kOptSsopFlagCurdir as c_int as c_uint != 0
-        && ssop_flags.get() & kOptSsopFlagSesdir as c_int as c_uint != 0
-    {
-        let mut oldval: *const c_char = (*args).os_oldval.string.data;
-        opt_strings_flags(
-            oldval,
-            opt_ssop_values.ptr() as *mut *const c_char,
-            ssop_flags.ptr(),
-            true_0 != 0,
-        );
-        return &raw const e_invarg as *const c_char;
+    let both = kOptSsopFlagCurdir as c_uint | kOptSsopFlagSesdir as c_uint;
+    if ssop_flags.get() & both == both {
+        // SAFETY: the frame's old value is a C string, and the table's own
+        // word list and mask.
+        unsafe {
+            opt_strings_flags(
+                old_value(args),
+                opt_ssop_values.ptr().cast::<*const c_char>(),
+                ssop_flags.ptr(),
+                true,
+            );
+        }
+        return invalid();
     }
-    return ::core::ptr::null::<c_char>();
+    ptr::null()
 }
 
-pub unsafe extern "C" fn did_set_shada(mut args: *mut optset_T) -> *const c_char {
-    let mut errbuf: *mut c_char = (*args).os_errbuf;
-    let mut errbuflen: size_t = (*args).os_errbuflen;
-    let mut s: *mut c_char = p_shada.get();
-    while *s != 0 {
-        if vim_strchr(
-            b"!\"%'/:<@cfhnrs\0".as_ptr() as *const c_char,
-            *s as uint8_t as c_int,
-        )
-        .is_null()
-        {
-            return illegal_char(errbuf, errbuflen, *s as uint8_t as c_int);
-        }
-        if *s as c_int == 'n' as c_int {
-            break;
-        }
-        if *s as c_int == 'r' as c_int {
-            loop {
-                s = s.offset(1);
-                if !(*s as c_int != 0 && *s as c_int != ',' as c_int) {
-                    break;
-                }
+/// 'shada' is a comma-separated list of one-letter items, most of which
+/// take a number. The value is walked here rather than by the generic
+/// flag-letter check because each letter decides what may follow it.
+///
+/// # Safety
+/// `args` points at the option table's call frame.
+pub unsafe extern "C" fn did_set_shada(args: *mut optset_T) -> *const c_char {
+    let (buf, buflen) = unsafe { errbuf(args) };
+    // SAFETY: the option's own C string value, walked to its terminator.
+    unsafe {
+        let mut s = p_shada.get();
+        while *s != 0 {
+            if vim_strchr(c"!\"%'/:<@cfhnrs".as_ptr(), c_int::from(*s as u8)).is_null() {
+                return illegal_char(buf, buflen, c_int::from(*s as u8));
             }
-        } else if *s as c_int == '%' as c_int {
-            loop {
-                s = s.offset(1);
-                if !ascii_isdigit(*s as c_int) {
-                    break;
-                }
-            }
-        } else if *s as c_int == '!' as c_int
-            || *s as c_int == 'h' as c_int
-            || *s as c_int == 'c' as c_int
-        {
-            s = s.offset(1);
-        } else {
-            loop {
-                s = s.offset(1);
-                if !ascii_isdigit(*s as c_int) {
-                    break;
-                }
-            }
-            if !ascii_isdigit(*s.offset(-(1 as c_int as isize)) as c_int) {
-                if !errbuf.is_null() {
+            if *s == b'n' as c_char {
+                break; // The file name is always last, and takes the rest.
+            } else if *s == b'r' as c_char {
+                // A removable-media path runs to the next comma.
+                while {
+                    s = s.add(1);
+                    *s != 0 && *s != b',' as c_char
+                } {}
+            } else if *s == b'%' as c_char {
+                // The buffer-list count is optional.
+                while {
+                    s = s.add(1);
+                    ascii_isdigit(c_int::from(*s))
+                } {}
+            } else if *s == b'!' as c_char || *s == b'h' as c_char || *s == b'c' as c_char {
+                s = s.add(1); // Takes nothing.
+            } else {
+                // Everything else must have a number.
+                while {
+                    s = s.add(1);
+                    ascii_isdigit(c_int::from(*s))
+                } {}
+                if !ascii_isdigit(c_int::from(*s.sub(1))) {
+                    if buf.is_null() {
+                        return c"".as_ptr();
+                    }
                     vim_snprintf(
-                        errbuf,
-                        errbuflen,
-                        gettext(b"E526: Missing number after <%s>\0".as_ptr() as *const c_char),
-                        transchar_byte(*s.offset(-(1 as c_int as isize)) as uint8_t as c_int),
+                        buf,
+                        buflen,
+                        gettext(c"E526: Missing number after <%s>".as_ptr()),
+                        transchar_byte(c_int::from(*s.sub(1) as u8)),
                     );
-                    return errbuf;
+                    return buf;
+                }
+            }
+            if *s == b',' as c_char {
+                s = s.add(1);
+            } else if *s != 0 {
+                return if buf.is_null() {
+                    c"".as_ptr()
                 } else {
-                    return b"\0".as_ptr() as *const c_char;
+                    c"E527: Missing comma".as_ptr()
+                };
+            }
+        }
+        // The ' item, how many files to remember marks for, is required.
+        if *p_shada.get() != 0 && get_shada_parameter(c_int::from(b'\'')) < 0 {
+            return c"E528: Must specify a ' value".as_ptr();
+        }
+    }
+    ptr::null()
+}
+
+/// 'shellpipe' and 'shellredir' are printf-style: at most one `%s`, and a
+/// `%` has to be followed by something.
+///
+/// # Safety
+/// `args` points at the option table's call frame.
+pub unsafe extern "C" fn did_set_shellpipe_redir(args: *mut optset_T) -> *const c_char {
+    // SAFETY: the frame's new value is a C string.
+    let value = unsafe { CStr::from_ptr((*args).os_newval.string.data) }.to_bytes();
+    let bad = e_invalid_format_string_single_percent_s
+        .ptr()
+        .cast::<c_char>();
+    let mut seen = false;
+    let mut at = 0;
+    while at < value.len() {
+        if value[at] == b'%' {
+            match value.get(at + 1) {
+                None => return bad,
+                Some(&b'%') => at += 1,
+                Some(&b's') if !seen => {
+                    seen = true;
+                    at += 1;
                 }
+                _ => return bad,
             }
         }
-        if *s as c_int == ',' as c_int {
-            s = s.offset(1);
-        } else if *s != 0 {
-            if !errbuf.is_null() {
-                return b"E527: Missing comma\0".as_ptr() as *const c_char;
-            } else {
-                return b"\0".as_ptr() as *const c_char;
-            }
+        at += 1;
+    }
+    ptr::null()
+}
+
+/// # Safety
+/// `args` points at the option table's call frame.
+pub unsafe extern "C" fn did_set_shortmess(args: *mut optset_T) -> *const c_char {
+    // SAFETY: the frame, its value and its error buffer.
+    unsafe {
+        let (buf, len) = errbuf(args);
+        did_set_option_listflag(*varp(args), SHM_ALL.as_ptr(), buf, len)
+    }
+}
+
+/// # Safety
+/// `args` points at the option table's call frame.
+pub unsafe extern "C" fn did_set_verbosefile(_args: *mut optset_T) -> *const c_char {
+    // SAFETY: closes and reopens this process's own log file.
+    unsafe {
+        verbose_stop();
+        if c_int::from(*p_vfile.get()) != NUL && verbose_open() == FAIL {
+            return invalid();
         }
     }
-    if *p_shada.get() as c_int != 0 && get_shada_parameter('\'' as c_int) < 0 as c_int {
-        return b"E528: Must specify a ' value\0".as_ptr() as *const c_char;
-    }
-    return ::core::ptr::null::<c_char>();
-}
-
-pub unsafe extern "C" fn did_set_shellpipe_redir(mut args: *mut optset_T) -> *const c_char {
-    let mut seen: bool = false_0 != 0;
-    let mut p: *mut c_char = (*args).os_newval.string.data;
-    while *p as c_int != NUL {
-        if *p as c_int == '%' as c_int {
-            if *p.offset(1 as c_int as isize) as c_int == NUL {
-                return &raw const e_invalid_format_string_single_percent_s as *const c_char;
-            }
-            if *p.offset(1 as c_int as isize) as c_int == '%' as c_int {
-                p = p.offset(1);
-            } else if *p.offset(1 as c_int as isize) as c_int == 's' as c_int {
-                if seen {
-                    return &raw const e_invalid_format_string_single_percent_s as *const c_char;
-                }
-                seen = true_0 != 0;
-                p = p.offset(1);
-            } else {
-                return &raw const e_invalid_format_string_single_percent_s as *const c_char;
-            }
-        }
-        p = p.offset(1);
-    }
-    return ::core::ptr::null::<c_char>();
-}
-
-pub unsafe extern "C" fn did_set_shortmess(mut args: *mut optset_T) -> *const c_char {
-    let mut varp: *mut *mut c_char = (*args).os_varp as *mut *mut c_char;
-    return did_set_option_listflag(
-        *varp,
-        SHM_ALL.as_ptr().cast_mut(),
-        (*args).os_errbuf,
-        (*args).os_errbuflen,
-    );
-}
-
-pub unsafe extern "C" fn did_set_statuscolumn(mut args: *mut optset_T) -> *const c_char {
-    return did_set_statustabline_rulerformat(args, false_0 != 0, true_0 != 0);
-}
-
-pub unsafe extern "C" fn did_set_statusline(mut args: *mut optset_T) -> *const c_char {
-    return did_set_statustabline_rulerformat(args, false_0 != 0, false_0 != 0);
-}
-
-pub(crate) unsafe extern "C" fn did_set_statustabline_rulerformat(
-    mut args: *mut optset_T,
-    mut rulerformat: bool,
-    mut statuscolumn: bool,
-) -> *const c_char {
-    let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut varp: *mut *mut c_char = (*args).os_varp as *mut *mut c_char;
-    if rulerformat {
-        ru_wid.set(0 as c_int);
-    } else if statuscolumn {
-        (*win).w_nrwidth_line_count = 0 as c_int as linenr_T;
-    }
-    let mut errmsg: *const c_char = ::core::ptr::null::<c_char>();
-    let mut s: *mut c_char = *varp;
-    let mut is_stl: bool = (*args).os_idx as c_int == kOptStatusline as c_int;
-    if is_stl as c_int != 0
-        && ((*args).os_flags & OPT_GLOBAL as c_int != 0
-            || (*args).os_flags & OPT_LOCAL as c_int == 0)
-        && *s.offset(0 as c_int as isize) as c_int == NUL
-    {
-        xfree(*varp as *mut c_void);
-        *varp = xstrdup(
-            get_option_default((*args).os_idx, (*args).os_flags)
-                .data
-                .string
-                .data,
-        );
-        s = *varp;
-    }
-    if is_stl as c_int != 0 && !win.is_null() && (*win).w_floating as c_int != 0 {
-        win_config_float(win, (*win).w_config);
-    }
-    if rulerformat as c_int != 0 && *s as c_int == '%' as c_int {
-        s = s.offset(1);
-        if *s as c_int == '-' as c_int {
-            s = s.offset(1);
-        }
-        let mut wid: c_int = getdigits_int(&raw mut s, true_0 != 0, 0 as c_int);
-        if wid != 0 && *s as c_int == '(' as c_int && {
-            errmsg = check_stl_option(p_ruf.get());
-            errmsg.is_null()
-        } {
-            ru_wid.set(wid);
-        } else if *(*varp).offset(1 as c_int as isize) as c_int != '!' as c_int {
-            errmsg = check_stl_option(p_ruf.get());
-        }
-    } else if rulerformat as c_int != 0
-        || *s.offset(0 as c_int as isize) as c_int != '%' as c_int
-        || *s.offset(1 as c_int as isize) as c_int != '!' as c_int
-    {
-        errmsg = check_stl_option(s);
-    }
-    if rulerformat as c_int != 0 && errmsg.is_null() {
-        comp_col();
-    }
-    return errmsg;
-}
-
-pub unsafe extern "C" fn did_set_tabline(mut args: *mut optset_T) -> *const c_char {
-    return did_set_statustabline_rulerformat(args, false_0 != 0, false_0 != 0);
-}
-
-pub(crate) unsafe extern "C" fn did_set_titleiconstring(
-    mut args: *mut optset_T,
-    mut flagval: c_int,
-) -> *const c_char {
-    let mut varp: *mut *mut c_char = (*args).os_varp as *mut *mut c_char;
-    if !vim_strchr(*varp, '%' as c_int).is_null() && check_stl_option(*varp).is_null() {
-        (*stl_syntax.ptr()) |= flagval;
-    } else {
-        (*stl_syntax.ptr()) &= !flagval;
-    }
-    did_set_title();
-    return ::core::ptr::null::<c_char>();
-}
-
-pub unsafe extern "C" fn did_set_titlestring(mut args: *mut optset_T) -> *const c_char {
-    return did_set_titleiconstring(args, STL_IN_TITLE);
-}
-
-pub unsafe extern "C" fn did_set_verbosefile(mut _args: *mut optset_T) -> *const c_char {
-    verbose_stop();
-    if *p_vfile.get() as c_int != NUL && verbose_open() == FAIL {
-        return &raw const e_invarg as *const c_char as *mut c_char;
-    }
-    return ::core::ptr::null::<c_char>();
+    ptr::null()
 }
