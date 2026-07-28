@@ -17,6 +17,7 @@
 
 #![forbid(unsafe_code)]
 
+mod flags;
 mod index;
 mod lookup;
 mod table_1;
@@ -26,11 +27,12 @@ mod table_4;
 mod table_5;
 mod values;
 
+pub use self::flags::*;
 pub use self::index::*;
 pub use self::lookup::*;
 pub use self::values::*;
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::offset_of;
 use core::ptr;
 

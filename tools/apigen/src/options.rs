@@ -75,6 +75,48 @@ struct Choice {
     nested: Vec<Choice>,
 }
 
+/// The flag enum an option's `flags` key asks for, in ascending value order.
+///
+/// Upstream emits one whenever `flags` is truthy and the option either spells
+/// the values itself or has a `values` list to take bit positions from — so a
+/// bare `flags = true` with no `values` produces nothing. The two spellings
+/// are not interchangeable: `flags = { Insert = 6 }` exists precisely because
+/// some of these are combinations rather than single bits.
+fn flag_enum(o: &Table, values: &[Choice], full_name: &str) -> Result<Vec<(String, i64)>, String> {
+    let fail = |what: &str| format!("option '{full_name}': {what}");
+    if !o.truthy("flags") {
+        return Ok(Vec::new());
+    }
+    let mut entries: Vec<(String, i64)> = match o.get("flags") {
+        Some(Value::Table(t)) => t
+            .map
+            .iter()
+            .map(|(name, value)| match value {
+                Value::Int(n) => Ok((name.clone(), *n)),
+                other => Err(fail(&format!(
+                    "flag `{name}` is {}, not a number",
+                    other.describe()
+                ))),
+            })
+            .collect::<Result<_, _>>()?,
+        // Otherwise each valid value owns the next bit, in the order the
+        // `values` list spells them.
+        _ => values
+            .iter()
+            .enumerate()
+            .map(|(i, choice)| match choice.nested.is_empty() {
+                true => Ok((choice.name.clone(), 1 << i)),
+                false => Err(fail("cannot take flags from a nested `values` list")),
+            })
+            .collect::<Result<_, _>>()?,
+    };
+    entries.sort_by_key(|(_, value)| *value);
+    Ok(entries
+        .into_iter()
+        .map(|(name, value)| (titlecase(name.trim_end_matches(':')), value))
+        .collect())
+}
+
 /// A default value, once the `condition` has been settled.
 enum Default {
     Bool(bool),
@@ -97,6 +139,9 @@ struct Opt {
     varname: Option<String>,
     flags_varname: Option<String>,
     flags: Vec<String>,
+    /// The option's own flag enum: one `(suffix, value)` per bit its parsed
+    /// value can carry, in ascending value order. Empty when it has none.
+    flag_enum: Vec<(String, i64)>,
     values: Vec<Choice>,
     did_set_cb: Option<String>,
     expand_cb: Option<String>,
@@ -116,6 +161,22 @@ impl Opt {
             "opt_{}",
             self.abbreviation.as_ref().unwrap_or(&self.full_name)
         )
+    }
+
+    /// The name its flag enum is spelled with: an abbreviated option is known
+    /// by its abbreviation here, not its full name.
+    fn flags_name(&self) -> String {
+        titlecase(self.abbreviation.as_ref().unwrap_or(&self.full_name))
+    }
+
+    /// The type its flag enum's constants carry.
+    fn flags_type(&self) -> String {
+        format!("Opt{}Flags", self.flags_name())
+    }
+
+    /// The constant naming one bit of its flag enum.
+    fn flag_const(&self, suffix: &str) -> String {
+        format!("kOpt{}Flag{}", self.flags_name(), suffix)
     }
 }
 
@@ -355,6 +416,7 @@ fn parse_options(source: &str) -> Result<Vec<Opt>, String> {
             varname: varname.filter(|_| !disabled),
             flags_varname: o.str("flags_varname").map(str::to_string),
             flags,
+            flag_enum: flag_enum(o, &values, &full_name)?,
             values,
             did_set_cb: did_set_cb.filter(|_| !disabled),
             expand_cb: expand_cb.filter(|_| !disabled),
@@ -652,6 +714,29 @@ fn emit_index(out: &mut String, opts: &[Opt]) {
     writeln!(out, "]);").unwrap();
 }
 
+/// The per-option flag enums: the bits a string option's parsed value is
+/// remembered as, in the `flags_var` its row names.
+fn emit_flags(out: &mut String, opts: &[Opt]) {
+    let mut first = true;
+    for o in opts.iter().filter(|o| !o.flag_enum.is_empty()) {
+        if !first {
+            out.push('\n');
+        }
+        first = false;
+        let ty = o.flags_type();
+        writeln!(out, "/// The bits '{}' parses into.", o.full_name).unwrap();
+        writeln!(out, "pub type {ty} = c_uint;").unwrap();
+        for (suffix, value) in &o.flag_enum {
+            writeln!(
+                out,
+                "pub const {}: {ty} = {value:#04x};",
+                o.flag_const(suffix)
+            )
+            .unwrap();
+        }
+    }
+}
+
 /// The arrays of valid values, in the preorder upstream walked them.
 fn emit_values(out: &mut String, opts: &[Opt]) {
     fn walk(out: &mut String, prefix: &str, values: &[Choice]) {
@@ -934,7 +1019,12 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
             .insert(name);
     }
 
-    out.push_str("use core::ffi::{CStr, c_char, c_int, c_void};\n");
+    let mut ffi = vec!["CStr", "c_char", "c_int", "c_void"];
+    if opts.iter().any(|o| !o.flag_enum.is_empty()) {
+        ffi.push("c_uint");
+    }
+    ffi.sort_by_key(|name| (name.starts_with("c_"), *name));
+    writeln!(out, "use core::ffi::{{{}}};", ffi.join(", ")).unwrap();
     out.push_str("use core::mem::offset_of;\n");
     out.push_str("use core::ptr;\n\n");
     out.push_str("use crate::src::nvim::global_cell::GlobalCell;\n");
@@ -987,6 +1077,14 @@ pub fn generate(
     emit_index(&mut text, &opts);
     for chunk in chunked(&rustfmt(config, &text)?) {
         sections.push(("index", chunk));
+    }
+
+    // Upstream's `gen_vars` wrote the flag enums ahead of the value arrays;
+    // both describe what a string option's value may say.
+    let mut text = String::new();
+    emit_flags(&mut text, &opts);
+    for chunk in chunked(&rustfmt(config, &text)?) {
+        sections.push(("flags", chunk));
     }
 
     let mut text = String::new();
@@ -1043,6 +1141,7 @@ pub fn generate(
         };
         let what = match *stem {
             "index" => "The option indices: which row is which option.",
+            "flags" => "The flag enums a string option's value parses into.",
             "values" => "The values each string option accepts.",
             _ => "The name lookup: which option a spelling means.",
         };
