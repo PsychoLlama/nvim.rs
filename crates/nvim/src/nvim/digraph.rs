@@ -11,11 +11,11 @@ mod tables;
 
 use crate::src::nvim::charset::char2cells;
 use crate::src::nvim::drawscreen::status_redraw_curbuf;
+use crate::src::nvim::eval::eval_to_string;
 use crate::src::nvim::eval::typval::{
     tv_check_for_opt_bool_arg, tv_get_bool, tv_get_string_buf_chk, tv_get_string_chk,
     tv_list_alloc, tv_list_alloc_ret, tv_list_append_list, tv_list_append_string,
 };
-use crate::src::nvim::eval_1::eval_to_string;
 use crate::src::nvim::ex_docmd::{do_cmdline_cmd, getline_equal};
 use crate::src::nvim::ex_getln::putcmdline;
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_init};

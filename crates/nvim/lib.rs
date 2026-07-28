@@ -22,8 +22,6 @@ pub mod src {
         pub mod rpc;
     } // mod mpack
     pub mod nvim {
-        #[path = "eval.rs"]
-        pub mod eval_1;
         pub mod api {
             pub mod autocmd;
             pub mod buffer;
@@ -74,21 +72,7 @@ pub mod src {
         pub mod drawline;
         pub mod drawscreen;
         pub mod edit;
-        pub mod eval {
-            pub mod buffer;
-            pub mod decode;
-            pub mod deprecated;
-            pub mod encode;
-            pub mod executor;
-            pub mod fs;
-            pub mod funcs;
-            pub mod gc;
-            pub mod list;
-            pub mod typval;
-            pub mod userfunc;
-            pub mod vars;
-            pub mod window;
-        } // mod eval
+        pub mod eval;
         pub mod event {
             pub mod libuv;
             pub mod libuv_proc;

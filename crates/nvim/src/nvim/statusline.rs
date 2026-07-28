@@ -12,10 +12,10 @@ use crate::src::nvim::charset::{
 use crate::src::nvim::digraph::keymap_str;
 use crate::src::nvim::drawline::{fill_foldcolumn, use_cursor_line_highlight};
 use crate::src::nvim::drawscreen::{compute_foldcolumn, redrawing};
+use crate::src::nvim::eval::eval_to_string_safe;
 use crate::src::nvim::eval::vars::{
     do_unlet, get_vim_var_nr, set_internal_string_var, set_var, set_vim_var_nr,
 };
-use crate::src::nvim::eval_1::eval_to_string_safe;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{
     grid_adjust, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,

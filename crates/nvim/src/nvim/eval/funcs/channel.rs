@@ -14,12 +14,12 @@ use crate::src::nvim::api::private::helpers::{api_clear_error, arena_array, cstr
 use crate::src::nvim::channel::{
     channel_close, channel_connect, channel_from_stdio, channel_send, find_channel,
 };
+use crate::src::nvim::eval::save_tv_as_string;
 use crate::src::nvim::eval::typval::{
     tv_blob_len, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number, tv_get_string,
     tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_string,
 };
 use crate::src::nvim::eval::userfunc::{restore_funccal, save_funccal, set_current_funccal};
-use crate::src::nvim::eval_1::save_tv_as_string;
 use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::garray::ga_grow;

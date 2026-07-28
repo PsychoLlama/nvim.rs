@@ -16,7 +16,7 @@ use crate::src::nvim::cursor::{
 use crate::src::nvim::drawscreen::{redraw_curbuf_later, update_screen};
 use crate::src::nvim::edit::{beginline, display_dollar, edit};
 use crate::src::nvim::eval::typval::{tv_clear, tv_dict_add_nr};
-use crate::src::nvim::eval_1::{callback_call, set_ref_in_callback};
+use crate::src::nvim::eval::{callback_call, set_ref_in_callback};
 use crate::src::nvim::extmark::{extmark_splice, extmark_splice_cols};
 use crate::src::nvim::fold::{deleteFold, foldCreate, foldOpenCursor, hasFolding, opFoldRange};
 use crate::src::nvim::getchar::{

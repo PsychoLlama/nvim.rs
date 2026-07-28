@@ -1,3 +1,16 @@
+pub mod buffer;
+pub mod decode;
+pub mod deprecated;
+pub mod encode;
+pub mod executor;
+pub mod fs;
+pub mod funcs;
+pub mod gc;
+pub mod list;
+pub mod typval;
+pub mod userfunc;
+pub mod vars;
+pub mod window;
 use crate::src::nvim::api::private::converter::vim_to_object;
 use crate::src::nvim::api::private::helpers::{cstr_as_string, cstr_to_string};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul, ascii_isxdigit};

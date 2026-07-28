@@ -9,9 +9,9 @@ use crate::src::nvim::charset::{
     vim_isprintc, vim_strsize,
 };
 use crate::src::nvim::drawscreen::{redraw_all_later, redraw_later, set_must_redraw};
+use crate::src::nvim::eval::callback_call;
 use crate::src::nvim::eval::typval::tv_clear;
 use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string, var_redir_str};
-use crate::src::nvim::eval_1::callback_call;
 use crate::src::nvim::event::r#loop::loop_schedule_deferred;
 use crate::src::nvim::event::multiqueue::multiqueue_process_events;
 use crate::src::nvim::ex_docmd::do_sleep;

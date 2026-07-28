@@ -19,7 +19,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::userfunc::get_user_func_name;
 use crate::src::nvim::eval::vars::get_user_var_name;
-use crate::src::nvim::eval_1::{call_func_retlist, call_func_retstr, set_context_for_expression};
+use crate::src::nvim::eval::{call_func_retlist, call_func_retstr, set_context_for_expression};
 use crate::src::nvim::ex_cmds::skip_vimgrep_pat;
 use crate::src::nvim::ex_docmd::{
     ends_excmd, excmd_get_argt, excmd_get_cmdidx, expand_argopt, expand_findfunc, find_nextcmd,

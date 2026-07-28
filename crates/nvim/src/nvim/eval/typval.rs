@@ -10,7 +10,7 @@ use crate::src::nvim::eval::vars::{
     eval_msgpack_type_lists, get_globvar_dict, valid_varname, var_check_fixed, var_check_ro,
     var_wrong_func_name,
 };
-use crate::src::nvim::eval_1::{
+use crate::src::nvim::eval::{
     callback_call, callback_from_typval, func_equal, get_copyID, partial_name, partial_unref,
     set_selfdict, var_item_copy, var2fpos,
 };

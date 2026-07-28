@@ -10,12 +10,12 @@ use super::{
 use crate::src::nvim::api::private::helpers::cbuf_to_string;
 use crate::src::nvim::buffer::buflist_findnr;
 use crate::src::nvim::charset::getdigits_int;
+use crate::src::nvim::eval::list2fpos;
 use crate::src::nvim::eval::typval::{
     tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_dict_get_string,
     tv_list_alloc, tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_list,
     tv_list_append_number,
 };
-use crate::src::nvim::eval_1::list2fpos;
 use crate::src::nvim::main::{
     curbuf, curwin, e_buffer_is_not_loaded, e_invalid_column_number_nr, e_invalid_line_number_nr,
     e_invargNval, p_sel, virtual_op,

@@ -14,7 +14,7 @@ use crate::src::nvim::api::private::helpers::{
 use crate::src::nvim::autocmd::{apply_autocmds, has_event};
 use crate::src::nvim::eval::encode::encode_tv2json;
 use crate::src::nvim::eval::typval::{tv_dict_add_dict, tv_dict_set_keys_readonly};
-use crate::src::nvim::eval_1::{eval_fmt_source_name_line, get_v_event, restore_v_event};
+use crate::src::nvim::eval::{eval_fmt_source_name_line, get_v_event, restore_v_event};
 use crate::src::nvim::event::r#loop::one_arg_event;
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::event::proc::proc_is_stopped;

@@ -19,7 +19,7 @@ use crate::src::nvim::eval::typval::{
     tv_clear, tv_copy, tv_list_alloc, tv_list_append_allocated_string,
 };
 use crate::src::nvim::eval::vars::{get_globvar_ht, get_vim_var_list, set_vim_var_list};
-use crate::src::nvim::eval_1::{
+use crate::src::nvim::eval::{
     get_copyID, set_ref_in_ht, set_ref_in_list_items, var_flavour, var_set_global,
 };
 use crate::src::nvim::event::libuv::uv_strerror;

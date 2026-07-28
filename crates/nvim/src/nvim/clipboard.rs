@@ -27,7 +27,7 @@ pub use crate::src::nvim::types::{
 
 use crate::src::nvim::api::private::helpers::cstr_to_string;
 use crate::src::nvim::eval::typval::{tv_list_alloc, tv_list_append_list, tv_list_append_string};
-use crate::src::nvim::eval_1::{eval_call_provider, eval_has_provider};
+use crate::src::nvim::eval::{eval_call_provider, eval_has_provider};
 use crate::src::nvim::memory::{xcalloc, xfree};
 use crate::src::nvim::message::{emsg, msg, redirecting};
 use crate::src::nvim::os::libc::strlen;

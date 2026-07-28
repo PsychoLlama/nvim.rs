@@ -15,7 +15,7 @@ use crate::src::nvim::eval::typval::{
     VAR_STRING, VAR_UNKNOWN, tv_clear, tv_get_number, tv_get_string, tv_get_string_buf,
     tv_list_extend,
 };
-use crate::src::nvim::eval_1::{grow_string_tv, num_divide, num_modulus};
+use crate::src::nvim::eval::{grow_string_tv, num_divide, num_modulus};
 use crate::src::nvim::garray::ga_grow;
 use crate::src::nvim::os::libc::{abort, memmove};
 use crate::src::nvim::strings::concat_str;

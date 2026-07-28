@@ -25,7 +25,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::vars::{init_var_dict, unref_var_dict, vars_clear};
 use crate::src::nvim::eval::window::{restore_win_noblock, switch_win_noblock, win_has_winnr};
-use crate::src::nvim::eval_1::{get_v_event, restore_v_event};
+use crate::src::nvim::eval::{get_v_event, restore_v_event};
 use crate::src::nvim::ex_cmds::do_ecmd;
 use crate::src::nvim::ex_cmds2::{can_abandon, dialog_changed};
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;

@@ -1,8 +1,8 @@
 use crate::src::nvim::charset::{skipwhite, vim_isIDc, vim_isfilec};
 use crate::src::nvim::cmdexpand::{ExpandInit, ExpandOne};
 use crate::src::nvim::eval::fs::modify_fname;
+use crate::src::nvim::eval::skip_expr;
 use crate::src::nvim::eval::vars::get_vim_var_str;
-use crate::src::nvim::eval_1::skip_expr;
 use crate::src::nvim::event::libuv::{
     uv_err_name, uv_os_getenv, uv_os_homedir, uv_os_setenv, uv_os_unsetenv, uv_strerror,
 };

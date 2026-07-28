@@ -1,7 +1,7 @@
 use crate::src::nvim::api::private::helpers::{arena_dict, arena_string, cstr_as_string};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite};
-use crate::src::nvim::eval_1::last_set_msg;
+use crate::src::nvim::eval::last_set_msg;
 use crate::src::nvim::ex_docmd::{do_cmdline, ends_excmd};
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;

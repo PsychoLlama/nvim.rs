@@ -14,7 +14,7 @@ use crate::src::nvim::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
     set_vim_var_type, var_check_fixed, var_check_ro,
 };
-use crate::src::nvim::eval_1::{eval_expr_typval, get_copyID};
+use crate::src::nvim::eval::{eval_expr_typval, get_copyID};
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::garray::{ga_append, ga_concat, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;

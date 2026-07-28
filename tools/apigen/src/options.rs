@@ -580,11 +580,6 @@ pub fn module_path(root: &Path, path: &Path) -> String {
     if parts.last().is_some_and(|p| p == "mod") {
         parts.pop();
     }
-    // `nvim/eval.rs` collides with the `nvim/eval/` directory; lib.rs maps it
-    // to `eval_1`.
-    if parts == ["nvim", "eval"] {
-        parts = vec!["nvim".into(), "eval_1".into()];
-    }
     // `loop.rs`, `match.rs`, `move.rs`: lib.rs spells those as raw
     // identifiers, and so must anything importing from them.
     for part in &mut parts {

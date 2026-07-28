@@ -11,6 +11,7 @@ use super::{
 };
 use crate::semsg;
 use crate::src::nvim::cursor::get_cursor_pos_ptr;
+use crate::src::nvim::eval::do_string_sub;
 use crate::src::nvim::eval::typval::{
     tv_blob_alloc_ret, tv_blob_get, tv_blob_set_range, tv_check_for_nonempty_string_arg,
     tv_check_for_string_arg, tv_check_num, tv_get_bool_chk, tv_get_number, tv_get_number_chk,
@@ -18,7 +19,6 @@ use crate::src::nvim::eval::typval::{
     tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_string, tv_list_extend,
     tv_list_len,
 };
-use crate::src::nvim::eval_1::do_string_sub;
 use crate::src::nvim::ex_getln::vim_strsave_fnameescape;
 use crate::src::nvim::garray::{ga_clear, ga_grow};
 use crate::src::nvim::keycodes::vim_strsave_escape_ks;

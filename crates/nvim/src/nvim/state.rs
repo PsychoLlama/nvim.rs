@@ -1,7 +1,7 @@
 use crate::src::nvim::autocmd::{apply_autocmds, has_event};
 use crate::src::nvim::drawscreen::{setcursor, update_screen};
 use crate::src::nvim::eval::typval::{tv_dict_add_str, tv_dict_set_keys_readonly};
-use crate::src::nvim::eval_1::{get_v_event, restore_v_event};
+use crate::src::nvim::eval::{get_v_event, restore_v_event};
 use crate::src::nvim::event::multiqueue::{multiqueue_empty, multiqueue_get};
 use crate::src::nvim::ex_getln::{cmdline_overstrike, get_cmdline_info};
 use crate::src::nvim::getchar::{

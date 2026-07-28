@@ -15,7 +15,7 @@ use crate::src::nvim::eval::typval::{
     tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc_ret,
     tv_list_append_number,
 };
-use crate::src::nvim::eval_1::{eval_expr_to_bool, eval_expr_valid_arg};
+use crate::src::nvim::eval::{eval_expr_to_bool, eval_expr_valid_arg};
 use crate::src::nvim::main::{curbuf, curwin, e_invarg2, empty_string_option, p_cpo, p_ws};
 use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::memline::{decl, incl};

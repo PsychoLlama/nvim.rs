@@ -22,7 +22,7 @@ use crate::src::nvim::eval::userfunc::{
     get_scriptlocal_funcname, save_function_name, trans_function_name, translated_function_exists,
 };
 use crate::src::nvim::eval::vars::var_exists;
-use crate::src::nvim::eval_1::{eval_option, eval1, partial_name, script_host_eval};
+use crate::src::nvim::eval::{eval_option, eval1, partial_name, script_host_eval};
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_docmd::{cmd_exists, do_cmdline, do_cmdline_cmd};
 use crate::src::nvim::ex_eval::aborting;

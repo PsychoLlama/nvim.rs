@@ -6,7 +6,7 @@ use crate::src::nvim::api::private::helpers::{
 use crate::src::nvim::api::private::validate::api_err_exp;
 use crate::src::nvim::eval::typval::{tv_clear, tv_dict_find};
 use crate::src::nvim::eval::userfunc::call_func;
-use crate::src::nvim::eval_1::{clear_evalarg, eval0};
+use crate::src::nvim::eval::{clear_evalarg, eval0};
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::garray::{ga_clear, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;

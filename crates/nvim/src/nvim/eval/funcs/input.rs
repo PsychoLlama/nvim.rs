@@ -11,11 +11,11 @@ use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::api::vim::nvim_feedkeys;
 use crate::src::nvim::buffer::bt_prompt;
 use crate::src::nvim::edit::buf_prompt_text;
+use crate::src::nvim::eval::prompt_get_input;
 use crate::src::nvim::eval::typval::{
     tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf, tv_get_string_buf_chk,
     tv_get_string_chk, tv_list_len,
 };
-use crate::src::nvim::eval_1::prompt_get_input;
 use crate::src::nvim::event::libuv::uv_kill;
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_getln::get_user_input;

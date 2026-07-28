@@ -22,7 +22,7 @@ use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::{skiptowhite_esc, skipwhite, trans_characters, vim_str2nr};
 use crate::src::nvim::drawscreen::redraw_all_later;
-use crate::src::nvim::eval_1::last_set_msg;
+use crate::src::nvim::eval::last_set_msg;
 use crate::src::nvim::ex_getln::gotocmdline;
 use crate::src::nvim::keycodes::find_special_key;
 use crate::src::nvim::main::{

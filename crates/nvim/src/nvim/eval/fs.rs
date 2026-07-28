@@ -9,7 +9,7 @@ use crate::src::nvim::eval::typval::{tv_blob_len, tv_list_first, tv_list_len, tv
 use crate::src::nvim::eval::userfunc::{add_defer, can_add_defer};
 use crate::src::nvim::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::src::nvim::eval::window::find_win_by_nr;
-use crate::src::nvim::eval_1::{do_string_sub, eval_expr_typval};
+use crate::src::nvim::eval::{do_string_sub, eval_expr_typval};
 use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_docmd::{changedir_func, vim_mkdir_emsg};

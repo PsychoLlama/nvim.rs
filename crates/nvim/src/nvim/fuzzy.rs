@@ -1,5 +1,6 @@
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::{skipwhite, vim_iswordc, vim_iswordp};
+use crate::src::nvim::eval::callback_call;
 use crate::src::nvim::eval::typval::tv_list_len;
 use crate::src::nvim::eval::typval::{
     callback_free, tv_check_for_nonnull_dict_arg, tv_clear, tv_dict_find, tv_dict_get_callback,
@@ -7,7 +8,6 @@ use crate::src::nvim::eval::typval::{
     tv_list_alloc, tv_list_alloc_ret, tv_list_append_list, tv_list_append_number,
     tv_list_append_tv, tv_list_find,
 };
-use crate::src::nvim::eval_1::callback_call;
 use crate::src::nvim::pos::equalpos;
 
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};

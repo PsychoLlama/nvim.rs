@@ -5,12 +5,12 @@ use crate::src::nvim::charset::{ptr2cells, skipwhite};
 use crate::src::nvim::cursor::get_cursor_line_ptr;
 use crate::src::nvim::drawscreen::{setcursor, showmode, unshowmode, update_screen};
 use crate::src::nvim::edit::{edit_putchar, edit_unputchar};
+use crate::src::nvim::eval::garbage_collect;
 use crate::src::nvim::eval::typval::{
     tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_dict_get_string, tv_dict_has_key,
     tv_get_number_chk,
 };
 use crate::src::nvim::eval::vars::set_vim_var_nr;
-use crate::src::nvim::eval_1::garbage_collect;
 use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::event::multiqueue::multiqueue_empty;
 use crate::src::nvim::ex_cmds::check_secure;

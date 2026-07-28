@@ -9,13 +9,13 @@ use crate::src::nvim::buffer::{
 use crate::src::nvim::bufwrite::buf_write;
 use crate::src::nvim::change::unchanged;
 use crate::src::nvim::channel::channel_job_running;
+use crate::src::nvim::eval::eval_call_provider;
 use crate::src::nvim::eval::typval::{
     tv_list_alloc, tv_list_append_allocated_string, tv_list_append_number, tv_list_append_string,
 };
 use crate::src::nvim::eval::vars::{
     do_unlet, get_var_value, set_internal_string_var, set_vim_var_string,
 };
-use crate::src::nvim::eval_1::eval_call_provider;
 use crate::src::nvim::ex_cmds::{check_overwrite, set_swapcommand};
 use crate::src::nvim::ex_docmd::{dialog_msg, do_cmdline, do_cmdline_cmd};
 use crate::src::nvim::ex_getln::script_get;

@@ -8,7 +8,7 @@ use crate::src::nvim::drawscreen::{
 };
 use crate::src::nvim::edit::{set_can_cindent, start_arrow, undisplay_dollar};
 use crate::src::nvim::eval::typval::{tv_clear, tv_dict_add_nr, tv_dict_alloc_ret};
-use crate::src::nvim::eval_1::{call_vim_function, eval_has_provider};
+use crate::src::nvim::eval::{call_vim_function, eval_has_provider};
 use crate::src::nvim::ex_docmd::{do_cmdline_cmd, tabpage_close, tabpage_close_other, tabpage_new};
 use crate::src::nvim::fold::{closeFold, hasFolding, openFold};
 use crate::src::nvim::getchar::{

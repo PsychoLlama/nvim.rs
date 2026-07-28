@@ -14,7 +14,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::userfunc::{find_func, register_luafunc};
 use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
-use crate::src::nvim::eval_1::{get_copyID, partial_name};
+use crate::src::nvim::eval::{get_copyID, partial_name};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::highlight_group::syn_check_group;

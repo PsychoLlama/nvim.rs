@@ -31,7 +31,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::userfunc::callback_call_retnr;
 use crate::src::nvim::eval::vars::set_vim_var_dict;
-use crate::src::nvim::eval_1::{callback_call, get_v_event, restore_v_event, set_ref_in_callback};
+use crate::src::nvim::eval::{callback_call, get_v_event, restore_v_event, set_ref_in_callback};
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::ex_getln::tilde_replace;
 use crate::src::nvim::extmark::{extmark_apply_undo, extmark_splice_delete};

@@ -94,7 +94,7 @@ use crate::src::nvim::eval::window::{
     f_win_screenpos, f_win_splitmove, f_winbufnr, f_wincol, f_winheight, f_winlayout, f_winline,
     f_winnr, f_winrestcmd, f_winrestview, f_winsaveview, f_winwidth,
 };
-use crate::src::nvim::eval_1::{f_slice, f_system, f_systemlist};
+use crate::src::nvim::eval::{f_slice, f_system, f_systemlist};
 use crate::src::nvim::ex_docmd::f_fullcommand;
 use crate::src::nvim::ex_getln::{
     f_getcmdcomplpat, f_getcmdcompltype, f_getcmdline, f_getcmdpos, f_getcmdprompt,

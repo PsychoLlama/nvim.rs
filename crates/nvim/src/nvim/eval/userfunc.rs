@@ -16,7 +16,7 @@ use crate::src::nvim::eval::vars::{
     find_var, find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict, list_hashtable_vars,
     skip_var_list, vars_clear, vars_clear_ext,
 };
-use crate::src::nvim::eval_1::{
+use crate::src::nvim::eval::{
     callback_call, check_luafunc_name, clear_evalarg, clear_lval, eval_isnamec, eval_isnamec1,
     eval_lavars_used, eval0, eval1, fill_evalarg_from_eap, find_name_end, garbage_collect,
     get_id_len, get_lval, handle_subscript, is_luafunc, last_set_msg, partial_name, partial_unref,

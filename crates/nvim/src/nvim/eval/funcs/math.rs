@@ -8,11 +8,11 @@ use super::wrappers::tv_get_float_chk;
 use super::{VAR_FLOAT, VAR_LIST, VAR_NUMBER, VARNUMBER_MAX};
 use crate::semsg;
 use crate::src::nvim::charset::skipwhite;
+use crate::src::nvim::eval::string2float;
 use crate::src::nvim::eval::typval::{
     tv_get_number_chk, tv_get_string, tv_list_alloc_ret, tv_list_append_number, tv_list_find,
     tv_list_len,
 };
-use crate::src::nvim::eval_1::string2float;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::e_invarg2;
 use crate::src::nvim::message::semsg;

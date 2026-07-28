@@ -1,8 +1,8 @@
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::diff::diff_infold;
 use crate::src::nvim::drawscreen::redraw_win_range_later;
+use crate::src::nvim::eval::eval_foldexpr;
 use crate::src::nvim::eval::vars::set_vim_var_nr;
-use crate::src::nvim::eval_1::eval_foldexpr;
 use crate::src::nvim::indent::{get_indent_buf, get_sw_value};
 use crate::src::nvim::main::{KeyTyped, curbuf, curwin, diff_context, got_int};
 use crate::src::nvim::memline::ml_get_buf;

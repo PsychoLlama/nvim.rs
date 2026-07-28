@@ -8,7 +8,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_add_bool, tv_dict_add_str, tv_dict_set_keys_readonly,
 };
 use crate::src::nvim::eval::vars::set_vim_var_string;
-use crate::src::nvim::eval_1::{eval_to_string_safe, get_v_event, restore_v_event};
+use crate::src::nvim::eval::{eval_to_string_safe, get_v_event, restore_v_event};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     NameBuff, VIsual_active, curbuf, current_sctx, curwin, e_cant_find_directory_str_in_cdpath,

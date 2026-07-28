@@ -4,9 +4,9 @@
 use super::*;
 use crate::src::nvim::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::src::nvim::cursor::{check_cursor, get_cursor_line_ptr};
+use crate::src::nvim::eval::eval_to_number;
 use crate::src::nvim::eval::typval::tv_get_lnum;
 use crate::src::nvim::eval::vars::set_vim_var_nr;
-use crate::src::nvim::eval_1::eval_to_number;
 use crate::src::nvim::ex_docmd::handle_did_throw;
 use crate::src::nvim::indent_c::{cindent_on, do_c_expr_indent};
 use crate::src::nvim::main::{

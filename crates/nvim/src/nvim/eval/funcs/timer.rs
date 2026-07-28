@@ -14,7 +14,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_find, tv_get_number, tv_get_number_chk, tv_list_alloc_ret, tv_list_append_number,
     tv_list_find_nr, tv_list_len,
 };
-use crate::src::nvim::eval_1::{
+use crate::src::nvim::eval::{
     add_timer_info, add_timer_info_all, callback_from_typval, eval_expr_typval, find_timer_by_nr,
     timer_due_cb, timer_start, timer_stop, timer_stop_all,
 };

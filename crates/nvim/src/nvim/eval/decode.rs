@@ -5,6 +5,7 @@ use crate::src::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::src::nvim::charset::vim_str2nr;
 use crate::src::nvim::eval::encode::encode_list_write;
+use crate::src::nvim::eval::string2float;
 use crate::src::nvim::eval::typval::{
     tv_blob_alloc_ret, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_alloc,
     tv_dict_item_alloc_len, tv_list_alloc, tv_list_append_list, tv_list_append_number,
@@ -12,7 +13,6 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::typval::{tv_list_len, tv_list_ref};
 use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
-use crate::src::nvim::eval_1::string2float;
 use crate::src::nvim::garray::ga_concat_len;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;

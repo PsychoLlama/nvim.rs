@@ -13,7 +13,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::userfunc::find_func;
 use crate::src::nvim::eval::vars::set_vim_var_char;
-use crate::src::nvim::eval_1::{eval_to_string, last_set_msg};
+use crate::src::nvim::eval::{eval_to_string, last_set_msg};
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_session::put_eol;
 use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};

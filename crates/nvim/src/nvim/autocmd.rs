@@ -15,7 +15,7 @@ use crate::src::nvim::eval::userfunc::{restore_funccal, save_funccal};
 use crate::src::nvim::eval::vars::{
     get_vim_var_nr, get_vim_var_str, set_cmdarg, set_vim_var_nr, vars_clear,
 };
-use crate::src::nvim::eval_1::{callback_call, get_v_event, last_set_msg, restore_v_event};
+use crate::src::nvim::eval::{callback_call, get_v_event, last_set_msg, restore_v_event};
 use crate::src::nvim::event::multiqueue::{multiqueue_new_child, multiqueue_put_event};
 use crate::src::nvim::ex_docmd::{
     do_cmdline, ends_excmd, expand_sfile, get_pressedreturn, set_pressedreturn,

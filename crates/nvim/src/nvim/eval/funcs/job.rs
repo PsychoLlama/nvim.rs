@@ -22,7 +22,7 @@ use crate::src::nvim::eval::typval::{
     tv_list_append_number, tv_list_len, tv_list_ref,
 };
 use crate::src::nvim::eval::vars::get_vim_var_str;
-use crate::src::nvim::eval_1::{common_job_callbacks, find_job, tv_to_argv};
+use crate::src::nvim::eval::{common_job_callbacks, find_job, tv_to_argv};
 use crate::src::nvim::event::r#loop::loop_on_put;
 use crate::src::nvim::event::multiqueue::{
     multiqueue_free, multiqueue_new, multiqueue_process_events, multiqueue_replace_parent,

@@ -24,7 +24,7 @@ use crate::src::nvim::eval::vars::{
     get_vim_var_list, get_vim_var_str, set_reg_var, set_vim_var_list, set_vim_var_nr,
     set_vim_var_string, set_vim_var_type,
 };
-use crate::src::nvim::eval_1::{
+use crate::src::nvim::eval::{
     eval_has_provider, eval_init, garbage_collect, set_argv_var, timer_teardown,
 };
 use crate::src::nvim::event::libuv::uv_strerror;

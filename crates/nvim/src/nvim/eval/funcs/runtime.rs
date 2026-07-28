@@ -18,7 +18,7 @@ use crate::src::nvim::eval::typval::{
     tv_list_alloc_ret, tv_list_append_number,
 };
 use crate::src::nvim::eval::vars::{get_vim_var_nr, set_vim_var_nr};
-use crate::src::nvim::eval_1::{eval_has_provider, get_callback_depth};
+use crate::src::nvim::eval::{eval_has_provider, get_callback_depth};
 use crate::src::nvim::garray::{ga_append, ga_init};
 use crate::src::nvim::getchar::{stuff_empty, using_script};
 use crate::src::nvim::global_cell::GlobalCell;

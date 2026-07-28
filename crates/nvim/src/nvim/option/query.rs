@@ -16,7 +16,7 @@ use crate::src::nvim::buffer::bt_prompt;
 use crate::src::nvim::drawscreen::redraw_buf_status_later;
 use crate::src::nvim::eval::typval::{callback_free, tv_dict_add_tv, tv_dict_alloc, tv_free};
 use crate::src::nvim::eval::vars::optval_as_tv;
-use crate::src::nvim::eval_1::{callback_from_typval, eval_expr};
+use crate::src::nvim::eval::{callback_from_typval, eval_expr};
 use crate::src::nvim::main::{
     OPTION_MAGIC_OFF, OPTION_MAGIC_ON, State, bkc_flags, curbuf, empty_string_option,
     magic_overruled, need_maketitle, p_bs, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh, p_shm,

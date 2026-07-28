@@ -1,7 +1,7 @@
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::{backslash_halve, backslash_halve_save, rem_backslash, skipwhite};
 use crate::src::nvim::cmdexpand::globpath;
-use crate::src::nvim::eval_1::eval_to_string;
+use crate::src::nvim::eval::eval_to_string;
 use crate::src::nvim::ex_docmd::eval_vars;
 use crate::src::nvim::fileio::{file_pat_to_reg_pat, match_file_list};
 use crate::src::nvim::garray::{

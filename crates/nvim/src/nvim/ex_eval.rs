@@ -5,7 +5,7 @@ use crate::src::nvim::eval::typval::tv_list_ref;
 use crate::src::nvim::eval::typval::{tv_clear, tv_free, tv_list_unref};
 use crate::src::nvim::eval::userfunc::{do_return, get_return_cmd};
 use crate::src::nvim::eval::vars::{set_vim_var_list, set_vim_var_string};
-use crate::src::nvim::eval_1::{
+use crate::src::nvim::eval::{
     clear_evalarg, eval_for_line, eval_to_bool, eval_to_string_skip, eval0, fill_evalarg_from_eap,
     free_for_info, next_for_item,
 };

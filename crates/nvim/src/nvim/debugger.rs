@@ -2,7 +2,7 @@ use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::{getdigits_int32, skipwhite};
 use crate::src::nvim::drawscreen::redraw_all_later;
 use crate::src::nvim::eval::typval::tv_free;
-use crate::src::nvim::eval_1::{eval_expr, typval_compare, typval_tostring};
+use crate::src::nvim::eval::{eval_expr, typval_compare, typval_tostring};
 use crate::src::nvim::ex_docmd::{do_cmdline, do_cmdline_cmd};
 use crate::src::nvim::ex_getln::{getcmdline_prompt, getexline};
 use crate::src::nvim::fileio::file_pat_to_reg_pat;

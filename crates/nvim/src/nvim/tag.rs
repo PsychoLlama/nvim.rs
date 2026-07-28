@@ -12,7 +12,7 @@ use crate::src::nvim::eval::typval::{
     tv_get_number, tv_list_alloc, tv_list_append_dict, tv_list_append_number, tv_list_free,
 };
 use crate::src::nvim::eval::vars::set_vim_var_string;
-use crate::src::nvim::eval_1::{callback_call, list2fpos, set_ref_in_callback};
+use crate::src::nvim::eval::{callback_call, list2fpos, set_ref_in_callback};
 use crate::src::nvim::ex_cmds::{getfile, prepare_tagpreview};
 use crate::src::nvim::ex_docmd::{do_cmdline_cmd, set_no_hlsearch};
 use crate::src::nvim::file_search::{

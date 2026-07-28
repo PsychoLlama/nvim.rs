@@ -15,9 +15,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::window::find_win_by_nr_or_id;
 use crate::src::nvim::eval::window::win_id2wp_tp;
-use crate::src::nvim::eval_1::{
-    buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos,
-};
+use crate::src::nvim::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos};
 use crate::src::nvim::main::{curbuf, curwin, e_invarg, e_invarg2, p_spk, skip_update_topline};
 use crate::src::nvim::mark::setmark_pos;
 use crate::src::nvim::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};

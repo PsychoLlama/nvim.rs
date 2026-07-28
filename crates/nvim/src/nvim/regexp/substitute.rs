@@ -31,7 +31,7 @@ use super::{
 };
 use crate::src::nvim::eval::typval::{tv_clear, tv_get_string_buf_chk, tv_list_len};
 use crate::src::nvim::eval::userfunc::call_func;
-use crate::src::nvim::eval_1::{eval_to_string, partial_name};
+use crate::src::nvim::eval::{eval_to_string, partial_name};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curbuf, e_null, e_re_damg, e_resulting_text_too_long};
 use crate::src::nvim::mbyte::{

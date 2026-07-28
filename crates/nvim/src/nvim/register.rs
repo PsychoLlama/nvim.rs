@@ -21,7 +21,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str, tv_dict_set_keys_readonly, tv_list_alloc,
     tv_list_append_allocated_string, tv_list_append_string,
 };
-use crate::src::nvim::eval_1::{eval_to_string, get_v_event, restore_v_event};
+use crate::src::nvim::eval::{eval_to_string, get_v_event, restore_v_event};
 use crate::src::nvim::ex_cmds2::check_fname;
 use crate::src::nvim::ex_getln::{cmdline_paste_str, getcmdline};
 use crate::src::nvim::extmark::{extmark_splice, extmark_splice_cols};

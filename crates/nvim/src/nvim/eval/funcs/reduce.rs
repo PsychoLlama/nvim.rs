@@ -12,7 +12,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_len, tv_get_number_chk, tv_get_string, tv_list_first, tv_list_len, tv_list_locked,
     tv_list_set_lock,
 };
-use crate::src::nvim::eval_1::{eval_expr_typval, partial_name};
+use crate::src::nvim::eval::{eval_expr_typval, partial_name};
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::main::{
     called_emsg, e_listdictarg, e_reduce_of_an_empty_str_with_no_initial_value,

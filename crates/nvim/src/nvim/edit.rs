@@ -23,7 +23,7 @@ use crate::src::nvim::drawscreen::{
     showmode, skip_showmode, status_redraw_curbuf, unshowmode, update_screen,
 };
 use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
-use crate::src::nvim::eval_1::{invoke_prompt_interrupt, prompt_invoke_callback};
+use crate::src::nvim::eval::{invoke_prompt_interrupt, prompt_invoke_callback};
 use crate::src::nvim::ex_docmd::{do_cmdline, do_cmdline_cmd, expr_map_locked};
 use crate::src::nvim::fileio::check_timestamps;
 use crate::src::nvim::fold::{

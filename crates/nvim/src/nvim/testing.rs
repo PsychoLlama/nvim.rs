@@ -9,7 +9,7 @@ use crate::src::nvim::eval::typval::{tv_list_first, tv_list_last, tv_list_len};
 use crate::src::nvim::eval::vars::{
     assert_error, get_vim_var_nr, get_vim_var_str, get_vim_var_tv, set_vim_var_string,
 };
-use crate::src::nvim::eval_1::{garbage_collect, pattern_match};
+use crate::src::nvim::eval::{garbage_collect, pattern_match};
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;

@@ -6,7 +6,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_find, tv_list_append_allocated_string, tv_list_idx_of_item,
 };
 use crate::src::nvim::eval::vars::eval_msgpack_type_lists;
-use crate::src::nvim::eval_1::{get_copyID, partial_name};
+use crate::src::nvim::eval::{get_copyID, partial_name};
 use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;

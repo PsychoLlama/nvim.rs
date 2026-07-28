@@ -24,7 +24,7 @@ use crate::src::nvim::eval::userfunc::{
     get_funccal_local_ht, get_funccal_local_var, list_func_vars,
 };
 use crate::src::nvim::eval::window::{find_win_by_nr, restore_win, switch_win};
-use crate::src::nvim::eval_1::{
+use crate::src::nvim::eval::{
     clear_evalarg, clear_lval, eval_expr_ext, eval_isnamec1, eval_lavars_used, eval_option,
     eval_to_bool, eval_to_string, eval0, eval1, fill_evalarg_from_eap, find_name_end,
     find_option_var_end, get_env_len, get_lval, get_name_len, handle_subscript,

@@ -57,7 +57,7 @@ use crate::src::nvim::eval::vars::{
     ex_let, ex_lockvar, ex_unlet, get_vim_var_list, get_vim_var_str, set_vim_var_nr,
     set_vim_var_string, v_exception, v_throwpoint, var_redir_start, var_redir_stop,
 };
-use crate::src::nvim::eval_1::{
+use crate::src::nvim::eval::{
     callback_call, eval_to_string, ex_echo, ex_echohl, ex_execute, get_copyID, set_ref_in_callback,
     skip_expr,
 };

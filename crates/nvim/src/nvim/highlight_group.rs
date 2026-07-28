@@ -5,8 +5,8 @@ use crate::src::nvim::charset::{skiptowhite, skipwhite, vim_isprintc, vim_strsiz
 use crate::src::nvim::cursor_shape::cursor_mode_uses_syn_id;
 use crate::src::nvim::decoration_provider::decor_provider_invalidate_hl;
 use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::eval::last_set_msg;
 use crate::src::nvim::eval::vars::{do_unlet, get_var_value};
-use crate::src::nvim::eval_1::last_set_msg;
 use crate::src::nvim::ex_docmd::ends_excmd;
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_grow, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;

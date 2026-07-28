@@ -24,8 +24,8 @@ use crate::src::nvim::edit::{
     beginline, cursor_down, cursor_down_inner, cursor_up, cursor_up_inner, edit, get_literal,
     ins_copychar, oneleft, oneright, prompt_curpos_editable, set_last_insert,
 };
+use crate::src::nvim::eval::prompt_invoke_callback;
 use crate::src::nvim::eval::vars::{set_reg_var, set_vcount, set_vim_var_string};
-use crate::src::nvim::eval_1::prompt_invoke_callback;
 use crate::src::nvim::ex_cmds::{do_ascii, do_ecmd};
 use crate::src::nvim::ex_cmds2::autowrite;
 use crate::src::nvim::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exmode, do_sleep};

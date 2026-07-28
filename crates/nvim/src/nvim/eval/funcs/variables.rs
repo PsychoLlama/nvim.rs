@@ -12,7 +12,7 @@ use crate::src::nvim::eval::typval::{
     tv_islocked,
 };
 use crate::src::nvim::eval::vars::find_var;
-use crate::src::nvim::eval_1::{callback_from_typval, clear_lval, get_lval};
+use crate::src::nvim::eval::{callback_from_typval, clear_lval, get_lval};
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::main::{e_dictkey, e_invarg2, e_trailing_arg};
 use crate::src::nvim::memory::xmalloc;

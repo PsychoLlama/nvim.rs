@@ -19,7 +19,7 @@ use crate::src::nvim::eval::typval::{
     tv_list_append_list, tv_list_append_string,
 };
 use crate::src::nvim::eval::vars::{get_globvar_dict, set_vim_var_string};
-use crate::src::nvim::eval_1::{eval_call_provider, get_v_event, restore_v_event};
+use crate::src::nvim::eval::{eval_call_provider, get_v_event, restore_v_event};
 use crate::src::nvim::event::multiqueue::{
     multiqueue_free, multiqueue_move_events, multiqueue_new, multiqueue_new_child,
     multiqueue_process_events, multiqueue_put_event,

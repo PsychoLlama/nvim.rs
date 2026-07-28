@@ -50,7 +50,7 @@ use crate::src::nvim::eval::typval::{
     tv_list_item_remove,
 };
 use crate::src::nvim::eval::window::win_has_winnr;
-use crate::src::nvim::eval_1::{callback_from_typval, typval_tostring};
+use crate::src::nvim::eval::{callback_from_typval, typval_tostring};
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::extmark::extmark_splice_cols;
 use core::ffi::CStr;

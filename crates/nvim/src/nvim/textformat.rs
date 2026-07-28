@@ -12,8 +12,8 @@ use crate::src::nvim::edit::{
     backspace_until_column, beginline, get_nolist_virtcol, insertchar, set_can_cindent,
     undisplay_dollar,
 };
+use crate::src::nvim::eval::eval_to_number;
 use crate::src::nvim::eval::vars::{set_vim_var_char, set_vim_var_nr, set_vim_var_string};
-use crate::src::nvim::eval_1::eval_to_number;
 use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::indent::{

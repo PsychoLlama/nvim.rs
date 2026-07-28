@@ -40,7 +40,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::typval::{tv_list_first, tv_list_last, tv_list_len};
 use crate::src::nvim::eval::vars::{get_globvar_dict, heredoc_get, set_vim_var_char};
-use crate::src::nvim::eval_1::{
+use crate::src::nvim::eval::{
     callback_call, eval_has_provider, get_echo_hl_id, get_v_event, restore_v_event,
 };
 use crate::src::nvim::ex_cmds::rename_buffer;

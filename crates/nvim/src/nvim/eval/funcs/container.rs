@@ -21,7 +21,7 @@ use crate::src::nvim::eval::userfunc::{func_ref, get_func_arity, printable_func_
 use crate::src::nvim::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type,
 };
-use crate::src::nvim::eval_1::{eval_expr_typval, get_copyID, partial_name, var_item_copy};
+use crate::src::nvim::eval::{eval_expr_typval, get_copyID, partial_name, var_item_copy};
 use crate::src::nvim::main::{
     called_emsg, did_emsg, e_invarg2, e_listarg, e_listblobreq, e_listdictblobarg,
 };

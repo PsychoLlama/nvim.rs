@@ -17,7 +17,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::eval::userfunc::{func_tbl_get, restore_funccal, save_funccal};
 use crate::src::nvim::eval::vars::new_script_vars;
-use crate::src::nvim::eval_1::{eval_to_number, get_copyID};
+use crate::src::nvim::eval::{eval_to_number, get_copyID};
 use crate::src::nvim::event::libuv::{uv_mutex_init, uv_mutex_lock, uv_mutex_unlock};
 use crate::src::nvim::ex_docmd::{
     do_cmdline, do_cmdline_cmd, do_exedit, getline_cookie, getline_equal,
