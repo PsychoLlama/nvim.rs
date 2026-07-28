@@ -4,25 +4,20 @@ use crate::src::nvim::api::private::converter::{
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_object, arena_array, cstr_as_string, dict_set_var,
 };
-use crate::src::nvim::api::vim::nvim_feedkeys;
 use crate::src::nvim::autocmd::apply_autocmds;
-use crate::src::nvim::buffer::{
-    bt_prompt, buf_close_terminal, buflist_findnr, buflist_findpat, setfname,
-};
+use crate::src::nvim::buffer::{buf_close_terminal, buflist_findnr, buflist_findpat, setfname};
 use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::channel::{
     channel_close, channel_connect, channel_create_event, channel_decref, channel_from_stdio,
     channel_incref, channel_job_start, channel_send, channel_terminal_alloc,
 };
 use crate::src::nvim::channel::{channel_proc, channel_pty};
-use crate::src::nvim::edit::buf_prompt_text;
 use crate::src::nvim::eval::buffer::find_buffer;
 use crate::src::nvim::eval::typval::{tv_blob_len, tv_list_len, tv_list_ref};
 use crate::src::nvim::eval::typval::{
     tv_check_str_or_nr, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_extend,
     tv_dict_find, tv_dict_free, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
-    tv_dict_get_string, tv_dict_item_remove, tv_get_number, tv_get_number_chk, tv_get_string,
-    tv_get_string_buf, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret,
+    tv_dict_get_string, tv_dict_item_remove, tv_get_string, tv_list_alloc, tv_list_alloc_ret,
     tv_list_append_allocated_string, tv_list_append_number, tv_list_append_string,
 };
 use crate::src::nvim::eval::userfunc::{
@@ -30,10 +25,8 @@ use crate::src::nvim::eval::userfunc::{
 };
 use crate::src::nvim::eval::vars::{cat_prefix_varname, get_user_var_name, get_vim_var_str};
 use crate::src::nvim::eval::window::{find_tabwin, find_win_by_nr_or_id};
-use crate::src::nvim::eval_1::{
-    common_job_callbacks, find_job, prompt_get_input, save_tv_as_string, tv_to_argv,
-};
-use crate::src::nvim::event::libuv::{uv_kill, uv_strerror};
+use crate::src::nvim::eval_1::{common_job_callbacks, find_job, save_tv_as_string, tv_to_argv};
+use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::event::r#loop::loop_on_put;
 use crate::src::nvim::event::multiqueue::{
     multiqueue_free, multiqueue_new, multiqueue_process_events, multiqueue_replace_parent,
@@ -41,29 +34,22 @@ use crate::src::nvim::event::multiqueue::{
 use crate::src::nvim::event::proc::proc_is_stopped;
 use crate::src::nvim::event::proc::{proc_stop, proc_wait};
 use crate::src::nvim::ex_cmds::check_secure;
-use crate::src::nvim::ex_getln::{get_user_input, text_locked, text_locked_msg};
-use crate::src::nvim::garray::{ga_append_via_ptr, ga_grow};
-use crate::src::nvim::getchar::{restore_typeahead, save_typeahead};
+use crate::src::nvim::ex_getln::{text_locked, text_locked_msg};
+use crate::src::nvim::garray::ga_grow;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::{
-    IObuff, NameBuff, Rows, autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match,
-    cmdline_row, cmdline_star, curbuf, current_sctx, curwin, e_api_error, e_channotpty,
-    e_invalwindow, e_invarg, e_invarg2, e_invargNval, e_listarg, e_stdiochan2, e_toofewarg,
-    e_toomanyarg, empty_string_option, emsg_off, got_int, lastbuf, lines_left, main_loop,
-    mouse_row, msg_row, msg_scroll, on_print, p_cpo, p_magic, p_tgc, p_verbose,
-    provider_call_nesting, provider_caller_scope,
+    IObuff, NameBuff, autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, curbuf,
+    current_sctx, curwin, e_api_error, e_channotpty, e_invalwindow, e_invarg, e_invarg2,
+    e_invargNval, e_stdiochan2, e_toofewarg, e_toomanyarg, empty_string_option, emsg_off, lastbuf,
+    main_loop, on_print, p_cpo, p_magic, p_tgc, provider_call_nesting, provider_caller_scope,
 };
 use crate::src::nvim::memline::ml_open;
 use crate::src::nvim::memory::{
     ARENA_EMPTY, arena_finish, arena_mem_free, xcalloc, xfree, xmemdup, xstrdup,
 };
-use crate::src::nvim::message::{
-    do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start, semsg,
-    semsg_multiline, verb_msg,
-};
+use crate::src::nvim::message::{emsg, semsg, semsg_multiline};
 use crate::src::nvim::r#move::win_col_off;
 use crate::src::nvim::msgpack_rpc::channel::get_client_info;
 use crate::src::nvim::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
@@ -149,7 +135,7 @@ pub use crate::src::nvim::types::{
     va_list, varnumber_T, vim_exception, vimconv_T, virt_line, visualinfo_T, win_T, window_S,
     wininfo_S, winopt_T, winsize, wline_T, xfmark_T, xp_prefix_T, yankreg_T,
 };
-use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_flush, ui_has};
+use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
 mod table;
 
