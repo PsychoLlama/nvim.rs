@@ -27,19 +27,18 @@ use crate::src::nvim::eval::executor::eexe_mod_op;
 use crate::src::nvim::eval::gc::{gc_first_dict, gc_first_list};
 use crate::src::nvim::eval::typval::{
     callback_free, callback_put, tv_blob_alloc, tv_blob_alloc_ret, tv_blob_check_index,
-    tv_blob_check_range, tv_blob_copy, tv_blob_equal, tv_blob_set_append, tv_blob_set_range,
+    tv_blob_check_range, tv_blob_copy, tv_blob_set_append, tv_blob_set_range,
     tv_blob_slice_or_index, tv_blob_unref, tv_check_lock, tv_check_num, tv_check_str, tv_clear,
-    tv_copy, tv_dict_add, tv_dict_add_nr, tv_dict_alloc, tv_dict_copy, tv_dict_equal, tv_dict_find,
-    tv_dict_free, tv_dict_free_contents, tv_dict_free_dict, tv_dict_get_callback,
-    tv_dict_get_number, tv_dict_item_alloc, tv_dict_item_free, tv_dict_unref,
-    tv_dict_watcher_notify, tv_dict_wrong_func_name, tv_empty_string, tv_equal, tv_get_float,
-    tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf, tv_get_string_buf_chk,
-    tv_get_string_chk, tv_in_free_unref_items, tv_list_alloc, tv_list_alloc_ret,
-    tv_list_append_dict, tv_list_append_owned_tv, tv_list_append_string, tv_list_assign_range,
-    tv_list_check_range_index_one, tv_list_check_range_index_two, tv_list_copy, tv_list_equal,
-    tv_list_find, tv_list_find_nr, tv_list_free, tv_list_free_contents, tv_list_free_list,
-    tv_list_join, tv_list_slice_or_index, tv_list_unref, tv_list_watch_add, tv_list_watch_remove,
-    tv2bool, value_check_lock,
+    tv_copy, tv_dict_add, tv_dict_add_nr, tv_dict_alloc, tv_dict_copy, tv_dict_find, tv_dict_free,
+    tv_dict_free_contents, tv_dict_free_dict, tv_dict_get_callback, tv_dict_get_number,
+    tv_dict_item_alloc, tv_dict_item_free, tv_dict_unref, tv_dict_watcher_notify,
+    tv_dict_wrong_func_name, tv_empty_string, tv_get_number, tv_get_number_chk, tv_get_string,
+    tv_get_string_buf_chk, tv_get_string_chk, tv_in_free_unref_items, tv_list_alloc,
+    tv_list_alloc_ret, tv_list_append_dict, tv_list_append_owned_tv, tv_list_append_string,
+    tv_list_assign_range, tv_list_check_range_index_one, tv_list_check_range_index_two,
+    tv_list_copy, tv_list_find, tv_list_find_nr, tv_list_free, tv_list_free_contents,
+    tv_list_free_list, tv_list_join, tv_list_slice_or_index, tv_list_unref, tv_list_watch_add,
+    tv_list_watch_remove, tv2bool, value_check_lock,
 };
 use crate::src::nvim::eval::typval::{
     tv_blob_get, tv_blob_len, tv_blob_set_ret, tv_dict_is_watched, tv_dict_set_ret,
@@ -97,8 +96,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::src::nvim::mark::{mark_get, mark_global_iter};
 use crate::src::nvim::mbyte::{
-    mb_charlen, mb_copy_char, mb_strcmp_ic, string_convert, utf_char2bytes, utf_head_off,
-    utfc_ptr2len,
+    mb_charlen, mb_copy_char, string_convert, utf_char2bytes, utf_head_off, utfc_ptr2len,
 };
 use crate::src::nvim::memline::{ml_append, ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{

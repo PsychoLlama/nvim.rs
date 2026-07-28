@@ -1,7 +1,7 @@
 {
   "internal_exports": 120,
   "files_without_forbid_unsafe": 398,
-  "files_without_deny_unsafe_op": 254,
+  "files_without_deny_unsafe_op": 253,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -96,7 +96,7 @@
     "crates/nvim/src/nvim/eval/executor.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/eval/expr/arith.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/eval/expr/call.rs": {"unsafe": 6},
-    "crates/nvim/src/nvim/eval/expr/compare.rs": {"unsafe": 2},
+    "crates/nvim/src/nvim/eval/expr/compare.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/eval/expr/complete.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/eval/expr/container.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/eval/expr/index.rs": {"unsafe": 9},
