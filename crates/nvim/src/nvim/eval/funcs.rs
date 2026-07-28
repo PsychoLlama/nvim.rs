@@ -72,8 +72,8 @@ use crate::src::nvim::eval_1::{
     callback_from_typval, clear_lval, common_job_callbacks, do_string_sub, eval_expr_to_bool,
     eval_expr_typval, eval_expr_valid_arg, eval_has_provider, eval_option, eval1, find_job,
     find_timer_by_nr, get_callback_depth, get_copyID, get_lval, list2fpos, partial_name,
-    prompt_get_input, save_tv_as_string, script_host_eval, string2float, timer_due_cb, timer_start,
-    timer_stop, timer_stop_all, tv_to_argv, var_item_copy, var2fpos,
+    prompt_get_input, save_tv_as_string, script_host_eval, timer_due_cb, timer_start, timer_stop,
+    timer_stop_all, tv_to_argv, var_item_copy, var2fpos,
 };
 use crate::src::nvim::event::libuv::{uv_kill, uv_strerror};
 use crate::src::nvim::event::r#loop::{loop_on_put, process_events_until};
@@ -172,9 +172,8 @@ use crate::src::nvim::os::env::{
 };
 use crate::src::nvim::os::fs::{os_isdir, os_setperm};
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, atan2, atoi, fabs, fmod, gettext, memcpy, memmove, memset, mktime, pow,
-    snprintf, strcasecmp, strchr, strcmp, strcpy, strftime, strlen, strncasecmp, strncmp, strtoul,
-    time,
+    __assert_fail, abort, atoi, gettext, memcpy, memmove, memset, mktime, snprintf, strcasecmp,
+    strchr, strcmp, strcpy, strftime, strlen, strncasecmp, strncmp, strtoul, time,
 };
 use crate::src::nvim::os::pty_proc_unix::pty_proc_resize;
 use crate::src::nvim::os::shell::shell_free_argv;
@@ -295,6 +294,7 @@ use self::table::{BUILTINS, builtin_index};
 // The bodies, grouped by what they are about. Each child opens with
 // `use super::*`, so the transpiled preamble above is its import list.
 
+mod args;
 mod call;
 mod channel;
 mod container;
@@ -1707,12 +1707,6 @@ pub const kXDGDataHome: XDGVarType = 1;
 pub const kXDGConfigHome: XDGVarType = 0;
 pub const kXDGNone: XDGVarType = -1;
 pub const YREG_YANK: C2Rust_Unnamed_61 = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_52 {
-    pub number: uint32_t,
-    pub bytes: [uint8_t; 4],
-}
 pub const FCERR_TOOMANY: C2Rust_Unnamed_55 = 1;
 pub const FCERR_TOOFEW: C2Rust_Unnamed_55 = 2;
 pub const FCERR_NONE: C2Rust_Unnamed_55 = 5;
