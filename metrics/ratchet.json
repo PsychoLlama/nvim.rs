@@ -1,7 +1,7 @@
 {
   "internal_exports": 122,
-  "files_without_forbid_unsafe": 337,
-  "files_without_deny_unsafe_op": 282,
+  "files_without_forbid_unsafe": 336,
+  "files_without_deny_unsafe_op": 280,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -253,9 +253,8 @@
     "crates/nvim/src/nvim/quickfix.rs": {"lines": 10213, "no_mangle": 8, "unsafe": 248},
     "crates/nvim/src/nvim/regexp.rs": {"lines": 1184},
     "crates/nvim/src/nvim/regexp/api.rs": {"no_mangle": 6, "unsafe": 8},
-    "crates/nvim/src/nvim/regexp/bt/atom.rs": {"lines": 1036, "unsafe": 1},
-    "crates/nvim/src/nvim/regexp/bt/compile.rs": {"unsafe": 13},
-    "crates/nvim/src/nvim/regexp/bt/equi_class.rs": {"unsafe": 1},
+    "crates/nvim/src/nvim/regexp/bt/atom.rs": {"lines": 1030, "unsafe": 1},
+    "crates/nvim/src/nvim/regexp/bt/compile.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/regexp/bt/exec.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/regexp/bt/matcher.rs": {"lines": 1745, "unsafe": 1},
     "crates/nvim/src/nvim/regexp/bt/piece.rs": {"unsafe": 8},

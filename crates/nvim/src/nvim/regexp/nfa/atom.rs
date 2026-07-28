@@ -181,7 +181,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             -207 | -206 | -205 | -204 | -203 | -202 | -201 | -200 | -199 => {
                                 let mut refnum: ::core::ffi::c_int =
                                     unmagic(c) - '1' as ::core::ffi::c_int;
-                                if seen_endbrace(refnum + 1 as ::core::ffi::c_int) == 0 {
+                                if !seen_endbrace(refnum + 1 as ::core::ffi::c_int) {
                                     return FAIL;
                                 }
                                 if post_ptr.get() >= post_end.get() {

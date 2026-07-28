@@ -1,5 +1,7 @@
 //! `[[=a=]]`: the equivalence class each base character expands to.
 
+#![forbid(unsafe_code)]
+
 use core::ffi::c_int;
 
 use super::compile::regmbc;
@@ -11,17 +13,12 @@ use crate::src::nvim::regexp::equi_class;
 /// [`equi_class`] module; upstream kept a copy of it here and another in the
 /// NFA compiler.
 pub(crate) fn reg_equi_class(c: c_int) {
-    // SAFETY: `regmbc` appends to the program under construction; the caller
-    // is `regatom`, which only runs between `regcomp_start` and the end of
-    // the compile pass.
-    unsafe {
-        match equi_class::backtracking_class_of(c) {
-            Some(class) => {
-                for member in class.backtracking_members() {
-                    regmbc(member);
-                }
+    match equi_class::backtracking_class_of(c) {
+        Some(class) => {
+            for member in class.backtracking_members() {
+                regmbc(member);
             }
-            None => regmbc(c),
         }
+        None => regmbc(c),
     }
 }

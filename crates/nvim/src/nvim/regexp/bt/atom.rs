@@ -168,7 +168,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                         -207 | -206 | -205 | -204 | -203 | -202 | -201 | -200 | -199 => {
                             let mut refnum: ::core::ffi::c_int = 0;
                             refnum = c - ('0' as ::core::ffi::c_int - 256 as ::core::ffi::c_int);
-                            if seen_endbrace(refnum) == 0 {
+                            if !seen_endbrace(refnum) {
                                 return ::core::ptr::null_mut::<uint8_t>();
                             }
                             ret = regnode(BACKREF + refnum);
@@ -542,14 +542,8 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                                     }
                                                     ret = regnode(RE_VCOL);
                                                 }
-                                                if ret == JUST_CALC_SIZE {
-                                                    (*regsize.ptr()) += 5 as int64_t;
-                                                } else {
-                                                    regcode.set(re_put_uint32(regcode.get(), n));
-                                                    let c2rust_fresh1490 = regcode.get();
-                                                    regcode.set((*regcode.ptr()).offset(1));
-                                                    *c2rust_fresh1490 = cmp as uint8_t;
-                                                }
+                                                regnr(n);
+                                                regc(cmp);
                                                 break 's_1154;
                                             }
                                         }
