@@ -26,7 +26,7 @@ use crate::src::nvim::types::{
 
 /// Reserve `rex` for `run`, restoring an outer match's context after. The
 /// nesting is real: `:s/…/\=…/` can evaluate an expression that searches.
-fn with_rex<R>(run: impl FnOnce() -> R) -> R {
+pub(crate) fn with_rex<R>(run: impl FnOnce() -> R) -> R {
     let outer = rex_in_use.get();
     let saved = outer.then(|| rex.get());
     rex_in_use.set(true);

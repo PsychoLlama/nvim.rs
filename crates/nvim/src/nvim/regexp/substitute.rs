@@ -121,121 +121,62 @@ pub unsafe extern "C" fn regtilde(
     }
     return newsub;
 }
+/// Expand `source` into `dest` using the captures of the string match
+/// `rmp`, or the result of `expr` when the replacement is an expression.
+/// Returns the length written, plus one for the NUL.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regsub(
-    mut rmp: *mut regmatch_T,
-    mut source: *mut ::core::ffi::c_char,
-    mut expr: *mut typval_T,
-    mut dest: *mut ::core::ffi::c_char,
-    mut destlen: ::core::ffi::c_int,
-    mut flags: ::core::ffi::c_int,
+    rmp: *mut regmatch_T,
+    source: *mut ::core::ffi::c_char,
+    expr: *mut typval_T,
+    dest: *mut ::core::ffi::c_char,
+    destlen: ::core::ffi::c_int,
+    flags: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut rex_save: regexec_T = regexec_T {
-        reg_match: ::core::ptr::null_mut::<regmatch_T>(),
-        reg_mmatch: ::core::ptr::null_mut::<regmmatch_T>(),
-        reg_startp: ::core::ptr::null_mut::<*mut uint8_t>(),
-        reg_endp: ::core::ptr::null_mut::<*mut uint8_t>(),
-        reg_startpos: ::core::ptr::null_mut::<lpos_T>(),
-        reg_endpos: ::core::ptr::null_mut::<lpos_T>(),
-        reg_win: ::core::ptr::null_mut::<win_T>(),
-        reg_buf: ::core::ptr::null_mut::<buf_T>(),
-        reg_firstlnum: 0,
-        reg_maxline: 0,
-        reg_line_lbr: false,
-        lnum: 0,
-        line: ::core::ptr::null_mut::<uint8_t>(),
-        input: ::core::ptr::null_mut::<uint8_t>(),
-        need_clear_subexpr: 0,
-        need_clear_zsubexpr: 0,
-        reg_ic: false,
-        reg_icombine: false,
-        reg_nobreak: false,
-        reg_maxcol: 0,
-        nfa_has_zend: 0,
-        nfa_has_backref: 0,
-        nfa_nsubexpr: 0,
-        nfa_listid: 0,
-        nfa_alt_listid: 0,
-        nfa_has_zsubexpr: 0,
-    };
-    let mut rex_in_use_save: bool = rex_in_use.get();
-    if rex_in_use.get() {
-        rex_save = rex.get();
-    }
-    rex_in_use.set(true_0 != 0);
-    (*rex.ptr()).reg_match = rmp;
-    (*rex.ptr()).reg_mmatch = ::core::ptr::null_mut::<regmmatch_T>();
-    (*rex.ptr()).reg_maxline = 0 as ::core::ffi::c_int as linenr_T;
-    (*rex.ptr()).reg_buf = curbuf.get();
-    (*rex.ptr()).reg_line_lbr = true_0 != 0;
-    let mut result: ::core::ffi::c_int = vim_regsub_both(source, expr, dest, destlen, flags);
-    rex_in_use.set(rex_in_use_save);
-    if rex_in_use.get() {
-        rex.set(rex_save);
-    }
-    return result;
+    with_rex(|| {
+        rex.with_mut(|r| {
+            r.reg_match = rmp;
+            r.reg_mmatch = ::core::ptr::null_mut::<regmmatch_T>();
+            r.reg_maxline = 0;
+            r.reg_buf = curbuf.get();
+            // A string replacement has no lines to cross, so a `\n` in it
+            // is a literal newline rather than a line break.
+            r.reg_line_lbr = true;
+        });
+        vim_regsub_both(source, expr, dest, destlen, flags)
+    })
 }
+
+/// [`vim_regsub`] for a buffer match, whose captures can span lines from
+/// `lnum` on.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regsub_multi(
-    mut rmp: *mut regmmatch_T,
-    mut lnum: linenr_T,
-    mut source: *mut ::core::ffi::c_char,
-    mut dest: *mut ::core::ffi::c_char,
-    mut destlen: ::core::ffi::c_int,
-    mut flags: ::core::ffi::c_int,
+    rmp: *mut regmmatch_T,
+    lnum: linenr_T,
+    source: *mut ::core::ffi::c_char,
+    dest: *mut ::core::ffi::c_char,
+    destlen: ::core::ffi::c_int,
+    flags: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut rex_save: regexec_T = regexec_T {
-        reg_match: ::core::ptr::null_mut::<regmatch_T>(),
-        reg_mmatch: ::core::ptr::null_mut::<regmmatch_T>(),
-        reg_startp: ::core::ptr::null_mut::<*mut uint8_t>(),
-        reg_endp: ::core::ptr::null_mut::<*mut uint8_t>(),
-        reg_startpos: ::core::ptr::null_mut::<lpos_T>(),
-        reg_endpos: ::core::ptr::null_mut::<lpos_T>(),
-        reg_win: ::core::ptr::null_mut::<win_T>(),
-        reg_buf: ::core::ptr::null_mut::<buf_T>(),
-        reg_firstlnum: 0,
-        reg_maxline: 0,
-        reg_line_lbr: false,
-        lnum: 0,
-        line: ::core::ptr::null_mut::<uint8_t>(),
-        input: ::core::ptr::null_mut::<uint8_t>(),
-        need_clear_subexpr: 0,
-        need_clear_zsubexpr: 0,
-        reg_ic: false,
-        reg_icombine: false,
-        reg_nobreak: false,
-        reg_maxcol: 0,
-        nfa_has_zend: 0,
-        nfa_has_backref: 0,
-        nfa_nsubexpr: 0,
-        nfa_listid: 0,
-        nfa_alt_listid: 0,
-        nfa_has_zsubexpr: 0,
-    };
-    let mut rex_in_use_save: bool = rex_in_use.get();
-    if rex_in_use.get() {
-        rex_save = rex.get();
-    }
-    rex_in_use.set(true_0 != 0);
-    (*rex.ptr()).reg_match = ::core::ptr::null_mut::<regmatch_T>();
-    (*rex.ptr()).reg_mmatch = rmp;
-    (*rex.ptr()).reg_buf = curbuf.get();
-    (*rex.ptr()).reg_firstlnum = lnum;
-    (*rex.ptr()).reg_maxline = (*curbuf.get()).b_ml.ml_line_count - lnum;
-    (*rex.ptr()).reg_line_lbr = false_0 != 0;
-    let mut result: ::core::ffi::c_int = vim_regsub_both(
-        source,
-        ::core::ptr::null_mut::<typval_T>(),
-        dest,
-        destlen,
-        flags,
-    );
-    rex_in_use.set(rex_in_use_save);
-    if rex_in_use.get() {
-        rex.set(rex_save);
-    }
-    return result;
+    with_rex(|| {
+        rex.with_mut(|r| {
+            r.reg_match = ::core::ptr::null_mut::<regmatch_T>();
+            r.reg_mmatch = rmp;
+            r.reg_buf = curbuf.get();
+            r.reg_firstlnum = lnum;
+            r.reg_maxline = (*curbuf.get()).b_ml.ml_line_count - lnum;
+            r.reg_line_lbr = false;
+        });
+        vim_regsub_both(
+            source,
+            ::core::ptr::null_mut::<typval_T>(),
+            dest,
+            destlen,
+            flags,
+        )
+    })
 }
+
 pub(crate) unsafe extern "C" fn vim_regsub_both(
     mut source: *mut ::core::ffi::c_char,
     mut expr: *mut typval_T,
