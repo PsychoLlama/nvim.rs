@@ -8,6 +8,8 @@
 //! [`single`], with [`resume`] unwinding the decisions it saved on
 //! [`state`]'s stack.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 mod atom;
 mod collection;
 mod compile;

@@ -15,6 +15,8 @@
 //! `with`/`with_mut` — see [`context`] for why that distinction is
 //! load-bearing.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::types::{
     MarkGet, VarLockStatus, VarType, buf_T, colnr_T, garray_T, int16_t, int64_t, linenr_T, lpos_T,

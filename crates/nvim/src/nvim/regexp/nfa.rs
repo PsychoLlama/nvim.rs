@@ -8,6 +8,8 @@
 //! The lists themselves, and the walk that puts a state on one, are
 //! [`list`]; [`sub`] is the capture sets the threads on them carry.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 mod assertions;
 mod atom;
 mod build;
