@@ -180,7 +180,7 @@ pub(crate) fn match_one(
             ZREF_1..=ZREF_9 => external_reference(op - ZREF),
 
             // The position a `\@<=` look-behind has to end at.
-            BHPOS => nomatch_unless(reg_save_equal(behind_pos.ptr())),
+            BHPOS => nomatch_unless(reg_save_equal(&*behind_pos.ptr())),
 
             NEWL => {
                 let lbr = (*rex.ptr()).reg_line_lbr;

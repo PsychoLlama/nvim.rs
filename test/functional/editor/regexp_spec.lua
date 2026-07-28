@@ -455,6 +455,59 @@ describe('the editor survives pathological patterns', function()
     )
   end)
 
+  it("reports E363 when a pattern outgrows 'maxmempattern'", function()
+    -- 'maxmempattern' is the only bound on how far either engine may go: the
+    -- backtracking engine charges it for every frame of its saved-state
+    -- stack, and the NFA engine for every slot of its thread lists. Reaching
+    -- it has to be an error the user sees, not an editor that stops
+    -- answering — so this asserts the message, and `survives` below asserts
+    -- that the child still exits cleanly after it.
+    --
+    -- The patterns are ones that keep pushing: a nested star over an atom
+    -- that can match the same text several ways for the backtracker, and a
+    -- back-reference — which is what stops the NFA engine from collapsing
+    -- two threads on one state — for the pike VM.
+    local hungry = {
+      [ENGINES.bt] = { '\\(a*\\)\\+x', '\\(\\(a\\|b\\)*\\)\\+x' },
+      [ENGINES.nfa] = { '\\(a\\|b\\)*\\1x', '\\(\\(a\\|b\\)\\+\\)\\+\\1x' },
+    }
+    command('set maxmempattern=1')
+    local line = string.rep('ab', 800)
+    for prefix, pats in pairs(hungry) do
+      for _, pat in ipairs(pats) do
+        eq(
+          "Vim:E363: Pattern uses more memory than 'maxmempattern'",
+          pcall_err(fn.match, line, prefix .. pat),
+          ('%s%s'):format(prefix, pat)
+        )
+      end
+    end
+
+    -- And the editor carries on: E363 is an error the pattern gets, not a
+    -- state the engine is left in.
+    command('set maxmempattern&')
+    each_engine(function(e)
+      eq(0, fn.match('abab', e .. 'a\\+b'))
+    end)
+  end)
+
+  it("survives a pattern that outgrows 'maxmempattern'", function()
+    -- The stack the backtracker gives up on is several thousand frames deep
+    -- and the NFA's thread lists hold a slot per live thread; both are freed
+    -- on the way out, and the child has to reach `qall!`.
+    survives(
+      'over maxmempattern',
+      table.concat({
+        'set maxmempattern=1',
+        'let s:line = repeat("ab", 800)',
+        'silent! call match(s:line, "\\%#=1\\(a*\\)\\+x")',
+        'silent! call match(s:line, "\\%#=2\\(a\\|b\\)*\\1x")',
+        'set maxmempattern&',
+        'silent! call match(s:line, "\\%#=1\\(a*\\)\\+x")',
+      }, ' | ')
+    )
+  end)
+
   it('survives malformed patterns', function()
     -- Truncated constructs, run through the whole pattern surface at once:
     -- match(), search() and :substitute reach different callers of the same

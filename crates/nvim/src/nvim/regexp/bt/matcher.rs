@@ -19,24 +19,24 @@ use core::ffi::{c_char, c_int};
 use super::compile::regnext;
 use super::resume::resume;
 use super::single::match_one;
-use crate::src::nvim::garray::{ga_append_via_ptr, ga_grow};
-use crate::src::nvim::main::{e_re_corr, got_int, p_mmp};
+use super::state::{RegStack, regstack};
+use crate::src::nvim::garray::ga_append_via_ptr;
+use crate::src::nvim::main::{e_re_corr, got_int};
 use crate::src::nvim::mbyte::{mb_isupper, mb_tolower, mb_toupper, utf_ptr2char, utfc_ptr2len};
-use crate::src::nvim::message::{emsg, iemsg, internal_error};
+use crate::src::nvim::message::{iemsg, internal_error};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::profile::profile_passed_limit;
+use crate::src::nvim::regexp::backpos_T;
 use crate::src::nvim::regexp::{
-    ADD_NL, BACK, BEHIND, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE, BRANCH,
-    E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, EXACTLY, FIRST_NL, LAST_NL, MATCH, MAX_LIMIT,
-    MCLOSE, MOPEN, NCLOSE, NOBEHIND, NOMATCH, NOPEN, NUL, PLUS, RA_BREAK, RA_CONT, RA_FAIL,
-    RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT,
-    RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN,
-    STAR, SUBPAT, ZCLOSE, ZOPEN, backpos, bl_maxval, bl_minval, brace_count, brace_max, brace_min,
-    cleanup_subexpr, cleanup_zsubexpr, reg_breakcheck, reg_endzp, reg_endzpos, reg_nextline,
-    reg_save, reg_save_equal, reg_startzp, reg_startzpos, regstack, regstack_push, regstar_T,
-    regstate_T, rex, save_se_multi, save_se_one, save_subexpr,
+    ADD_NL, BACK, BEHIND, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE, BRANCH, EXACTLY, FIRST_NL,
+    LAST_NL, MATCH, MAX_LIMIT, MCLOSE, MOPEN, NCLOSE, NOBEHIND, NOMATCH, NOPEN, NUL, PLUS,
+    RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BRANCH, RS_BRCPLX_LONG,
+    RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG,
+    RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, STAR, SUBPAT, ZCLOSE, ZOPEN, backpos, bl_maxval, bl_minval,
+    brace_count, brace_max, brace_min, cleanup_subexpr, cleanup_zsubexpr, reg_breakcheck,
+    reg_endzp, reg_endzpos, reg_nextline, reg_save, reg_save_equal, reg_startzp, reg_startzpos,
+    regstar_T, regstate_T, rex, save_se_multi, save_se_one, save_subexpr,
 };
-use crate::src::nvim::regexp::{backpos_T, regbehind_T};
 use crate::src::nvim::types::{int16_t, int64_t, lpos_T, proftime_T, uint8_t};
 
 /// The four bytes of a node operand at `off`, big-endian, as the compiler
@@ -79,7 +79,10 @@ pub(crate) fn regmatch(start: *mut uint8_t, tm: *const proftime_T, timed_out: *m
         let mut scan = start;
         let mut tm_count = 0;
         let mut status;
-        (*regstack.ptr()).ga_len = 0;
+        // The stack is reserved for this call: nothing the walk below runs
+        // re-enters `regmatch`.
+        let stack = &mut *regstack.ptr();
+        stack.begin();
         (*backpos.ptr()).ga_len = 0;
 
         loop {
@@ -135,7 +138,7 @@ pub(crate) fn regmatch(start: *mut uint8_t, tm: *const proftime_T, timed_out: *m
                     let c = utf_ptr2char((*rex.ptr()).input.cast());
                     status = match match_one(op, scan, next, c) {
                         Some(status) => status,
-                        None => push_frame(op, scan, &mut next),
+                        None => push_frame(stack, op, scan, &mut next),
                     };
                 }
 
@@ -145,12 +148,12 @@ pub(crate) fn regmatch(start: *mut uint8_t, tm: *const proftime_T, timed_out: *m
                 scan = next;
             }
 
-            resume(&mut scan, &mut status);
+            resume(stack, &mut scan, &mut status);
 
             if status == RA_CONT {
                 continue;
             }
-            if (*regstack.ptr()).ga_len <= 0 || status == RA_FAIL {
+            if stack.depth() == 0 || status == RA_FAIL {
                 if scan.is_null() {
                     // Should not happen. Providing a message and failing is
                     // better than a crash.
@@ -167,7 +170,12 @@ pub(crate) fn regmatch(start: *mut uint8_t, tm: *const proftime_T, timed_out: *m
 /// Each pushes a frame describing what [`super::resume`] should do if the
 /// rest of the pattern fails from here. `next` is the node the walk continues
 /// at; several of these redirect it into their own operand.
-fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
+fn push_frame(
+    stack: &mut RegStack,
+    op: c_int,
+    scan: *mut uint8_t,
+    next: &mut *mut uint8_t,
+) -> c_int {
     // SAFETY: as `regmatch`; `scan` is a node in the program and the frames
     // pushed here are read back by `resume` while this call is still on the
     // stack.
@@ -189,11 +197,11 @@ fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
                     let fresh = ga_append_via_ptr(backpos.ptr(), size_of::<backpos_T>())
                         .cast::<backpos_T>();
                     (*fresh).bp_scan = scan;
-                } else if reg_save_equal(&raw mut (*seen().add(i as usize)).bp_pos) {
+                } else if reg_save_equal(&(*seen().add(i as usize)).bp_pos) {
                     status = RA_NOMATCH;
                 }
                 if status != RA_NOMATCH {
-                    reg_save(&raw mut (*seen().add(i as usize)).bp_pos, backpos.ptr());
+                    reg_save(&mut (*seen().add(i as usize)).bp_pos, backpos.ptr());
                 }
                 status
             }
@@ -203,7 +211,7 @@ fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
             MOPEN..=MOPEN_9 => {
                 cleanup_subexpr();
                 let no = op - MOPEN;
-                push_capture(RS_MOPEN, scan, no, |no| {
+                push_capture(stack, RS_MOPEN, scan, no, |no| {
                     (
                         (*rex.ptr()).reg_startpos.add(no),
                         (*rex.ptr()).reg_startp.add(no),
@@ -213,7 +221,7 @@ fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
             MCLOSE..=MCLOSE_9 => {
                 cleanup_subexpr();
                 let no = op - MCLOSE;
-                push_capture(RS_MCLOSE, scan, no, |no| {
+                push_capture(stack, RS_MCLOSE, scan, no, |no| {
                     (
                         (*rex.ptr()).reg_endpos.add(no),
                         (*rex.ptr()).reg_endp.add(no),
@@ -223,7 +231,7 @@ fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
             ZOPEN_1..=ZOPEN_9 => {
                 cleanup_zsubexpr();
                 let no = op - ZOPEN;
-                push_capture(RS_ZOPEN, scan, no, |no| {
+                push_capture(stack, RS_ZOPEN, scan, no, |no| {
                     (
                         reg_startzpos.ptr().cast::<lpos_T>().add(no),
                         reg_startzp.ptr().cast::<*mut uint8_t>().add(no),
@@ -233,7 +241,7 @@ fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
             ZCLOSE_1..=ZCLOSE_9 => {
                 cleanup_zsubexpr();
                 let no = op - ZCLOSE;
-                push_capture(RS_ZCLOSE, scan, no, |no| {
+                push_capture(stack, RS_ZCLOSE, scan, no, |no| {
                     (
                         reg_endzpos.ptr().cast::<lpos_T>().add(no),
                         reg_endzp.ptr().cast::<*mut uint8_t>().add(no),
@@ -244,7 +252,7 @@ fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
             // `\%(` captures nothing, but still needs a frame so that the
             // unwinder has something to step over.
             NOPEN | NCLOSE => {
-                if regstack_push(RS_NOPEN, scan).is_null() {
+                if stack.push(RS_NOPEN, scan).is_none() {
                     RA_FAIL
                 } else {
                     RA_CONT
@@ -257,7 +265,7 @@ fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
                 if *(*next) as c_int != BRANCH {
                     *next = scan.add(3);
                     RA_CONT
-                } else if regstack_push(RS_BRANCH, scan).is_null() {
+                } else if stack.push(RS_BRANCH, scan).is_none() {
                     RA_FAIL
                 } else {
                     RA_BREAK
@@ -284,19 +292,18 @@ fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
                 }
             }
 
-            BRACE_COMPLEX..=BRACE_COMPLEX_9 => brace_complex(op - BRACE_COMPLEX, scan, next),
+            BRACE_COMPLEX..=BRACE_COMPLEX_9 => brace_complex(stack, op - BRACE_COMPLEX, scan, next),
 
-            BRACE_SIMPLE | STAR | PLUS => counted_repeat(op, scan),
+            BRACE_SIMPLE | STAR | PLUS => counted_repeat(stack, op, scan),
 
             // `\@=`, `\@!` and `\@>`: run the operand, then decide what its
             // outcome means.
             NOMATCH | MATCH | SUBPAT => {
-                let rp = regstack_push(RS_NOMATCH, scan);
-                if rp.is_null() {
+                let Some(rp) = stack.push(RS_NOMATCH, scan) else {
                     return RA_FAIL;
-                }
-                (*rp).rs_no = op as int16_t;
-                reg_save(&raw mut (*rp).rs_un.regsave, backpos.ptr());
+                };
+                rp.rs_no = op as int16_t;
+                reg_save(&mut rp.rs_un.regsave, backpos.ptr());
                 *next = scan.add(3);
                 RA_CONT
             }
@@ -304,18 +311,14 @@ fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
             // `\@<=` and `\@<!`: the operand has to match ending here, so the
             // unwinder walks the start position backwards until it does.
             BEHIND | NOBEHIND => {
-                if over_memory_limit() {
+                // The capture snapshot rides in front of the frame.
+                if !stack.push_behind(RS_BEHIND1, scan) {
                     return RA_FAIL;
                 }
-                ga_grow(regstack.ptr(), size_of::<regbehind_T>() as c_int);
-                (*regstack.ptr()).ga_len += size_of::<regbehind_T>() as c_int;
-                let rp = regstack_push(RS_BEHIND1, scan);
-                if rp.is_null() {
-                    return RA_FAIL;
-                }
-                save_subexpr(rp.cast::<regbehind_T>().sub(1));
-                (*rp).rs_no = op as int16_t;
-                reg_save(&raw mut (*rp).rs_un.regsave, backpos.ptr());
+                let (rp, bp) = stack.top_behind();
+                save_subexpr(bp);
+                rp.rs_no = op as int16_t;
+                reg_save(&mut rp.rs_un.regsave, backpos.ptr());
                 RA_CONT
             }
 
@@ -329,30 +332,13 @@ fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
     }
 }
 
-/// Would one more frame put the stack over 'maxmempattern'? Reports E363 if
-/// so.
-///
-/// # Safety
-/// Reads the match-time stack.
-unsafe fn over_memory_limit() -> bool {
-    // SAFETY: `regstack` is live for the duration of a match.
-    unsafe {
-        if (((*regstack.ptr()).ga_len as u32) >> 10) as int64_t >= p_mmp.get() {
-            emsg(gettext(
-                E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN.as_ptr(),
-            ));
-            return true;
-        }
-        false
-    }
-}
-
 /// Push a frame that restores capture slot `no` — the multi-line and the
 /// string form of it — if the rest of the pattern fails.
 ///
 /// # Safety
 /// `slots` must hand back the pair of slots for `no`.
 unsafe fn push_capture(
+    stack: &mut RegStack,
     state: regstate_T,
     scan: *mut uint8_t,
     no: c_int,
@@ -360,16 +346,16 @@ unsafe fn push_capture(
 ) -> c_int {
     // SAFETY: as `push_frame`.
     unsafe {
-        let rp = regstack_push(state, scan);
-        if rp.is_null() {
-            return RA_FAIL;
-        }
-        (*rp).rs_no = no as int16_t;
         let (pos, ptr) = slots(no as usize);
-        if (*rex.ptr()).reg_match.is_null() {
-            save_se_multi(&raw mut (*rp).rs_un.sesave, pos);
+        let multi = (*rex.ptr()).reg_match.is_null();
+        let Some(rp) = stack.push(state, scan) else {
+            return RA_FAIL;
+        };
+        rp.rs_no = no as int16_t;
+        if multi {
+            save_se_multi(&mut rp.rs_un.sesave, pos);
         } else {
-            save_se_one(&raw mut (*rp).rs_un.sesave, ptr);
+            save_se_one(&mut rp.rs_un.sesave, ptr);
         }
         RA_CONT
     }
@@ -383,7 +369,12 @@ unsafe fn push_capture(
 ///
 /// # Safety
 /// As `push_frame`.
-unsafe fn brace_complex(no: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
+unsafe fn brace_complex(
+    stack: &mut RegStack,
+    no: c_int,
+    scan: *mut uint8_t,
+    next: &mut *mut uint8_t,
+) -> c_int {
     // SAFETY: as `push_frame`.
     unsafe {
         let slot = no as usize;
@@ -395,31 +386,28 @@ unsafe fn brace_complex(no: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) 
 
         // Still below the smaller bound: another pass is mandatory.
         if count <= min.min(max) {
-            let rp = regstack_push(RS_BRCPLX_MORE, scan);
-            if rp.is_null() {
+            let Some(rp) = stack.push(RS_BRCPLX_MORE, scan) else {
                 return RA_FAIL;
-            }
-            (*rp).rs_no = no as int16_t;
-            reg_save(&raw mut (*rp).rs_un.regsave, backpos.ptr());
+            };
+            rp.rs_no = no as int16_t;
+            reg_save(&mut rp.rs_un.regsave, backpos.ptr());
             *next = scan.add(3);
         } else if greedy {
             // Another pass is allowed; try it, and fall back to stopping.
             if count <= max {
-                let rp = regstack_push(RS_BRCPLX_LONG, scan);
-                if rp.is_null() {
+                let Some(rp) = stack.push(RS_BRCPLX_LONG, scan) else {
                     return RA_FAIL;
-                }
-                (*rp).rs_no = no as int16_t;
-                reg_save(&raw mut (*rp).rs_un.regsave, backpos.ptr());
+                };
+                rp.rs_no = no as int16_t;
+                reg_save(&mut rp.rs_un.regsave, backpos.ptr());
                 *next = scan.add(3);
             }
         } else if count <= min {
             // Non-greedy: try stopping first, and fall back to another pass.
-            let rp = regstack_push(RS_BRCPLX_SHORT, scan);
-            if rp.is_null() {
+            let Some(rp) = stack.push(RS_BRCPLX_SHORT, scan) else {
                 return RA_FAIL;
-            }
-            reg_save(&raw mut (*rp).rs_un.regsave, backpos.ptr());
+            };
+            reg_save(&mut rp.rs_un.regsave, backpos.ptr());
         }
         RA_CONT
     }
@@ -430,7 +418,7 @@ unsafe fn brace_complex(no: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) 
 ///
 /// # Safety
 /// As `push_frame`.
-unsafe fn counted_repeat(op: c_int, scan: *mut uint8_t) -> c_int {
+unsafe fn counted_repeat(stack: &mut RegStack, op: c_int, scan: *mut uint8_t) -> c_int {
     // SAFETY: as `push_frame`.
     unsafe {
         let mut rst = regstar_T {
@@ -475,24 +463,15 @@ unsafe fn counted_repeat(op: c_int, scan: *mut uint8_t) -> c_int {
         if !enough {
             return RA_NOMATCH;
         }
-        if over_memory_limit() {
-            return RA_FAIL;
-        }
         // The counter rides in front of the frame.
-        ga_grow(regstack.ptr(), size_of::<regstar_T>() as c_int);
-        (*regstack.ptr()).ga_len += size_of::<regstar_T>() as c_int;
-        let rp = regstack_push(
-            if rst.minval <= rst.maxval {
-                RS_STAR_LONG
-            } else {
-                RS_STAR_SHORT
-            },
-            scan,
-        );
-        if rp.is_null() {
+        let state = if rst.minval <= rst.maxval {
+            RS_STAR_LONG
+        } else {
+            RS_STAR_SHORT
+        };
+        if !stack.push_star(state, scan, rst) {
             return RA_FAIL;
         }
-        *rp.cast::<regstar_T>().sub(1) = rst;
         RA_BREAK
     }
 }

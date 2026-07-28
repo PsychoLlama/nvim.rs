@@ -987,7 +987,6 @@ static classcodes: GlobalCell<[::core::ffi::c_int; 27]> = GlobalCell::new([
     NUPPER,
 ]);
 pub const JUST_CALC_SIZE: *mut uint8_t = -1 as ::core::ffi::c_int as *mut uint8_t;
-static regstack: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
 static backpos: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
 static behind_pos: GlobalCell<regsave_T> = GlobalCell::new(regsave_T {
     rs_u: C2Rust_Unnamed_23 {

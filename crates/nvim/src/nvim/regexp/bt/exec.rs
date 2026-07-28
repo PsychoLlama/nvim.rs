@@ -11,6 +11,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::matcher::regmatch;
+use super::state::regstack;
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::src::nvim::main::{curbuf, e_null, got_int, re_extmatch_out};
 use crate::src::nvim::mbyte::{mb_tolower, utf_fold, utf_ptr2char, utfc_ptr2len};
@@ -19,11 +20,10 @@ use crate::src::nvim::message::iemsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::profile::profile_passed_limit;
 use crate::src::nvim::regexp::{
-    BACKPOS_INITIAL, NSUBEXP, NUL, RE_NOBREAK, REGSTACK_INITIAL, REX_SET, RF_ICASE, RF_ICOMBINE,
-    RF_NOICASE, backpos, backpos_T, bt_regprog_T, cleanup_subexpr, cleanup_zsubexpr, cstrchr,
-    cstrncmp, init_regexec_multi, make_extmatch, prog_magic_wrong, reg_endzp, reg_endzpos,
-    reg_getline, reg_startzp, reg_startzpos, reg_tofree, reg_tofreelen, reg_toolong, regstack, rex,
-    unref_extmatch,
+    BACKPOS_INITIAL, NSUBEXP, NUL, RE_NOBREAK, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, backpos,
+    backpos_T, bt_regprog_T, cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp,
+    init_regexec_multi, make_extmatch, prog_magic_wrong, reg_endzp, reg_endzpos, reg_getline,
+    reg_startzp, reg_startzpos, reg_tofree, reg_tofreelen, reg_toolong, rex, unref_extmatch,
 };
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
@@ -145,14 +145,10 @@ fn bt_regexec_both(
     timed_out: *mut c_int,
 ) -> c_int {
     unsafe {
-        // The two stacks the matcher works on are kept between calls, so
-        // that an ordinary match never allocates. `bt_regexec_both` is not
+        // The loop back-edge record is kept between calls, so that an
+        // ordinary match never allocates. `bt_regexec_both` is not
         // re-entered: nothing the matcher runs calls back into the editor.
-        if (*regstack.ptr()).ga_data.is_null() {
-            ga_init(regstack.ptr(), 1, REGSTACK_INITIAL);
-            ga_grow(regstack.ptr(), REGSTACK_INITIAL);
-            ga_set_growsize(regstack.ptr(), REGSTACK_INITIAL * 8);
-        }
+        // The saved-state stack does the same for itself, in `RegStack`.
         if (*backpos.ptr()).ga_data.is_null() {
             ga_init(
                 backpos.ptr(),
@@ -214,9 +210,7 @@ fn bt_regexec_both(
         }
         // Likewise the two stacks: a pathological pattern must not leave its
         // working set behind.
-        if (*regstack.ptr()).ga_maxlen > REGSTACK_INITIAL {
-            ga_clear(regstack.ptr());
-        }
+        (*regstack.ptr()).trim();
         if (*backpos.ptr()).ga_maxlen > BACKPOS_INITIAL {
             ga_clear(backpos.ptr());
         }
