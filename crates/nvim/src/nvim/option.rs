@@ -6,11 +6,9 @@
 //! Everything an option *is* — its name, type, scopes, flags, variable and
 //! default — lives in the generated [`crate::src::nvim::options`] table.
 
-use crate::src::nvim::api::private::helpers::{api_set_error, cstr_as_string, cstr_to_string};
+use crate::src::nvim::api::private::helpers::{cstr_as_string, cstr_to_string};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::autocmd::{
-    apply_autocmds, aucmd_prepbuf, aucmd_restbuf, do_filetype_autocmd,
-};
+use crate::src::nvim::autocmd::apply_autocmds;
 use crate::src::nvim::buffer::{buf_is_empty, do_autochdir, free_buf_options};
 use crate::src::nvim::change::save_file_ff;
 use crate::src::nvim::charset::{
@@ -24,10 +22,7 @@ use crate::src::nvim::drawscreen::{
     check_screensize, comp_col, redraw_all_later, screen_resize, showmode, status_redraw_all,
     status_redraw_curbuf,
 };
-use crate::src::nvim::eval::vars::{
-    get_vim_var_str, optval_as_tv, reset_v_option_vars, set_vim_var_string, set_vim_var_tv,
-};
-use crate::src::nvim::eval::window::{restore_win_noblock, switch_win_noblock};
+use crate::src::nvim::eval::vars::set_vim_var_string;
 use crate::src::nvim::eval_1::last_set_msg;
 use crate::src::nvim::ex_docmd::set_no_hlsearch;
 use crate::src::nvim::ex_getln::gotocmdline;
@@ -48,22 +43,20 @@ use crate::src::nvim::keycodes::{
     find_special_key, find_special_key_in_table, get_special_key_code, get_special_key_name,
 };
 use crate::src::nvim::log::logmsg;
-use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
     Columns, IObuff, NameBuff, Rows, clear_cmdline, cmdline_row, cmdmod, curbuf, current_sctx,
-    curtab, curwin, e_invarg, e_sandbox, e_secure, e_trailing, e_unknown_option2,
-    e_unsupportedoption, empty_string_option, escape_chars, fenc_default, first_tabpage, firstbuf,
-    firstwin, full_screen, got_int, info_message, lastwin, need_maketitle, no_wait_return, p_ai,
-    p_arshape, p_bdir, p_bin, p_bomb, p_cdpath, p_cfu, p_ch, p_chi, p_ci, p_cin, p_cink, p_cino,
-    p_cinsd, p_cinw, p_cms, p_columns, p_com, p_cpo, p_cpt, p_deco, p_dir, p_ea, p_enc, p_et,
-    p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp, p_fo, p_ft, p_hh, p_hlg, p_hls, p_icon,
-    p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_lines, p_lisp, p_lnr,
-    p_lop, p_lrm, p_ma, p_ml, p_mle, p_mouse, p_mps, p_nf, p_ofu, p_paste, p_path, p_pi, p_pp,
-    p_qe, p_ri, p_rtp, p_ru, p_scbk, p_sh, p_si, p_sj, p_sm, p_smc, p_spc, p_spf, p_spl, p_spo,
-    p_sps, p_sta, p_sts, p_sua, p_sw, p_swf, p_syn, p_tags, p_tbidi, p_tfu, p_title, p_titlelen,
-    p_ts, p_tw, p_uc, p_udf, p_ul, p_vdir, p_verbose, p_vsts, p_vts, p_wbr, p_wc, p_wcm, p_wh,
-    p_window, p_wiw, p_wm, readonlymode, sandbox, secure, silent_mode, spo_flags, starting,
-    t_colors, topframe, updating_screen,
+    curtab, curwin, e_invarg, e_sandbox, e_trailing, empty_string_option, escape_chars,
+    fenc_default, first_tabpage, firstbuf, firstwin, full_screen, got_int, info_message, lastwin,
+    need_maketitle, no_wait_return, p_ai, p_arshape, p_bdir, p_bin, p_bomb, p_cdpath, p_cfu, p_ch,
+    p_chi, p_ci, p_cin, p_cink, p_cino, p_cinsd, p_cinw, p_cms, p_columns, p_com, p_cpo, p_cpt,
+    p_deco, p_dir, p_ea, p_enc, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp, p_fo, p_ft,
+    p_hh, p_hlg, p_hls, p_icon, p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk,
+    p_keymap, p_lines, p_lisp, p_lnr, p_lop, p_lrm, p_ma, p_ml, p_mle, p_mouse, p_mps, p_nf, p_ofu,
+    p_paste, p_path, p_pi, p_pp, p_qe, p_ri, p_rtp, p_ru, p_scbk, p_sh, p_si, p_sj, p_sm, p_smc,
+    p_spc, p_spf, p_spl, p_spo, p_sps, p_sta, p_sts, p_sua, p_sw, p_swf, p_syn, p_tags, p_tbidi,
+    p_tfu, p_title, p_titlelen, p_ts, p_tw, p_uc, p_udf, p_ul, p_vdir, p_verbose, p_vsts, p_vts,
+    p_wc, p_wcm, p_wh, p_window, p_wiw, p_wm, readonlymode, sandbox, silent_mode, spo_flags,
+    starting, topframe, updating_screen,
 };
 use crate::src::nvim::mapping::{langmap_init, put_escstr};
 use crate::src::nvim::mbyte::enc_locale;
@@ -79,8 +72,8 @@ use crate::src::nvim::r#move::changed_window_setting;
 use crate::src::nvim::normal::{do_check_scrollbind, get_vtopline};
 use crate::src::nvim::options::*;
 use crate::src::nvim::optionstr::{
-    check_buf_options, check_illegal_path_names, check_signcolumn, check_string_option,
-    clear_string_option, free_string_option, set_chars_option,
+    check_buf_options, check_signcolumn, check_string_option, clear_string_option,
+    free_string_option, set_chars_option,
 };
 use crate::src::nvim::os::env::{
     expand_env_esc, home_replace, os_env_exists, os_getenv, vim_getenv,
@@ -97,26 +90,24 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::popupmenu::{pum_drawn, pum_redraw};
 use crate::src::nvim::quickfix::qf_resize_stack;
-use crate::src::nvim::runtime::{exestack, runtimepath_default, source_runtime_vim_lua};
+use crate::src::nvim::runtime::{runtimepath_default, source_runtime_vim_lua};
 use crate::src::nvim::spell::{compile_cap_prog, init_spell_chartab, parse_spelllang};
-use crate::src::nvim::strings::{
-    vim_snprintf, vim_snprintf_safelen, vim_strchr, vim_strsave_escaped,
-};
+use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
 use crate::src::nvim::tag::set_buflocal_tfu_callback;
 use crate::src::nvim::types::{
-    __uid_t, CMD_index, CallbackType, CharsOption, Error, ErrorType, FILE, HlAttrs, Object,
-    ObjectType, OptIndex, OptInt, OptScope, OptVal, OptValData, OptValType, RgbValue, String_0,
-    Terminal, TriState, VarType, VimVarIndex, aco_save_T, auto_event, buf_T, bufref_T, colnr_T,
-    estack_T, event_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, int16_t, int32_t, linenr_T,
-    optexpand_T, optset_T, ptrdiff_t, regmatch_T, scid_T, sctx_T, size_t, switchwin_T, tabpage_T,
-    typval_T, uint8_t, uint32_t, uint64_t, uvarnumber_T, vimoption_T, win_T, winopt_T, xp_prefix_T,
+    __uid_t, CMD_index, CallbackType, CharsOption, ErrorType, FILE, HlAttrs, Object, ObjectType,
+    OptIndex, OptInt, OptScope, OptVal, OptValData, OptValType, RgbValue, String_0, Terminal,
+    TriState, VarType, VimVarIndex, auto_event, buf_T, colnr_T, event_T, exarg_T, expand_T,
+    fuzmatch_str_T, garray_T, int16_t, int32_t, linenr_T, optexpand_T, optset_T, ptrdiff_t,
+    regmatch_T, scid_T, sctx_T, size_t, tabpage_T, uint8_t, uint32_t, uint64_t, uvarnumber_T,
+    vimoption_T, win_T, winopt_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::undo::{bufIsChanged, curbufIsChanged, u_compute_hash, u_read_undo, u_sync};
 use crate::src::nvim::window::{
     check_colorcolumn, command_height, frame_new_height, global_stl_height, last_status, min_rows,
-    set_winbar, set_winbar_win, tabline_height, win_comp_pos, win_comp_scroll, win_equal,
-    win_find_tabpage, win_new_screen_rows, win_setheight, win_setwidth,
+    set_winbar_win, tabline_height, win_comp_pos, win_comp_scroll, win_equal, win_new_screen_rows,
+    win_setheight, win_setwidth,
 };
 use crate::src::nvim::winfloat::win_float_update_statusline;
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -138,6 +129,8 @@ mod scope;
 pub use self::scope::*;
 mod set;
 pub use self::set::*;
+mod context;
+pub use self::context::*;
 mod show;
 pub use self::show::*;
 mod expand;
@@ -422,26 +415,6 @@ pub const OPTION_COUNT: usize = ::core::mem::size_of::<[vimoption_T; 374]>()
             .wrapping_rem(::core::mem::size_of::<vimoption_T>())
             == 0) as c_int as usize,
     );
-static p_bin_dep_opts: GlobalCell<[c_int; 5]> = GlobalCell::new([
-    kOptTextwidth as c_int,
-    kOptWrapmargin as c_int,
-    kOptModeline as c_int,
-    kOptExpandtab as c_int,
-    kOptInvalid as c_int,
-]);
-static p_paste_dep_opts: GlobalCell<[c_int; 11]> = GlobalCell::new([
-    kOptAutoindent as c_int,
-    kOptExpandtab as c_int,
-    kOptRuler as c_int,
-    kOptShowmatch as c_int,
-    kOptSmarttab as c_int,
-    kOptSofttabstop as c_int,
-    kOptTextwidth as c_int,
-    kOptWrapmargin as c_int,
-    kOptRevins as c_int,
-    kOptVarsofttabstop as c_int,
-    kOptInvalid as c_int,
-]);
 pub const INC: c_int = 20 as c_int;
 pub const GAP: c_int = 3 as c_int;
 static expand_option_idx: GlobalCell<OptIndex> = GlobalCell::new(kOptInvalid);

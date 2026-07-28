@@ -44,7 +44,7 @@ pub(crate) fn opt_values(idx: OptIndex) -> (*const *const c_char, size_t) {
     };
     // SAFETY: `get_option` indexes the generated option table with a valid
     // index and returns a row of it, which lives for the process.
-    let opt = unsafe { get_option(shared) };
+    let opt = get_option(shared);
     unsafe { ((*opt).values.cast_const(), (*opt).values_len) }
 }
 
@@ -182,7 +182,7 @@ pub(crate) unsafe fn did_set_option_listflag(
 /// `varp` is null or points at the option's `char *` variable.
 pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_int {
     // SAFETY: `get_option` returns a row of the generated option table.
-    let opt = unsafe { get_option(idx) };
+    let opt = get_option(idx);
     let varp = if varp.is_null() {
         unsafe { (*opt).var.cast::<*mut c_char>() }
     } else {

@@ -5,6 +5,21 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// The options 'paste' overrides while it is on, and so re-attributes to
+/// whatever script set 'paste'.
+const PASTE_DEP_OPTS: [OptIndex; 10] = [
+    kOptAutoindent,
+    kOptExpandtab,
+    kOptRuler,
+    kOptShowmatch,
+    kOptSmarttab,
+    kOptSofttabstop,
+    kOptTextwidth,
+    kOptWrapmargin,
+    kOptRevins,
+    kOptVarsofttabstop,
+];
+
 pub unsafe extern "C" fn did_set_arabic(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     let mut errmsg: *const c_char = ::core::ptr::null::<c_char>();
@@ -425,10 +440,7 @@ pub unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const c_cha
         });
     }
     old_p_paste.set(p_paste.get());
-    didset_options_sctx(
-        OPT_LOCAL as c_int | OPT_GLOBAL as c_int,
-        p_paste_dep_opts.ptr() as *mut c_int,
-    );
+    didset_options_sctx(OPT_LOCAL as c_int | OPT_GLOBAL as c_int, &PASTE_DEP_OPTS);
     return ::core::ptr::null::<c_char>();
 }
 

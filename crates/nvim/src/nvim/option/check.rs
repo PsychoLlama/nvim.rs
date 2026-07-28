@@ -47,9 +47,13 @@ use super::{
     HL_GLOBAL, HLATTRS_INIT, NO_SCREEN, NUL, NULL_STRING, OPT_GLOBAL, OPT_LOCAL, UPD_NOT_VALID,
     didset_options_sctx, didset_window_options, get_varp, kFillchars, kListchars, kOptFlagHLOnly,
     kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl,
-    kOptFlagRedrWin, kOptValTypeString, option_has_type, p_bin_dep_opts, p_et_nobin, p_ml_nobin,
-    p_tw_nobin, p_wm_nobin,
+    kOptFlagRedrWin, kOptValTypeString, option_has_type, p_et_nobin, p_ml_nobin, p_tw_nobin,
+    p_wm_nobin,
 };
+
+/// The options 'binary' overrides while it is on, and so re-attributes to
+/// whatever script set 'binary'.
+const BIN_DEP_OPTS: [OptIndex; 4] = [kOptTextwidth, kOptWrapmargin, kOptModeline, kOptExpandtab];
 
 /// Rebuild the window title, unless the screen has not started yet.
 pub fn did_set_title() {
@@ -110,10 +114,10 @@ pub fn set_options_bin(oldval: c_int, newval: c_int, opt_flags: c_int) {
                 p_et.set(p_et_nobin.get());
             }
         }
-        // The four overridden options were not set by the user, so they take
-        // 'binary's own script context rather than keeping their old one.
-        didset_options_sctx(opt_flags, p_bin_dep_opts.ptr().cast::<c_int>());
     }
+    // The four overridden options were not set by the user, so they take
+    // 'binary's own script context rather than keeping their old one.
+    didset_options_sctx(opt_flags, &BIN_DEP_OPTS);
 }
 
 /// The first startup sweep: everything that has to see the options as they
