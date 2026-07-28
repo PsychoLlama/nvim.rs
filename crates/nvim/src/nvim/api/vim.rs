@@ -81,8 +81,7 @@ use crate::src::nvim::msgpack_rpc::channel::rpc_set_client_info;
 use crate::src::nvim::msgpack_rpc::unpacker::unpack;
 use crate::src::nvim::normal::reset_VIsual_and_resel;
 use crate::src::nvim::option::{buf_copy_options, set_option_direct_for};
-use crate::src::nvim::options::kOptCotFlagPopup;
-use crate::src::nvim::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
+use crate::src::nvim::options::{kOptBufhidden, kOptBuftype, kOptCotFlagPopup, kOptInvalid};
 use crate::src::nvim::optionstr::check_stl_option;
 use crate::src::nvim::os::input::{
     input_blocking, input_enqueue, input_enqueue_mouse, input_enqueue_raw,

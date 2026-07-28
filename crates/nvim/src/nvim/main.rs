@@ -63,10 +63,9 @@ use crate::src::nvim::option::{
     set_option_value_give_err, set_options_bin,
 };
 use crate::src::nvim::options::{
-    kOptArabic, kOptErrorfile, kOptKeymap, kOptRightleft, kOptShadafile, kOptShortmess,
-    kOptVerbosefile, kOptWindow,
+    kOptArabic, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptErrorfile, kOptKeymap, kOptRightleft,
+    kOptShadafile, kOptShortmess, kOptVerbosefile, kOptWindow,
 };
-use crate::src::nvim::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
 use crate::src::nvim::os::env::{
     env_init, init_homedir, os_getenv, os_getenv_noalloc, os_hint_priority, vim_env_iter,
 };

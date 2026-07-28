@@ -54,9 +54,8 @@ use crate::src::nvim::mouse::mouse_find_win_inner;
 use crate::src::nvim::r#move::{curs_columns, set_topline, validate_cursor, win_col_off};
 use crate::src::nvim::ops::clear_oparg;
 use crate::src::nvim::option::set_option_value;
-use crate::src::nvim::options::kOptBuftype;
 use crate::src::nvim::options::{
-    kOptBoFlagTerm, kOptCuloptFlagNumber, kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1,
+    kOptBoFlagTerm, kOptBuftype, kOptCuloptFlagNumber, kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1,
     kOptTpfFlagDEL, kOptTpfFlagESC, kOptTpfFlagFF, kOptTpfFlagHT,
 };
 use crate::src::nvim::optionstr::free_string_option;

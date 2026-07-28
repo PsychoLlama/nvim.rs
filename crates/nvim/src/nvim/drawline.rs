@@ -53,8 +53,7 @@ use crate::src::nvim::mbyte::{
 use crate::src::nvim::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
 use crate::src::nvim::r#move::{set_empty_rows, validate_virtcol, win_col_off, win_col_off2};
-use crate::src::nvim::option::get_showbreak_value;
-use crate::src::nvim::option::kOptFlagInsecure;
+use crate::src::nvim::option::{get_showbreak_value, kOptFlagInsecure};
 use crate::src::nvim::options::{
     kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,
     kOptSpoFlagNoplainbuffer,

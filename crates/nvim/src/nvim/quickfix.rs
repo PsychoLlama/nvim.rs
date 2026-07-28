@@ -76,10 +76,9 @@ use crate::src::nvim::option::{
     shortmess, skip_to_option_part,
 };
 use crate::src::nvim::options::{
-    kOptBufhidden, kOptBuftype, kOptCpoptions, kOptErrorfile, kOptFiletype, kOptFoldmethod,
-    kOptSwapfile,
+    kOptBufhidden, kOptBuftype, kOptCpoptions, kOptErrorfile, kOptFdoFlagQuickfix, kOptFiletype,
+    kOptFoldmethod, kOptSwapfile, kOptSwbFlagUselast, kOptSwbFlagUsetab,
 };
-use crate::src::nvim::options::{kOptFdoFlagQuickfix, kOptSwbFlagUselast, kOptSwbFlagUsetab};
 use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::env::{expand_env, os_get_pid};
 use crate::src::nvim::os::fs::{

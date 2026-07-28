@@ -83,10 +83,6 @@ use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::changed_window_setting;
 use crate::src::nvim::normal::{do_check_scrollbind, get_vtopline};
 use crate::src::nvim::options::*;
-use crate::src::nvim::options::{
-    kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptVeFlagNone,
-    kOptVeFlagNoneU,
-};
 use crate::src::nvim::optionstr::{
     check_buf_options, check_illegal_path_names, check_signcolumn, check_string_option,
     clear_string_option, did_set_breakat, didset_string_options, free_string_option,

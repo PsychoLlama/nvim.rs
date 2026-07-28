@@ -49,20 +49,16 @@ use crate::src::nvim::message::{
 use crate::src::nvim::r#move::validate_virtcol;
 use crate::src::nvim::option::{
     copy_option_part, did_set_title, fill_culopt_flags, get_fileformat, get_option,
-    get_option_default, get_option_varp_scope_from, p_vfile, parse_winhl_opt, redraw_titles,
-    set_iminsert_global, set_imsearch_global, set_option_direct, skip_to_option_part, valid_name,
-};
-use crate::src::nvim::option::{kOptFlagComma, kOptFlagNDname, kOptFlagNFname, kOptFlagOneComma};
-use crate::src::nvim::options::{
-    kOptAmbiwidth, kOptBackupcopy, kOptBelloff, kOptCasemap, kOptClipboard, kOptComments,
-    kOptCompleteopt, kOptDisplay, kOptFileformat, kOptFileformats, kOptFoldopen, kOptJumpoptions,
-    kOptRedrawdebug, kOptSessionoptions, kOptStatusline, kOptSwitchbuf, kOptTabclose, kOptTagcase,
-    kOptTermpastefilter, kOptViewoptions, kOptVirtualedit, kOptWildoptions,
+    get_option_default, get_option_varp_scope_from, kOptFlagComma, kOptFlagNDname, kOptFlagNFname,
+    kOptFlagOneComma, p_vfile, parse_winhl_opt, redraw_titles, set_iminsert_global,
+    set_imsearch_global, set_option_direct, skip_to_option_part, valid_name,
 };
 use crate::src::nvim::options::{
-    kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptSsopFlagCurdir, kOptSsopFlagSesdir,
-};
-use crate::src::nvim::options::{
+    kOptAmbiwidth, kOptBackupcopy, kOptBelloff, kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes,
+    kOptCasemap, kOptClipboard, kOptComments, kOptCompleteopt, kOptDisplay, kOptFileformat,
+    kOptFileformats, kOptFoldopen, kOptJumpoptions, kOptRedrawdebug, kOptSessionoptions,
+    kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, kOptSwitchbuf, kOptTabclose,
+    kOptTagcase, kOptTermpastefilter, kOptViewoptions, kOptVirtualedit, kOptWildoptions,
     opt_bh_values, opt_bkc_values, opt_bt_values, opt_cot_values, opt_dip_algorithm_values,
     opt_dip_inline_values, opt_ff_values, opt_scl_values, opt_spo_values, opt_ssop_values,
     opt_tc_values, opt_ve_values,

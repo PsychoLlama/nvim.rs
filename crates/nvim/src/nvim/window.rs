@@ -85,9 +85,9 @@ use crate::src::nvim::option::{
     buf_copy_options, clear_winopt, get_scrolloff_value, option_was_set, set_option_value,
     win_copy_options,
 };
-use crate::src::nvim::options::{kOptCmdheight, kOptWindow};
 use crate::src::nvim::options::{
-    kOptSwbFlagUseopen, kOptSwbFlagUsetab, kOptTclFlagLeft, kOptTclFlagUselast,
+    kOptCmdheight, kOptSwbFlagUseopen, kOptSwbFlagUsetab, kOptTclFlagLeft, kOptTclFlagUselast,
+    kOptWindow,
 };
 use crate::src::nvim::os::fs::{os_chdir, os_dirname};
 use crate::src::nvim::os::libc::{

@@ -43,11 +43,10 @@ use crate::src::nvim::r#move::{
     update_topline, validate_cheight, validate_cursor, validate_cursor_col,
 };
 use crate::src::nvim::option::set_option_value_give_err;
-use crate::src::nvim::options::opt_winborder_values;
 use crate::src::nvim::options::{
-    kOptBufhidden, kOptBuflisted, kOptBuftype, kOptDiff, kOptSwapfile,
+    kOptBufhidden, kOptBuflisted, kOptBuftype, kOptCotFlagFuzzy, kOptCotFlagPopup,
+    kOptCotFlagPreview, kOptDiff, kOptSwapfile, opt_winborder_values,
 };
-use crate::src::nvim::options::{kOptCotFlagFuzzy, kOptCotFlagPopup, kOptCotFlagPreview};
 use crate::src::nvim::os::libc::{__assert_fail, gettext, memset, strchr, strlen};
 use crate::src::nvim::plines::plines_m_win;
 use crate::src::nvim::plines::win_linetabsize;

@@ -103,10 +103,9 @@ use crate::src::nvim::option::{
     set_option_value_give_err, string_to_key,
 };
 use crate::src::nvim::options::{
-    kOptBoFlagError, kOptBoFlagWildmode, kOptWimFlagFull, kOptWimFlagLastused, kOptWimFlagList,
-    kOptWimFlagLongest, kOptWimFlagNoselect,
+    kOptBoFlagError, kOptBoFlagWildmode, kOptBufhidden, kOptFiletype, kOptInccommand,
+    kOptWimFlagFull, kOptWimFlagLastused, kOptWimFlagList, kOptWimFlagLongest, kOptWimFlagNoselect,
 };
-use crate::src::nvim::options::{kOptBufhidden, kOptFiletype, kOptInccommand};
 use crate::src::nvim::os::env::home_replace_save;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{

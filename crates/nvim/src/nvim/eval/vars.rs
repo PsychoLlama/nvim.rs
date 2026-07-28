@@ -56,10 +56,10 @@ use crate::src::nvim::message::{
     emsg, internal_error, message_filtered, msg_advance, msg_clr_eos, msg_ext_set_kind,
     msg_outtrans, msg_putchar, msg_puts, msg_puts_len, msg_start, semsg,
 };
-use crate::src::nvim::option::kOptFlagFunc;
 use crate::src::nvim::option::{
     find_option, get_option, get_option_sctx, get_option_value, get_tty_option, get_winbuf_options,
-    is_option_hidden, is_tty_option, option_has_type, optval_free, set_option_value_handle_tty,
+    is_option_hidden, is_tty_option, kOptFlagFunc, option_has_type, optval_free,
+    set_option_value_handle_tty,
 };
 use crate::src::nvim::options::{
     kOptAleph, kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, kOptSpellsuggest,

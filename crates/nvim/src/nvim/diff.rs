@@ -46,8 +46,7 @@ use crate::src::nvim::r#move::{
 };
 use crate::src::nvim::normal::check_scrollbind;
 use crate::src::nvim::option::{set_option_direct_for, set_option_value_give_err};
-use crate::src::nvim::options::kOptBoFlagOperator;
-use crate::src::nvim::options::{kOptDiff, kOptFoldmethod};
+use crate::src::nvim::options::{kOptBoFlagOperator, kOptDiff, kOptFoldmethod};
 use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::env::{os_env_exists, os_unsetenv};
 use crate::src::nvim::os::fs::{

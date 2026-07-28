@@ -82,10 +82,8 @@ use crate::src::nvim::option::{
     set_option_value_give_err, shortmess,
 };
 use crate::src::nvim::options::{
-    kOptBufhidden, kOptBuftype, kOptIconstring, kOptSwapfile, kOptTitlestring,
-};
-use crate::src::nvim::options::{
-    kOptJopFlagClean, kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit,
+    kOptBufhidden, kOptBuftype, kOptIconstring, kOptJopFlagClean, kOptJopFlagView, kOptSwapfile,
+    kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit, kOptTitlestring,
 };
 use crate::src::nvim::optionstr::clear_string_option;
 use crate::src::nvim::os::env::{home_replace, home_replace_save};

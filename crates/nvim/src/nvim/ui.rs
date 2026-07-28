@@ -42,8 +42,7 @@ use crate::src::nvim::message::{
     msg_source, msg_ui_refresh,
 };
 use crate::src::nvim::option::{set_option_value, ui_refresh_options};
-use crate::src::nvim::options::kOptCmdheight;
-use crate::src::nvim::options::{kOptBoFlagAll, kOptRdbFlagFlush, kOptRdbFlagLine};
+use crate::src::nvim::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlagLine};
 use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, llabs, memcpy, memset, strcmp};
 use crate::src::nvim::os::time::{os_hrtime, os_sleep};
 use crate::src::nvim::strings::vim_strchr;
