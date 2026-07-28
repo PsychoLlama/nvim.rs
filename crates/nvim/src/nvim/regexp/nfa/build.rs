@@ -154,11 +154,12 @@ pub(crate) unsafe extern "C" fn nfa_max_width(
     }
     return -1 as ::core::ffi::c_int;
 }
-pub(crate) unsafe extern "C" fn post2nfa(
-    mut postfix: *mut ::core::ffi::c_int,
-    mut end: *mut ::core::ffi::c_int,
+pub(crate) unsafe fn post2nfa(
+    items: &[::core::ffi::c_int],
     mut nfa_calc_size: ::core::ffi::c_int,
 ) -> *mut nfa_state_T {
+    let postfix: *mut ::core::ffi::c_int = items.as_ptr().cast_mut();
+    let end: *mut ::core::ffi::c_int = postfix.wrapping_add(items.len());
     let mut p: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
     let mut mopen: ::core::ffi::c_int = 0;
     let mut mclose: ::core::ffi::c_int = 0;
@@ -181,9 +182,6 @@ pub(crate) unsafe extern "C" fn post2nfa(
     let mut s1: *mut nfa_state_T = ::core::ptr::null_mut::<nfa_state_T>();
     let mut matchstate: *mut nfa_state_T = ::core::ptr::null_mut::<nfa_state_T>();
     let mut ret: *mut nfa_state_T = ::core::ptr::null_mut::<nfa_state_T>();
-    if postfix.is_null() {
-        return ::core::ptr::null_mut::<nfa_state_T>();
-    }
     if nfa_calc_size == false_0 {
         stack = xmalloc(
             ((nstate.get() + 1 as ::core::ffi::c_int) as size_t)

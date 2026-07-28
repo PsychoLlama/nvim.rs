@@ -33,40 +33,20 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                 return FAIL;
                             }
                             -162 => {
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh42 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh42 = NFA_BOL as ::core::ffi::c_int;
+                                postfix::emit(NFA_BOL as ::core::ffi::c_int);
                                 break 's_3797;
                             }
                             -220 => {
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh43 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh43 = NFA_EOL as ::core::ffi::c_int;
+                                postfix::emit(NFA_EOL as ::core::ffi::c_int);
                                 had_eol.set(true_0);
                                 break 's_3797;
                             }
                             -196 => {
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh44 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh44 = NFA_BOW as ::core::ffi::c_int;
+                                postfix::emit(NFA_BOW as ::core::ffi::c_int);
                                 break 's_3797;
                             }
                             -194 => {
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh45 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh45 = NFA_EOW as ::core::ffi::c_int;
+                                postfix::emit(NFA_EOW as ::core::ffi::c_int);
                                 break 's_3797;
                             }
                             -161 => {
@@ -77,20 +57,10 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                     return FAIL;
                                 }
                                 if c == '^' as ::core::ffi::c_int {
-                                    if post_ptr.get() >= post_end.get() {
-                                        realloc_post_list();
-                                    }
-                                    let c2rust_fresh46 = post_ptr.get();
-                                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                                    *c2rust_fresh46 = NFA_BOL as ::core::ffi::c_int;
+                                    postfix::emit(NFA_BOL as ::core::ffi::c_int);
                                     break 's_3797;
                                 } else if c == '$' as ::core::ffi::c_int {
-                                    if post_ptr.get() >= post_end.get() {
-                                        realloc_post_list();
-                                    }
-                                    let c2rust_fresh47 = post_ptr.get();
-                                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                                    *c2rust_fresh47 = NFA_EOL as ::core::ffi::c_int;
+                                    postfix::emit(NFA_EOL as ::core::ffi::c_int);
                                     had_eol.set(true_0);
                                     break 's_3797;
                                 } else {
@@ -105,19 +75,9 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             | -152 | -184 | -159 | -191 | -148 | -180 | -139 | -171 => {}
                             -146 => {
                                 if reg_string.get() != 0 {
-                                    if post_ptr.get() >= post_end.get() {
-                                        realloc_post_list();
-                                    }
-                                    let c2rust_fresh51 = post_ptr.get();
-                                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                                    *c2rust_fresh51 = '\n' as ::core::ffi::c_int;
+                                    postfix::emit('\n' as ::core::ffi::c_int);
                                 } else {
-                                    if post_ptr.get() >= post_end.get() {
-                                        realloc_post_list();
-                                    }
-                                    let c2rust_fresh52 = post_ptr.get();
-                                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                                    *c2rust_fresh52 = NFA_NEWL as ::core::ffi::c_int;
+                                    postfix::emit(NFA_NEWL as ::core::ffi::c_int);
                                     (*regflags.ptr()) |= RF_HASNL as ::core::ffi::c_uint;
                                 }
                                 break 's_3797;
@@ -152,30 +112,15 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                 }
                                 lp = reg_prev_sub.get() as *mut uint8_t;
                                 while *lp as ::core::ffi::c_int != NUL {
-                                    if post_ptr.get() >= post_end.get() {
-                                        realloc_post_list();
-                                    }
-                                    let c2rust_fresh53 = post_ptr.get();
-                                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                                    *c2rust_fresh53 = utf_ptr2char(lp as *mut ::core::ffi::c_char);
+                                    postfix::emit(utf_ptr2char(lp as *mut ::core::ffi::c_char));
                                     if lp != reg_prev_sub.get() as *mut uint8_t {
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh54 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh54 = NFA_CONCAT as ::core::ffi::c_int;
+                                        postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                                     }
                                     lp = lp.offset(
                                         utf_ptr2len(lp as *mut ::core::ffi::c_char) as isize
                                     );
                                 }
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh55 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh55 = NFA_NOPEN as ::core::ffi::c_int;
+                                postfix::emit(NFA_NOPEN as ::core::ffi::c_int);
                                 break 's_3797;
                             }
                             -207 | -206 | -205 | -204 | -203 | -202 | -201 | -200 | -199 => {
@@ -184,12 +129,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                 if !seen_endbrace(refnum + 1 as ::core::ffi::c_int) {
                                     return FAIL;
                                 }
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh56 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh56 = NFA_BACKREF1 as ::core::ffi::c_int + refnum;
+                                postfix::emit(NFA_BACKREF1 as ::core::ffi::c_int + refnum);
                                 (*rex.ptr()).nfa_has_backref = true_0;
                                 break 's_3797;
                             }
@@ -197,23 +137,13 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                 c = unmagic(getchr());
                                 match c {
                                     115 => {
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh57 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh57 = NFA_ZSTART as ::core::ffi::c_int;
+                                        postfix::emit(NFA_ZSTART as ::core::ffi::c_int);
                                         if !re_mult_next("\\zs") {
                                             return false_0;
                                         }
                                     }
                                     101 => {
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh58 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh58 = NFA_ZEND as ::core::ffi::c_int;
+                                        postfix::emit(NFA_ZEND as ::core::ffi::c_int);
                                         (*rex.ptr()).nfa_has_zend = true_0;
                                         if !re_mult_next("\\ze") {
                                             return false_0;
@@ -227,13 +157,10 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                             rc_did_emsg.set(true_0 != 0);
                                             return FAIL;
                                         }
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh59 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh59 = NFA_ZREF1 as ::core::ffi::c_int
-                                            + (unmagic(c) - '1' as ::core::ffi::c_int);
+                                        postfix::emit(
+                                            NFA_ZREF1 as ::core::ffi::c_int
+                                                + (unmagic(c) - '1' as ::core::ffi::c_int),
+                                        );
                                         re_has_z.set(REX_USE);
                                     }
                                     40 => {
@@ -267,12 +194,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         if nfa_reg(REG_NPAREN) == FAIL {
                                             return FAIL;
                                         }
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh60 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh60 = NFA_NOPEN as ::core::ffi::c_int;
+                                        postfix::emit(NFA_NOPEN as ::core::ffi::c_int);
                                     }
                                     100 | 111 | 120 | 117 | 85 => {
                                         let mut nr: int64_t = 0;
@@ -315,32 +237,17 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                             rc_did_emsg.set(true_0 != 0);
                                             return FAIL;
                                         }
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh61 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh61 = if nr == 0 as int64_t {
+                                        postfix::emit(if nr == 0 as int64_t {
                                             0xa as ::core::ffi::c_int
                                         } else {
                                             nr as ::core::ffi::c_int
-                                        };
+                                        });
                                     }
                                     94 => {
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh62 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh62 = NFA_BOF as ::core::ffi::c_int;
+                                        postfix::emit(NFA_BOF as ::core::ffi::c_int);
                                     }
                                     36 => {
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh63 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh63 = NFA_EOF as ::core::ffi::c_int;
+                                        postfix::emit(NFA_EOF as ::core::ffi::c_int);
                                     }
                                     35 => {
                                         if *(*regparse.ptr())
@@ -367,28 +274,13 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                             );
                                             return FAIL;
                                         }
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh64 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh64 = NFA_CURSOR as ::core::ffi::c_int;
+                                        postfix::emit(NFA_CURSOR as ::core::ffi::c_int);
                                     }
                                     86 => {
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh65 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh65 = NFA_VISUAL as ::core::ffi::c_int;
+                                        postfix::emit(NFA_VISUAL as ::core::ffi::c_int);
                                     }
                                     67 => {
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh66 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh66 = NFA_ANY_COMPOSING as ::core::ffi::c_int;
+                                        postfix::emit(NFA_ANY_COMPOSING as ::core::ffi::c_int);
                                     }
                                     91 => {
                                         let mut n: ::core::ffi::c_int = 0;
@@ -435,24 +327,9 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                             rc_did_emsg.set(true_0 != 0);
                                             return FAIL;
                                         }
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh67 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh67 = NFA_OPT_CHARS as ::core::ffi::c_int;
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh68 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh68 = n;
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh69 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh69 = NFA_NOPEN as ::core::ffi::c_int;
+                                        postfix::emit(NFA_OPT_CHARS as ::core::ffi::c_int);
+                                        postfix::emit(n);
+                                        postfix::emit(NFA_NOPEN as ::core::ffi::c_int);
                                     }
                                     _ => {
                                         let mut n_0: int64_t = 0 as int64_t;
@@ -510,19 +387,15 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                 if cur {
                                                     n_0 = (*curwin.get()).w_cursor.lnum as int64_t;
                                                 }
-                                                if post_ptr.get() >= post_end.get() {
-                                                    realloc_post_list();
-                                                }
-                                                let c2rust_fresh70 = post_ptr.get();
-                                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                                *c2rust_fresh70 =
+                                                postfix::emit(
                                                     if cmp == '<' as ::core::ffi::c_int {
                                                         NFA_LNUM_LT as ::core::ffi::c_int
                                                     } else if cmp == '>' as ::core::ffi::c_int {
                                                         NFA_LNUM_GT as ::core::ffi::c_int
                                                     } else {
                                                         NFA_LNUM as ::core::ffi::c_int
-                                                    };
+                                                    },
+                                                );
                                                 if save_prev_at_start != 0 {
                                                     at_start.set(true_0);
                                                 }
@@ -531,19 +404,15 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                     n_0 = (*curwin.get()).w_cursor.col as int64_t;
                                                     n_0 += 1;
                                                 }
-                                                if post_ptr.get() >= post_end.get() {
-                                                    realloc_post_list();
-                                                }
-                                                let c2rust_fresh71 = post_ptr.get();
-                                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                                *c2rust_fresh71 =
+                                                postfix::emit(
                                                     if cmp == '<' as ::core::ffi::c_int {
                                                         NFA_COL_LT as ::core::ffi::c_int
                                                     } else if cmp == '>' as ::core::ffi::c_int {
                                                         NFA_COL_GT as ::core::ffi::c_int
                                                     } else {
                                                         NFA_COL as ::core::ffi::c_int
-                                                    };
+                                                    },
+                                                );
                                             } else {
                                                 if cur {
                                                     let mut vcol: colnr_T = 0 as colnr_T;
@@ -557,19 +426,15 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                     vcol += 1;
                                                     n_0 = vcol as int64_t;
                                                 }
-                                                if post_ptr.get() >= post_end.get() {
-                                                    realloc_post_list();
-                                                }
-                                                let c2rust_fresh72 = post_ptr.get();
-                                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                                *c2rust_fresh72 =
+                                                postfix::emit(
                                                     if cmp == '<' as ::core::ffi::c_int {
                                                         NFA_VCOL_LT as ::core::ffi::c_int
                                                     } else if cmp == '>' as ::core::ffi::c_int {
                                                         NFA_VCOL_GT as ::core::ffi::c_int
                                                     } else {
                                                         NFA_VCOL as ::core::ffi::c_int
-                                                    };
+                                                    },
+                                                );
                                                 limit = (INT32_MAX
                                                     / MB_MAXBYTES as ::core::ffi::c_int)
                                                     as int32_t;
@@ -578,33 +443,18 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                 emsg(gettext(E_VALUE_TOO_LARGE.as_ptr()));
                                                 return FAIL;
                                             }
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh73 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh73 = n_0 as ::core::ffi::c_int;
+                                            postfix::emit(n_0 as ::core::ffi::c_int);
                                         } else if unmagic(c) == '\'' as ::core::ffi::c_int
                                             && n_0 == 0 as int64_t
                                         {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh74 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh74 = if cmp == '<' as ::core::ffi::c_int {
+                                            postfix::emit(if cmp == '<' as ::core::ffi::c_int {
                                                 NFA_MARK_LT as ::core::ffi::c_int
                                             } else if cmp == '>' as ::core::ffi::c_int {
                                                 NFA_MARK_GT as ::core::ffi::c_int
                                             } else {
                                                 NFA_MARK as ::core::ffi::c_int
-                                            };
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh75 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh75 = getchr();
+                                            });
+                                            postfix::emit(getchr());
                                         } else {
                                             semsg(
                                                 gettext(
@@ -649,26 +499,12 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             c = getchr();
                             break '_nfa_do_multibyte;
                         } else {
-                            if post_ptr.get() >= post_end.get() {
-                                realloc_post_list();
-                            }
-                            let c2rust_fresh48 = post_ptr.get();
-                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                            *c2rust_fresh48 =
-                                (*nfa_classcodes.ptr())[p.offset_from(classchars.get()) as usize];
+                            postfix::emit(
+                                (*nfa_classcodes.ptr())[p.offset_from(classchars.get()) as usize],
+                            );
                             if extra == NFA_ADD_NL {
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh49 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh49 = NFA_NEWL as ::core::ffi::c_int;
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh50 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh50 = NFA_OR as ::core::ffi::c_int;
+                                postfix::emit(NFA_NEWL as ::core::ffi::c_int);
+                                postfix::emit(NFA_OR as ::core::ffi::c_int);
                                 (*regflags.ptr()) |= RF_HASNL as ::core::ffi::c_uint;
                             }
                             break 's_3797;
@@ -687,31 +523,11 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             if result >= NFA_FIRST_NL as ::core::ffi::c_int
                                 && result <= NFA_LAST_NL as ::core::ffi::c_int
                             {
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh76 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh76 = result - 31 as ::core::ffi::c_int;
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh77 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh77 = NFA_NEWL as ::core::ffi::c_int;
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh78 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh78 = NFA_OR as ::core::ffi::c_int;
+                                postfix::emit(result - 31 as ::core::ffi::c_int);
+                                postfix::emit(NFA_NEWL as ::core::ffi::c_int);
+                                postfix::emit(NFA_OR as ::core::ffi::c_int);
                             } else {
-                                if post_ptr.get() >= post_end.get() {
-                                    realloc_post_list();
-                                }
-                                let c2rust_fresh79 = post_ptr.get();
-                                post_ptr.set((*post_ptr.ptr()).offset(1));
-                                *c2rust_fresh79 = result;
+                                postfix::emit(result);
                             }
                             regparse.set(endp as *mut ::core::ffi::c_char);
                             regparse.set(
@@ -725,34 +541,14 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             regparse.set(
                                 (*regparse.ptr()).offset(utfc_ptr2len(regparse.get()) as isize),
                             );
-                            if post_ptr.get() >= post_end.get() {
-                                realloc_post_list();
-                            }
-                            let c2rust_fresh80 = post_ptr.get();
-                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                            *c2rust_fresh80 = NFA_START_NEG_COLL as ::core::ffi::c_int;
+                            postfix::emit(NFA_START_NEG_COLL as ::core::ffi::c_int);
                         } else {
-                            if post_ptr.get() >= post_end.get() {
-                                realloc_post_list();
-                            }
-                            let c2rust_fresh81 = post_ptr.get();
-                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                            *c2rust_fresh81 = NFA_START_COLL as ::core::ffi::c_int;
+                            postfix::emit(NFA_START_COLL as ::core::ffi::c_int);
                         }
                         if *regparse.get() as ::core::ffi::c_int == '-' as ::core::ffi::c_int {
                             startc = '-' as ::core::ffi::c_int;
-                            if post_ptr.get() >= post_end.get() {
-                                realloc_post_list();
-                            }
-                            let c2rust_fresh82 = post_ptr.get();
-                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                            *c2rust_fresh82 = startc;
-                            if post_ptr.get() >= post_end.get() {
-                                realloc_post_list();
-                            }
-                            let c2rust_fresh83 = post_ptr.get();
-                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                            *c2rust_fresh83 = NFA_CONCAT as ::core::ffi::c_int;
+                            postfix::emit(startc);
+                            postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                             regparse.set(
                                 (*regparse.ptr()).offset(utfc_ptr2len(regparse.get()) as isize),
                             );
@@ -776,174 +572,69 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                 if charclass != CLASS_NONE as ::core::ffi::c_int {
                                     match charclass {
                                         0 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh84 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh84 = NFA_CLASS_ALNUM as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_ALNUM as ::core::ffi::c_int);
                                         }
                                         1 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh85 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh85 = NFA_CLASS_ALPHA as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_ALPHA as ::core::ffi::c_int);
                                         }
                                         2 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh86 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh86 = NFA_CLASS_BLANK as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_BLANK as ::core::ffi::c_int);
                                         }
                                         3 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh87 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh87 = NFA_CLASS_CNTRL as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_CNTRL as ::core::ffi::c_int);
                                         }
                                         4 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh88 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh88 = NFA_CLASS_DIGIT as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_DIGIT as ::core::ffi::c_int);
                                         }
                                         5 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh89 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh89 = NFA_CLASS_GRAPH as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_GRAPH as ::core::ffi::c_int);
                                         }
                                         6 => {
                                             wants_nfa.set(true_0 != 0);
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh90 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh90 = NFA_CLASS_LOWER as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_LOWER as ::core::ffi::c_int);
                                         }
                                         7 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh91 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh91 = NFA_CLASS_PRINT as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_PRINT as ::core::ffi::c_int);
                                         }
                                         8 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh92 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh92 = NFA_CLASS_PUNCT as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_PUNCT as ::core::ffi::c_int);
                                         }
                                         9 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh93 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh93 = NFA_CLASS_SPACE as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_SPACE as ::core::ffi::c_int);
                                         }
                                         10 => {
                                             wants_nfa.set(true_0 != 0);
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh94 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh94 = NFA_CLASS_UPPER as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_UPPER as ::core::ffi::c_int);
                                         }
                                         11 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh95 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh95 =
-                                                NFA_CLASS_XDIGIT as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_XDIGIT as ::core::ffi::c_int);
                                         }
                                         12 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh96 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh96 = NFA_CLASS_TAB as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_TAB as ::core::ffi::c_int);
                                         }
                                         13 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh97 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh97 =
-                                                NFA_CLASS_RETURN as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_RETURN as ::core::ffi::c_int);
                                         }
                                         14 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh98 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh98 =
-                                                NFA_CLASS_BACKSPACE as ::core::ffi::c_int;
+                                            postfix::emit(
+                                                NFA_CLASS_BACKSPACE as ::core::ffi::c_int,
+                                            );
                                         }
                                         15 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh99 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh99 =
-                                                NFA_CLASS_ESCAPE as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_ESCAPE as ::core::ffi::c_int);
                                         }
                                         16 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh100 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh100 =
-                                                NFA_CLASS_IDENT as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_IDENT as ::core::ffi::c_int);
                                         }
                                         17 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh101 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh101 =
-                                                NFA_CLASS_KEYWORD as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_KEYWORD as ::core::ffi::c_int);
                                         }
                                         18 => {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh102 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh102 =
-                                                NFA_CLASS_FNAME as ::core::ffi::c_int;
+                                            postfix::emit(NFA_CLASS_FNAME as ::core::ffi::c_int);
                                         }
                                         _ => {}
                                     }
-                                    if post_ptr.get() >= post_end.get() {
-                                        realloc_post_list();
-                                    }
-                                    let c2rust_fresh103 = post_ptr.get();
-                                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                                    *c2rust_fresh103 = NFA_CONCAT as ::core::ffi::c_int;
+                                    postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                                     continue;
                                 } else if equiclass != 0 as ::core::ffi::c_int {
                                     nfa_emit_equi_class(equiclass);
@@ -1049,67 +740,27 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                     }
                                     if endc > startc + 2 as ::core::ffi::c_int {
                                         if startc == 0 as ::core::ffi::c_int {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh104 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh104 = 1 as ::core::ffi::c_int;
+                                            postfix::emit(1 as ::core::ffi::c_int);
                                         } else {
-                                            post_ptr.set((*post_ptr.ptr()).offset(-1));
+                                            postfix::drop_last();
                                         }
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh105 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh105 = endc;
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh106 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh106 = NFA_RANGE as ::core::ffi::c_int;
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh107 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh107 = NFA_CONCAT as ::core::ffi::c_int;
+                                        postfix::emit(endc);
+                                        postfix::emit(NFA_RANGE as ::core::ffi::c_int);
+                                        postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                                     } else if utf_char2len(startc) > 1 as ::core::ffi::c_int
                                         || utf_char2len(endc) > 1 as ::core::ffi::c_int
                                     {
                                         c = startc + 1 as ::core::ffi::c_int;
                                         while c <= endc {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh108 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh108 = c;
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh109 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh109 = NFA_CONCAT as ::core::ffi::c_int;
+                                            postfix::emit(c);
+                                            postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                                             c += 1;
                                         }
                                     } else {
                                         c = startc + 1 as ::core::ffi::c_int;
                                         while c <= endc {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh110 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh110 = c;
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh111 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh111 = NFA_CONCAT as ::core::ffi::c_int;
+                                            postfix::emit(c);
+                                            postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                                             c += 1;
                                         }
                                     }
@@ -1122,32 +773,12 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                 } else if got_coll_char == true_0
                                     && startc == 0 as ::core::ffi::c_int
                                 {
-                                    if post_ptr.get() >= post_end.get() {
-                                        realloc_post_list();
-                                    }
-                                    let c2rust_fresh112 = post_ptr.get();
-                                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                                    *c2rust_fresh112 = 0xa as ::core::ffi::c_int;
-                                    if post_ptr.get() >= post_end.get() {
-                                        realloc_post_list();
-                                    }
-                                    let c2rust_fresh113 = post_ptr.get();
-                                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                                    *c2rust_fresh113 = NFA_CONCAT as ::core::ffi::c_int;
+                                    postfix::emit(0xa as ::core::ffi::c_int);
+                                    postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                                 } else {
-                                    if post_ptr.get() >= post_end.get() {
-                                        realloc_post_list();
-                                    }
-                                    let c2rust_fresh114 = post_ptr.get();
-                                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                                    *c2rust_fresh114 = startc;
+                                    postfix::emit(startc);
                                     if utf_ptr2len(regparse.get()) == utfc_ptr2len(regparse.get()) {
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh115 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh115 = NFA_CONCAT as ::core::ffi::c_int;
+                                        postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                                     }
                                 }
                                 let mut plen: ::core::ffi::c_int = 0;
@@ -1159,44 +790,19 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                     c = utf_ptr2char((*regparse.ptr()).offset(i as isize));
                                     loop {
                                         if c == 0 as ::core::ffi::c_int {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh116 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh116 = 1 as ::core::ffi::c_int;
+                                            postfix::emit(1 as ::core::ffi::c_int);
                                         } else {
-                                            if post_ptr.get() >= post_end.get() {
-                                                realloc_post_list();
-                                            }
-                                            let c2rust_fresh117 = post_ptr.get();
-                                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                                            *c2rust_fresh117 = c;
+                                            postfix::emit(c);
                                         }
-                                        if post_ptr.get() >= post_end.get() {
-                                            realloc_post_list();
-                                        }
-                                        let c2rust_fresh118 = post_ptr.get();
-                                        post_ptr.set((*post_ptr.ptr()).offset(1));
-                                        *c2rust_fresh118 = NFA_CONCAT as ::core::ffi::c_int;
+                                        postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                                         i += utf_char2len(c);
                                         if i >= plen {
                                             break;
                                         }
                                         c = utf_ptr2char((*regparse.ptr()).offset(i as isize));
                                     }
-                                    if post_ptr.get() >= post_end.get() {
-                                        realloc_post_list();
-                                    }
-                                    let c2rust_fresh119 = post_ptr.get();
-                                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                                    *c2rust_fresh119 = NFA_COMPOSING as ::core::ffi::c_int;
-                                    if post_ptr.get() >= post_end.get() {
-                                        realloc_post_list();
-                                    }
-                                    let c2rust_fresh120 = post_ptr.get();
-                                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                                    *c2rust_fresh120 = NFA_CONCAT as ::core::ffi::c_int;
+                                    postfix::emit(NFA_COMPOSING as ::core::ffi::c_int);
+                                    postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                                 }
                                 regparse.set(
                                     (*regparse.ptr()).offset(utfc_ptr2len(regparse.get()) as isize),
@@ -1210,54 +816,24 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             ) + 1 as ::core::ffi::c_int) as isize),
                         ));
                         if *regparse.get() as ::core::ffi::c_int == '-' as ::core::ffi::c_int {
-                            if post_ptr.get() >= post_end.get() {
-                                realloc_post_list();
-                            }
-                            let c2rust_fresh121 = post_ptr.get();
-                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                            *c2rust_fresh121 = '-' as ::core::ffi::c_int;
-                            if post_ptr.get() >= post_end.get() {
-                                realloc_post_list();
-                            }
-                            let c2rust_fresh122 = post_ptr.get();
-                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                            *c2rust_fresh122 = NFA_CONCAT as ::core::ffi::c_int;
+                            postfix::emit('-' as ::core::ffi::c_int);
+                            postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                         }
                         regparse.set(endp as *mut ::core::ffi::c_char);
                         regparse
                             .set((*regparse.ptr()).offset(utfc_ptr2len(regparse.get()) as isize));
                         if negated == true_0 {
-                            if post_ptr.get() >= post_end.get() {
-                                realloc_post_list();
-                            }
-                            let c2rust_fresh123 = post_ptr.get();
-                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                            *c2rust_fresh123 = NFA_END_NEG_COLL as ::core::ffi::c_int;
+                            postfix::emit(NFA_END_NEG_COLL as ::core::ffi::c_int);
                         } else {
-                            if post_ptr.get() >= post_end.get() {
-                                realloc_post_list();
-                            }
-                            let c2rust_fresh124 = post_ptr.get();
-                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                            *c2rust_fresh124 = NFA_END_COLL as ::core::ffi::c_int;
+                            postfix::emit(NFA_END_COLL as ::core::ffi::c_int);
                         }
                         if extra == NFA_ADD_NL {
-                            if post_ptr.get() >= post_end.get() {
-                                realloc_post_list();
-                            }
-                            let c2rust_fresh125 = post_ptr.get();
-                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                            *c2rust_fresh125 = if reg_string.get() != 0 {
+                            postfix::emit(if reg_string.get() != 0 {
                                 '\n' as ::core::ffi::c_int
                             } else {
                                 NFA_NEWL as ::core::ffi::c_int
-                            };
-                            if post_ptr.get() >= post_end.get() {
-                                realloc_post_list();
-                            }
-                            let c2rust_fresh126 = post_ptr.get();
-                            post_ptr.set((*post_ptr.ptr()).offset(1));
-                            *c2rust_fresh126 = NFA_OR as ::core::ffi::c_int;
+                            });
+                            postfix::emit(NFA_OR as ::core::ffi::c_int);
                         }
                         return OK;
                     }
@@ -1276,19 +852,9 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
         if utf_char2len(c) != plen_0 || utf_iscomposing_legacy(c) as ::core::ffi::c_int != 0 {
             let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             loop {
-                if post_ptr.get() >= post_end.get() {
-                    realloc_post_list();
-                }
-                let c2rust_fresh127 = post_ptr.get();
-                post_ptr.set((*post_ptr.ptr()).offset(1));
-                *c2rust_fresh127 = c;
+                postfix::emit(c);
                 if i_0 > 0 as ::core::ffi::c_int {
-                    if post_ptr.get() >= post_end.get() {
-                        realloc_post_list();
-                    }
-                    let c2rust_fresh128 = post_ptr.get();
-                    post_ptr.set((*post_ptr.ptr()).offset(1));
-                    *c2rust_fresh128 = NFA_CONCAT as ::core::ffi::c_int;
+                    postfix::emit(NFA_CONCAT as ::core::ffi::c_int);
                 }
                 i_0 += utf_char2len(c);
                 if i_0 >= plen_0 {
@@ -1296,21 +862,11 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                 }
                 c = utf_ptr2char((old_regparse as *mut ::core::ffi::c_char).offset(i_0 as isize));
             }
-            if post_ptr.get() >= post_end.get() {
-                realloc_post_list();
-            }
-            let c2rust_fresh129 = post_ptr.get();
-            post_ptr.set((*post_ptr.ptr()).offset(1));
-            *c2rust_fresh129 = NFA_COMPOSING as ::core::ffi::c_int;
+            postfix::emit(NFA_COMPOSING as ::core::ffi::c_int);
             regparse.set((old_regparse as *mut ::core::ffi::c_char).offset(plen_0 as isize));
         } else {
             c = unmagic(c);
-            if post_ptr.get() >= post_end.get() {
-                realloc_post_list();
-            }
-            let c2rust_fresh130 = post_ptr.get();
-            post_ptr.set((*post_ptr.ptr()).offset(1));
-            *c2rust_fresh130 = c;
+            postfix::emit(c);
         }
         return OK;
     }

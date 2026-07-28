@@ -132,7 +132,6 @@
     "crates/nvim/src/nvim/regexp.rs": 1,
     "crates/nvim/src/nvim/regexp/nfa/atom.rs": 12,
     "crates/nvim/src/nvim/regexp/nfa/build.rs": 7,
-    "crates/nvim/src/nvim/regexp/nfa/compile.rs": 3,
     "crates/nvim/src/nvim/regexp/nfa/exec.rs": 2,
     "crates/nvim/src/nvim/regexp/nfa/matcher.rs": 18,
     "crates/nvim/src/nvim/regexp/nfa/parse.rs": 12,

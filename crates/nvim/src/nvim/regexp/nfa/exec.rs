@@ -309,23 +309,22 @@ pub(crate) unsafe extern "C" fn nfa_regcomp(
 ) -> *mut regprog_T {
     let mut prog_size: size_t = 0;
     let mut prog: *mut nfa_regprog_T = ::core::ptr::null_mut::<nfa_regprog_T>();
-    let mut postfix: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
     if expr.is_null() {
         return ::core::ptr::null_mut::<regprog_T>();
     }
     nfa_re_flags.set(re_flags);
     nfa_regcomp_start(expr, re_flags);
-    postfix = re2post();
+    let built = re2post();
     '_out: {
-        if !postfix.is_null() {
-            post2nfa(postfix, post_ptr.get(), true_0);
+        if built != FAIL {
+            postfix::with_items(|items| post2nfa(items, true_0));
             prog_size = (80 as size_t).wrapping_add(
                 ::core::mem::size_of::<nfa_state_T>().wrapping_mul(nstate.get() as size_t),
             );
             prog = xmalloc(prog_size) as *mut nfa_regprog_T;
             state_ptr.set(&raw mut (*prog).state as *mut nfa_state_T);
             (*prog).re_in_use = false_0 != 0;
-            (*prog).start = post2nfa(postfix, post_ptr.get(), false_0);
+            (*prog).start = postfix::with_items(|items| post2nfa(items, false_0));
             if !(*prog).start.is_null() {
                 (*prog).regflags = regflags.get();
                 (*prog).engine = nfa_regengine.ptr();
@@ -348,10 +347,7 @@ pub(crate) unsafe extern "C" fn nfa_regcomp(
         *ptr_ = NULL_0;
         let _ = *ptr_;
     }
-    xfree(post_start.get() as *mut ::core::ffi::c_void);
-    post_end.set(::core::ptr::null_mut::<::core::ffi::c_int>());
-    post_ptr.set(post_end.get());
-    post_start.set(post_ptr.get());
+    postfix::finish();
     state_ptr.set(::core::ptr::null_mut::<nfa_state_T>());
     return prog as *mut regprog_T;
 }

@@ -16,6 +16,7 @@ mod equi_class;
 mod exec;
 mod matcher;
 mod parse;
+mod postfix;
 mod run;
 mod sub;
 

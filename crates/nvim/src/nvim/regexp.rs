@@ -1047,12 +1047,6 @@ const E_MISPLACED: &::core::ffi::CStr = c"E866: (NFA regexp) Misplaced %c";
 const E_ILL_CHAR_CLASS: &::core::ffi::CStr = c"E877: (NFA regexp) Invalid character class: %ld";
 const E_VALUE_TOO_LARGE: &::core::ffi::CStr = c"E951: \\% value too large";
 static nfa_re_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static post_start: GlobalCell<*mut ::core::ffi::c_int> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_int>());
-static post_end: GlobalCell<*mut ::core::ffi::c_int> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_int>());
-static post_ptr: GlobalCell<*mut ::core::ffi::c_int> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_int>());
 static wants_nfa: GlobalCell<bool> = GlobalCell::new(false);
 static nstate: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static istate: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
