@@ -13,8 +13,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     VIsual, VIsual_active, VIsual_mode, called_emsg, e_internal_error_in_regexp, e_nopresub,
     e_null, e_re_corr, e_re_damg, e_resulting_text_too_long, e_toomsbra, e_trailing, got_int,
-    p_cpo, p_mmp, p_re, p_sel, p_verbose, rc_did_emsg, re_extmatch_in, re_extmatch_out,
-    reg_do_extmatch,
+    p_mmp, p_re, p_sel, p_verbose, rc_did_emsg, re_extmatch_in, re_extmatch_out, reg_do_extmatch,
 };
 use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::mark::mark_get;
@@ -30,14 +29,13 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::os::input::fast_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, bsearch, gettext, memmove, memset, strcpy, strlen, strncmp,
-    strncpy,
+    __assert_fail, __ctype_b_loc, gettext, memmove, memset, strcpy, strlen, strncmp, strncpy,
 };
 use crate::src::nvim::plines::getvvcol;
 use crate::src::nvim::plines::win_linetabsize;
 use crate::src::nvim::pos::lt;
 use crate::src::nvim::profile::profile_passed_limit;
-use crate::src::nvim::strings::{cmp_keyvalue_value_n, vim_strchr, vim_strsave_escaped, xstrnsave};
+use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, ArgvFunc, BoolVarValue,
     BufUpdateCallbacks, CSType, Callback, Callback_data as C2Rust_Unnamed_8, CallbackType,
@@ -648,13 +646,6 @@ pub type C2Rust_Unnamed_24 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_int;
-static char_class_tab: GlobalCell<[keyvalue_T; 19]> = GlobalCell::new(
-    [keyvalue_T {
-        key: 0,
-        value: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        length: 0,
-    }; 19],
-);
 pub const INT32_MAX: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -715,7 +706,6 @@ static reg_prev_sub: GlobalCell<*mut ::core::ffi::c_char> =
 static reg_prev_sublen: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 const REGEXP_INRANGE: &::core::ffi::CStr = c"]^-n\\";
 const REGEXP_ABBR: &::core::ffi::CStr = c"nrtebdoxuU";
-static class_tab: GlobalCell<[int16_t; 256]> = GlobalCell::new([0; 256]);
 pub const RI_DIGIT: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const RI_HEX: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const RI_OCTAL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
@@ -1450,109 +1440,3 @@ pub const REX_SET: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const REX_USE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const REX_ALL: ::core::ffi::c_int = REX_SET | REX_USE;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
-unsafe extern "C" fn c2rust_run_static_initializers() {
-    char_class_tab.set([
-        keyvalue_T {
-            key: CLASS_ALNUM as ::core::ffi::c_int,
-            value: b"alnum:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_ALPHA as ::core::ffi::c_int,
-            value: b"alpha:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_BACKSPACE as ::core::ffi::c_int,
-            value: b"backspace:]\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_BLANK as ::core::ffi::c_int,
-            value: b"blank:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_CNTRL as ::core::ffi::c_int,
-            value: b"cntrl:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_DIGIT as ::core::ffi::c_int,
-            value: b"digit:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_ESCAPE as ::core::ffi::c_int,
-            value: b"escape:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_FNAME as ::core::ffi::c_int,
-            value: b"fname:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_GRAPH as ::core::ffi::c_int,
-            value: b"graph:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_IDENT as ::core::ffi::c_int,
-            value: b"ident:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_KEYWORD as ::core::ffi::c_int,
-            value: b"keyword:]\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_LOWER as ::core::ffi::c_int,
-            value: b"lower:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_PRINT as ::core::ffi::c_int,
-            value: b"print:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_PUNCT as ::core::ffi::c_int,
-            value: b"punct:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_RETURN as ::core::ffi::c_int,
-            value: b"return:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_SPACE as ::core::ffi::c_int,
-            value: b"space:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_TAB as ::core::ffi::c_int,
-            value: b"tab:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_UPPER as ::core::ffi::c_int,
-            value: b"upper:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: CLASS_XDIGIT as ::core::ffi::c_int,
-            value: b"xdigit:]\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-        },
-    ]);
-}
-#[used]
-#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
-#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
-#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
-static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];

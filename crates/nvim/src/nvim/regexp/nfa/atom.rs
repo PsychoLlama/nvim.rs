@@ -70,7 +70,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                 break 's_3797;
                             }
                             -161 => {
-                                c = no_Magic(getchr());
+                                c = unmagic(getchr());
                                 if c == NUL {
                                     emsg(gettext(E_NUL_FOUND.as_ptr()));
                                     rc_did_emsg.set(true_0 != 0);
@@ -131,14 +131,14 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             -132 | -218 | -215 => {
                                 semsg(
                                     gettext(E_MISPLACED.as_ptr()),
-                                    no_Magic(c) as ::core::ffi::c_char as ::core::ffi::c_int,
+                                    unmagic(c) as ::core::ffi::c_char as ::core::ffi::c_int,
                                 );
                                 return FAIL;
                             }
                             -195 | -193 | -213 | -192 | -214 | -133 => {
                                 semsg(
                                     gettext(E_MISPLACED.as_ptr()),
-                                    no_Magic(c) as ::core::ffi::c_char as ::core::ffi::c_int,
+                                    unmagic(c) as ::core::ffi::c_char as ::core::ffi::c_int,
                                 );
                                 return FAIL;
                             }
@@ -180,7 +180,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             }
                             -207 | -206 | -205 | -204 | -203 | -202 | -201 | -200 | -199 => {
                                 let mut refnum: ::core::ffi::c_int =
-                                    no_Magic(c) - '1' as ::core::ffi::c_int;
+                                    unmagic(c) - '1' as ::core::ffi::c_int;
                                 if seen_endbrace(refnum + 1 as ::core::ffi::c_int) == 0 {
                                     return FAIL;
                                 }
@@ -194,7 +194,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                 break 's_3797;
                             }
                             -134 => {
-                                c = no_Magic(getchr());
+                                c = unmagic(getchr());
                                 match c {
                                     115 => {
                                         if post_ptr.get() >= post_end.get() {
@@ -239,7 +239,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         let c2rust_fresh59 = post_ptr.get();
                                         post_ptr.set((*post_ptr.ptr()).offset(1));
                                         *c2rust_fresh59 = NFA_ZREF1 as ::core::ffi::c_int
-                                            + (no_Magic(c) - '1' as ::core::ffi::c_int);
+                                            + (unmagic(c) - '1' as ::core::ffi::c_int);
                                         re_has_z.set(REX_USE);
                                     }
                                     40 => {
@@ -259,7 +259,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                 b"E867: (NFA) Unknown operator '\\z%c'\0".as_ptr()
                                                     as *const ::core::ffi::c_char,
                                             ),
-                                            no_Magic(c),
+                                            unmagic(c),
                                         );
                                         return FAIL;
                                     }
@@ -267,7 +267,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                 break 's_3797;
                             }
                             -219 => {
-                                c = no_Magic(getchr());
+                                c = unmagic(getchr());
                                 match c {
                                     40 => {
                                         if nfa_reg(REG_NPAREN) == FAIL {
@@ -470,7 +470,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         {
                                             c = getchr();
                                         }
-                                        if no_Magic(c) == '.' as ::core::ffi::c_int {
+                                        if unmagic(c) == '.' as ::core::ffi::c_int {
                                             cur = true_0 != 0;
                                             c = getchr();
                                         }
@@ -481,7 +481,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                         E_REGEXP_NUMBER_AFTER_DOT_POS_SEARCH_CHR
                                                             .as_ptr(),
                                                     ),
-                                                    no_Magic(c),
+                                                    unmagic(c),
                                                 );
                                                 return FAIL;
                                             }
@@ -508,7 +508,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                     gettext(
                                                         E_NFA_REGEXP_MISSING_VALUE_IN_CHR.as_ptr(),
                                                     ),
-                                                    no_Magic(c),
+                                                    unmagic(c),
                                                 );
                                                 return FAIL;
                                             }
@@ -590,7 +590,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                             let c2rust_fresh73 = post_ptr.get();
                                             post_ptr.set((*post_ptr.ptr()).offset(1));
                                             *c2rust_fresh73 = n_0 as ::core::ffi::c_int;
-                                        } else if no_Magic(c) == '\'' as ::core::ffi::c_int
+                                        } else if unmagic(c) == '\'' as ::core::ffi::c_int
                                             && n_0 == 0 as int64_t
                                         {
                                             if post_ptr.get() >= post_end.get() {
@@ -618,7 +618,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                         .as_ptr()
                                                         as *const ::core::ffi::c_char,
                                                 ),
-                                                no_Magic(c),
+                                                unmagic(c),
                                             );
                                             return FAIL;
                                         }
@@ -633,7 +633,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                 break 's_3637;
                             }
                         }
-                        p = vim_strchr(classchars.get() as *mut ::core::ffi::c_char, no_Magic(c))
+                        p = vim_strchr(classchars.get() as *mut ::core::ffi::c_char, unmagic(c))
                             as *mut uint8_t;
                         if p.is_null() {
                             if extra == NFA_ADD_NL {
@@ -772,11 +772,11 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             if *regparse.get() as ::core::ffi::c_int == '[' as ::core::ffi::c_int {
                                 collclass = 0 as ::core::ffi::c_int;
                                 equiclass = collclass;
-                                charclass = get_char_class(regparse.ptr());
+                                charclass = take_char_class(&mut *regparse.ptr());
                                 if charclass == CLASS_NONE as ::core::ffi::c_int {
-                                    equiclass = get_equi_class(regparse.ptr());
+                                    equiclass = take_bracketed(&mut *regparse.ptr(), b'=');
                                     if equiclass == 0 as ::core::ffi::c_int {
-                                        collclass = get_coll_element(regparse.ptr());
+                                        collclass = take_bracketed(&mut *regparse.ptr(), b'.');
                                     }
                                 }
                                 if charclass != CLASS_NONE as ::core::ffi::c_int {
@@ -1038,7 +1038,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         );
                                     } else {
                                         startc =
-                                            backslash_trans(*regparse.get() as ::core::ffi::c_int);
+                                            backslash_abbr(*regparse.get() as ::core::ffi::c_int);
                                     }
                                 }
                                 if startc == -1 as ::core::ffi::c_int {
@@ -1310,7 +1310,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
             *c2rust_fresh129 = NFA_COMPOSING as ::core::ffi::c_int;
             regparse.set((old_regparse as *mut ::core::ffi::c_char).offset(plen_0 as isize));
         } else {
-            c = no_Magic(c);
+            c = unmagic(c);
             if post_ptr.get() >= post_end.get() {
                 realloc_post_list();
             }

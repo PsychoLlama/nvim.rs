@@ -446,9 +446,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             }
                             DIGIT => {
                                 if !(c < 0x100 as ::core::ffi::c_int
-                                    && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                        & RI_DIGIT
-                                        != 0)
+                                    && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_DIGIT != 0)
                                 {
                                     status = RA_NOMATCH;
                                 } else {
@@ -462,8 +460,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             NDIGIT => {
                                 if c == NUL
                                     || c < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                            & RI_DIGIT
+                                        && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_DIGIT
                                             != 0
                                 {
                                     status = RA_NOMATCH;
@@ -477,9 +474,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             }
                             HEX => {
                                 if !(c < 0x100 as ::core::ffi::c_int
-                                    && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                        & RI_HEX
-                                        != 0)
+                                    && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_HEX != 0)
                                 {
                                     status = RA_NOMATCH;
                                 } else {
@@ -493,9 +488,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             NHEX => {
                                 if c == NUL
                                     || c < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                            & RI_HEX
-                                            != 0
+                                        && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_HEX != 0
                                 {
                                     status = RA_NOMATCH;
                                 } else {
@@ -508,9 +501,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             }
                             OCTAL => {
                                 if !(c < 0x100 as ::core::ffi::c_int
-                                    && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                        & RI_OCTAL
-                                        != 0)
+                                    && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_OCTAL != 0)
                                 {
                                     status = RA_NOMATCH;
                                 } else {
@@ -524,8 +515,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             NOCTAL => {
                                 if c == NUL
                                     || c < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                            & RI_OCTAL
+                                        && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_OCTAL
                                             != 0
                                 {
                                     status = RA_NOMATCH;
@@ -539,9 +529,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             }
                             WORD => {
                                 if !(c < 0x100 as ::core::ffi::c_int
-                                    && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                        & RI_WORD
-                                        != 0)
+                                    && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_WORD != 0)
                                 {
                                     status = RA_NOMATCH;
                                 } else {
@@ -555,9 +543,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             NWORD => {
                                 if c == NUL
                                     || c < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                            & RI_WORD
-                                            != 0
+                                        && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_WORD != 0
                                 {
                                     status = RA_NOMATCH;
                                 } else {
@@ -570,9 +556,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             }
                             HEAD => {
                                 if !(c < 0x100 as ::core::ffi::c_int
-                                    && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                        & RI_HEAD
-                                        != 0)
+                                    && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_HEAD != 0)
                                 {
                                     status = RA_NOMATCH;
                                 } else {
@@ -586,9 +570,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             NHEAD => {
                                 if c == NUL
                                     || c < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                            & RI_HEAD
-                                            != 0
+                                        && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_HEAD != 0
                                 {
                                     status = RA_NOMATCH;
                                 } else {
@@ -601,9 +583,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             }
                             ALPHA => {
                                 if !(c < 0x100 as ::core::ffi::c_int
-                                    && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                        & RI_ALPHA
-                                        != 0)
+                                    && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_ALPHA != 0)
                                 {
                                     status = RA_NOMATCH;
                                 } else {
@@ -617,8 +597,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             NALPHA => {
                                 if c == NUL
                                     || c < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                            & RI_ALPHA
+                                        && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_ALPHA
                                             != 0
                                 {
                                     status = RA_NOMATCH;
@@ -632,9 +611,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             }
                             LOWER => {
                                 if !(c < 0x100 as ::core::ffi::c_int
-                                    && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                        & RI_LOWER
-                                        != 0)
+                                    && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_LOWER != 0)
                                 {
                                     status = RA_NOMATCH;
                                 } else {
@@ -648,8 +625,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             NLOWER => {
                                 if c == NUL
                                     || c < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                            & RI_LOWER
+                                        && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_LOWER
                                             != 0
                                 {
                                     status = RA_NOMATCH;
@@ -663,9 +639,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             }
                             UPPER => {
                                 if !(c < 0x100 as ::core::ffi::c_int
-                                    && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                        & RI_UPPER
-                                        != 0)
+                                    && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_UPPER != 0)
                                 {
                                     status = RA_NOMATCH;
                                 } else {
@@ -679,8 +653,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                             NUPPER => {
                                 if c == NUL
                                     || c < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[c as usize] as ::core::ffi::c_int
-                                            & RI_UPPER
+                                        && RI_FLAGS[c as usize] as ::core::ffi::c_int & RI_UPPER
                                             != 0
                                 {
                                     status = RA_NOMATCH;

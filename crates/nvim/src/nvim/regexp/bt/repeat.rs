@@ -483,8 +483,7 @@ pub(crate) unsafe extern "C" fn regrepeat(
                         break;
                     }
                     scan = scan.offset(l as isize);
-                } else if (*class_tab.ptr())[*scan as usize] as ::core::ffi::c_int & mask == testval
-                {
+                } else if RI_FLAGS[*scan as usize] as ::core::ffi::c_int & mask == testval {
                     scan = scan.offset(1);
                 } else {
                     if !((*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0

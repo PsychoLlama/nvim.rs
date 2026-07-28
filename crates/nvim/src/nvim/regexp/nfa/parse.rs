@@ -81,7 +81,7 @@ pub(crate) unsafe extern "C" fn nfa_regpiece() -> ::core::ffi::c_int {
         }
         -192 => {
             c2 = getdecchrs();
-            op = no_Magic(getchr());
+            op = unmagic(getchr());
             i = 0 as ::core::ffi::c_int;
             match op {
                 61 => {
@@ -91,7 +91,7 @@ pub(crate) unsafe extern "C" fn nfa_regpiece() -> ::core::ffi::c_int {
                     i = NFA_PREV_ATOM_NO_WIDTH_NEG as ::core::ffi::c_int;
                 }
                 60 => {
-                    op = no_Magic(getchr());
+                    op = unmagic(getchr());
                     if op == '=' as ::core::ffi::c_int {
                         i = NFA_PREV_ATOM_JUST_BEFORE as ::core::ffi::c_int;
                     } else if op == '!' as ::core::ffi::c_int {

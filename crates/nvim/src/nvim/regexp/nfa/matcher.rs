@@ -827,8 +827,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 }
                                 -906 => {
                                     result = (curc < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[curc as usize] as ::core::ffi::c_int
-                                            & RI_DIGIT
+                                        && RI_FLAGS[curc as usize] as ::core::ffi::c_int & RI_DIGIT
                                             != 0)
                                         as ::core::ffi::c_int;
                                     if result != 0 {
@@ -839,8 +838,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 -905 => {
                                     result = (curc != NUL
                                         && !(curc < 0x100 as ::core::ffi::c_int
-                                            && (*class_tab.ptr())[curc as usize]
-                                                as ::core::ffi::c_int
+                                            && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                 & RI_DIGIT
                                                 != 0))
                                         as ::core::ffi::c_int;
@@ -851,8 +849,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 }
                                 -904 => {
                                     result = (curc < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[curc as usize] as ::core::ffi::c_int
-                                            & RI_HEX
+                                        && RI_FLAGS[curc as usize] as ::core::ffi::c_int & RI_HEX
                                             != 0)
                                         as ::core::ffi::c_int;
                                     if result != 0 {
@@ -863,8 +860,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 -903 => {
                                     result = (curc != NUL
                                         && !(curc < 0x100 as ::core::ffi::c_int
-                                            && (*class_tab.ptr())[curc as usize]
-                                                as ::core::ffi::c_int
+                                            && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                 & RI_HEX
                                                 != 0))
                                         as ::core::ffi::c_int;
@@ -875,8 +871,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 }
                                 -902 => {
                                     result = (curc < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[curc as usize] as ::core::ffi::c_int
-                                            & RI_OCTAL
+                                        && RI_FLAGS[curc as usize] as ::core::ffi::c_int & RI_OCTAL
                                             != 0)
                                         as ::core::ffi::c_int;
                                     if result != 0 {
@@ -887,8 +882,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 -901 => {
                                     result = (curc != NUL
                                         && !(curc < 0x100 as ::core::ffi::c_int
-                                            && (*class_tab.ptr())[curc as usize]
-                                                as ::core::ffi::c_int
+                                            && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                 & RI_OCTAL
                                                 != 0))
                                         as ::core::ffi::c_int;
@@ -899,8 +893,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 }
                                 -900 => {
                                     result = (curc < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[curc as usize] as ::core::ffi::c_int
-                                            & RI_WORD
+                                        && RI_FLAGS[curc as usize] as ::core::ffi::c_int & RI_WORD
                                             != 0)
                                         as ::core::ffi::c_int;
                                     if result != 0 {
@@ -911,8 +904,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 -899 => {
                                     result = (curc != NUL
                                         && !(curc < 0x100 as ::core::ffi::c_int
-                                            && (*class_tab.ptr())[curc as usize]
-                                                as ::core::ffi::c_int
+                                            && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                 & RI_WORD
                                                 != 0))
                                         as ::core::ffi::c_int;
@@ -923,8 +915,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 }
                                 -898 => {
                                     result = (curc < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[curc as usize] as ::core::ffi::c_int
-                                            & RI_HEAD
+                                        && RI_FLAGS[curc as usize] as ::core::ffi::c_int & RI_HEAD
                                             != 0)
                                         as ::core::ffi::c_int;
                                     if result != 0 {
@@ -935,8 +926,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 -897 => {
                                     result = (curc != NUL
                                         && !(curc < 0x100 as ::core::ffi::c_int
-                                            && (*class_tab.ptr())[curc as usize]
-                                                as ::core::ffi::c_int
+                                            && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                 & RI_HEAD
                                                 != 0))
                                         as ::core::ffi::c_int;
@@ -947,8 +937,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 }
                                 -896 => {
                                     result = (curc < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[curc as usize] as ::core::ffi::c_int
-                                            & RI_ALPHA
+                                        && RI_FLAGS[curc as usize] as ::core::ffi::c_int & RI_ALPHA
                                             != 0)
                                         as ::core::ffi::c_int;
                                     if result != 0 {
@@ -959,8 +948,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 -895 => {
                                     result = (curc != NUL
                                         && !(curc < 0x100 as ::core::ffi::c_int
-                                            && (*class_tab.ptr())[curc as usize]
-                                                as ::core::ffi::c_int
+                                            && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                 & RI_ALPHA
                                                 != 0))
                                         as ::core::ffi::c_int;
@@ -971,8 +959,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 }
                                 -894 => {
                                     result = (curc < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[curc as usize] as ::core::ffi::c_int
-                                            & RI_LOWER
+                                        && RI_FLAGS[curc as usize] as ::core::ffi::c_int & RI_LOWER
                                             != 0)
                                         as ::core::ffi::c_int;
                                     if result != 0 {
@@ -983,8 +970,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 -893 => {
                                     result = (curc != NUL
                                         && !(curc < 0x100 as ::core::ffi::c_int
-                                            && (*class_tab.ptr())[curc as usize]
-                                                as ::core::ffi::c_int
+                                            && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                 & RI_LOWER
                                                 != 0))
                                         as ::core::ffi::c_int;
@@ -995,8 +981,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 }
                                 -892 => {
                                     result = (curc < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[curc as usize] as ::core::ffi::c_int
-                                            & RI_UPPER
+                                        && RI_FLAGS[curc as usize] as ::core::ffi::c_int & RI_UPPER
                                             != 0)
                                         as ::core::ffi::c_int;
                                     if result != 0 {
@@ -1007,8 +992,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 -891 => {
                                     result = (curc != NUL
                                         && !(curc < 0x100 as ::core::ffi::c_int
-                                            && (*class_tab.ptr())[curc as usize]
-                                                as ::core::ffi::c_int
+                                            && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                 & RI_UPPER
                                                 != 0))
                                         as ::core::ffi::c_int;
@@ -1019,13 +1003,11 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 }
                                 -890 => {
                                     result = (curc < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[curc as usize] as ::core::ffi::c_int
-                                            & RI_LOWER
+                                        && RI_FLAGS[curc as usize] as ::core::ffi::c_int & RI_LOWER
                                             != 0
                                         || (*rex.ptr()).reg_ic as ::core::ffi::c_int != 0
                                             && (curc < 0x100 as ::core::ffi::c_int
-                                                && (*class_tab.ptr())[curc as usize]
-                                                    as ::core::ffi::c_int
+                                                && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                     & RI_UPPER
                                                     != 0))
                                         as ::core::ffi::c_int;
@@ -1037,13 +1019,12 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 -889 => {
                                     result = (curc != NUL
                                         && !(curc < 0x100 as ::core::ffi::c_int
-                                            && (*class_tab.ptr())[curc as usize]
-                                                as ::core::ffi::c_int
+                                            && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                 & RI_LOWER
                                                 != 0
                                             || (*rex.ptr()).reg_ic as ::core::ffi::c_int != 0
                                                 && (curc < 0x100 as ::core::ffi::c_int
-                                                    && (*class_tab.ptr())[curc as usize]
+                                                    && RI_FLAGS[curc as usize]
                                                         as ::core::ffi::c_int
                                                         & RI_UPPER
                                                         != 0)))
@@ -1055,13 +1036,11 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 }
                                 -888 => {
                                     result = (curc < 0x100 as ::core::ffi::c_int
-                                        && (*class_tab.ptr())[curc as usize] as ::core::ffi::c_int
-                                            & RI_UPPER
+                                        && RI_FLAGS[curc as usize] as ::core::ffi::c_int & RI_UPPER
                                             != 0
                                         || (*rex.ptr()).reg_ic as ::core::ffi::c_int != 0
                                             && (curc < 0x100 as ::core::ffi::c_int
-                                                && (*class_tab.ptr())[curc as usize]
-                                                    as ::core::ffi::c_int
+                                                && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                     & RI_LOWER
                                                     != 0))
                                         as ::core::ffi::c_int;
@@ -1073,13 +1052,12 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 -887 => {
                                     result = (curc != NUL
                                         && !(curc < 0x100 as ::core::ffi::c_int
-                                            && (*class_tab.ptr())[curc as usize]
-                                                as ::core::ffi::c_int
+                                            && RI_FLAGS[curc as usize] as ::core::ffi::c_int
                                                 & RI_UPPER
                                                 != 0
                                             || (*rex.ptr()).reg_ic as ::core::ffi::c_int != 0
                                                 && (curc < 0x100 as ::core::ffi::c_int
-                                                    && (*class_tab.ptr())[curc as usize]
+                                                    && RI_FLAGS[curc as usize]
                                                         as ::core::ffi::c_int
                                                         & RI_LOWER
                                                         != 0)))

@@ -60,9 +60,9 @@ pub(crate) unsafe extern "C" fn skip_anyof(
         {
             p = p.offset(2 as ::core::ffi::c_int as isize);
         } else if *p as ::core::ffi::c_int == '[' as ::core::ffi::c_int {
-            if get_char_class(&raw mut p) == CLASS_NONE as ::core::ffi::c_int
-                && get_equi_class(&raw mut p) == 0 as ::core::ffi::c_int
-                && get_coll_element(&raw mut p) == 0 as ::core::ffi::c_int
+            if take_char_class(&mut p) == CLASS_NONE as ::core::ffi::c_int
+                && take_bracketed(&mut p, b'=') == 0 as ::core::ffi::c_int
+                && take_bracketed(&mut p, b'.') == 0 as ::core::ffi::c_int
                 && *p as ::core::ffi::c_int != NUL
             {
                 p = p.offset(1);
@@ -118,7 +118,7 @@ pub unsafe extern "C" fn skip_regexp_ex(
     } else {
         mymagic = MAGIC_OFF;
     }
-    get_cpo_flags();
+    refresh_cpo_flags();
     while *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
         if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == dirc {
             break;
@@ -265,7 +265,7 @@ pub(crate) unsafe extern "C" fn peekchr() -> ::core::ffi::c_int {
                     || prevchr.get() == '|' as ::core::ffi::c_int - 256 as ::core::ffi::c_int
                     || prevchr.get() == '&' as ::core::ffi::c_int - 256 as ::core::ffi::c_int
                     || prevchr.get() == 'n' as ::core::ffi::c_int - 256 as ::core::ffi::c_int
-                    || no_Magic(prevchr.get()) == '(' as ::core::ffi::c_int
+                    || unmagic(prevchr.get()) == '(' as ::core::ffi::c_int
                         && prevprevchr.get()
                             == '%' as ::core::ffi::c_int - 256 as ::core::ffi::c_int)
             {
@@ -356,14 +356,14 @@ pub(crate) unsafe extern "C" fn peekchr() -> ::core::ffi::c_int {
                 peekchr();
                 regparse.set((*regparse.ptr()).offset(-1));
                 (*after_slash.ptr()) -= 1;
-                curchr.set(toggle_Magic(curchr.get()));
+                curchr.set(toggle_magic(curchr.get()));
             } else if !vim_strchr(REGEXP_ABBR.as_ptr(), c).is_null() {
-                curchr.set(backslash_trans(c));
+                curchr.set(backslash_abbr(c));
             } else if reg_magic.get() as ::core::ffi::c_uint
                 == MAGIC_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
                 && (c == '$' as ::core::ffi::c_int || c == '^' as ::core::ffi::c_int)
             {
-                curchr.set(toggle_Magic(c));
+                curchr.set(toggle_magic(c));
             } else {
                 curchr.set(utf_ptr2char(
                     (*regparse.ptr()).offset(1 as ::core::ffi::c_int as isize),

@@ -314,7 +314,6 @@ pub(crate) unsafe extern "C" fn nfa_regcomp(
         return ::core::ptr::null_mut::<regprog_T>();
     }
     nfa_re_flags.set(re_flags);
-    init_class_tab();
     nfa_regcomp_start(expr, re_flags);
     postfix = re2post();
     '_out: {

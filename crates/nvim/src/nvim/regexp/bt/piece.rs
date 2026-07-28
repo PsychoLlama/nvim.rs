@@ -51,7 +51,7 @@ pub(crate) unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> 
         -192 => {
             let mut lop: ::core::ffi::c_int = END;
             let mut nr: int64_t = getdecchrs();
-            match no_Magic(getchr()) {
+            match unmagic(getchr()) {
                 61 => {
                     lop = MATCH;
                 }
@@ -61,7 +61,7 @@ pub(crate) unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> 
                 62 => {
                     lop = SUBPAT;
                 }
-                60 => match no_Magic(getchr()) {
+                60 => match unmagic(getchr()) {
                     61 => {
                         lop = BEHIND;
                     }
@@ -166,7 +166,7 @@ pub(crate) unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> 
             } else {
                 b"\\\0".as_ptr() as *const ::core::ffi::c_char
             },
-            no_Magic(peekchr()),
+            unmagic(peekchr()),
         );
         rc_did_emsg.set(true_0 != 0);
         return NULL_0 as *mut uint8_t;
@@ -426,7 +426,6 @@ pub(crate) unsafe extern "C" fn bt_regcomp(
         rc_did_emsg.set(true_0 != 0);
         return NULL_0 as *mut regprog_T;
     }
-    init_class_tab();
     regcomp_start(expr, re_flags);
     regcode.set(JUST_CALC_SIZE);
     regc(REGMAGIC);

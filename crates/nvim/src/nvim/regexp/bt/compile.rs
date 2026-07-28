@@ -18,7 +18,7 @@ pub(crate) unsafe extern "C" fn regcomp_start(
     }
     reg_string.set(re_flags & RE_STRING);
     reg_strict.set(re_flags & RE_STRICT);
-    get_cpo_flags();
+    refresh_cpo_flags();
     num_complex_braces.set(0 as ::core::ffi::c_int);
     regnpar.set(1 as ::core::ffi::c_int);
     memset(

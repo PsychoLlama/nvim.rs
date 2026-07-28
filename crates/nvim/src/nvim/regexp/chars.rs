@@ -1,183 +1,197 @@
-//! Characters and character classes: the `magic` toggles, the named
-//! `[:alpha:]` classes and the collation elements a `[]` item can name.
-//!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! Characters and character classes: the `magic` toggles, the byte class
+//! table the `\d`/`\w`/`\s` atoms test against, and the three bracketed
+//! items a `[]` collection can name — `[:alpha:]`, `[=a=]` and `[.a.]`.
 
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub(crate) unsafe extern "C" fn no_Magic(mut x: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    if x < 0 as ::core::ffi::c_int {
-        return x + 256 as ::core::ffi::c_int;
-    }
-    return x;
+use core::cmp::Ordering;
+use core::ffi::{CStr, c_char, c_int};
+
+use super::{
+    CLASS_ALNUM, CLASS_ALPHA, CLASS_BACKSPACE, CLASS_BLANK, CLASS_CNTRL, CLASS_DIGIT, CLASS_ESCAPE,
+    CLASS_FNAME, CLASS_GRAPH, CLASS_IDENT, CLASS_KEYWORD, CLASS_LOWER, CLASS_NONE, CLASS_PRINT,
+    CLASS_PUNCT, CLASS_RETURN, CLASS_SPACE, CLASS_TAB, CLASS_UPPER, CLASS_XDIGIT, CPO_LITERAL,
+    RF_HASNL, RI_ALPHA, RI_DIGIT, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WHITE, RI_WORD,
+    reg_cpo_lit,
+};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::p_cpo;
+use crate::src::nvim::mbyte::{utf_ptr2char, utfc_ptr2len};
+use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::types::regprog_T;
+
+/// A magic metacharacter is held as its byte minus 256, so that the parser
+/// can tell `*` (a repeat) from `\*` (a literal star) by sign alone. These
+/// two undo and flip that marker.
+pub(crate) fn unmagic(c: c_int) -> c_int {
+    if c < 0 { c + 256 } else { c }
 }
-pub(crate) unsafe extern "C" fn toggle_Magic(mut x: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    if x < 0 as ::core::ffi::c_int {
-        return x + 256 as ::core::ffi::c_int;
-    }
-    return x - 256 as ::core::ffi::c_int;
+
+pub(crate) fn toggle_magic(c: c_int) -> c_int {
+    if c < 0 { c + 256 } else { c - 256 }
 }
-pub(crate) unsafe extern "C" fn backslash_trans(mut c: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    match c {
-        114 => return CAR,
-        116 => return TAB,
-        101 => return ESC,
-        98 => return BS,
-        _ => {}
+
+/// The control character a `\r`/`\t`/`\e`/`\b` abbreviation stands for.
+/// Anything else is returned unchanged.
+pub(crate) fn backslash_abbr(c: c_int) -> c_int {
+    match c as u8 {
+        b'r' => b'\r' as c_int,
+        b't' => b'\t' as c_int,
+        b'e' => 0x1b,
+        b'b' => 0x08,
+        _ => c,
     }
-    return c;
 }
-pub(crate) unsafe extern "C" fn get_char_class(
-    mut pp: *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if *(*pp).offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == ':' as ::core::ffi::c_int
-        && (*(*pp).offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-            >= 'a' as ::core::ffi::c_uint
-            && *(*pp).offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                <= 'z' as ::core::ffi::c_uint)
-        && (*(*pp).offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-            >= 'a' as ::core::ffi::c_uint
-            && *(*pp).offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                <= 'z' as ::core::ffi::c_uint)
-        && (*(*pp).offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-            >= 'a' as ::core::ffi::c_uint
-            && *(*pp).offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                <= 'z' as ::core::ffi::c_uint)
-    {
-        static last_entry: GlobalCell<*mut keyvalue_T> =
-            GlobalCell::new(::core::ptr::null_mut::<keyvalue_T>());
-        let mut target: keyvalue_T = keyvalue_T {
-            key: 0 as ::core::ffi::c_int,
-            value: (*pp).offset(2 as ::core::ffi::c_int as isize),
-            length: 0 as size_t,
-        };
-        let mut entry: *mut keyvalue_T = ::core::ptr::null_mut::<keyvalue_T>();
-        if !(*last_entry.ptr()).is_null()
-            && cmp_keyvalue_value_n(
-                &raw mut target as *const ::core::ffi::c_void,
-                last_entry.get() as *const ::core::ffi::c_void,
-            ) == 0 as ::core::ffi::c_int
-        {
-            entry = last_entry.get();
-        } else {
-            entry = bsearch(
-                &raw mut target as *const ::core::ffi::c_void,
-                char_class_tab.ptr() as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<[keyvalue_T; 19]>()
-                    .wrapping_div(::core::mem::size_of::<keyvalue_T>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[keyvalue_T; 19]>()
-                            .wrapping_rem(::core::mem::size_of::<keyvalue_T>())
-                            == 0) as ::core::ffi::c_int as size_t,
-                    ),
-                ::core::mem::size_of::<keyvalue_T>(),
-                Some(
-                    cmp_keyvalue_value_n
-                        as unsafe extern "C" fn(
-                            *const ::core::ffi::c_void,
-                            *const ::core::ffi::c_void,
-                        ) -> ::core::ffi::c_int,
-                ),
-            ) as *mut keyvalue_T;
-        }
-        if !entry.is_null() {
-            last_entry.set(entry);
-            *pp = (*pp).offset((*entry).length.wrapping_add(2 as size_t) as isize);
-            return (*entry).key;
-        }
-    }
-    return CLASS_NONE as ::core::ffi::c_int;
-}
-pub(crate) unsafe extern "C" fn init_class_tab() {
-    let mut i: ::core::ffi::c_int = 0;
-    static done: GlobalCell<::core::ffi::c_int> = GlobalCell::new(false_0);
-    if done.get() != 0 {
-        return;
-    }
-    i = 0 as ::core::ffi::c_int;
-    while i < 256 as ::core::ffi::c_int {
-        if i >= '0' as ::core::ffi::c_int && i <= '7' as ::core::ffi::c_int {
-            (*class_tab.ptr())[i as usize] = (RI_DIGIT + RI_HEX + RI_OCTAL + RI_WORD) as int16_t;
-        } else if i >= '8' as ::core::ffi::c_int && i <= '9' as ::core::ffi::c_int {
-            (*class_tab.ptr())[i as usize] = (RI_DIGIT + RI_HEX + RI_WORD) as int16_t;
-        } else if i >= 'a' as ::core::ffi::c_int && i <= 'f' as ::core::ffi::c_int {
-            (*class_tab.ptr())[i as usize] =
-                (RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER) as int16_t;
-        } else if i >= 'g' as ::core::ffi::c_int && i <= 'z' as ::core::ffi::c_int {
-            (*class_tab.ptr())[i as usize] = (RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER) as int16_t;
-        } else if i >= 'A' as ::core::ffi::c_int && i <= 'F' as ::core::ffi::c_int {
-            (*class_tab.ptr())[i as usize] =
-                (RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER) as int16_t;
-        } else if i >= 'G' as ::core::ffi::c_int && i <= 'Z' as ::core::ffi::c_int {
-            (*class_tab.ptr())[i as usize] = (RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER) as int16_t;
-        } else if i == '_' as ::core::ffi::c_int {
-            (*class_tab.ptr())[i as usize] = (RI_WORD + RI_HEAD) as int16_t;
-        } else {
-            (*class_tab.ptr())[i as usize] = 0 as int16_t;
-        }
+
+/// Which of the `RI_*` classes each byte belongs to. Only the ASCII range
+/// is meaningful — the engines test `c < 256` before indexing, and
+/// everything at or above 0x80 is classless here because a multibyte
+/// character is classified by [`crate::src::nvim::mbyte`] instead.
+pub(crate) static RI_FLAGS: [i16; 256] = build_ri_flags();
+
+const fn build_ri_flags() -> [i16; 256] {
+    let mut tab = [0i16; 256];
+    let mut i = 0usize;
+    while i < 256 {
+        let b = i as u8;
+        tab[i] = match b {
+            b'0'..=b'7' => RI_DIGIT + RI_HEX + RI_OCTAL + RI_WORD,
+            b'8'..=b'9' => RI_DIGIT + RI_HEX + RI_WORD,
+            b'a'..=b'f' => RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER,
+            b'g'..=b'z' => RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER,
+            b'A'..=b'F' => RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER,
+            b'G'..=b'Z' => RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER,
+            b'_' => RI_WORD + RI_HEAD,
+            _ => 0,
+        } as i16;
         i += 1;
     }
-    (*class_tab.ptr())[' ' as ::core::ffi::c_int as usize] =
-        ((*class_tab.ptr())[' ' as ::core::ffi::c_int as usize] as ::core::ffi::c_int | RI_WHITE)
-            as int16_t;
-    (*class_tab.ptr())['\t' as ::core::ffi::c_int as usize] =
-        ((*class_tab.ptr())['\t' as ::core::ffi::c_int as usize] as ::core::ffi::c_int | RI_WHITE)
-            as int16_t;
-    done.set(true_0);
+    tab[b' ' as usize] |= RI_WHITE as i16;
+    tab[b'\t' as usize] |= RI_WHITE as i16;
+    tab
 }
+
+/// The `[:name:]` classes a collection may contain, sorted by name so the
+/// lookup below can binary-search them. The trailing `:]` is part of the
+/// name: the `[` is already consumed when we get here, and matching the
+/// close is what proves the item was a class and not literal text.
+static CHAR_CLASS_TAB: [(&CStr, c_int); 19] = [
+    (c"alnum:]", CLASS_ALNUM as c_int),
+    (c"alpha:]", CLASS_ALPHA as c_int),
+    (c"backspace:]", CLASS_BACKSPACE as c_int),
+    (c"blank:]", CLASS_BLANK as c_int),
+    (c"cntrl:]", CLASS_CNTRL as c_int),
+    (c"digit:]", CLASS_DIGIT as c_int),
+    (c"escape:]", CLASS_ESCAPE as c_int),
+    (c"fname:]", CLASS_FNAME as c_int),
+    (c"graph:]", CLASS_GRAPH as c_int),
+    (c"ident:]", CLASS_IDENT as c_int),
+    (c"keyword:]", CLASS_KEYWORD as c_int),
+    (c"lower:]", CLASS_LOWER as c_int),
+    (c"print:]", CLASS_PRINT as c_int),
+    (c"punct:]", CLASS_PUNCT as c_int),
+    (c"return:]", CLASS_RETURN as c_int),
+    (c"space:]", CLASS_SPACE as c_int),
+    (c"tab:]", CLASS_TAB as c_int),
+    (c"upper:]", CLASS_UPPER as c_int),
+    (c"xdigit:]", CLASS_XDIGIT as c_int),
+];
+
+/// The entry [`take_char_class`] matched last. Collections repeat a class
+/// far more often than they vary it, and the hit skips the search.
+static LAST_CLASS: GlobalCell<usize> = GlobalCell::new(0);
+
+/// Recognise a `[:alpha:]`-style class at `*pp`, which points at the `[`.
+/// On a hit `*pp` advances past the name — the caller has already consumed
+/// the `[`, and the name carries its own `:]` — and the `CLASS_*` code is
+/// returned. Otherwise `CLASS_NONE`, with `*pp` untouched.
+///
+/// # Safety
+///
+/// `*pp` must point into a NUL-terminated pattern.
+pub(crate) unsafe fn take_char_class(pp: &mut *mut c_char) -> c_int {
+    let p = *pp;
+    unsafe {
+        // Only `[:` followed by at least three lowercase letters is a
+        // candidate. That is load-bearing, not just a guard against reading
+        // off the end: `[:a:]` is a literal, not a class.
+        if *p.add(1) as u8 != b':' || !(2..5).all(|off| (*p.add(off) as u8).is_ascii_lowercase()) {
+            return CLASS_NONE as c_int;
+        }
+        let name = p.add(2);
+        // Order the pattern text against a class name the way the C
+        // `strncmp` over the name's length did: byte by byte, stopping at
+        // the first difference. A NUL in the pattern therefore just
+        // compares low, and no byte past it is read.
+        let cmp = |entry: &CStr| {
+            for (i, &want) in entry.to_bytes().iter().enumerate() {
+                match (*name.add(i) as u8).cmp(&want) {
+                    Ordering::Equal => {}
+                    other => return other,
+                }
+            }
+            Ordering::Equal
+        };
+        let last = LAST_CLASS.get();
+        let hit = if cmp(CHAR_CLASS_TAB[last].0).is_eq() {
+            Some(last)
+        } else {
+            // `binary_search_by` orders each entry against the needle;
+            // `cmp` reads the other way round.
+            CHAR_CLASS_TAB
+                .binary_search_by(|(entry, _)| cmp(entry).reverse())
+                .ok()
+        };
+        match hit {
+            Some(i) => {
+                LAST_CLASS.set(i);
+                *pp = p.add(2 + CHAR_CLASS_TAB[i].0.to_bytes().len());
+                CHAR_CLASS_TAB[i].1
+            }
+            None => CLASS_NONE as c_int,
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn re_multiline(mut prog: *const regprog_T) -> ::core::ffi::c_int {
-    return ((*prog).regflags & RF_HASNL as ::core::ffi::c_uint) as ::core::ffi::c_int;
+pub unsafe extern "C" fn re_multiline(prog: *const regprog_T) -> c_int {
+    (unsafe { (*prog).regflags } & RF_HASNL as u32) as c_int
 }
-pub(crate) unsafe extern "C" fn get_equi_class(
-    mut pp: *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut c: ::core::ffi::c_int = 0;
-    let mut l: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    let mut p: *mut ::core::ffi::c_char = *pp;
-    if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == '=' as ::core::ffi::c_int
-        && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-    {
-        l = utfc_ptr2len(p.offset(2 as ::core::ffi::c_int as isize));
-        if *p.offset((l + 2 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-            == '=' as ::core::ffi::c_int
-            && *p.offset((l + 3 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-                == ']' as ::core::ffi::c_int
-        {
-            c = utf_ptr2char(p.offset(2 as ::core::ffi::c_int as isize));
-            *pp = (*pp).offset((l + 4 as ::core::ffi::c_int) as isize);
-            return c;
+
+/// Recognise the one other shape a `[]` collection can bracket: an
+/// equivalence class `[=a=]` (`delim` is `=`) or a collation element
+/// `[.a.]` (`delim` is `.`). `*pp` points at the `[`; on a hit it advances
+/// past the whole item and the character between the delimiters is
+/// returned, else 0 with `*pp` untouched.
+///
+/// Upstream splits this in two and only null-checks `p[0]` in the
+/// collation-element half. Both callers hold `p[0] == '['`, so the check
+/// never fires either way; it is applied to both here so that a pattern
+/// ending mid-item can never walk past its terminator.
+///
+/// # Safety
+///
+/// `*pp` must point into a NUL-terminated pattern.
+pub(crate) unsafe fn take_bracketed(pp: &mut *mut c_char, delim: u8) -> c_int {
+    let p = *pp;
+    unsafe {
+        if *p == 0 || *p.add(1) as u8 != delim || *p.add(2) == 0 {
+            return 0;
         }
-    }
-    return 0 as ::core::ffi::c_int;
-}
-pub(crate) unsafe extern "C" fn get_coll_element(
-    mut pp: *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut c: ::core::ffi::c_int = 0;
-    let mut l: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    let mut p: *mut ::core::ffi::c_char = *pp;
-    if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-        && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '.' as ::core::ffi::c_int
-        && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-    {
-        l = utfc_ptr2len(p.offset(2 as ::core::ffi::c_int as isize));
-        if *p.offset((l + 2 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-            == '.' as ::core::ffi::c_int
-            && *p.offset((l + 3 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-                == ']' as ::core::ffi::c_int
-        {
-            c = utf_ptr2char(p.offset(2 as ::core::ffi::c_int as isize));
-            *pp = (*pp).offset((l + 4 as ::core::ffi::c_int) as isize);
-            return c;
+        let len = utfc_ptr2len(p.add(2)) as usize;
+        if *p.add(len + 2) as u8 != delim || *p.add(len + 3) as u8 != b']' {
+            return 0;
         }
+        *pp = p.add(len + 4);
+        utf_ptr2char(p.add(2))
     }
-    return 0 as ::core::ffi::c_int;
 }
-pub(crate) unsafe extern "C" fn get_cpo_flags() {
-    reg_cpo_lit.set(!vim_strchr(p_cpo.get(), CPO_LITERAL).is_null() as ::core::ffi::c_int);
+
+/// Cache whether 'cpoptions' contains `l`, which makes `\r`, `\t` and
+/// friends literal inside a `[]` collection. Read once per compile rather
+/// than per character.
+pub(crate) fn refresh_cpo_flags() {
+    // SAFETY: `p_cpo` is the NUL-terminated 'cpoptions' string.
+    let literal = unsafe { !vim_strchr(p_cpo.get(), CPO_LITERAL).is_null() };
+    reg_cpo_lit.set(literal as c_int);
 }
