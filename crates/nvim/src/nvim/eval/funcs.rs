@@ -18,7 +18,7 @@ use crate::src::nvim::channel::{
     channel_incref, channel_job_start, channel_send, channel_terminal_alloc,
 };
 use crate::src::nvim::channel::{channel_proc, channel_pty};
-use crate::src::nvim::charset::{getdigits_int, skipwhite};
+use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, cmdline_pum_active};
 use crate::src::nvim::context::{
     ctx_free, ctx_from_dict, ctx_get, ctx_restore, ctx_save, ctx_size, ctx_to_dict, kCtxAll,
@@ -38,8 +38,8 @@ use crate::src::nvim::eval::typval::{
     tv_check_for_list_arg, tv_check_for_lnum_arg, tv_check_for_nonnull_dict_arg,
     tv_check_for_number_arg, tv_check_for_opt_dict_arg, tv_check_for_opt_number_arg,
     tv_check_for_string_arg, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_add_allocated_str,
-    tv_dict_add_bool, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len,
-    tv_dict_alloc, tv_dict_alloc_ret, tv_dict_extend, tv_dict_find, tv_dict_free, tv_dict_get_bool,
+    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len, tv_dict_alloc,
+    tv_dict_alloc_ret, tv_dict_extend, tv_dict_find, tv_dict_free, tv_dict_get_bool,
     tv_dict_get_callback, tv_dict_get_number, tv_dict_get_string, tv_dict_item_remove,
     tv_dict_watcher_add, tv_dict_watcher_remove, tv_get_bool, tv_get_lnum, tv_get_lnum_buf,
     tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf, tv_get_string_buf_chk,
@@ -116,9 +116,8 @@ use crate::src::nvim::main::{
     emsg_silent, firstwin, garbage_collect_at_exit, got_int, lastbuf, lines_left, main_loop,
     mouse_row, msg_col, msg_row, msg_scroll, msg_scrolled, msg_silent, need_clr_eos, on_print,
     p_cpo, p_ic, p_magic, p_tgc, p_verbose, p_wic, p_ws, provider_call_nesting,
-    provider_caller_scope, redir_off, reg_executing, reg_recorded, reg_recording, starting,
-    stdin_isatty, stdout_isatty, typebuf, vgetc_busy, vim_ignored, want_garbage_collect,
-    wild_menu_showing, windowsVersion,
+    provider_caller_scope, redir_off, starting, stdin_isatty, stdout_isatty, typebuf, vgetc_busy,
+    vim_ignored, want_garbage_collect, wild_menu_showing, windowsVersion,
 };
 use crate::src::nvim::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks, setpcmark};
 use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
@@ -154,8 +153,8 @@ use crate::src::nvim::os::env::{
 };
 use crate::src::nvim::os::fs::{os_isdir, os_setperm};
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, atoi, gettext, memcpy, memmove, memset, snprintf, strcasecmp, strchr,
-    strcmp, strcpy, strlen, strncasecmp, strncmp, strtoul, time,
+    __assert_fail, atoi, gettext, memcpy, memmove, memset, snprintf, strcasecmp, strchr, strcmp,
+    strcpy, strlen, strncasecmp, strncmp, strtoul, time,
 };
 use crate::src::nvim::os::pty_proc_unix::pty_proc_resize;
 use crate::src::nvim::os::shell::shell_free_argv;
@@ -166,11 +165,6 @@ use crate::src::nvim::popupmenu::{pum_set_event_info, pum_visible};
 use crate::src::nvim::pos::{clearpos, equalpos};
 use crate::src::nvim::profile::{
     profile_end, profile_msg, profile_setlimit, profile_signed, profile_start, profile_sub,
-};
-use crate::src::nvim::register::get_register_name;
-use crate::src::nvim::register::{
-    format_reg_type, get_reg_contents, get_reg_type, get_unname_register, get_yank_register,
-    op_reg_set_previous, write_reg_contents_ex, write_reg_contents_lst,
 };
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::search::searchit;

@@ -58,7 +58,6 @@
     "crates/nvim/src/nvim/eval/funcs/msgpack.rs": 19,
     "crates/nvim/src/nvim/eval/funcs/reduce.rs": 5,
     "crates/nvim/src/nvim/eval/funcs/regexp.rs": 16,
-    "crates/nvim/src/nvim/eval/funcs/register.rs": 11,
     "crates/nvim/src/nvim/eval/funcs/runtime.rs": 116,
     "crates/nvim/src/nvim/eval/funcs/screen.rs": 3,
     "crates/nvim/src/nvim/eval/funcs/search.rs": 5,
