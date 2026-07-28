@@ -53,7 +53,6 @@
     "crates/nvim/src/nvim/eval/funcs/env.rs": 17,
     "crates/nvim/src/nvim/eval/funcs/input.rs": 4,
     "crates/nvim/src/nvim/eval/funcs/job.rs": 51,
-    "crates/nvim/src/nvim/eval/funcs/msgpack.rs": 19,
     "crates/nvim/src/nvim/eval/funcs/reduce.rs": 5,
     "crates/nvim/src/nvim/eval/funcs/regexp.rs": 16,
     "crates/nvim/src/nvim/eval/funcs/runtime.rs": 116,
