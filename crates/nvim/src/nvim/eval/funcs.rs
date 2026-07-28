@@ -17,7 +17,7 @@ use crate::src::nvim::channel::{
 };
 use crate::src::nvim::channel::{channel_proc, channel_pty};
 use crate::src::nvim::charset::skipwhite;
-use crate::src::nvim::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, cmdline_pum_active};
+use crate::src::nvim::cmdexpand::cmdline_pum_active;
 use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::edit::buf_prompt_text;
 use crate::src::nvim::eval::buffer::find_buffer;
@@ -59,9 +59,7 @@ use crate::src::nvim::event::multiqueue::{
 use crate::src::nvim::event::proc::proc_is_stopped;
 use crate::src::nvim::event::proc::{proc_stop, proc_wait};
 use crate::src::nvim::ex_cmds::check_secure;
-use crate::src::nvim::ex_docmd::{
-    cmd_exists, do_cmdline, do_cmdline_cmd, eval_vars, expand_filename,
-};
+use crate::src::nvim::ex_docmd::{cmd_exists, do_cmdline, do_cmdline_cmd};
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::ex_getln::{get_user_input, text_locked, text_locked_msg};
 use crate::src::nvim::garray::{ga_append, ga_append_via_ptr, ga_grow, ga_init};
@@ -89,18 +87,16 @@ use crate::src::nvim::main::{
     e_unknown_function_str, empty_string_option, emsg_noredir, emsg_off, emsg_silent, firstwin,
     garbage_collect_at_exit, got_int, lastbuf, lines_left, main_loop, mouse_row, msg_col, msg_row,
     msg_scroll, msg_scrolled, msg_silent, need_clr_eos, on_print, p_cpo, p_ic, p_magic, p_tgc,
-    p_verbose, p_wic, p_ws, provider_call_nesting, provider_caller_scope, redir_off, starting,
+    p_verbose, p_ws, provider_call_nesting, provider_caller_scope, redir_off, starting,
     stdin_isatty, stdout_isatty, typebuf, vgetc_busy, want_garbage_collect, wild_menu_showing,
     windowsVersion,
 };
 use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
-use crate::src::nvim::memline::{
-    decl, incl, ml_get, ml_get_buf, ml_get_len, ml_open, recover_names, swapfile_dict,
-};
+use crate::src::nvim::memline::{decl, incl, ml_get, ml_get_buf, ml_get_len, ml_open};
 use crate::src::nvim::memory::{
-    ARENA_EMPTY, arena_finish, arena_mem_free, strequal, strnequal, xcalloc, xfree, xmalloc,
-    xmemdup, xmemdupz, xstrdup,
+    ARENA_EMPTY, arena_finish, arena_mem_free, strnequal, xcalloc, xfree, xmalloc, xmemdup,
+    xmemdupz, xstrdup,
 };
 use crate::src::nvim::menu::{get_menu_cmd_modes, menu_get};
 use crate::src::nvim::message::{
@@ -120,20 +116,17 @@ use crate::src::nvim::options::kOptCpoptions;
 use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::src::nvim::os::env::{
-    expand_env_save, home_replace, os_copy_fullenv, os_env_exists, os_free_fullenv,
-    os_get_fullenv_size, os_get_hostname, os_get_pid, os_getenv, vim_env_iter, vim_getenv,
-    vim_setenv_ext, vim_unsetenv_ext,
+    expand_env_save, home_replace, os_env_exists, os_get_hostname, os_get_pid, os_getenv,
 };
-use crate::src::nvim::os::fs::{os_isdir, os_setperm};
+use crate::src::nvim::os::fs::os_isdir;
 use crate::src::nvim::os::libc::{
-    __assert_fail, atoi, gettext, memcpy, memset, snprintf, strcasecmp, strchr, strcmp, strcpy,
-    strlen, strncasecmp, strncmp, strtoul,
+    __assert_fail, atoi, gettext, memcpy, memset, snprintf, strcasecmp, strcmp, strcpy, strlen,
+    strncasecmp, strncmp, strtoul,
 };
 use crate::src::nvim::os::pty_proc_unix::pty_proc_resize;
 use crate::src::nvim::os::shell::shell_free_argv;
-use crate::src::nvim::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
 use crate::src::nvim::os::time::os_hrtime;
-use crate::src::nvim::path::{concat_fnames_realloc, vim_FullName};
+use crate::src::nvim::path::vim_FullName;
 use crate::src::nvim::popupmenu::{pum_set_event_info, pum_visible};
 use crate::src::nvim::pos::{clearpos, equalpos};
 use crate::src::nvim::profile::profile_setlimit;
