@@ -1,846 +1,749 @@
-//! Child processes: the `job*()` family and the environment it hands
-//! them.
-//!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! Child processes: the `job*()` family and the environment it hands them.
+#![deny(unsafe_op_in_unsafe_fn)]
 
-use super::*;
+use super::args::frame;
+use super::{
+    C2Rust_Unnamed_16, C2Rust_Unnamed_22, EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, FAIL,
+    GA_EMPTY_INIT_VALUE, NUL, NUMBUFLEN, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN,
+    VAR_UNLOCKED, VV_SEND_SERVER, f_environ, false_0, kCallbackNone, kChannelPartRpc,
+    kChannelStdinNull, kChannelStdinPipe, kChannelStreamProc, kErrorTypeNone, kObjectTypeInteger,
+    kProcTypePty,
+};
+use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string, dict_set_var};
+use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::buffer::{buf_close_terminal, setfname};
+use crate::src::nvim::channel::{
+    channel_close, channel_create_event, channel_decref, channel_incref, channel_job_start,
+    channel_proc, channel_pty, channel_terminal_alloc, find_channel,
+};
+use crate::src::nvim::eval::typval::{
+    tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_extend, tv_dict_find,
+    tv_dict_free, tv_dict_get_number, tv_dict_get_string, tv_dict_item_remove, tv_list_alloc,
+    tv_list_append_number, tv_list_len, tv_list_ref,
+};
+use crate::src::nvim::eval::vars::get_vim_var_str;
+use crate::src::nvim::eval_1::{common_job_callbacks, find_job, tv_to_argv};
+use crate::src::nvim::event::r#loop::loop_on_put;
+use crate::src::nvim::event::multiqueue::{
+    multiqueue_free, multiqueue_new, multiqueue_process_events, multiqueue_replace_parent,
+};
+use crate::src::nvim::event::proc::{proc_is_stopped, proc_stop, proc_wait};
+use crate::src::nvim::ex_cmds::check_secure;
+use crate::src::nvim::ex_getln::{text_locked, text_locked_msg};
+use crate::src::nvim::main::{
+    IObuff, NameBuff, curbuf, curwin, e_channotpty, e_invarg, e_invarg2, e_invargNval, main_loop,
+    p_tgc,
+};
+use crate::src::nvim::memline::ml_open;
+use crate::src::nvim::memory::{xcalloc, xfree};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::r#move::win_col_off;
+use crate::src::nvim::os::env::{home_replace, os_getenv};
+use crate::src::nvim::os::fs::os_isdir;
+use crate::src::nvim::os::libc::{gettext, snprintf, strlen, strncmp};
+use crate::src::nvim::os::pty_proc_unix::pty_proc_resize;
+use crate::src::nvim::os::shell::shell_free_argv;
+use crate::src::nvim::os::time::os_hrtime;
+use crate::src::nvim::path::vim_FullName;
+use crate::src::nvim::terminal::{terminal_buf, terminal_open, terminal_running};
+use crate::src::nvim::types::{
+    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, Integer,
+    buf_T, dict_T, dictitem_T, list_T, listitem_T, object, typval_T, typval_vval_union, uint16_t,
+    uint64_t, varnumber_T,
+};
+use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_flush};
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr;
 
+/// A cleared `CallbackReader`, which the option parser fills in.
+const NO_READER: CallbackReader = CallbackReader {
+    cb: NO_CALLBACK,
+    self_0: ptr::null_mut::<dict_T>(),
+    buffer: GA_EMPTY_INIT_VALUE,
+    eof: false,
+    buffered: false,
+    fwd_err: false,
+    type_0: ptr::null::<c_char>(),
+};
+
+/// A cleared `Callback`.
+const NO_CALLBACK: Callback = Callback {
+    data: C2Rust_Unnamed_22 {
+        funcref: ptr::null_mut::<c_char>(),
+    },
+    type_0: kCallbackNone,
+};
+
+/// The job id a `job*()` builtin was handed, or `None` when the argument
+/// was not a Number at all -- in which case the error is already out.
+///
+/// # Safety
+/// `arg` is a live typval.
+unsafe fn job_id(arg: &typval_T) -> Option<uint64_t> {
+    if arg.v_type != VAR_NUMBER {
+        // SAFETY: `e_invarg` is a live NUL-terminated buffer.
+        unsafe { emsg(gettext(e_invarg.ptr() as *const c_char)) };
+        return None;
+    }
+    // SAFETY: the type tag names the union member.
+    Some(unsafe { arg.vval.v_number } as uint64_t)
+}
+
+/// `jobpid({job})`
 pub unsafe extern "C" fn f_jobpid(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    (*rettv).v_type = VAR_NUMBER;
-    (*rettv).vval.v_number = 0 as varnumber_T;
-    if check_secure() {
-        return;
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.v_type = VAR_NUMBER;
+    rettv.vval.v_number = 0;
+    // SAFETY: the frame is live; `find_job` answers with a live channel or
+    // null.
+    unsafe {
+        if check_secure() {
+            return;
+        }
+        let Some(id) = job_id(args.get(0)) else {
+            return;
+        };
+        let data = find_job(id, true);
+        if data.is_null() {
+            return;
+        }
+        rettv.vval.v_number = (*channel_proc(data)).pid as varnumber_T;
     }
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
-        return;
-    }
-    let mut data: *mut Channel = find_job(
-        (*argvars.offset(0 as ::core::ffi::c_int as isize))
-            .vval
-            .v_number as uint64_t,
-        true_0 != 0,
-    );
-    if data.is_null() {
-        return;
-    }
-    let mut proc: *mut Proc = channel_proc(data);
-    (*rettv).vval.v_number = (*proc).pid as varnumber_T;
 }
+
+/// `jobresize({job}, {width}, {height})` — only for a pty job.
 pub unsafe extern "C" fn f_jobresize(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    (*rettv).v_type = VAR_NUMBER;
-    (*rettv).vval.v_number = 0 as varnumber_T;
-    if check_secure() {
-        return;
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.v_type = VAR_NUMBER;
+    rettv.vval.v_number = 0;
+    // SAFETY: the frame is live; `find_job` answers with a live channel or
+    // null.
+    unsafe {
+        if check_secure() {
+            return;
+        }
+        // All three arguments are checked together, so a bad width reports
+        // the same message a bad job id does.
+        if args.ty(0) != VAR_NUMBER || args.ty(1) != VAR_NUMBER || args.ty(2) != VAR_NUMBER {
+            emsg(gettext(e_invarg.ptr() as *const c_char));
+            return;
+        }
+        let data = find_job(args.get(0).vval.v_number as uint64_t, true);
+        if data.is_null() {
+            return;
+        }
+        if (*channel_proc(data)).type_0 != kProcTypePty {
+            emsg(gettext(e_channotpty.ptr() as *const c_char));
+            return;
+        }
+        pty_proc_resize(
+            channel_pty(data),
+            args.get(1).vval.v_number as uint16_t,
+            args.get(2).vval.v_number as uint16_t,
+        );
+        rettv.vval.v_number = 1;
     }
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
-        return;
-    }
-    let mut data: *mut Channel = find_job(
-        (*argvars.offset(0 as ::core::ffi::c_int as isize))
-            .vval
-            .v_number as uint64_t,
-        true_0 != 0,
-    );
-    if data.is_null() {
-        return;
-    }
-    if (*channel_proc(data)).type_0 as ::core::ffi::c_uint
-        != kProcTypePty as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        emsg(gettext(
-            &raw const e_channotpty as *const ::core::ffi::c_char,
-        ));
-        return;
-    }
-    pty_proc_resize(
-        channel_pty(data),
-        (*argvars.offset(1 as ::core::ffi::c_int as isize))
-            .vval
-            .v_number as uint16_t,
-        (*argvars.offset(2 as ::core::ffi::c_int as isize))
-            .vval
-            .v_number as uint16_t,
-    );
-    (*rettv).vval.v_number = 1 as varnumber_T;
 }
-static pty_ignored_env_vars: GlobalCell<[*const ::core::ffi::c_char; 8]> = GlobalCell::new([
-    b"COLUMNS\0".as_ptr() as *const ::core::ffi::c_char,
-    b"LINES\0".as_ptr() as *const ::core::ffi::c_char,
-    b"TERMCAP\0".as_ptr() as *const ::core::ffi::c_char,
-    b"COLORFGBG\0".as_ptr() as *const ::core::ffi::c_char,
-    b"COLORTERM\0".as_ptr() as *const ::core::ffi::c_char,
-    b"VIM\0".as_ptr() as *const ::core::ffi::c_char,
-    b"VIMRUNTIME\0".as_ptr() as *const ::core::ffi::c_char,
-    ::core::ptr::null::<::core::ffi::c_char>(),
-]);
-static required_env_vars: GlobalCell<[*const ::core::ffi::c_char; 1]> =
-    GlobalCell::new([::core::ptr::null::<::core::ffi::c_char>()]);
-pub unsafe extern "C" fn create_environment(
-    mut job_env: *const dictitem_T,
-    clear_env: bool,
-    pty: bool,
-    pty_term_name: *const ::core::ffi::c_char,
-) -> *mut dict_T {
-    let mut env: *mut dict_T = tv_dict_alloc();
-    if !clear_env {
-        let mut temp_env: typval_T = typval_T {
-            v_type: VAR_UNKNOWN,
-            v_lock: VAR_UNLOCKED,
-            vval: typval_vval_union { v_number: 0 },
-        };
-        f_environ(
-            ::core::ptr::null_mut::<typval_T>(),
-            &raw mut temp_env,
-            EvalFuncData { null: NULL_0 },
-        );
-        tv_dict_extend(
-            env,
-            temp_env.vval.v_dict,
-            b"force\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        tv_dict_free(temp_env.vval.v_dict);
-        if pty {
-            let mut i: size_t = 0 as size_t;
-            while i < ::core::mem::size_of::<[*const ::core::ffi::c_char; 8]>()
-                .wrapping_div(::core::mem::size_of::<*const ::core::ffi::c_char>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[*const ::core::ffi::c_char; 8]>()
-                        .wrapping_rem(::core::mem::size_of::<*const ::core::ffi::c_char>())
-                        == 0) as ::core::ffi::c_int as usize,
-                )
-                && !(*pty_ignored_env_vars.ptr())[i as usize].is_null()
-            {
-                let mut dv: *mut dictitem_T = tv_dict_find(
-                    env,
-                    (*pty_ignored_env_vars.ptr())[i as usize],
-                    -1 as ptrdiff_t,
-                );
-                if !dv.is_null() {
-                    tv_dict_item_remove(env, dv);
-                }
-                i = i.wrapping_add(1);
-            }
-            if p_tgc.get() != 0 {
-                tv_dict_add_str(
-                    env,
-                    b"COLORTERM\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-                    b"truecolor\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        }
-    }
-    if pty {
-        let mut dv_0: *mut dictitem_T = tv_dict_find(
-            env,
-            b"TERM\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
-        if !dv_0.is_null() {
-            tv_dict_item_remove(env, dv_0);
-        }
-        tv_dict_add_str(
-            env,
-            b"TERM\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            pty_term_name,
-        );
-    }
-    let mut nvim_addr: *mut ::core::ffi::c_char = get_vim_var_str(VV_SEND_SERVER);
-    if *nvim_addr.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
-        let mut dv_1: *mut dictitem_T = tv_dict_find(
-            env,
-            b"NVIM\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
-        if !dv_1.is_null() {
-            tv_dict_item_remove(env, dv_1);
-        }
-        tv_dict_add_str(
-            env,
-            b"NVIM\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            nvim_addr,
-        );
-    }
-    if !job_env.is_null() {
-        tv_dict_extend(
-            env,
-            (*job_env).di_tv.vval.v_dict,
-            b"force\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    }
-    if pty {
-        let mut i_0: size_t = 0 as size_t;
-        while i_0
-            < ::core::mem::size_of::<[*const ::core::ffi::c_char; 1]>()
-                .wrapping_div(::core::mem::size_of::<*const ::core::ffi::c_char>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[*const ::core::ffi::c_char; 1]>()
-                        .wrapping_rem(::core::mem::size_of::<*const ::core::ffi::c_char>())
-                        == 0) as ::core::ffi::c_int as usize,
-                )
-            && !(*required_env_vars.ptr())[i_0 as usize].is_null()
-        {
-            let mut len: size_t = strlen((*required_env_vars.ptr())[i_0 as usize]);
-            let mut dv_2: *mut dictitem_T = tv_dict_find(
-                env,
-                (*required_env_vars.ptr())[i_0 as usize],
-                len as ptrdiff_t,
-            );
-            if dv_2.is_null() {
-                let mut env_var: *mut ::core::ffi::c_char =
-                    os_getenv((*required_env_vars.ptr())[i_0 as usize]);
-                if !env_var.is_null() {
-                    tv_dict_add_allocated_str(
-                        env,
-                        (*required_env_vars.ptr())[i_0 as usize],
-                        len,
-                        env_var,
-                    );
-                }
-            }
-            i_0 = i_0.wrapping_add(1);
-        }
-    }
-    return env;
-}
-pub unsafe extern "C" fn f_jobstart(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+
+/// `jobstop({job})`
+pub unsafe extern "C" fn f_jobstop(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    let mut len: size_t = 0;
-    let mut err: Error = Error {
-        type_0: kErrorTypeException,
-        msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
-    (*rettv).v_type = VAR_NUMBER;
-    (*rettv).vval.v_number = 0 as varnumber_T;
-    if check_secure() {
-        return;
-    }
-    let mut cmd: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut executable: bool = true_0 != 0;
-    let mut argv: *mut *mut ::core::ffi::c_char = tv_to_argv(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-        &raw mut cmd,
-        &raw mut executable,
-    );
-    if argv.is_null() {
-        (*rettv).vval.v_number = (if executable as ::core::ffi::c_int != 0 {
-            0 as ::core::ffi::c_int
-        } else {
-            -1 as ::core::ffi::c_int
-        }) as varnumber_T;
-        return;
-    }
-    if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        && (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        semsg(
-            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-            b"expected dictionary\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        shell_free_argv(argv);
-        return;
-    }
-    let mut job_opts: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
-    let mut detach: bool = false_0 != 0;
-    let mut rpc: bool = false_0 != 0;
-    let mut pty: bool = false_0 != 0;
-    let mut term: bool = false_0 != 0;
-    let mut clear_env: bool = false_0 != 0;
-    let mut overlapped: bool = false_0 != 0;
-    let mut stdin_mode: ChannelStdinMode = kChannelStdinPipe;
-    let mut on_stdout: CallbackReader = CallbackReader {
-        cb: Callback {
-            data: C2Rust_Unnamed_22 {
-                funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-            type_0: kCallbackNone,
-        },
-        self_0: ::core::ptr::null_mut::<dict_T>(),
-        buffer: GA_EMPTY_INIT_VALUE,
-        eof: false,
-        buffered: false_0 != 0,
-        fwd_err: false_0 != 0,
-        type_0: ::core::ptr::null::<::core::ffi::c_char>(),
-    };
-    let mut on_stderr: CallbackReader = CallbackReader {
-        cb: Callback {
-            data: C2Rust_Unnamed_22 {
-                funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-            type_0: kCallbackNone,
-        },
-        self_0: ::core::ptr::null_mut::<dict_T>(),
-        buffer: GA_EMPTY_INIT_VALUE,
-        eof: false,
-        buffered: false_0 != 0,
-        fwd_err: false_0 != 0,
-        type_0: ::core::ptr::null::<::core::ffi::c_char>(),
-    };
-    let mut on_exit: Callback = Callback {
-        data: C2Rust_Unnamed_22 {
-            funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        type_0: kCallbackNone,
-    };
-    let mut cwd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut job_env: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
-    if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        job_opts = (*argvars.offset(1 as ::core::ffi::c_int as isize))
-            .vval
-            .v_dict;
-        detach = tv_dict_get_number(job_opts, b"detach\0".as_ptr() as *const ::core::ffi::c_char)
-            != 0 as varnumber_T;
-        rpc = tv_dict_get_number(job_opts, b"rpc\0".as_ptr() as *const ::core::ffi::c_char)
-            != 0 as varnumber_T;
-        term = tv_dict_get_number(job_opts, b"term\0".as_ptr() as *const ::core::ffi::c_char)
-            != 0 as varnumber_T;
-        pty = term as ::core::ffi::c_int != 0
-            || tv_dict_get_number(job_opts, b"pty\0".as_ptr() as *const ::core::ffi::c_char)
-                != 0 as varnumber_T;
-        clear_env = tv_dict_get_number(
-            job_opts,
-            b"clear_env\0".as_ptr() as *const ::core::ffi::c_char,
-        ) != 0 as varnumber_T;
-        overlapped = tv_dict_get_number(
-            job_opts,
-            b"overlapped\0".as_ptr() as *const ::core::ffi::c_char,
-        ) != 0 as varnumber_T;
-        let mut s: *mut ::core::ffi::c_char = tv_dict_get_string(
-            job_opts,
-            b"stdin\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0 != 0,
-        );
-        if !s.is_null() {
-            if strncmp(
-                s,
-                b"null\0".as_ptr() as *const ::core::ffi::c_char,
-                NUMBUFLEN as ::core::ffi::c_int as size_t,
-            ) == 0
-            {
-                stdin_mode = kChannelStdinNull;
-            } else if strncmp(
-                s,
-                b"pipe\0".as_ptr() as *const ::core::ffi::c_char,
-                NUMBUFLEN as ::core::ffi::c_int as size_t,
-            ) != 0
-            {
-                semsg(
-                    gettext(&raw const e_invargNval as *const ::core::ffi::c_char),
-                    b"stdin\0".as_ptr() as *const ::core::ffi::c_char,
-                    s,
-                );
-            }
-        }
-        let job_term: *mut dictitem_T = tv_dict_find(
-            job_opts,
-            b"term\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
-        if !job_term.is_null()
-            && VAR_BOOL as ::core::ffi::c_int as ::core::ffi::c_uint
-                != (*job_term).di_tv.v_type as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                b"'term' must be Boolean\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            shell_free_argv(argv);
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.v_type = VAR_NUMBER;
+    rettv.vval.v_number = 0;
+    // SAFETY: the frame is live; `find_job` answers with a live channel or
+    // null, and `error` is a borrowed static message.
+    unsafe {
+        if check_secure() {
             return;
         }
-        if pty as ::core::ffi::c_int != 0 && rpc as ::core::ffi::c_int != 0 {
-            semsg(
-                gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                b"job cannot have both 'pty' and 'rpc' options set\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-            shell_free_argv(argv);
+        let Some(id) = job_id(args.get(0)) else {
             return;
-        }
-        let mut new_cwd: *mut ::core::ffi::c_char = tv_dict_get_string(
-            job_opts,
-            b"cwd\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0 != 0,
-        );
-        if !new_cwd.is_null() && *new_cwd as ::core::ffi::c_int != NUL {
-            cwd = new_cwd;
-            if !os_isdir(cwd) {
-                semsg(
-                    gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                    b"expected valid directory\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-                shell_free_argv(argv);
-                return;
-            }
-        }
-        job_env = tv_dict_find(
-            job_opts,
-            b"env\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
-        if !job_env.is_null()
-            && (*job_env).di_tv.v_type as ::core::ffi::c_uint
-                != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            semsg(
-                gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                b"env\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            shell_free_argv(argv);
-            return;
-        }
-        if !common_job_callbacks(
-            job_opts,
-            &raw mut on_stdout,
-            &raw mut on_stderr,
-            &raw mut on_exit,
-        ) {
-            shell_free_argv(argv);
-            return;
-        }
-    }
-    let mut width: uint16_t =
-        tv_dict_get_number(job_opts, b"width\0".as_ptr() as *const ::core::ffi::c_char) as uint16_t;
-    let mut height: uint16_t =
-        tv_dict_get_number(job_opts, b"height\0".as_ptr() as *const ::core::ffi::c_char)
-            as uint16_t;
-    let mut term_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if term {
-        if text_locked() {
-            text_locked_msg();
-            shell_free_argv(argv);
-            return;
-        }
-        if (*curbuf.get()).b_changed != 0 {
-            emsg(gettext(
-                b"jobstart(...,{term=true}) requires unmodified buffer\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ));
-            shell_free_argv(argv);
-            return;
-        }
-        if !(*curbuf.get()).terminal.is_null() {
-            if terminal_running((*curbuf.get()).terminal) {
-                semsg(
-                    gettext(b"Terminal already connected to buffer %d\0".as_ptr()
-                        as *const ::core::ffi::c_char),
-                    (*curbuf.get()).handle,
-                );
-                shell_free_argv(argv);
-                return;
-            }
-            buf_close_terminal(curbuf.get());
-        }
-        '_c2rust_label: {
-            if !rpc {
-            } else {
-                __assert_fail(
-                    b"!rpc\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    3606 as ::core::ffi::c_uint,
-                    b"void f_jobstart(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
         };
-        term_name =
-            b"xterm-256color\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        cwd = (if !cwd.is_null() {
-            cwd as *const ::core::ffi::c_char
-        } else {
-            b".\0".as_ptr() as *const ::core::ffi::c_char
-        }) as *mut ::core::ffi::c_char;
-        overlapped = false_0 != 0;
-        detach = false_0 != 0;
-        stdin_mode = kChannelStdinPipe;
-        width = (if width as ::core::ffi::c_int != 0 {
-            width as ::core::ffi::c_int
-        } else {
-            (if 0 as ::core::ffi::c_int > (*curwin.get()).w_view_width - win_col_off(curwin.get()) {
-                0 as ::core::ffi::c_int
-            } else {
-                (*curwin.get()).w_view_width - win_col_off(curwin.get())
-            }) as uint16_t as ::core::ffi::c_int
-        }) as uint16_t;
-        height = (if height as ::core::ffi::c_int != 0 {
-            height as ::core::ffi::c_int
-        } else {
-            (*curwin.get()).w_view_height as uint16_t as ::core::ffi::c_int
-        }) as uint16_t;
+        // `false`: a job that has already gone is not an error here.
+        let data = find_job(id, false);
+        if data.is_null() {
+            return;
+        }
+        let mut error = ptr::null::<c_char>();
+        if (*data).is_rpc {
+            channel_close((*data).id, kChannelPartRpc, &raw mut error);
+        }
+        proc_stop(channel_proc(data));
+        // Reported as a success even when closing the RPC half complained.
+        rettv.vval.v_number = 1;
+        if !error.is_null() {
+            emsg(error);
+        }
     }
-    if pty {
-        term_name = if !term_name.is_null() {
-            term_name
-        } else {
-            tv_dict_get_string(
-                job_opts,
-                b"TERM\0".as_ptr() as *const ::core::ffi::c_char,
-                false_0 != 0,
-            )
-        };
-        term_name = (if !term_name.is_null() {
-            term_name as *const ::core::ffi::c_char
-        } else {
-            b"ansi\0".as_ptr() as *const ::core::ffi::c_char
-        }) as *mut ::core::ffi::c_char;
-    }
-    let mut env: *mut dict_T = create_environment(job_env, clear_env, pty, term_name);
-    let mut chan: *mut Channel = channel_job_start(
-        argv,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        on_stdout,
-        on_stderr,
-        on_exit,
-        pty,
-        rpc,
-        overlapped,
-        detach,
-        stdin_mode,
-        cwd,
-        width,
-        height,
-        env,
-        &raw mut (*rettv).vval.v_number,
-    );
-    if chan.is_null() {
-        return;
-    } else {
-        if !term {
-            channel_create_event(chan, ::core::ptr::null::<::core::ffi::c_char>());
-        } else {
-            if (*rettv).vval.v_number <= 0 as varnumber_T {
-                return;
-            }
-            let pid: ::core::ffi::c_int = (*channel_proc(chan)).pid;
-            let buf: *mut buf_T = curbuf.get();
-            (*buf).b_p_swf = false_0;
-            if (*buf).b_ml.ml_mfp.is_null() && ml_open(buf) == FAIL {
-                proc_stop(channel_proc(chan));
-                channel_decref(chan);
-                return;
-            }
-            channel_incref(chan);
-            channel_terminal_alloc(buf, chan);
-            apply_autocmds(
-                EVENT_BUFFILEPRE,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
-                buf,
-            );
-            if !((*chan).term.is_null() || terminal_buf((*chan).term) == 0 as ::core::ffi::c_int) {
-                vim_FullName(
-                    cwd,
-                    NameBuff.ptr() as *mut ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
-                    false_0 != 0,
-                );
-                len = home_replace(
-                    ::core::ptr::null::<buf_T>(),
-                    NameBuff.ptr() as *mut ::core::ffi::c_char,
-                    IObuff.ptr() as *mut ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
-                    true_0 != 0,
-                );
-                if len != 1 as size_t
-                    && ((*IObuff.ptr())[len.wrapping_sub(1 as size_t) as usize]
-                        as ::core::ffi::c_int
-                        == '\\' as ::core::ffi::c_int
-                        || (*IObuff.ptr())[len.wrapping_sub(1 as size_t) as usize]
-                            as ::core::ffi::c_int
-                            == '/' as ::core::ffi::c_int)
+}
+
+/// `jobwait({jobs} [, {timeout}])`
+pub unsafe extern "C" fn f_jobwait(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.v_type = VAR_NUMBER;
+    rettv.vval.v_number = 0;
+    // SAFETY: the frame is live; `jobs` is an allocation this body owns for
+    // its whole length, and every channel in it holds a reference.
+    unsafe {
+        if check_secure() {
+            return;
+        }
+        if args.ty(0) != VAR_LIST || (args.ty(1) != VAR_NUMBER && args.has(1)) {
+            emsg(gettext(e_invarg.ptr() as *const c_char));
+            return;
+        }
+
+        let list: *mut list_T = args.get(0).vval.v_list;
+        let count = tv_list_len(list);
+        let jobs = xcalloc(count as usize, size_of::<*mut Channel>()) as *mut *mut Channel;
+        // The waiting jobs' events are parked on a queue of our own so that
+        // they do not run while we block.
+        let waiting_jobs = multiqueue_new(Some(loop_on_put), main_loop.ptr() as *mut c_void);
+
+        let mut i = 0;
+        if !list.is_null() {
+            let mut arg: *const listitem_T = (*list).lv_first;
+            while !arg.is_null() {
+                let mut chan = ptr::null_mut::<Channel>();
+                if (*arg).li_tv.v_type != VAR_NUMBER
+                    || {
+                        chan = find_channel((*arg).li_tv.vval.v_number as uint64_t);
+                        chan.is_null()
+                    }
+                    || (*chan).streamtype != kChannelStreamProc
                 {
-                    (*IObuff.ptr())[len.wrapping_sub(1 as size_t) as usize] =
-                        NUL as ::core::ffi::c_char;
-                }
-                if len == 1 as size_t
-                    && (*IObuff.ptr())[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-                        == '/' as ::core::ffi::c_int
-                {
-                    (*IObuff.ptr())[1 as ::core::ffi::c_int as usize] = '.' as ::core::ffi::c_char;
-                    (*IObuff.ptr())[2 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-                }
-                snprintf(
-                    NameBuff.ptr() as *mut ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
-                    b"term://%s//%d:%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    IObuff.ptr() as *mut ::core::ffi::c_char,
-                    pid,
-                    cmd,
-                );
-                setfname(
-                    buf,
-                    NameBuff.ptr() as *mut ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    true_0 != 0,
-                );
-                apply_autocmds(
-                    EVENT_BUFFILEPOST,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    false_0 != 0,
-                    buf,
-                );
-                if !((*chan).term.is_null()
-                    || terminal_buf((*chan).term) == 0 as ::core::ffi::c_int)
-                {
-                    err = Error {
-                        type_0: kErrorTypeNone,
-                        msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    };
-                    (*buf).b_locked += 1;
-                    dict_set_var(
-                        (*buf).b_vars,
-                        cstr_as_string(b"terminal_job_id\0".as_ptr() as *const ::core::ffi::c_char),
-                        object {
-                            type_0: kObjectTypeInteger,
-                            data: C2Rust_Unnamed_16 {
-                                integer: (*chan).id as Integer,
-                            },
-                        },
-                        false_0 != 0,
-                        false_0 != 0,
-                        ::core::ptr::null_mut::<Arena>(),
-                        &raw mut err,
-                    );
-                    api_clear_error(&raw mut err);
-                    dict_set_var(
-                        (*buf).b_vars,
-                        cstr_as_string(b"terminal_job_pid\0".as_ptr() as *const ::core::ffi::c_char),
-                        object {
-                            type_0: kObjectTypeInteger,
-                            data: C2Rust_Unnamed_16 {
-                                integer: pid as Integer,
-                            },
-                        },
-                        false_0 != 0,
-                        false_0 != 0,
-                        ::core::ptr::null_mut::<Arena>(),
-                        &raw mut err,
-                    );
-                    api_clear_error(&raw mut err);
-                    (*buf).b_locked -= 1;
-                    if !((*chan).term.is_null()
-                        || terminal_buf((*chan).term) == 0 as ::core::ffi::c_int)
-                    {
-                        terminal_open(&raw mut (*chan).term, buf);
+                    // Not a job: reported as -3 below.
+                    *jobs.add(i as usize) = ptr::null_mut();
+                } else if proc_is_stopped(&*channel_proc(chan)) {
+                    // Already gone; reap it and report -3 as well.
+                    proc_wait(channel_proc(chan), -1, ptr::null_mut());
+                    *jobs.add(i as usize) = ptr::null_mut();
+                } else {
+                    *jobs.add(i as usize) = chan;
+                    channel_incref(chan);
+                    if (*channel_proc(chan)).status < 0 {
+                        multiqueue_process_events((*chan).events);
+                        multiqueue_replace_parent((*chan).events, waiting_jobs);
                     }
                 }
+                i += 1;
+                arg = (*arg).li_next;
             }
-            channel_create_event(chan, ::core::ptr::null::<::core::ffi::c_char>());
-            channel_decref(chan);
         }
-        return;
-    };
-}
-pub unsafe extern "C" fn f_jobstop(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    (*rettv).v_type = VAR_NUMBER;
-    (*rettv).vval.v_number = 0 as varnumber_T;
-    if check_secure() {
-        return;
-    }
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
-        return;
-    }
-    let mut data: *mut Channel = find_job(
-        (*argvars.offset(0 as ::core::ffi::c_int as isize))
-            .vval
-            .v_number as uint64_t,
-        false_0 != 0,
-    );
-    if data.is_null() {
-        return;
-    }
-    let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    if (*data).is_rpc {
-        channel_close((*data).id, kChannelPartRpc, &raw mut error);
-    }
-    proc_stop(channel_proc(data));
-    (*rettv).vval.v_number = 1 as varnumber_T;
-    if !error.is_null() {
-        emsg(error);
-    }
-}
-pub unsafe extern "C" fn f_jobwait(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    (*rettv).v_type = VAR_NUMBER;
-    (*rettv).vval.v_number = 0 as varnumber_T;
-    if check_secure() {
-        return;
-    }
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
-        return;
-    }
-    let mut args: *mut list_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
-        .vval
-        .v_list;
-    let mut jobs: *mut *mut Channel = xcalloc(
-        tv_list_len(args) as size_t,
-        ::core::mem::size_of::<*mut Channel>(),
-    ) as *mut *mut Channel;
-    let mut waiting_jobs: *mut MultiQueue = multiqueue_new(
-        Some(loop_on_put as unsafe extern "C" fn(*mut MultiQueue, *mut ::core::ffi::c_void) -> ()),
-        main_loop.ptr() as *mut ::core::ffi::c_void,
-    );
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let l_: *const list_T = args;
-    if !l_.is_null() {
-        let mut arg: *const listitem_T = (*l_).lv_first;
-        while !arg.is_null() {
-            let mut chan: *mut Channel = ::core::ptr::null_mut::<Channel>();
-            if (*arg).li_tv.v_type as ::core::ffi::c_uint
-                != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-                || {
-                    chan = find_channel((*arg).li_tv.vval.v_number as uint64_t);
-                    chan.is_null()
-                }
-                || (*chan).streamtype as ::core::ffi::c_uint
-                    != kChannelStreamProc as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                *jobs.offset(i as isize) = ::core::ptr::null_mut::<Channel>();
-            } else if proc_is_stopped(&*channel_proc(chan)) {
-                proc_wait(
-                    channel_proc(chan),
-                    -1 as ::core::ffi::c_int,
-                    ::core::ptr::null_mut::<MultiQueue>(),
-                );
-                *jobs.offset(i as isize) = ::core::ptr::null_mut::<Channel>();
-            } else {
-                *jobs.offset(i as isize) = chan;
-                channel_incref(chan);
-                if (*channel_proc(chan)).status < 0 as ::core::ffi::c_int {
-                    multiqueue_process_events((*chan).events);
-                    multiqueue_replace_parent((*chan).events, waiting_jobs);
-                }
-            }
-            i += 1;
-            arg = (*arg).li_next;
+
+        // A negative or absent timeout means "no limit".
+        let mut remaining = -1;
+        let mut before = 0u64;
+        if args.ty(1) == VAR_NUMBER && args.get(1).vval.v_number >= 0 {
+            remaining = args.get(1).vval.v_number as c_int;
+            before = os_hrtime();
         }
-    }
-    let mut remaining: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    let mut before: uint64_t = 0 as uint64_t;
-    if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-        && (*argvars.offset(1 as ::core::ffi::c_int as isize))
-            .vval
-            .v_number
-            >= 0 as varnumber_T
-    {
-        remaining = (*argvars.offset(1 as ::core::ffi::c_int as isize))
-            .vval
-            .v_number as ::core::ffi::c_int;
-        before = os_hrtime();
-    }
-    let busy: bool = remaining != 0 as ::core::ffi::c_int;
-    if busy {
-        ui_busy_start();
-        ui_flush();
-    }
-    i = 0 as ::core::ffi::c_int;
-    while i < tv_list_len(args) {
-        if remaining == 0 as ::core::ffi::c_int {
-            break;
+        // Only mark the UI busy when this actually blocks.
+        let busy = remaining != 0;
+        if busy {
+            ui_busy_start();
+            ui_flush();
         }
-        if !(*jobs.offset(i as isize)).is_null() {
-            let mut status: ::core::ffi::c_int = proc_wait(
-                channel_proc(*jobs.offset(i as isize)),
-                remaining,
-                waiting_jobs,
-            );
-            if status < 0 as ::core::ffi::c_int {
+
+        for i in 0..count {
+            if remaining == 0 {
                 break;
             }
-            if remaining > 0 as ::core::ffi::c_int {
-                let mut now: uint64_t = os_hrtime();
-                remaining = if (0 as ::core::ffi::c_int)
-                    < remaining
-                        - now.wrapping_sub(before).wrapping_div(1000000 as uint64_t)
-                            as ::core::ffi::c_int
-                {
-                    0 as ::core::ffi::c_int
-                } else {
-                    remaining
-                        - now.wrapping_sub(before).wrapping_div(1000000 as uint64_t)
-                            as ::core::ffi::c_int
-                };
+            if (*jobs.add(i as usize)).is_null() {
+                continue;
+            }
+            let status = proc_wait(channel_proc(*jobs.add(i as usize)), remaining, waiting_jobs);
+            if status < 0 {
+                // Interrupted or timed out; the rest report -1.
+                break;
+            }
+            if remaining > 0 {
+                let now = os_hrtime();
+                let elapsed = now.wrapping_sub(before).wrapping_div(1_000_000) as c_int;
+                // Upstream writes MIN here, not MAX, so any positive
+                // timeout collapses to 0 after the first job and the loop
+                // stops. Preserved; see the commit that rewrote this file.
+                remaining = (remaining - elapsed).min(0);
                 before = now;
             }
         }
-        i += 1;
-    }
-    let rv: *mut list_T = tv_list_alloc(tv_list_len(args) as ptrdiff_t);
-    i = 0 as ::core::ffi::c_int;
-    while i < tv_list_len(args) {
-        if (*jobs.offset(i as isize)).is_null() {
-            tv_list_append_number(rv, -3 as varnumber_T);
-        } else {
-            multiqueue_process_events((**jobs.offset(i as isize)).events);
-            multiqueue_replace_parent(
-                (**jobs.offset(i as isize)).events,
-                (*main_loop.ptr()).events,
-            );
-            tv_list_append_number(
-                rv,
-                (*channel_proc(*jobs.offset(i as isize))).status as varnumber_T,
-            );
-            channel_decref(*jobs.offset(i as isize));
+
+        let rv = tv_list_alloc(count as isize);
+        for i in 0..count {
+            let chan = *jobs.add(i as usize);
+            if chan.is_null() {
+                tv_list_append_number(rv, -3);
+                continue;
+            }
+            // Hand the parked events back before reporting.
+            multiqueue_process_events((*chan).events);
+            multiqueue_replace_parent((*chan).events, (*main_loop.ptr()).events);
+            tv_list_append_number(rv, (*channel_proc(chan)).status as varnumber_T);
+            channel_decref(chan);
         }
-        i += 1;
+
+        multiqueue_free(waiting_jobs);
+        xfree(jobs as *mut c_void);
+        if busy {
+            ui_busy_stop();
+        }
+        tv_list_ref(rv);
+        rettv.v_type = VAR_LIST;
+        rettv.vval.v_list = rv;
     }
-    multiqueue_free(waiting_jobs);
-    xfree(jobs as *mut ::core::ffi::c_void);
-    if busy {
-        ui_busy_stop();
+}
+
+/// Variables a pty job must not inherit: they describe *our* terminal, and
+/// the child gets its own.
+const PTY_IGNORED_ENV: [&CStr; 7] = [
+    c"COLUMNS",
+    c"LINES",
+    c"TERMCAP",
+    c"COLORFGBG",
+    c"COLORTERM",
+    c"VIM",
+    c"VIMRUNTIME",
+];
+
+/// Variables a pty job must inherit from *our* environment even when the
+/// job's own `env` does not mention them.
+///
+/// Empty, and upstream's is too -- the C array holds nothing but its NULL
+/// terminator. The loop below is kept because the list is the thing that
+/// would change.
+const REQUIRED_ENV: [&CStr; 0] = [];
+
+/// Build the environment for a child process.
+///
+/// # Safety
+/// `job_env` is null or a live dict item holding a Dict; `pty_term_name` is
+/// null or a NUL-terminated string, and non-null whenever `pty` is set.
+unsafe fn create_environment(
+    job_env: *const dictitem_T,
+    clear_env: bool,
+    pty: bool,
+    pty_term_name: *const c_char,
+) -> *mut dict_T {
+    // SAFETY: the caller's obligation; every key below is a `'static`
+    // NUL-terminated string and the dict owns what it is given.
+    unsafe {
+        let env = tv_dict_alloc();
+
+        if !clear_env {
+            // Start from our own environment. `f_environ` is the builtin,
+            // called directly because it is the only thing that knows how
+            // to turn `environ` into a Dict.
+            let mut inherited = typval_T {
+                v_type: VAR_UNKNOWN,
+                v_lock: VAR_UNLOCKED,
+                vval: typval_vval_union { v_number: 0 },
+            };
+            f_environ(
+                ptr::null_mut(),
+                &raw mut inherited,
+                EvalFuncData {
+                    null: ptr::null_mut(),
+                },
+            );
+            tv_dict_extend(env, inherited.vval.v_dict, c"force".as_ptr());
+            tv_dict_free(inherited.vval.v_dict);
+
+            if pty {
+                for name in PTY_IGNORED_ENV {
+                    let dv = tv_dict_find(env, name.as_ptr(), -1);
+                    if !dv.is_null() {
+                        tv_dict_item_remove(env, dv);
+                    }
+                }
+                // COLORTERM was just removed; put ours back when we know
+                // the child can use it.
+                if p_tgc.get() != 0 {
+                    tv_dict_add_str(env, c"COLORTERM".as_ptr(), 9, c"truecolor".as_ptr());
+                }
+            }
+        }
+
+        if pty {
+            let dv = tv_dict_find(env, c"TERM".as_ptr(), 4);
+            if !dv.is_null() {
+                tv_dict_item_remove(env, dv);
+            }
+            tv_dict_add_str(env, c"TERM".as_ptr(), 4, pty_term_name);
+        }
+
+        // $NVIM points the child at this instance's server address, when
+        // there is one.
+        let nvim_addr = get_vim_var_str(VV_SEND_SERVER);
+        if *nvim_addr as c_int != NUL {
+            let dv = tv_dict_find(env, c"NVIM".as_ptr(), 4);
+            if !dv.is_null() {
+                tv_dict_item_remove(env, dv);
+            }
+            tv_dict_add_str(env, c"NVIM".as_ptr(), 4, nvim_addr);
+        }
+
+        // The job's own `env` wins over everything above.
+        if !job_env.is_null() {
+            tv_dict_extend(env, (*job_env).di_tv.vval.v_dict, c"force".as_ptr());
+        }
+
+        if pty {
+            for name in REQUIRED_ENV {
+                let len = strlen(name.as_ptr());
+                if tv_dict_find(env, name.as_ptr(), len as isize).is_null() {
+                    let value = os_getenv(name.as_ptr());
+                    if !value.is_null() {
+                        tv_dict_add_allocated_str(env, name.as_ptr(), len, value);
+                    }
+                }
+            }
+        }
+
+        env
     }
-    tv_list_ref(rv);
-    (*rettv).v_type = VAR_LIST;
-    (*rettv).vval.v_list = rv;
+}
+
+/// `jobstart({cmd} [, {opts}])`
+pub unsafe extern "C" fn f_jobstart(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.v_type = VAR_NUMBER;
+    rettv.vval.v_number = 0;
+    // SAFETY: the frame is live; `argv` is released on every path that does
+    // not hand it to `channel_job_start`, which adopts it.
+    unsafe {
+        if check_secure() {
+            return;
+        }
+
+        let mut cmd = ptr::null::<c_char>();
+        let mut executable = true;
+        let argv = tv_to_argv(args.ptr(0), &raw mut cmd, &raw mut executable);
+        if argv.is_null() {
+            // A malformed command answers 0; a command that is simply not
+            // executable answers -1.
+            rettv.vval.v_number = if executable { 0 } else { -1 };
+            return;
+        }
+        // From here on every early exit must release `argv`.
+        macro_rules! bail {
+            () => {{
+                shell_free_argv(argv);
+                return;
+            }};
+        }
+
+        if args.ty(1) != VAR_DICT && args.has(1) {
+            semsg(
+                gettext(e_invarg2.ptr() as *const c_char),
+                c"expected dictionary".as_ptr(),
+            );
+            bail!();
+        }
+
+        let mut job_opts = ptr::null_mut::<dict_T>();
+        let mut detach = false;
+        let mut rpc = false;
+        let mut pty = false;
+        let mut term = false;
+        let mut clear_env = false;
+        let mut overlapped = false;
+        let mut stdin_mode: ChannelStdinMode = kChannelStdinPipe;
+        let mut on_stdout = NO_READER;
+        let mut on_stderr = NO_READER;
+        let mut on_exit = NO_CALLBACK;
+        let mut cwd = ptr::null_mut::<c_char>();
+        let mut job_env = ptr::null_mut::<dictitem_T>();
+
+        if args.ty(1) == VAR_DICT {
+            job_opts = args.get(1).vval.v_dict;
+            detach = tv_dict_get_number(job_opts, c"detach".as_ptr()) != 0;
+            rpc = tv_dict_get_number(job_opts, c"rpc".as_ptr()) != 0;
+            term = tv_dict_get_number(job_opts, c"term".as_ptr()) != 0;
+            pty = term || tv_dict_get_number(job_opts, c"pty".as_ptr()) != 0;
+            clear_env = tv_dict_get_number(job_opts, c"clear_env".as_ptr()) != 0;
+            overlapped = tv_dict_get_number(job_opts, c"overlapped".as_ptr()) != 0;
+
+            // An unrecognised `stdin` is a warning, not a failure.
+            let s = tv_dict_get_string(job_opts, c"stdin".as_ptr(), false);
+            if !s.is_null() {
+                if strncmp(s, c"null".as_ptr(), NUMBUFLEN as usize) == 0 {
+                    stdin_mode = kChannelStdinNull;
+                } else if strncmp(s, c"pipe".as_ptr(), NUMBUFLEN as usize) != 0 {
+                    semsg(
+                        gettext(e_invargNval.ptr() as *const c_char),
+                        c"stdin".as_ptr(),
+                        s,
+                    );
+                }
+            }
+
+            // `term` is the one option whose *type* is checked, because a
+            // truthy string used to mean something else.
+            let job_term = tv_dict_find(job_opts, c"term".as_ptr(), 4);
+            if !job_term.is_null() && (*job_term).di_tv.v_type != VAR_BOOL {
+                semsg(
+                    gettext(e_invarg2.ptr() as *const c_char),
+                    c"'term' must be Boolean".as_ptr(),
+                );
+                bail!();
+            }
+            if pty && rpc {
+                semsg(
+                    gettext(e_invarg2.ptr() as *const c_char),
+                    c"job cannot have both 'pty' and 'rpc' options set".as_ptr(),
+                );
+                bail!();
+            }
+
+            let new_cwd = tv_dict_get_string(job_opts, c"cwd".as_ptr(), false);
+            if !new_cwd.is_null() && *new_cwd as c_int != NUL {
+                cwd = new_cwd;
+                if !os_isdir(cwd) {
+                    semsg(
+                        gettext(e_invarg2.ptr() as *const c_char),
+                        c"expected valid directory".as_ptr(),
+                    );
+                    bail!();
+                }
+            }
+
+            job_env = tv_dict_find(job_opts, c"env".as_ptr(), 3);
+            if !job_env.is_null() && (*job_env).di_tv.v_type != VAR_DICT {
+                semsg(gettext(e_invarg2.ptr() as *const c_char), c"env".as_ptr());
+                bail!();
+            }
+
+            if !common_job_callbacks(
+                job_opts,
+                &raw mut on_stdout,
+                &raw mut on_stderr,
+                &raw mut on_exit,
+            ) {
+                bail!();
+            }
+        }
+
+        // `tv_dict_get_number` accepts a null dict, so these two are read
+        // whether or not there were options at all.
+        let mut width = tv_dict_get_number(job_opts, c"width".as_ptr()) as uint16_t;
+        let mut height = tv_dict_get_number(job_opts, c"height".as_ptr()) as uint16_t;
+        let mut term_name = ptr::null_mut::<c_char>();
+
+        if term {
+            if text_locked() {
+                text_locked_msg();
+                bail!();
+            }
+            if (*curbuf.get()).b_changed != 0 {
+                emsg(gettext(
+                    c"jobstart(...,{term=true}) requires unmodified buffer".as_ptr(),
+                ));
+                bail!();
+            }
+            if !(*curbuf.get()).terminal.is_null() {
+                if terminal_running((*curbuf.get()).terminal) {
+                    semsg(
+                        gettext(c"Terminal already connected to buffer %d".as_ptr()),
+                        (*curbuf.get()).handle,
+                    );
+                    bail!();
+                }
+                buf_close_terminal(curbuf.get());
+            }
+            // `pty && rpc` was refused above and `term` implies `pty`.
+            debug_assert!(!rpc);
+
+            term_name = c"xterm-256color".as_ptr() as *mut c_char;
+            if cwd.is_null() {
+                cwd = c".".as_ptr() as *mut c_char;
+            }
+            overlapped = false;
+            detach = false;
+            stdin_mode = kChannelStdinPipe;
+            if width == 0 {
+                width =
+                    ((*curwin.get()).w_view_width - win_col_off(curwin.get())).max(0) as uint16_t;
+            }
+            if height == 0 {
+                height = (*curwin.get()).w_view_height as uint16_t;
+            }
+        }
+        if pty && term_name.is_null() {
+            term_name = tv_dict_get_string(job_opts, c"TERM".as_ptr(), false);
+            if term_name.is_null() {
+                term_name = c"ansi".as_ptr() as *mut c_char;
+            }
+        }
+
+        let env = create_environment(job_env, clear_env, pty, term_name);
+        let chan = channel_job_start(
+            argv,
+            ptr::null(),
+            on_stdout,
+            on_stderr,
+            on_exit,
+            pty,
+            rpc,
+            overlapped,
+            detach,
+            stdin_mode,
+            cwd,
+            width,
+            height,
+            env,
+            &raw mut rettv.vval.v_number,
+        );
+        if chan.is_null() {
+            return;
+        }
+        if !term {
+            channel_create_event(chan, ptr::null());
+            return;
+        }
+        if rettv.vval.v_number <= 0 {
+            return;
+        }
+        attach_terminal(chan, cwd, cmd);
+    }
+}
+
+/// Give a `{term: v:true}` job the current buffer.
+///
+/// # Safety
+/// `chan` is a live channel with a running process, `cwd` and `cmd` are
+/// NUL-terminated strings.
+unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_char) {
+    // SAFETY: the caller's obligation; `NameBuff` and `IObuff` are the
+    // shared scratch buffers and are only used within this body.
+    unsafe {
+        let pid = (*channel_proc(chan)).pid;
+        let buf = curbuf.get();
+        (*buf).b_p_swf = false_0;
+        if (*buf).b_ml.ml_mfp.is_null() && ml_open(buf) == FAIL {
+            proc_stop(channel_proc(chan));
+            channel_decref(chan);
+            return;
+        }
+        channel_incref(chan);
+        channel_terminal_alloc(buf, chan);
+        apply_autocmds(
+            EVENT_BUFFILEPRE,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            false,
+            buf,
+        );
+
+        // The autocommand may have closed the terminal out from under us,
+        // which is what each of these three re-tests is for.
+        if terminal_live(chan) {
+            // Name the buffer `term://{cwd}//{pid}:{cmd}`.
+            vim_FullName(cwd, NameBuff.ptr() as *mut c_char, 4096, false);
+            let len = home_replace(
+                ptr::null(),
+                NameBuff.ptr() as *mut c_char,
+                IObuff.ptr() as *mut c_char,
+                1025,
+                true,
+            );
+            // Drop a trailing separator, but keep `/` itself meaningful by
+            // spelling it `/.`.
+            let io = IObuff.ptr();
+            if len != 1 && matches!((*io)[len - 1] as u8, b'\\' | b'/') {
+                (*io)[len - 1] = NUL as c_char;
+            }
+            if len == 1 && (*io)[0] as u8 == b'/' {
+                (*io)[1] = b'.' as c_char;
+                (*io)[2] = NUL as c_char;
+            }
+            snprintf(
+                NameBuff.ptr() as *mut c_char,
+                4096,
+                c"term://%s//%d:%s".as_ptr(),
+                IObuff.ptr() as *mut c_char,
+                pid,
+                cmd,
+            );
+            setfname(buf, NameBuff.ptr() as *mut c_char, ptr::null_mut(), true);
+            apply_autocmds(
+                EVENT_BUFFILEPOST,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                false,
+                buf,
+            );
+
+            if terminal_live(chan) {
+                let mut err = Error {
+                    type_0: kErrorTypeNone,
+                    msg: ptr::null_mut(),
+                };
+                // Locked so that the two variables cannot be swapped out
+                // from under the terminal by a BufFilePost autocommand.
+                (*buf).b_locked += 1;
+                set_buf_var(buf, c"terminal_job_id", (*chan).id as Integer, &raw mut err);
+                set_buf_var(buf, c"terminal_job_pid", pid as Integer, &raw mut err);
+                (*buf).b_locked -= 1;
+
+                if terminal_live(chan) {
+                    terminal_open(&raw mut (*chan).term, buf);
+                }
+            }
+        }
+
+        channel_create_event(chan, ptr::null());
+        channel_decref(chan);
+    }
+}
+
+/// Whether the channel still has a terminal attached to a real buffer.
+///
+/// # Safety
+/// `chan` is a live channel.
+unsafe fn terminal_live(chan: *mut Channel) -> bool {
+    // SAFETY: the caller's obligation.
+    unsafe { !(*chan).term.is_null() && terminal_buf((*chan).term) != 0 }
+}
+
+/// Set one buffer-local variable to an Integer, discarding any error.
+///
+/// # Safety
+/// `buf` is a live buffer and `err` a live out-parameter.
+unsafe fn set_buf_var(buf: *mut buf_T, name: &CStr, value: Integer, err: *mut Error) {
+    // SAFETY: the caller's obligation; the name is `'static`.
+    unsafe {
+        dict_set_var(
+            (*buf).b_vars,
+            cstr_as_string(name.as_ptr()),
+            object {
+                type_0: kObjectTypeInteger,
+                data: C2Rust_Unnamed_16 { integer: value },
+            },
+            false,
+            false,
+            ptr::null_mut::<Arena>(),
+            err,
+        );
+        api_clear_error(err);
+    }
 }
