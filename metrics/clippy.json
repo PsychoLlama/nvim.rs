@@ -130,7 +130,6 @@
     "crates/nvim/src/nvim/profile.rs": 7,
     "crates/nvim/src/nvim/quickfix.rs": 359,
     "crates/nvim/src/nvim/regexp.rs": 1,
-    "crates/nvim/src/nvim/regexp/bt/atom.rs": 29,
     "crates/nvim/src/nvim/regexp/bt/matcher.rs": 22,
     "crates/nvim/src/nvim/regexp/nfa/atom.rs": 12,
     "crates/nvim/src/nvim/regexp/nfa/build.rs": 7,

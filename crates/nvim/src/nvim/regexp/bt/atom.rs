@@ -1,1030 +1,190 @@
-//! One atom of a pattern: the `[]` collections, the `\\%[]` sequence and
-//! every escape that stands for a single node.
+//! One atom of a pattern: the smallest thing a multi can repeat.
 //!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! This is only the dispatch. The three families that need more than a node
+//! or two live next door: [`super::collection`] for `[...]`,
+//! [`super::escape`] for the `\z` and `\%` escapes, and [`super::literal`]
+//! for a run of ordinary characters.
 
-use super::*;
+#![forbid(unsafe_code)]
 
-pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *mut uint8_t {
-    let mut ret: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
-    let mut flags: ::core::ffi::c_int = 0;
-    let mut c: ::core::ffi::c_int = 0;
-    let mut p: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
-    let mut extra: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut save_prev_at_start: ::core::ffi::c_int = prev_at_start.get();
+use core::ffi::c_int;
+
+use super::collection::{Collection, collection};
+use super::compile::{regc, regnode, seen_endbrace};
+use super::escape::{percent_atom, z_atom};
+use super::literal::{class_shorthand, is_class_shorthand, literal_run, previous_substitute};
+use super::piece::reg;
+use crate::semsg;
+use crate::src::nvim::main::rc_did_emsg;
+use crate::src::nvim::regexp::{
+    ADD_NL, BACKREF, BOL, BOW, EOL, EOW, EXACTLY, HASLOOKBH, HASNL, HASWIDTH, MAGIC_ALL, MAGIC_ON,
+    NEWL, NL, NUL, REG_PAREN, SIMPLE, SPSTART, WORST, getchr, had_eol, magic, magic_prefix,
+    one_exactly, prev_at_start, reg_magic, reg_string, unmagic,
+};
+use crate::src::nvim::types::uint8_t;
+
+const M_AMP: c_int = magic(b'&');
+const M_AT: c_int = magic(b'@');
+const M_BAR: c_int = magic(b'|');
+const M_BRACE: c_int = magic(b'{');
+const M_BRACKET: c_int = magic(b'[');
+const M_CARET: c_int = magic(b'^');
+const M_DOLLAR: c_int = magic(b'$');
+const M_EQUAL: c_int = magic(b'=');
+const M_GT: c_int = magic(b'>');
+const M_LT: c_int = magic(b'<');
+const M_N: c_int = magic(b'n');
+const M_PAREN_CLOSE: c_int = magic(b')');
+const M_PAREN_OPEN: c_int = magic(b'(');
+const M_PERCENT: c_int = magic(b'%');
+const M_PLUS: c_int = magic(b'+');
+const M_QUESTION: c_int = magic(b'?');
+const M_STAR: c_int = magic(b'*');
+const M_TILDE: c_int = magic(b'~');
+const M_UNDERSCORE: c_int = magic(b'_');
+const M_Z: c_int = magic(b'z');
+const M_0: c_int = magic(b'0');
+const M_1: c_int = magic(b'1');
+const M_9: c_int = magic(b'9');
+
+/// `\%[abc]` compiles each of its members as a single atom, so a member that
+/// is itself a group or an alternation cannot work. Reports E369 and returns
+/// true when we are inside one.
+pub(crate) fn denied_in_optional_sequence() -> bool {
+    if one_exactly.get() == 0 {
+        return false;
+    }
+    let prefix = magic_prefix();
+    semsg!("E369: Invalid item in {prefix}%[]");
+    rc_did_emsg.set(true);
+    true
+}
+
+/// Parse one atom, emit its nodes and describe it in `*flagp`.
+///
+/// Returns null when an error has already been reported.
+pub(crate) fn regatom(flagp: &mut c_int) -> *mut uint8_t {
+    // `\%23l` restores the "still at the start of the pattern" flag, because
+    // a position assertion consumes no input; [`percent_atom`] needs the
+    // value from before this atom was read.
+    let save_prev_at_start = prev_at_start.get();
     *flagp = WORST;
-    c = getchr();
-    let mut len_0: ::core::ffi::c_int = 0;
-    's_2192: {
-        '_do_multibyte: {
-            's_2080: {
-                'c_120706: {
-                    match c {
-                        -162 => {
-                            ret = regnode(BOL);
-                            break 's_2192;
-                        }
-                        -220 => {
-                            ret = regnode(EOL);
-                            had_eol.set(true_0);
-                            break 's_2192;
-                        }
-                        -196 => {
-                            ret = regnode(BOW);
-                            break 's_2192;
-                        }
-                        -194 => {
-                            ret = regnode(EOW);
-                            break 's_2192;
-                        }
-                        -161 => {
-                            c = unmagic(getchr());
-                            if c == '^' as ::core::ffi::c_int {
-                                ret = regnode(BOL);
-                                break 's_2192;
-                            } else if c == '$' as ::core::ffi::c_int {
-                                ret = regnode(EOL);
-                                had_eol.set(true_0);
-                                break 's_2192;
-                            } else {
-                                extra = ADD_NL;
-                                *flagp |= HASNL;
-                                if c != '[' as ::core::ffi::c_int {
-                                    break 'c_120706;
-                                }
-                            }
-                        }
-                        -210 | -151 | -183 | -149 | -181 | -154 | -186 | -144 | -176 | -141
-                        | -173 | -156 | -188 | -136 | -168 | -145 | -177 | -137 | -169 | -152
-                        | -184 | -159 | -191 | -148 | -180 | -139 | -171 => {
-                            break 'c_120706;
-                        }
-                        -146 => {
-                            if reg_string.get() != 0 {
-                                ret = regnode(EXACTLY);
-                                regc(NL);
-                                regc(NUL);
-                                *flagp |= HASWIDTH | SIMPLE;
-                            } else {
-                                ret = regnode(NEWL);
-                                *flagp |= HASWIDTH | HASNL;
-                            }
-                            break 's_2192;
-                        }
-                        -216 => {
-                            if one_exactly.get() != 0 {
-                                semsg(
-                                    gettext(E_INVALID_ITEM_IN_STR_BRACKETS.as_ptr()),
-                                    if reg_magic.get() as ::core::ffi::c_uint
-                                        == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        b"\0".as_ptr() as *const ::core::ffi::c_char
-                                    } else {
-                                        b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                    },
-                                );
-                                rc_did_emsg.set(true_0 != 0);
-                                return NULL_0 as *mut uint8_t;
-                            }
-                            ret = reg(REG_PAREN, &mut flags);
-                            if ret.is_null() {
-                                return ::core::ptr::null_mut::<uint8_t>();
-                            }
-                            *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
-                            break 's_2192;
-                        }
-                        NUL | -132 | -218 | -215 => {
-                            if one_exactly.get() != 0 {
-                                semsg(
-                                    gettext(E_INVALID_ITEM_IN_STR_BRACKETS.as_ptr()),
-                                    if reg_magic.get() as ::core::ffi::c_uint
-                                        == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        b"\0".as_ptr() as *const ::core::ffi::c_char
-                                    } else {
-                                        b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                    },
-                                );
-                                rc_did_emsg.set(true_0 != 0);
-                                return NULL_0 as *mut uint8_t;
-                            }
-                            iemsg(gettext(
-                                &raw const e_internal_error_in_regexp as *const ::core::ffi::c_char,
-                            ));
-                            rc_did_emsg.set(true_0 != 0);
-                            return NULL_0 as *mut uint8_t;
-                        }
-                        -195 | -193 | -213 | -192 | -133 | -214 => {
-                            c = unmagic(c);
-                            semsg(
-                                gettext(b"E64: %s%c follows nothing\0".as_ptr()
-                                    as *const ::core::ffi::c_char),
-                                if (if c == '*' as ::core::ffi::c_int {
-                                    (reg_magic.get() as ::core::ffi::c_uint
-                                        >= MAGIC_ON as ::core::ffi::c_int as ::core::ffi::c_uint)
-                                        as ::core::ffi::c_int
-                                } else {
-                                    (reg_magic.get() as ::core::ffi::c_uint
-                                        == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint)
-                                        as ::core::ffi::c_int
-                                }) != 0
-                                {
-                                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                                } else {
-                                    b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                },
-                                c,
-                            );
-                            rc_did_emsg.set(true_0 != 0);
-                            return NULL_0 as *mut uint8_t;
-                        }
-                        -130 => {
-                            if !(*reg_prev_sub.ptr()).is_null() {
-                                let mut lp: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
-                                ret = regnode(EXACTLY);
-                                lp = reg_prev_sub.get() as *mut uint8_t;
-                                while *lp as ::core::ffi::c_int != NUL {
-                                    let c2rust_fresh1487 = lp;
-                                    lp = lp.offset(1);
-                                    regc(*c2rust_fresh1487 as ::core::ffi::c_int);
-                                }
-                                regc(NUL);
-                                if *reg_prev_sub.get() as ::core::ffi::c_int != NUL {
-                                    *flagp |= HASWIDTH;
-                                    if lp.offset_from(reg_prev_sub.get() as *mut uint8_t)
-                                        == 1 as isize
-                                    {
-                                        *flagp |= SIMPLE;
-                                    }
-                                }
-                            } else {
-                                emsg(gettext(&raw const e_nopresub as *const ::core::ffi::c_char));
-                                rc_did_emsg.set(true_0 != 0);
-                                return NULL_0 as *mut uint8_t;
-                            }
-                            break 's_2192;
-                        }
-                        -207 | -206 | -205 | -204 | -203 | -202 | -201 | -200 | -199 => {
-                            let mut refnum: ::core::ffi::c_int = 0;
-                            refnum = c - ('0' as ::core::ffi::c_int - 256 as ::core::ffi::c_int);
-                            if !seen_endbrace(refnum) {
-                                return ::core::ptr::null_mut::<uint8_t>();
-                            }
-                            ret = regnode(BACKREF + refnum);
-                            break 's_2192;
-                        }
-                        -134 => {
-                            c = unmagic(getchr());
-                            match c {
-                                40 => {
-                                    if reg_do_extmatch.get() & REX_SET == 0 as ::core::ffi::c_int {
-                                        emsg(gettext(E_Z_NOT_ALLOWED.as_ptr()));
-                                        rc_did_emsg.set(true_0 != 0);
-                                        return NULL_0 as *mut uint8_t;
-                                    }
-                                    if one_exactly.get() != 0 {
-                                        semsg(
-                                            gettext(E_INVALID_ITEM_IN_STR_BRACKETS.as_ptr()),
-                                            if reg_magic.get() as ::core::ffi::c_uint
-                                                == MAGIC_ALL as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
-                                                b"\0".as_ptr() as *const ::core::ffi::c_char
-                                            } else {
-                                                b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                            },
-                                        );
-                                        rc_did_emsg.set(true_0 != 0);
-                                        return NULL_0 as *mut uint8_t;
-                                    }
-                                    ret = reg(REG_ZPAREN, &mut flags);
-                                    if ret.is_null() {
-                                        return ::core::ptr::null_mut::<uint8_t>();
-                                    }
-                                    *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
-                                    re_has_z.set(REX_SET);
-                                }
-                                49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 => {
-                                    if reg_do_extmatch.get() & REX_USE == 0 as ::core::ffi::c_int {
-                                        emsg(gettext(E_Z1_NOT_ALLOWED.as_ptr()));
-                                        rc_did_emsg.set(true_0 != 0);
-                                        return NULL_0 as *mut uint8_t;
-                                    }
-                                    ret = regnode(ZREF + c - '0' as ::core::ffi::c_int);
-                                    re_has_z.set(REX_USE);
-                                }
-                                115 => {
-                                    ret = regnode(MOPEN + 0 as ::core::ffi::c_int);
-                                    if !re_mult_next("\\zs") {
-                                        return ::core::ptr::null_mut::<uint8_t>();
-                                    }
-                                }
-                                101 => {
-                                    ret = regnode(MCLOSE + 0 as ::core::ffi::c_int);
-                                    if !re_mult_next("\\ze") {
-                                        return ::core::ptr::null_mut::<uint8_t>();
-                                    }
-                                }
-                                _ => {
-                                    emsg(gettext(b"E68: Invalid character after \\z\0".as_ptr()
-                                        as *const ::core::ffi::c_char));
-                                    rc_did_emsg.set(true_0 != 0);
-                                    return NULL_0 as *mut uint8_t;
-                                }
-                            }
-                            break 's_2192;
-                        }
-                        -219 => {
-                            c = unmagic(getchr());
-                            's_1154: {
-                                match c {
-                                    40 => {
-                                        if one_exactly.get() != 0 {
-                                            semsg(
-                                                gettext(E_INVALID_ITEM_IN_STR_BRACKETS.as_ptr()),
-                                                if reg_magic.get() as ::core::ffi::c_uint
-                                                    == MAGIC_ALL as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
-                                                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                                                } else {
-                                                    b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                                },
-                                            );
-                                            rc_did_emsg.set(true_0 != 0);
-                                            return NULL_0 as *mut uint8_t;
-                                        }
-                                        ret = reg(REG_NPAREN, &mut flags);
-                                        if ret.is_null() {
-                                            return ::core::ptr::null_mut::<uint8_t>();
-                                        }
-                                        *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
-                                    }
-                                    94 => {
-                                        ret = regnode(RE_BOF);
-                                    }
-                                    36 => {
-                                        ret = regnode(RE_EOF);
-                                    }
-                                    35 => {
-                                        if *(*regparse.ptr())
-                                            .offset(0 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int
-                                            == '=' as ::core::ffi::c_int
-                                            && *(*regparse.ptr())
-                                                .offset(1 as ::core::ffi::c_int as isize)
-                                                as ::core::ffi::c_int
-                                                >= 48 as ::core::ffi::c_int
-                                            && *(*regparse.ptr())
-                                                .offset(1 as ::core::ffi::c_int as isize)
-                                                as ::core::ffi::c_int
-                                                <= 50 as ::core::ffi::c_int
-                                        {
-                                            semsg(
-                                                gettext(
-                                                    E_ATOM_ENGINE_MUST_BE_AT_START_OF_PATTERN
-                                                        .as_ptr(),
-                                                ),
-                                                *(*regparse.ptr())
-                                                    .offset(1 as ::core::ffi::c_int as isize)
-                                                    as ::core::ffi::c_int,
-                                            );
-                                            return ::core::ptr::null_mut::<uint8_t>();
-                                        }
-                                        ret = regnode(CURSOR);
-                                    }
-                                    86 => {
-                                        ret = regnode(RE_VISUAL);
-                                    }
-                                    67 => {
-                                        ret = regnode(RE_COMPOSING);
-                                    }
-                                    91 => {
-                                        if one_exactly.get() != 0 {
-                                            semsg(
-                                                gettext(E_INVALID_ITEM_IN_STR_BRACKETS.as_ptr()),
-                                                if reg_magic.get() as ::core::ffi::c_uint
-                                                    == MAGIC_ALL as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
-                                                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                                                } else {
-                                                    b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                                },
-                                            );
-                                            rc_did_emsg.set(true_0 != 0);
-                                            return NULL_0 as *mut uint8_t;
-                                        }
-                                        let mut lastbranch: *mut uint8_t =
-                                            ::core::ptr::null_mut::<uint8_t>();
-                                        let mut lastnode: *mut uint8_t =
-                                            ::core::ptr::null_mut::<uint8_t>();
-                                        let mut br: *mut uint8_t =
-                                            ::core::ptr::null_mut::<uint8_t>();
-                                        ret = ::core::ptr::null_mut::<uint8_t>();
-                                        loop {
-                                            c = getchr();
-                                            if c == ']' as ::core::ffi::c_int {
-                                                break;
-                                            }
-                                            if c == NUL {
-                                                semsg(
-                                                    gettext(E_MISSING_SB.as_ptr()),
-                                                    if reg_magic.get() as ::core::ffi::c_uint
-                                                        == MAGIC_ALL as ::core::ffi::c_int
-                                                            as ::core::ffi::c_uint
-                                                    {
-                                                        b"\0".as_ptr() as *const ::core::ffi::c_char
-                                                    } else {
-                                                        b"\\\0".as_ptr()
-                                                            as *const ::core::ffi::c_char
-                                                    },
-                                                );
-                                                rc_did_emsg.set(true_0 != 0);
-                                                return NULL_0 as *mut uint8_t;
-                                            }
-                                            br = regnode(BRANCH);
-                                            if ret.is_null() {
-                                                ret = br;
-                                            } else {
-                                                regtail(lastnode, br);
-                                                if reg_toolong.get() != 0 {
-                                                    return ::core::ptr::null_mut::<uint8_t>();
-                                                }
-                                            }
-                                            ungetchr();
-                                            one_exactly.set(true_0);
-                                            lastnode = regatom(flagp);
-                                            one_exactly.set(false_0);
-                                            if lastnode.is_null() {
-                                                return ::core::ptr::null_mut::<uint8_t>();
-                                            }
-                                        }
-                                        if ret.is_null() {
-                                            semsg(
-                                                gettext(E_EMPTY_SB.as_ptr()),
-                                                if reg_magic.get() as ::core::ffi::c_uint
-                                                    == MAGIC_ALL as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
-                                                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                                                } else {
-                                                    b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                                },
-                                            );
-                                            rc_did_emsg.set(true_0 != 0);
-                                            return NULL_0 as *mut uint8_t;
-                                        }
-                                        lastbranch = regnode(BRANCH);
-                                        br = regnode(NOTHING);
-                                        if ret != JUST_CALC_SIZE {
-                                            regtail(lastnode, br);
-                                            regtail(lastbranch, br);
-                                            br = ret;
-                                            while br != lastnode {
-                                                if *br as ::core::ffi::c_int == BRANCH {
-                                                    regtail(br, lastbranch);
-                                                    if reg_toolong.get() != 0 {
-                                                        return ::core::ptr::null_mut::<uint8_t>();
-                                                    }
-                                                    br =
-                                                        br.offset(3 as ::core::ffi::c_int as isize);
-                                                } else {
-                                                    br = regnext(br);
-                                                }
-                                            }
-                                        }
-                                        *flagp &= !(HASWIDTH | SIMPLE);
-                                    }
-                                    100 | 111 | 120 | 117 | 85 => {
-                                        let mut i: int64_t = 0;
-                                        match c {
-                                            100 => {
-                                                i = getdecchrs();
-                                            }
-                                            111 => {
-                                                i = getoctchrs();
-                                            }
-                                            120 => {
-                                                i = gethexchrs(2 as ::core::ffi::c_int);
-                                            }
-                                            117 => {
-                                                i = gethexchrs(4 as ::core::ffi::c_int);
-                                            }
-                                            85 => {
-                                                i = gethexchrs(8 as ::core::ffi::c_int);
-                                            }
-                                            _ => {
-                                                i = -1 as int64_t;
-                                            }
-                                        }
-                                        if i < 0 as int64_t || i > INT_MAX as int64_t {
-                                            semsg(
-                                                gettext(
-                                                    b"E678: Invalid character after %s%%[dxouU]\0"
-                                                        .as_ptr()
-                                                        as *const ::core::ffi::c_char,
-                                                ),
-                                                if reg_magic.get() as ::core::ffi::c_uint
-                                                    == MAGIC_ALL as ::core::ffi::c_int
-                                                        as ::core::ffi::c_uint
-                                                {
-                                                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                                                } else {
-                                                    b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                                },
-                                            );
-                                            rc_did_emsg.set(true_0 != 0);
-                                            return NULL_0 as *mut uint8_t;
-                                        }
-                                        if use_multibytecode(i as ::core::ffi::c_int) {
-                                            ret = regnode(MULTIBYTECODE);
-                                        } else {
-                                            ret = regnode(EXACTLY);
-                                        }
-                                        if i == 0 as int64_t {
-                                            regc(0xa as ::core::ffi::c_int);
-                                        } else {
-                                            regmbc(i as ::core::ffi::c_int);
-                                        }
-                                        regc(NUL);
-                                        *flagp |= HASWIDTH;
-                                    }
-                                    _ => {
-                                        if ascii_isdigit(c) as ::core::ffi::c_int != 0
-                                            || c == '<' as ::core::ffi::c_int
-                                            || c == '>' as ::core::ffi::c_int
-                                            || c == '\'' as ::core::ffi::c_int
-                                            || c == '.' as ::core::ffi::c_int
-                                        {
-                                            let mut n: uint32_t = 0 as uint32_t;
-                                            let mut cmp: ::core::ffi::c_int = 0;
-                                            let mut cur: bool = false_0 != 0;
-                                            let mut got_digit: bool = false_0 != 0;
-                                            cmp = c;
-                                            if cmp == '<' as ::core::ffi::c_int
-                                                || cmp == '>' as ::core::ffi::c_int
-                                            {
-                                                c = getchr();
-                                            }
-                                            if unmagic(c) == '.' as ::core::ffi::c_int {
-                                                cur = true_0 != 0;
-                                                c = getchr();
-                                            }
-                                            while ascii_isdigit(c) {
-                                                got_digit = true_0 != 0;
-                                                n = n.wrapping_mul(10 as uint32_t).wrapping_add(
-                                                    (c - '0' as ::core::ffi::c_int) as uint32_t,
-                                                );
-                                                c = getchr();
-                                            }
-                                            if unmagic(c) == '\'' as ::core::ffi::c_int
-                                                && n == 0 as uint32_t
-                                            {
-                                                c = getchr();
-                                                ret = regnode(RE_MARK);
-                                                if ret == JUST_CALC_SIZE {
-                                                    (*regsize.ptr()) += 2 as int64_t;
-                                                } else {
-                                                    let c2rust_fresh1488 = regcode.get();
-                                                    regcode.set((*regcode.ptr()).offset(1));
-                                                    *c2rust_fresh1488 = c as uint8_t;
-                                                    let c2rust_fresh1489 = regcode.get();
-                                                    regcode.set((*regcode.ptr()).offset(1));
-                                                    *c2rust_fresh1489 = cmp as uint8_t;
-                                                }
-                                                break 's_1154;
-                                            } else if (c == 'l' as ::core::ffi::c_int
-                                                || c == 'c' as ::core::ffi::c_int
-                                                || c == 'v' as ::core::ffi::c_int)
-                                                && (cur as ::core::ffi::c_int != 0
-                                                    || got_digit as ::core::ffi::c_int != 0)
-                                            {
-                                                if cur as ::core::ffi::c_int != 0 && n != 0 {
-                                                    semsg(
-                                                        gettext(
-                                                            E_REGEXP_NUMBER_AFTER_DOT_POS_SEARCH_CHR.as_ptr(),
-                                                        ),
-                                                        unmagic(c),
-                                                    );
-                                                    rc_did_emsg.set(true_0 != 0);
-                                                    return ::core::ptr::null_mut::<uint8_t>();
-                                                }
-                                                if c == 'l' as ::core::ffi::c_int {
-                                                    if cur {
-                                                        n = (*curwin.get()).w_cursor.lnum
-                                                            as uint32_t;
-                                                    }
-                                                    ret = regnode(RE_LNUM);
-                                                    if save_prev_at_start != 0 {
-                                                        at_start.set(true_0);
-                                                    }
-                                                } else if c == 'c' as ::core::ffi::c_int {
-                                                    if cur {
-                                                        n = (*curwin.get()).w_cursor.col
-                                                            as uint32_t;
-                                                        n = n.wrapping_add(1);
-                                                    }
-                                                    ret = regnode(RE_COL);
-                                                } else {
-                                                    if cur {
-                                                        let mut vcol: colnr_T = 0 as colnr_T;
-                                                        getvvcol(
-                                                            curwin.get(),
-                                                            &raw mut (*curwin.get()).w_cursor,
-                                                            ::core::ptr::null_mut::<colnr_T>(),
-                                                            ::core::ptr::null_mut::<colnr_T>(),
-                                                            &raw mut vcol,
-                                                        );
-                                                        vcol += 1;
-                                                        n = vcol as uint32_t;
-                                                    }
-                                                    ret = regnode(RE_VCOL);
-                                                }
-                                                regnr(n);
-                                                regc(cmp);
-                                                break 's_1154;
-                                            }
-                                        }
-                                        semsg(
-                                            gettext(
-                                                b"E71: Invalid character after %s%%\0".as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
-                                            if reg_magic.get() as ::core::ffi::c_uint
-                                                == MAGIC_ALL as ::core::ffi::c_int
-                                                    as ::core::ffi::c_uint
-                                            {
-                                                b"\0".as_ptr() as *const ::core::ffi::c_char
-                                            } else {
-                                                b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                            },
-                                        );
-                                        rc_did_emsg.set(true_0 != 0);
-                                        return NULL_0 as *mut uint8_t;
-                                    }
-                                }
-                            }
-                            break 's_2192;
-                        }
-                        -165 => {}
-                        _ => {
-                            break 's_2080;
-                        }
-                    }
-                    let mut lp_0: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
-                    lp_0 = skip_anyof(regparse.get()) as *mut uint8_t;
-                    if *lp_0 as ::core::ffi::c_int == ']' as ::core::ffi::c_int {
-                        let mut startc: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-                        let mut endc: ::core::ffi::c_int = 0;
-                        if *regparse.get() as ::core::ffi::c_int == '^' as ::core::ffi::c_int {
-                            ret = regnode(ANYBUT + extra);
-                            regparse.set((*regparse.ptr()).offset(1));
-                        } else {
-                            ret = regnode(ANYOF + extra);
-                        }
-                        if *regparse.get() as ::core::ffi::c_int == ']' as ::core::ffi::c_int
-                            || *regparse.get() as ::core::ffi::c_int == '-' as ::core::ffi::c_int
-                        {
-                            startc = *regparse.get() as uint8_t as ::core::ffi::c_int;
-                            let c2rust_fresh1491 = regparse.get();
-                            regparse.set((*regparse.ptr()).offset(1));
-                            regc(*c2rust_fresh1491 as ::core::ffi::c_int);
-                        }
-                        while *regparse.get() as ::core::ffi::c_int != NUL
-                            && *regparse.get() as ::core::ffi::c_int != ']' as ::core::ffi::c_int
-                        {
-                            if *regparse.get() as ::core::ffi::c_int == '-' as ::core::ffi::c_int {
-                                regparse.set((*regparse.ptr()).offset(1));
-                                if *regparse.get() as ::core::ffi::c_int
-                                    == ']' as ::core::ffi::c_int
-                                    || *regparse.get() as ::core::ffi::c_int == NUL
-                                    || startc == -1 as ::core::ffi::c_int
-                                    || *(*regparse.ptr()).offset(0 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int
-                                        == '\\' as ::core::ffi::c_int
-                                        && *(*regparse.ptr())
-                                            .offset(1 as ::core::ffi::c_int as isize)
-                                            as ::core::ffi::c_int
-                                            == 'n' as ::core::ffi::c_int
-                                {
-                                    regc('-' as ::core::ffi::c_int);
-                                    startc = '-' as ::core::ffi::c_int;
-                                } else {
-                                    endc = 0 as ::core::ffi::c_int;
-                                    if *regparse.get() as ::core::ffi::c_int
-                                        == '[' as ::core::ffi::c_int
-                                    {
-                                        endc = take_bracketed(&mut *regparse.ptr(), b'.');
-                                    }
-                                    if endc == 0 as ::core::ffi::c_int {
-                                        endc = mb_ptr2char_adv(
-                                            regparse.ptr() as *mut *const ::core::ffi::c_char
-                                        );
-                                    }
-                                    if endc == '\\' as ::core::ffi::c_int && reg_cpo_lit.get() == 0
-                                    {
-                                        endc = coll_get_char();
-                                    }
-                                    if startc > endc {
-                                        emsg(gettext(E_REVERSE_RANGE.as_ptr()));
-                                        rc_did_emsg.set(true_0 != 0);
-                                        return NULL_0 as *mut uint8_t;
-                                    }
-                                    if utf_char2len(startc) > 1 as ::core::ffi::c_int
-                                        || utf_char2len(endc) > 1 as ::core::ffi::c_int
-                                    {
-                                        if endc > startc + 256 as ::core::ffi::c_int {
-                                            emsg(gettext(E_LARGE_CLASS.as_ptr()));
-                                            rc_did_emsg.set(true_0 != 0);
-                                            return NULL_0 as *mut uint8_t;
-                                        }
-                                        loop {
-                                            startc += 1;
-                                            if startc > endc {
-                                                break;
-                                            }
-                                            regmbc(startc);
-                                        }
-                                    } else {
-                                        loop {
-                                            startc += 1;
-                                            if startc > endc {
-                                                break;
-                                            }
-                                            regc(startc);
-                                        }
-                                    }
-                                    startc = -1 as ::core::ffi::c_int;
-                                }
-                            } else if *regparse.get() as ::core::ffi::c_int
-                                == '\\' as ::core::ffi::c_int
-                                && (!vim_strchr(
-                                    REGEXP_INRANGE.as_ptr(),
-                                    *(*regparse.ptr()).offset(1 as ::core::ffi::c_int as isize)
-                                        as uint8_t
-                                        as ::core::ffi::c_int,
-                                )
-                                .is_null()
-                                    || reg_cpo_lit.get() == 0
-                                        && !vim_strchr(
-                                            REGEXP_ABBR.as_ptr(),
-                                            *(*regparse.ptr())
-                                                .offset(1 as ::core::ffi::c_int as isize)
-                                                as uint8_t
-                                                as ::core::ffi::c_int,
-                                        )
-                                        .is_null())
-                            {
-                                regparse.set((*regparse.ptr()).offset(1));
-                                if *regparse.get() as ::core::ffi::c_int
-                                    == 'n' as ::core::ffi::c_int
-                                {
-                                    if ret != JUST_CALC_SIZE {
-                                        if *ret as ::core::ffi::c_int == ANYOF {
-                                            *ret = (ANYOF + ADD_NL) as uint8_t;
-                                            *flagp |= HASNL;
-                                        }
-                                    }
-                                    regparse.set((*regparse.ptr()).offset(1));
-                                    startc = -1 as ::core::ffi::c_int;
-                                } else if *regparse.get() as ::core::ffi::c_int
-                                    == 'd' as ::core::ffi::c_int
-                                    || *regparse.get() as ::core::ffi::c_int
-                                        == 'o' as ::core::ffi::c_int
-                                    || *regparse.get() as ::core::ffi::c_int
-                                        == 'x' as ::core::ffi::c_int
-                                    || *regparse.get() as ::core::ffi::c_int
-                                        == 'u' as ::core::ffi::c_int
-                                    || *regparse.get() as ::core::ffi::c_int
-                                        == 'U' as ::core::ffi::c_int
-                                {
-                                    startc = coll_get_char();
-                                    if startc == INT_MAX {
-                                        emsg(gettext(E_UNICODE_VAL_TOO_LARGE.as_ptr()));
-                                        rc_did_emsg.set(true_0 != 0);
-                                        return NULL_0 as *mut uint8_t;
-                                    }
-                                    if startc == 0 as ::core::ffi::c_int {
-                                        regc(0xa as ::core::ffi::c_int);
-                                    } else {
-                                        regmbc(startc);
-                                    }
-                                } else {
-                                    let c2rust_fresh1492 = regparse.get();
-                                    regparse.set((*regparse.ptr()).offset(1));
-                                    startc =
-                                        backslash_abbr(*c2rust_fresh1492 as ::core::ffi::c_int);
-                                    regc(startc);
-                                }
-                            } else if *regparse.get() as ::core::ffi::c_int
-                                == '[' as ::core::ffi::c_int
-                            {
-                                let mut c_class: ::core::ffi::c_int = 0;
-                                let mut cu: ::core::ffi::c_int = 0;
-                                c_class = take_char_class(&mut *regparse.ptr());
-                                startc = -1 as ::core::ffi::c_int;
-                                match c_class {
-                                    99 => {
-                                        c_class = take_bracketed(&mut *regparse.ptr(), b'=');
-                                        if c_class != 0 as ::core::ffi::c_int {
-                                            reg_equi_class(c_class);
-                                        } else {
-                                            c_class = take_bracketed(&mut *regparse.ptr(), b'.');
-                                            if c_class != 0 as ::core::ffi::c_int {
-                                                regmbc(c_class);
-                                            } else {
-                                                let c2rust_fresh1493 = regparse.get();
-                                                regparse.set((*regparse.ptr()).offset(1));
-                                                startc = *c2rust_fresh1493 as uint8_t
-                                                    as ::core::ffi::c_int;
-                                                regc(startc);
-                                            }
-                                        }
-                                    }
-                                    0 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu < 128 as ::core::ffi::c_int {
-                                            if *(*__ctype_b_loc()).offset(cu as isize)
-                                                as ::core::ffi::c_int
-                                                & _ISalnum as ::core::ffi::c_int
-                                                    as ::core::ffi::c_ushort
-                                                    as ::core::ffi::c_int
-                                                != 0
-                                            {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    1 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu < 128 as ::core::ffi::c_int {
-                                            if *(*__ctype_b_loc()).offset(cu as isize)
-                                                as ::core::ffi::c_int
-                                                & _ISalpha as ::core::ffi::c_int
-                                                    as ::core::ffi::c_ushort
-                                                    as ::core::ffi::c_int
-                                                != 0
-                                            {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    2 => {
-                                        regc(' ' as ::core::ffi::c_int);
-                                        regc('\t' as ::core::ffi::c_int);
-                                    }
-                                    3 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu <= 127 as ::core::ffi::c_int {
-                                            if *(*__ctype_b_loc()).offset(cu as isize)
-                                                as ::core::ffi::c_int
-                                                & _IScntrl as ::core::ffi::c_int
-                                                    as ::core::ffi::c_ushort
-                                                    as ::core::ffi::c_int
-                                                != 0
-                                            {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    4 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu <= 127 as ::core::ffi::c_int {
-                                            if ascii_isdigit(cu) {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    5 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu <= 127 as ::core::ffi::c_int {
-                                            if *(*__ctype_b_loc()).offset(cu as isize)
-                                                as ::core::ffi::c_int
-                                                & _ISgraph as ::core::ffi::c_int
-                                                    as ::core::ffi::c_ushort
-                                                    as ::core::ffi::c_int
-                                                != 0
-                                            {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    6 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu <= 255 as ::core::ffi::c_int {
-                                            if mb_islower(cu) as ::core::ffi::c_int != 0
-                                                && cu != 170 as ::core::ffi::c_int
-                                                && cu != 186 as ::core::ffi::c_int
-                                            {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    7 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu <= 255 as ::core::ffi::c_int {
-                                            if vim_isprintc(cu) {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    8 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu < 128 as ::core::ffi::c_int {
-                                            if *(*__ctype_b_loc()).offset(cu as isize)
-                                                as ::core::ffi::c_int
-                                                & _ISpunct as ::core::ffi::c_int
-                                                    as ::core::ffi::c_ushort
-                                                    as ::core::ffi::c_int
-                                                != 0
-                                            {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    9 => {
-                                        cu = 9 as ::core::ffi::c_int;
-                                        while cu <= 13 as ::core::ffi::c_int {
-                                            regc(cu);
-                                            cu += 1;
-                                        }
-                                        regc(' ' as ::core::ffi::c_int);
-                                    }
-                                    10 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu <= 255 as ::core::ffi::c_int {
-                                            if mb_isupper(cu) {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    11 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu <= 255 as ::core::ffi::c_int {
-                                            if ascii_isxdigit(cu) {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    12 => {
-                                        regc('\t' as ::core::ffi::c_int);
-                                    }
-                                    13 => {
-                                        regc('\r' as ::core::ffi::c_int);
-                                    }
-                                    14 => {
-                                        regc('\u{8}' as ::core::ffi::c_int);
-                                    }
-                                    15 => {
-                                        regc(ESC);
-                                    }
-                                    16 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu <= 255 as ::core::ffi::c_int {
-                                            if vim_isIDc(cu) {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    17 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu <= 255 as ::core::ffi::c_int {
-                                            if reg_iswordc(cu) {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    18 => {
-                                        cu = 1 as ::core::ffi::c_int;
-                                        while cu <= 255 as ::core::ffi::c_int {
-                                            if vim_isfilec(cu) {
-                                                regmbc(cu);
-                                            }
-                                            cu += 1;
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            } else {
-                                startc = utf_ptr2char(regparse.get());
-                                let mut len: ::core::ffi::c_int = utfc_ptr2len(regparse.get());
-                                if utf_char2len(startc) != len {
-                                    startc = -1 as ::core::ffi::c_int;
-                                }
-                                loop {
-                                    len -= 1;
-                                    if len < 0 as ::core::ffi::c_int {
-                                        break;
-                                    }
-                                    let c2rust_fresh1494 = regparse.get();
-                                    regparse.set((*regparse.ptr()).offset(1));
-                                    regc(*c2rust_fresh1494 as ::core::ffi::c_int);
-                                }
-                            }
-                        }
-                        regc(NUL);
-                        prevchr_len.set(1 as ::core::ffi::c_int);
-                        if *regparse.get() as ::core::ffi::c_int != ']' as ::core::ffi::c_int {
-                            emsg(gettext(&raw const e_toomsbra as *const ::core::ffi::c_char));
-                            rc_did_emsg.set(true_0 != 0);
-                            return NULL_0 as *mut uint8_t;
-                        }
-                        skipchr();
-                        *flagp |= HASWIDTH | SIMPLE;
-                        break 's_2192;
-                    } else {
-                        if reg_strict.get() != 0 {
-                            semsg(
-                                gettext(E_MISSINGBRACKET.as_ptr()),
-                                if reg_magic.get() as ::core::ffi::c_uint
-                                    > MAGIC_OFF as ::core::ffi::c_int as ::core::ffi::c_uint
-                                {
-                                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                                } else {
-                                    b"\\\0".as_ptr() as *const ::core::ffi::c_char
-                                },
-                            );
-                            rc_did_emsg.set(true_0 != 0);
-                            return NULL_0 as *mut uint8_t;
-                        }
-                        break 's_2080;
-                    }
-                }
-                p = vim_strchr(classchars.get() as *mut ::core::ffi::c_char, unmagic(c))
-                    as *mut uint8_t;
-                if p.is_null() {
-                    emsg(gettext(E_INVALID_USE_OF_UNDERSCORE.as_ptr()));
-                    rc_did_emsg.set(true_0 != 0);
-                    return NULL_0 as *mut uint8_t;
-                }
-                if c == '.' as ::core::ffi::c_int - 256 as ::core::ffi::c_int
-                    && utf_iscomposing_legacy(peekchr()) as ::core::ffi::c_int != 0
-                {
-                    c = getchr();
-                    break '_do_multibyte;
+    let mut c = getchr();
+
+    // `\_x` is "x, or a line break". The atom is built as usual and `ADD_NL`
+    // shifts its opcode to the newline-accepting variant of itself.
+    if c == M_UNDERSCORE {
+        c = unmagic(getchr());
+        return match c as u8 {
+            b'^' => regnode(BOL),
+            b'$' => {
+                had_eol.set(1);
+                regnode(EOL)
+            }
+            _ => {
+                *flagp |= HASNL;
+                if c == b'[' as c_int {
+                    bracketed(flagp, ADD_NL, c)
                 } else {
-                    ret = regnode(
-                        (*classcodes.ptr())[p.offset_from(classchars.get()) as usize] + extra,
-                    );
-                    *flagp |= HASWIDTH | SIMPLE;
-                    break 's_2192;
+                    class_shorthand(flagp, c, ADD_NL)
                 }
             }
-            len_0 = 0;
-            if !use_multibytecode(c) {
-                ret = regnode(EXACTLY);
-                len_0 = 0 as ::core::ffi::c_int;
-                while c != NUL
-                    && (len_0 == 0 as ::core::ffi::c_int
-                        || re_multi_type(peekchr()) == NOT_MULTI
-                            && one_exactly.get() == 0
-                            && !(c < 0 as ::core::ffi::c_int))
-                {
-                    c = unmagic(c);
-                    regmbc(c);
-                    let mut l: ::core::ffi::c_int = 0;
-                    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-                    loop {
-                        l = utf_ptr2len(regparse.get());
-                        if !utf_composinglike(
-                            regparse.get(),
-                            (*regparse.ptr()).offset(l as isize),
-                            &raw mut state,
-                        ) {
-                            break;
-                        }
-                        regmbc(utf_ptr2char(regparse.get()));
-                        skipchr();
-                    }
-                    c = getchr();
-                    len_0 += 1;
-                }
-                ungetchr();
+        };
+    }
+
+    match c {
+        M_CARET => regnode(BOL),
+        M_DOLLAR => {
+            had_eol.set(1);
+            regnode(EOL)
+        }
+        M_LT => regnode(BOW),
+        M_GT => regnode(EOW),
+
+        // `\n` is a line break, except in a string match, where there are no
+        // lines and it is just the byte.
+        M_N => {
+            if reg_string.get() != 0 {
+                let ret = regnode(EXACTLY);
+                regc(NL);
                 regc(NUL);
-                *flagp |= HASWIDTH;
-                if len_0 == 1 as ::core::ffi::c_int {
-                    *flagp |= SIMPLE;
-                }
-                break 's_2192;
+                *flagp |= HASWIDTH | SIMPLE;
+                ret
+            } else {
+                let ret = regnode(NEWL);
+                *flagp |= HASWIDTH | HASNL;
+                ret
             }
         }
-        ret = regnode(MULTIBYTECODE);
-        regmbc(c);
-        *flagp |= HASWIDTH | SIMPLE;
+
+        M_PAREN_OPEN => {
+            if denied_in_optional_sequence() {
+                return core::ptr::null_mut();
+            }
+            let mut flags = 0;
+            let ret = reg(REG_PAREN, &mut flags);
+            if !ret.is_null() {
+                *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
+            }
+            ret
+        }
+
+        // These end an alternative, so `regconcat` should already have
+        // stopped; reaching one here means the parser lost track.
+        NUL | M_BAR | M_AMP | M_PAREN_CLOSE => {
+            if denied_in_optional_sequence() {
+                return core::ptr::null_mut();
+            }
+            semsg!("E473: Internal error in regexp");
+            rc_did_emsg.set(true);
+            core::ptr::null_mut()
+        }
+
+        // A multi with no atom in front of it.
+        M_EQUAL | M_QUESTION | M_PLUS | M_AT | M_BRACE | M_STAR => {
+            let c = unmagic(c);
+            // As in E61: `*` is magic one level sooner than the rest, so the
+            // backslash this message shows is decided by a looser test.
+            let bare = if c == b'*' as c_int {
+                reg_magic.get() >= MAGIC_ON
+            } else {
+                reg_magic.get() == MAGIC_ALL
+            };
+            let prefix = if bare { "" } else { "\\" };
+            let c = c as u8 as char;
+            semsg!("E64: {prefix}{c} follows nothing");
+            rc_did_emsg.set(true);
+            core::ptr::null_mut()
+        }
+
+        M_TILDE => previous_substitute(flagp),
+
+        M_1..=M_9 => {
+            let refnum = c - M_0;
+            if !seen_endbrace(refnum) {
+                return core::ptr::null_mut();
+            }
+            regnode(BACKREF + refnum)
+        }
+
+        M_Z => z_atom(flagp),
+        M_PERCENT => percent_atom(flagp, save_prev_at_start),
+        M_BRACKET => bracketed(flagp, 0, c),
+
+        // `\d`, `\w`, `\s`, … in their magic form.
+        c if is_class_shorthand(c) => class_shorthand(flagp, c, 0),
+
+        _ => literal_run(flagp, c),
     }
-    return ret;
+}
+
+/// A `[` that may open a collection. If it does not close, it is an ordinary
+/// character — unless 'regexpengine' strictness is on, where the missing `]`
+/// is an error.
+fn bracketed(flagp: &mut c_int, extra: c_int, c: c_int) -> *mut uint8_t {
+    match collection(flagp, extra) {
+        Collection::Node(node) => node,
+        Collection::Failed => core::ptr::null_mut(),
+        Collection::NotACollection => literal_run(flagp, c),
+    }
 }

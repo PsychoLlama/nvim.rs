@@ -10,15 +10,14 @@ use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init, ga
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::main::{
-    e_internal_error_in_regexp, e_nopresub, e_null, e_re_corr, e_re_damg,
-    e_resulting_text_too_long, e_toomsbra, got_int, p_mmp, rc_did_emsg, re_extmatch_in,
-    re_extmatch_out, reg_do_extmatch,
+    e_nopresub, e_null, e_re_corr, e_re_damg, e_resulting_text_too_long, got_int, p_mmp,
+    rc_did_emsg, re_extmatch_in, re_extmatch_out, reg_do_extmatch,
 };
 use crate::src::nvim::mark::mark_get;
 use crate::src::nvim::mbyte::{
-    mb_get_class_tab, mb_islower, mb_isupper, mb_ptr2char_adv, mb_tolower, mb_toupper,
-    utf_char2bytes, utf_char2len, utf_composinglike, utf_fold, utf_head_off,
-    utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
+    mb_get_class_tab, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_char2bytes, utf_char2len,
+    utf_composinglike, utf_fold, utf_head_off, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len,
+    utfc_ptr2len,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xrealloc, xstrdup};
 use crate::src::nvim::message::{emsg, iemsg, internal_error, semsg, siemsg};

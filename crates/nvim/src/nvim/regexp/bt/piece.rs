@@ -72,8 +72,7 @@ macro_rules! fail {
 /// as an explicit branch-and-back loop in the program.
 pub(crate) fn regpiece(flagp: &mut c_int) -> *mut uint8_t {
     let mut flags = 0;
-    // SAFETY: `regatom` is still transpiled and reads the pattern cursor.
-    let ret = unsafe { regatom(&mut flags) };
+    let ret = regatom(&mut flags);
     if ret.is_null() {
         return core::ptr::null_mut();
     }

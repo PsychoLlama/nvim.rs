@@ -213,7 +213,7 @@ pub unsafe fn skip_regexp_ex(
 }
 
 /// The byte `off` bytes past the cursor.
-fn pat_byte(off: usize) -> u8 {
+pub(crate) fn pat_byte(off: usize) -> u8 {
     // SAFETY: the cursor points into the pattern `initchr` was given, and
     // every caller here has already established that `off` is at or before
     // its NUL.
@@ -221,13 +221,13 @@ fn pat_byte(off: usize) -> u8 {
 }
 
 /// The character `off` bytes past the cursor.
-fn pat_char(off: usize) -> c_int {
+pub(crate) fn pat_char(off: usize) -> c_int {
     // SAFETY: as `pat_byte`.
     unsafe { utf_ptr2char(regparse.get().add(off)) }
 }
 
 /// The encoded length of the character `off` bytes past the cursor.
-fn pat_charlen(off: usize) -> c_int {
+pub(crate) fn pat_charlen(off: usize) -> c_int {
     // SAFETY: as `pat_byte`.
     unsafe { utf_ptr2len(regparse.get().add(off)) }
 }
@@ -235,7 +235,7 @@ fn pat_charlen(off: usize) -> c_int {
 /// Move the cursor. Wrapping arithmetic because [`peekchr`] and
 /// [`ungetchr`] step it back over a character they have already read,
 /// which the compiler cannot see is in bounds.
-fn seek(delta: isize) {
+pub(crate) fn pat_seek(delta: isize) {
     regparse.set(regparse.get().wrapping_offset(delta));
 }
 
@@ -397,10 +397,10 @@ pub(crate) fn peekchr() -> c_int {
                 curchr.set(-1);
                 prev_at_start.set(at_start.get());
                 at_start.set(0);
-                seek(1);
+                pat_seek(1);
                 AFTER_SLASH.set(AFTER_SLASH.get() + 1);
                 peekchr();
-                seek(-1);
+                pat_seek(-1);
                 AFTER_SLASH.set(AFTER_SLASH.get() - 1);
                 curchr.set(toggle_magic(curchr.get()));
             } else if is_abbr(c) {
@@ -425,7 +425,7 @@ pub(crate) fn skipchr() {
     if pat_byte(prevchr_len.get() as usize) != 0 {
         prevchr_len.set(prevchr_len.get() + pat_charlen(prevchr_len.get() as usize));
     }
-    seek(prevchr_len.get() as isize);
+    pat_seek(prevchr_len.get() as isize);
     prev_at_start.set(at_start.get());
     at_start.set(0);
     prevprevchr.set(prevchr.get());
@@ -460,7 +460,7 @@ pub(crate) fn ungetchr() {
     prevchr.set(prevprevchr.get());
     at_start.set(prev_at_start.get());
     prev_at_start.set(0);
-    seek(-(prevchr_len.get() as isize));
+    pat_seek(-(prevchr_len.get() as isize));
 }
 
 /// Read up to `maxinputlen` hex digits at the cursor, or -1 if there are
@@ -474,7 +474,7 @@ pub(crate) fn gethexchrs(maxinputlen: c_int) -> i64 {
             break;
         }
         nr = (nr << 4) | hex2nr(c) as i64;
-        seek(1);
+        pat_seek(1);
         i += 1;
     }
     if i == 0 { -1 } else { nr }
@@ -490,7 +490,7 @@ pub(crate) fn getdecchrs() -> i64 {
             break;
         }
         nr = nr * 10 + (c - b'0') as i64;
-        seek(1);
+        pat_seek(1);
         // Unlike the hex and octal readers this drops the lookahead, so
         // that what follows `\%d123` is peeked afresh.
         curchr.set(-1);
@@ -510,7 +510,7 @@ pub(crate) fn getoctchrs() -> i64 {
             break;
         }
         nr = (nr << 3) | hex2nr(c as c_int) as i64;
-        seek(1);
+        pat_seek(1);
         i += 1;
     }
     if i == 0 { -1 } else { nr }
@@ -531,13 +531,13 @@ pub(crate) fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> c_int {
     // out of the min/max order rather than from a flag.
     let mut reverse = false;
     if pat_byte(0) == b'-' {
-        seek(1);
+        pat_seek(1);
         reverse = true;
     }
     let first_byte = pat_byte(0);
     *minval = take_digits(0);
     if pat_byte(0) == b',' {
-        seek(1);
+        pat_seek(1);
         *maxval = if ascii_isdigit(pat_byte(0) as c_int) {
             take_digits(MAX_LIMIT)
         } else {
@@ -550,7 +550,7 @@ pub(crate) fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> c_int {
         *maxval = MAX_LIMIT;
     }
     if pat_byte(0) == b'\\' {
-        seek(1);
+        pat_seek(1);
     }
     if pat_byte(0) != b'}' {
         let prefix = if reg_magic.get() == MAGIC_ALL {

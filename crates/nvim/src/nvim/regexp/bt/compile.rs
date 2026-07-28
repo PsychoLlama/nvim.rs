@@ -134,6 +134,13 @@ fn put_uint32(p: *mut uint8_t, val: uint32_t) -> *mut uint8_t {
     }
 }
 
+/// Change an already-emitted node's opcode. `[]` uses this to widen an
+/// `ANYOF` into its newline-accepting form once it sees a `\n` inside.
+pub(crate) fn set_opcode(node: *mut uint8_t, op: c_int) {
+    // SAFETY: `node` is a node in the program under construction.
+    unsafe { *node = op as uint8_t };
+}
+
 /// Emit a node's 32-bit operand, big-endian.
 pub(crate) fn regnr(val: uint32_t) {
     if sizing() {

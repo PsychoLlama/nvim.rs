@@ -10,16 +10,18 @@
 use super::*;
 
 mod atom;
+mod collection;
 mod compile;
 mod equi_class;
+mod escape;
 mod exec;
+mod literal;
 mod matcher;
 mod piece;
 mod repeat;
 mod state;
 
 pub(crate) use self::compile::*;
-pub(crate) use self::equi_class::*;
 pub(crate) use self::exec::*;
 pub(crate) use self::matcher::*;
 pub use self::piece::*;
