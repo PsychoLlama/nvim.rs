@@ -687,7 +687,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                                         if cstrncmp(
                                             opnd as *mut ::core::ffi::c_char,
                                             (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                            &raw mut len,
+                                            &mut len,
                                         ) != 0 as ::core::ffi::c_int
                                         {
                                             status = RA_NOMATCH;
@@ -798,7 +798,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                                     } else if cstrncmp(
                                         opnd_0 as *mut ::core::ffi::c_char,
                                         (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                        &raw mut len_1,
+                                        &mut len_1,
                                     ) != 0 as ::core::ffi::c_int
                                     {
                                         status = RA_NOMATCH;
@@ -973,7 +973,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                                             *(*rex.ptr()).reg_startp.offset(no as isize)
                                                 as *mut ::core::ffi::c_char,
                                             (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                            &raw mut len_2,
+                                            &mut len_2,
                                         ) != 0 as ::core::ffi::c_int
                                         {
                                             status = RA_NOMATCH;
@@ -999,7 +999,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                                                 as isize,
                                         ),
                                         (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                        &raw mut len_2,
+                                        &mut len_2,
                                     ) != 0 as ::core::ffi::c_int
                                     {
                                         status = RA_NOMATCH;
@@ -1033,7 +1033,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                                         (*re_extmatch_in.get()).matches[no as usize]
                                             as *mut ::core::ffi::c_char,
                                         (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                        &raw mut len_3,
+                                        &mut len_3,
                                     ) != 0 as ::core::ffi::c_int
                                     {
                                         status = RA_NOMATCH;

@@ -185,7 +185,7 @@ pub(crate) unsafe extern "C" fn bt_regexec_both(
                             if cstrncmp(
                                 s as *mut ::core::ffi::c_char,
                                 (*prog).regmust as *mut ::core::ffi::c_char,
-                                &raw mut (*prog).regmlen,
+                                &mut (*prog).regmlen,
                             ) == 0 as ::core::ffi::c_int
                             {
                                 break;
@@ -201,7 +201,7 @@ pub(crate) unsafe extern "C" fn bt_regexec_both(
                             if cstrncmp(
                                 s as *mut ::core::ffi::c_char,
                                 (*prog).regmust as *mut ::core::ffi::c_char,
-                                &raw mut (*prog).regmlen,
+                                &mut (*prog).regmlen,
                             ) == 0 as ::core::ffi::c_int
                             {
                                 break;

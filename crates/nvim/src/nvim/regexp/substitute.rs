@@ -5,6 +5,8 @@
 //! the bodies are unchanged.
 
 use super::*;
+use crate::src::nvim::mbyte::{mb_tolower, mb_toupper};
+use core::ffi::c_int;
 
 pub unsafe extern "C" fn regtilde(
     mut source: *mut ::core::ffi::c_char,
@@ -247,8 +249,8 @@ pub(crate) unsafe extern "C" fn vim_regsub_both(
     let mut c: ::core::ffi::c_int = 0;
     let mut cc: ::core::ffi::c_int = 0;
     let mut no: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    let mut func_all: fptr_T = ::core::mem::transmute::<*mut ::core::ffi::c_void, fptr_T>(NULL_0);
-    let mut func_one: fptr_T = ::core::mem::transmute::<*mut ::core::ffi::c_void, fptr_T>(NULL_0);
+    let mut func_all: Option<CaseFolder> = None;
+    let mut func_one: Option<CaseFolder> = None;
     let mut clnum: linenr_T = 0 as linenr_T;
     let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     static nesting: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
@@ -496,55 +498,24 @@ pub(crate) unsafe extern "C" fn vim_regsub_both(
                             src = src.offset(1);
                             match *c2rust_fresh2 as ::core::ffi::c_int {
                                 117 => {
-                                    func_one = Some(
-                                        do_upper
-                                            as unsafe extern "C" fn(
-                                                *mut ::core::ffi::c_int,
-                                                ::core::ffi::c_int,
-                                            )
-                                                -> (),
-                                    ) as fptr_T;
+                                    func_one = Some(to_upper);
                                     continue;
                                 }
                                 85 => {
-                                    func_all = Some(
-                                        do_upper
-                                            as unsafe extern "C" fn(
-                                                *mut ::core::ffi::c_int,
-                                                ::core::ffi::c_int,
-                                            )
-                                                -> (),
-                                    ) as fptr_T;
+                                    func_all = Some(to_upper);
                                     continue;
                                 }
                                 108 => {
-                                    func_one = Some(
-                                        do_lower
-                                            as unsafe extern "C" fn(
-                                                *mut ::core::ffi::c_int,
-                                                ::core::ffi::c_int,
-                                            )
-                                                -> (),
-                                    ) as fptr_T;
+                                    func_one = Some(to_lower);
                                     continue;
                                 }
                                 76 => {
-                                    func_all = Some(
-                                        do_lower
-                                            as unsafe extern "C" fn(
-                                                *mut ::core::ffi::c_int,
-                                                ::core::ffi::c_int,
-                                            )
-                                                -> (),
-                                    ) as fptr_T;
+                                    func_all = Some(to_lower);
                                     continue;
                                 }
                                 101 | 69 => {
-                                    func_all = ::core::mem::transmute::<
-                                        *mut ::core::ffi::c_void,
-                                        fptr_T,
-                                    >(NULL_0);
-                                    func_one = func_all;
+                                    func_all = None;
+                                    func_one = None;
                                     continue;
                                 }
                                 _ => {}
@@ -628,14 +599,10 @@ pub(crate) unsafe extern "C" fn vim_regsub_both(
                             } else {
                                 c = utf_ptr2char(src.offset(-(1 as ::core::ffi::c_int as isize)));
                             }
-                            if func_one.is_some() {
-                                func_one.expect("non-null function pointer")(&raw mut cc, c);
-                                func_one = None;
-                            } else if func_all.is_some() {
-                                func_all.expect("non-null function pointer")(&raw mut cc, c);
-                            } else {
-                                cc = c;
-                            }
+                            cc = match func_one.take().or(func_all) {
+                                Some(fold) => fold(c),
+                                None => c,
+                            };
                             let mut totlen: ::core::ffi::c_int =
                                 utfc_ptr2len(src.offset(-(1 as ::core::ffi::c_int as isize)));
                             let mut charlen: ::core::ffi::c_int = utf_char2len(cc);
@@ -771,20 +738,10 @@ pub(crate) unsafe extern "C" fn vim_regsub_both(
                                             dst = dst.offset(2 as ::core::ffi::c_int as isize);
                                         } else {
                                             c = utf_ptr2char(s);
-                                            if func_one.is_some() {
-                                                func_one.expect("non-null function pointer")(
-                                                    &raw mut cc,
-                                                    c,
-                                                );
-                                                func_one = None;
-                                            } else if func_all.is_some() {
-                                                func_all.expect("non-null function pointer")(
-                                                    &raw mut cc,
-                                                    c,
-                                                );
-                                            } else {
-                                                cc = c;
-                                            }
+                                            cc = match func_one.take().or(func_all) {
+                                                Some(fold) => fold(c),
+                                                None => c,
+                                            };
                                             let mut l: ::core::ffi::c_int = 0;
                                             let mut charlen_0: ::core::ffi::c_int = 0;
                                             l = utf_ptr2len(s) - 1 as ::core::ffi::c_int;
@@ -825,4 +782,16 @@ pub(crate) unsafe extern "C" fn vim_regsub_both(
         }
     }
     return (dst.offset_from(dest) + 1 as isize) as ::core::ffi::c_int;
+}
+
+/// The `\u`/`\U` and `\l`/`\L` case hooks a `:substitute` replacement can
+/// install. See [`CaseFolder`].
+pub(crate) fn to_upper(c: c_int) -> c_int {
+    // SAFETY: `mb_toupper` is a pure table lookup over a code point.
+    unsafe { mb_toupper(c) }
+}
+
+pub(crate) fn to_lower(c: c_int) -> c_int {
+    // SAFETY: `mb_tolower` is a pure table lookup over a code point.
+    unsafe { mb_tolower(c) }
 }

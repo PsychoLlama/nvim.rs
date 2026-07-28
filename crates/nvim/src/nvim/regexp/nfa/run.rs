@@ -166,7 +166,7 @@ pub(crate) unsafe extern "C" fn match_backref(
                         ((*rex.ptr()).line as *mut ::core::ffi::c_char)
                             .offset((*sub).list.multi[subidx as usize].start_col as isize),
                         (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                        &raw mut len,
+                        &mut len,
                     ) == 0 as ::core::ffi::c_int
                     {
                         *bytelen = len;
@@ -194,7 +194,7 @@ pub(crate) unsafe extern "C" fn match_backref(
                 if cstrncmp(
                     (*sub).list.line[subidx as usize].start as *mut ::core::ffi::c_char,
                     (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                    &raw mut len,
+                    &mut len,
                 ) == 0 as ::core::ffi::c_int
                 {
                     *bytelen = len;
@@ -224,7 +224,7 @@ pub(crate) unsafe extern "C" fn match_zref(
     if cstrncmp(
         (*re_extmatch_in.get()).matches[subidx as usize] as *mut ::core::ffi::c_char,
         (*rex.ptr()).input as *mut ::core::ffi::c_char,
-        &raw mut len,
+        &mut len,
     ) == 0 as ::core::ffi::c_int
     {
         *bytelen = len;

@@ -370,7 +370,7 @@ pub(crate) unsafe extern "C" fn match_with_backref(
             && cstrncmp(
                 p.offset(ccol as isize),
                 (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                &raw mut len,
+                &mut len,
             ) != 0 as ::core::ffi::c_int
             || (*rex.ptr()).reg_ic as ::core::ffi::c_int != 0
                 && mb_strnicmp(

@@ -20,7 +20,7 @@ use crate::src::nvim::mark::mark_get;
 use crate::src::nvim::mbyte::{
     mb_get_class_tab, mb_islower, mb_isupper, mb_ptr2char_adv, mb_strnicmp, mb_tolower, mb_toupper,
     utf_char2bytes, utf_char2len, utf_composinglike, utf_fold, utf_head_off,
-    utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len, utf_strnicmp, utfc_ptr2len,
+    utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xrealloc, xstrdup};
@@ -195,7 +195,9 @@ pub const CLASS_BLANK: C2Rust_Unnamed_26 = 2;
 pub const CLASS_BACKSPACE: C2Rust_Unnamed_26 = 14;
 pub const CLASS_ALPHA: C2Rust_Unnamed_26 = 1;
 pub const CLASS_ALNUM: C2Rust_Unnamed_26 = 0;
-pub type fptr_T = Option<unsafe extern "C" fn(*mut ::core::ffi::c_int, ::core::ffi::c_int) -> ()>;
+/// The case hook `\\u`, `\\U`, `\\l` and `\\L` install for the rest of a
+/// `:substitute` replacement.
+pub type CaseFolder = fn(::core::ffi::c_int) -> ::core::ffi::c_int;
 pub type reg_getline_flags_T = ::core::ffi::c_uint;
 pub const RGLF_SUBMATCH: reg_getline_flags_T = 4;
 pub const RGLF_LENGTH: reg_getline_flags_T = 2;
@@ -473,13 +475,6 @@ pub const NFA_COL_GT: C2Rust_Unnamed_27 = -850;
 pub const NFA_LNUM: C2Rust_Unnamed_27 = -854;
 pub const NFA_LNUM_LT: C2Rust_Unnamed_27 = -852;
 pub const NFA_LNUM_GT: C2Rust_Unnamed_27 = -853;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct decomp_T {
-    pub a: ::core::ffi::c_int,
-    pub b: ::core::ffi::c_int,
-    pub c: ::core::ffi::c_int,
-}
 pub const NFA_ZREF1: C2Rust_Unnamed_27 = -967;
 pub const NFA_BACKREF1: C2Rust_Unnamed_27 = -976;
 pub const NFA_BACKREF9: C2Rust_Unnamed_27 = -968;
@@ -915,248 +910,6 @@ static reg_endzp: GlobalCell<[*mut uint8_t; 10]> =
     GlobalCell::new([::core::ptr::null_mut::<uint8_t>(); 10]);
 static reg_startzpos: GlobalCell<[lpos_T; 10]> = GlobalCell::new([lpos_T { lnum: 0, col: 0 }; 10]);
 static reg_endzpos: GlobalCell<[lpos_T; 10]> = GlobalCell::new([lpos_T { lnum: 0, col: 0 }; 10]);
-static decomp_table: GlobalCell<[decomp_T; 48]> = GlobalCell::new([
-    decomp_T {
-        a: 0x5e2 as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d0 as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d3 as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d4 as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5db as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5dc as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5dd as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e8 as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5ea as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: '+' as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e9 as ::core::ffi::c_int,
-        b: 0x5c1 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e9 as ::core::ffi::c_int,
-        b: 0x5c2 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e9 as ::core::ffi::c_int,
-        b: 0x5c1 as ::core::ffi::c_int,
-        c: 0x5bc as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e9 as ::core::ffi::c_int,
-        b: 0x5c2 as ::core::ffi::c_int,
-        c: 0x5bc as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d0 as ::core::ffi::c_int,
-        b: 0x5b7 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d0 as ::core::ffi::c_int,
-        b: 0x5b8 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d0 as ::core::ffi::c_int,
-        b: 0x5b4 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d1 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d2 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d3 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d4 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d5 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d6 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0xfb37 as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d8 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d9 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5da as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5db as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5dc as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0xfb3d as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5de as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0xfb3f as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e0 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e1 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0xfb42 as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e3 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e4 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0xfb45 as ::core::ffi::c_int,
-        b: 0 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e6 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e7 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e8 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e9 as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5ea as ::core::ffi::c_int,
-        b: 0x5bc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d5 as ::core::ffi::c_int,
-        b: 0x5b9 as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d1 as ::core::ffi::c_int,
-        b: 0x5bf as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5db as ::core::ffi::c_int,
-        b: 0x5bf as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5e4 as ::core::ffi::c_int,
-        b: 0x5bf as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-    decomp_T {
-        a: 0x5d0 as ::core::ffi::c_int,
-        b: 0x5dc as ::core::ffi::c_int,
-        c: 0 as ::core::ffi::c_int,
-    },
-]);
 pub const MAX_REGSUB_NESTING: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 static eval_result: GlobalCell<[*mut ::core::ffi::c_char; 4]> = GlobalCell::new([
     ::core::ptr::null_mut::<::core::ffi::c_char>(),
