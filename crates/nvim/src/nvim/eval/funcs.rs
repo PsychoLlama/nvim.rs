@@ -20,9 +20,7 @@ use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::cmdexpand::cmdline_pum_active;
 use crate::src::nvim::edit::buf_prompt_text;
 use crate::src::nvim::eval::buffer::find_buffer;
-use crate::src::nvim::eval::typval::{
-    tv_blob_len, tv_list_first, tv_list_len, tv_list_ref, tv_list_set_ret,
-};
+use crate::src::nvim::eval::typval::{tv_blob_len, tv_list_first, tv_list_len, tv_list_ref};
 use crate::src::nvim::eval::typval::{
     tv_check_for_dict_arg, tv_check_for_list_arg, tv_check_str_or_nr, tv_copy,
     tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_alloc_ret, tv_dict_extend,
@@ -60,11 +58,6 @@ use crate::src::nvim::ex_getln::{get_user_input, text_locked, text_locked_msg};
 use crate::src::nvim::garray::{ga_append, ga_append_via_ptr, ga_grow, ga_init};
 use crate::src::nvim::getchar::{restore_typeahead, save_typeahead, stuff_empty, using_script};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::grid::{grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint};
-use crate::src::nvim::highlight_group::{
-    get_highlight_name_ext, highlight_color, highlight_exists, highlight_has_attr,
-    syn_get_final_id, syn_name2id,
-};
 use crate::src::nvim::indent::{get_sw_value, get_sw_value_col};
 use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::insexpand::ins_compl_active;
@@ -84,15 +77,14 @@ use crate::src::nvim::main::{
     provider_call_nesting, provider_caller_scope, redir_off, starting, stdin_isatty, stdout_isatty,
     typebuf, vgetc_busy, want_garbage_collect, wild_menu_showing, windowsVersion,
 };
-use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len};
-use crate::src::nvim::memline::{ml_get, ml_get_len, ml_open};
+use crate::src::nvim::memline::{ml_get, ml_open};
 use crate::src::nvim::memory::{
     ARENA_EMPTY, arena_finish, arena_mem_free, strnequal, xcalloc, xfree, xmalloc, xmemdup, xstrdup,
 };
 use crate::src::nvim::menu::{get_menu_cmd_modes, menu_get};
 use crate::src::nvim::message::{
-    do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_scroll_flush,
-    msg_start, semsg, semsg_multiline, verb_msg,
+    do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start, semsg,
+    semsg_multiline, verb_msg,
 };
 use crate::src::nvim::r#move::win_col_off;
 use crate::src::nvim::msgpack_rpc::channel::get_client_info;
@@ -108,8 +100,8 @@ use crate::src::nvim::os::env::{
 };
 use crate::src::nvim::os::fs::os_isdir;
 use crate::src::nvim::os::libc::{
-    __assert_fail, atoi, gettext, memcpy, memset, snprintf, strcasecmp, strcmp, strlen,
-    strncasecmp, strncmp, strtoul,
+    __assert_fail, atoi, gettext, memcpy, snprintf, strcasecmp, strcmp, strlen, strncasecmp,
+    strncmp, strtoul,
 };
 use crate::src::nvim::os::pty_proc_unix::pty_proc_resize;
 use crate::src::nvim::os::shell::shell_free_argv;
@@ -119,9 +111,7 @@ use crate::src::nvim::popupmenu::{pum_set_event_info, pum_visible};
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::state::{get_mode, get_was_safe_state};
 use crate::src::nvim::strings::vim_strchr;
-use crate::src::nvim::syntax::{
-    get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char, syntax_present,
-};
+use crate::src::nvim::syntax::syntax_present;
 use crate::src::nvim::terminal::{terminal_buf, terminal_open, terminal_running};
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gid_t, __gnuc_va_list, __pthread_internal_list, __pthread_list_t,
@@ -191,11 +181,7 @@ pub use crate::src::nvim::types::{
     va_list, varnumber_T, vim_exception, vimconv_T, virt_line, visualinfo_T, win_T, window_S,
     wininfo_S, winopt_T, winsize, wline_T, xfmark_T, xp_prefix_T, yankreg_T,
 };
-use crate::src::nvim::ui::{
-    ui_busy_start, ui_busy_stop, ui_current_col, ui_current_row, ui_flush, ui_gui_attached, ui_has,
-    ui_rgb_attached,
-};
-use crate::src::nvim::ui_compositor::ui_comp_get_grid_at_coord;
+use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_flush, ui_gui_attached, ui_has};
 use crate::src::nvim::version::{has_nvim_version, has_vim_patch};
 use crate::src::nvim::window::find_tabpage;
 use core::ffi::CStr;
@@ -435,28 +421,6 @@ pub const DI_FLAGS_RO_SBX: C2Rust_Unnamed_34 = 2;
 pub const DI_FLAGS_RO: C2Rust_Unnamed_34 = 1;
 pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
 pub const MAX_FUNC_ARGS: C2Rust_Unnamed_35 = 20;
-pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
-pub const HL_GLOBAL: C2Rust_Unnamed_36 = 16384;
-pub const HL_DEFAULT: C2Rust_Unnamed_36 = 8192;
-pub const HL_FG_INDEXED: C2Rust_Unnamed_36 = 4096;
-pub const HL_BG_INDEXED: C2Rust_Unnamed_36 = 2048;
-pub const HL_NOCOMBINE: C2Rust_Unnamed_36 = 1024;
-pub const HL_OVERLINE: C2Rust_Unnamed_36 = 131072;
-pub const HL_CONCEALED: C2Rust_Unnamed_36 = 65536;
-pub const HL_BLINK: C2Rust_Unnamed_36 = 32768;
-pub const HL_DIM: C2Rust_Unnamed_36 = 512;
-pub const HL_ALTFONT: C2Rust_Unnamed_36 = 256;
-pub const HL_STRIKETHROUGH: C2Rust_Unnamed_36 = 128;
-pub const HL_STANDOUT: C2Rust_Unnamed_36 = 64;
-pub const HL_UNDERDASHED: C2Rust_Unnamed_36 = 40;
-pub const HL_UNDERDOTTED: C2Rust_Unnamed_36 = 32;
-pub const HL_UNDERDOUBLE: C2Rust_Unnamed_36 = 24;
-pub const HL_UNDERCURL: C2Rust_Unnamed_36 = 16;
-pub const HL_UNDERLINE: C2Rust_Unnamed_36 = 8;
-pub const HL_UNDERLINE_MASK: C2Rust_Unnamed_36 = 56;
-pub const HL_ITALIC: C2Rust_Unnamed_36 = 4;
-pub const HL_BOLD: C2Rust_Unnamed_36 = 2;
-pub const HL_INVERSE: C2Rust_Unnamed_36 = 1;
 pub const HLF_COUNT: hlf_T = 76;
 pub const HLF_PRE: hlf_T = 75;
 pub const HLF_OK: hlf_T = 74;
@@ -1411,7 +1375,6 @@ pub const kCtxRegs: C2Rust_Unnamed_45 = 1;
 pub type C2Rust_Unnamed_46 = ::core::ffi::c_uint;
 pub const BASE_LAST: C2Rust_Unnamed_46 = 255;
 pub const BASE_NONE: C2Rust_Unnamed_46 = 0;
-pub const HL_CONCEAL: C2Rust_Unnamed_65 = 131072;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
@@ -1675,26 +1638,6 @@ pub const OP_LSHIFT: C2Rust_Unnamed_62 = 4;
 pub const OP_CHANGE: C2Rust_Unnamed_62 = 3;
 pub const OP_YANK: C2Rust_Unnamed_62 = 2;
 pub const OP_DELETE: C2Rust_Unnamed_62 = 1;
-pub type C2Rust_Unnamed_65 = ::core::ffi::c_uint;
-pub const HL_INCLUDED_TOPLEVEL: C2Rust_Unnamed_65 = 524288;
-pub const HL_CONCEALENDS: C2Rust_Unnamed_65 = 262144;
-pub const HL_TRANS_CONT: C2Rust_Unnamed_65 = 65536;
-pub const HL_MATCHCONT: C2Rust_Unnamed_65 = 32768;
-pub const HL_EXTEND: C2Rust_Unnamed_65 = 16384;
-pub const HL_FOLD: C2Rust_Unnamed_65 = 8192;
-pub const HL_DISPLAY: C2Rust_Unnamed_65 = 4096;
-pub const HL_EXCLUDENL: C2Rust_Unnamed_65 = 2048;
-pub const HL_KEEPEND: C2Rust_Unnamed_65 = 1024;
-pub const HL_SKIPEMPTY: C2Rust_Unnamed_65 = 512;
-pub const HL_SKIPWHITE: C2Rust_Unnamed_65 = 256;
-pub const HL_SKIPNL: C2Rust_Unnamed_65 = 128;
-pub const HL_MATCH: C2Rust_Unnamed_65 = 64;
-pub const HL_SYNC_THERE: C2Rust_Unnamed_65 = 32;
-pub const HL_SYNC_HERE: C2Rust_Unnamed_65 = 16;
-pub const HL_HAS_EOL: C2Rust_Unnamed_65 = 8;
-pub const HL_ONELINE: C2Rust_Unnamed_65 = 4;
-pub const HL_TRANSP: C2Rust_Unnamed_65 = 2;
-pub const HL_CONTAINED: C2Rust_Unnamed_65 = 1;
 pub type C2Rust_Unnamed_66 = ::core::ffi::c_uint;
 pub const TFN_READ_ONLY: C2Rust_Unnamed_66 = 16;
 pub type C2Rust_Unnamed_67 = ::core::ffi::c_uint;
