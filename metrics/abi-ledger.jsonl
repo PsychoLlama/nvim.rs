@@ -1,6 +1,6 @@
 {"symbol":"NameBuff","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"_hash_key_removed","kind":"fn","file":"crates/nvim/src/nvim/hashtab.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"api_free_object","kind":"fn","file":"crates/nvim/src/nvim/api/private/helpers.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"api_free_object","kind":"fn","file":"crates/nvim/src/nvim/api/private/helpers/value.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"append_path","kind":"fn","file":"crates/nvim/src/nvim/path.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"appended_lines_buf","kind":"fn","file":"crates/nvim/src/nvim/change.rs","class":"internal","refs":[]}
 {"symbol":"apply_autocmds","kind":"fn","file":"crates/nvim/src/nvim/autocmd.rs","class":"internal","refs":[]}

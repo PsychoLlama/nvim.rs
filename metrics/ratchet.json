@@ -1,6 +1,6 @@
 {
   "internal_exports": 120,
-  "files_without_forbid_unsafe": 346,
+  "files_without_forbid_unsafe": 350,
   "files_without_deny_unsafe_op": 258,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -41,7 +41,11 @@
     "crates/nvim/src/nvim/api/private/dispatch_wrappers/vimscript.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/api/private/dispatch_wrappers/win_config.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/api/private/dispatch_wrappers/window.rs": {"unsafe": 38},
-    "crates/nvim/src/nvim/api/private/helpers.rs": {"lines": 1482, "no_mangle": 2, "unsafe": 91, "variadic": 1},
+    "crates/nvim/src/nvim/api/private/helpers.rs": {"no_mangle": 1, "unsafe": 20, "variadic": 1},
+    "crates/nvim/src/nvim/api/private/helpers/keydict.rs": {"unsafe": 9},
+    "crates/nvim/src/nvim/api/private/helpers/text.rs": {"unsafe": 18},
+    "crates/nvim/src/nvim/api/private/helpers/value.rs": {"no_mangle": 1, "unsafe": 38},
+    "crates/nvim/src/nvim/api/private/helpers/vimdict.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/api/private/validate.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/api/tabpage.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/api/ui.rs": {"lines": 2576, "unsafe": 64},
