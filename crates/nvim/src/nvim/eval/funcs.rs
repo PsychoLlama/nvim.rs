@@ -1,47 +1,20 @@
-use crate::src::nvim::api::private::converter::{
-    object_to_vim, object_to_vim_take_luaref, vim_to_object,
-};
-use crate::src::nvim::api::private::helpers::{
-    api_clear_error, api_free_object, arena_array, cstr_as_string,
-};
+use crate::src::nvim::api::private::converter::{object_to_vim_take_luaref, vim_to_object};
+use crate::src::nvim::api::private::helpers::{api_clear_error, api_free_object};
 use crate::src::nvim::buffer::{buflist_findnr, buflist_findpat};
-use crate::src::nvim::channel::find_channel;
-use crate::src::nvim::channel::{channel_close, channel_connect, channel_from_stdio, channel_send};
 use crate::src::nvim::eval::buffer::find_buffer;
-use crate::src::nvim::eval::typval::tv_blob_len;
-use crate::src::nvim::eval::typval::{
-    tv_check_str_or_nr, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number, tv_get_string,
-    tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_string,
-};
-use crate::src::nvim::eval::userfunc::{
-    get_user_func_name, restore_funccal, save_funccal, set_current_funccal,
-};
+use crate::src::nvim::eval::typval::{tv_check_str_or_nr, tv_get_string};
+use crate::src::nvim::eval::userfunc::get_user_func_name;
 use crate::src::nvim::eval::vars::{cat_prefix_varname, get_user_var_name};
 use crate::src::nvim::eval::window::{find_tabwin, find_win_by_nr_or_id};
-use crate::src::nvim::eval_1::save_tv_as_string;
-use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::ex_cmds::check_secure;
-use crate::src::nvim::garray::ga_grow;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
-use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::{
-    IObuff, autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, curbuf, current_sctx,
-    curwin, e_api_error, e_invalwindow, e_invarg, e_invarg2, e_stdiochan2, e_toofewarg,
-    e_toomanyarg, empty_string_option, emsg_off, lastbuf, on_print, p_cpo, p_magic,
-    provider_call_nesting, provider_caller_scope,
+    IObuff, curbuf, curwin, e_api_error, e_invalwindow, e_toofewarg, e_toomanyarg,
+    empty_string_option, emsg_off, lastbuf, p_cpo, p_magic,
 };
-use crate::src::nvim::memory::{
-    ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmemdup, xstrdup,
-};
+use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::src::nvim::message::{emsg, semsg, semsg_multiline};
-use crate::src::nvim::msgpack_rpc::channel::get_client_info;
-use crate::src::nvim::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
-use crate::src::nvim::msgpack_rpc::server::{
-    server_address_list, server_address_new, server_start, server_stop,
-};
-use crate::src::nvim::os::libc::{gettext, memcpy, strcmp, strlen, strncmp};
-use crate::src::nvim::runtime::exestack;
+use crate::src::nvim::os::libc::{gettext, memcpy, strlen, strncmp};
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gid_t, __gnuc_va_list, __pthread_internal_list, __pthread_list_t,
     __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __uid_t, __va_list_tag, AdditionalData,
