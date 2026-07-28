@@ -108,7 +108,7 @@ pub(crate) unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> 
             regoptail(ret, next);
         }
         -133 => {
-            if read_limits(&raw mut minval, &raw mut maxval) == 0 {
+            if read_limits(&mut minval, &mut maxval) == 0 {
                 return ::core::ptr::null_mut::<uint8_t>();
             }
             if flags & SIMPLE != 0 {

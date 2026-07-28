@@ -1,6 +1,6 @@
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_isxdigit};
 use crate::src::nvim::charset::{
-    getdigits_int, hex2nr, vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordc_buf, vim_iswordp_buf,
+    vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordc_buf, vim_iswordp_buf,
 };
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_get_string_buf_chk, tv_list_alloc, tv_list_append_string, tv_list_init_static10,

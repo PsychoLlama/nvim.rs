@@ -39,7 +39,7 @@ pub(crate) unsafe extern "C" fn nfa_regpiece() -> ::core::ffi::c_int {
     let mut old_post_pos: ::core::ffi::c_int = 0;
     let mut my_post_start: ::core::ffi::c_int = 0;
     let mut quest: ::core::ffi::c_int = 0;
-    save_parse_state(&raw mut old_state);
+    save_parse_state(&mut old_state);
     my_post_start = (*post_ptr.ptr()).offset_from(post_start.get()) as ::core::ffi::c_int;
     ret = nfa_regatom();
     if ret == FAIL {
@@ -60,7 +60,7 @@ pub(crate) unsafe extern "C" fn nfa_regpiece() -> ::core::ffi::c_int {
             *c2rust_fresh29 = NFA_STAR as ::core::ffi::c_int;
         }
         -213 => {
-            restore_parse_state(&raw mut old_state);
+            restore_parse_state(&old_state);
             curchr.set(-1 as ::core::ffi::c_int);
             if nfa_regatom() == FAIL {
                 return FAIL;
@@ -145,7 +145,7 @@ pub(crate) unsafe extern "C" fn nfa_regpiece() -> ::core::ffi::c_int {
                 skipchr();
                 greedy = false_0 != 0;
             }
-            if read_limits(&raw mut minval, &raw mut maxval) == 0 {
+            if read_limits(&mut minval, &mut maxval) == 0 {
                 emsg(gettext(
                     b"E870: (NFA regexp) Error reading repetition limits\0".as_ptr()
                         as *const ::core::ffi::c_char,
@@ -189,7 +189,7 @@ pub(crate) unsafe extern "C" fn nfa_regpiece() -> ::core::ffi::c_int {
                     return FAIL;
                 }
                 post_ptr.set((*post_start.ptr()).offset(my_post_start as isize));
-                save_parse_state(&raw mut new_state);
+                save_parse_state(&mut new_state);
                 quest = if greedy as ::core::ffi::c_int == true_0 {
                     NFA_QUEST as ::core::ffi::c_int
                 } else {
@@ -197,7 +197,7 @@ pub(crate) unsafe extern "C" fn nfa_regpiece() -> ::core::ffi::c_int {
                 };
                 i = 0 as ::core::ffi::c_int;
                 while i < maxval {
-                    restore_parse_state(&raw mut old_state);
+                    restore_parse_state(&old_state);
                     old_post_pos =
                         (*post_ptr.ptr()).offset_from(post_start.get()) as ::core::ffi::c_int;
                     if nfa_regatom() == FAIL {
@@ -242,7 +242,7 @@ pub(crate) unsafe extern "C" fn nfa_regpiece() -> ::core::ffi::c_int {
                     }
                     i += 1;
                 }
-                restore_parse_state(&raw mut new_state);
+                restore_parse_state(&new_state);
                 curchr.set(-1 as ::core::ffi::c_int);
             }
         }
