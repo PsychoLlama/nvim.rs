@@ -47,6 +47,7 @@ const ADDSTATE_MAX_DEPTH: c_int = 5000;
 ///
 /// SAFETY: every state this module is handed is a state of the running
 /// program.
+#[inline(always)]
 fn op(state: *mut nfa_state_T) -> c_int {
     unsafe { (*state).c }
 }
@@ -54,6 +55,7 @@ fn op(state: *mut nfa_state_T) -> c_int {
 /// What a state continues at.
 ///
 /// SAFETY: as `op`.
+#[inline(always)]
 fn out_of(state: *mut nfa_state_T) -> *mut nfa_state_T {
     unsafe { (*state).out }
 }
@@ -62,6 +64,7 @@ fn out_of(state: *mut nfa_state_T) -> *mut nfa_state_T {
 /// threads on anything else.
 ///
 /// SAFETY: as `op`.
+#[inline(always)]
 fn id_of(state: *mut nfa_state_T) -> c_int {
     unsafe { (*state).id }
 }
@@ -135,6 +138,7 @@ impl ThreadList {
     }
 
     /// How many threads are live.
+    #[inline(always)]
     pub(crate) fn len(&self) -> usize {
         self.n
     }
@@ -146,13 +150,21 @@ impl ThreadList {
     }
 
     /// The `i`th live thread.
+    ///
+    /// One bounds check, not two: slicing to `n` first and indexing that is
+    /// the natural spelling and costs a second check on the hottest accessor
+    /// the match loop has. `n` is never past `threads.len()`.
+    #[inline(always)]
     pub(crate) fn thread(&self, i: usize) -> &nfa_thread_T {
-        &self.threads[..self.n][i]
+        debug_assert!(i < self.n);
+        &self.threads[i]
     }
 
     /// The `i`th live thread, to write to.
+    #[inline(always)]
     pub(crate) fn thread_mut(&mut self, i: usize) -> &mut nfa_thread_T {
-        &mut self.threads[..self.n][i]
+        debug_assert!(i < self.n);
+        &mut self.threads[i]
     }
 
     /// Reserve the next slot size up, or report E363 and refuse.
@@ -216,12 +228,21 @@ impl ThreadList {
         pim: Option<&nfa_pim_T>,
     ) -> bool {
         let has_z = has_zsubexpr();
-        self.threads[..self.n].iter().any(|thread| {
-            id_of(thread.state) == id_of(state)
+        let id = id_of(state);
+        // A plain index walk: at opt-level 0 the iterator adaptors are a
+        // handful of calls per thread, and this is the match loop's innermost
+        // comparison.
+        for i in 0..self.n {
+            let thread = &self.threads[i];
+            if id_of(thread.state) == id
                 && sub_equal(&thread.subs.norm, &subs.norm)
                 && (!has_z || sub_equal(&thread.subs.synt, &subs.synt))
                 && pim_equal(Some(&thread.pim), pim)
-        })
+            {
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -319,9 +340,18 @@ fn walk(
     };
 
     let c = op(state);
-    let transparent = matches!(c, NFA_SPLIT | NFA_EMPTY | NFA_MOPEN | NFA_NCLOSE | NFA_ZEND)
-        || (NFA_MCLOSE..=NFA_MCLOSE9).contains(&c)
-        || (NFA_ZCLOSE..=NFA_ZCLOSE9).contains(&c);
+    // One match rather than `RangeInclusive::contains`, which is a call per
+    // range at opt-level 0 and this runs once per `addstate`.
+    let transparent = matches!(
+        c,
+        NFA_SPLIT
+            | NFA_EMPTY
+            | NFA_MOPEN
+            | NFA_NCLOSE
+            | NFA_ZEND
+            | NFA_MCLOSE..=NFA_MCLOSE9
+            | NFA_ZCLOSE..=NFA_ZCLOSE9
+    );
 
     if !transparent {
         // `^` and `\%^` in the middle of a line can never match, and a thread
@@ -372,8 +402,10 @@ fn place(
             // alone identifies the thread. Adding it at the current position
             // is still worth doing when the copy already on the list is
             // behind where the loop has got to.
-            let found = add_here
-                && (0..l.len().min(listindex)).any(|k| id_of(l.thread(k).state) == id_of(state));
+            let found = add_here && {
+                let id = id_of(state);
+                (0..l.len().min(listindex)).any(|k| id_of(l.thread(k).state) == id)
+            };
             if !add_here || found {
                 return Place::Skip;
             }

@@ -40,6 +40,7 @@ const NO_LINEPOS: linepos = linepos {
 
 /// Does this match run over a range of buffer lines rather than over one
 /// string?
+#[inline(always)]
 pub(crate) fn multi_line() -> bool {
     // SAFETY: `rex` describes a match that is set up and running.
     unsafe { (*rex.ptr()).reg_match.is_null() }
@@ -47,6 +48,7 @@ pub(crate) fn multi_line() -> bool {
 
 /// Does the pattern have `\z(` groups? They are carried in a second capture
 /// set beside the ordinary one, and only copied when there are any.
+#[inline(always)]
 pub(crate) fn has_zsubexpr() -> bool {
     // SAFETY: as `multi_line`.
     unsafe { (*rex.ptr()).nfa_has_zsubexpr != 0 }
@@ -55,6 +57,7 @@ pub(crate) fn has_zsubexpr() -> bool {
 /// Does the pattern have a back-reference? It is the only thing that reads a
 /// capture's end while the match is still running, and so the only thing that
 /// can tell two threads on one state apart by their ends.
+#[inline(always)]
 pub(crate) fn has_backref() -> bool {
     // SAFETY: as `multi_line`.
     unsafe { (*rex.ptr()).nfa_has_backref != 0 }
@@ -83,21 +86,29 @@ pub(crate) fn clear_sub(sub: &mut regsub_T) {
 }
 
 /// Copy the captures `from` has in use over `to`'s.
+#[inline(always)]
 pub(crate) fn copy_sub(to: &mut regsub_T, from: &regsub_T) {
     to.in_use = from.in_use;
     if from.in_use <= 0 {
         return;
     }
     let n = from.in_use as usize;
+    // A plain loop rather than `copy_from_slice`: `in_use` is one or two in
+    // almost every match, and at opt-level 0 the slice call chain costs more
+    // than the copy. This runs once per thread put on a list.
     // SAFETY: as `clear_sub`.
     unsafe {
         if multi_line() {
-            to.list.multi[..n].copy_from_slice(&from.list.multi[..n]);
+            for i in 0..n {
+                to.list.multi[i] = from.list.multi[i];
+            }
             // Where a `:substitute` resumes scanning, which travels with the
             // whole-match capture.
             to.orig_start_col = from.orig_start_col;
         } else {
-            to.list.line[..n].copy_from_slice(&from.list.line[..n]);
+            for i in 0..n {
+                to.list.line[i] = from.list.line[i];
+            }
         }
     }
 }
@@ -115,9 +126,13 @@ pub(crate) fn copy_sub_off(to: &mut regsub_T, from: &regsub_T) {
     // SAFETY: as `clear_sub`.
     unsafe {
         if multi_line() {
-            to.list.multi[1..n].copy_from_slice(&from.list.multi[1..n]);
+            for i in 1..n {
+                to.list.multi[i] = from.list.multi[i];
+            }
         } else {
-            to.list.line[1..n].copy_from_slice(&from.list.line[1..n]);
+            for i in 1..n {
+                to.list.line[i] = from.list.line[i];
+            }
         }
     }
 }
@@ -148,19 +163,26 @@ pub(crate) fn copy_ze_off(to: &mut regsub_T, from: &regsub_T) {
 /// back-reference, which is the only thing that reads them mid-match.
 pub(crate) fn sub_equal(sub1: &regsub_T, sub2: &regsub_T) -> bool {
     let ends_matter = has_backref();
+    let (n1, n2) = (sub1.in_use, sub2.in_use);
+    let todo = n1.max(n2) as usize;
+    // Written as a plain loop over the fields rather than over a helper that
+    // returns "the position, or the unset one": this is the match loop's
+    // innermost comparison and at opt-level 0 a closure per element is a
+    // call per element.
     // SAFETY: as `clear_sub`.
     unsafe {
-        let todo = sub1.in_use.max(sub2.in_use) as usize;
         if multi_line() {
-            let at = |sub: &regsub_T, i: usize| {
-                if (i as c_int) < sub.in_use {
-                    sub.list.multi[i]
+            for i in 0..todo {
+                let a = if (i as c_int) < n1 {
+                    sub1.list.multi[i]
                 } else {
                     NO_MULTIPOS
-                }
-            };
-            for i in 0..todo {
-                let (a, b) = (at(sub1, i), at(sub2, i));
+                };
+                let b = if (i as c_int) < n2 {
+                    sub2.list.multi[i]
+                } else {
+                    NO_MULTIPOS
+                };
                 if a.start_lnum != b.start_lnum {
                     return false;
                 }
@@ -168,23 +190,27 @@ pub(crate) fn sub_equal(sub1: &regsub_T, sub2: &regsub_T) -> bool {
                 if a.start_lnum != -1 && a.start_col != b.start_col {
                     return false;
                 }
-                if ends_matter && (a.end_lnum != b.end_lnum) {
-                    return false;
-                }
-                if ends_matter && a.end_lnum != -1 && a.end_col != b.end_col {
-                    return false;
+                if ends_matter {
+                    if a.end_lnum != b.end_lnum {
+                        return false;
+                    }
+                    if a.end_lnum != -1 && a.end_col != b.end_col {
+                        return false;
+                    }
                 }
             }
         } else {
-            let at = |sub: &regsub_T, i: usize| {
-                if (i as c_int) < sub.in_use {
-                    sub.list.line[i]
+            for i in 0..todo {
+                let a = if (i as c_int) < n1 {
+                    sub1.list.line[i]
                 } else {
                     NO_LINEPOS
-                }
-            };
-            for i in 0..todo {
-                let (a, b) = (at(sub1, i), at(sub2, i));
+                };
+                let b = if (i as c_int) < n2 {
+                    sub2.list.line[i]
+                } else {
+                    NO_LINEPOS
+                };
                 if a.start != b.start {
                     return false;
                 }
@@ -193,8 +219,8 @@ pub(crate) fn sub_equal(sub1: &regsub_T, sub2: &regsub_T) -> bool {
                 }
             }
         }
-        true
     }
+    true
 }
 
 /// Copy a postponed lookaround, captures and all.
