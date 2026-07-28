@@ -5,11 +5,8 @@
 //! machine ([`build`]), and the machine is run by advancing a list of threads
 //! over the input one character at a time ([`matcher`], [`step`]).
 //!
-//! Only [`sub`] — `addstate` and the thread lists it grows — is still as
-//! transpilation left it.
-
-#[allow(unused_imports)]
-use super::*;
+//! The lists themselves, and the walk that puts a state on one, are
+//! [`list`]; [`sub`] is the capture sets the threads on them carry.
 
 mod assertions;
 mod atom;
@@ -22,6 +19,7 @@ mod cursor;
 mod equi_class;
 mod escape;
 mod exec;
+mod list;
 mod literal;
 mod matcher;
 mod parse;

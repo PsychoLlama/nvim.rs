@@ -35,6 +35,7 @@
 use core::ffi::c_int;
 
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::regexp::NFA_CONCAT;
 
 struct Program {
     /// Owns the allocation. Its own length stays 0; `len` below is the real
@@ -123,7 +124,7 @@ pub(crate) fn emit(item: c_int) {
 #[inline(always)]
 pub(crate) fn emit_concat(item: c_int) {
     emit(item);
-    emit(super::NFA_CONCAT);
+    emit(NFA_CONCAT);
 }
 
 /// How many items have been emitted; a handle [`truncate`] can rewind to.

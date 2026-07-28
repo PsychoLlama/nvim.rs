@@ -15,17 +15,17 @@
 
 use core::ffi::{c_char, c_int};
 
+use super::list::{ThreadList, addstate, addstate_here};
 use super::run::nfa_did_time_out;
 use super::step::{Run, Step, lookaround_held, step};
-use super::sub::{addstate, addstate_here, copy_pim, copy_sub_off, match_follows};
+use super::sub::{copy_sub, copy_sub_off, has_zsubexpr, match_follows};
 use crate::src::nvim::main::got_int;
 use crate::src::nvim::mbyte::{utf_fold, utf_ptr2char, utfc_ptr2len};
-use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::regexp::{
     AUTOMATIC_ENGINE, FAIL, NFA_MAX_STATES, NFA_MOPEN, NFA_PIM_MATCH, NFA_PIM_NOMATCH,
-    NFA_PIM_TODO, NFA_PIM_UNUSED, NFA_TOO_EXPENSIVE, NUL, nfa_endp, nfa_list_T, nfa_match,
-    nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_thread_T, nfa_time_count, nfa_time_limit,
-    reg_breakcheck, reg_nextline, regsubs_T, rex,
+    NFA_PIM_TODO, NFA_PIM_UNUSED, NFA_TOO_EXPENSIVE, NUL, nfa_endp, nfa_match, nfa_pim_T,
+    nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit, reg_breakcheck, reg_nextline,
+    regsubs_T, rex,
 };
 use crate::src::nvim::regexp::{recursive_regmatch, skip_to_start};
 use crate::src::nvim::types::colnr_T;
@@ -52,57 +52,42 @@ pub(crate) fn nfa_regmatch(
     nfa_match.set(0);
 
     // SAFETY: `prog` and `start` are the running program; the two thread
-    // arrays below are owned by this call and freed before it returns.
+    // lists below are owned by this call.
     unsafe {
-        let capacity = (*prog).nstate + 1;
-        let bytes = capacity as usize * size_of::<nfa_thread_T>();
-        let mut list = [blank_list(), blank_list()];
-        list[0].t = xmalloc(bytes) as *mut nfa_thread_T;
-        list[0].len = capacity;
-        list[1].t = xmalloc(bytes) as *mut nfa_thread_T;
-        list[1].len = capacity;
+        let capacity = ((*prog).nstate + 1) as usize;
+        let mut list = [ThreadList::new(capacity), ThreadList::new(capacity)];
 
         let mut listids: Vec<c_int> = Vec::new();
+        // Scratch for the one call that may not hand `addstate` a capture set
+        // that lives in the list it is adding to — see `deliver`.
+        let mut here: regsubs_T = core::mem::zeroed();
         let mut run = Run {
             prog,
             submatch,
             m,
             listids: &mut listids,
+            here: &mut here,
         };
 
         // The whole pattern is wrapped in group 0, and when it is the
         // machine's own entry the match's start is recorded here rather
         // than by walking into it.
         let toplevel = (*start).c == NFA_MOPEN;
-        let thislist = &raw mut list[0];
-        (*thislist).id = (*rex.ptr()).nfa_listid + 1;
+        list[0].id = (*rex.ptr()).nfa_listid + 1;
         let seeded = if toplevel {
             record_match_start(m, 0);
             (*m).norm.in_use = 1;
-            addstate(thislist, (*start).out, m, core::ptr::null_mut(), 0)
+            addstate(&mut list[0], (*start).out, &mut *m, None, 0)
         } else {
-            addstate(thislist, start, m, core::ptr::null_mut(), 0)
+            addstate(&mut list[0], start, &mut *m, None, 0)
         };
 
-        if seeded.is_null() {
+        if !seeded {
             nfa_match.set(NFA_TOO_EXPENSIVE);
         } else {
             scan(&mut list, prog, start, toplevel, &mut run);
         }
-
-        xfree(list[0].t.cast());
-        xfree(list[1].t.cast());
         nfa_match.get()
-    }
-}
-
-fn blank_list() -> nfa_list_T {
-    nfa_list_T {
-        t: core::ptr::null_mut(),
-        n: 0,
-        len: 0,
-        id: 0,
-        has_pim: 0,
     }
 }
 
@@ -131,7 +116,7 @@ unsafe fn record_match_start(m: *mut regsubs_T, off: c_int) {
 ///
 /// Every pointer must belong to the running match.
 unsafe fn scan(
-    list: &mut [nfa_list_T; 2],
+    list: &mut [ThreadList; 2],
     prog: *mut nfa_regprog_T,
     start: *mut nfa_state_T,
     toplevel: bool,
@@ -150,11 +135,14 @@ unsafe fn scan(
                 go_to_nextline = false;
             }
 
-            let thislist = &raw mut list[current];
+            let (first, second) = list.split_at_mut(1);
+            let (thislist, nextlist) = if current == 0 {
+                (&mut first[0], &mut second[0])
+            } else {
+                (&mut second[0], &mut first[0])
+            };
             current ^= 1;
-            let nextlist = &raw mut list[current];
-            (*nextlist).n = 0;
-            (*nextlist).has_pim = 0;
+            nextlist.clear();
 
             // Every position gets a fresh generation, which is how a state
             // knows whether it is already on a list.
@@ -165,23 +153,21 @@ unsafe fn scan(
                 nfa_match.set(NFA_TOO_EXPENSIVE);
                 return;
             }
-            (*thislist).id = (*rex.ptr()).nfa_listid;
-            (*nextlist).id = (*rex.ptr()).nfa_listid + 1;
-            if (*thislist).n == 0 {
+            thislist.id = (*rex.ptr()).nfa_listid;
+            nextlist.id = (*rex.ptr()).nfa_listid + 1;
+            if thislist.len() == 0 {
                 // Nothing alive: the match is over.
                 return;
             }
 
             let mut matched = false;
-            let mut listidx = 0;
-            while listidx < (*thislist).n {
+            let mut listidx: c_int = 0;
+            while (listidx as usize) < thislist.len() {
                 reg_breakcheck();
                 if got_int.get() || out_of_time() {
                     break;
                 }
-                let t = (*thislist).t.offset(listidx as isize);
                 let outcome = step(
-                    t,
                     thislist,
                     nextlist,
                     &mut listidx,
@@ -201,7 +187,7 @@ unsafe fn scan(
                         return;
                     }
                     add => {
-                        if !deliver(t, thislist, nextlist, &mut listidx, run, clen, add) {
+                        if !deliver(thislist, nextlist, &mut listidx, run, clen, add) {
                             nfa_match.set(NFA_TOO_EXPENSIVE);
                             return;
                         }
@@ -268,11 +254,11 @@ unsafe fn sub_match_spans_lines() -> bool {
 ///
 /// # Safety
 ///
-/// Every pointer must belong to the running match.
+/// Every pointer must belong to the running match, and `*listidx` index
+/// `thislist`.
 unsafe fn deliver(
-    t: *mut nfa_thread_T,
-    thislist: *mut nfa_list_T,
-    nextlist: *mut nfa_list_T,
+    thislist: &mut ThreadList,
+    nextlist: &mut ThreadList,
     listidx: &mut c_int,
     run: &mut Run,
     clen: c_int,
@@ -285,76 +271,88 @@ unsafe fn deliver(
             _ => return true,
         };
 
-        let mut pim: *mut nfa_pim_T = if (*t).pim.result == NFA_PIM_UNUSED {
-            core::ptr::null_mut()
-        } else {
-            &raw mut (*t).pim
-        };
+        let idx = *listidx as usize;
+        let mut carries_pim = thislist.thread(idx).pim.result != NFA_PIM_UNUSED;
 
         // The lookaround was postponed to here: settle it now, either
         // because there is no more input to postpone past or because the
         // state we are about to add ends the pattern.
-        if !pim.is_null() && (clen == 0 || match_follows(add_state, 0)) {
-            let result = if (*pim).result == NFA_PIM_TODO {
+        if carries_pim && (clen == 0 || match_follows(add_state, 0)) {
+            let t = thislist.thread_mut(idx);
+            let pim_state = t.pim.state;
+            let result = if t.pim.result == NFA_PIM_TODO {
                 let result = recursive_regmatch(
-                    (*pim).state,
-                    pim,
+                    pim_state,
+                    &raw mut t.pim,
                     run.prog,
                     run.submatch,
                     run.m,
                     run.listids,
                 );
-                (*pim).result = if result != 0 {
+                t.pim.result = if result != 0 {
                     NFA_PIM_MATCH
                 } else {
                     NFA_PIM_NOMATCH
                 };
-                if lookaround_held((*pim).state, result) {
+                if lookaround_held(pim_state, result) {
                     // Keep what the lookaround captured, but not its idea
                     // of where the whole match starts.
-                    copy_sub_off(&raw mut (*pim).subs.norm, &raw mut (*run.m).norm);
-                    if (*rex.ptr()).nfa_has_zsubexpr != 0 {
-                        copy_sub_off(&raw mut (*pim).subs.synt, &raw mut (*run.m).synt);
+                    copy_sub_off(&mut t.pim.subs.norm, &(*run.m).norm);
+                    if has_zsubexpr() {
+                        copy_sub_off(&mut t.pim.subs.synt, &(*run.m).synt);
                     }
                 }
                 result
             } else {
                 // Already decided, on an earlier thread.
-                ((*pim).result == NFA_PIM_MATCH) as c_int
+                (t.pim.result == NFA_PIM_MATCH) as c_int
             };
-            if !lookaround_held((*pim).state, result) {
+            if !lookaround_held(pim_state, result) {
                 // The lookaround failed: the thread dies rather than being
                 // added anywhere.
                 return true;
             }
-            copy_sub_off(&raw mut (*t).subs.norm, &raw mut (*pim).subs.norm);
-            if (*rex.ptr()).nfa_has_zsubexpr != 0 {
-                copy_sub_off(&raw mut (*t).subs.synt, &raw mut (*pim).subs.synt);
+            copy_sub_off(&mut t.subs.norm, &t.pim.subs.norm);
+            if has_zsubexpr() {
+                copy_sub_off(&mut t.subs.synt, &t.pim.subs.synt);
             }
-            pim = core::ptr::null_mut();
+            carries_pim = false;
         }
 
         // A still-postponed lookaround travels with the thread, and the
         // thread it came from may be overwritten as the list grows, so it
         // is copied out first.
-        let mut pim_copy: nfa_pim_T = core::mem::zeroed();
-        if pim == &raw mut (*t).pim {
-            copy_pim(&raw mut pim_copy, pim);
-            pim = &raw mut pim_copy;
-        }
-
-        let r = if add_here {
-            addstate_here(thislist, add_state, &raw mut (*t).subs, pim, listidx)
+        let pim_copy;
+        let pim: Option<&nfa_pim_T> = if carries_pim {
+            pim_copy = thislist.thread(idx).pim;
+            Some(&pim_copy)
         } else {
-            let r = addstate(nextlist, add_state, &raw mut (*t).subs, pim, add_off);
-            if add_count > 0 {
+            None
+        };
+
+        if add_here {
+            // `addstate_here` rewrites the list this thread lives in, so it
+            // may not be handed a capture set that lives in it.
+            let has_z = has_zsubexpr();
+            let t = thislist.thread(idx);
+            copy_sub(&mut run.here.norm, &t.subs.norm);
+            if has_z {
+                copy_sub(&mut run.here.synt, &t.subs.synt);
+            }
+            addstate_here(thislist, add_state, run.here, pim, listidx)
+        } else {
+            let subs = &mut thislist.thread_mut(idx).subs;
+            if !addstate(nextlist, add_state, subs, pim, add_off) {
+                return false;
+            }
+            if add_count > 0 && nextlist.len() > 0 {
                 // The thread owes more input than this character supplies;
                 // `NFA_SKIP` counts it down.
-                (*(*nextlist).t.offset(((*nextlist).n - 1) as isize)).count = add_count;
+                let last = nextlist.len() - 1;
+                nextlist.thread_mut(last).count = add_count;
             }
-            r
-        };
-        !r.is_null()
+            true
+        }
     }
 }
 
@@ -373,7 +371,7 @@ unsafe fn restart(
     prog: *mut nfa_regprog_T,
     start: *mut nfa_state_T,
     toplevel: bool,
-    nextlist: *mut nfa_list_T,
+    nextlist: &mut ThreadList,
     run: &mut Run,
     clen: c_int,
 ) -> bool {
@@ -389,7 +387,7 @@ unsafe fn restart(
         // The program may know the character every match starts with, in
         // which case there is no point restarting anywhere else.
         if (*prog).regstart != NUL && clen != 0 {
-            if (*nextlist).n == 0 {
+            if nextlist.len() == 0 {
                 // Nothing is alive, so jump the input straight to the next
                 // place that character occurs.
                 let mut col = (*rex.ptr()).input.offset_from((*rex.ptr()).line) as colnr_T + clen;
@@ -423,14 +421,14 @@ unsafe fn restart(
 ///
 /// Every pointer must belong to the running match.
 unsafe fn seed(
-    nextlist: *mut nfa_list_T,
+    nextlist: &mut ThreadList,
     state: *mut nfa_state_T,
     run: &mut Run,
     clen: c_int,
 ) -> bool {
     // SAFETY: the caller's list and state.
-    let added = unsafe { addstate(nextlist, state, run.m, core::ptr::null_mut(), clen) };
-    if added.is_null() {
+    let added = unsafe { addstate(nextlist, state, &mut *run.m, None, clen) };
+    if !added {
         nfa_match.set(NFA_TOO_EXPENSIVE);
         return false;
     }

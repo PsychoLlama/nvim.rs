@@ -6,13 +6,13 @@ use crate::src::nvim::eval::userfunc::call_func;
 use crate::src::nvim::eval_1::{eval_to_string, partial_name};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::curbuf;
-use crate::src::nvim::main::{e_null, e_re_damg, e_resulting_text_too_long, p_mmp};
+use crate::src::nvim::main::{e_null, e_re_damg, e_resulting_text_too_long};
 use crate::src::nvim::mbyte::{
     utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
-use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xrealloc, xstrdup};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::src::nvim::message::{emsg, iemsg};
-use crate::src::nvim::os::libc::{gettext, memmove, memset, strcpy, strlen, strncmp, strncpy};
+use crate::src::nvim::os::libc::{gettext, memmove, strcpy, strlen, strncmp, strncpy};
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, ArgvFunc, BoolVarValue,

@@ -55,10 +55,10 @@ fn nfa_regtry(
         nfa_timed_out.set(timed_out);
         nfa_time_count.set(0);
 
-        clear_sub(&raw mut subs.norm);
-        clear_sub(&raw mut m.norm);
-        clear_sub(&raw mut subs.synt);
-        clear_sub(&raw mut m.synt);
+        clear_sub(&mut subs.norm);
+        clear_sub(&mut m.norm);
+        clear_sub(&mut subs.synt);
+        clear_sub(&mut m.synt);
 
         let result = nfa_regmatch(prog, (*prog).start, &raw mut subs, &raw mut m);
         if result == 0 || result == NFA_TOO_EXPENSIVE {

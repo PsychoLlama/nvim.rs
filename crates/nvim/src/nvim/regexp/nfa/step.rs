@@ -11,8 +11,9 @@ use core::ffi::{c_char, c_int};
 use super::assertions::{at_col, at_cursor, at_line, at_mark, at_vcol, in_visual};
 use super::classes::class_matches;
 use super::composing::matches_composing;
+use super::list::{ThreadList, addstate_here};
 use super::run::{check_char_class, match_backref, match_zref, recursive_regmatch};
-use super::sub::{addstate_here, copy_sub, copy_sub_off, copy_ze_off, state_in_list};
+use super::sub::{copy_sub, copy_sub_off, copy_ze_off, has_zsubexpr};
 use crate::src::nvim::mbyte::{mb_get_class_tab, utf_fold, utf_iscomposing_legacy, utf_ptr2len};
 use crate::src::nvim::regexp::{
     FAIL, NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOF, NFA_BOL, NFA_BOW,
@@ -24,8 +25,8 @@ use crate::src::nvim::regexp::{
     NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_INVISIBLE_FIRST, NFA_START_INVISIBLE_NEG,
     NFA_START_INVISIBLE_NEG_FIRST, NFA_START_NEG_COLL, NFA_START_PATTERN, NFA_TOO_EXPENSIVE,
     NFA_VCOL, NFA_VCOL_LT, NFA_VISUAL, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZREF1, NFA_ZREF9, NFA_ZSTART,
-    NUL, nfa_endp, nfa_list_T, nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_thread_T,
-    reg_prev_class, regsubs_T, rex,
+    NUL, nfa_endp, nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T, reg_prev_class, regsubs_T,
+    rex,
 };
 
 /// Where a thread's state leaves it.
@@ -84,6 +85,9 @@ pub(crate) struct Run<'a> {
     pub(crate) submatch: *mut regsubs_T,
     pub(crate) m: *mut regsubs_T,
     pub(crate) listids: &'a mut Vec<c_int>,
+    /// Scratch for the capture set `addstate_here` is handed, which may not
+    /// be one that lives in the list it rewrites.
+    pub(crate) here: &'a mut regsubs_T,
 }
 
 /// Is `state` one of the negated lookarounds, whose sub-match must *fail*
@@ -107,25 +111,19 @@ pub(crate) fn lookaround_held(state: *mut nfa_state_T, result: c_int) -> bool {
 }
 
 /// Copy the normal and — when the pattern has any — the `\z(` captures.
-fn copy_both(to: *mut regsubs_T, from: *mut regsubs_T) {
-    // SAFETY: both are live capture sets of this match.
-    unsafe {
-        copy_sub(&raw mut (*to).norm, &raw mut (*from).norm);
-        if (*rex.ptr()).nfa_has_zsubexpr != 0 {
-            copy_sub(&raw mut (*to).synt, &raw mut (*from).synt);
-        }
+fn copy_both(to: &mut regsubs_T, from: &regsubs_T) {
+    copy_sub(&mut to.norm, &from.norm);
+    if has_zsubexpr() {
+        copy_sub(&mut to.synt, &from.synt);
     }
 }
 
 /// As [`copy_both`], but leaving group 0 alone: a lookaround must not move
 /// the whole match's start or end.
-fn copy_both_off(to: *mut regsubs_T, from: *mut regsubs_T) {
-    // SAFETY: as `copy_both`.
-    unsafe {
-        copy_sub_off(&raw mut (*to).norm, &raw mut (*from).norm);
-        if (*rex.ptr()).nfa_has_zsubexpr != 0 {
-            copy_sub_off(&raw mut (*to).synt, &raw mut (*from).synt);
-        }
+fn copy_both_off(to: &mut regsubs_T, from: &regsubs_T) {
+    copy_sub_off(&mut to.norm, &from.norm);
+    if has_zsubexpr() {
+        copy_sub_off(&mut to.synt, &from.synt);
     }
 }
 
@@ -136,13 +134,12 @@ fn copy_both_off(to: *mut regsubs_T, from: *mut regsubs_T) {
 ///
 /// # Safety
 ///
-/// Every pointer must belong to the running match; `listidx` must index
+/// Every pointer must belong to the running match; `*listidx` must index
 /// `thislist`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn step(
-    t: *mut nfa_thread_T,
-    thislist: *mut nfa_list_T,
-    nextlist: *mut nfa_list_T,
+    thislist: &mut ThreadList,
+    nextlist: &ThreadList,
     listidx: &mut c_int,
     run: &mut Run,
     curc: c_int,
@@ -150,7 +147,8 @@ pub(crate) unsafe fn step(
     go_to_nextline: &mut bool,
 ) -> Step {
     unsafe {
-        let state = (*t).state;
+        let idx = *listidx as usize;
+        let state = thislist.thread(idx).state;
         let out = (*state).out;
         match (*state).c {
             NFA_MATCH => {
@@ -163,8 +161,8 @@ pub(crate) unsafe fn step(
                     return Step::Dead;
                 }
                 nfa_match.set(1);
-                copy_both(run.submatch, &raw mut (*t).subs);
-                if (*nextlist).n == 0 {
+                copy_both(&mut *run.submatch, &thislist.thread(idx).subs);
+                if nextlist.len() == 0 {
                     *clen = 0;
                 }
                 Step::Matched
@@ -179,20 +177,20 @@ pub(crate) unsafe fn step(
                 // A negated lookaround discards what it captured: it only
                 // has to have matched, and its groups did not really match.
                 if (*state).c != NFA_END_INVISIBLE_NEG {
-                    copy_both(run.m, &raw mut (*t).subs);
+                    copy_both(&mut *run.m, &thislist.thread(idx).subs);
                 }
                 nfa_match.set(1);
-                if (*nextlist).n == 0 {
+                if nextlist.len() == 0 {
                     *clen = 0;
                 }
                 Step::Matched
             }
 
             NFA_START_INVISIBLE..=NFA_START_INVISIBLE_BEFORE_NEG_FIRST => {
-                start_lookaround(t, thislist, listidx, run)
+                start_lookaround(thislist, idx, listidx, run)
             }
 
-            NFA_START_PATTERN => start_pattern(t, thislist, nextlist, run, *clen),
+            NFA_START_PATTERN => start_pattern(thislist, nextlist, idx, run, *clen),
 
             NFA_BOL => Step::zero_width((*rex.ptr()).input == (*rex.ptr()).line, out),
             NFA_EOL => Step::zero_width(curc == NUL, out),
@@ -259,7 +257,11 @@ pub(crate) unsafe fn step(
             c @ (NFA_BACKREF1..=NFA_BACKREF9 | NFA_ZREF1..=NFA_ZREF9) => {
                 let mut bytelen = 0;
                 let matched = if (NFA_BACKREF1..=NFA_BACKREF9).contains(&c) {
-                    match_backref(&(*t).subs.norm, c - NFA_BACKREF1 + 1, &mut bytelen)
+                    match_backref(
+                        &thislist.thread(idx).subs.norm,
+                        c - NFA_BACKREF1 + 1,
+                        &mut bytelen,
+                    )
                 } else {
                     match_zref(c - NFA_ZREF1 + 1, &mut bytelen)
                 };
@@ -273,13 +275,14 @@ pub(crate) unsafe fn step(
 
             NFA_SKIP => {
                 // Consume the bytes a back-reference still owes.
-                if (*t).count - *clen <= 0 {
+                let owed = thislist.thread(idx).count - *clen;
+                if owed <= 0 {
                     Step::next(out, *clen)
                 } else {
                     Step::Next {
                         state,
                         off: 0,
-                        count: (*t).count - *clen,
+                        count: owed,
                     }
                 }
             }
@@ -453,16 +456,16 @@ unsafe fn collection_matches(start: *mut nfa_state_T, curc: c_int, clen: c_int) 
 ///
 /// Every pointer must belong to the running match.
 unsafe fn start_lookaround(
-    t: *mut nfa_thread_T,
-    thislist: *mut nfa_list_T,
+    thislist: &mut ThreadList,
+    idx: usize,
     listidx: &mut c_int,
     run: &mut Run,
 ) -> Step {
     unsafe {
-        let state = (*t).state;
+        let state = thislist.thread(idx).state;
         // Postponing is only worth it when the compiler said so, and a
         // thread that already carries one runs it now.
-        let run_now = (*t).pim.result != NFA_PIM_UNUSED
+        let run_now = thislist.thread(idx).pim.result != NFA_PIM_UNUSED
             || matches!(
                 (*state).c,
                 NFA_START_INVISIBLE_FIRST
@@ -483,15 +486,21 @@ unsafe fn start_lookaround(
             } else {
                 pim.end.ptr = (*rex.ptr()).input;
             }
-            if addstate_here(
+            // `addstate_here` rewrites this list, so it may not be handed a
+            // capture set that lives in it.
+            let has_z = has_zsubexpr();
+            let t = thislist.thread(idx);
+            copy_sub(&mut run.here.norm, &t.subs.norm);
+            if has_z {
+                copy_sub(&mut run.here.synt, &t.subs.synt);
+            }
+            if !addstate_here(
                 thislist,
                 (*(*state).out1).out,
-                &raw mut (*t).subs,
-                &raw mut pim,
+                run.here,
+                Some(&pim),
                 listidx,
-            )
-            .is_null()
-            {
+            ) {
                 return Step::TooExpensive;
             }
             return Step::Dead;
@@ -500,7 +509,7 @@ unsafe fn start_lookaround(
         // `m` is scratch shared with the sub-match; group 0 is the outer
         // match's and must survive.
         let in_use = (*run.m).norm.in_use;
-        copy_both_off(run.m, &raw mut (*t).subs);
+        copy_both_off(&mut *run.m, &thislist.thread(idx).subs);
         let result = recursive_regmatch(
             state,
             core::ptr::null_mut(),
@@ -514,9 +523,9 @@ unsafe fn start_lookaround(
             return Step::TooExpensive;
         }
         let step = if lookaround_held(state, result) {
-            copy_both_off(&raw mut (*t).subs, run.m);
+            copy_both_off(&mut thislist.thread_mut(idx).subs, &*run.m);
             // `\ze` inside the lookaround may have moved the match's end.
-            copy_ze_off(&raw mut (*t).subs.norm, &raw mut (*run.m).norm);
+            copy_ze_off(&mut thislist.thread_mut(idx).subs.norm, &(*run.m).norm);
             Step::Here((*(*state).out1).out)
         } else {
             Step::Dead
@@ -532,25 +541,26 @@ unsafe fn start_lookaround(
 ///
 /// Every pointer must belong to the running match.
 unsafe fn start_pattern(
-    t: *mut nfa_thread_T,
-    thislist: *mut nfa_list_T,
-    nextlist: *mut nfa_list_T,
+    thislist: &mut ThreadList,
+    nextlist: &ThreadList,
+    idx: usize,
     run: &mut Run,
     clen: c_int,
 ) -> Step {
     unsafe {
-        let state = (*t).state;
+        let state = thislist.thread(idx).state;
         let after = (*(*state).out1).out;
         // If the state this would land on is already queued with the same
         // captures, running the sub-match again would prove nothing.
-        let already = state_in_list(nextlist, after, &raw mut (*t).subs)
-            || state_in_list(nextlist, (*after).out, &raw mut (*t).subs)
-            || state_in_list(thislist, (*after).out, &raw mut (*t).subs);
+        let subs = &thislist.thread(idx).subs;
+        let already = nextlist.holds(after, subs)
+            || nextlist.holds((*after).out, subs)
+            || thislist.holds((*after).out, subs);
         if already {
             return Step::Dead;
         }
 
-        copy_both_off(run.m, &raw mut (*t).subs);
+        copy_both_off(&mut *run.m, &thislist.thread(idx).subs);
         let result = recursive_regmatch(
             state,
             core::ptr::null_mut(),
@@ -566,7 +576,7 @@ unsafe fn start_pattern(
         if result == 0 {
             return Step::Dead;
         }
-        copy_both_off(&raw mut (*t).subs, run.m);
+        copy_both_off(&mut thislist.thread_mut(idx).subs, &*run.m);
         // How far the sub-match reached, which is what the thread consumes.
         let bytelen = if (*rex.ptr()).reg_match.is_null() {
             (*run.m).norm.list.multi[0].end_col
