@@ -1,384 +1,455 @@
 //! Vetting a string option's value, and the sweeps that re-vet every
 //! buffer's copy of one.
+//!
+//! Two things live here that the rest of the tree leans on.
+//!
+//! The **empty string option**. A string option's variable is never null:
+//! out of memory, `xstrdup` may hand back null, and everything downstream
+//! dereferences the variable, so a null one is replaced by the shared
+//! `empty_string_option`. That one allocation is aliased by every option
+//! holding "", which is why freeing a string option has to go through
+//! [`free_string_option`] rather than `xfree`.
+//!
+//! The **error buffer**. A check that has to name what it disliked formats
+//! into a caller-supplied `errbuf`; the caller may decline one by passing
+//! null, and upstream then answers with the shared empty string rather than
+//! null, so the set still fails but reports nothing.
 
-#[allow(unused_imports)]
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr;
+
+use crate::src::nvim::ascii::ascii_isdigit;
+use crate::src::nvim::charset::transchar;
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::indent_c::parse_cino;
+use crate::src::nvim::main::{empty_string_option, secure};
+use crate::src::nvim::memory::xfree;
+use crate::src::nvim::option::{kOptFlagNDname, kOptFlagNFname, valid_name};
+use crate::src::nvim::options::{
+    kOptBackupcopy, kOptBelloff, kOptCasemap, kOptClipboard, kOptCompleteopt, kOptDisplay,
+    kOptFoldopen, kOptJumpoptions, kOptRedrawdebug, kOptSessionoptions, kOptSwitchbuf,
+    kOptTabclose, kOptTagcase, kOptTermpastefilter, kOptViewoptions, kOptVirtualedit,
+    kOptWildoptions, opt_scl_values,
+};
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
+use crate::src::nvim::types::{buf_T, size_t, uint32_t, win_T};
+
+use super::{
+    FAIL, NUL, OK, SCL_NO, SCL_NUM, check_str_opt, e_illegal_character_after_chr,
+    e_unbalanced_groups, e_unclosed_expression_sequence, opt_strings_flags,
+};
+
+/// The options whose bitmask is derived from a value the startup sequence
+/// may have installed without going through `:set`.
 pub unsafe extern "C" fn didset_string_options() {
-    check_str_opt(kOptCasemap, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptBackupcopy, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptBelloff, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptCompleteopt, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptSessionoptions, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptViewoptions, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptFoldopen, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptDisplay, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptJumpoptions, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptRedrawdebug, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptTagcase, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptTermpastefilter, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptVirtualedit, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptSwitchbuf, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptTabclose, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptWildoptions, ::core::ptr::null_mut::<*mut c_char>());
-    check_str_opt(kOptClipboard, ::core::ptr::null_mut::<*mut c_char>());
+    for idx in [
+        kOptCasemap,
+        kOptBackupcopy,
+        kOptBelloff,
+        kOptCompleteopt,
+        kOptSessionoptions,
+        kOptViewoptions,
+        kOptFoldopen,
+        kOptDisplay,
+        kOptJumpoptions,
+        kOptRedrawdebug,
+        kOptTagcase,
+        kOptTermpastefilter,
+        kOptVirtualedit,
+        kOptSwitchbuf,
+        kOptTabclose,
+        kOptWildoptions,
+        kOptClipboard,
+    ] {
+        // SAFETY: a null `varp` asks for the option's own global variable.
+        unsafe { check_str_opt(idx, ptr::null_mut()) };
+    }
 }
 
-pub unsafe extern "C" fn illegal_char(
-    mut errbuf: *mut c_char,
-    mut errbuflen: size_t,
-    mut c: c_int,
+/// "E539: Illegal character <x>", formatted into the caller's buffer.
+///
+/// # Safety
+/// `errbuf` is null or points at `errbuflen` writable bytes.
+pub unsafe fn illegal_char(errbuf: *mut c_char, errbuflen: size_t, c: c_int) -> *mut c_char {
+    if errbuf.is_null() {
+        return c"".as_ptr().cast_mut();
+    }
+    // SAFETY: the caller's buffer, and `transchar` returns a C string.
+    unsafe {
+        vim_snprintf(
+            errbuf,
+            errbuflen,
+            gettext(c"E539: Illegal character <%s>".as_ptr()),
+            transchar(c),
+        );
+    }
+    errbuf
+}
+
+/// "E535: Illegal character after <%c>", for the options that spell a field
+/// as a character followed by a value.
+///
+/// # Safety
+/// As [`illegal_char`].
+pub(crate) unsafe fn illegal_char_after_chr(
+    errbuf: *mut c_char,
+    errbuflen: size_t,
+    c: c_int,
 ) -> *mut c_char {
     if errbuf.is_null() {
-        return b"\0".as_ptr() as *const c_char as *mut c_char;
+        return c"".as_ptr().cast_mut();
     }
-    vim_snprintf(
-        errbuf,
-        errbuflen,
-        gettext(b"E539: Illegal character <%s>\0".as_ptr() as *const c_char),
-        transchar(c),
-    );
-    return errbuf;
-}
-
-pub(crate) unsafe extern "C" fn illegal_char_after_chr(
-    mut errbuf: *mut c_char,
-    mut errbuflen: size_t,
-    mut c: c_int,
-) -> *mut c_char {
-    if errbuf.is_null() {
-        return b"\0".as_ptr() as *const c_char as *mut c_char;
+    // SAFETY: the caller's buffer; the format takes one `int`.
+    unsafe {
+        vim_snprintf(
+            errbuf,
+            errbuflen,
+            gettext(e_illegal_character_after_chr.ptr().cast::<c_char>()),
+            c,
+        );
     }
-    vim_snprintf(
-        errbuf,
-        errbuflen,
-        gettext((e_illegal_character_after_chr.ptr() as *const _) as *const c_char),
-        c,
-    );
-    return errbuf;
+    errbuf
 }
 
-pub unsafe extern "C" fn check_buf_options(mut buf: *mut buf_T) {
-    check_string_option(&raw mut (*buf).b_p_bh);
-    check_string_option(&raw mut (*buf).b_p_bt);
-    check_string_option(&raw mut (*buf).b_p_fenc);
-    check_string_option(&raw mut (*buf).b_p_ff);
-    check_string_option(&raw mut (*buf).b_p_def);
-    check_string_option(&raw mut (*buf).b_p_inc);
-    check_string_option(&raw mut (*buf).b_p_inex);
-    check_string_option(&raw mut (*buf).b_p_inde);
-    check_string_option(&raw mut (*buf).b_p_indk);
-    check_string_option(&raw mut (*buf).b_p_fp);
-    check_string_option(&raw mut (*buf).b_p_fex);
-    check_string_option(&raw mut (*buf).b_p_kp);
-    check_string_option(&raw mut (*buf).b_p_mps);
-    check_string_option(&raw mut (*buf).b_p_fo);
-    check_string_option(&raw mut (*buf).b_p_flp);
-    check_string_option(&raw mut (*buf).b_p_isk);
-    check_string_option(&raw mut (*buf).b_p_com);
-    check_string_option(&raw mut (*buf).b_p_cms);
-    check_string_option(&raw mut (*buf).b_p_nf);
-    check_string_option(&raw mut (*buf).b_p_qe);
-    check_string_option(&raw mut (*buf).b_p_syn);
-    check_string_option(&raw mut (*buf).b_s.b_syn_isk);
-    check_string_option(&raw mut (*buf).b_s.b_p_spc);
-    check_string_option(&raw mut (*buf).b_s.b_p_spf);
-    check_string_option(&raw mut (*buf).b_s.b_p_spl);
-    check_string_option(&raw mut (*buf).b_s.b_p_spo);
-    check_string_option(&raw mut (*buf).b_p_sua);
-    check_string_option(&raw mut (*buf).b_p_cink);
-    check_string_option(&raw mut (*buf).b_p_cino);
-    parse_cino(buf);
-    check_string_option(&raw mut (*buf).b_p_lop);
-    check_string_option(&raw mut (*buf).b_p_ft);
-    check_string_option(&raw mut (*buf).b_p_cinw);
-    check_string_option(&raw mut (*buf).b_p_cinsd);
-    check_string_option(&raw mut (*buf).b_p_cot);
-    check_string_option(&raw mut (*buf).b_p_cpt);
-    check_string_option(&raw mut (*buf).b_p_cfu);
-    check_string_option(&raw mut (*buf).b_p_ofu);
-    check_string_option(&raw mut (*buf).b_p_keymap);
-    check_string_option(&raw mut (*buf).b_p_gefm);
-    check_string_option(&raw mut (*buf).b_p_gp);
-    check_string_option(&raw mut (*buf).b_p_mp);
-    check_string_option(&raw mut (*buf).b_p_efm);
-    check_string_option(&raw mut (*buf).b_p_ep);
-    check_string_option(&raw mut (*buf).b_p_path);
-    check_string_option(&raw mut (*buf).b_p_tags);
-    check_string_option(&raw mut (*buf).b_p_ffu);
-    check_string_option(&raw mut (*buf).b_p_tfu);
-    check_string_option(&raw mut (*buf).b_p_tc);
-    check_string_option(&raw mut (*buf).b_p_dict);
-    check_string_option(&raw mut (*buf).b_p_dia);
-    check_string_option(&raw mut (*buf).b_p_tsr);
-    check_string_option(&raw mut (*buf).b_p_tsrfu);
-    check_string_option(&raw mut (*buf).b_p_lw);
-    check_string_option(&raw mut (*buf).b_p_bkc);
-    check_string_option(&raw mut (*buf).b_p_menc);
-    check_string_option(&raw mut (*buf).b_p_vsts);
-    check_string_option(&raw mut (*buf).b_p_vts);
-}
-
-pub unsafe extern "C" fn free_string_option(mut p: *mut c_char) {
-    if p != empty_string_option.ptr() as *mut c_char {
-        xfree(p as *mut c_void);
+/// Give every string option of a buffer the empty string in place of a null.
+///
+/// # Safety
+/// `buf` points at a live buffer.
+pub unsafe extern "C" fn check_buf_options(buf: *mut buf_T) {
+    // SAFETY: the caller's buffer; each field is one of its `char *`
+    // options, and `parse_cino` re-derives the 'cinoptions' cache from the
+    // string this just made non-null.
+    unsafe {
+        for field in [
+            &raw mut (*buf).b_p_bh,
+            &raw mut (*buf).b_p_bt,
+            &raw mut (*buf).b_p_fenc,
+            &raw mut (*buf).b_p_ff,
+            &raw mut (*buf).b_p_def,
+            &raw mut (*buf).b_p_inc,
+            &raw mut (*buf).b_p_inex,
+            &raw mut (*buf).b_p_inde,
+            &raw mut (*buf).b_p_indk,
+            &raw mut (*buf).b_p_fp,
+            &raw mut (*buf).b_p_fex,
+            &raw mut (*buf).b_p_kp,
+            &raw mut (*buf).b_p_mps,
+            &raw mut (*buf).b_p_fo,
+            &raw mut (*buf).b_p_flp,
+            &raw mut (*buf).b_p_isk,
+            &raw mut (*buf).b_p_com,
+            &raw mut (*buf).b_p_cms,
+            &raw mut (*buf).b_p_nf,
+            &raw mut (*buf).b_p_qe,
+            &raw mut (*buf).b_p_syn,
+            &raw mut (*buf).b_s.b_syn_isk,
+            &raw mut (*buf).b_s.b_p_spc,
+            &raw mut (*buf).b_s.b_p_spf,
+            &raw mut (*buf).b_s.b_p_spl,
+            &raw mut (*buf).b_s.b_p_spo,
+            &raw mut (*buf).b_p_sua,
+            &raw mut (*buf).b_p_cink,
+            &raw mut (*buf).b_p_cino,
+        ] {
+            check_string_option(field);
+        }
+        parse_cino(buf);
+        for field in [
+            &raw mut (*buf).b_p_lop,
+            &raw mut (*buf).b_p_ft,
+            &raw mut (*buf).b_p_cinw,
+            &raw mut (*buf).b_p_cinsd,
+            &raw mut (*buf).b_p_cot,
+            &raw mut (*buf).b_p_cpt,
+            &raw mut (*buf).b_p_cfu,
+            &raw mut (*buf).b_p_ofu,
+            &raw mut (*buf).b_p_keymap,
+            &raw mut (*buf).b_p_gefm,
+            &raw mut (*buf).b_p_gp,
+            &raw mut (*buf).b_p_mp,
+            &raw mut (*buf).b_p_efm,
+            &raw mut (*buf).b_p_ep,
+            &raw mut (*buf).b_p_path,
+            &raw mut (*buf).b_p_tags,
+            &raw mut (*buf).b_p_ffu,
+            &raw mut (*buf).b_p_tfu,
+            &raw mut (*buf).b_p_tc,
+            &raw mut (*buf).b_p_dict,
+            &raw mut (*buf).b_p_dia,
+            &raw mut (*buf).b_p_tsr,
+            &raw mut (*buf).b_p_tsrfu,
+            &raw mut (*buf).b_p_lw,
+            &raw mut (*buf).b_p_bkc,
+            &raw mut (*buf).b_p_menc,
+            &raw mut (*buf).b_p_vsts,
+            &raw mut (*buf).b_p_vts,
+        ] {
+            check_string_option(field);
+        }
     }
 }
 
-pub unsafe extern "C" fn clear_string_option(mut pp: *mut *mut c_char) {
-    if *pp != empty_string_option.ptr() as *mut c_char {
-        xfree(*pp as *mut c_void);
+/// Free a string option's value, unless it is the shared empty string every
+/// option holding "" points at.
+///
+/// # Safety
+/// `p` is null, the shared empty string, or an allocation this owns.
+pub unsafe fn free_string_option(p: *mut c_char) {
+    if p != empty_string_option.ptr().cast::<c_char>() {
+        // SAFETY: as documented above.
+        unsafe { xfree(p.cast::<c_void>()) };
     }
-    *pp = empty_string_option.ptr() as *mut c_char;
 }
 
-pub unsafe extern "C" fn check_string_option(mut pp: *mut *mut c_char) {
-    if (*pp).is_null() {
-        *pp = empty_string_option.ptr() as *mut c_char;
+/// Free a string option's value and leave the variable holding the shared
+/// empty string.
+///
+/// # Safety
+/// `pp` points at a string option's variable.
+pub unsafe fn clear_string_option(pp: *mut *mut c_char) {
+    // SAFETY: the caller's variable, holding a value `free_string_option`
+    // accepts.
+    unsafe {
+        free_string_option(*pp);
+        *pp = empty_string_option.ptr().cast::<c_char>();
     }
 }
 
-pub(crate) unsafe extern "C" fn valid_filetype(mut val: *const c_char) -> bool {
-    return valid_name(val, b".-_\0".as_ptr() as *const c_char);
+/// Replace a null option value with the shared empty string, so that
+/// everything downstream can dereference it.
+///
+/// # Safety
+/// `pp` points at a string option's variable.
+pub unsafe fn check_string_option(pp: *mut *mut c_char) {
+    // SAFETY: the caller's variable.
+    unsafe {
+        if (*pp).is_null() {
+            *pp = empty_string_option.ptr().cast::<c_char>();
+        }
+    }
 }
 
-pub unsafe extern "C" fn check_signcolumn(mut scl: *mut c_char, mut wp: *mut win_T) -> c_int {
-    let mut val: *mut c_char = empty_string_option.ptr() as *mut c_char;
-    if !scl.is_null() {
-        val = scl;
+/// Is `val` a name 'filetype', 'syntax' or 'keymap' will accept?
+///
+/// # Safety
+/// `val` is a C string.
+pub(crate) unsafe fn valid_filetype(val: *const c_char) -> bool {
+    // SAFETY: `valid_name` only reads the string.
+    unsafe { valid_name(val, c".-_".as_ptr()) }
+}
+
+/// Parse 'signcolumn' and, given a window, store the width range it asks
+/// for.
+///
+/// `scl` overrides the window's own value; a null `wp` only validates. The
+/// two halves are separate grammars: everything the generated table lists
+/// ("no", "yes", "yes:1".."yes:9", "auto", "auto:1".."auto:9", "number"),
+/// and then the `auto:<min>-<max>` range, which the table cannot enumerate
+/// and which is parsed by hand.
+///
+/// # Safety
+/// `scl` is null or a C string; `wp` is null or a live window.
+pub unsafe extern "C" fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
+    let val = if !scl.is_null() {
+        scl.cast_const()
     } else if !wp.is_null() {
-        val = (*wp).w_onebuf_opt.wo_scl;
-    }
-    if *val as c_int == NUL {
+        // SAFETY: the caller's window.
+        unsafe { (*wp).w_onebuf_opt.wo_scl }
+    } else {
+        empty_string_option.ptr().cast::<c_char>()
+    };
+    // SAFETY: an option value is a C string.
+    let val = unsafe { CStr::from_ptr(val) }.to_bytes();
+    if val.is_empty() {
         return FAIL;
     }
-    if opt_strings_flags(
-        val,
-        opt_scl_values.ptr() as *mut *const c_char,
-        ::core::ptr::null_mut::<c_uint>(),
-        false_0 != 0,
-    ) == OK
-    {
+
+    // SAFETY: the table's own array, and no mask is wanted.
+    let listed = unsafe {
+        opt_strings_flags(
+            val.as_ptr().cast::<c_char>(),
+            opt_scl_values.ptr().cast::<*const c_char>(),
+            ptr::null_mut(),
+            false,
+        )
+    } == OK;
+
+    let (min, max) = if listed {
         if wp.is_null() {
             return OK;
         }
-        if strncmp(val, b"no\0".as_ptr() as *const c_char, 2 as size_t) == 0 {
-            (*wp).w_maxscwidth = SCL_NO;
-            (*wp).w_minscwidth = (*wp).w_maxscwidth;
-        } else if strncmp(val, b"nu\0".as_ptr() as *const c_char, 2 as size_t) == 0
-            && ((*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0)
-        {
-            (*wp).w_maxscwidth = SCL_NUM;
-            (*wp).w_minscwidth = (*wp).w_maxscwidth;
-        } else if strncmp(val, b"yes:\0".as_ptr() as *const c_char, 4 as size_t) == 0 {
-            (*wp).w_maxscwidth = *val.offset(4 as c_int as isize) as c_int - '0' as c_int;
-            (*wp).w_minscwidth = (*wp).w_maxscwidth;
-        } else if *val as c_int == 'y' as c_int {
-            (*wp).w_maxscwidth = 1 as c_int;
-            (*wp).w_minscwidth = (*wp).w_maxscwidth;
-        } else if strncmp(val, b"auto:\0".as_ptr() as *const c_char, 5 as size_t) == 0 {
-            (*wp).w_minscwidth = 0 as c_int;
-            (*wp).w_maxscwidth = *val.offset(5 as c_int as isize) as c_int - '0' as c_int;
-        } else {
-            (*wp).w_minscwidth = 0 as c_int;
-            (*wp).w_maxscwidth = 1 as c_int;
+        // SAFETY: the caller's window; 'number' only wins when the window
+        // is actually showing numbers.
+        let numbered = unsafe { (*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0 };
+        match val {
+            [b'n', b'o', ..] => (SCL_NO, SCL_NO),
+            [b'n', b'u', ..] if numbered => (SCL_NUM, SCL_NUM),
+            [b'y', b'e', b's', b':', n, ..] => (digit(*n), digit(*n)),
+            [b'y', ..] => (1, 1),
+            [b'a', b'u', b't', b'o', b':', n, ..] => (0, digit(*n)),
+            _ => (0, 1),
         }
     } else {
-        if strncmp(val, b"auto:\0".as_ptr() as *const c_char, 5 as size_t) != 0 as c_int
-            || strlen(val) != 8 as size_t
-            || !ascii_isdigit(*val.offset(5 as c_int as isize) as c_int)
-            || *val.offset(6 as c_int as isize) as c_int != '-' as c_int
-            || !ascii_isdigit(*val.offset(7 as c_int as isize) as c_int)
-        {
+        // "auto:<min>-<max>", the one spelling the table cannot list.
+        let [b'a', b'u', b't', b'o', b':', min, b'-', max] = val else {
+            return FAIL;
+        };
+        if !ascii_isdigit(c_int::from(*min)) || !ascii_isdigit(c_int::from(*max)) {
             return FAIL;
         }
-        let mut min: c_int = *val.offset(5 as c_int as isize) as c_int - '0' as c_int;
-        let mut max: c_int = *val.offset(7 as c_int as isize) as c_int - '0' as c_int;
-        if min < 1 as c_int || max < 2 as c_int || min > 8 as c_int || min >= max {
+        let (min, max) = (digit(*min), digit(*max));
+        if min < 1 || max < 2 || min > 8 || min >= max {
             return FAIL;
         }
         if wp.is_null() {
             return OK;
         }
+        (min, max)
+    };
+
+    // SAFETY: the caller's window, which the null tests above ruled out.
+    unsafe {
         (*wp).w_minscwidth = min;
         (*wp).w_maxscwidth = max;
+        // Keep the width the window is currently drawing inside the new
+        // range, without widening it on its own.
+        let held = if min <= 0 {
+            0
+        } else {
+            max.min((*wp).w_scwidth)
+        };
+        (*wp).w_scwidth = min.max(held);
     }
-    let mut scwidth: c_int = if (*wp).w_minscwidth <= 0 as c_int {
-        0 as c_int
-    } else if (*wp).w_maxscwidth < (*wp).w_scwidth {
-        (*wp).w_maxscwidth
-    } else {
-        (*wp).w_scwidth
-    };
-    (*wp).w_scwidth = if (*wp).w_minscwidth > scwidth {
-        (*wp).w_minscwidth
-    } else {
-        scwidth
-    };
-    return OK;
+    OK
 }
 
-pub unsafe extern "C" fn check_stl_option(mut s: *mut c_char) -> *const c_char {
-    let mut groupdepth: c_int = 0 as c_int;
-    static errbuf: GlobalCell<[c_char; 80]> = GlobalCell::new([0; 80]);
-    while *s != 0 {
-        while *s as c_int != 0 && *s as c_int != '%' as c_int {
-            s = s.offset(1);
-        }
-        if *s == 0 {
+/// One ASCII digit as its value. Every caller has already established that
+/// the byte is a digit, or is in the half of 'signcolumn' the option table
+/// vetted.
+fn digit(byte: u8) -> c_int {
+    c_int::from(byte) - c_int::from(b'0')
+}
+
+/// Every item 'statusline' and its relatives accept after a `%`.
+///
+/// The three tab-page items repeat at the end because upstream builds
+/// `STL_ALL` by concatenating the item list with the tab-page one, which
+/// already contains them. Duplicates do not matter to a membership test;
+/// the set is kept exactly as upstream spells it.
+const STL_ALL: &CStr = c"fFtcvVlLnkoObBrRhHyYwWmMqpPaNSCs{=<*#$TX@TX@";
+
+/// Check a 'statusline'-format value. Returns an untranslated message, or
+/// null when the format is good.
+///
+/// # Safety
+/// `s` is a C string.
+pub unsafe extern "C" fn check_stl_option(s: *mut c_char) -> *const c_char {
+    // The message needs to outlive this call, and the caller passes no
+    // buffer, so upstream formats into a function-local static.
+    static ERRBUF: GlobalCell<[c_char; 80]> = GlobalCell::new([0; 80]);
+    let errbuf = ERRBUF.ptr().cast::<c_char>();
+    let errbuflen = size_of::<[c_char; 80]>();
+
+    // SAFETY: the caller's C string.
+    let mut rest = unsafe { CStr::from_ptr(s) }.to_bytes();
+    let mut groupdepth: c_int = 0;
+
+    loop {
+        let Some(at) = rest.iter().position(|&b| b == b'%') else {
             break;
-        }
-        s = s.offset(1);
-        if *s as c_int == '%' as c_int
-            || *s as c_int == STL_TRUNCMARK as c_int
-            || *s as c_int == STL_SEPARATE as c_int
-        {
-            s = s.offset(1);
-        } else if *s as c_int == ')' as c_int {
-            s = s.offset(1);
-            groupdepth -= 1;
-            if groupdepth < 0 as c_int {
-                break;
-            }
-        } else {
-            if *s as c_int == '-' as c_int {
-                s = s.offset(1);
-            }
-            while ascii_isdigit(*s as c_int) {
-                s = s.offset(1);
-            }
-            if *s as c_int == STL_USER_HL as c_int {
+        };
+        // Past the `%`. The value may end here, in which case the item is
+        // the terminator and the membership test below rejects it.
+        rest = &rest[at + 1..];
+        match rest.first() {
+            // "%%", the truncation mark and the item separator take no
+            // width, no precision and no argument.
+            Some(&b'%' | &b'<' | &b'=') => {
+                rest = &rest[1..];
                 continue;
             }
-            if *s as c_int == '.' as c_int {
-                s = s.offset(1);
-                while *s as c_int != 0 && ascii_isdigit(*s as c_int) as c_int != 0 {
-                    s = s.offset(1);
+            Some(&b')') => {
+                rest = &rest[1..];
+                groupdepth -= 1;
+                if groupdepth < 0 {
+                    break;
+                }
+                continue;
+            }
+            _ => {}
+        }
+        // A minimum width, optionally left-aligned.
+        rest = rest.strip_prefix(b"-").unwrap_or(rest);
+        rest = &rest[rest.iter().take_while(|b| b.is_ascii_digit()).count()..];
+        // A user highlight group takes the width as its number and stops
+        // there.
+        if rest.first() == Some(&b'*') {
+            continue;
+        }
+        // A maximum width.
+        if let Some(after) = rest.strip_prefix(b".") {
+            rest = &after[after.iter().take_while(|b| b.is_ascii_digit()).count()..];
+        }
+        if rest.first() == Some(&b'(') {
+            groupdepth += 1;
+            continue;
+        }
+        let Some(&item) = rest.first() else {
+            // SAFETY: the module's own buffer.
+            return unsafe { illegal_char(errbuf, errbuflen, NUL) };
+        };
+        // SAFETY: `STL_ALL` is a C string; `vim_strchr` only reads it.
+        if unsafe { vim_strchr(STL_ALL.as_ptr(), c_int::from(item)) }.is_null() {
+            // SAFETY: the module's own buffer.
+            return unsafe { illegal_char(errbuf, errbuflen, c_int::from(item)) };
+        }
+        if item == b'{' {
+            rest = &rest[1..];
+            // "%{%…%}" re-evaluates its result as another format, and its
+            // terminator is "%}" rather than a bare "}".
+            let reevaluate = rest.first() == Some(&b'%');
+            if reevaluate {
+                rest = &rest[1..];
+                if rest.first() == Some(&b'}') {
+                    // SAFETY: the module's own buffer.
+                    return unsafe { illegal_char(errbuf, errbuflen, c_int::from(b'}')) };
                 }
             }
-            if *s as c_int == '(' as c_int {
-                groupdepth += 1;
+            let close = if reevaluate {
+                rest.windows(2).position(|w| w == b"%}").map(|at| at + 1)
             } else {
-                let mut c2rust_lvalue: [c_char; 45] = [
-                    STL_FILEPATH as c_int as c_char,
-                    STL_FULLPATH as c_int as c_char,
-                    STL_FILENAME as c_int as c_char,
-                    STL_COLUMN as c_int as c_char,
-                    STL_VIRTCOL as c_int as c_char,
-                    STL_VIRTCOL_ALT as c_int as c_char,
-                    STL_LINE as c_int as c_char,
-                    STL_NUMLINES as c_int as c_char,
-                    STL_BUFNO as c_int as c_char,
-                    STL_KEYMAP as c_int as c_char,
-                    STL_OFFSET as c_int as c_char,
-                    STL_OFFSET_X as c_int as c_char,
-                    STL_BYTEVAL as c_int as c_char,
-                    STL_BYTEVAL_X as c_int as c_char,
-                    STL_ROFLAG as c_int as c_char,
-                    STL_ROFLAG_ALT as c_int as c_char,
-                    STL_HELPFLAG as c_int as c_char,
-                    STL_HELPFLAG_ALT as c_int as c_char,
-                    STL_FILETYPE as c_int as c_char,
-                    STL_FILETYPE_ALT as c_int as c_char,
-                    STL_PREVIEWFLAG as c_int as c_char,
-                    STL_PREVIEWFLAG_ALT as c_int as c_char,
-                    STL_MODIFIED as c_int as c_char,
-                    STL_MODIFIED_ALT as c_int as c_char,
-                    STL_QUICKFIX as c_int as c_char,
-                    STL_PERCENTAGE as c_int as c_char,
-                    STL_ALTPERCENT as c_int as c_char,
-                    STL_ARGLISTSTAT as c_int as c_char,
-                    STL_PAGENUM as c_int as c_char,
-                    STL_SHOWCMD as c_int as c_char,
-                    STL_FOLDCOL as c_int as c_char,
-                    STL_SIGNCOL as c_int as c_char,
-                    STL_VIM_EXPR as c_int as c_char,
-                    STL_SEPARATE as c_int as c_char,
-                    STL_TRUNCMARK as c_int as c_char,
-                    STL_USER_HL as c_int as c_char,
-                    STL_HIGHLIGHT as c_int as c_char,
-                    STL_HIGHLIGHT_COMB as c_int as c_char,
-                    STL_TABPAGENR as c_int as c_char,
-                    STL_TABCLOSENR as c_int as c_char,
-                    STL_CLICK_FUNC as c_int as c_char,
-                    STL_TABPAGENR as c_int as c_char,
-                    STL_TABCLOSENR as c_int as c_char,
-                    STL_CLICK_FUNC as c_int as c_char,
-                    0 as c_char,
-                ];
-                if vim_strchr(
-                    &raw mut c2rust_lvalue as *mut c_char,
-                    *s as uint8_t as c_int,
-                )
-                .is_null()
-                {
-                    return illegal_char(
-                        errbuf.ptr() as *mut c_char,
-                        ::core::mem::size_of::<[c_char; 80]>(),
-                        *s as uint8_t as c_int,
-                    );
-                }
-                if *s as c_int == '{' as c_int {
-                    s = s.offset(1);
-                    let mut reevaluate: bool = *s as c_int == '%' as c_int;
-                    if reevaluate as c_int != 0 && {
-                        s = s.offset(1);
-                        *s as c_int == '}' as c_int
-                    } {
-                        return illegal_char(
-                            errbuf.ptr() as *mut c_char,
-                            ::core::mem::size_of::<[c_char; 80]>(),
-                            '}' as c_int,
-                        );
-                    }
-                    while (*s as c_int != '}' as c_int
-                        || reevaluate as c_int != 0
-                            && *s.offset(-1 as c_int as isize) as c_int != '%' as c_int)
-                        && *s as c_int != 0
-                    {
-                        s = s.offset(1);
-                    }
-                    if *s as c_int != '}' as c_int {
-                        return (e_unclosed_expression_sequence.ptr() as *const _) as *const c_char;
-                    }
-                }
-            }
+                rest.iter().position(|&b| b == b'}')
+            };
+            let Some(close) = close else {
+                return e_unclosed_expression_sequence.ptr().cast::<c_char>();
+            };
+            rest = &rest[close..];
         }
     }
-    if groupdepth != 0 as c_int {
-        return (e_unbalanced_groups.ptr() as *const _) as *const c_char;
+
+    if groupdepth != 0 {
+        return e_unbalanced_groups.ptr().cast::<c_char>();
     }
-    return ::core::ptr::null::<c_char>();
+    ptr::null()
 }
 
-pub unsafe extern "C" fn check_illegal_path_names(
-    mut val: *mut c_char,
-    mut flags: uint32_t,
-) -> bool {
-    return flags & kOptFlagNFname as c_int as uint32_t != 0
-        && !strpbrk(
-            val,
-            if secure.get() != 0 {
-                b"/\\*?[|;&<>\r\n\0".as_ptr() as *const c_char
-            } else {
-                b"/\\*?[<>\r\n\0".as_ptr() as *const c_char
-            },
-        )
-        .is_null()
-        || flags & kOptFlagNDname as c_int as uint32_t != 0
-            && !strpbrk(val, b"*?[|;&<>\r\n\0".as_ptr() as *const c_char).is_null();
-}
-
-pub(crate) unsafe extern "C" fn check_str_opt(
-    mut idx: OptIndex,
-    mut varp: *mut *mut c_char,
-) -> c_int {
-    let mut opt: *mut vimoption_T = get_option(idx);
-    if varp.is_null() {
-        varp = (*opt).var as *mut *mut c_char;
-    }
-    let mut list: bool =
-        (*opt).flags & (kOptFlagComma as c_int | kOptFlagOneComma as c_int) as uint32_t != 0;
-    let mut values: *mut *const c_char = opt_values(idx, ::core::ptr::null_mut::<size_t>());
-    return opt_strings_flags(*varp, values, (*opt).flags_var, list);
+/// Does `val` hold a character an option marked as a file or directory name
+/// refuses? The set is wider while 'secure' is on.
+///
+/// # Safety
+/// `val` is a C string.
+pub unsafe extern "C" fn check_illegal_path_names(val: *mut c_char, flags: uint32_t) -> bool {
+    // SAFETY: the caller's C string.
+    let val = unsafe { CStr::from_ptr(val) }.to_bytes();
+    let holds = |set: &[u8]| val.iter().any(|b| set.contains(b));
+    (flags & kOptFlagNFname as uint32_t != 0
+        && holds(if secure.get() != 0 {
+            b"/\\*?[|;&<>\r\n"
+        } else {
+            b"/\\*?[<>\r\n"
+        }))
+        || (flags & kOptFlagNDname as uint32_t != 0 && holds(b"*?[|;&<>\r\n"))
 }

@@ -8,9 +8,8 @@ pub unsafe extern "C" fn expand_set_str_generic(
     mut numMatches: *mut c_int,
     mut matches: *mut *mut *mut c_char,
 ) -> c_int {
-    let mut values_len: size_t = 0;
-    let mut values: *mut *const c_char = opt_values((*args).oe_idx, &raw mut values_len);
-    return expand_set_opt_string(args, values, values_len, numMatches, matches);
+    let (values, values_len) = opt_values((*args).oe_idx);
+    return expand_set_opt_string(args, values.cast_mut(), values_len, numMatches, matches);
 }
 
 pub(crate) unsafe extern "C" fn expand_set_opt_string(

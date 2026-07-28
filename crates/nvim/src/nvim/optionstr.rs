@@ -4,7 +4,7 @@ use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{check_ei, get_event_name_no_group};
 use crate::src::nvim::charset::{
     buf_init_chartab, char2cells, check_isopt, getdigits_int, hexhex2nr, init_chartab, ptr2cells,
-    transchar, transchar_byte,
+    transchar_byte,
 };
 use crate::src::nvim::cmdexpand::ExpandGeneric;
 use crate::src::nvim::cursor::coladvance;
@@ -31,11 +31,11 @@ use crate::src::nvim::insexpand::set_cpt_callbacks;
 use crate::src::nvim::main::{
     IObuff, VIsual_active, bkc_flags, breakat_flags, cia_flags, cmdpreview, cot_flags, curtab,
     curwin, didset_vim, didset_vimruntime, e_invalid_format_string_single_percent_s, e_invarg,
-    e_leadtab_requires_tab, e_modifiable, e_unsupportedoption, empty_string_option, first_tabpage,
-    firstbuf, firstwin, km_startsel, km_stopsel, p_bex, p_bg, p_bkc, p_breakat, p_bs, p_cia, p_cot,
-    p_ei, p_enc, p_fcs, p_fenc, p_hlg, p_isk, p_km, p_lcs, p_mousescroll, p_mousescroll_hor,
-    p_mousescroll_vert, p_pm, p_pumborder, p_ruf, p_shada, p_tc, p_ve, p_winborder, ru_wid, secure,
-    spo_flags, ssop_flags, stl_syntax, tc_flags, ve_flags,
+    e_leadtab_requires_tab, e_modifiable, e_unsupportedoption, first_tabpage, firstbuf, firstwin,
+    km_startsel, km_stopsel, p_bex, p_bg, p_bkc, p_breakat, p_bs, p_cia, p_cot, p_ei, p_enc, p_fcs,
+    p_fenc, p_hlg, p_isk, p_km, p_lcs, p_mousescroll, p_mousescroll_hor, p_mousescroll_vert, p_pm,
+    p_pumborder, p_ruf, p_shada, p_tc, p_ve, p_winborder, ru_wid, secure, spo_flags, ssop_flags,
+    stl_syntax, tc_flags, ve_flags,
 };
 use crate::src::nvim::mark::free_fmark;
 use crate::src::nvim::mbyte::{
@@ -48,24 +48,19 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::r#move::validate_virtcol;
 use crate::src::nvim::option::{
-    copy_option_part, did_set_title, fill_culopt_flags, get_fileformat, get_option,
-    get_option_default, get_option_varp_scope_from, kOptFlagComma, kOptFlagNDname, kOptFlagNFname,
-    kOptFlagOneComma, p_vfile, parse_winhl_opt, redraw_titles, set_iminsert_global,
-    set_imsearch_global, set_option_direct, skip_to_option_part, valid_name,
+    copy_option_part, did_set_title, fill_culopt_flags, get_fileformat, get_option_default,
+    get_option_varp_scope_from, p_vfile, parse_winhl_opt, redraw_titles, set_iminsert_global,
+    set_imsearch_global, set_option_direct, skip_to_option_part,
 };
 use crate::src::nvim::options::{
-    kOptAmbiwidth, kOptBackupcopy, kOptBelloff, kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes,
-    kOptCasemap, kOptClipboard, kOptComments, kOptCompleteopt, kOptDisplay, kOptFileformat,
-    kOptFileformats, kOptFoldopen, kOptJumpoptions, kOptRedrawdebug, kOptSessionoptions,
-    kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, kOptSwitchbuf, kOptTabclose,
-    kOptTagcase, kOptTermpastefilter, kOptViewoptions, kOptVirtualedit, kOptWildoptions,
-    opt_bh_values, opt_bkc_values, opt_bt_values, opt_cot_values, opt_dip_algorithm_values,
-    opt_dip_inline_values, opt_ff_values, opt_scl_values, opt_spo_values, opt_ssop_values,
-    opt_tc_values, opt_ve_values,
+    kOptAmbiwidth, kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments,
+    kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_bh_values, opt_bkc_values,
+    opt_bt_values, opt_cot_values, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
+    opt_spo_values, opt_ssop_values, opt_tc_values, opt_ve_values,
 };
 use crate::src::nvim::os::env::vim_unsetenv_ext;
 use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, memcmp, memset, snprintf, strcmp, strlen, strncmp, strpbrk, strstr,
+    gettext, memcmp, memset, snprintf, strcmp, strlen, strncmp, strstr,
 };
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::shada::get_shada_parameter;
@@ -77,10 +72,10 @@ use crate::src::nvim::spellsuggest::spell_check_sps;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, CharsOption, CompleteListItemGetter, Error, ErrorType,
-    FloatAnchor, FloatRelative, OptIndex, OptInt, OptVal, OptValData, OptValType, String_0,
-    Terminal, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, buf_T, colnr_T, expand_T,
-    fcs_chars_T, fmark_T, fmarkv_T, int64_t, lcs_chars_T, linenr_T, lpos_T, optexpand_T, optset_T,
-    pos_T, regmatch_T, schar_T, size_t, tabpage_T, uint8_t, uint32_t, vimoption_T, win_T,
+    FloatAnchor, FloatRelative, OptInt, OptVal, OptValData, OptValType, String_0, Terminal,
+    VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, buf_T, colnr_T, expand_T, fcs_chars_T,
+    fmark_T, fmarkv_T, int64_t, lcs_chars_T, linenr_T, lpos_T, optexpand_T, optset_T, pos_T,
+    regmatch_T, schar_T, size_t, tabpage_T, uint8_t, win_T,
 };
 use crate::src::nvim::window::{check_colorcolumn, global_stl_height};
 use crate::src::nvim::winfloat::win_config_float;
