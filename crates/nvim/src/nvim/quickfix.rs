@@ -79,6 +79,7 @@ use crate::src::nvim::options::{
     kOptBufhidden, kOptBuftype, kOptCpoptions, kOptErrorfile, kOptFiletype, kOptFoldmethod,
     kOptSwapfile,
 };
+use crate::src::nvim::options::{kOptFdoFlagQuickfix, kOptSwbFlagUselast, kOptSwbFlagUsetab};
 use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::env::{expand_env, os_get_pid};
 use crate::src::nvim::os::fs::{
@@ -1062,25 +1063,6 @@ pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
 pub const DOBUF_SPLIT: dobuf_action_values = 1;
 pub const DOBUF_GOTO: dobuf_action_values = 0;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const kOptFdoFlagJump: C2Rust_Unnamed_18 = 1024;
-pub const kOptFdoFlagUndo: C2Rust_Unnamed_18 = 512;
-pub const kOptFdoFlagInsert: C2Rust_Unnamed_18 = 256;
-pub const kOptFdoFlagTag: C2Rust_Unnamed_18 = 128;
-pub const kOptFdoFlagSearch: C2Rust_Unnamed_18 = 64;
-pub const kOptFdoFlagQuickfix: C2Rust_Unnamed_18 = 32;
-pub const kOptFdoFlagPercent: C2Rust_Unnamed_18 = 16;
-pub const kOptFdoFlagMark: C2Rust_Unnamed_18 = 8;
-pub const kOptFdoFlagHor: C2Rust_Unnamed_18 = 4;
-pub const kOptFdoFlagBlock: C2Rust_Unnamed_18 = 2;
-pub const kOptFdoFlagAll: C2Rust_Unnamed_18 = 1;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kOptSwbFlagUselast: C2Rust_Unnamed_19 = 32;
-pub const kOptSwbFlagVsplit: C2Rust_Unnamed_19 = 16;
-pub const kOptSwbFlagNewtab: C2Rust_Unnamed_19 = 8;
-pub const kOptSwbFlagSplit: C2Rust_Unnamed_19 = 4;
-pub const kOptSwbFlagUsetab: C2Rust_Unnamed_19 = 2;
-pub const kOptSwbFlagUseopen: C2Rust_Unnamed_19 = 1;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_20 = 83;
 pub const SHM_FILEINFO: C2Rust_Unnamed_20 = 70;

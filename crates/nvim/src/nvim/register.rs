@@ -59,6 +59,7 @@ use crate::src::nvim::r#move::{changed_cline_bef_curs, invalidate_botline_win, u
 use crate::src::nvim::normal::find_ident_under_cursor;
 use crate::src::nvim::ops::{adjust_cursor_eol, block_prep, charwise_block_prep, get_op_char};
 use crate::src::nvim::option::get_ve_flags;
+use crate::src::nvim::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{
     __assert_fail, abort, atoi, gettext, memcpy, memmove, memset, ngettext, snprintf, strcpy,
@@ -987,13 +988,6 @@ pub const EVENT_BUFENTER: auto_event = 3;
 pub const EVENT_BUFDELETE: auto_event = 2;
 pub const EVENT_BUFCREATE: auto_event = 1;
 pub const EVENT_BUFADD: auto_event = 0;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kOptVeFlagNoneU: C2Rust_Unnamed_19 = 32;
-pub const kOptVeFlagNone: C2Rust_Unnamed_19 = 16;
-pub const kOptVeFlagOnemore: C2Rust_Unnamed_19 = 8;
-pub const kOptVeFlagInsert: C2Rust_Unnamed_19 = 6;
-pub const kOptVeFlagBlock: C2Rust_Unnamed_19 = 5;
-pub const kOptVeFlagAll: C2Rust_Unnamed_19 = 4;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;

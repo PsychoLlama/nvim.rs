@@ -54,6 +54,10 @@ use crate::src::nvim::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
 use crate::src::nvim::r#move::{set_empty_rows, validate_virtcol, win_col_off, win_col_off2};
 use crate::src::nvim::option::get_showbreak_value;
+use crate::src::nvim::options::{
+    kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,
+    kOptSpoFlagNoplainbuffer,
+};
 use crate::src::nvim::os::libc::{__assert_fail, abs, memcpy, memmove, memset, snprintf, strlen};
 use crate::src::nvim::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
 use crate::src::nvim::pos::ltoreq;
@@ -348,18 +352,6 @@ pub const STL_COLUMN: StlFlag = 99;
 pub const STL_FILENAME: StlFlag = 116;
 pub const STL_FULLPATH: StlFlag = 70;
 pub const STL_FILEPATH: StlFlag = 102;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const kOptCuloptFlagNumber: C2Rust_Unnamed_21 = 4;
-pub const kOptCuloptFlagScreenline: C2Rust_Unnamed_21 = 2;
-pub const kOptCuloptFlagLine: C2Rust_Unnamed_21 = 1;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const kOptDyFlagMsgsep: C2Rust_Unnamed_22 = 8;
-pub const kOptDyFlagUhex: C2Rust_Unnamed_22 = 4;
-pub const kOptDyFlagTruncate: C2Rust_Unnamed_22 = 2;
-pub const kOptDyFlagLastline: C2Rust_Unnamed_22 = 1;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const kOptSpoFlagNoplainbuffer: C2Rust_Unnamed_23 = 2;
-pub const kOptSpoFlagCamel: C2Rust_Unnamed_23 = 1;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub const kDecorKindUIWatched: C2Rust_Unnamed_24 = 4;
 pub const kDecorKindVirtLines: C2Rust_Unnamed_24 = 3;

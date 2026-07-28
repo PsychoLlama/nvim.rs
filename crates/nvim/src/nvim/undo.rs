@@ -42,6 +42,7 @@ use crate::src::nvim::message::{
     verbose_leave,
 };
 use crate::src::nvim::option::copy_option_part;
+use crate::src::nvim::options::kOptFdoFlagUndo;
 use crate::src::nvim::os::fs::{
     os_fchown, os_fileinfo, os_fopen, os_free_acl, os_fsync, os_get_acl, os_getperm, os_isdir,
     os_mkdir_recurse, os_open, os_path_exists, os_remove, os_set_acl, os_setperm,
@@ -96,7 +97,6 @@ mod header {
 
     pub const UPD_NOT_VALID: c_int = 40;
     pub const HLF_T: c_int = 23;
-    pub const kOptFdoFlagUndo: c_int = 512;
     pub const kListLenMayKnow: ListLenSpecials = -3;
     pub const kExtmarkNOOP: ExtmarkOp = 0;
     pub const kExtmarkUndo: ExtmarkOp = 1;

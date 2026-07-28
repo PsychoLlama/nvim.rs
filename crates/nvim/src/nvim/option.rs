@@ -83,6 +83,10 @@ use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::changed_window_setting;
 use crate::src::nvim::normal::{do_check_scrollbind, get_vtopline};
 use crate::src::nvim::options::*;
+use crate::src::nvim::options::{
+    kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptVeFlagNone,
+    kOptVeFlagNoneU,
+};
 use crate::src::nvim::optionstr::{
     check_buf_options, check_illegal_path_names, check_signcolumn, check_string_option,
     clear_string_option, did_set_breakat, didset_string_options, free_string_option,
@@ -1206,17 +1210,6 @@ pub const EVENT_BUFENTER: auto_event = 3;
 pub const EVENT_BUFDELETE: auto_event = 2;
 pub const EVENT_BUFCREATE: auto_event = 1;
 pub const EVENT_BUFADD: auto_event = 0;
-pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const kOptCuloptFlagNumber: C2Rust_Unnamed_26 = 4;
-pub const kOptCuloptFlagScreenline: C2Rust_Unnamed_26 = 2;
-pub const kOptCuloptFlagLine: C2Rust_Unnamed_26 = 1;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const kOptVeFlagNoneU: C2Rust_Unnamed_27 = 32;
-pub const kOptVeFlagNone: C2Rust_Unnamed_27 = 16;
-pub const kOptVeFlagOnemore: C2Rust_Unnamed_27 = 8;
-pub const kOptVeFlagInsert: C2Rust_Unnamed_27 = 6;
-pub const kOptVeFlagBlock: C2Rust_Unnamed_27 = 5;
-pub const kOptVeFlagAll: C2Rust_Unnamed_27 = 4;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_28 = 83;
 pub const SHM_FILEINFO: C2Rust_Unnamed_28 = 70;

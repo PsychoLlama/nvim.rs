@@ -53,6 +53,7 @@ use crate::src::nvim::r#move::{
     invalidate_botline_win, set_topline, sms_marker_overlap,
 };
 use crate::src::nvim::option::{copy_option_part, get_ve_flags};
+use crate::src::nvim::options::kOptVeFlagOnemore;
 use crate::src::nvim::os::libc::{
     __assert_fail, gettext, memmove, strcat, strcmp, strlen, strncmp,
 };
@@ -543,7 +544,6 @@ pub const UPD_NOT_VALID: C2Rust_Unnamed_20 = 40;
 pub const REPLACE_FLAG: C2Rust_Unnamed_22 = 256;
 pub const MODE_INSERT: C2Rust_Unnamed_22 = 16;
 pub const VREPLACE_FLAG: C2Rust_Unnamed_22 = 512;
-pub const kOptVeFlagOnemore: C2Rust_Unnamed_19 = 8;
 pub const KEY_OPEN_BACK: C2Rust_Unnamed_21 = 258;
 pub const KEY_OPEN_FORW: C2Rust_Unnamed_21 = 257;
 pub const SIN_NOMARK: C2Rust_Unnamed_23 = 8;
@@ -553,12 +553,6 @@ pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
 pub const ML_DEL_MESSAGE: C2Rust_Unnamed_24 = 1;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kOptVeFlagNoneU: C2Rust_Unnamed_19 = 32;
-pub const kOptVeFlagNone: C2Rust_Unnamed_19 = 16;
-pub const kOptVeFlagInsert: C2Rust_Unnamed_19 = 6;
-pub const kOptVeFlagBlock: C2Rust_Unnamed_19 = 5;
-pub const kOptVeFlagAll: C2Rust_Unnamed_19 = 4;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const UPD_CLEAR: C2Rust_Unnamed_20 = 50;
 pub const UPD_SOME_VALID: C2Rust_Unnamed_20 = 35;

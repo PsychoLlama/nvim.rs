@@ -13,6 +13,7 @@ use crate::src::nvim::mbyte::{
     utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2len_len, utfc_ptrlen2schar,
 };
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc};
+use crate::src::nvim::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::src::nvim::optionstr::check_chars_options;
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memmove, memset, strlen, strnlen};
 pub use crate::src::nvim::types::{
@@ -189,8 +190,6 @@ pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const SLF_INC_VCOL: C2Rust_Unnamed_13 = 4;
 pub const SLF_WRAP: C2Rust_Unnamed_13 = 2;
 pub const SLF_RIGHTLEFT: C2Rust_Unnamed_13 = 1;
-pub const kOptRdbFlagInvalid: C2Rust_Unnamed_14 = 4;
-pub const kOptRdbFlagNodelta: C2Rust_Unnamed_14 = 8;
 pub const kUIExtCount: UIExtension = 10;
 pub const kUIFloatDebug: UIExtension = 9;
 pub const kUITermColors: UIExtension = 8;
@@ -202,11 +201,6 @@ pub const kUIWildmenu: UIExtension = 3;
 pub const kUITabline: UIExtension = 2;
 pub const kUIPopupmenu: UIExtension = 1;
 pub const kUICmdline: UIExtension = 0;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const kOptRdbFlagFlush: C2Rust_Unnamed_14 = 32;
-pub const kOptRdbFlagLine: C2Rust_Unnamed_14 = 16;
-pub const kOptRdbFlagNothrottle: C2Rust_Unnamed_14 = 2;
-pub const kOptRdbFlagCompositor: C2Rust_Unnamed_14 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;

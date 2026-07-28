@@ -59,6 +59,9 @@ use crate::src::nvim::options::{
     kOptTermpastefilter, kOptViewoptions, kOptVirtualedit, kOptWildoptions,
 };
 use crate::src::nvim::options::{
+    kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptSsopFlagCurdir, kOptSsopFlagSesdir,
+};
+use crate::src::nvim::options::{
     opt_bh_values, opt_bkc_values, opt_bt_values, opt_cot_values, opt_dip_algorithm_values,
     opt_dip_inline_values, opt_ff_values, opt_scl_values, opt_spo_values, opt_ssop_values,
     opt_tc_values, opt_ve_values,
@@ -262,31 +265,6 @@ pub const STL_COLUMN: C2Rust_Unnamed_15 = 99;
 pub const STL_FILENAME: C2Rust_Unnamed_15 = 116;
 pub const STL_FULLPATH: C2Rust_Unnamed_15 = 70;
 pub const STL_FILEPATH: C2Rust_Unnamed_15 = 102;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const kOptBkcFlagBreakhardlink: C2Rust_Unnamed_16 = 16;
-pub const kOptBkcFlagBreaksymlink: C2Rust_Unnamed_16 = 8;
-pub const kOptBkcFlagNo: C2Rust_Unnamed_16 = 4;
-pub const kOptBkcFlagAuto: C2Rust_Unnamed_16 = 2;
-pub const kOptBkcFlagYes: C2Rust_Unnamed_16 = 1;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const kOptSsopFlagSkiprtp: C2Rust_Unnamed_17 = 131072;
-pub const kOptSsopFlagTerminal: C2Rust_Unnamed_17 = 65536;
-pub const kOptSsopFlagTabpages: C2Rust_Unnamed_17 = 32768;
-pub const kOptSsopFlagCursor: C2Rust_Unnamed_17 = 16384;
-pub const kOptSsopFlagFolds: C2Rust_Unnamed_17 = 8192;
-pub const kOptSsopFlagCurdir: C2Rust_Unnamed_17 = 4096;
-pub const kOptSsopFlagSesdir: C2Rust_Unnamed_17 = 2048;
-pub const kOptSsopFlagUnix: C2Rust_Unnamed_17 = 1024;
-pub const kOptSsopFlagSlash: C2Rust_Unnamed_17 = 512;
-pub const kOptSsopFlagGlobals: C2Rust_Unnamed_17 = 256;
-pub const kOptSsopFlagBlank: C2Rust_Unnamed_17 = 128;
-pub const kOptSsopFlagHelp: C2Rust_Unnamed_17 = 64;
-pub const kOptSsopFlagOptions: C2Rust_Unnamed_17 = 32;
-pub const kOptSsopFlagLocaloptions: C2Rust_Unnamed_17 = 16;
-pub const kOptSsopFlagWinsize: C2Rust_Unnamed_17 = 8;
-pub const kOptSsopFlagResize: C2Rust_Unnamed_17 = 4;
-pub const kOptSsopFlagWinpos: C2Rust_Unnamed_17 = 2;
-pub const kOptSsopFlagBuffers: C2Rust_Unnamed_17 = 1;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_18 = 83;
 pub const SHM_FILEINFO: C2Rust_Unnamed_18 = 70;

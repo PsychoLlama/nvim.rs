@@ -61,6 +61,7 @@ use crate::src::nvim::normal::{
 use crate::src::nvim::option::{
     get_equalprg, get_fileformat, get_ve_flags, option_set_callback_func,
 };
+use crate::src::nvim::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
     __assert_fail, __ctype_b_loc, abort, gettext, memmove, memset, ngettext, strcpy, strlen,
@@ -206,34 +207,6 @@ pub const CMOD_UNSILENT: C2Rust_Unnamed_17 = 8;
 pub const CMOD_ERRSILENT: C2Rust_Unnamed_17 = 4;
 pub const CMOD_SILENT: C2Rust_Unnamed_17 = 2;
 pub const CMOD_SANDBOX: C2Rust_Unnamed_17 = 1;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const kOptBoFlagWildmode: C2Rust_Unnamed_18 = 524288;
-pub const kOptBoFlagTerm: C2Rust_Unnamed_18 = 262144;
-pub const kOptBoFlagSpell: C2Rust_Unnamed_18 = 131072;
-pub const kOptBoFlagShell: C2Rust_Unnamed_18 = 65536;
-pub const kOptBoFlagRegister: C2Rust_Unnamed_18 = 32768;
-pub const kOptBoFlagOperator: C2Rust_Unnamed_18 = 16384;
-pub const kOptBoFlagShowmatch: C2Rust_Unnamed_18 = 8192;
-pub const kOptBoFlagMess: C2Rust_Unnamed_18 = 4096;
-pub const kOptBoFlagLang: C2Rust_Unnamed_18 = 2048;
-pub const kOptBoFlagInsertmode: C2Rust_Unnamed_18 = 1024;
-pub const kOptBoFlagHangul: C2Rust_Unnamed_18 = 512;
-pub const kOptBoFlagEx: C2Rust_Unnamed_18 = 256;
-pub const kOptBoFlagEsc: C2Rust_Unnamed_18 = 128;
-pub const kOptBoFlagError: C2Rust_Unnamed_18 = 64;
-pub const kOptBoFlagCtrlg: C2Rust_Unnamed_18 = 32;
-pub const kOptBoFlagCopy: C2Rust_Unnamed_18 = 16;
-pub const kOptBoFlagComplete: C2Rust_Unnamed_18 = 8;
-pub const kOptBoFlagCursor: C2Rust_Unnamed_18 = 4;
-pub const kOptBoFlagBackspace: C2Rust_Unnamed_18 = 2;
-pub const kOptBoFlagAll: C2Rust_Unnamed_18 = 1;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kOptVeFlagNoneU: C2Rust_Unnamed_19 = 32;
-pub const kOptVeFlagNone: C2Rust_Unnamed_19 = 16;
-pub const kOptVeFlagOnemore: C2Rust_Unnamed_19 = 8;
-pub const kOptVeFlagInsert: C2Rust_Unnamed_19 = 6;
-pub const kOptVeFlagBlock: C2Rust_Unnamed_19 = 5;
-pub const kOptVeFlagAll: C2Rust_Unnamed_19 = 4;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const STR2NR_QUOTE: C2Rust_Unnamed_20 = 16;
 pub const STR2NR_NO_OCT: C2Rust_Unnamed_20 = 13;

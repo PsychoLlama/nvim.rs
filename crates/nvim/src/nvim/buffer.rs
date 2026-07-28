@@ -84,6 +84,9 @@ use crate::src::nvim::option::{
 use crate::src::nvim::options::{
     kOptBufhidden, kOptBuftype, kOptIconstring, kOptSwapfile, kOptTitlestring,
 };
+use crate::src::nvim::options::{
+    kOptJopFlagClean, kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit,
+};
 use crate::src::nvim::optionstr::clear_string_option;
 use crate::src::nvim::os::env::{home_replace, home_replace_save};
 use crate::src::nvim::os::fs::{os_fileid, os_fileid_equal, os_getperm};
@@ -1104,7 +1107,6 @@ pub const READ_NEW: C2Rust_Unnamed_29 = 1;
 pub const READ_FIFO: C2Rust_Unnamed_29 = 64;
 pub const READ_NOFILE: C2Rust_Unnamed_29 = 256;
 pub const UPD_NOT_VALID: C2Rust_Unnamed_26 = 40;
-pub const kOptJopFlagView: C2Rust_Unnamed_22 = 2;
 pub const BCO_NOHELP: C2Rust_Unnamed_32 = 4;
 pub const BCO_ENTER: C2Rust_Unnamed_32 = 1;
 pub const kBffInitChangedtick: C2Rust_Unnamed_35 = 2;
@@ -1114,11 +1116,7 @@ pub const BCO_ALWAYS: C2Rust_Unnamed_32 = 2;
 pub const MODE_INSERT: C2Rust_Unnamed_31 = 16;
 pub const ECMD_FORCEIT: C2Rust_Unnamed_27 = 8;
 pub const ECMD_ONE: C2Rust_Unnamed_28 = 1;
-pub const kOptJopFlagClean: C2Rust_Unnamed_22 = 4;
 pub const WSP_VERT: C2Rust_Unnamed_34 = 2;
-pub const kOptSwbFlagVsplit: C2Rust_Unnamed_23 = 16;
-pub const kOptSwbFlagNewtab: C2Rust_Unnamed_23 = 8;
-pub const kOptSwbFlagSplit: C2Rust_Unnamed_23 = 4;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct bufmatch_T {
@@ -1146,12 +1144,6 @@ pub const WSP_BELOW: C2Rust_Unnamed_34 = 64;
 pub const WSP_ROOM: C2Rust_Unnamed_34 = 1;
 pub const READ_DUMMY: C2Rust_Unnamed_29 = 16;
 pub const ECMD_HIDE: C2Rust_Unnamed_27 = 1;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const kOptJopFlagStack: C2Rust_Unnamed_22 = 1;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const kOptSwbFlagUselast: C2Rust_Unnamed_23 = 32;
-pub const kOptSwbFlagUsetab: C2Rust_Unnamed_23 = 2;
-pub const kOptSwbFlagUseopen: C2Rust_Unnamed_23 = 1;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_24 = 83;
 pub const SHM_RECORDING: C2Rust_Unnamed_24 = 113;

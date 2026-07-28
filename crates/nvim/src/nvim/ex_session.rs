@@ -22,6 +22,12 @@ use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz};
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::option::{makefoldset, makeset};
+use crate::src::nvim::options::{
+    kOptSsopFlagBlank, kOptSsopFlagBuffers, kOptSsopFlagCurdir, kOptSsopFlagCursor,
+    kOptSsopFlagFolds, kOptSsopFlagGlobals, kOptSsopFlagHelp, kOptSsopFlagLocaloptions,
+    kOptSsopFlagOptions, kOptSsopFlagResize, kOptSsopFlagSesdir, kOptSsopFlagSkiprtp,
+    kOptSsopFlagTabpages, kOptSsopFlagTerminal, kOptSsopFlagWinsize,
+};
 use crate::src::nvim::os::env::home_replace_save;
 use crate::src::nvim::os::fs::{os_chdir, os_dirname, os_isdir};
 use crate::src::nvim::os::libc::{fclose, fprintf, fputs, gettext, putc, strcpy, strlen};
@@ -952,34 +958,15 @@ pub const VSE_BUFFER: C2Rust_Unnamed_14 = 2;
 pub const VSE_SHELL: C2Rust_Unnamed_14 = 1;
 pub const VSE_NONE: C2Rust_Unnamed_14 = 0;
 pub const DOSO_NONE: C2Rust_Unnamed_17 = 0;
-pub const kOptSsopFlagCurdir: C2Rust_Unnamed_16 = 4096;
-pub const kOptSsopFlagCursor: C2Rust_Unnamed_16 = 16384;
-pub const kOptSsopFlagFolds: C2Rust_Unnamed_16 = 8192;
-pub const kOptSsopFlagOptions: C2Rust_Unnamed_16 = 32;
 pub const OPT_LOCAL: C2Rust_Unnamed_15 = 2;
-pub const kOptSsopFlagLocaloptions: C2Rust_Unnamed_16 = 16;
-pub const kOptSsopFlagSesdir: C2Rust_Unnamed_16 = 2048;
-pub const kOptSsopFlagTerminal: C2Rust_Unnamed_16 = 65536;
-pub const kOptSsopFlagTabpages: C2Rust_Unnamed_16 = 32768;
-pub const kOptSsopFlagHelp: C2Rust_Unnamed_16 = 64;
-pub const kOptSsopFlagBlank: C2Rust_Unnamed_16 = 128;
-pub const kOptSsopFlagWinsize: C2Rust_Unnamed_16 = 8;
-pub const kOptSsopFlagResize: C2Rust_Unnamed_16 = 4;
-pub const kOptSsopFlagGlobals: C2Rust_Unnamed_16 = 256;
-pub const kOptSsopFlagBuffers: C2Rust_Unnamed_16 = 1;
 pub const OPT_GLOBAL: C2Rust_Unnamed_15 = 1;
 pub const OPT_SKIPRTP: C2Rust_Unnamed_15 = 128;
-pub const kOptSsopFlagSkiprtp: C2Rust_Unnamed_16 = 131072;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const OPT_NO_REDRAW: C2Rust_Unnamed_15 = 64;
 pub const OPT_ONECOLUMN: C2Rust_Unnamed_15 = 32;
 pub const OPT_NOWIN: C2Rust_Unnamed_15 = 16;
 pub const OPT_WINONLY: C2Rust_Unnamed_15 = 8;
 pub const OPT_MODELINE: C2Rust_Unnamed_15 = 4;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const kOptSsopFlagUnix: C2Rust_Unnamed_16 = 1024;
-pub const kOptSsopFlagSlash: C2Rust_Unnamed_16 = 512;
-pub const kOptSsopFlagWinpos: C2Rust_Unnamed_16 = 2;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const DOSO_VIMRC: C2Rust_Unnamed_17 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

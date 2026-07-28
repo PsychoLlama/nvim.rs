@@ -98,6 +98,10 @@ use crate::src::nvim::ops::do_join;
 use crate::src::nvim::option::{
     can_bs, copy_option_part, get_scrolloff_value, get_ve_flags, set_iminsert_global,
 };
+use crate::src::nvim::options::{
+    kOptBoFlagBackspace, kOptBoFlagCopy, kOptBoFlagCtrlg, kOptBoFlagCursor, kOptBoFlagRegister,
+    kOptFdoFlagAll, kOptFdoFlagHor, kOptFdoFlagInsert, kOptVeFlagAll, kOptVeFlagOnemore,
+};
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{__ctype_b_loc, gettext, memcpy, memmove, memset, strcmp, strlen};
 use crate::src::nvim::os::time::os_time;
@@ -497,46 +501,6 @@ pub const OPENLINE_MARKFIX: C2Rust_Unnamed_18 = 8;
 pub const OPENLINE_KEEPTRAIL: C2Rust_Unnamed_18 = 4;
 pub const OPENLINE_DO_COM: C2Rust_Unnamed_18 = 2;
 pub const OPENLINE_DELSPACES: C2Rust_Unnamed_18 = 1;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kOptBoFlagWildmode: C2Rust_Unnamed_19 = 524288;
-pub const kOptBoFlagTerm: C2Rust_Unnamed_19 = 262144;
-pub const kOptBoFlagSpell: C2Rust_Unnamed_19 = 131072;
-pub const kOptBoFlagShell: C2Rust_Unnamed_19 = 65536;
-pub const kOptBoFlagRegister: C2Rust_Unnamed_19 = 32768;
-pub const kOptBoFlagOperator: C2Rust_Unnamed_19 = 16384;
-pub const kOptBoFlagShowmatch: C2Rust_Unnamed_19 = 8192;
-pub const kOptBoFlagMess: C2Rust_Unnamed_19 = 4096;
-pub const kOptBoFlagLang: C2Rust_Unnamed_19 = 2048;
-pub const kOptBoFlagInsertmode: C2Rust_Unnamed_19 = 1024;
-pub const kOptBoFlagHangul: C2Rust_Unnamed_19 = 512;
-pub const kOptBoFlagEx: C2Rust_Unnamed_19 = 256;
-pub const kOptBoFlagEsc: C2Rust_Unnamed_19 = 128;
-pub const kOptBoFlagError: C2Rust_Unnamed_19 = 64;
-pub const kOptBoFlagCtrlg: C2Rust_Unnamed_19 = 32;
-pub const kOptBoFlagCopy: C2Rust_Unnamed_19 = 16;
-pub const kOptBoFlagComplete: C2Rust_Unnamed_19 = 8;
-pub const kOptBoFlagCursor: C2Rust_Unnamed_19 = 4;
-pub const kOptBoFlagBackspace: C2Rust_Unnamed_19 = 2;
-pub const kOptBoFlagAll: C2Rust_Unnamed_19 = 1;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const kOptFdoFlagJump: C2Rust_Unnamed_20 = 1024;
-pub const kOptFdoFlagUndo: C2Rust_Unnamed_20 = 512;
-pub const kOptFdoFlagInsert: C2Rust_Unnamed_20 = 256;
-pub const kOptFdoFlagTag: C2Rust_Unnamed_20 = 128;
-pub const kOptFdoFlagSearch: C2Rust_Unnamed_20 = 64;
-pub const kOptFdoFlagQuickfix: C2Rust_Unnamed_20 = 32;
-pub const kOptFdoFlagPercent: C2Rust_Unnamed_20 = 16;
-pub const kOptFdoFlagMark: C2Rust_Unnamed_20 = 8;
-pub const kOptFdoFlagHor: C2Rust_Unnamed_20 = 4;
-pub const kOptFdoFlagBlock: C2Rust_Unnamed_20 = 2;
-pub const kOptFdoFlagAll: C2Rust_Unnamed_20 = 1;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const kOptVeFlagNoneU: C2Rust_Unnamed_21 = 32;
-pub const kOptVeFlagNone: C2Rust_Unnamed_21 = 16;
-pub const kOptVeFlagOnemore: C2Rust_Unnamed_21 = 8;
-pub const kOptVeFlagInsert: C2Rust_Unnamed_21 = 6;
-pub const kOptVeFlagBlock: C2Rust_Unnamed_21 = 5;
-pub const kOptVeFlagAll: C2Rust_Unnamed_21 = 4;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const UPD_CLEAR: C2Rust_Unnamed_22 = 50;
 pub const UPD_NOT_VALID: C2Rust_Unnamed_22 = 40;

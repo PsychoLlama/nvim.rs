@@ -17,6 +17,7 @@ use crate::src::nvim::main::{
     need_wait_return, restart_VIsual_select, restart_edit, typebuf, virtual_op,
 };
 use crate::src::nvim::option::get_ve_flags;
+use crate::src::nvim::options::{kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
 use crate::src::nvim::os::input::{input_available, input_get, os_breakcheck};
 use crate::src::nvim::os::libc::{strcmp, strcpy};
 use crate::src::nvim::strings::vim_snprintf;
@@ -431,13 +432,6 @@ pub const KE_S_F2: key_extra = 7;
 pub const KE_S_F1: key_extra = 6;
 pub const KE_S_DOWN: key_extra = 5;
 pub const KE_S_UP: key_extra = 4;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const kOptVeFlagNoneU: C2Rust_Unnamed_27 = 32;
-pub const kOptVeFlagNone: C2Rust_Unnamed_27 = 16;
-pub const kOptVeFlagOnemore: C2Rust_Unnamed_27 = 8;
-pub const kOptVeFlagInsert: C2Rust_Unnamed_27 = 6;
-pub const kOptVeFlagBlock: C2Rust_Unnamed_27 = 5;
-pub const kOptVeFlagAll: C2Rust_Unnamed_27 = 4;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;

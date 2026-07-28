@@ -18,6 +18,7 @@ use crate::src::nvim::memline::ml_get_buf;
 use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::message::{emsg, msg, semsg};
 use crate::src::nvim::r#move::changed_window_setting_all;
+use crate::src::nvim::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
 use crate::src::nvim::optionstr::check_chars_options;
 use crate::src::nvim::os::env::os_getenv_noalloc;
 use crate::src::nvim::os::libc::{
@@ -163,9 +164,6 @@ pub const kUnknown: WorkingStatus = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const kOptCmpFlagKeepascii: C2Rust_Unnamed_16 = 2;
-pub const kOptCmpFlagInternal: C2Rust_Unnamed_16 = 1;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const UPD_CLEAR: C2Rust_Unnamed_17 = 50;
 pub const UPD_NOT_VALID: C2Rust_Unnamed_17 = 40;

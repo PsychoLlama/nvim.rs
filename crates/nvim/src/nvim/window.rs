@@ -86,6 +86,9 @@ use crate::src::nvim::option::{
     win_copy_options,
 };
 use crate::src::nvim::options::{kOptCmdheight, kOptWindow};
+use crate::src::nvim::options::{
+    kOptSwbFlagUseopen, kOptSwbFlagUsetab, kOptTclFlagLeft, kOptTclFlagUselast,
+};
 use crate::src::nvim::os::fs::{os_chdir, os_dirname};
 use crate::src::nvim::os::libc::{
     __assert_fail, abort, abs, gettext, memmove, memset, qsort, strncmp,
@@ -1060,16 +1063,6 @@ pub const DOBUF_MOD: dobuf_start_values = 3;
 pub const DOBUF_LAST: dobuf_start_values = 2;
 pub const DOBUF_FIRST: dobuf_start_values = 1;
 pub const DOBUF_CURRENT: dobuf_start_values = 0;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const kOptSwbFlagUselast: C2Rust_Unnamed_21 = 32;
-pub const kOptSwbFlagVsplit: C2Rust_Unnamed_21 = 16;
-pub const kOptSwbFlagNewtab: C2Rust_Unnamed_21 = 8;
-pub const kOptSwbFlagSplit: C2Rust_Unnamed_21 = 4;
-pub const kOptSwbFlagUsetab: C2Rust_Unnamed_21 = 2;
-pub const kOptSwbFlagUseopen: C2Rust_Unnamed_21 = 1;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const kOptTclFlagUselast: C2Rust_Unnamed_22 = 2;
-pub const kOptTclFlagLeft: C2Rust_Unnamed_22 = 1;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub const UPD_CLEAR: C2Rust_Unnamed_23 = 50;
 pub const UPD_NOT_VALID: C2Rust_Unnamed_23 = 40;

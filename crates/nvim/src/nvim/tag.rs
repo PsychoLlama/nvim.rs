@@ -47,6 +47,10 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::r#move::{set_topline, validate_cursor};
 use crate::src::nvim::option::{copy_option_part, magic_isset, option_set_callback_func};
+use crate::src::nvim::options::{
+    kOptFdoFlagTag, kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagUseopen, kOptSwbFlagUsetab,
+    kOptSwbFlagVsplit,
+};
 use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::fs::{os_fopen, os_path_exists};
 use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
@@ -1074,35 +1078,6 @@ pub const GETFILE_OPEN_OTHER: getf_retvalues = -1;
 pub const GETFILE_SAME_FILE: getf_retvalues = 0;
 pub const GETFILE_NOT_WRITTEN: getf_retvalues = 2;
 pub const GETFILE_ERROR: getf_retvalues = 1;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const kOptFdoFlagJump: C2Rust_Unnamed_18 = 1024;
-pub const kOptFdoFlagUndo: C2Rust_Unnamed_18 = 512;
-pub const kOptFdoFlagInsert: C2Rust_Unnamed_18 = 256;
-pub const kOptFdoFlagTag: C2Rust_Unnamed_18 = 128;
-pub const kOptFdoFlagSearch: C2Rust_Unnamed_18 = 64;
-pub const kOptFdoFlagQuickfix: C2Rust_Unnamed_18 = 32;
-pub const kOptFdoFlagPercent: C2Rust_Unnamed_18 = 16;
-pub const kOptFdoFlagMark: C2Rust_Unnamed_18 = 8;
-pub const kOptFdoFlagHor: C2Rust_Unnamed_18 = 4;
-pub const kOptFdoFlagBlock: C2Rust_Unnamed_18 = 2;
-pub const kOptFdoFlagAll: C2Rust_Unnamed_18 = 1;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kOptJopFlagClean: C2Rust_Unnamed_19 = 4;
-pub const kOptJopFlagView: C2Rust_Unnamed_19 = 2;
-pub const kOptJopFlagStack: C2Rust_Unnamed_19 = 1;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const kOptSwbFlagUselast: C2Rust_Unnamed_20 = 32;
-pub const kOptSwbFlagVsplit: C2Rust_Unnamed_20 = 16;
-pub const kOptSwbFlagNewtab: C2Rust_Unnamed_20 = 8;
-pub const kOptSwbFlagSplit: C2Rust_Unnamed_20 = 4;
-pub const kOptSwbFlagUsetab: C2Rust_Unnamed_20 = 2;
-pub const kOptSwbFlagUseopen: C2Rust_Unnamed_20 = 1;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const kOptTcFlagSmart: C2Rust_Unnamed_21 = 16;
-pub const kOptTcFlagFollowscs: C2Rust_Unnamed_21 = 8;
-pub const kOptTcFlagMatch: C2Rust_Unnamed_21 = 4;
-pub const kOptTcFlagIgnore: C2Rust_Unnamed_21 = 2;
-pub const kOptTcFlagFollowic: C2Rust_Unnamed_21 = 1;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const WILD_PUM_WANT: C2Rust_Unnamed_22 = 13;
 pub const WILD_PAGEDOWN: C2Rust_Unnamed_22 = 12;

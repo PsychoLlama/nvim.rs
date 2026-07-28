@@ -9,6 +9,7 @@ use crate::src::nvim::main::{State, curbuf, curwin, e_invarg2, e_positive, saved
 use crate::src::nvim::memline::{ml_get, ml_get_buf, ml_get_pos, ml_replace};
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::options::kOptDyFlagUhex;
 use crate::src::nvim::os::libc::{abort, gettext, memmove};
 use crate::src::nvim::plines::getvcol;
 use crate::src::nvim::textformat::has_format_option;
@@ -56,7 +57,6 @@ const INDENT_INC: ::core::ffi::c_uint = 2;
 const INDENT_DEC: ::core::ffi::c_uint = 3;
 const kBufOptIndentexpr: ::core::ffi::c_uint = 47;
 const kExtmarkUndo: ExtmarkOp = 1;
-const kOptDyFlagUhex: ::core::ffi::c_uint = 4;
 const kOptIndentexpr: OptIndex = 148;
 const kOptValTypeString: OptValType = 2;
 const kOptVartabstop: OptIndex = 338;

@@ -64,6 +64,9 @@ use crate::src::nvim::r#move::{
 };
 use crate::src::nvim::normal::{clear_showcmd, do_check_scrollbind};
 use crate::src::nvim::option::{get_ve_flags, shortmess};
+use crate::src::nvim::options::{
+    kOptDyFlagLastline, kOptDyFlagTruncate, kOptVeFlagAll, kOptVeFlagBlock,
+};
 use crate::src::nvim::os::libc::{__assert_fail, abs, gettext, snprintf};
 use crate::src::nvim::plines::{
     getvcols, getvvcol, plines_m_win, plines_win, win_get_fill, win_may_fill,
@@ -433,18 +436,6 @@ pub const EVENT_BUFENTER: auto_event = 3;
 pub const EVENT_BUFDELETE: auto_event = 2;
 pub const EVENT_BUFCREATE: auto_event = 1;
 pub const EVENT_BUFADD: auto_event = 0;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const kOptDyFlagMsgsep: C2Rust_Unnamed_16 = 8;
-pub const kOptDyFlagUhex: C2Rust_Unnamed_16 = 4;
-pub const kOptDyFlagTruncate: C2Rust_Unnamed_16 = 2;
-pub const kOptDyFlagLastline: C2Rust_Unnamed_16 = 1;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const kOptVeFlagNoneU: C2Rust_Unnamed_17 = 32;
-pub const kOptVeFlagNone: C2Rust_Unnamed_17 = 16;
-pub const kOptVeFlagOnemore: C2Rust_Unnamed_17 = 8;
-pub const kOptVeFlagInsert: C2Rust_Unnamed_17 = 6;
-pub const kOptVeFlagBlock: C2Rust_Unnamed_17 = 5;
-pub const kOptVeFlagAll: C2Rust_Unnamed_17 = 4;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_18 = 83;
 pub const SHM_FILEINFO: C2Rust_Unnamed_18 = 70;

@@ -6,7 +6,7 @@
 //! them re-enter through `ml_replace` and the extmark bookkeeping, so a
 //! `&mut` here would invalidate a pointer the caller still holds.
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::src::nvim::change::inserted_bytes;
@@ -23,6 +23,7 @@ use crate::src::nvim::r#move::{
     changed_cline_bef_curs, set_valid_virtcol, validate_virtcol, win_col_off,
 };
 use crate::src::nvim::option::{get_sidescrolloff_value, get_ve_flags};
+use crate::src::nvim::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::src::nvim::os::libc::{memcpy, memset};
 use crate::src::nvim::plines::{
     getvcol, getvvcol, init_charsize_arg, linetabsize, linetabsize_eol, win_charsize,
@@ -39,8 +40,6 @@ const MODE_INSERT: c_int = 16;
 const MODE_TERMINAL: c_int = 128;
 const VALID_VIRTCOL: c_int = 0x4;
 const UPD_NOT_VALID: c_int = 40;
-const kOptVeFlagAll: c_uint = 4;
-const kOptVeFlagOnemore: c_uint = 8;
 
 /// Virtual column of the cursor, as `getvvcol` reports it (list mode off).
 ///

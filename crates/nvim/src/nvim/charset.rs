@@ -20,6 +20,7 @@ use crate::src::nvim::mbyte::{
 };
 use crate::src::nvim::memory::{xmalloc, xstrchrnul};
 use crate::src::nvim::option::skip_to_option_part;
+use crate::src::nvim::options::kOptDyFlagUhex;
 use crate::src::nvim::os::libc::{__errno_location, abort, memset, strlen, strtoimax};
 use crate::src::nvim::path::path_has_wildcard;
 use crate::src::nvim::types::{
@@ -71,7 +72,6 @@ const KS_ZERO: c_int = 255;
 const KS_SPECIAL: c_int = 254;
 const EOL_MAC: c_int = 2;
 const ERANGE: c_int = 34;
-const kOptDyFlagUhex: c_uint = 4;
 const MAXCOL: c_int = 2147483647;
 const OK: c_int = 1;
 const FAIL: c_int = 0;

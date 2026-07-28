@@ -47,6 +47,7 @@ use crate::src::nvim::options::opt_winborder_values;
 use crate::src::nvim::options::{
     kOptBufhidden, kOptBuflisted, kOptBuftype, kOptDiff, kOptSwapfile,
 };
+use crate::src::nvim::options::{kOptCotFlagFuzzy, kOptCotFlagPopup, kOptCotFlagPreview};
 use crate::src::nvim::os::libc::{__assert_fail, gettext, memset, strchr, strlen};
 use crate::src::nvim::plines::plines_m_win;
 use crate::src::nvim::plines::win_linetabsize;
@@ -831,18 +832,6 @@ pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
 pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const kOptCotFlagNearest: C2Rust_Unnamed_17 = 1024;
-pub const kOptCotFlagPreinsert: C2Rust_Unnamed_17 = 512;
-pub const kOptCotFlagNosort: C2Rust_Unnamed_17 = 256;
-pub const kOptCotFlagFuzzy: C2Rust_Unnamed_17 = 128;
-pub const kOptCotFlagNoselect: C2Rust_Unnamed_17 = 64;
-pub const kOptCotFlagNoinsert: C2Rust_Unnamed_17 = 32;
-pub const kOptCotFlagPopup: C2Rust_Unnamed_17 = 16;
-pub const kOptCotFlagPreview: C2Rust_Unnamed_17 = 8;
-pub const kOptCotFlagLongest: C2Rust_Unnamed_17 = 4;
-pub const kOptCotFlagMenuone: C2Rust_Unnamed_17 = 2;
-pub const kOptCotFlagMenu: C2Rust_Unnamed_17 = 1;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const UPD_CLEAR: C2Rust_Unnamed_18 = 50;
 pub const UPD_NOT_VALID: C2Rust_Unnamed_18 = 40;

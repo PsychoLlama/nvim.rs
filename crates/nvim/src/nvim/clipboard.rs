@@ -10,6 +10,7 @@
 use crate::src::nvim::eval::typval::{tv_list_first, tv_list_last, tv_list_len};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::cb_flags;
+use crate::src::nvim::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
 use crate::src::nvim::register::{
     AdditionalData, PLUS_REGISTER, STAR_REGISTER, String_0, kMTBlockWise, kMTCharWise, kMTLineWise,
     kMTUnknown, yankreg_T,
@@ -37,8 +38,6 @@ pub const VAR_LIST: VarType = 4;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 
-pub const kOptCbFlagUnnamed: ::core::ffi::c_uint = 1;
-pub const kOptCbFlagUnnamedplus: ::core::ffi::c_uint = 2;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22;
 

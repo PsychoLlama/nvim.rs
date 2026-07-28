@@ -27,6 +27,7 @@ use crate::src::nvim::message::semsg;
 use crate::src::nvim::mouse::vcol2col;
 use crate::src::nvim::normal::{nv_g_home_m_cmd, nv_screengo};
 use crate::src::nvim::option::{get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
+use crate::src::nvim::options::kOptCuloptFlagScreenline;
 use crate::src::nvim::os::libc::{__assert_fail, gettext, labs};
 use crate::src::nvim::plines::{
     getvcol, getvvcol, linetabsize_eol, plines_m_win, plines_win, plines_win_full,
@@ -143,7 +144,6 @@ pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
-pub const kOptCuloptFlagScreenline: C2Rust_Unnamed_16 = 2;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct lineoff_T {
@@ -151,9 +151,6 @@ pub struct lineoff_T {
     pub fill: ::core::ffi::c_int,
     pub height: ::core::ffi::c_int,
 }
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const kOptCuloptFlagNumber: C2Rust_Unnamed_16 = 4;
-pub const kOptCuloptFlagLine: C2Rust_Unnamed_16 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;

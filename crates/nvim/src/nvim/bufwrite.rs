@@ -26,6 +26,9 @@ use crate::src::nvim::memline::{
 use crate::src::nvim::memory::{verbose_try_malloc, xfree, xmalloc, xmemcpyz, xstrlcat};
 use crate::src::nvim::message::{emsg, msg, msg_progress, msg_puts_hl, semsg, set_keep_msg};
 use crate::src::nvim::option::{copy_option_part, get_bkc_flags, get_fileformat_force, shortmess};
+use crate::src::nvim::options::{
+    kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
+};
 use crate::src::nvim::os::fs::{
     os_chown, os_close, os_copy, os_copy_xattr, os_fchown, os_file_is_writable, os_file_settime,
     os_fileinfo, os_fileinfo_hardlinks, os_fileinfo_id_equal, os_fileinfo_link, os_free_acl,
@@ -1059,18 +1062,12 @@ pub const FIO_UCS4: C2Rust_Unnamed_16 = 8;
 pub const FIO_NOCONVERT: C2Rust_Unnamed_16 = 8192;
 pub const FIO_UTF8: C2Rust_Unnamed_16 = 2;
 pub const ICONV_MULT: C2Rust_Unnamed_18 = 8;
-pub const kOptBkcFlagBreakhardlink: C2Rust_Unnamed_19 = 16;
-pub const kOptBkcFlagBreaksymlink: C2Rust_Unnamed_19 = 8;
-pub const kOptBkcFlagAuto: C2Rust_Unnamed_19 = 2;
-pub const kOptBkcFlagYes: C2Rust_Unnamed_19 = 1;
 pub const SHM_OVER: C2Rust_Unnamed_20 = 111;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
 pub const FIO_ALL: C2Rust_Unnamed_16 = -1;
 pub const FIO_UCSBOM: C2Rust_Unnamed_16 = 16384;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kOptBkcFlagNo: C2Rust_Unnamed_19 = 4;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_20 = 83;
 pub const SHM_FILEINFO: C2Rust_Unnamed_20 = 70;

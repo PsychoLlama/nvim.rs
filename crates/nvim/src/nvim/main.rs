@@ -66,6 +66,7 @@ use crate::src::nvim::options::{
     kOptArabic, kOptErrorfile, kOptKeymap, kOptRightleft, kOptShadafile, kOptShortmess,
     kOptVerbosefile, kOptWindow,
 };
+use crate::src::nvim::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
 use crate::src::nvim::os::env::{
     env_init, init_homedir, os_getenv, os_getenv_noalloc, os_hint_priority, vim_env_iter,
 };
@@ -1305,9 +1306,6 @@ pub const MODE_CMDLINE: C2Rust_Unnamed_44 = 8;
 pub const MODE_OP_PENDING: C2Rust_Unnamed_44 = 4;
 pub const MODE_VISUAL: C2Rust_Unnamed_44 = 2;
 pub const MODE_NORMAL: C2Rust_Unnamed_44 = 1;
-pub type C2Rust_Unnamed_45 = ::core::ffi::c_uint;
-pub const kOptCbFlagUnnamedplus: C2Rust_Unnamed_45 = 2;
-pub const kOptCbFlagUnnamed: C2Rust_Unnamed_45 = 1;
 pub const KE_WILD: key_extra = 108;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_LUA: key_extra = 103;

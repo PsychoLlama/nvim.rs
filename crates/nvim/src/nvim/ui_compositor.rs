@@ -8,6 +8,7 @@ use crate::src::nvim::main::{
     rdb_flags,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
+use crate::src::nvim::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
 use crate::src::nvim::os::libc::{__assert_fail, abort, llabs, memcpy};
 use crate::src::nvim::os::time::os_sleep;
 pub use crate::src::nvim::types::{
@@ -174,13 +175,6 @@ pub const HLF_TERM: C2Rust_Unnamed_12 = 3;
 pub const HLF_EOB: C2Rust_Unnamed_12 = 2;
 pub const HLF_8: C2Rust_Unnamed_12 = 1;
 pub const HLF_NONE: C2Rust_Unnamed_12 = 0;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const kOptRdbFlagFlush: C2Rust_Unnamed_13 = 32;
-pub const kOptRdbFlagLine: C2Rust_Unnamed_13 = 16;
-pub const kOptRdbFlagNodelta: C2Rust_Unnamed_13 = 8;
-pub const kOptRdbFlagInvalid: C2Rust_Unnamed_13 = 4;
-pub const kOptRdbFlagNothrottle: C2Rust_Unnamed_13 = 2;
-pub const kOptRdbFlagCompositor: C2Rust_Unnamed_13 = 1;
 pub const kUIExtCount: UIExtension = 10;
 pub const kUIFloatDebug: UIExtension = 9;
 pub const kUITermColors: UIExtension = 8;

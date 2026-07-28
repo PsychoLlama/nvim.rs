@@ -66,6 +66,9 @@ use crate::src::nvim::option::{
     ExpandOldSetting, ExpandSettingSubtract, ExpandSettings, ExpandStringSetting, copy_option_part,
     csh_like_shell, get_findfunc, magic_isset, set_context_in_set_cmd,
 };
+use crate::src::nvim::options::{
+    kOptBoFlagWildmode, kOptWopFlagExacttext, kOptWopFlagFuzzy, kOptWopFlagPum, kOptWopFlagTagfile,
+};
 use crate::src::nvim::os::env::{expand_env_save_opt, get_env_name, home_replace, vim_getenv};
 use crate::src::nvim::os::fs::os_isdir;
 use crate::src::nvim::os::lang::{get_lang_arg, get_locales};
@@ -949,32 +952,6 @@ pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
 pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const kOptBoFlagWildmode: C2Rust_Unnamed_16 = 524288;
-pub const kOptBoFlagTerm: C2Rust_Unnamed_16 = 262144;
-pub const kOptBoFlagSpell: C2Rust_Unnamed_16 = 131072;
-pub const kOptBoFlagShell: C2Rust_Unnamed_16 = 65536;
-pub const kOptBoFlagRegister: C2Rust_Unnamed_16 = 32768;
-pub const kOptBoFlagOperator: C2Rust_Unnamed_16 = 16384;
-pub const kOptBoFlagShowmatch: C2Rust_Unnamed_16 = 8192;
-pub const kOptBoFlagMess: C2Rust_Unnamed_16 = 4096;
-pub const kOptBoFlagLang: C2Rust_Unnamed_16 = 2048;
-pub const kOptBoFlagInsertmode: C2Rust_Unnamed_16 = 1024;
-pub const kOptBoFlagHangul: C2Rust_Unnamed_16 = 512;
-pub const kOptBoFlagEx: C2Rust_Unnamed_16 = 256;
-pub const kOptBoFlagEsc: C2Rust_Unnamed_16 = 128;
-pub const kOptBoFlagError: C2Rust_Unnamed_16 = 64;
-pub const kOptBoFlagCtrlg: C2Rust_Unnamed_16 = 32;
-pub const kOptBoFlagCopy: C2Rust_Unnamed_16 = 16;
-pub const kOptBoFlagComplete: C2Rust_Unnamed_16 = 8;
-pub const kOptBoFlagCursor: C2Rust_Unnamed_16 = 4;
-pub const kOptBoFlagBackspace: C2Rust_Unnamed_16 = 2;
-pub const kOptBoFlagAll: C2Rust_Unnamed_16 = 1;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const kOptWopFlagExacttext: C2Rust_Unnamed_17 = 8;
-pub const kOptWopFlagPum: C2Rust_Unnamed_17 = 4;
-pub const kOptWopFlagTagfile: C2Rust_Unnamed_17 = 2;
-pub const kOptWopFlagFuzzy: C2Rust_Unnamed_17 = 1;
 pub const kCmdRedrawAll: CmdRedraw = 2;
 pub const kCmdRedrawPos: CmdRedraw = 1;
 pub const kCmdRedrawNone: CmdRedraw = 0;

@@ -46,6 +46,7 @@ use crate::src::nvim::r#move::{
 };
 use crate::src::nvim::normal::check_scrollbind;
 use crate::src::nvim::option::{set_option_direct_for, set_option_value_give_err};
+use crate::src::nvim::options::kOptBoFlagOperator;
 use crate::src::nvim::options::{kOptDiff, kOptFoldmethod};
 use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::env::{os_env_exists, os_unsetenv};
@@ -1008,27 +1009,6 @@ pub const EVENT_BUFENTER: auto_event = 3;
 pub const EVENT_BUFDELETE: auto_event = 2;
 pub const EVENT_BUFCREATE: auto_event = 1;
 pub const EVENT_BUFADD: auto_event = 0;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kOptBoFlagWildmode: C2Rust_Unnamed_19 = 524288;
-pub const kOptBoFlagTerm: C2Rust_Unnamed_19 = 262144;
-pub const kOptBoFlagSpell: C2Rust_Unnamed_19 = 131072;
-pub const kOptBoFlagShell: C2Rust_Unnamed_19 = 65536;
-pub const kOptBoFlagRegister: C2Rust_Unnamed_19 = 32768;
-pub const kOptBoFlagOperator: C2Rust_Unnamed_19 = 16384;
-pub const kOptBoFlagShowmatch: C2Rust_Unnamed_19 = 8192;
-pub const kOptBoFlagMess: C2Rust_Unnamed_19 = 4096;
-pub const kOptBoFlagLang: C2Rust_Unnamed_19 = 2048;
-pub const kOptBoFlagInsertmode: C2Rust_Unnamed_19 = 1024;
-pub const kOptBoFlagHangul: C2Rust_Unnamed_19 = 512;
-pub const kOptBoFlagEx: C2Rust_Unnamed_19 = 256;
-pub const kOptBoFlagEsc: C2Rust_Unnamed_19 = 128;
-pub const kOptBoFlagError: C2Rust_Unnamed_19 = 64;
-pub const kOptBoFlagCtrlg: C2Rust_Unnamed_19 = 32;
-pub const kOptBoFlagCopy: C2Rust_Unnamed_19 = 16;
-pub const kOptBoFlagComplete: C2Rust_Unnamed_19 = 8;
-pub const kOptBoFlagCursor: C2Rust_Unnamed_19 = 4;
-pub const kOptBoFlagBackspace: C2Rust_Unnamed_19 = 2;
-pub const kOptBoFlagAll: C2Rust_Unnamed_19 = 1;
 pub const UPD_VALID: C2Rust_Unnamed_20 = 10;
 #[derive(Copy, Clone)]
 #[repr(C)]

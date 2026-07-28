@@ -43,6 +43,7 @@ use crate::src::nvim::option::{
     valid_name,
 };
 use crate::src::nvim::options::{kOptSpell, kOptSpelllang};
+use crate::src::nvim::options::{kOptSpoFlagCamel, kOptSpoFlagNoplainbuffer};
 use crate::src::nvim::os::fs::os_remove;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
@@ -972,9 +973,6 @@ pub const EVENT_BUFENTER: auto_event = 3;
 pub const EVENT_BUFDELETE: auto_event = 2;
 pub const EVENT_BUFCREATE: auto_event = 1;
 pub const EVENT_BUFADD: auto_event = 0;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const kOptSpoFlagNoplainbuffer: C2Rust_Unnamed_15 = 2;
-pub const kOptSpoFlagCamel: C2Rust_Unnamed_15 = 1;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_16 = 83;
 pub const SHM_FILEINFO: C2Rust_Unnamed_16 = 70;

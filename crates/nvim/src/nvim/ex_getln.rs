@@ -102,6 +102,10 @@ use crate::src::nvim::option::{
     csh_like_shell, magic_isset, set_iminsert_global, set_imsearch_global, set_option_direct,
     set_option_value_give_err, string_to_key,
 };
+use crate::src::nvim::options::{
+    kOptBoFlagError, kOptBoFlagWildmode, kOptWimFlagFull, kOptWimFlagLastused, kOptWimFlagList,
+    kOptWimFlagLongest, kOptWimFlagNoselect,
+};
 use crate::src::nvim::options::{kOptBufhidden, kOptFiletype, kOptInccommand};
 use crate::src::nvim::os::env::home_replace_save;
 use crate::src::nvim::os::input::line_breakcheck;
@@ -1199,33 +1203,6 @@ pub const DOBUF_MOD: dobuf_start_values = 3;
 pub const DOBUF_LAST: dobuf_start_values = 2;
 pub const DOBUF_FIRST: dobuf_start_values = 1;
 pub const DOBUF_CURRENT: dobuf_start_values = 0;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const kOptBoFlagWildmode: C2Rust_Unnamed_22 = 524288;
-pub const kOptBoFlagTerm: C2Rust_Unnamed_22 = 262144;
-pub const kOptBoFlagSpell: C2Rust_Unnamed_22 = 131072;
-pub const kOptBoFlagShell: C2Rust_Unnamed_22 = 65536;
-pub const kOptBoFlagRegister: C2Rust_Unnamed_22 = 32768;
-pub const kOptBoFlagOperator: C2Rust_Unnamed_22 = 16384;
-pub const kOptBoFlagShowmatch: C2Rust_Unnamed_22 = 8192;
-pub const kOptBoFlagMess: C2Rust_Unnamed_22 = 4096;
-pub const kOptBoFlagLang: C2Rust_Unnamed_22 = 2048;
-pub const kOptBoFlagInsertmode: C2Rust_Unnamed_22 = 1024;
-pub const kOptBoFlagHangul: C2Rust_Unnamed_22 = 512;
-pub const kOptBoFlagEx: C2Rust_Unnamed_22 = 256;
-pub const kOptBoFlagEsc: C2Rust_Unnamed_22 = 128;
-pub const kOptBoFlagError: C2Rust_Unnamed_22 = 64;
-pub const kOptBoFlagCtrlg: C2Rust_Unnamed_22 = 32;
-pub const kOptBoFlagCopy: C2Rust_Unnamed_22 = 16;
-pub const kOptBoFlagComplete: C2Rust_Unnamed_22 = 8;
-pub const kOptBoFlagCursor: C2Rust_Unnamed_22 = 4;
-pub const kOptBoFlagBackspace: C2Rust_Unnamed_22 = 2;
-pub const kOptBoFlagAll: C2Rust_Unnamed_22 = 1;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const kOptWimFlagNoselect: C2Rust_Unnamed_23 = 16;
-pub const kOptWimFlagLastused: C2Rust_Unnamed_23 = 8;
-pub const kOptWimFlagList: C2Rust_Unnamed_23 = 4;
-pub const kOptWimFlagLongest: C2Rust_Unnamed_23 = 2;
-pub const kOptWimFlagFull: C2Rust_Unnamed_23 = 1;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
