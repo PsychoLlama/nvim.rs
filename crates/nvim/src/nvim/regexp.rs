@@ -1,19 +1,10 @@
 use crate::src::nvim::eval::typval::{
-    tv_clear, tv_get_string_buf_chk, tv_list_alloc, tv_list_append_string, tv_list_init_static10,
+    tv_list_alloc, tv_list_append_string, tv_list_first, tv_list_init_static10, tv_list_ref,
 };
-use crate::src::nvim::eval::typval::{tv_list_first, tv_list_len, tv_list_ref};
-use crate::src::nvim::eval::userfunc::call_func;
-use crate::src::nvim::eval_1::{eval_to_string, partial_name};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::main::curbuf;
-use crate::src::nvim::main::{e_null, e_re_damg, e_resulting_text_too_long};
-use crate::src::nvim::mbyte::{
-    utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
-};
-use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
-use crate::src::nvim::message::{emsg, iemsg};
-use crate::src::nvim::os::libc::{gettext, memmove, strcpy, strlen, strncmp, strncpy};
-use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz};
+use crate::src::nvim::os::libc::{strcpy, strncpy};
+use crate::src::nvim::strings::xstrnsave;
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, ArgvFunc, BoolVarValue,
     BufUpdateCallbacks, CSType, Callback, Callback_data as C2Rust_Unnamed_8, CallbackType,
@@ -66,7 +57,7 @@ pub(crate) use self::mbyte::*;
 pub(crate) use self::nfa::*;
 pub use self::parse::*;
 pub use self::submatch::*;
-pub use self::substitute::*;
+pub(crate) use self::substitute::*;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
 pub const _ISpunct: C2Rust_Unnamed = 4;
@@ -173,9 +164,6 @@ pub const CLASS_BLANK: C2Rust_Unnamed_26 = 2;
 pub const CLASS_BACKSPACE: C2Rust_Unnamed_26 = 14;
 pub const CLASS_ALPHA: C2Rust_Unnamed_26 = 1;
 pub const CLASS_ALNUM: C2Rust_Unnamed_26 = 0;
-/// The case hook `\\u`, `\\U`, `\\l` and `\\L` install for the rest of a
-/// `:substitute` replacement.
-pub type CaseFolder = fn(::core::ffi::c_int) -> ::core::ffi::c_int;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct regexec_T {
@@ -742,13 +730,6 @@ static reg_endzp: GlobalCell<[*mut uint8_t; 10]> =
     GlobalCell::new([::core::ptr::null_mut::<uint8_t>(); 10]);
 static reg_startzpos: GlobalCell<[lpos_T; 10]> = GlobalCell::new([lpos_T { lnum: 0, col: 0 }; 10]);
 static reg_endzpos: GlobalCell<[lpos_T; 10]> = GlobalCell::new([lpos_T { lnum: 0, col: 0 }; 10]);
-pub const MAX_REGSUB_NESTING: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-static eval_result: GlobalCell<[*mut ::core::ffi::c_char; 4]> = GlobalCell::new([
-    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-]);
 pub const END: ::core::ffi::c_int = 0;
 pub const BOL: ::core::ffi::c_int = 1;
 pub const EOL: ::core::ffi::c_int = 2;
@@ -933,17 +914,6 @@ static nfa_regengine: GlobalCell<regengine_T> = GlobalCell::new(regengine {
 static regexp_engine: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
-    fe_argv_func: None,
-    fe_firstline: 0 as linenr_T,
-    fe_lastline: 0 as linenr_T,
-    fe_doesrange: ::core::ptr::null_mut::<bool>(),
-    fe_evaluate: false_0 != 0,
-    fe_partial: ::core::ptr::null_mut::<partial_T>(),
-    fe_selfdict: ::core::ptr::null_mut::<dict_T>(),
-    fe_basetv: ::core::ptr::null_mut::<typval_T>(),
-    fe_found_var: false_0 != 0,
-};
 pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const GRAPHEME_STATE_INIT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const MAX_MCO: ::core::ffi::c_int = 6 as ::core::ffi::c_int;

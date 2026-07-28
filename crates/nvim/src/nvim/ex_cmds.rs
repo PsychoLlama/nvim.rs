@@ -120,7 +120,9 @@ use crate::src::nvim::plines::linetabsize_str;
 use crate::src::nvim::plines::{getvcol, plines_m_win_fill};
 use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};
-use crate::src::nvim::regexp::{regtilde, skip_regexp, skip_regexp_err, skip_regexp_ex};
+use crate::src::nvim::regexp::{
+    regtilde, skip_regexp, skip_regexp_err, skip_regexp_ex, vim_regsub_multi,
+};
 use crate::src::nvim::search::{get_search_pat, last_search_pat, save_re_pat, search_regcomp};
 use crate::src::nvim::spell::parse_spelllang;
 use crate::src::nvim::strings::{
@@ -173,14 +175,6 @@ use crate::src::nvim::window::{
 };
 unsafe extern "C" {
     fn re_multiline(prog: *const regprog_T) -> ::core::ffi::c_int;
-    fn vim_regsub_multi(
-        rmp: *mut regmmatch_T,
-        lnum: linenr_T,
-        source: *mut ::core::ffi::c_char,
-        dest: *mut ::core::ffi::c_char,
-        destlen: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

@@ -117,6 +117,7 @@ use crate::src::nvim::os::shell::{
 };
 use crate::src::nvim::profile::{prof_child_enter, prof_child_exit};
 use crate::src::nvim::quickfix::set_ref_in_quickfix;
+use crate::src::nvim::regexp::vim_regsub;
 use crate::src::nvim::register::{get_reg_contents, op_global_reg_iter};
 use crate::src::nvim::runtime::{
     exestack, get_scriptname, script_autoload, script_is_lua, sourcing_a_script,
@@ -189,14 +190,6 @@ use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::u_clearallandblockfree;
 unsafe extern "C" {
     static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_35>;
-    fn vim_regsub(
-        rmp: *mut regmatch_T,
-        source: *mut ::core::ffi::c_char,
-        expr: *mut typval_T,
-        dest: *mut ::core::ffi::c_char,
-        destlen: ::core::ffi::c_int,
-        flags: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,
