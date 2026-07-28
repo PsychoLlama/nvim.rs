@@ -3,11 +3,10 @@
 //! Henry Spencer's matcher as Vim reshaped it: a pattern compiles to a
 //! program of nodes and the matcher walks it, backtracking on failure.
 //!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
-
-#[allow(unused_imports)]
-use super::*;
+//! The program emitter and the parser above it are [`compile`], [`piece`]
+//! and [`atom`]; the walk that runs a program is [`matcher`] over
+//! [`single`], with [`resume`] unwinding the decisions it saved on
+//! [`state`]'s stack.
 
 mod atom;
 mod collection;

@@ -1,6 +1,8 @@
 //! `[[=a=]]`: the equivalence class each base character expands to, emitted
 //! straight into the postfix form.
 
+#![forbid(unsafe_code)]
+
 use core::ffi::c_int;
 
 use super::postfix;

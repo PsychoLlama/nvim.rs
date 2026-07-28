@@ -635,23 +635,10 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 };
 pub const REGMAGIC: ::core::ffi::c_int = 0o234 as ::core::ffi::c_int;
 pub const MAX_LIMIT: ::core::ffi::c_int = (32767 as ::core::ffi::c_int) << 16 as ::core::ffi::c_int;
-const E_INVALID_CHARACTER_AFTER_STR_AT: &::core::ffi::CStr = c"E59: Invalid character after %s@";
-const E_INVALID_USE_OF_UNDERSCORE: &::core::ffi::CStr = c"E63: Invalid use of \\_";
 const E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN: &::core::ffi::CStr =
     c"E363: Pattern uses more memory than 'maxmempattern'";
-const E_INVALID_ITEM_IN_STR_BRACKETS: &::core::ffi::CStr = c"E369: Invalid item in %s%%[]";
 const E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR: &::core::ffi::CStr =
     c"E654: Missing delimiter after search pattern: %s";
-const E_MISSINGBRACKET: &::core::ffi::CStr = c"E769: Missing ] after %s[";
-const E_REVERSE_RANGE: &::core::ffi::CStr = c"E944: Reverse range in character class";
-const E_LARGE_CLASS: &::core::ffi::CStr = c"E945: Range too large in character class";
-const E_UNMATCHEDPP: &::core::ffi::CStr = c"E53: Unmatched %s%%(";
-const E_UNMATCHEDP: &::core::ffi::CStr = c"E54: Unmatched %s(";
-const E_UNMATCHEDPAR: &::core::ffi::CStr = c"E55: Unmatched %s)";
-const E_Z_NOT_ALLOWED: &::core::ffi::CStr = c"E66: \\z( not allowed here";
-const E_Z1_NOT_ALLOWED: &::core::ffi::CStr = c"E67: \\z1 - \\z9 not allowed here";
-const E_MISSING_SB: &::core::ffi::CStr = c"E69: Missing ] after %s%%[";
-const E_EMPTY_SB: &::core::ffi::CStr = c"E70: Empty %s%%[]";
 const E_RECURSIVE: &::core::ffi::CStr = c"E956: Cannot use pattern recursively";
 const E_REGEXP_NUMBER_AFTER_DOT_POS_SEARCH_CHR: &::core::ffi::CStr =
     c"E1204: No Number allowed after .: '\\%%%c'";
@@ -699,135 +686,6 @@ static had_eol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static reg_magic: GlobalCell<magic_T> = GlobalCell::new(0 as magic_T);
 static reg_string: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static reg_strict: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static META_flags: GlobalCell<[uint8_t; 127]> = GlobalCell::new([
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    1 as uint8_t,
-    0 as uint8_t,
-    1 as uint8_t,
-]);
 static curchr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static prevchr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static prevprevchr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -1028,10 +886,6 @@ static nfa_classcodes: GlobalCell<[::core::ffi::c_int; 27]> = GlobalCell::new([
     NFA_UPPER as ::core::ffi::c_int,
     NFA_NUPPER as ::core::ffi::c_int,
 ]);
-const E_NUL_FOUND: &::core::ffi::CStr = c"E865: (NFA) Regexp end encountered prematurely";
-const E_MISPLACED: &::core::ffi::CStr = c"E866: (NFA regexp) Misplaced %c";
-const E_ILL_CHAR_CLASS: &::core::ffi::CStr = c"E877: (NFA regexp) Invalid character class: %ld";
-const E_VALUE_TOO_LARGE: &::core::ffi::CStr = c"E951: \\% value too large";
 static nfa_re_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static wants_nfa: GlobalCell<bool> = GlobalCell::new(false);
 static nstate: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -1046,61 +900,7 @@ pub const CLASS_AZ: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
 pub const CLASS_o7: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const CLASS_o9: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const CLASS_underscore: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const A_grave: ::core::ffi::c_int = 192;
-pub const A_acute: ::core::ffi::c_int = 193;
-pub const A_circumflex: ::core::ffi::c_int = 194;
-pub const A_virguilla: ::core::ffi::c_int = 195;
-pub const A_diaeresis: ::core::ffi::c_int = 196;
-pub const A_ring: ::core::ffi::c_int = 197;
-pub const C_cedilla: ::core::ffi::c_int = 199;
-pub const E_grave: ::core::ffi::c_int = 200;
-pub const E_acute: ::core::ffi::c_int = 201;
-pub const E_circumflex: ::core::ffi::c_int = 202;
-pub const E_diaeresis: ::core::ffi::c_int = 203;
-pub const I_grave: ::core::ffi::c_int = 204;
-pub const I_acute: ::core::ffi::c_int = 205;
-pub const I_circumflex: ::core::ffi::c_int = 206;
-pub const I_diaeresis: ::core::ffi::c_int = 207;
-pub const N_virguilla: ::core::ffi::c_int = 209;
-pub const O_grave: ::core::ffi::c_int = 210;
-pub const O_acute: ::core::ffi::c_int = 211;
-pub const O_circumflex: ::core::ffi::c_int = 212;
-pub const O_virguilla: ::core::ffi::c_int = 213;
-pub const O_diaeresis: ::core::ffi::c_int = 214;
-pub const O_slash: ::core::ffi::c_int = 216;
-pub const U_grave: ::core::ffi::c_int = 217;
-pub const U_acute: ::core::ffi::c_int = 218;
-pub const U_circumflex: ::core::ffi::c_int = 219;
-pub const U_diaeresis: ::core::ffi::c_int = 220;
-pub const Y_acute: ::core::ffi::c_int = 221;
-pub const a_grave: ::core::ffi::c_int = 224;
-pub const a_acute: ::core::ffi::c_int = 225;
-pub const a_circumflex: ::core::ffi::c_int = 226;
-pub const a_virguilla: ::core::ffi::c_int = 227;
-pub const a_diaeresis: ::core::ffi::c_int = 228;
 pub const a_ring: ::core::ffi::c_int = 229;
-pub const c_cedilla: ::core::ffi::c_int = 231;
-pub const e_grave: ::core::ffi::c_int = 232;
-pub const e_acute: ::core::ffi::c_int = 233;
-pub const e_circumflex: ::core::ffi::c_int = 234;
-pub const e_diaeresis: ::core::ffi::c_int = 235;
-pub const i_grave: ::core::ffi::c_int = 236;
-pub const i_acute: ::core::ffi::c_int = 237;
-pub const i_circumflex: ::core::ffi::c_int = 238;
-pub const i_diaeresis: ::core::ffi::c_int = 239;
-pub const n_virguilla: ::core::ffi::c_int = 241;
-pub const o_grave: ::core::ffi::c_int = 242;
-pub const o_acute: ::core::ffi::c_int = 243;
-pub const o_circumflex: ::core::ffi::c_int = 244;
-pub const o_virguilla: ::core::ffi::c_int = 245;
-pub const o_diaeresis: ::core::ffi::c_int = 246;
-pub const o_slash: ::core::ffi::c_int = 248;
-pub const u_grave: ::core::ffi::c_int = 249;
-pub const u_acute: ::core::ffi::c_int = 250;
-pub const u_circumflex: ::core::ffi::c_int = 251;
-pub const u_diaeresis: ::core::ffi::c_int = 252;
-pub const y_acute: ::core::ffi::c_int = 253;
-pub const y_diaeresis: ::core::ffi::c_int = 255;
 static state_ptr: GlobalCell<*mut nfa_state_T> =
     GlobalCell::new(::core::ptr::null_mut::<nfa_state_T>());
 static empty: GlobalCell<Frag_T> = GlobalCell::new(Frag_T {
