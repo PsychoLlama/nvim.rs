@@ -361,7 +361,10 @@ unsafe fn deliver(
 /// Seed the next list with the machine's entry state again, so that a match
 /// may also start one character further on.
 ///
-/// Returns false when the whole match should stop.
+/// Returns false when the whole match should stop — either because there is
+/// nowhere left for one to start, or because the list could not grow, which
+/// is reported as `NFA_TOO_EXPENSIVE` so the caller falls back to the
+/// backtracking engine rather than believing there was no match.
 ///
 /// # Safety
 ///
@@ -380,7 +383,7 @@ unsafe fn restart(
         }
         if !toplevel {
             // A lookaround's own machine has no start column to move.
-            return !addstate(nextlist, start, run.m, core::ptr::null_mut(), clen).is_null();
+            return seed(nextlist, start, run, clen);
         }
 
         // The program may know the character every match starts with, in
@@ -406,9 +409,32 @@ unsafe fn restart(
                 }
             }
         }
+        // Only reachable on the match's first line, where `rex.lnum` is
+        // still what the seeding call recorded.
         record_match_start(run.m, clen);
-        !addstate(nextlist, (*start).out, run.m, core::ptr::null_mut(), clen).is_null()
+        seed(nextlist, (*start).out, run, clen)
     }
+}
+
+/// Put `state` on the next list, reporting `NFA_TOO_EXPENSIVE` if it would
+/// not fit.
+///
+/// # Safety
+///
+/// Every pointer must belong to the running match.
+unsafe fn seed(
+    nextlist: *mut nfa_list_T,
+    state: *mut nfa_state_T,
+    run: &mut Run,
+    clen: c_int,
+) -> bool {
+    // SAFETY: the caller's list and state.
+    let added = unsafe { addstate(nextlist, state, run.m, core::ptr::null_mut(), clen) };
+    if added.is_null() {
+        nfa_match.set(NFA_TOO_EXPENSIVE);
+        return false;
+    }
+    true
 }
 
 /// Is there anywhere left for a match to start?

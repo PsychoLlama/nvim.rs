@@ -276,7 +276,7 @@
     "crates/nvim/src/nvim/regexp/nfa/escape.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/regexp/nfa/exec.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/regexp/nfa/literal.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/regexp/nfa/matcher.rs": {"unsafe": 13},
+    "crates/nvim/src/nvim/regexp/nfa/matcher.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/regexp/nfa/postfix.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/regexp/nfa/run.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/regexp/nfa/step.rs": {"unsafe": 18},
