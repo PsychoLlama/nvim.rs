@@ -8,7 +8,7 @@
 
 use crate::src::nvim::api::extmark::nvim_create_namespace;
 use crate::src::nvim::api::private::helpers::{
-    api_free_string, api_set_error, arena_dict, copy_string, cstr_as_string, cstr_to_string,
+    api_set_error, arena_dict, cstr_as_string, cstr_to_string,
 };
 use crate::src::nvim::api::private::validate::api_err_invalid;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
@@ -81,7 +81,7 @@ use crate::src::nvim::mbyte::{enc_locale, utfc_ptr2len};
 use crate::src::nvim::memfile::mf_close_file;
 use crate::src::nvim::memline::{ml_open_file, ml_open_files};
 use crate::src::nvim::memory::{
-    strequal, strnequal, xcalloc, xfree, xmalloc, xmemdupz, xrealloc, xstrchrnul, xstrdup, xstrlcpy,
+    strequal, xcalloc, xfree, xmalloc, xmemdupz, xrealloc, xstrchrnul, xstrdup, xstrlcpy,
 };
 use crate::src::nvim::message::{
     emsg, iemsg, message_filtered, msg, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar,

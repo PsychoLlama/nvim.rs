@@ -35,7 +35,7 @@ pub(crate) unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: c_int)
                 } else {
                     varp = get_varp(opt);
                 }
-                if !varp.is_null() && (all as c_int != 0 || optval_default(opt_idx, varp) == 0) {
+                if !varp.is_null() && (all as c_int != 0 || !optval_is_default(opt_idx, varp)) {
                     let mut len: c_int = 0;
                     if opt_flags & OPT_ONECOLUMN as c_int != 0 {
                         len = Columns.get();
@@ -188,7 +188,7 @@ pub unsafe extern "C" fn makeset(
                             let mut varp: *mut c_void = get_varp_scope(opt, opt_flags);
                             if !varp.is_null() {
                                 if !(opt_flags & OPT_GLOBAL as c_int != 0
-                                    && optval_default(opt_idx, varp) != 0)
+                                    && optval_is_default(opt_idx, varp))
                                 {
                                     if !(opt_flags & OPT_SKIPRTP as c_int != 0
                                         && ((*opt).var == p_rtp.ptr() as *mut c_void
@@ -204,7 +204,7 @@ pub unsafe extern "C" fn makeset(
                                             {
                                                 let mut varp_fresh: *mut c_void =
                                                     get_varp_scope(opt, OPT_GLOBAL as c_int);
-                                                if optval_default(opt_idx, varp_fresh) == 0 {
+                                                if !optval_is_default(opt_idx, varp_fresh) {
                                                     round = 1 as c_int;
                                                     varp_local = varp;
                                                     varp = varp_fresh;

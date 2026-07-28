@@ -253,7 +253,7 @@ pub(crate) unsafe extern "C" fn validate_option_value(
         }
     } else if !option_has_type(opt_idx, (*newval).type_0) {
         let mut rep: *mut c_char = optval_to_cstr(*newval);
-        let mut type_str: *const c_char = optval_type_get_name((*opt).type_0);
+        let mut type_str: *const c_char = optval_type_name((*opt).type_0).as_ptr();
         snprintf(
             errbuf,
             IOSIZE as size_t,
@@ -263,7 +263,7 @@ pub(crate) unsafe extern "C" fn validate_option_value(
             ),
             (*opt).fullname,
             type_str,
-            optval_type_get_name((*newval).type_0),
+            optval_type_name((*newval).type_0).as_ptr(),
             rep,
         );
         xfree(rep as *mut c_void);

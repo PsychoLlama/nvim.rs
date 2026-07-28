@@ -966,9 +966,7 @@ unsafe extern "C" fn set_option_to(
         );
         return;
     }
-    let mut error: bool = false_0 != 0;
-    let mut optval: OptVal = object_as_optval(value, &raw mut error);
-    if error {
+    let Some(optval) = object_as_optval(value) else {
         api_err_exp(
             err,
             b"value\0".as_ptr() as *const ::core::ffi::c_char,
@@ -976,7 +974,7 @@ unsafe extern "C" fn set_option_to(
             api_typename(value.type_0),
         );
         return;
-    }
+    };
     let opt_flags: ::core::ffi::c_int = if scope as ::core::ffi::c_uint
         == kOptScopeWin as ::core::ffi::c_int as ::core::ffi::c_uint
         && !option_has_scope(opt_idx, kOptScopeGlobal)

@@ -215,7 +215,11 @@ pub(crate) unsafe extern "C" fn vimoption2dict(
         value: object {
             type_0: kObjectTypeString,
             data: object_data {
-                string: cstr_as_string(optval_type_get_name(option_get_type(get_opt_idx(opt)))),
+                string: cstr_as_string(
+                    optval_type_name(option_get_type(get_opt_idx(opt)))
+                        .as_ptr()
+                        .cast_mut(),
+                ),
             },
         },
     };

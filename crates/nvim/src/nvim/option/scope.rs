@@ -3,6 +3,12 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// Whether exactly one bit is set — for a `scope_flags` mask, whether the
+/// option lives in exactly one scope.
+fn is_power_of_two(x: u64) -> bool {
+    x.count_ones() == 1
+}
+
 pub unsafe extern "C" fn is_option_hidden(mut opt_idx: OptIndex) -> bool {
     return opt_idx as c_int != kOptInvalid as c_int
         && (*options.ptr())[opt_idx as usize].immutable as c_int != 0

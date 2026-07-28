@@ -739,9 +739,7 @@ pub unsafe extern "C" fn nvim_set_option_value(
             opt_flags = OPT_LOCAL as ::core::ffi::c_int;
         }
     }
-    let mut error: bool = false_0 != 0;
-    let mut optval: OptVal = object_as_optval(value, &raw mut error);
-    if error {
+    let Some(optval) = object_as_optval(value) else {
         api_err_exp(
             err,
             b"value\0".as_ptr() as *const ::core::ffi::c_char,
@@ -749,7 +747,7 @@ pub unsafe extern "C" fn nvim_set_option_value(
             api_typename(value.type_0),
         );
         return;
-    }
+    };
     let save_current_sctx: sctx_T = api_set_sctx(channel_id);
     set_option_value_for(name.data, opt_idx, optval, opt_flags, scope, to, err);
     current_sctx.set(save_current_sctx);
