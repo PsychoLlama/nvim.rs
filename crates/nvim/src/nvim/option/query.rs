@@ -1,401 +1,535 @@
 //! The accessors the rest of the editor reads options through.
+//!
+//! Most of these exist because a value is not simply "the variable": a
+//! global-local option falls back to the global when the local copy is
+//! unset, 'shortmess' has an abbreviation that stands for four other flags,
+//! 'virtualedit' and 'cursorlineopt' are read as parsed flag words, and
+//! 'scrolloff' is forced to zero in a terminal buffer.
 
-#[allow(unused_imports)]
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub unsafe extern "C" fn get_equalprg() -> *mut c_char {
-    if *(*curbuf.get()).b_p_ep as c_int == NUL {
-        return p_ep.get();
+use core::ffi::{c_char, c_int, c_uchar, c_uint, c_void};
+use core::ptr;
+
+use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::buffer::bt_prompt;
+use crate::src::nvim::drawscreen::redraw_buf_status_later;
+use crate::src::nvim::eval::typval::{callback_free, tv_dict_add_tv, tv_dict_alloc, tv_free};
+use crate::src::nvim::eval::vars::optval_as_tv;
+use crate::src::nvim::eval_1::{callback_from_typval, eval_expr};
+use crate::src::nvim::main::{
+    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, State, bkc_flags, curbuf, empty_string_option,
+    magic_overruled, need_maketitle, p_bs, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh, p_shm,
+    p_siso, p_so, redraw_tabline, ve_flags,
+};
+use crate::src::nvim::memory::{xcalloc, xfree, xstrdup};
+use crate::src::nvim::options::*;
+use crate::src::nvim::os::env::{os_setenv, vim_getenv};
+use crate::src::nvim::os::libc::{strcmp, strlen, strncmp, strstr};
+use crate::src::nvim::path::{FullName_save, path_tail};
+use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::types::{
+    Callback, Callback_data, OptIndex, OptVal, OptValData, buf_T, dict_T, exarg_T, int64_t, scid_T,
+    size_t, typval_T, uint8_t, vimoption_T, win_T,
+};
+
+use super::{
+    BS_NOSTOP, BS_START, EOL_DOS, EOL_MAC, EOL_UNIX, FAIL, FORCE_BIN, MODE_TERMINAL, NUL, OK,
+    SHM_LINES, SHM_MOD, SHM_RO, SHM_WRI, VAR_STRING, get_varp, kCallbackNone, kOptFlagWasSet,
+    kOptScopeBuf, kOptScopeWin, kOptValTypeString, option_has_scope, optval_from_varp,
+    set_option_direct,
+};
+
+/// 'equalprg', local where set.
+pub fn get_equalprg() -> *mut c_char {
+    // SAFETY: `curbuf` is live, and its string options are never null.
+    unsafe {
+        if *(*curbuf.get()).b_p_ep == 0 {
+            p_ep.get()
+        } else {
+            (*curbuf.get()).b_p_ep
+        }
     }
-    return (*curbuf.get()).b_p_ep;
 }
 
-pub unsafe extern "C" fn get_findfunc() -> *mut c_char {
-    if *(*curbuf.get()).b_p_ffu as c_int == NUL {
-        return p_ffu.get();
+/// 'findfunc', local where set.
+pub fn get_findfunc() -> *mut c_char {
+    // SAFETY: `curbuf` is live, and its string options are never null.
+    unsafe {
+        if *(*curbuf.get()).b_p_ffu == 0 {
+            p_ffu.get()
+        } else {
+            (*curbuf.get()).b_p_ffu
+        }
     }
-    return (*curbuf.get()).b_p_ffu;
 }
 
-pub unsafe extern "C" fn shortmess(mut x: c_int) -> bool {
-    return !(*p_shm.ptr()).is_null()
-        && (!vim_strchr(p_shm.get(), x).is_null()
-            || !vim_strchr(p_shm.get(), 'a' as c_int).is_null() && {
-                let mut c2rust_lvalue: [c_char; 5] = [
-                    SHM_RO as c_int as c_char,
-                    SHM_MOD as c_int as c_char,
-                    SHM_LINES as c_int as c_char,
-                    SHM_WRI as c_int as c_char,
-                    0 as c_char,
-                ];
-                !vim_strchr(&raw mut c2rust_lvalue as *mut c_char, x).is_null()
-            });
+/// Whether 'shortmess' asks for message `x` to be shortened. The `a` flag is
+/// an abbreviation standing for these four and nothing else.
+pub fn shortmess(x: c_int) -> bool {
+    const ABBREVIATED: [c_uint; 4] = [SHM_RO, SHM_MOD, SHM_LINES, SHM_WRI];
+    // SAFETY: 'shortmess' is a string option; the null test is upstream's.
+    unsafe {
+        !p_shm.ptr().is_null()
+            && (!vim_strchr(p_shm.get(), x).is_null()
+                || (!vim_strchr(p_shm.get(), 'a' as c_int).is_null()
+                    && ABBREVIATED.contains(&(x as c_uint))))
+    }
 }
 
-pub unsafe extern "C" fn vimrc_found(mut fname: *mut c_char, mut envname: *mut c_char) {
-    if !fname.is_null() && !envname.is_null() {
-        let mut p: *mut c_char = vim_getenv(envname);
-        if p.is_null() {
-            p = FullName_save(fname, false_0 != 0);
-            if !p.is_null() {
-                os_setenv(envname, p, 1 as c_int);
-                xfree(p as *mut c_void);
+/// Record where a vimrc was found in `$MYVIMRC`/`$MYVIMDIR`, unless the
+/// environment variable is already set.
+///
+/// # Safety
+///
+/// `fname` and `envname`, when non-null, must be NUL-terminated.
+pub unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
+    if fname.is_null() || envname.is_null() {
+        return;
+    }
+    // SAFETY: the caller's strings are NUL-terminated.
+    unsafe {
+        let existing = vim_getenv(envname);
+        if !existing.is_null() {
+            xfree(existing.cast::<c_void>());
+            return;
+        }
+        let full = FullName_save(fname, false);
+        if !full.is_null() {
+            os_setenv(envname, full, 1);
+            xfree(full.cast::<c_void>());
+        }
+    }
+}
+
+/// Whether anything has ever set the option.
+pub fn option_was_set(opt_idx: OptIndex) -> bool {
+    assert!(opt_idx != kOptInvalid);
+    // SAFETY: the option table is a plain array; nothing holds a borrow.
+    unsafe { (*options.ptr())[opt_idx as usize].flags & kOptFlagWasSet != 0 }
+}
+
+/// Forget that anything set the option — what `:set all&` does.
+pub fn reset_option_was_set(opt_idx: OptIndex) {
+    assert!(opt_idx != kOptInvalid);
+    // SAFETY: the option table is a plain array; nothing holds a borrow.
+    unsafe { (*options.ptr())[opt_idx as usize].flags &= !kOptFlagWasSet }
+}
+
+/// Parse 'cursorlineopt' into `wp->w_p_culopt_flags`, from `val` or from the
+/// window's own value. `FAIL` for a value that does not parse; the flags are
+/// only stored on success.
+///
+/// # Safety
+///
+/// `val`, when non-null, must be NUL-terminated; `wp` must be live.
+pub unsafe fn fill_culopt_flags(val: *mut c_char, wp: *mut win_T) -> c_int {
+    // SAFETY: the caller's `wp` is live and `val` is NUL-terminated.
+    unsafe {
+        let mut p = if val.is_null() {
+            (*wp).w_onebuf_opt.wo_culopt
+        } else {
+            val
+        };
+        let mut flags: uint8_t = 0;
+        while *p != 0 {
+            for (word, bits) in [
+                (c"line".to_bytes(), kOptCuloptFlagLine),
+                (
+                    c"both".to_bytes(),
+                    kOptCuloptFlagLine | kOptCuloptFlagNumber,
+                ),
+                (c"number".to_bytes(), kOptCuloptFlagNumber),
+                (c"screenline".to_bytes(), kOptCuloptFlagScreenline),
+            ] {
+                if strncmp(p, word.as_ptr().cast::<c_char>(), word.len() as size_t) == 0 {
+                    p = p.add(word.len());
+                    flags |= bits as uint8_t;
+                    break;
+                }
             }
-        } else {
-            xfree(p as *mut c_void);
+            // Anything the words above did not consume is a syntax error.
+            if *p != b',' as c_char && *p != 0 {
+                return FAIL;
+            }
+            if *p == b',' as c_char {
+                p = p.add(1);
+            }
         }
-    }
-}
-
-pub unsafe extern "C" fn option_was_set(mut opt_idx: OptIndex) -> bool {
-    '_c2rust_label: {
-        if opt_idx as c_int != kOptInvalid as c_int {
-        } else {
-            __assert_fail(
-                b"opt_idx != kOptInvalid\0".as_ptr() as *const c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
-                6204 as c_uint,
-                b"_Bool option_was_set(OptIndex)\0".as_ptr() as *const c_char,
-            );
-        }
-    };
-    return (*options.ptr())[opt_idx as usize].flags & kOptFlagWasSet as c_int as uint32_t != 0;
-}
-
-pub unsafe extern "C" fn reset_option_was_set(mut opt_idx: OptIndex) {
-    '_c2rust_label: {
-        if opt_idx as c_int != kOptInvalid as c_int {
-        } else {
-            __assert_fail(
-                b"opt_idx != kOptInvalid\0".as_ptr() as *const c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
-                6213 as c_uint,
-                b"void reset_option_was_set(OptIndex)\0".as_ptr() as *const c_char,
-            );
-        }
-    };
-    (*options.ptr())[opt_idx as usize].flags = ((*options.ptr())[opt_idx as usize].flags as c_uint
-        & !(kOptFlagWasSet as c_int as c_uint))
-        as uint32_t;
-}
-
-pub unsafe extern "C" fn fill_culopt_flags(mut val: *mut c_char, mut wp: *mut win_T) -> c_int {
-    let mut p: *mut c_char = ::core::ptr::null_mut::<c_char>();
-    let mut culopt_flags_new: uint8_t = 0 as uint8_t;
-    if val.is_null() {
-        p = (*wp).w_onebuf_opt.wo_culopt;
-    } else {
-        p = val;
-    }
-    while *p as c_int != NUL {
-        if strncmp(p, b"line\0".as_ptr() as *const c_char, 4 as size_t) == 0 as c_int {
-            p = p.offset(4 as c_int as isize);
-            culopt_flags_new = (culopt_flags_new as c_int | kOptCuloptFlagLine as c_int) as uint8_t;
-        } else if strncmp(p, b"both\0".as_ptr() as *const c_char, 4 as size_t) == 0 as c_int {
-            p = p.offset(4 as c_int as isize);
-            culopt_flags_new = (culopt_flags_new as c_int
-                | (kOptCuloptFlagLine as c_int | kOptCuloptFlagNumber as c_int))
-                as uint8_t;
-        } else if strncmp(p, b"number\0".as_ptr() as *const c_char, 6 as size_t) == 0 as c_int {
-            p = p.offset(6 as c_int as isize);
-            culopt_flags_new =
-                (culopt_flags_new as c_int | kOptCuloptFlagNumber as c_int) as uint8_t;
-        } else if strncmp(p, b"screenline\0".as_ptr() as *const c_char, 10 as size_t) == 0 as c_int
+        // "line" and "screenline" are mutually exclusive; "both" implies
+        // "line", so it collides with "screenline" too.
+        if flags as c_int & kOptCuloptFlagLine as c_int != 0
+            && flags as c_int & kOptCuloptFlagScreenline as c_int != 0
         {
-            p = p.offset(10 as c_int as isize);
-            culopt_flags_new =
-                (culopt_flags_new as c_int | kOptCuloptFlagScreenline as c_int) as uint8_t;
-        }
-        if *p as c_int != ',' as c_int && *p as c_int != NUL {
             return FAIL;
         }
-        if *p as c_int == ',' as c_int {
-            p = p.offset(1);
+        (*wp).w_p_culopt_flags = flags;
+        OK
+    }
+}
+
+/// Whether patterns are magic right now — `\v`/`\V` in the pattern override
+/// 'magic' for the pattern they appear in.
+pub fn magic_isset() -> bool {
+    match magic_overruled.get() {
+        OPTION_MAGIC_ON => true,
+        OPTION_MAGIC_OFF => false,
+        _ => p_magic.get() != 0,
+    }
+}
+
+/// Parse a `'*func'` option's value into `optcb`. An empty value clears the
+/// callback; anything that does not resolve to one leaves `optcb` alone.
+///
+/// # Safety
+///
+/// `optval`, when non-null, must be NUL-terminated; `optcb` must point at a
+/// live `Callback` this call may replace.
+pub unsafe fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback) -> c_int {
+    // SAFETY: the caller's pointers are valid for the call.
+    unsafe {
+        if optval.is_null() || *optval == 0 {
+            callback_free(optcb);
+            return OK;
         }
-    }
-    if culopt_flags_new as c_int & kOptCuloptFlagLine as c_int != 0
-        && culopt_flags_new as c_int & kOptCuloptFlagScreenline as c_int != 0
-    {
-        return FAIL;
-    }
-    (*wp).w_p_culopt_flags = culopt_flags_new;
-    return OK;
-}
-
-pub unsafe extern "C" fn magic_isset() -> bool {
-    match magic_overruled.get() as c_uint {
-        1 => return true_0 != 0,
-        2 => return false_0 != 0,
-        0 | _ => {}
-    }
-    return p_magic.get() != 0;
-}
-
-pub unsafe extern "C" fn option_set_callback_func(
-    mut optval: *mut c_char,
-    mut optcb: *mut Callback,
-) -> c_int {
-    if optval.is_null() || *optval as c_int == NUL {
-        callback_free(optcb);
-        return OK;
-    }
-    let mut tv: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
-    if *optval as c_int == '{' as c_int
-        || strncmp(
-            optval,
-            b"function(\0".as_ptr() as *const c_char,
-            9 as size_t,
-        ) == 0 as c_int
-        || strncmp(optval, b"funcref(\0".as_ptr() as *const c_char, 8 as size_t) == 0 as c_int
-    {
-        tv = eval_expr(optval, ::core::ptr::null_mut::<exarg_T>());
-        if tv.is_null() {
-            return FAIL;
-        }
-    } else {
-        tv = xcalloc(1 as size_t, ::core::mem::size_of::<typval_T>()) as *mut typval_T;
-        (*tv).v_type = VAR_STRING;
-        (*tv).vval.v_string = xstrdup(optval);
-    }
-    let mut cb: Callback = Callback {
-        data: Callback_data {
-            funcref: ::core::ptr::null_mut::<c_char>(),
-        },
-        type_0: kCallbackNone,
-    };
-    if !callback_from_typval(&raw mut cb, tv)
-        || cb.type_0 as c_uint == kCallbackNone as c_int as c_uint
-    {
-        tv_free(tv);
-        return FAIL;
-    }
-    callback_free(optcb);
-    *optcb = cb;
-    tv_free(tv);
-    return OK;
-}
-
-pub unsafe extern "C" fn can_bs(mut what: c_int) -> bool {
-    if what == BS_START && bt_prompt(curbuf.get()) as c_int != 0 {
-        return false_0 != 0;
-    }
-    if *p_bs.get() as c_int == '2' as c_int {
-        return what != BS_NOSTOP;
-    }
-    return !vim_strchr(p_bs.get(), what).is_null();
-}
-
-pub unsafe extern "C" fn get_bkc_flags(mut buf: *mut buf_T) -> c_uint {
-    return if (*buf).b_bkc_flags != 0 {
-        (*buf).b_bkc_flags
-    } else {
-        bkc_flags.get()
-    };
-}
-
-pub unsafe extern "C" fn get_flp_value(mut buf: *mut buf_T) -> *mut c_char {
-    if (*buf).b_p_flp.is_null() || *(*buf).b_p_flp as c_int == NUL {
-        return p_flp.get();
-    }
-    return (*buf).b_p_flp;
-}
-
-pub unsafe extern "C" fn get_ve_flags(mut wp: *mut win_T) -> c_uint {
-    return (if (*wp).w_onebuf_opt.wo_ve_flags != 0 {
-        (*wp).w_onebuf_opt.wo_ve_flags
-    } else {
-        ve_flags.get()
-    }) & !((kOptVeFlagNone as c_int | kOptVeFlagNoneU as c_int) as c_uint);
-}
-
-pub unsafe extern "C" fn get_showbreak_value(win: *mut win_T) -> *mut c_char {
-    if (*win).w_onebuf_opt.wo_sbr.is_null() || *(*win).w_onebuf_opt.wo_sbr as c_int == NUL {
-        return p_sbr.get();
-    }
-    if strcmp(
-        (*win).w_onebuf_opt.wo_sbr,
-        b"NONE\0".as_ptr() as *const c_char,
-    ) == 0 as c_int
-    {
-        return empty_string_option.ptr() as *mut c_char;
-    }
-    return (*win).w_onebuf_opt.wo_sbr;
-}
-
-pub unsafe extern "C" fn get_fileformat(mut buf: *const buf_T) -> c_int {
-    let mut c: c_int = *(*buf).b_p_ff as c_uchar as c_int;
-    if (*buf).b_p_bin != 0 || c == 'u' as c_int {
-        return EOL_UNIX;
-    }
-    if c == 'm' as c_int {
-        return EOL_MAC;
-    }
-    return EOL_DOS;
-}
-
-pub unsafe extern "C" fn get_fileformat_force(
-    mut buf: *const buf_T,
-    mut eap: *const exarg_T,
-) -> c_int {
-    let mut c: c_int = 0;
-    if !eap.is_null() && (*eap).force_ff != 0 as c_int {
-        c = (*eap).force_ff;
-    } else {
-        if if !eap.is_null() && (*eap).force_bin != 0 as c_int {
-            ((*eap).force_bin == FORCE_BIN) as c_int
-        } else {
-            (*buf).b_p_bin
-        } != 0
+        // A lambda, `function(...)` or `funcref(...)` is an expression; a
+        // bare name is the function's name.
+        let tv = if *optval == b'{' as c_char
+            || strncmp(optval, c"function(".as_ptr(), 9) == 0
+            || strncmp(optval, c"funcref(".as_ptr(), 8) == 0
         {
-            return EOL_UNIX;
-        }
-        c = *(*buf).b_p_ff as c_uchar as c_int;
-    }
-    if c == 'u' as c_int {
-        return EOL_UNIX;
-    }
-    if c == 'm' as c_int {
-        return EOL_MAC;
-    }
-    return EOL_DOS;
-}
-
-pub unsafe extern "C" fn default_fileformat() -> c_int {
-    match *p_ffs.get() as c_int {
-        109 => return EOL_MAC,
-        100 => return EOL_DOS,
-        _ => {}
-    }
-    return EOL_UNIX;
-}
-
-pub unsafe extern "C" fn set_fileformat(mut eol_style: c_int, mut opt_flags: c_int) {
-    let mut p: *mut c_char = ::core::ptr::null_mut::<c_char>();
-    match eol_style {
-        EOL_UNIX => {
-            p = b"unix\0".as_ptr() as *const c_char as *mut c_char;
-        }
-        EOL_MAC => {
-            p = b"mac\0".as_ptr() as *const c_char as *mut c_char;
-        }
-        EOL_DOS => {
-            p = b"dos\0".as_ptr() as *const c_char as *mut c_char;
-        }
-        _ => {}
-    }
-    if !p.is_null() {
-        set_option_direct(
-            kOptFileformat,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: cstr_as_string(p),
-                },
+            let tv = eval_expr(optval, ptr::null_mut::<exarg_T>());
+            if tv.is_null() {
+                return FAIL;
+            }
+            tv
+        } else {
+            let tv = xcalloc(1, size_of::<typval_T>()).cast::<typval_T>();
+            (*tv).v_type = VAR_STRING;
+            (*tv).vval.v_string = xstrdup(optval);
+            tv
+        };
+        let mut cb = Callback {
+            data: Callback_data {
+                funcref: ptr::null_mut::<c_char>(),
             },
-            opt_flags,
-            0 as scid_T,
-        );
-    }
-    redraw_buf_status_later(curbuf.get());
-    redraw_tabline.set(true_0 != 0);
-    need_maketitle.set(true_0 != 0);
-}
-
-pub unsafe extern "C" fn skip_to_option_part(mut p: *const c_char) -> *mut c_char {
-    if *p as c_int == ',' as c_int {
-        p = p.offset(1);
-    }
-    while *p as c_int == ' ' as c_int {
-        p = p.offset(1);
-    }
-    return p as *mut c_char;
-}
-
-pub unsafe extern "C" fn copy_option_part(
-    mut option: *mut *mut c_char,
-    mut buf: *mut c_char,
-    mut maxlen: size_t,
-    mut sep_chars: *mut c_char,
-) -> size_t {
-    let mut len: size_t = 0 as size_t;
-    let mut p: *mut c_char = *option;
-    if *p as c_int == '.' as c_int {
-        let c2rust_fresh7 = p;
-        p = p.offset(1);
-        let c2rust_fresh8 = len;
-        len = len.wrapping_add(1);
-        *buf.offset(c2rust_fresh8 as isize) = *c2rust_fresh7;
-    }
-    while *p as c_int != NUL && vim_strchr(sep_chars, *p as uint8_t as c_int).is_null() {
-        if *p.offset(0 as c_int as isize) as c_int == '\\' as c_int
-            && !vim_strchr(
-                sep_chars,
-                *p.offset(1 as c_int as isize) as uint8_t as c_int,
-            )
-            .is_null()
-        {
-            p = p.offset(1);
+            type_0: kCallbackNone,
+        };
+        if !callback_from_typval(&raw mut cb, tv) || cb.type_0 == kCallbackNone {
+            tv_free(tv);
+            return FAIL;
         }
-        if len < maxlen.wrapping_sub(1 as size_t) {
-            let c2rust_fresh9 = len;
-            len = len.wrapping_add(1);
-            *buf.offset(c2rust_fresh9 as isize) = *p;
+        callback_free(optcb);
+        *optcb = cb;
+        tv_free(tv);
+        OK
+    }
+}
+
+/// Whether 'backspace' allows backspacing over `what`. A prompt buffer never
+/// lets the prompt itself be backspaced over.
+pub fn can_bs(what: c_int) -> bool {
+    // SAFETY: `curbuf` is live; 'backspace' is a string option.
+    unsafe {
+        if what == BS_START && bt_prompt(curbuf.get()) {
+            return false;
         }
-        p = p.offset(1);
+        // The historic numeric spelling: 2 is everything but "nostop".
+        if *p_bs.get() == b'2' as c_char {
+            return what != BS_NOSTOP;
+        }
+        !vim_strchr(p_bs.get(), what).is_null()
     }
-    *buf.offset(len as isize) = NUL as c_char;
-    if *p as c_int != NUL && *p as c_int != ',' as c_int {
-        p = p.offset(1);
+}
+
+/// 'backupcopy' as flags, local where set.
+///
+/// # Safety
+///
+/// `buf` must be live.
+pub unsafe fn get_bkc_flags(buf: *mut buf_T) -> c_uint {
+    // SAFETY: the caller's buffer is live.
+    match unsafe { (*buf).b_bkc_flags } {
+        0 => bkc_flags.get(),
+        local => local,
     }
-    p = skip_to_option_part(p);
-    *option = p;
-    return len;
 }
 
-pub unsafe extern "C" fn csh_like_shell() -> c_int {
-    return !strstr(path_tail(p_sh.get()), b"csh\0".as_ptr() as *const c_char).is_null() as c_int;
+/// 'formatlistpat', local where set.
+///
+/// # Safety
+///
+/// `buf` must be live.
+pub unsafe fn get_flp_value(buf: *mut buf_T) -> *mut c_char {
+    // SAFETY: the caller's buffer is live.
+    unsafe {
+        if (*buf).b_p_flp.is_null() || *(*buf).b_p_flp == 0 {
+            p_flp.get()
+        } else {
+            (*buf).b_p_flp
+        }
+    }
 }
 
-pub unsafe extern "C" fn fish_like_shell() -> bool {
-    return !strstr(path_tail(p_sh.get()), b"fish\0".as_ptr() as *const c_char).is_null();
+/// 'virtualedit' as flags, local where set. The two "none" bits only exist
+/// so a window can spell out that it overrides the global value with
+/// nothing, so they never reach a caller.
+///
+/// # Safety
+///
+/// `wp` must be live.
+pub unsafe fn get_ve_flags(wp: *mut win_T) -> c_uint {
+    // SAFETY: the caller's window is live.
+    let flags = match unsafe { (*wp).w_onebuf_opt.wo_ve_flags } {
+        0 => ve_flags.get(),
+        local => local,
+    };
+    flags & !(kOptVeFlagNone | kOptVeFlagNoneU)
 }
 
-pub unsafe extern "C" fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
-    let d: *mut dict_T = tv_dict_alloc();
-    let mut opt_idx: OptIndex = kOptAleph;
-    while (opt_idx as c_int) < kOptCount {
-        let mut opt: *mut vimoption_T =
-            (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-        if bufopt != 0 && option_has_scope(opt_idx, kOptScopeBuf) as c_int != 0
-            || bufopt == 0 && option_has_scope(opt_idx, kOptScopeWin) as c_int != 0
-        {
-            let mut varp: *mut c_void = get_varp(opt);
-            if !varp.is_null() {
-                let mut opt_tv: typval_T =
-                    optval_as_tv(optval_from_varp(opt_idx, varp), true_0 != 0);
-                tv_dict_add_tv(d, (*opt).fullname, strlen((*opt).fullname), &raw mut opt_tv);
+/// 'showbreak', local where set. `"NONE"` is how a window says "no leader"
+/// against a global value that has one.
+///
+/// # Safety
+///
+/// `win` must be live.
+pub unsafe fn get_showbreak_value(win: *mut win_T) -> *mut c_char {
+    // SAFETY: the caller's window is live.
+    unsafe {
+        let local = (*win).w_onebuf_opt.wo_sbr;
+        if local.is_null() || *local == 0 {
+            return p_sbr.get();
+        }
+        if strcmp(local, c"NONE".as_ptr()) == 0 {
+            return empty_string_option.ptr().cast::<c_char>();
+        }
+        local
+    }
+}
+
+/// The buffer's line ending. 'binary' forces Unix whatever 'fileformat' says.
+///
+/// # Safety
+///
+/// `buf` must be live.
+pub unsafe fn get_fileformat(buf: *const buf_T) -> c_int {
+    // SAFETY: the caller's buffer is live; 'fileformat' is never null.
+    unsafe {
+        let c = *(*buf).b_p_ff as c_uchar;
+        if (*buf).b_p_bin != 0 || c == b'u' {
+            EOL_UNIX
+        } else if c == b'm' {
+            EOL_MAC
+        } else {
+            EOL_DOS
+        }
+    }
+}
+
+/// [`get_fileformat`] with a command's `++ff`/`++bin` overriding the buffer.
+///
+/// # Safety
+///
+/// `buf` must be live; `eap`, when non-null, must be a live command.
+pub unsafe fn get_fileformat_force(buf: *const buf_T, eap: *const exarg_T) -> c_int {
+    // SAFETY: the caller's pointers are live.
+    let c = unsafe {
+        if !eap.is_null() && (*eap).force_ff != 0 {
+            (*eap).force_ff
+        } else {
+            let binary = if !eap.is_null() && (*eap).force_bin != 0 {
+                ((*eap).force_bin == FORCE_BIN) as c_int
+            } else {
+                (*buf).b_p_bin
+            };
+            if binary != 0 {
+                return EOL_UNIX;
             }
+            *(*buf).b_p_ff as c_uchar as c_int
         }
-        opt_idx += 1;
+    };
+    match c as u8 {
+        b'u' => EOL_UNIX,
+        b'm' => EOL_MAC,
+        _ => EOL_DOS,
     }
-    return d;
 }
 
-pub unsafe extern "C" fn get_scrolloff_value(mut wp: *mut win_T) -> int64_t {
-    if State.get() & MODE_TERMINAL as c_int != 0 && !(*(*wp).w_buffer).terminal.is_null() {
-        return 0 as int64_t;
+/// The line ending a new file gets: the first entry of 'fileformats'.
+pub fn default_fileformat() -> c_int {
+    // SAFETY: 'fileformats' is a string option; it is never null.
+    match unsafe { *p_ffs.get() } as u8 {
+        b'm' => EOL_MAC,
+        b'd' => EOL_DOS,
+        _ => EOL_UNIX,
     }
-    return if (*wp).w_onebuf_opt.wo_so < 0 as OptInt {
-        p_so.get() as int64_t
-    } else {
-        (*wp).w_onebuf_opt.wo_so as int64_t
-    };
 }
 
-pub unsafe extern "C" fn get_sidescrolloff_value(mut wp: *mut win_T) -> int64_t {
-    return if (*wp).w_onebuf_opt.wo_siso < 0 as OptInt {
-        p_siso.get() as int64_t
-    } else {
-        (*wp).w_onebuf_opt.wo_siso as int64_t
+/// Set 'fileformat' to `eol_style` and redraw what shows it.
+pub fn set_fileformat(eol_style: c_int, opt_flags: c_int) {
+    let name = match eol_style {
+        EOL_UNIX => Some(c"unix"),
+        EOL_MAC => Some(c"mac"),
+        EOL_DOS => Some(c"dos"),
+        _ => None,
     };
+    // SAFETY: the names are static; `curbuf` is live.
+    unsafe {
+        if let Some(name) = name {
+            set_option_direct(
+                kOptFileformat,
+                OptVal {
+                    type_0: kOptValTypeString,
+                    data: OptValData {
+                        string: cstr_as_string(name.as_ptr().cast_mut()),
+                    },
+                },
+                opt_flags,
+                0 as scid_T,
+            );
+        }
+        redraw_buf_status_later(curbuf.get());
+    }
+    redraw_tabline.set(true);
+    need_maketitle.set(true);
+}
+
+/// Step over the separator and any padding between two parts of a
+/// comma-separated option.
+///
+/// # Safety
+///
+/// `p` must be NUL-terminated.
+pub unsafe fn skip_to_option_part(mut p: *const c_char) -> *mut c_char {
+    // SAFETY: the caller's string is NUL-terminated.
+    unsafe {
+        if *p == b',' as c_char {
+            p = p.add(1);
+        }
+        while *p == b' ' as c_char {
+            p = p.add(1);
+        }
+    }
+    p.cast_mut()
+}
+
+/// Copy one part of a separated option into `buf` and advance `option` past
+/// it, returning the part's length. A part longer than `maxlen - 1` is
+/// truncated in `buf` but still counted in full.
+///
+/// # Safety
+///
+/// `option` must point at a NUL-terminated string; `buf` must have room for
+/// `maxlen` bytes; `sep_chars` must be NUL-terminated.
+pub unsafe fn copy_option_part(
+    option: *mut *mut c_char,
+    buf: *mut c_char,
+    maxlen: size_t,
+    sep_chars: *mut c_char,
+) -> size_t {
+    // SAFETY: the caller's pointers are valid for the lengths documented.
+    unsafe {
+        let mut len: size_t = 0;
+        let mut p = *option;
+        // A leading '.' is copied without being tested against the
+        // separators, so `.` can start a path entry.
+        if *p == b'.' as c_char {
+            *buf = *p;
+            p = p.add(1);
+            len = 1;
+        }
+        while *p != 0 && vim_strchr(sep_chars, *p as uint8_t as c_int).is_null() {
+            // A backslash escapes a separator, and is dropped.
+            if *p == b'\\' as c_char
+                && !vim_strchr(sep_chars, *p.add(1) as uint8_t as c_int).is_null()
+            {
+                p = p.add(1);
+            }
+            if len < maxlen.wrapping_sub(1) {
+                *buf.add(len) = *p;
+                len += 1;
+            }
+            p = p.add(1);
+        }
+        *buf.add(len) = NUL as c_char;
+        // Step over the separator we stopped on — unless it is a comma,
+        // which `skip_to_option_part` handles along with the padding.
+        if *p != 0 && *p != b',' as c_char {
+            p = p.add(1);
+        }
+        *option = skip_to_option_part(p);
+        len
+    }
+}
+
+/// Whether 'shell' is a csh derivative, which needs its own quoting.
+pub fn csh_like_shell() -> bool {
+    // SAFETY: 'shell' is a string option; it is never null.
+    unsafe { !strstr(path_tail(p_sh.get()), c"csh".as_ptr()).is_null() }
+}
+
+/// Whether 'shell' is fish, which needs its own quoting.
+pub fn fish_like_shell() -> bool {
+    // SAFETY: 'shell' is a string option; it is never null.
+    unsafe { !strstr(path_tail(p_sh.get()), c"fish".as_ptr()).is_null() }
+}
+
+/// Every buffer-local (or window-local) option of the current buffer and
+/// window, as a dictionary — what `b:` and `w:` expose.
+pub fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
+    let scope = if bufopt != 0 {
+        kOptScopeBuf
+    } else {
+        kOptScopeWin
+    };
+    // SAFETY: the option table is a plain array, and `get_varp` hands back
+    // the variable for the current buffer and window.
+    unsafe {
+        let d = tv_dict_alloc();
+        for opt_idx in kOptAleph..kOptCount {
+            if !option_has_scope(opt_idx, scope) {
+                continue;
+            }
+            let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
+            let varp = get_varp(opt);
+            if varp.is_null() {
+                continue;
+            }
+            let mut tv = optval_as_tv(optval_from_varp(opt_idx, varp), true);
+            tv_dict_add_tv(d, (*opt).fullname, strlen((*opt).fullname), &raw mut tv);
+        }
+        d
+    }
+}
+
+/// 'scrolloff' for a window, local where set. A terminal buffer never
+/// scrolls off, whatever the option says.
+///
+/// # Safety
+///
+/// `wp` must be live, with a live buffer.
+pub unsafe fn get_scrolloff_value(wp: *mut win_T) -> int64_t {
+    // SAFETY: the caller's window and its buffer are live.
+    unsafe {
+        if State.get() & MODE_TERMINAL as c_int != 0 && !(*(*wp).w_buffer).terminal.is_null() {
+            return 0;
+        }
+        match (*wp).w_onebuf_opt.wo_so {
+            local if local < 0 => p_so.get(),
+            local => local,
+        }
+    }
+}
+
+/// 'sidescrolloff' for a window, local where set.
+///
+/// # Safety
+///
+/// `wp` must be live.
+pub unsafe fn get_sidescrolloff_value(wp: *mut win_T) -> int64_t {
+    // SAFETY: the caller's window is live.
+    match unsafe { (*wp).w_onebuf_opt.wo_siso } {
+        local if local < 0 => p_siso.get(),
+        local => local,
+    }
 }

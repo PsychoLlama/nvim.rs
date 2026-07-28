@@ -15,9 +15,7 @@ use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, do_filetype_autocmd,
 };
-use crate::src::nvim::buffer::{
-    bt_prompt, buf_is_empty, do_autochdir, free_buf_options, maketitle,
-};
+use crate::src::nvim::buffer::{buf_is_empty, do_autochdir, free_buf_options, maketitle};
 use crate::src::nvim::change::save_file_ff;
 use crate::src::nvim::charset::{
     buf_init_chartab, init_chartab, skiptowhite_esc, skipwhite, trans_characters, transchar,
@@ -28,15 +26,14 @@ use crate::src::nvim::cursor_shape::parse_shape_opt;
 use crate::src::nvim::decoration_provider::get_decor_provider;
 use crate::src::nvim::diff::diff_buf_adjust;
 use crate::src::nvim::drawscreen::{
-    check_screensize, comp_col, redraw_all_later, redraw_buf_later, redraw_buf_status_later,
-    redraw_later, screen_resize, showmode, status_redraw_all, status_redraw_curbuf,
+    check_screensize, comp_col, redraw_all_later, redraw_buf_later, redraw_later, screen_resize,
+    showmode, status_redraw_all, status_redraw_curbuf,
 };
-use crate::src::nvim::eval::typval::{callback_free, tv_dict_add_tv, tv_dict_alloc, tv_free};
 use crate::src::nvim::eval::vars::{
     get_vim_var_str, optval_as_tv, reset_v_option_vars, set_vim_var_string, set_vim_var_tv,
 };
 use crate::src::nvim::eval::window::{restore_win_noblock, switch_win_noblock};
-use crate::src::nvim::eval_1::{callback_from_typval, eval_expr, last_set_msg};
+use crate::src::nvim::eval_1::last_set_msg;
 use crate::src::nvim::ex_docmd::set_no_hlsearch;
 use crate::src::nvim::ex_getln::{check_opt_wim, did_set_cedit, gotocmdline};
 use crate::src::nvim::ex_session::{put_eol, put_line};
@@ -59,29 +56,28 @@ use crate::src::nvim::keycodes::{
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
-    Columns, IObuff, NameBuff, Rows, State, bkc_flags, clear_cmdline, cmdline_row, cmdmod, curbuf,
-    current_sctx, curtab, curwin, e_invarg, e_positive, e_sandbox, e_scroll, e_secure, e_trailing,
+    Columns, IObuff, NameBuff, Rows, clear_cmdline, cmdline_row, cmdmod, curbuf, current_sctx,
+    curtab, curwin, e_invarg, e_positive, e_sandbox, e_scroll, e_secure, e_trailing,
     e_unknown_option2, e_unsupportedoption, e_winheight, e_winwidth, empty_string_option,
     escape_chars, fenc_default, first_tabpage, firstbuf, firstwin, full_screen, got_int,
-    info_message, lastwin, magic_overruled, need_maketitle, no_wait_return, p_ai, p_arshape,
-    p_bdir, p_bin, p_bomb, p_bs, p_cdpath, p_cfu, p_ch, p_chi, p_ci, p_cin, p_cink, p_cino,
-    p_cinsd, p_cinw, p_cms, p_columns, p_com, p_cpo, p_cpt, p_deco, p_dir, p_ea, p_enc, p_ep, p_et,
-    p_fenc, p_fex, p_ff, p_ffs, p_ffu, p_fixeol, p_flp, p_fo, p_ft, p_hh, p_hlg, p_hls, p_icon,
-    p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_kp, p_lines, p_lisp,
-    p_lnr, p_lop, p_lrm, p_ma, p_magic, p_ml, p_mle, p_mouse, p_mps, p_nf, p_ofu, p_paste, p_path,
-    p_pi, p_pp, p_qe, p_ri, p_rtp, p_ru, p_sbr, p_scbk, p_sh, p_shm, p_si, p_siso, p_sj, p_sm,
-    p_smc, p_so, p_spc, p_spf, p_spl, p_spo, p_sps, p_sta, p_sts, p_sua, p_sw, p_swf, p_syn,
+    info_message, lastwin, need_maketitle, no_wait_return, p_ai, p_arshape, p_bdir, p_bin, p_bomb,
+    p_cdpath, p_cfu, p_ch, p_chi, p_ci, p_cin, p_cink, p_cino, p_cinsd, p_cinw, p_cms, p_columns,
+    p_com, p_cpo, p_cpt, p_deco, p_dir, p_ea, p_enc, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol,
+    p_flp, p_fo, p_ft, p_hh, p_hlg, p_hls, p_icon, p_iminsert, p_imsearch, p_inde, p_indk, p_inex,
+    p_inf, p_isk, p_keymap, p_kp, p_lines, p_lisp, p_lnr, p_lop, p_lrm, p_ma, p_ml, p_mle, p_mouse,
+    p_mps, p_nf, p_ofu, p_paste, p_path, p_pi, p_pp, p_qe, p_ri, p_rtp, p_ru, p_scbk, p_sh, p_si,
+    p_sj, p_sm, p_smc, p_spc, p_spf, p_spl, p_spo, p_sps, p_sta, p_sts, p_sua, p_sw, p_swf, p_syn,
     p_tags, p_tbidi, p_tfu, p_title, p_titlelen, p_ts, p_tw, p_uc, p_udf, p_ul, p_vdir, p_verbose,
     p_vsts, p_vts, p_wbr, p_wc, p_wcm, p_wh, p_window, p_wiw, p_wm, p_wmh, p_wmw, readonlymode,
     redraw_tabline, sandbox, secure, silent_mode, spo_flags, starting, t_colors, topframe,
-    updating_screen, ve_flags,
+    updating_screen,
 };
 use crate::src::nvim::mapping::{langmap_init, put_escstr};
 use crate::src::nvim::mbyte::{enc_locale, utfc_ptr2len};
 use crate::src::nvim::memfile::mf_close_file;
 use crate::src::nvim::memline::{ml_open_file, ml_open_files};
 use crate::src::nvim::memory::{
-    strequal, xcalloc, xfree, xmalloc, xmemdupz, xrealloc, xstrchrnul, xstrdup, xstrlcpy,
+    strequal, xfree, xmalloc, xmemdupz, xrealloc, xstrchrnul, xstrdup, xstrlcpy,
 };
 use crate::src::nvim::message::{
     emsg, message_filtered, msg, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar,
@@ -97,17 +93,17 @@ use crate::src::nvim::optionstr::{
     set_chars_option,
 };
 use crate::src::nvim::os::env::{
-    expand_env_esc, home_replace, os_env_exists, os_getenv, os_setenv, vim_getenv,
+    expand_env_esc, home_replace, os_env_exists, os_getenv, vim_getenv,
 };
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::lang::{get_mess_lang, lang_init};
 use crate::src::nvim::os::libc::{
     __assert_fail, abort, bind_textdomain_codeset, fprintf, fputs, gettext, getuid, memmove,
-    memset, snprintf, strchr, strcmp, strcpy, strlen, strncasecmp, strncmp, strstr,
+    memset, snprintf, strchr, strcmp, strcpy, strlen, strncasecmp, strncmp,
 };
 use crate::src::nvim::os::stdpaths::stdpaths_user_state_subpath;
 use crate::src::nvim::path::{
-    FullName_save, after_pathsep, invocation_path_tail, path_fnamecmp, path_tail, vim_ispathlistsep,
+    after_pathsep, invocation_path_tail, path_fnamecmp, vim_ispathlistsep,
 };
 use crate::src::nvim::popupmenu::{pum_drawn, pum_redraw};
 use crate::src::nvim::quickfix::qf_resize_stack;
@@ -122,14 +118,14 @@ use crate::src::nvim::strings::{
 };
 use crate::src::nvim::tag::set_buflocal_tfu_callback;
 use crate::src::nvim::types::{
-    __uid_t, Arena, CMD_index, Callback, Callback_data, CallbackType, CharsOption, DecorProvider,
-    Dict, Error, ErrorType, FILE, HlAttrs, Integer, KeyDict_highlight, KeyValuePair, NS, Object,
-    ObjectType, OptIndex, OptInt, OptScope, OptVal, OptValData, OptValType, RgbValue, String_0,
-    Terminal, TriState, VarType, VimVarIndex, aco_save_T, auto_event, buf_T, bufref_T, colnr_T,
-    dict_T, estack_T, event_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, int16_t, int32_t,
-    int64_t, key_value_pair, linenr_T, object, object_data, optexpand_T, optset_T, ptrdiff_t,
-    regmatch_T, scid_T, sctx_T, size_t, switchwin_T, tabpage_T, typval_T, uint8_t, uint32_t,
-    uint64_t, uvarnumber_T, vimoption_T, win_T, winopt_T, xp_prefix_T,
+    __uid_t, Arena, CMD_index, CallbackType, CharsOption, DecorProvider, Dict, Error, ErrorType,
+    FILE, HlAttrs, Integer, KeyDict_highlight, KeyValuePair, NS, Object, ObjectType, OptIndex,
+    OptInt, OptScope, OptVal, OptValData, OptValType, RgbValue, String_0, Terminal, TriState,
+    VarType, VimVarIndex, aco_save_T, auto_event, buf_T, bufref_T, colnr_T, estack_T, event_T,
+    exarg_T, expand_T, fuzmatch_str_T, garray_T, int16_t, int32_t, int64_t, key_value_pair,
+    linenr_T, object, object_data, optexpand_T, optset_T, ptrdiff_t, regmatch_T, scid_T, sctx_T,
+    size_t, switchwin_T, tabpage_T, typval_T, uint8_t, uint32_t, uint64_t, uvarnumber_T,
+    vimoption_T, win_T, winopt_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::undo::{bufIsChanged, curbufIsChanged, u_compute_hash, u_read_undo, u_sync};
@@ -140,7 +136,7 @@ use crate::src::nvim::window::{
     win_setheight, win_setwidth,
 };
 use crate::src::nvim::winfloat::win_float_update_statusline;
-use core::ffi::{c_char, c_int, c_uchar, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_uint, c_void};
 
 // The carve of a 9,000-line transpiled module; see the child docs.
 mod defaults;

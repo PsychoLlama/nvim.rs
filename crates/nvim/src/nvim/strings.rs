@@ -370,7 +370,7 @@ pub unsafe extern "C" fn vim_strsave_shellescape(
     do_special: bool,
     do_newline: bool,
 ) -> *mut c_char {
-    let csh_like = csh_like_shell() != 0;
+    let csh_like = csh_like_shell();
     let fish_like = fish_like_shell();
     let mut l: size_t = 0;
 

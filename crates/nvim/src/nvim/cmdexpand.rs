@@ -1593,7 +1593,7 @@ unsafe extern "C" fn skip_wildmenu_char(
                     && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL)
     {
         if (*xp).xp_shell as ::core::ffi::c_int != 0
-            && csh_like_shell() != 0
+            && csh_like_shell()
             && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
                 == '\\' as ::core::ffi::c_int
             && *s.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int

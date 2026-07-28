@@ -7289,7 +7289,7 @@ pub unsafe extern "C" fn vim_strsave_fnameescape(
             PATH_ESC_CHARS.as_ptr()
         },
     );
-    if what == VSE_SHELL as ::core::ffi::c_int && csh_like_shell() != 0 {
+    if what == VSE_SHELL as ::core::ffi::c_int && csh_like_shell() {
         let mut s: *mut ::core::ffi::c_char =
             vim_strsave_escaped(p, b"!\0".as_ptr() as *const ::core::ffi::c_char);
         xfree(p as *mut ::core::ffi::c_void);
