@@ -19,11 +19,12 @@ mod literal;
 mod matcher;
 mod piece;
 mod repeat;
+mod resume;
+mod single;
 mod state;
 
 pub(crate) use self::compile::*;
 pub(crate) use self::exec::*;
 pub(crate) use self::matcher::*;
 pub use self::piece::*;
-pub(crate) use self::repeat::*;
 pub(crate) use self::state::*;
