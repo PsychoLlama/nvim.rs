@@ -124,7 +124,6 @@
     "crates/nvim/src/nvim/option/expand.rs": 11,
     "crates/nvim/src/nvim/option/info.rs": 31,
     "crates/nvim/src/nvim/option/query.rs": 22,
-    "crates/nvim/src/nvim/option/scope.rs": 5,
     "crates/nvim/src/nvim/option/set.rs": 47,
     "crates/nvim/src/nvim/option/set_cmd.rs": 25,
     "crates/nvim/src/nvim/option/show.rs": 37,

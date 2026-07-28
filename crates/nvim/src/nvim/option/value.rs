@@ -158,8 +158,7 @@ pub(crate) unsafe fn set_option_varp(
     value: OptVal,
     free_oldval: bool,
 ) {
-    // SAFETY: reading the table's declared types for the option.
-    assert!(unsafe { option_has_type(opt_idx, value.type_0) });
+    assert!(option_has_type(opt_idx, value.type_0));
     if free_oldval {
         // SAFETY: the caller's `varp` is this option's variable.
         optval_free(unsafe { optval_from_varp(opt_idx, varp) });
@@ -284,8 +283,7 @@ pub fn object_as_optval(o: Object) -> Option<OptVal> {
 ///
 /// `varp` must be the variable the table names for `opt_idx`, in some scope.
 pub(crate) unsafe fn optval_is_default(opt_idx: OptIndex, varp: *mut c_void) -> bool {
-    // SAFETY: reading the option table.
-    if unsafe { is_option_hidden(opt_idx) } {
+    if is_option_hidden(opt_idx) {
         return true;
     }
     // SAFETY: the caller's `varp` is this option's variable.

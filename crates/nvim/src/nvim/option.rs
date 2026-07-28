@@ -84,7 +84,7 @@ use crate::src::nvim::memory::{
     strequal, xcalloc, xfree, xmalloc, xmemdupz, xrealloc, xstrchrnul, xstrdup, xstrlcpy,
 };
 use crate::src::nvim::message::{
-    emsg, iemsg, message_filtered, msg, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar,
+    emsg, message_filtered, msg, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar,
     msg_puts, msg_puts_title, msg_source,
 };
 use crate::src::nvim::mouse::setmouse;
@@ -128,8 +128,8 @@ use crate::src::nvim::types::{
     Terminal, TriState, VarType, VimVarIndex, aco_save_T, auto_event, buf_T, bufref_T, colnr_T,
     dict_T, estack_T, event_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, int16_t, int32_t,
     int64_t, key_value_pair, linenr_T, object, object_data, optexpand_T, optset_T, ptrdiff_t,
-    regmatch_T, scid_T, sctx_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T, uint8_t,
-    uint32_t, uint64_t, uvarnumber_T, vimoption_T, win_T, winopt_T, xp_prefix_T,
+    regmatch_T, scid_T, sctx_T, size_t, switchwin_T, tabpage_T, typval_T, uint8_t, uint32_t,
+    uint64_t, uvarnumber_T, vimoption_T, win_T, winopt_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::undo::{bufIsChanged, curbufIsChanged, u_compute_hash, u_read_undo, u_sync};
