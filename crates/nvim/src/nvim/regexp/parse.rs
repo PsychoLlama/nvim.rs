@@ -46,13 +46,13 @@ pub(crate) unsafe extern "C" fn skip_anyof(
             }
         } else if *p as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
             && (!vim_strchr(
-                REGEXP_INRANGE.ptr() as *mut ::core::ffi::c_char,
+                REGEXP_INRANGE.as_ptr(),
                 *p.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
             )
             .is_null()
                 || reg_cpo_lit.get() == 0
                     && !vim_strchr(
-                        REGEXP_ABBR.ptr() as *mut ::core::ffi::c_char,
+                        REGEXP_ABBR.as_ptr(),
                         *p.offset(1 as ::core::ffi::c_int as isize) as uint8_t
                             as ::core::ffi::c_int,
                     )
@@ -95,10 +95,7 @@ pub unsafe extern "C" fn skip_regexp_err(
     let mut p: *mut ::core::ffi::c_char = skip_regexp(startp, delim, magic);
     if *p as ::core::ffi::c_int != delim {
         semsg(
-            gettext(
-                (e_missing_delimiter_after_search_pattern_str.ptr() as *const _)
-                    as *const ::core::ffi::c_char,
-            ),
+            gettext(E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR.as_ptr()),
             startp,
         );
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -360,7 +357,7 @@ pub(crate) unsafe extern "C" fn peekchr() -> ::core::ffi::c_int {
                 regparse.set((*regparse.ptr()).offset(-1));
                 (*after_slash.ptr()) -= 1;
                 curchr.set(toggle_Magic(curchr.get()));
-            } else if !vim_strchr(REGEXP_ABBR.ptr() as *mut ::core::ffi::c_char, c).is_null() {
+            } else if !vim_strchr(REGEXP_ABBR.as_ptr(), c).is_null() {
                 curchr.set(backslash_trans(c));
             } else if reg_magic.get() as ::core::ffi::c_uint
                 == MAGIC_NONE as ::core::ffi::c_int as ::core::ffi::c_uint

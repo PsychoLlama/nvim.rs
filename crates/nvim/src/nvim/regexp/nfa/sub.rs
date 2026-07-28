@@ -413,8 +413,7 @@ pub(crate) unsafe extern "C" fn addstate(
                     (newlen as size_t).wrapping_mul(::core::mem::size_of::<nfa_thread_T>());
                 if (newsize >> 10 as ::core::ffi::c_int) as int64_t >= p_mmp.get() {
                     emsg(gettext(
-                        (e_pattern_uses_more_memory_than_maxmempattern.ptr() as *const _)
-                            as *const ::core::ffi::c_char,
+                        E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN.as_ptr(),
                     ));
                     (*depth.ptr()) -= 1;
                     return ::core::ptr::null_mut::<regsubs_T>();
@@ -663,8 +662,7 @@ pub(crate) unsafe extern "C" fn addstate_here(
                 (newlen as size_t).wrapping_mul(::core::mem::size_of::<nfa_thread_T>());
             if (newsize >> 10 as ::core::ffi::c_int) as int64_t >= p_mmp.get() {
                 emsg(gettext(
-                    (e_pattern_uses_more_memory_than_maxmempattern.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
+                    E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN.as_ptr(),
                 ));
                 return ::core::ptr::null_mut::<regsubs_T>();
             }

@@ -28,9 +28,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                     '_collection: {
                         match c {
                             NUL => {
-                                emsg(gettext(
-                                    (e_nul_found.ptr() as *const _) as *const ::core::ffi::c_char,
-                                ));
+                                emsg(gettext(E_NUL_FOUND.as_ptr()));
                                 rc_did_emsg.set(true_0 != 0);
                                 return FAIL;
                             }
@@ -74,10 +72,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             -161 => {
                                 c = no_Magic(getchr());
                                 if c == NUL {
-                                    emsg(gettext(
-                                        (e_nul_found.ptr() as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ));
+                                    emsg(gettext(E_NUL_FOUND.as_ptr()));
                                     rc_did_emsg.set(true_0 != 0);
                                     return FAIL;
                                 }
@@ -135,20 +130,14 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             }
                             -132 | -218 | -215 => {
                                 semsg(
-                                    gettext(
-                                        (e_misplaced.ptr() as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ),
+                                    gettext(E_MISPLACED.as_ptr()),
                                     no_Magic(c) as ::core::ffi::c_char as ::core::ffi::c_int,
                                 );
                                 return FAIL;
                             }
                             -195 | -193 | -213 | -192 | -214 | -133 => {
                                 semsg(
-                                    gettext(
-                                        (e_misplaced.ptr() as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ),
+                                    gettext(E_MISPLACED.as_ptr()),
                                     no_Magic(c) as ::core::ffi::c_char as ::core::ffi::c_int,
                                 );
                                 return FAIL;
@@ -240,10 +229,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         if reg_do_extmatch.get() & REX_USE
                                             == 0 as ::core::ffi::c_int
                                         {
-                                            emsg(gettext(
-                                                (e_z1_not_allowed.ptr() as *const _)
-                                                    as *const ::core::ffi::c_char,
-                                            ));
+                                            emsg(gettext(E_Z1_NOT_ALLOWED.as_ptr()));
                                             rc_did_emsg.set(true_0 != 0);
                                             return FAIL;
                                         }
@@ -258,10 +244,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                     }
                                     40 => {
                                         if reg_do_extmatch.get() != REX_SET {
-                                            emsg(gettext(
-                                                (e_z_not_allowed.ptr() as *const _)
-                                                    as *const ::core::ffi::c_char,
-                                            ));
+                                            emsg(gettext(E_Z_NOT_ALLOWED.as_ptr()));
                                             rc_did_emsg.set(true_0 != 0);
                                             return FAIL;
                                         }
@@ -381,9 +364,8 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         {
                                             semsg(
                                                 gettext(
-                                                    (e_atom_engine_must_be_at_start_of_pattern.ptr()
-                                                        as *const _)
-                                                        as *const ::core::ffi::c_char,
+                                                    E_ATOM_ENGINE_MUST_BE_AT_START_OF_PATTERN
+                                                        .as_ptr(),
                                                 ),
                                                 *(*regparse.ptr())
                                                     .offset(1 as ::core::ffi::c_int as isize)
@@ -424,10 +406,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                             }
                                             if c == NUL {
                                                 semsg(
-                                                    gettext(
-                                                        (e_missing_sb.ptr() as *const _)
-                                                            as *const ::core::ffi::c_char,
-                                                    ),
+                                                    gettext(E_MISSING_SB.as_ptr()),
                                                     if reg_magic.get() as ::core::ffi::c_uint
                                                         == MAGIC_ALL as ::core::ffi::c_int
                                                             as ::core::ffi::c_uint
@@ -449,10 +428,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         getchr();
                                         if n == 0 as ::core::ffi::c_int {
                                             semsg(
-                                                gettext(
-                                                    (e_empty_sb.ptr() as *const _)
-                                                        as *const ::core::ffi::c_char,
-                                                ),
+                                                gettext(E_EMPTY_SB.as_ptr()),
                                                 if reg_magic.get() as ::core::ffi::c_uint
                                                     == MAGIC_ALL as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
@@ -502,10 +478,8 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                             if cur {
                                                 semsg(
                                                     gettext(
-                                                        (e_regexp_number_after_dot_pos_search_chr
-                                                            .ptr()
-                                                            as *const _)
-                                                            as *const ::core::ffi::c_char,
+                                                        E_REGEXP_NUMBER_AFTER_DOT_POS_SEARCH_CHR
+                                                            .as_ptr(),
                                                     ),
                                                     no_Magic(c),
                                                 );
@@ -516,10 +490,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                     / 10 as ::core::ffi::c_int)
                                                     as int64_t
                                             {
-                                                emsg(gettext(
-                                                    (e_value_too_large.ptr() as *const _)
-                                                        as *const ::core::ffi::c_char,
-                                                ));
+                                                emsg(gettext(E_VALUE_TOO_LARGE.as_ptr()));
                                                 return FAIL;
                                             }
                                             n_0 = n_0 * 10 as int64_t
@@ -535,9 +506,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                             if !cur && !got_digit {
                                                 semsg(
                                                     gettext(
-                                                        (e_nfa_regexp_missing_value_in_chr.ptr()
-                                                            as *const _)
-                                                            as *const ::core::ffi::c_char,
+                                                        E_NFA_REGEXP_MISSING_VALUE_IN_CHR.as_ptr(),
                                                     ),
                                                     no_Magic(c),
                                                 );
@@ -612,10 +581,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                                     as int32_t;
                                             }
                                             if n_0 >= limit as int64_t {
-                                                emsg(gettext(
-                                                    (e_value_too_large.ptr() as *const _)
-                                                        as *const ::core::ffi::c_char,
-                                                ));
+                                                emsg(gettext(E_VALUE_TOO_LARGE.as_ptr()));
                                                 return FAIL;
                                             }
                                             if post_ptr.get() >= post_end.get() {
@@ -671,13 +637,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                             as *mut uint8_t;
                         if p.is_null() {
                             if extra == NFA_ADD_NL {
-                                semsg(
-                                    gettext(
-                                        (e_ill_char_class.ptr() as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ),
-                                    c as int64_t,
-                                );
+                                semsg(gettext(E_ILL_CHAR_CLASS.as_ptr()), c as int64_t);
                                 rc_did_emsg.set(true_0 != 0);
                                 return FAIL;
                             }
@@ -1013,7 +973,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         .offset(1 as ::core::ffi::c_int as isize)
                                         <= endp
                                     && (!vim_strchr(
-                                        REGEXP_INRANGE.ptr() as *mut ::core::ffi::c_char,
+                                        REGEXP_INRANGE.as_ptr(),
                                         *(*regparse.ptr()).offset(1 as ::core::ffi::c_int as isize)
                                             as uint8_t
                                             as ::core::ffi::c_int,
@@ -1021,7 +981,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                     .is_null()
                                         || reg_cpo_lit.get() == 0
                                             && !vim_strchr(
-                                                REGEXP_ABBR.ptr() as *mut ::core::ffi::c_char,
+                                                REGEXP_ABBR.as_ptr(),
                                                 *(*regparse.ptr())
                                                     .offset(1 as ::core::ffi::c_int as isize)
                                                     as uint8_t
@@ -1060,10 +1020,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                     {
                                         startc = coll_get_char();
                                         if startc == INT_MAX {
-                                            emsg(gettext(
-                                                (e_unicode_val_too_large.ptr() as *const _)
-                                                    as *const ::core::ffi::c_char,
-                                            ));
+                                            emsg(gettext(E_UNICODE_VAL_TOO_LARGE.as_ptr()));
                                             rc_did_emsg.set(true_0 != 0);
                                             return FAIL;
                                         }
@@ -1092,10 +1049,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                     range_endpoint = true_0 != 0;
                                     startc = oldstartc;
                                     if startc > endc {
-                                        emsg(gettext(
-                                            (e_reverse_range.ptr() as *const _)
-                                                as *const ::core::ffi::c_char,
-                                        ));
+                                        emsg(gettext(E_REVERSE_RANGE.as_ptr()));
                                         rc_did_emsg.set(true_0 != 0);
                                         return FAIL;
                                     }
@@ -1314,9 +1268,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                         return OK;
                     }
                     if reg_strict.get() != 0 {
-                        emsg(gettext(
-                            (e_missingbracket.ptr() as *const _) as *const ::core::ffi::c_char,
-                        ));
+                        emsg(gettext(E_MISSINGBRACKET.as_ptr()));
                         rc_did_emsg.set(true_0 != 0);
                         return FAIL;
                     }

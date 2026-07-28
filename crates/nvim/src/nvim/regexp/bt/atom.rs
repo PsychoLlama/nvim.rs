@@ -75,10 +75,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                         -216 => {
                             if one_exactly.get() != 0 {
                                 semsg(
-                                    gettext(
-                                        (e_invalid_item_in_str_brackets.ptr() as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ),
+                                    gettext(E_INVALID_ITEM_IN_STR_BRACKETS.as_ptr()),
                                     if reg_magic.get() as ::core::ffi::c_uint
                                         == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                                     {
@@ -100,10 +97,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                         NUL | -132 | -218 | -215 => {
                             if one_exactly.get() != 0 {
                                 semsg(
-                                    gettext(
-                                        (e_invalid_item_in_str_brackets.ptr() as *const _)
-                                            as *const ::core::ffi::c_char,
-                                    ),
+                                    gettext(E_INVALID_ITEM_IN_STR_BRACKETS.as_ptr()),
                                     if reg_magic.get() as ::core::ffi::c_uint
                                         == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                                     {
@@ -185,19 +179,13 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                             match c {
                                 40 => {
                                     if reg_do_extmatch.get() & REX_SET == 0 as ::core::ffi::c_int {
-                                        emsg(gettext(
-                                            (e_z_not_allowed.ptr() as *const _)
-                                                as *const ::core::ffi::c_char,
-                                        ));
+                                        emsg(gettext(E_Z_NOT_ALLOWED.as_ptr()));
                                         rc_did_emsg.set(true_0 != 0);
                                         return NULL_0 as *mut uint8_t;
                                     }
                                     if one_exactly.get() != 0 {
                                         semsg(
-                                            gettext(
-                                                (e_invalid_item_in_str_brackets.ptr() as *const _)
-                                                    as *const ::core::ffi::c_char,
-                                            ),
+                                            gettext(E_INVALID_ITEM_IN_STR_BRACKETS.as_ptr()),
                                             if reg_magic.get() as ::core::ffi::c_uint
                                                 == MAGIC_ALL as ::core::ffi::c_int
                                                     as ::core::ffi::c_uint
@@ -219,10 +207,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                 }
                                 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 => {
                                     if reg_do_extmatch.get() & REX_USE == 0 as ::core::ffi::c_int {
-                                        emsg(gettext(
-                                            (e_z1_not_allowed.ptr() as *const _)
-                                                as *const ::core::ffi::c_char,
-                                        ));
+                                        emsg(gettext(E_Z1_NOT_ALLOWED.as_ptr()));
                                         rc_did_emsg.set(true_0 != 0);
                                         return NULL_0 as *mut uint8_t;
                                     }
@@ -263,11 +248,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                     40 => {
                                         if one_exactly.get() != 0 {
                                             semsg(
-                                                gettext(
-                                                    (e_invalid_item_in_str_brackets.ptr()
-                                                        as *const _)
-                                                        as *const ::core::ffi::c_char,
-                                                ),
+                                                gettext(E_INVALID_ITEM_IN_STR_BRACKETS.as_ptr()),
                                                 if reg_magic.get() as ::core::ffi::c_uint
                                                     == MAGIC_ALL as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
@@ -308,9 +289,8 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                         {
                                             semsg(
                                                 gettext(
-                                                    (e_atom_engine_must_be_at_start_of_pattern.ptr()
-                                                        as *const _)
-                                                        as *const ::core::ffi::c_char,
+                                                    E_ATOM_ENGINE_MUST_BE_AT_START_OF_PATTERN
+                                                        .as_ptr(),
                                                 ),
                                                 *(*regparse.ptr())
                                                     .offset(1 as ::core::ffi::c_int as isize)
@@ -329,11 +309,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                     91 => {
                                         if one_exactly.get() != 0 {
                                             semsg(
-                                                gettext(
-                                                    (e_invalid_item_in_str_brackets.ptr()
-                                                        as *const _)
-                                                        as *const ::core::ffi::c_char,
-                                                ),
+                                                gettext(E_INVALID_ITEM_IN_STR_BRACKETS.as_ptr()),
                                                 if reg_magic.get() as ::core::ffi::c_uint
                                                     == MAGIC_ALL as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
@@ -360,10 +336,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                             }
                                             if c == NUL {
                                                 semsg(
-                                                    gettext(
-                                                        (e_missing_sb.ptr() as *const _)
-                                                            as *const ::core::ffi::c_char,
-                                                    ),
+                                                    gettext(E_MISSING_SB.as_ptr()),
                                                     if reg_magic.get() as ::core::ffi::c_uint
                                                         == MAGIC_ALL as ::core::ffi::c_int
                                                             as ::core::ffi::c_uint
@@ -396,10 +369,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                         }
                                         if ret.is_null() {
                                             semsg(
-                                                gettext(
-                                                    (e_empty_sb.ptr() as *const _)
-                                                        as *const ::core::ffi::c_char,
-                                                ),
+                                                gettext(E_EMPTY_SB.as_ptr()),
                                                 if reg_magic.get() as ::core::ffi::c_uint
                                                     == MAGIC_ALL as ::core::ffi::c_int
                                                         as ::core::ffi::c_uint
@@ -540,8 +510,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                                 if cur as ::core::ffi::c_int != 0 && n != 0 {
                                                     semsg(
                                                         gettext(
-                                                            (e_regexp_number_after_dot_pos_search_chr.ptr() as *const _)
-                                                                as *const ::core::ffi::c_char,
+                                                            E_REGEXP_NUMBER_AFTER_DOT_POS_SEARCH_CHR.as_ptr(),
                                                         ),
                                                         no_Magic(c),
                                                     );
@@ -671,10 +640,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                         endc = coll_get_char();
                                     }
                                     if startc > endc {
-                                        emsg(gettext(
-                                            (e_reverse_range.ptr() as *const _)
-                                                as *const ::core::ffi::c_char,
-                                        ));
+                                        emsg(gettext(E_REVERSE_RANGE.as_ptr()));
                                         rc_did_emsg.set(true_0 != 0);
                                         return NULL_0 as *mut uint8_t;
                                     }
@@ -682,10 +648,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                         || utf_char2len(endc) > 1 as ::core::ffi::c_int
                                     {
                                         if endc > startc + 256 as ::core::ffi::c_int {
-                                            emsg(gettext(
-                                                (e_large_class.ptr() as *const _)
-                                                    as *const ::core::ffi::c_char,
-                                            ));
+                                            emsg(gettext(E_LARGE_CLASS.as_ptr()));
                                             rc_did_emsg.set(true_0 != 0);
                                             return NULL_0 as *mut uint8_t;
                                         }
@@ -710,7 +673,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                             } else if *regparse.get() as ::core::ffi::c_int
                                 == '\\' as ::core::ffi::c_int
                                 && (!vim_strchr(
-                                    REGEXP_INRANGE.ptr() as *mut ::core::ffi::c_char,
+                                    REGEXP_INRANGE.as_ptr(),
                                     *(*regparse.ptr()).offset(1 as ::core::ffi::c_int as isize)
                                         as uint8_t
                                         as ::core::ffi::c_int,
@@ -718,7 +681,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                 .is_null()
                                     || reg_cpo_lit.get() == 0
                                         && !vim_strchr(
-                                            REGEXP_ABBR.ptr() as *mut ::core::ffi::c_char,
+                                            REGEXP_ABBR.as_ptr(),
                                             *(*regparse.ptr())
                                                 .offset(1 as ::core::ffi::c_int as isize)
                                                 as uint8_t
@@ -751,10 +714,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                 {
                                     startc = coll_get_char();
                                     if startc == INT_MAX {
-                                        emsg(gettext(
-                                            (e_unicode_val_too_large.ptr() as *const _)
-                                                as *const ::core::ffi::c_char,
-                                        ));
+                                        emsg(gettext(E_UNICODE_VAL_TOO_LARGE.as_ptr()));
                                         rc_did_emsg.set(true_0 != 0);
                                         return NULL_0 as *mut uint8_t;
                                     }
@@ -1001,10 +961,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                     } else {
                         if reg_strict.get() != 0 {
                             semsg(
-                                gettext(
-                                    (e_missingbracket.ptr() as *const _)
-                                        as *const ::core::ffi::c_char,
-                                ),
+                                gettext(E_MISSINGBRACKET.as_ptr()),
                                 if reg_magic.get() as ::core::ffi::c_uint
                                     > MAGIC_OFF as ::core::ffi::c_int as ::core::ffi::c_uint
                                 {
@@ -1022,10 +979,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                 p = vim_strchr(classchars.get() as *mut ::core::ffi::c_char, no_Magic(c))
                     as *mut uint8_t;
                 if p.is_null() {
-                    emsg(gettext(
-                        (e_invalid_use_of_underscore.ptr() as *const _)
-                            as *const ::core::ffi::c_char,
-                    ));
+                    emsg(gettext(E_INVALID_USE_OF_UNDERSCORE.as_ptr()));
                     rc_did_emsg.set(true_0 != 0);
                     return NULL_0 as *mut uint8_t;
                 }

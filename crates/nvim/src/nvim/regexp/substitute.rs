@@ -261,9 +261,7 @@ pub(crate) unsafe extern "C" fn vim_regsub_both(
         return 0 as ::core::ffi::c_int;
     }
     if nesting.get() == MAX_REGSUB_NESTING {
-        emsg(gettext(
-            (e_substitute_nesting_too_deep.ptr() as *const _) as *const ::core::ffi::c_char,
-        ));
+        emsg(gettext(E_SUBSTITUTE_NESTING_TOO_DEEP.as_ptr()));
         return 0 as ::core::ffi::c_int;
     }
     let mut nested: ::core::ffi::c_int = nesting.get();

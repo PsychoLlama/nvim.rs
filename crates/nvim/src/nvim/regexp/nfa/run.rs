@@ -137,10 +137,7 @@ pub(crate) unsafe extern "C" fn check_char_class(
             }
         }
         _ => {
-            siemsg(
-                gettext((e_ill_char_class.ptr() as *const _) as *const ::core::ffi::c_char),
-                cls as int64_t,
-            );
+            siemsg(gettext(E_ILL_CHAR_CLASS.as_ptr()), cls as int64_t);
             return FAIL;
         }
     }

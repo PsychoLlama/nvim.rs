@@ -417,7 +417,7 @@ pub(crate) unsafe extern "C" fn nfa_reg(mut paren: ::core::ffi::c_int) -> ::core
     if paren != REG_NOPAREN && getchr() != ')' as ::core::ffi::c_int - 256 as ::core::ffi::c_int {
         if paren == REG_NPAREN {
             semsg(
-                gettext((e_unmatchedpp.ptr() as *const _) as *const ::core::ffi::c_char),
+                gettext(E_UNMATCHEDPP.as_ptr()),
                 if reg_magic.get() as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
@@ -430,7 +430,7 @@ pub(crate) unsafe extern "C" fn nfa_reg(mut paren: ::core::ffi::c_int) -> ::core
             return FAIL;
         } else {
             semsg(
-                gettext((e_unmatchedp.ptr() as *const _) as *const ::core::ffi::c_char),
+                gettext(E_UNMATCHEDP.as_ptr()),
                 if reg_magic.get() as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
@@ -445,7 +445,7 @@ pub(crate) unsafe extern "C" fn nfa_reg(mut paren: ::core::ffi::c_int) -> ::core
     } else if paren == REG_NOPAREN && peekchr() != NUL {
         if peekchr() == ')' as ::core::ffi::c_int - 256 as ::core::ffi::c_int {
             semsg(
-                gettext((e_unmatchedpar.ptr() as *const _) as *const ::core::ffi::c_char),
+                gettext(E_UNMATCHEDPAR.as_ptr()),
                 if reg_magic.get() as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {

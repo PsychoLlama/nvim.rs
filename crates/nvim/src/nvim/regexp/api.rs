@@ -135,9 +135,7 @@ pub(crate) unsafe extern "C" fn vim_regexec_string(
     };
     let mut rex_in_use_save: bool = rex_in_use.get();
     if (*(*rmp).regprog).re_in_use {
-        emsg(gettext(
-            (e_recursive.ptr() as *const _) as *const ::core::ffi::c_char,
-        ));
+        emsg(gettext(E_RECURSIVE.as_ptr()));
         return false_0 != 0;
     }
     (*(*rmp).regprog).re_in_use = true_0 != 0;
@@ -257,9 +255,7 @@ pub unsafe extern "C" fn vim_regexec_multi(
     };
     let mut rex_in_use_save: bool = rex_in_use.get();
     if (*(*rmp).regprog).re_in_use {
-        emsg(gettext(
-            (e_recursive.ptr() as *const _) as *const ::core::ffi::c_char,
-        ));
+        emsg(gettext(E_RECURSIVE.as_ptr()));
         return false_0;
     }
     (*(*rmp).regprog).re_in_use = true_0 != 0;

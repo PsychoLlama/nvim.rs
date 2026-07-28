@@ -675,104 +675,33 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 };
 pub const REGMAGIC: ::core::ffi::c_int = 0o234 as ::core::ffi::c_int;
 pub const MAX_LIMIT: ::core::ffi::c_int = (32767 as ::core::ffi::c_int) << 16 as ::core::ffi::c_int;
-static e_invalid_character_after_str_at: GlobalCell<[::core::ffi::c_char; 33]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 33], [::core::ffi::c_char; 33]>(
-            *b"E59: Invalid character after %s@\0",
-        )
-    });
-static e_invalid_use_of_underscore: GlobalCell<[::core::ffi::c_char; 23]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 23], [::core::ffi::c_char; 23]>(*b"E63: Invalid use of \\_\0")
-    });
-static e_pattern_uses_more_memory_than_maxmempattern: GlobalCell<[::core::ffi::c_char; 52]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 52], [::core::ffi::c_char; 52]>(
-            *b"E363: Pattern uses more memory than 'maxmempattern'\0",
-        )
-    });
-static e_invalid_item_in_str_brackets: GlobalCell<[::core::ffi::c_char; 29]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
-            *b"E369: Invalid item in %s%%[]\0",
-        )
-    });
-static e_missing_delimiter_after_search_pattern_str: GlobalCell<[::core::ffi::c_char; 49]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-            *b"E654: Missing delimiter after search pattern: %s\0",
-        )
-    });
-static e_missingbracket: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E769: Missing ] after %s[\0")
-});
-static e_reverse_range: GlobalCell<[::core::ffi::c_char; 39]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 39], [::core::ffi::c_char; 39]>(
-        *b"E944: Reverse range in character class\0",
-    )
-});
-static e_large_class: GlobalCell<[::core::ffi::c_char; 41]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 41], [::core::ffi::c_char; 41]>(
-        *b"E945: Range too large in character class\0",
-    )
-});
-static e_unmatchedpp: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E53: Unmatched %s%%(\0")
-});
-static e_unmatchedp: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E54: Unmatched %s(\0")
-});
-static e_unmatchedpar: GlobalCell<[::core::ffi::c_char; 19]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 19], [::core::ffi::c_char; 19]>(*b"E55: Unmatched %s)\0")
-});
-static e_z_not_allowed: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E66: \\z( not allowed here\0")
-});
-static e_z1_not_allowed: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
-        *b"E67: \\z1 - \\z9 not allowed here\0",
-    )
-});
-static e_missing_sb: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E69: Missing ] after %s%%[\0")
-});
-static e_empty_sb: GlobalCell<[::core::ffi::c_char; 18]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 18], [::core::ffi::c_char; 18]>(*b"E70: Empty %s%%[]\0")
-});
-static e_recursive: GlobalCell<[::core::ffi::c_char; 37]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 37], [::core::ffi::c_char; 37]>(
-        *b"E956: Cannot use pattern recursively\0",
-    )
-});
-static e_regexp_number_after_dot_pos_search_chr: GlobalCell<[::core::ffi::c_char; 42]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 42], [::core::ffi::c_char; 42]>(
-            *b"E1204: No Number allowed after .: '\\%%%c'\0",
-        )
-    });
-static e_nfa_regexp_missing_value_in_chr: GlobalCell<[::core::ffi::c_char; 45]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
-            *b"E1273: (NFA regexp) missing value in '\\%%%c'\0",
-        )
-    });
-static e_atom_engine_must_be_at_start_of_pattern: GlobalCell<[::core::ffi::c_char; 58]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 58], [::core::ffi::c_char; 58]>(
-            *b"E1281: Atom '\\%%#=%c' must be at the start of the pattern\0",
-        )
-    });
-static e_substitute_nesting_too_deep: GlobalCell<[::core::ffi::c_char; 35]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
-            *b"E1290: substitute nesting too deep\0",
-        )
-    });
-static e_unicode_val_too_large: GlobalCell<[::core::ffi::c_char; 58]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 58], [::core::ffi::c_char; 58]>(
-        *b"E1541: Value too large, max Unicode codepoint is U+10FFFF\0",
-    )
-});
+const E_INVALID_CHARACTER_AFTER_STR_AT: &::core::ffi::CStr = c"E59: Invalid character after %s@";
+const E_INVALID_USE_OF_UNDERSCORE: &::core::ffi::CStr = c"E63: Invalid use of \\_";
+const E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN: &::core::ffi::CStr =
+    c"E363: Pattern uses more memory than 'maxmempattern'";
+const E_INVALID_ITEM_IN_STR_BRACKETS: &::core::ffi::CStr = c"E369: Invalid item in %s%%[]";
+const E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR: &::core::ffi::CStr =
+    c"E654: Missing delimiter after search pattern: %s";
+const E_MISSINGBRACKET: &::core::ffi::CStr = c"E769: Missing ] after %s[";
+const E_REVERSE_RANGE: &::core::ffi::CStr = c"E944: Reverse range in character class";
+const E_LARGE_CLASS: &::core::ffi::CStr = c"E945: Range too large in character class";
+const E_UNMATCHEDPP: &::core::ffi::CStr = c"E53: Unmatched %s%%(";
+const E_UNMATCHEDP: &::core::ffi::CStr = c"E54: Unmatched %s(";
+const E_UNMATCHEDPAR: &::core::ffi::CStr = c"E55: Unmatched %s)";
+const E_Z_NOT_ALLOWED: &::core::ffi::CStr = c"E66: \\z( not allowed here";
+const E_Z1_NOT_ALLOWED: &::core::ffi::CStr = c"E67: \\z1 - \\z9 not allowed here";
+const E_MISSING_SB: &::core::ffi::CStr = c"E69: Missing ] after %s%%[";
+const E_EMPTY_SB: &::core::ffi::CStr = c"E70: Empty %s%%[]";
+const E_RECURSIVE: &::core::ffi::CStr = c"E956: Cannot use pattern recursively";
+const E_REGEXP_NUMBER_AFTER_DOT_POS_SEARCH_CHR: &::core::ffi::CStr =
+    c"E1204: No Number allowed after .: '\\%%%c'";
+const E_NFA_REGEXP_MISSING_VALUE_IN_CHR: &::core::ffi::CStr =
+    c"E1273: (NFA regexp) missing value in '\\%%%c'";
+const E_ATOM_ENGINE_MUST_BE_AT_START_OF_PATTERN: &::core::ffi::CStr =
+    c"E1281: Atom '\\%%#=%c' must be at the start of the pattern";
+const E_SUBSTITUTE_NESTING_TOO_DEEP: &::core::ffi::CStr = c"E1290: substitute nesting too deep";
+const E_UNICODE_VAL_TOO_LARGE: &::core::ffi::CStr =
+    c"E1541: Value too large, max Unicode codepoint is U+10FFFF";
 pub const NOT_MULTI: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const MULTI_ONE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const MULTI_MULT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -784,12 +713,8 @@ pub const RA_NOMATCH: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 static reg_prev_sub: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static reg_prev_sublen: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-static REGEXP_INRANGE: GlobalCell<[::core::ffi::c_char; 6]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"]^-n\\\0")
-});
-static REGEXP_ABBR: GlobalCell<[::core::ffi::c_char; 11]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"nrtebdoxuU\0")
-});
+const REGEXP_INRANGE: &::core::ffi::CStr = c"]^-n\\";
+const REGEXP_ABBR: &::core::ffi::CStr = c"nrtebdoxuU";
 static class_tab: GlobalCell<[int16_t; 256]> = GlobalCell::new([0; 256]);
 pub const RI_DIGIT: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const RI_HEX: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
@@ -1387,24 +1312,10 @@ static nfa_classcodes: GlobalCell<[::core::ffi::c_int; 27]> = GlobalCell::new([
     NFA_UPPER as ::core::ffi::c_int,
     NFA_NUPPER as ::core::ffi::c_int,
 ]);
-static e_nul_found: GlobalCell<[::core::ffi::c_char; 47]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 47], [::core::ffi::c_char; 47]>(
-        *b"E865: (NFA) Regexp end encountered prematurely\0",
-    )
-});
-static e_misplaced: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
-        *b"E866: (NFA regexp) Misplaced %c\0",
-    )
-});
-static e_ill_char_class: GlobalCell<[::core::ffi::c_char; 48]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 48], [::core::ffi::c_char; 48]>(
-        *b"E877: (NFA regexp) Invalid character class: %ld\0",
-    )
-});
-static e_value_too_large: GlobalCell<[::core::ffi::c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"E951: \\% value too large\0")
-});
+const E_NUL_FOUND: &::core::ffi::CStr = c"E865: (NFA) Regexp end encountered prematurely";
+const E_MISPLACED: &::core::ffi::CStr = c"E866: (NFA regexp) Misplaced %c";
+const E_ILL_CHAR_CLASS: &::core::ffi::CStr = c"E877: (NFA regexp) Invalid character class: %ld";
+const E_VALUE_TOO_LARGE: &::core::ffi::CStr = c"E951: \\% value too large";
 static nfa_re_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static post_start: GlobalCell<*mut ::core::ffi::c_int> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_int>());
@@ -1498,58 +1409,16 @@ static nfa_timed_out: GlobalCell<*mut ::core::ffi::c_int> =
 static nfa_time_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const ADDSTATE_HERE_OFFSET: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 static bt_regengine: GlobalCell<regengine_T> = GlobalCell::new(regengine {
-    regcomp: Some(
-        bt_regcomp as unsafe extern "C" fn(*mut uint8_t, ::core::ffi::c_int) -> *mut regprog_T,
-    ),
-    regfree: Some(bt_regfree as unsafe extern "C" fn(*mut regprog_T) -> ()),
-    regexec_nl: Some(
-        bt_regexec_nl
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                *mut uint8_t,
-                colnr_T,
-                bool,
-            ) -> ::core::ffi::c_int,
-    ),
-    regexec_multi: Some(
-        bt_regexec_multi
-            as unsafe extern "C" fn(
-                *mut regmmatch_T,
-                *mut win_T,
-                *mut buf_T,
-                linenr_T,
-                colnr_T,
-                *mut proftime_T,
-                *mut ::core::ffi::c_int,
-            ) -> ::core::ffi::c_int,
-    ),
+    regcomp: Some(bt_regcomp),
+    regfree: Some(bt_regfree),
+    regexec_nl: Some(bt_regexec_nl),
+    regexec_multi: Some(bt_regexec_multi),
 });
 static nfa_regengine: GlobalCell<regengine_T> = GlobalCell::new(regengine {
-    regcomp: Some(
-        nfa_regcomp as unsafe extern "C" fn(*mut uint8_t, ::core::ffi::c_int) -> *mut regprog_T,
-    ),
-    regfree: Some(nfa_regfree as unsafe extern "C" fn(*mut regprog_T) -> ()),
-    regexec_nl: Some(
-        nfa_regexec_nl
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                *mut uint8_t,
-                colnr_T,
-                bool,
-            ) -> ::core::ffi::c_int,
-    ),
-    regexec_multi: Some(
-        nfa_regexec_multi
-            as unsafe extern "C" fn(
-                *mut regmmatch_T,
-                *mut win_T,
-                *mut buf_T,
-                linenr_T,
-                colnr_T,
-                *mut proftime_T,
-                *mut ::core::ffi::c_int,
-            ) -> ::core::ffi::c_int,
-    ),
+    regcomp: Some(nfa_regcomp),
+    regfree: Some(nfa_regfree),
+    regexec_nl: Some(nfa_regexec_nl),
+    regexec_multi: Some(nfa_regexec_multi),
 });
 static regexp_engine: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

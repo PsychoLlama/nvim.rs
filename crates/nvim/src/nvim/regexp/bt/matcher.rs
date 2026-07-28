@@ -1260,9 +1260,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                                         >= p_mmp.get()
                                     {
                                         emsg(gettext(
-                                            (e_pattern_uses_more_memory_than_maxmempattern.ptr()
-                                                as *const _)
-                                                as *const ::core::ffi::c_char,
+                                            E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN.as_ptr(),
                                         ));
                                         status = RA_FAIL;
                                     } else {
@@ -1312,9 +1310,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                                     >= p_mmp.get()
                                 {
                                     emsg(gettext(
-                                        (e_pattern_uses_more_memory_than_maxmempattern.ptr()
-                                            as *const _)
-                                            as *const ::core::ffi::c_char,
+                                        E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN.as_ptr(),
                                     ));
                                     status = RA_FAIL;
                                 } else {

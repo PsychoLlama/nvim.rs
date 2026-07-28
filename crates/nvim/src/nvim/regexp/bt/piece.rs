@@ -74,10 +74,7 @@ pub(crate) unsafe extern "C" fn regpiece(mut flagp: *mut ::core::ffi::c_int) -> 
             }
             if lop == END {
                 semsg(
-                    gettext(
-                        (e_invalid_character_after_str_at.ptr() as *const _)
-                            as *const ::core::ffi::c_char,
-                    ),
+                    gettext(E_INVALID_CHARACTER_AFTER_STR_AT.as_ptr()),
                     if reg_magic.get() as ::core::ffi::c_uint
                         == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
@@ -366,7 +363,7 @@ pub(crate) unsafe extern "C" fn reg(
             return NULL_0 as *mut uint8_t;
         } else if paren == REG_NPAREN {
             semsg(
-                gettext((e_unmatchedpp.ptr() as *const _) as *const ::core::ffi::c_char),
+                gettext(E_UNMATCHEDPP.as_ptr()),
                 if reg_magic.get() as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
@@ -379,7 +376,7 @@ pub(crate) unsafe extern "C" fn reg(
             return NULL_0 as *mut uint8_t;
         } else {
             semsg(
-                gettext((e_unmatchedp.ptr() as *const _) as *const ::core::ffi::c_char),
+                gettext(E_UNMATCHEDP.as_ptr()),
                 if reg_magic.get() as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
@@ -394,7 +391,7 @@ pub(crate) unsafe extern "C" fn reg(
     } else if paren == REG_NOPAREN && peekchr() != NUL {
         if curchr.get() == ')' as ::core::ffi::c_int - 256 as ::core::ffi::c_int {
             semsg(
-                gettext((e_unmatchedpar.ptr() as *const _) as *const ::core::ffi::c_char),
+                gettext(E_UNMATCHEDPAR.as_ptr()),
                 if reg_magic.get() as ::core::ffi::c_uint
                     == MAGIC_ALL as ::core::ffi::c_int as ::core::ffi::c_uint
                 {

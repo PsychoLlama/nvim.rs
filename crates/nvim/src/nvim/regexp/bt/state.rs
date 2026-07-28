@@ -52,8 +52,7 @@ pub(crate) unsafe extern "C" fn regstack_push(
         >= p_mmp.get()
     {
         emsg(gettext(
-            (e_pattern_uses_more_memory_than_maxmempattern.ptr() as *const _)
-                as *const ::core::ffi::c_char,
+            E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN.as_ptr(),
         ));
         return ::core::ptr::null_mut::<regitem_T>();
     }
