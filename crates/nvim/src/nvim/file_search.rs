@@ -2550,7 +2550,7 @@ unsafe extern "C" fn eval_includeexpr(
             curwin.get(),
             kOptIncludeexpr,
             OPT_LOCAL as ::core::ffi::c_int,
-        ) != 0,
+        ),
         true_0 != 0,
     );
     set_vim_var_string(

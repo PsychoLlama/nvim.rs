@@ -27,7 +27,7 @@ pub unsafe extern "C" fn get_expr_indent() -> ::core::ffi::c_int {
         curwin.get(),
         kOptIndentexpr,
         OPT_LOCAL as ::core::ffi::c_int,
-    ) != 0;
+    );
     let save_sctx: sctx_T = current_sctx.get();
     let mut save_pos: pos_T = (*curwin.get()).w_cursor;
     let mut save_curswant: colnr_T = (*curwin.get()).w_curswant;

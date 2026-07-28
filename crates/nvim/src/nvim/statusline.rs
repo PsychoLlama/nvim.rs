@@ -1724,11 +1724,8 @@ pub unsafe extern "C" fn build_stl_str_hl(
             ::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(stl_items_len.get()),
         ) as *mut ::core::ffi::c_int);
     }
-    let use_sandbox: bool = if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
-        was_set_insecurely(wp, opt_idx, opt_scope)
-    } else {
-        false_0
-    } != 0;
+    let use_sandbox: bool = opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
+        && was_set_insecurely(wp, opt_idx, opt_scope);
     if *fmt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == '%' as ::core::ffi::c_int
         && *fmt.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int

@@ -1223,7 +1223,7 @@ pub unsafe extern "C" fn fex_format(
         curwin.get(),
         kOptFormatexpr,
         OPT_LOCAL as ::core::ffi::c_int,
-    ) != 0;
+    );
     let save_sctx: sctx_T = current_sctx.get();
     set_vim_var_nr(VV_LNUM, lnum as varnumber_T);
     set_vim_var_nr(VV_COUNT, count as varnumber_T);

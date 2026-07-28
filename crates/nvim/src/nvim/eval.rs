@@ -2349,8 +2349,7 @@ pub unsafe extern "C" fn eval_foldexpr(
     mut cp: *mut ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     let saved_sctx: sctx_T = current_sctx.get();
-    let use_sandbox: bool =
-        was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL as ::core::ffi::c_int) != 0;
+    let use_sandbox: bool = was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL as ::core::ffi::c_int);
     let mut arg: *mut ::core::ffi::c_char = skipwhite((*wp).w_onebuf_opt.wo_fde);
     current_sctx
         .set((*wp).w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as ::core::ffi::c_int as usize]);
@@ -2408,8 +2407,7 @@ pub unsafe extern "C" fn eval_foldexpr(
     return retval as ::core::ffi::c_int;
 }
 pub unsafe extern "C" fn eval_foldtext(mut wp: *mut win_T) -> Object {
-    let use_sandbox: bool =
-        was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL as ::core::ffi::c_int) != 0;
+    let use_sandbox: bool = was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL as ::core::ffi::c_int);
     let mut arg: *mut ::core::ffi::c_char = (*wp).w_onebuf_opt.wo_fdt;
     let mut funccal_entry: funccal_entry_T = funccal_entry_T {
         top_funccal: ::core::ptr::null_mut::<::core::ffi::c_void>(),

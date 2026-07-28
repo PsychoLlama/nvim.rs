@@ -6,7 +6,6 @@
 //! Everything an option *is* — its name, type, scopes, flags, variable and
 //! default — lives in the generated [`crate::src::nvim::options`] table.
 
-use crate::src::nvim::api::extmark::nvim_create_namespace;
 use crate::src::nvim::api::private::helpers::{
     api_set_error, arena_dict, cstr_as_string, cstr_to_string,
 };
@@ -15,19 +14,18 @@ use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, do_filetype_autocmd,
 };
-use crate::src::nvim::buffer::{buf_is_empty, do_autochdir, free_buf_options, maketitle};
+use crate::src::nvim::buffer::{buf_is_empty, do_autochdir, free_buf_options};
 use crate::src::nvim::change::save_file_ff;
 use crate::src::nvim::charset::{
-    buf_init_chartab, init_chartab, skiptowhite_esc, skipwhite, trans_characters, transchar,
-    vim_str2nr, vim_strsize,
+    buf_init_chartab, skiptowhite_esc, skipwhite, trans_characters, transchar, vim_str2nr,
+    vim_strsize,
 };
 use crate::src::nvim::cmdexpand::cmdline_fuzzy_complete;
 use crate::src::nvim::cursor_shape::parse_shape_opt;
-use crate::src::nvim::decoration_provider::get_decor_provider;
 use crate::src::nvim::diff::diff_buf_adjust;
 use crate::src::nvim::drawscreen::{
-    check_screensize, comp_col, redraw_all_later, redraw_buf_later, redraw_later, screen_resize,
-    showmode, status_redraw_all, status_redraw_curbuf,
+    check_screensize, comp_col, redraw_all_later, screen_resize, showmode, status_redraw_all,
+    status_redraw_curbuf,
 };
 use crate::src::nvim::eval::vars::{
     get_vim_var_str, optval_as_tv, reset_v_option_vars, set_vim_var_string, set_vim_var_tv,
@@ -35,7 +33,7 @@ use crate::src::nvim::eval::vars::{
 use crate::src::nvim::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::src::nvim::eval_1::last_set_msg;
 use crate::src::nvim::ex_docmd::set_no_hlsearch;
-use crate::src::nvim::ex_getln::{check_opt_wim, did_set_cedit, gotocmdline};
+use crate::src::nvim::ex_getln::gotocmdline;
 use crate::src::nvim::ex_session::{put_eol, put_line};
 use crate::src::nvim::fold::{
     foldUpdateAll, foldmethodIsDiff, foldmethodIsIndent, foldmethodIsSyntax, newFoldLevel,
@@ -43,8 +41,7 @@ use crate::src::nvim::fold::{
 use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
 use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::highlight::{hl_invalidate_blends, ns_hl_def};
-use crate::src::nvim::highlight_group::{highlight_changed, syn_check_group};
+use crate::src::nvim::highlight::hl_invalidate_blends;
 use crate::src::nvim::indent::{briopt_check, tabstop_set};
 use crate::src::nvim::indent_c::parse_cino;
 use crate::src::nvim::insexpand::{
@@ -69,16 +66,13 @@ use crate::src::nvim::main::{
     p_sj, p_sm, p_smc, p_spc, p_spf, p_spl, p_spo, p_sps, p_sta, p_sts, p_sua, p_sw, p_swf, p_syn,
     p_tags, p_tbidi, p_tfu, p_title, p_titlelen, p_ts, p_tw, p_uc, p_udf, p_ul, p_vdir, p_verbose,
     p_vsts, p_vts, p_wbr, p_wc, p_wcm, p_wh, p_window, p_wiw, p_wm, p_wmh, p_wmw, readonlymode,
-    redraw_tabline, sandbox, secure, silent_mode, spo_flags, starting, t_colors, topframe,
-    updating_screen,
+    sandbox, secure, silent_mode, spo_flags, starting, t_colors, topframe, updating_screen,
 };
 use crate::src::nvim::mapping::{langmap_init, put_escstr};
 use crate::src::nvim::mbyte::{enc_locale, utfc_ptr2len};
 use crate::src::nvim::memfile::mf_close_file;
 use crate::src::nvim::memline::{ml_open_file, ml_open_files};
-use crate::src::nvim::memory::{
-    strequal, xfree, xmalloc, xmemdupz, xrealloc, xstrchrnul, xstrdup, xstrlcpy,
-};
+use crate::src::nvim::memory::{strequal, xfree, xmalloc, xmemdupz, xrealloc, xstrdup, xstrlcpy};
 use crate::src::nvim::message::{
     emsg, message_filtered, msg, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar,
     msg_puts, msg_puts_title, msg_source,
@@ -89,8 +83,7 @@ use crate::src::nvim::normal::{do_check_scrollbind, get_vtopline};
 use crate::src::nvim::options::*;
 use crate::src::nvim::optionstr::{
     check_buf_options, check_illegal_path_names, check_signcolumn, check_string_option,
-    clear_string_option, did_set_breakat, didset_string_options, free_string_option,
-    set_chars_option,
+    clear_string_option, free_string_option, set_chars_option,
 };
 use crate::src::nvim::os::env::{
     expand_env_esc, home_replace, os_env_exists, os_getenv, vim_getenv,
@@ -99,7 +92,7 @@ use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::lang::{get_mess_lang, lang_init};
 use crate::src::nvim::os::libc::{
     __assert_fail, abort, bind_textdomain_codeset, fprintf, fputs, gettext, getuid, memmove,
-    memset, snprintf, strchr, strcmp, strcpy, strlen, strncasecmp, strncmp,
+    memset, snprintf, strcmp, strcpy, strlen, strncasecmp, strncmp,
 };
 use crate::src::nvim::os::stdpaths::stdpaths_user_state_subpath;
 use crate::src::nvim::path::{
@@ -108,24 +101,19 @@ use crate::src::nvim::path::{
 use crate::src::nvim::popupmenu::{pum_drawn, pum_redraw};
 use crate::src::nvim::quickfix::qf_resize_stack;
 use crate::src::nvim::runtime::{exestack, runtimepath_default, source_runtime_vim_lua};
-use crate::src::nvim::spell::{
-    compile_cap_prog, did_set_spell_option, init_spell_chartab, parse_spelllang,
-};
-use crate::src::nvim::spellfile::spell_check_msm;
-use crate::src::nvim::spellsuggest::spell_check_sps;
+use crate::src::nvim::spell::{compile_cap_prog, init_spell_chartab, parse_spelllang};
 use crate::src::nvim::strings::{
     vim_snprintf, vim_snprintf_safelen, vim_strchr, vim_strsave_escaped,
 };
 use crate::src::nvim::tag::set_buflocal_tfu_callback;
 use crate::src::nvim::types::{
-    __uid_t, Arena, CMD_index, CallbackType, CharsOption, DecorProvider, Dict, Error, ErrorType,
-    FILE, HlAttrs, Integer, KeyDict_highlight, KeyValuePair, NS, Object, ObjectType, OptIndex,
-    OptInt, OptScope, OptVal, OptValData, OptValType, RgbValue, String_0, Terminal, TriState,
-    VarType, VimVarIndex, aco_save_T, auto_event, buf_T, bufref_T, colnr_T, estack_T, event_T,
-    exarg_T, expand_T, fuzmatch_str_T, garray_T, int16_t, int32_t, int64_t, key_value_pair,
-    linenr_T, object, object_data, optexpand_T, optset_T, ptrdiff_t, regmatch_T, scid_T, sctx_T,
-    size_t, switchwin_T, tabpage_T, typval_T, uint8_t, uint32_t, uint64_t, uvarnumber_T,
-    vimoption_T, win_T, winopt_T, xp_prefix_T,
+    __uid_t, Arena, CMD_index, CallbackType, CharsOption, Dict, Error, ErrorType, FILE, HlAttrs,
+    Integer, KeyValuePair, Object, ObjectType, OptIndex, OptInt, OptScope, OptVal, OptValData,
+    OptValType, RgbValue, String_0, Terminal, TriState, VarType, VimVarIndex, aco_save_T,
+    auto_event, buf_T, bufref_T, colnr_T, estack_T, event_T, exarg_T, expand_T, fuzmatch_str_T,
+    garray_T, int16_t, int32_t, int64_t, key_value_pair, linenr_T, object, object_data,
+    optexpand_T, optset_T, ptrdiff_t, regmatch_T, scid_T, sctx_T, size_t, switchwin_T, tabpage_T,
+    typval_T, uint8_t, uint32_t, uint64_t, uvarnumber_T, vimoption_T, win_T, winopt_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::undo::{bufIsChanged, curbufIsChanged, u_compute_hash, u_read_undo, u_sync};
