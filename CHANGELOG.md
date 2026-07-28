@@ -7,25 +7,18 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+Ongoing migration of the transpiled tables back onto generated code.
+Behavior-preserving: same features, formats, and RPC surface.
+
 ### Changed
 
-- The whole API dispatch layer — the per-method msgpack-RPC wrappers, the
-  keyset tables, the handler table, the `vim.api` Lua binding and the
-  `nvim --api-info` metadata — is generated from the API signatures and the
-  keyset structs again (`just apigen`) instead of carried as transpiled code,
-  retiring all 27k lines of `api/private/dispatch.rs`, 18k of
-  `lua/api_wrappers.rs` and 32k of frozen metadata bytes in
-  `api/private/helpers.rs`.
-- The option table — every option's name, type, scopes, flags, default and
-  callbacks, plus the name lookup, the arrays of valid values and the flag
-  enums a string option's value parses into — is
-  generated from `options.lua` again (`just apigen`) instead of carried as
-  transpiled data, taking 19k lines out of `option.rs` and leaving the
-  `:set`/`did_set` logic behind on a table that can no longer drift.
-- The Vimscript builtin-function table is generated from `eval.lua` and the
-  API spec again (`just apigen`), taking 10k lines out of `eval/funcs.rs`;
-  the 177 `nvim_*()` builtins now derive their handler-table rows from the
-  same layout the handler table is built from instead of storing them.
+- Generated the API dispatch layer from the API signatures again
+  (`just apigen`), covering every msgpack-RPC method, the `vim.api` Lua
+  binding, and `nvim --api-info`.
+- Generated the option table from `options.lua` again (`just apigen`),
+  covering every option's default, valid values, and `:set`.
+- Generated the Vimscript builtin-function table from `eval.lua` again
+  (`just apigen`), covering every builtin function call.
 
 ## [2026.07.27-dd16441f3f]
 
