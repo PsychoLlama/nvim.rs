@@ -1,10 +1,32 @@
+//! The plumbing every `nvim_*` function shares.
+//!
+//! Four jobs live here, and nothing in this file is API surface of its own:
+//!
+//! - **Errors.** An API call reports failure through an `Error` out-parameter
+//!   rather than by throwing, so [`try_enter`]/[`try_leave`] bracket a call
+//!   that runs Vimscript and turn whatever it threw — an exception, an
+//!   `:echoerr`, a `CTRL-C` — into one.
+//! - **Conversion.** Between the API's `Object` tree and C strings, buffer
+//!   text, highlight ids, and the generated "keydict" structs the typed
+//!   `nvim_*` signatures take their options as.
+//! - **Ownership.** `Object`s are either arena-allocated, and freed in one
+//!   go when the arena is, or malloc'd, and freed member by member. The
+//!   `arena_*`, `copy_*` and `api_free_*` families are the two halves of
+//!   that, and passing a value to the wrong one is a leak or a double free.
+//! - **Handles.** Turning a `Buffer`/`Window`/`Tabpage` id from the wire back
+//!   into a pointer, or reporting that it names nothing.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{VaList, c_char, c_int, c_void};
+use core::{mem, ptr};
+
 use crate::src::nvim::api::private::converter::{object_to_vim, vim_to_object};
 use crate::src::nvim::api::private::metadata::PACKED_API_METADATA;
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
-use crate::src::nvim::eval::typval::tv_dict_is_watched;
 use crate::src::nvim::eval::typval::{
-    tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_item_alloc_len, tv_dict_item_remove,
-    tv_dict_watcher_notify,
+    tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc_len,
+    tv_dict_item_remove, tv_dict_watcher_notify,
 };
 use crate::src::nvim::eval::vars::{before_set_vvar, get_vimvar_dict};
 use crate::src::nvim::ex_eval::{
@@ -12,7 +34,7 @@ use crate::src::nvim::ex_eval::{
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{highlight_num_groups, syn_check_group, syn_id2name};
-use crate::src::nvim::kvec::_memcpy_free;
+use crate::src::nvim::kvec::InitVec;
 use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::src::nvim::main::{
     buffer_handles, curbuf, current_exception, current_sctx, curtab, curwin, did_emsg, did_throw,
@@ -27,480 +49,451 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::message::hl_msg_free;
 use crate::src::nvim::msgpack_rpc::unpacker::unpack;
-use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, strlen, strnlen, vsnprintf};
+use crate::src::nvim::os::libc::{abort, memcpy, strlen, strnlen, vsnprintf};
 use crate::src::nvim::runtime::script_is_lua;
-pub use crate::src::nvim::types::{
-    __builtin_va_list, __gnuc_va_list, __time_t, __va_list_tag, AdditionalData, AlignTextPos,
-    Arena, ArenaMem, Array, ArrayBuilder, BoolVarValue, Boolean, BufUpdateCallbacks, Buffer,
-    Callback, Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, ExtmarkUndoObject, FieldHashfn,
-    FileID, Float, FloatAnchor, FloatRelative, GridView, HlMessage, HlMessageChunk, Integer,
-    Intersection, KeySetLink, KeyValuePair, LuaRef, MTKey, MTNode, MTPos, Map_int_ptr_t,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
-    MarkTree, Object, ObjectType, OptInt, OptKeySet, OptionalKeys, QUEUE, ScopeDictDictItem,
-    ScopeType, ScreenGrid, Set_int, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
-    StlClickDefinition, StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Tabpage,
-    Terminal, Timestamp, TryState, VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, bhdr_T, blob_T,
-    blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, consumed_blk, dict_T,
-    dictitem_T, dictvar_S, diff_T, diffblock_S, disptick_T, except_T, except_type_T,
-    extmark_undo_vec_t, fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
-    file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
-    file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
-    funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, handle_T, hash_T,
-    hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, key_value_pair, lcs_chars_T,
-    linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, lpos_T,
-    mapblock, mapblock_T, match_T, matchitem, matchitem_T, memfile_T, memline_T, mfdirty_T,
-    msglist, msglist_T, mtnode_inner_s, mtnode_s, object, object_data as C2Rust_Unnamed, partial_S,
-    partial_T, pos_T, pos_save_T, proftime_T, ptr_t, ptrdiff_t, qf_info_S, qf_info_T, queue,
-    reg_extmatch_T, regmmatch_T, regprog, regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t,
-    syn_state, syn_state_sst_union as C2Rust_Unnamed_4, syn_time_T, synblock_T, synstate_T,
-    tabpage_S, tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry,
-    u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8,
-    u_header_uh_alt_prev as C2Rust_Unnamed_7, u_header_uh_next as C2Rust_Unnamed_10,
-    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
-    undo_object, va_list, varnumber_T, vim_exception, virt_line, visualinfo_T, win_T, window_S,
-    wininfo_S, winopt_T, wline_T, xfmark_T,
+use crate::src::nvim::types::{
+    Arena, ArenaMem, Array, ArrayBuilder, Boolean, Buffer, Dict, Error, ErrorType, FieldHashfn,
+    Float, HlMessage, HlMessageChunk, Integer, KeySetLink, KeyValuePair, LuaRef, Map_int_ptr_t,
+    Object, ObjectType, OptKeySet, OptionalKeys, String_0, Tabpage, TryState, VarLockStatus,
+    VarType, Window, buf_T, colnr_T, consumed_blk, dict_T, dictitem_T, except_type_T, fmarkv_T,
+    garray_T, handle_T, int64_t, key_value_pair, linenr_T, msglist_T, object, object_data, pos_T,
+    ptr_t, ptrdiff_t, scid_T, sctx_T, size_t, tabpage_T, typval_T, typval_vval_union, uint32_t,
+    uint64_t, win_T,
 };
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_12 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_12 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_12 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_12 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
-pub const MF_DIRTY_YES: mfdirty_T = 1;
-pub const MF_DIRTY_NO: mfdirty_T = 0;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_13 = 2147483647;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const DI_FLAGS_ALLOC: C2Rust_Unnamed_15 = 16;
-pub const DI_FLAGS_LOCK: C2Rust_Unnamed_15 = 8;
-pub const DI_FLAGS_FIX: C2Rust_Unnamed_15 = 4;
-pub const DI_FLAGS_RO_SBX: C2Rust_Unnamed_15 = 2;
-pub const DI_FLAGS_RO: C2Rust_Unnamed_15 = 1;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_16 = 76;
-pub const HLF_PRE: C2Rust_Unnamed_16 = 75;
-pub const HLF_OK: C2Rust_Unnamed_16 = 74;
-pub const HLF_SO: C2Rust_Unnamed_16 = 73;
-pub const HLF_SE: C2Rust_Unnamed_16 = 72;
-pub const HLF_TSNC: C2Rust_Unnamed_16 = 71;
-pub const HLF_TS: C2Rust_Unnamed_16 = 70;
-pub const HLF_BFOOTER: C2Rust_Unnamed_16 = 69;
-pub const HLF_BTITLE: C2Rust_Unnamed_16 = 68;
-pub const HLF_CU: C2Rust_Unnamed_16 = 67;
-pub const HLF_WBRNC: C2Rust_Unnamed_16 = 66;
-pub const HLF_WBR: C2Rust_Unnamed_16 = 65;
-pub const HLF_BORDER: C2Rust_Unnamed_16 = 64;
-pub const HLF_MSG: C2Rust_Unnamed_16 = 63;
-pub const HLF_NFLOAT: C2Rust_Unnamed_16 = 62;
-pub const HLF_MSGSEP: C2Rust_Unnamed_16 = 61;
-pub const HLF_INACTIVE: C2Rust_Unnamed_16 = 60;
-pub const HLF_0: C2Rust_Unnamed_16 = 59;
-pub const HLF_QFL: C2Rust_Unnamed_16 = 58;
-pub const HLF_MC: C2Rust_Unnamed_16 = 57;
-pub const HLF_CUL: C2Rust_Unnamed_16 = 56;
-pub const HLF_CUC: C2Rust_Unnamed_16 = 55;
-pub const HLF_TPF: C2Rust_Unnamed_16 = 54;
-pub const HLF_TPS: C2Rust_Unnamed_16 = 53;
-pub const HLF_TP: C2Rust_Unnamed_16 = 52;
-pub const HLF_PBR: C2Rust_Unnamed_16 = 51;
-pub const HLF_PST: C2Rust_Unnamed_16 = 50;
-pub const HLF_PSB: C2Rust_Unnamed_16 = 49;
-pub const HLF_PSX: C2Rust_Unnamed_16 = 48;
-pub const HLF_PNX: C2Rust_Unnamed_16 = 47;
-pub const HLF_PSK: C2Rust_Unnamed_16 = 46;
-pub const HLF_PNK: C2Rust_Unnamed_16 = 45;
-pub const HLF_PMSI: C2Rust_Unnamed_16 = 44;
-pub const HLF_PMNI: C2Rust_Unnamed_16 = 43;
-pub const HLF_PSI: C2Rust_Unnamed_16 = 42;
-pub const HLF_PNI: C2Rust_Unnamed_16 = 41;
-pub const HLF_SPL: C2Rust_Unnamed_16 = 40;
-pub const HLF_SPR: C2Rust_Unnamed_16 = 39;
-pub const HLF_SPC: C2Rust_Unnamed_16 = 38;
-pub const HLF_SPB: C2Rust_Unnamed_16 = 37;
-pub const HLF_CONCEAL: C2Rust_Unnamed_16 = 36;
-pub const HLF_SC: C2Rust_Unnamed_16 = 35;
-pub const HLF_TXA: C2Rust_Unnamed_16 = 34;
-pub const HLF_TXD: C2Rust_Unnamed_16 = 33;
-pub const HLF_DED: C2Rust_Unnamed_16 = 32;
-pub const HLF_CHD: C2Rust_Unnamed_16 = 31;
-pub const HLF_ADD: C2Rust_Unnamed_16 = 30;
-pub const HLF_FC: C2Rust_Unnamed_16 = 29;
-pub const HLF_FL: C2Rust_Unnamed_16 = 28;
-pub const HLF_WM: C2Rust_Unnamed_16 = 27;
-pub const HLF_W: C2Rust_Unnamed_16 = 26;
-pub const HLF_VNC: C2Rust_Unnamed_16 = 25;
-pub const HLF_V: C2Rust_Unnamed_16 = 24;
-pub const HLF_T: C2Rust_Unnamed_16 = 23;
-pub const HLF_VSP: C2Rust_Unnamed_16 = 22;
-pub const HLF_C: C2Rust_Unnamed_16 = 21;
-pub const HLF_SNC: C2Rust_Unnamed_16 = 20;
-pub const HLF_S: C2Rust_Unnamed_16 = 19;
-pub const HLF_R: C2Rust_Unnamed_16 = 18;
-pub const HLF_CLF: C2Rust_Unnamed_16 = 17;
-pub const HLF_CLS: C2Rust_Unnamed_16 = 16;
-pub const HLF_CLN: C2Rust_Unnamed_16 = 15;
-pub const HLF_LNB: C2Rust_Unnamed_16 = 14;
-pub const HLF_LNA: C2Rust_Unnamed_16 = 13;
-pub const HLF_N: C2Rust_Unnamed_16 = 12;
-pub const HLF_CM: C2Rust_Unnamed_16 = 11;
-pub const HLF_M: C2Rust_Unnamed_16 = 10;
-pub const HLF_LC: C2Rust_Unnamed_16 = 9;
-pub const HLF_L: C2Rust_Unnamed_16 = 8;
-pub const HLF_I: C2Rust_Unnamed_16 = 7;
-pub const HLF_E: C2Rust_Unnamed_16 = 6;
-pub const HLF_D: C2Rust_Unnamed_16 = 5;
-pub const HLF_AT: C2Rust_Unnamed_16 = 4;
-pub const HLF_TERM: C2Rust_Unnamed_16 = 3;
-pub const HLF_EOB: C2Rust_Unnamed_16 = 2;
-pub const HLF_8: C2Rust_Unnamed_16 = 1;
-pub const HLF_NONE: C2Rust_Unnamed_16 = 0;
-pub const ET_INTERRUPT: except_type_T = 2;
-pub const ET_ERROR: except_type_T = 1;
-pub const ET_USER: except_type_T = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const STRING_INIT: String_0 = String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
+
+const kErrorTypeNone: ErrorType = -1;
+const kErrorTypeException: ErrorType = 0;
+const kErrorTypeValidation: ErrorType = 1;
+
+const kObjectTypeNil: ObjectType = 0;
+const kObjectTypeBoolean: ObjectType = 1;
+const kObjectTypeInteger: ObjectType = 2;
+const kObjectTypeFloat: ObjectType = 3;
+const kObjectTypeString: ObjectType = 4;
+const kObjectTypeArray: ObjectType = 5;
+const kObjectTypeDict: ObjectType = 6;
+const kObjectTypeLuaRef: ObjectType = 7;
+const kObjectTypeBuffer: ObjectType = 8;
+const kObjectTypeWindow: ObjectType = 9;
+const kObjectTypeTabpage: ObjectType = 10;
+
+const VAR_UNKNOWN: VarType = 0;
+const VAR_UNLOCKED: VarLockStatus = 0;
+const ET_ERROR: except_type_T = 1;
+
+/// `dictitem_T.di_flags`: the key cannot be changed, cannot be changed right
+/// now, and cannot be removed.
+const DI_FLAGS_RO: c_int = 1;
+const DI_FLAGS_FIX: c_int = 4;
+const DI_FLAGS_LOCK: c_int = 8;
+
+/// The highlight group an error chunk gets when the caller named none.
+const HLF_E: c_int = 6;
+
+/// The hash slot `mh_get_int` reports for a key it did not find.
+const MH_TOMBSTONE: uint32_t = u32::MAX;
+
+const NUL: c_char = 0;
+const NL: c_char = b'\n' as c_char;
+const CAR: c_char = b'\r' as c_char;
+const MAXLNUM: int64_t = 2147483647;
+const MAXCOL: Integer = 2147483647;
+
+/// `current_sctx.sc_sid` for a call that came from Lua, and for one that came
+/// from an RPC client.
+const SID_LUA: scid_T = -8;
+const SID_API_CLIENT: scid_T = -9;
+
+/// Channel ids with the top bit set are not channels at all: they mark a call
+/// nvim made of itself, from Vimscript or from Lua.
+const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
+const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
+const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
+
+const STRING_INIT: String_0 = String_0 {
+    data: ptr::null_mut(),
+    size: 0,
 };
-pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
-    << ::core::mem::size_of::<uint64_t>()
-        .wrapping_mul(8 as usize)
-        .wrapping_sub(1 as usize);
-pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
-pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL.wrapping_add(1 as uint64_t);
-static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe extern "C" fn map_get_int_ptr_t(
-    mut map: *mut Map_int_ptr_t,
-    mut key: ::core::ffi::c_int,
-) -> ptr_t {
-    let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
-    return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t.get()
-    } else {
-        *(*map).values.offset(k as isize)
-    };
-}
-pub unsafe extern "C" fn try_enter(tstate: *mut TryState) {
-    *tstate = TryState {
-        current_exception: current_exception.get(),
-        private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
-        msg_list: msg_list.get() as *const *const msglist_T,
-        got_int: got_int.get() as ::core::ffi::c_int,
-        did_throw: did_throw.get(),
-        need_rethrow: need_rethrow.get() as ::core::ffi::c_int,
-        did_emsg: did_emsg.get(),
-    };
-    msg_list.set(&raw mut (*tstate).private_msg_list);
-    current_exception.set(::core::ptr::null_mut::<except_T>());
-    got_int.set(false_0 != 0);
-    did_throw.set(false_0 != 0);
-    need_rethrow.set(false_0 != 0);
-    did_emsg.set(false_0);
-    (*trylevel.ptr()) += 1;
-}
-pub unsafe extern "C" fn try_leave(tstate: *const TryState, err: *mut Error) {
-    '_c2rust_label: {
-        if trylevel.get() > 0 as ::core::ffi::c_int {
+
+const NIL: Object = object {
+    type_0: kObjectTypeNil,
+    data: object_data { boolean: false },
+};
+
+const EMPTY_DICT: Dict = Dict {
+    size: 0,
+    capacity: 0,
+    items: ptr::null_mut(),
+};
+
+const EMPTY_HL_MESSAGE: HlMessage = HlMessage {
+    size: 0,
+    capacity: 0,
+    items: ptr::null_mut(),
+};
+
+// -- Handles ---------------------------------------------------------------
+
+/// `map_get(int, ptr_t)`: what `key` maps to, or null when it maps to
+/// nothing. The C macro reads a per-value-type "default" global that nothing
+/// ever writes, so a miss is always null.
+unsafe fn map_get_ptr(map: *mut Map_int_ptr_t, key: c_int) -> ptr_t {
+    // SAFETY: the caller passes one of the three handle maps, which are
+    // initialised before any API call can run.
+    unsafe {
+        let slot = mh_get_int(&raw mut (*map).set, key);
+        if slot == MH_TOMBSTONE {
+            ptr::null_mut()
         } else {
-            __assert_fail(
-                b"trylevel > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/helpers.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                82 as ::core::ffi::c_uint,
-                b"void try_leave(const TryState *const, Error *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+            *(*map).values.add(slot as usize)
+        }
+    }
+}
+
+/// The buffer `buffer` names, or the current one for 0. Null — with `err`
+/// set — when it names nothing.
+pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T {
+    // SAFETY: `err` is the caller's out-parameter.
+    unsafe {
+        if buffer == 0 {
+            return curbuf.get();
+        }
+        let rv = map_get_ptr(buffer_handles.ptr(), buffer) as *mut buf_T;
+        if rv.is_null() {
+            api_err_invalid(
+                err,
+                c"buffer id".as_ptr(),
+                ptr::null(),
+                buffer as int64_t,
+                false,
             );
         }
-    };
-    (*trylevel.ptr()) -= 1;
-    did_emsg.set(false_0);
-    force_abort.set(false_0 != 0);
-    if got_int.get() {
-        if did_throw.get() {
+        rv
+    }
+}
+
+/// [`find_buffer_by_handle`] for a window.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T {
+    // SAFETY: `err` is the caller's out-parameter.
+    unsafe {
+        if window == 0 {
+            return curwin.get();
+        }
+        let rv = map_get_ptr(window_handles.ptr(), window) as *mut win_T;
+        if rv.is_null() {
+            api_err_invalid(
+                err,
+                c"window id".as_ptr(),
+                ptr::null(),
+                window as int64_t,
+                false,
+            );
+        }
+        rv
+    }
+}
+
+/// [`find_buffer_by_handle`] for a tab page.
+pub(crate) unsafe fn find_tab_by_handle(tabpage: Tabpage, err: *mut Error) -> *mut tabpage_T {
+    // SAFETY: `err` is the caller's out-parameter.
+    unsafe {
+        if tabpage == 0 {
+            return curtab.get();
+        }
+        let rv = map_get_ptr(tabpage_handles.ptr(), tabpage) as *mut tabpage_T;
+        if rv.is_null() {
+            api_err_invalid(
+                err,
+                c"tabpage id".as_ptr(),
+                ptr::null(),
+                tabpage as int64_t,
+                false,
+            );
+        }
+        rv
+    }
+}
+
+// -- Errors and the try/catch bracket --------------------------------------
+
+/// Start catching what Vimscript throws, saving the state to put back into
+/// `tstate`. Pairs with [`try_leave`].
+pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
+    // SAFETY: `tstate` is the caller's, and lives until `try_leave`.
+    unsafe {
+        *tstate = TryState {
+            current_exception: current_exception.get(),
+            private_msg_list: ptr::null_mut(),
+            msg_list: msg_list.get() as *const *const msglist_T,
+            got_int: got_int.get() as c_int,
+            did_throw: did_throw.get(),
+            need_rethrow: need_rethrow.get() as c_int,
+            did_emsg: did_emsg.get(),
+        };
+        // Errors go to the caller's own list from here on, so that an
+        // `:echoerr` inside the call does not reach an enclosing `:try`.
+        msg_list.set(&raw mut (*tstate).private_msg_list);
+        current_exception.set(ptr::null_mut());
+        got_int.set(false);
+        did_throw.set(false);
+        need_rethrow.set(false);
+        did_emsg.set(0);
+        (*trylevel.ptr()) += 1;
+    }
+}
+
+/// Stop catching, report whatever was caught through `err`, and restore what
+/// [`try_enter`] saved into `tstate`.
+pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
+    // SAFETY: `tstate` is what the matching `try_enter` filled in.
+    unsafe {
+        assert!(trylevel.get() > 0);
+        (*trylevel.ptr()) -= 1;
+        did_emsg.set(0);
+        force_abort.set(false);
+
+        if got_int.get() {
+            // An interrupt outranks anything that was thrown along the way.
+            if did_throw.get() {
+                discard_current_exception();
+            }
+            api_set_error(err, kErrorTypeException, c"Keyboard interrupt".as_ptr());
+            got_int.set(false);
+        } else if !msg_list.get().is_null() && !(*msg_list.get()).is_null() {
+            let mut should_free = false;
+            let msg = get_exception_string(
+                *msg_list.get() as *mut c_void,
+                ET_ERROR,
+                ptr::null_mut(),
+                &raw mut should_free,
+            );
+            api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg);
+            free_global_msglist();
+            if should_free {
+                xfree(msg.cast());
+            }
+        } else if did_throw.get() || need_rethrow.get() {
+            let ex = current_exception.get();
+            if *(*ex).throw_name != NUL {
+                if (*ex).throw_lnum != 0 {
+                    let fmt = c"%s, line %d: %s".as_ptr();
+                    api_set_error(
+                        err,
+                        kErrorTypeException,
+                        fmt,
+                        (*ex).throw_name,
+                        (*ex).throw_lnum,
+                        (*ex).value,
+                    );
+                } else {
+                    let fmt = c"%s: %s".as_ptr();
+                    api_set_error(err, kErrorTypeException, fmt, (*ex).throw_name, (*ex).value);
+                }
+            } else {
+                api_set_error(err, kErrorTypeException, c"%s".as_ptr(), (*ex).value);
+            }
             discard_current_exception();
         }
-        api_set_error(
-            err,
-            kErrorTypeException,
-            b"Keyboard interrupt\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        got_int.set(false_0 != 0);
-    } else if !(*msg_list.ptr()).is_null() && !(*msg_list.get()).is_null() {
-        let mut should_free: bool = false;
-        let mut msg: *mut ::core::ffi::c_char = get_exception_string(
-            *msg_list.get() as *mut ::core::ffi::c_void,
-            ET_ERROR,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            &raw mut should_free,
-        );
-        api_set_error(
-            err,
-            kErrorTypeException,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-            msg,
-        );
-        free_global_msglist();
-        if should_free {
-            xfree(msg as *mut ::core::ffi::c_void);
-        }
-    } else if did_throw.get() as ::core::ffi::c_int != 0
-        || need_rethrow.get() as ::core::ffi::c_int != 0
-    {
-        if *(*current_exception.get()).throw_name as ::core::ffi::c_int != NUL {
-            if (*current_exception.get()).throw_lnum != 0 as linenr_T {
-                api_set_error(
-                    err,
-                    kErrorTypeException,
-                    b"%s, line %d: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*current_exception.get()).throw_name,
-                    (*current_exception.get()).throw_lnum,
-                    (*current_exception.get()).value,
-                );
-            } else {
-                api_set_error(
-                    err,
-                    kErrorTypeException,
-                    b"%s: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*current_exception.get()).throw_name,
-                    (*current_exception.get()).value,
-                );
-            }
-        } else {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                (*current_exception.get()).value,
-            );
-        }
-        discard_current_exception();
+
+        msg_list.set((*tstate).msg_list as *mut *mut msglist_T);
+        current_exception.set((*tstate).current_exception);
+        got_int.set((*tstate).got_int != 0);
+        did_throw.set((*tstate).did_throw);
+        need_rethrow.set((*tstate).need_rethrow != 0);
+        did_emsg.set((*tstate).did_emsg);
     }
-    msg_list.set((*tstate).msg_list as *mut *mut msglist_T);
-    current_exception.set((*tstate).current_exception);
-    got_int.set((*tstate).got_int != 0);
-    did_throw.set((*tstate).did_throw);
-    need_rethrow.set((*tstate).need_rethrow != 0);
-    did_emsg.set((*tstate).did_emsg);
 }
-pub unsafe extern "C" fn dict_get_value(
-    mut dict: *mut dict_T,
-    mut key: String_0,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
+
+/// Set `err` from a printf-style message. The message is measured first and
+/// then formatted, so it is never truncated below 1 MiB.
+pub(crate) unsafe extern "C" fn api_set_error(
+    err: *mut Error,
+    err_type: ErrorType,
+    format: *const c_char,
+    mut args: ...
+) {
+    // SAFETY: `format` and the variadic arguments are the caller's, and are
+    // a valid printf call by construction — every call site is in-tree.
+    unsafe {
+        assert!(err_type != kErrorTypeNone);
+        let measure: VaList = args.clone();
+        let write: VaList = args.clone();
+        let len = vsnprintf(ptr::null_mut(), 0, format, measure);
+        assert!(len >= 0);
+        let bufsize = (len as size_t + 1).min(1024 * 1024);
+        (*err).msg = xmalloc(bufsize).cast();
+        vsnprintf((*err).msg, bufsize, format, write);
+        (*err).type_0 = err_type;
+    }
+}
+
+/// Free `err`'s message and mark it as carrying no error.
+pub(crate) unsafe fn api_clear_error(value: *mut Error) {
+    // SAFETY: `value` is the caller's error slot.
+    unsafe {
+        if (*value).type_0 == kErrorTypeNone {
+            return;
+        }
+        xfree((*value).msg.cast());
+        (*value).msg = ptr::null_mut();
+        (*value).type_0 = kErrorTypeNone;
+    }
+}
+
+// -- Vimscript dictionaries ------------------------------------------------
+
+/// The value `key` has in `dict`, as an API object. Nil — with `err` set —
+/// when the key is absent.
+pub(crate) unsafe fn dict_get_value(
+    dict: *mut dict_T,
+    key: String_0,
+    arena: *mut Arena,
+    err: *mut Error,
 ) -> Object {
-    let di: *mut dictitem_T = tv_dict_find(dict, key.data, key.size as ptrdiff_t);
-    if di.is_null() {
-        api_set_error(
-            err,
-            kErrorTypeValidation,
-            b"Key not found: %s\0".as_ptr() as *const ::core::ffi::c_char,
-            key.data,
-        );
-        return object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        };
-    }
-    return vim_to_object(&raw mut (*di).di_tv, arena, true_0 != 0);
-}
-pub unsafe extern "C" fn dict_check_writable(
-    mut dict: *mut dict_T,
-    mut key: String_0,
-    mut del: bool,
-    mut err: *mut Error,
-) -> *mut dictitem_T {
-    let mut di: *mut dictitem_T = tv_dict_find(dict, key.data, key.size as ptrdiff_t);
-    if !di.is_null() {
-        if (*di).di_flags as ::core::ffi::c_int & DI_FLAGS_RO as ::core::ffi::c_int != 0 {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                b"Key is read-only: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                key.data,
-            );
-        } else if (*di).di_flags as ::core::ffi::c_int & DI_FLAGS_LOCK as ::core::ffi::c_int != 0 {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                b"Key is locked: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                key.data,
-            );
-        } else if del as ::core::ffi::c_int != 0
-            && (*di).di_flags as ::core::ffi::c_int & DI_FLAGS_FIX as ::core::ffi::c_int != 0
-        {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                b"Key is fixed: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                key.data,
-            );
-        }
-    } else if (*dict).dv_lock as u64 != 0 {
-        api_set_error(
-            err,
-            kErrorTypeException,
-            b"Dict is locked\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    } else if key.size == 0 as size_t {
-        api_set_error(
-            err,
-            kErrorTypeValidation,
-            b"Key name is empty\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    } else if key.size > INT_MAX as size_t {
-        api_set_error(
-            err,
-            kErrorTypeValidation,
-            b"Key name is too long\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    }
-    return di;
-}
-pub unsafe extern "C" fn dict_set_var(
-    mut dict: *mut dict_T,
-    mut key: String_0,
-    mut value: Object,
-    mut del: bool,
-    mut retval: bool,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Object {
-    let mut rv: Object = object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    };
-    let mut di: *mut dictitem_T = dict_check_writable(dict, key, del, err);
-    if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        return rv;
-    }
-    let mut watched: bool = tv_dict_is_watched(dict);
-    if del {
+    // SAFETY: `dict` is a live Vimscript dictionary and `key` borrows the
+    // caller's text.
+    unsafe {
+        let di = tv_dict_find(dict, key.data, key.size as ptrdiff_t);
         if di.is_null() {
             api_set_error(
                 err,
                 kErrorTypeValidation,
-                b"Key not found: %s\0".as_ptr() as *const ::core::ffi::c_char,
+                c"Key not found: %s".as_ptr(),
                 key.data,
             );
-        } else {
-            if watched {
-                tv_dict_watcher_notify(
-                    dict,
+            return NIL;
+        }
+        vim_to_object(&raw mut (*di).di_tv, arena, true)
+    }
+}
+
+/// The item `key` names, having first reported through `err` any reason it
+/// could not be assigned to (or, with `del`, removed).
+///
+/// A null return does not mean failure: an absent key is fine for an
+/// assignment. Callers check `err`.
+pub(crate) unsafe fn dict_check_writable(
+    dict: *mut dict_T,
+    key: String_0,
+    del: bool,
+    err: *mut Error,
+) -> *mut dictitem_T {
+    // SAFETY: as `dict_get_value`.
+    unsafe {
+        let di = tv_dict_find(dict, key.data, key.size as ptrdiff_t);
+        if !di.is_null() {
+            let flags = (*di).di_flags as c_int;
+            if flags & DI_FLAGS_RO != 0 {
+                api_set_error(
+                    err,
+                    kErrorTypeException,
+                    c"Key is read-only: %s".as_ptr(),
                     key.data,
-                    ::core::ptr::null_mut::<typval_T>(),
-                    &raw mut (*di).di_tv,
+                );
+            } else if flags & DI_FLAGS_LOCK != 0 {
+                api_set_error(
+                    err,
+                    kErrorTypeException,
+                    c"Key is locked: %s".as_ptr(),
+                    key.data,
+                );
+            } else if del && flags & DI_FLAGS_FIX != 0 {
+                api_set_error(
+                    err,
+                    kErrorTypeException,
+                    c"Key is fixed: %s".as_ptr(),
+                    key.data,
                 );
             }
+        } else if (*dict).dv_lock as u64 != 0 {
+            api_set_error(err, kErrorTypeException, c"Dict is locked".as_ptr());
+        } else if key.size == 0 {
+            api_set_error(err, kErrorTypeValidation, c"Key name is empty".as_ptr());
+        } else if key.size > c_int::MAX as size_t {
+            api_set_error(err, kErrorTypeValidation, c"Key name is too long".as_ptr());
+        }
+        di
+    }
+}
+
+/// Set or remove `key` in `dict`. With `retval` the previous value comes
+/// back, otherwise nil. Fires the dictionary's watchers either way.
+pub(crate) unsafe fn dict_set_var(
+    dict: *mut dict_T,
+    key: String_0,
+    value: Object,
+    del: bool,
+    retval: bool,
+    arena: *mut Arena,
+    err: *mut Error,
+) -> Object {
+    // SAFETY: as `dict_get_value`.
+    unsafe {
+        let mut rv = NIL;
+        let mut di = dict_check_writable(dict, key, del, err);
+        if (*err).type_0 != kErrorTypeNone {
+            return rv;
+        }
+        let watched = tv_dict_is_watched(dict);
+
+        if del {
+            if di.is_null() {
+                api_set_error(
+                    err,
+                    kErrorTypeValidation,
+                    c"Key not found: %s".as_ptr(),
+                    key.data,
+                );
+                return rv;
+            }
+            if watched {
+                tv_dict_watcher_notify(dict, key.data, ptr::null_mut(), &raw mut (*di).di_tv);
+            }
             if retval {
-                rv = vim_to_object(&raw mut (*di).di_tv, arena, false_0 != 0);
+                rv = vim_to_object(&raw mut (*di).di_tv, arena, false);
             }
             tv_dict_item_remove(dict, di);
+            return rv;
         }
-    } else {
-        let mut tv: typval_T = typval_T {
+
+        let mut tv = typval_T {
             v_type: VAR_UNKNOWN,
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union { v_number: 0 },
         };
         object_to_vim(value, &raw mut tv, err);
-        let mut oldtv: typval_T = typval_T {
+        // Only filled in for a key that already existed; the watchers see an
+        // unset value for a key that did not.
+        let mut oldtv = typval_T {
             v_type: VAR_UNKNOWN,
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union { v_number: 0 },
         };
+
         if di.is_null() {
             di = tv_dict_item_alloc_len(key.data, key.size);
             tv_dict_add(dict, di);
         } else {
             if retval {
-                rv = vim_to_object(&raw mut (*di).di_tv, arena, false_0 != 0);
+                rv = vim_to_object(&raw mut (*di).di_tv, arena, false);
             }
-            let mut type_error: bool = false_0 != 0;
+            // `v:` keys are typed, and some of them run a hook on assignment.
+            let mut type_error = false;
             if dict == get_vimvar_dict()
                 && !before_set_vvar(
                     key.data,
                     di,
                     &raw mut tv,
-                    true_0 != 0,
+                    true,
                     watched,
                     &raw mut type_error,
                 )
             {
                 tv_clear(&raw mut tv);
                 if type_error {
-                    api_set_error(
-                        err,
-                        kErrorTypeValidation,
-                        b"Setting v:%s to value with wrong type\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                        key.data,
-                    );
+                    let fmt = c"Setting v:%s to value with wrong type".as_ptr();
+                    api_set_error(err, kErrorTypeValidation, fmt, key.data);
                 }
                 return rv;
             }
@@ -509,1331 +502,981 @@ pub unsafe extern "C" fn dict_set_var(
             }
             tv_clear(&raw mut (*di).di_tv);
         }
+
         tv_copy(&raw mut tv, &raw mut (*di).di_tv);
         if watched {
             tv_dict_watcher_notify(dict, key.data, &raw mut tv, &raw mut oldtv);
             tv_clear(&raw mut oldtv);
         }
         tv_clear(&raw mut tv);
+        rv
     }
-    return rv;
 }
-pub unsafe extern "C" fn find_buffer_by_handle(
-    mut buffer: Buffer,
-    mut err: *mut Error,
-) -> *mut buf_T {
-    if buffer == 0 as ::core::ffi::c_int {
-        return curbuf.get();
+
+// -- Strings ---------------------------------------------------------------
+
+/// A copy of the C string `str`, owned by the caller.
+pub(crate) unsafe fn cstr_to_string(str: *const c_char) -> String_0 {
+    // SAFETY: `str` is null or NUL-terminated.
+    unsafe {
+        if str.is_null() {
+            return STRING_INIT;
+        }
+        cbuf_to_string(str, strlen(str))
     }
-    let mut rv: *mut buf_T =
-        map_get_int_ptr_t(buffer_handles.ptr(), buffer as ::core::ffi::c_int) as *mut buf_T;
-    if rv.is_null() {
-        api_err_invalid(
-            err,
-            b"buffer id\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            buffer as int64_t,
-            false_0 != 0,
+}
+
+/// A copy of `size` bytes of `buf`, owned by the caller and NUL-terminated
+/// however many NULs the bytes themselves hold.
+pub(crate) unsafe fn cbuf_to_string(buf: *const c_char, size: size_t) -> String_0 {
+    // SAFETY: `buf` has `size` readable bytes.
+    unsafe {
+        String_0 {
+            data: xmemdupz(buf.cast(), size).cast(),
+            size,
+        }
+    }
+}
+
+/// A NUL-terminated copy of `str`'s bytes, owned by the caller.
+pub(crate) unsafe fn string_to_cstr(str: String_0) -> *mut c_char {
+    // SAFETY: `str` has `size` readable bytes.
+    unsafe { xstrndup(str.data, str.size) }
+}
+
+/// `str` viewed as an API string, borrowing rather than copying.
+pub(crate) unsafe fn cstr_as_string(str: *const c_char) -> String_0 {
+    // SAFETY: `str` is null or NUL-terminated.
+    unsafe {
+        if str.is_null() {
+            return STRING_INIT;
+        }
+        String_0 {
+            data: str as *mut c_char,
+            size: strlen(str),
+        }
+    }
+}
+
+/// [`cstr_as_string`] for a buffer that need not be NUL-terminated within
+/// `maxsize` bytes.
+pub(crate) unsafe fn cstrn_as_string(str: *mut c_char, maxsize: size_t) -> String_0 {
+    // SAFETY: `str` has `maxsize` readable bytes.
+    unsafe {
+        String_0 {
+            data: str,
+            size: strnlen(str, maxsize),
+        }
+    }
+}
+
+/// Take `ga`'s buffer as an API string, leaving the growarray empty.
+pub(crate) unsafe fn ga_take_string(ga: *mut garray_T) -> String_0 {
+    // SAFETY: `ga` is the caller's growarray of bytes.
+    unsafe {
+        let str = String_0 {
+            data: (*ga).ga_data.cast(),
+            size: (*ga).ga_len as size_t,
+        };
+        (*ga).ga_data = ptr::null_mut();
+        (*ga).ga_len = 0;
+        (*ga).ga_maxlen = 0;
+        str
+    }
+}
+
+/// Split `input` into one array item per line, arena-allocating the lines.
+///
+/// Line breaks are `\n`, or `\r` and `\r\n` as well with `crlf`. A NUL in
+/// the text stands for a newline, as it does everywhere a buffer line is
+/// passed as a C string, and is turned back into one. Text that ends *with*
+/// a break gets a trailing empty item, so that the array round-trips.
+pub(crate) unsafe fn string_to_array(input: String_0, crlf: bool, arena: *mut Arena) -> Array {
+    // SAFETY: `input` has `size` readable bytes.
+    unsafe {
+        let mut ret: ArrayBuilder = mem::zeroed();
+        let mut items = InitVec::new(
+            &mut ret.size,
+            &mut ret.capacity,
+            &mut ret.items,
+            &mut ret.init_array,
         );
-        return ::core::ptr::null_mut::<buf_T>();
-    }
-    return rv;
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn find_window_by_handle(
-    mut window: Window,
-    mut err: *mut Error,
-) -> *mut win_T {
-    if window == 0 as ::core::ffi::c_int {
-        return curwin.get();
-    }
-    let mut rv: *mut win_T =
-        map_get_int_ptr_t(window_handles.ptr(), window as ::core::ffi::c_int) as *mut win_T;
-    if rv.is_null() {
-        api_err_invalid(
-            err,
-            b"window id\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            window as int64_t,
-            false_0 != 0,
-        );
-        return ::core::ptr::null_mut::<win_T>();
-    }
-    return rv;
-}
-pub unsafe extern "C" fn find_tab_by_handle(
-    mut tabpage: Tabpage,
-    mut err: *mut Error,
-) -> *mut tabpage_T {
-    if tabpage == 0 as ::core::ffi::c_int {
-        return curtab.get();
-    }
-    let mut rv: *mut tabpage_T =
-        map_get_int_ptr_t(tabpage_handles.ptr(), tabpage as ::core::ffi::c_int) as *mut tabpage_T;
-    if rv.is_null() {
-        api_err_invalid(
-            err,
-            b"tabpage id\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            tabpage as int64_t,
-            false_0 != 0,
-        );
-        return ::core::ptr::null_mut::<tabpage_T>();
-    }
-    return rv;
-}
-pub unsafe extern "C" fn cstr_to_string(mut str: *const ::core::ffi::c_char) -> String_0 {
-    if str.is_null() {
-        return STRING_INIT;
-    }
-    let mut len: size_t = strlen(str);
-    return String_0 {
-        data: xmemdupz(str as *const ::core::ffi::c_void, len) as *mut ::core::ffi::c_char,
-        size: len,
-    };
-}
-pub unsafe extern "C" fn string_to_cstr(mut str: String_0) -> *mut ::core::ffi::c_char {
-    return xstrndup(str.data, str.size);
-}
-pub unsafe extern "C" fn cbuf_to_string(
-    mut buf: *const ::core::ffi::c_char,
-    mut size: size_t,
-) -> String_0 {
-    return String_0 {
-        data: xmemdupz(buf as *const ::core::ffi::c_void, size) as *mut ::core::ffi::c_char,
-        size: size,
-    };
-}
-pub unsafe extern "C" fn cstrn_as_string(
-    mut str: *mut ::core::ffi::c_char,
-    mut maxsize: size_t,
-) -> String_0 {
-    return String_0 {
-        data: str,
-        size: strnlen(str, maxsize),
-    };
-}
-pub unsafe extern "C" fn cstr_as_string(mut str: *const ::core::ffi::c_char) -> String_0 {
-    if str.is_null() {
-        return STRING_INIT;
-    }
-    return String_0 {
-        data: str as *mut ::core::ffi::c_char,
-        size: strlen(str),
-    };
-}
-pub unsafe extern "C" fn ga_take_string(mut ga: *mut garray_T) -> String_0 {
-    let mut str: String_0 = String_0 {
-        data: (*ga).ga_data as *mut ::core::ffi::c_char,
-        size: (*ga).ga_len as size_t,
-    };
-    (*ga).ga_data = NULL_0;
-    (*ga).ga_len = 0 as ::core::ffi::c_int;
-    (*ga).ga_maxlen = 0 as ::core::ffi::c_int;
-    return str;
-}
-pub unsafe extern "C" fn string_to_array(
-    input: String_0,
-    mut crlf: bool,
-    mut arena: *mut Arena,
-) -> Array {
-    let mut ret: ArrayBuilder = ArrayBuilder {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-        init_array: [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        }; 16],
-    };
-    ret.capacity = ::core::mem::size_of::<[Object; 16]>()
-        .wrapping_div(::core::mem::size_of::<Object>())
-        .wrapping_div(
-            (::core::mem::size_of::<[Object; 16]>().wrapping_rem(::core::mem::size_of::<Object>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
-    ret.size = 0 as size_t;
-    ret.items = &raw mut ret.init_array as *mut Object;
-    let mut i: size_t = 0 as size_t;
-    while i < input.size {
-        let mut start: *const ::core::ffi::c_char = input.data.offset(i as isize);
-        let mut end: *const ::core::ffi::c_char = start;
-        let mut line_len: size_t = 0 as size_t;
-        while line_len < input.size.wrapping_sub(i) {
-            end = start.offset(line_len as isize);
-            if *end as ::core::ffi::c_int == NL
-                || crlf as ::core::ffi::c_int != 0 && *end as ::core::ffi::c_int == CAR
-            {
-                break;
+        items.init();
+
+        let mut i: size_t = 0;
+        while i < input.size {
+            let start = input.data.add(i);
+            let mut end = start;
+            let mut line_len: size_t = 0;
+            while line_len < input.size - i {
+                end = start.add(line_len);
+                if *end == NL || (crlf && *end == CAR) {
+                    break;
+                }
+                line_len += 1;
             }
-            line_len = line_len.wrapping_add(1);
-        }
-        i = i.wrapping_add(line_len);
-        if crlf as ::core::ffi::c_int != 0
-            && *end as ::core::ffi::c_int == CAR
-            && i.wrapping_add(1 as size_t) < input.size
-            && *end.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NL
-        {
-            i = i.wrapping_add(1 as size_t);
-        }
-        let mut s: String_0 = arena_string(
-            arena,
-            String_0 {
-                data: start as *mut ::core::ffi::c_char,
-                size: line_len,
-            },
-        );
-        memchrsub(
-            s.data as *mut ::core::ffi::c_void,
-            NUL as ::core::ffi::c_char,
-            NL as ::core::ffi::c_char,
-            line_len,
-        );
-        if ret.size == ret.capacity {
-            ret.capacity = if ret.capacity << 1 as ::core::ffi::c_int
-                > ::core::mem::size_of::<[Object; 16]>()
-                    .wrapping_div(::core::mem::size_of::<Object>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[Object; 16]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                ret.capacity << 1 as ::core::ffi::c_int
-            } else {
-                ::core::mem::size_of::<[Object; 16]>()
-                    .wrapping_div(::core::mem::size_of::<Object>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[Object; 16]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>())
-                            == 0) as ::core::ffi::c_int as size_t,
-                    )
-            };
-            ret.items = (if ret.capacity
-                == ::core::mem::size_of::<[Object; 16]>()
-                    .wrapping_div(::core::mem::size_of::<Object>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[Object; 16]>()
-                            .wrapping_rem(::core::mem::size_of::<Object>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) {
-                if ret.items == &raw mut ret.init_array as *mut Object {
-                    ret.items as *mut ::core::ffi::c_void
-                } else {
-                    _memcpy_free(
-                        &raw mut ret.init_array as *mut Object as *mut ::core::ffi::c_void,
-                        ret.items as *mut ::core::ffi::c_void,
-                        ret.size.wrapping_mul(::core::mem::size_of::<Object>()),
-                    )
-                }
-            } else {
-                if ret.items == &raw mut ret.init_array as *mut Object {
-                    memcpy(
-                        xmalloc(ret.capacity.wrapping_mul(::core::mem::size_of::<Object>())),
-                        ret.items as *const ::core::ffi::c_void,
-                        ret.size.wrapping_mul(::core::mem::size_of::<Object>()),
-                    )
-                } else {
-                    xrealloc(
-                        ret.items as *mut ::core::ffi::c_void,
-                        ret.capacity.wrapping_mul(::core::mem::size_of::<Object>()),
-                    )
-                }
-            }) as *mut Object;
-        } else {
-        };
-        let c2rust_fresh0 = ret.size;
-        ret.size = ret.size.wrapping_add(1);
-        *ret.items.offset(c2rust_fresh0 as isize) = object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed { string: s },
-        };
-        if i.wrapping_add(1 as size_t) == input.size
-            && (*end as ::core::ffi::c_int == NL
-                || crlf as ::core::ffi::c_int != 0 && *end as ::core::ffi::c_int == CAR)
-        {
-            if ret.size == ret.capacity {
-                ret.capacity = if ret.capacity << 1 as ::core::ffi::c_int
-                    > ::core::mem::size_of::<[Object; 16]>()
-                        .wrapping_div(::core::mem::size_of::<Object>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[Object; 16]>()
-                                .wrapping_rem(::core::mem::size_of::<Object>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        ) {
-                    ret.capacity << 1 as ::core::ffi::c_int
-                } else {
-                    ::core::mem::size_of::<[Object; 16]>()
-                        .wrapping_div(::core::mem::size_of::<Object>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[Object; 16]>()
-                                .wrapping_rem(::core::mem::size_of::<Object>())
-                                == 0) as ::core::ffi::c_int as size_t,
-                        )
-                };
-                ret.items = (if ret.capacity
-                    == ::core::mem::size_of::<[Object; 16]>()
-                        .wrapping_div(::core::mem::size_of::<Object>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[Object; 16]>()
-                                .wrapping_rem(::core::mem::size_of::<Object>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        ) {
-                    if ret.items == &raw mut ret.init_array as *mut Object {
-                        ret.items as *mut ::core::ffi::c_void
-                    } else {
-                        _memcpy_free(
-                            &raw mut ret.init_array as *mut Object as *mut ::core::ffi::c_void,
-                            ret.items as *mut ::core::ffi::c_void,
-                            ret.size.wrapping_mul(::core::mem::size_of::<Object>()),
-                        )
-                    }
-                } else {
-                    if ret.items == &raw mut ret.init_array as *mut Object {
-                        memcpy(
-                            xmalloc(ret.capacity.wrapping_mul(::core::mem::size_of::<Object>())),
-                            ret.items as *const ::core::ffi::c_void,
-                            ret.size.wrapping_mul(::core::mem::size_of::<Object>()),
-                        )
-                    } else {
-                        xrealloc(
-                            ret.items as *mut ::core::ffi::c_void,
-                            ret.capacity.wrapping_mul(::core::mem::size_of::<Object>()),
-                        )
-                    }
-                }) as *mut Object;
-            } else {
-            };
-            let c2rust_fresh1 = ret.size;
-            ret.size = ret.size.wrapping_add(1);
-            *ret.items.offset(c2rust_fresh1 as isize) = object {
+            i += line_len;
+            let ends_line = *end == NL || (crlf && *end == CAR);
+            if crlf && *end == CAR && i + 1 < input.size && *end.add(1) == NL {
+                i += 1;
+            }
+
+            let s = arena_string(
+                arena,
+                String_0 {
+                    data: start,
+                    size: line_len,
+                },
+            );
+            memchrsub(s.data.cast(), NUL, NL, line_len);
+            items.push(object {
                 type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: String_0 {
-                        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        size: 0 as size_t,
+                data: object_data { string: s },
+            });
+            if i + 1 == input.size && ends_line {
+                items.push(object {
+                    type_0: kObjectTypeString,
+                    data: object_data {
+                        string: STRING_INIT,
                     },
-                },
-            };
+                });
+            }
+            i += 1;
         }
-        i = i.wrapping_add(1);
+        arena_take_arraybuilder(arena, &raw mut ret)
     }
-    return arena_take_arraybuilder(arena, &raw mut ret);
 }
-pub unsafe extern "C" fn normalize_index(
-    mut buf: *mut buf_T,
-    mut index: int64_t,
-    mut end_exclusive: bool,
-    mut oob: *mut bool,
+
+// -- Buffer text -----------------------------------------------------------
+
+/// Turn a signed, end-relative line index into a 1-based line number,
+/// clamping it into the buffer and reporting through `oob` that it had to.
+///
+/// `end_exclusive` allows one past the last line, which is what an
+/// end-of-range index means.
+pub(crate) unsafe fn normalize_index(
+    buf: *mut buf_T,
+    index: int64_t,
+    end_exclusive: bool,
+    oob: *mut bool,
 ) -> int64_t {
-    '_c2rust_label: {
-        if (*buf).b_ml.ml_line_count > 0 as linenr_T {
+    // SAFETY: `buf` is a loaded buffer and `oob` the caller's flag.
+    unsafe {
+        assert!((*buf).b_ml.ml_line_count > 0);
+        let max_index = ((*buf).b_ml.ml_line_count + end_exclusive as linenr_T - 1) as int64_t;
+        let mut index = if index < 0 {
+            max_index + index + 1
         } else {
-            __assert_fail(
-                b"buf->b_ml.ml_line_count > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/helpers.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                452 as ::core::ffi::c_uint,
-                b"int64_t normalize_index(buf_T *, int64_t, _Bool, _Bool *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
+            index
+        };
+        if index > max_index {
+            *oob = true;
+            index = max_index;
+        } else if index < 0 {
+            *oob = true;
+            index = 0;
         }
-    };
-    let mut max_index: int64_t =
-        ((*buf).b_ml.ml_line_count + end_exclusive as linenr_T - 1 as linenr_T) as int64_t;
-    index = if index < 0 as int64_t {
-        max_index + index + 1 as int64_t
-    } else {
-        index
-    };
-    if index > max_index {
-        *oob = true_0 != 0;
-        index = max_index;
-    } else if index < 0 as int64_t {
-        *oob = true_0 != 0;
-        index = 0 as int64_t;
+        index + 1
     }
-    index += 1;
-    return index;
 }
-pub unsafe extern "C" fn buf_get_text(
-    mut buf: *mut buf_T,
-    mut lnum: int64_t,
-    mut start_col: int64_t,
-    mut end_col: int64_t,
-    mut err: *mut Error,
+
+/// The text of line `lnum` between the two columns, as a *borrowed* string
+/// into the buffer's own line. Negative columns count back from the end.
+pub(crate) unsafe fn buf_get_text(
+    buf: *mut buf_T,
+    lnum: int64_t,
+    start_col: int64_t,
+    end_col: int64_t,
+    err: *mut Error,
 ) -> String_0 {
-    let mut rv: String_0 = STRING_INIT;
-    if !(lnum < MAXLNUM as ::core::ffi::c_int as int64_t) {
-        api_err_invalid(
-            err,
-            b"line index\0".as_ptr() as *const ::core::ffi::c_char,
-            b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
-            0 as int64_t,
-            false_0 != 0,
-        );
-        return rv;
-    }
-    let mut bufstr: *mut ::core::ffi::c_char = ml_get_buf(buf, lnum as linenr_T);
-    let mut line_length: colnr_T = ml_get_buf_len(buf, lnum as linenr_T);
-    start_col = if start_col < 0 as int64_t {
-        line_length as int64_t + start_col + 1 as int64_t
-    } else {
-        start_col
-    };
-    end_col = if end_col < 0 as int64_t {
-        line_length as int64_t + end_col + 1 as int64_t
-    } else {
-        end_col
-    };
-    start_col = if (if 0 as int64_t > start_col {
-        0 as int64_t
-    } else {
-        start_col
-    }) < line_length as int64_t
-    {
-        if 0 as int64_t > start_col {
-            0 as int64_t
-        } else {
-            start_col
-        }
-    } else {
-        line_length as int64_t
-    };
-    end_col = if (if 0 as int64_t > end_col {
-        0 as int64_t
-    } else {
-        end_col
-    }) < line_length as int64_t
-    {
-        if 0 as int64_t > end_col {
-            0 as int64_t
-        } else {
-            end_col
-        }
-    } else {
-        line_length as int64_t
-    };
-    if start_col > end_col {
-        api_set_error(
-            err,
-            kErrorTypeValidation,
-            b"start_col must be less than or equal to end_col\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        );
-        return rv;
-    }
-    return String_0 {
-        data: bufstr.offset(start_col as isize),
-        size: (end_col - start_col) as size_t,
-    };
-}
-pub unsafe extern "C" fn api_free_string(mut value: String_0) {
-    xfree(value.data as *mut ::core::ffi::c_void);
-}
-pub unsafe extern "C" fn arena_array(mut arena: *mut Arena, mut max_size: size_t) -> Array {
-    let mut arr: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    arr.capacity = max_size;
-    arr.items = arena_alloc(
-        arena,
-        ::core::mem::size_of::<Object>().wrapping_mul(arr.capacity),
-        true_0 != 0,
-    ) as *mut Object;
-    return arr;
-}
-pub unsafe extern "C" fn arena_dict(mut arena: *mut Arena, mut max_size: size_t) -> Dict {
-    let mut dict: Dict = Dict {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<KeyValuePair>(),
-    };
-    dict.capacity = max_size;
-    dict.items = arena_alloc(
-        arena,
-        ::core::mem::size_of::<KeyValuePair>().wrapping_mul(dict.capacity),
-        true_0 != 0,
-    ) as *mut KeyValuePair;
-    return dict;
-}
-pub unsafe extern "C" fn arena_string(mut arena: *mut Arena, mut str: String_0) -> String_0 {
-    if str.size != 0 {
-        return String_0 {
-            data: arena_memdupz(arena, str.data, str.size),
-            size: str.size,
-        };
-    } else {
-        return String_0 {
-            data: (if !arena.is_null() {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char) as *const ::core::ffi::c_char
-            }) as *mut ::core::ffi::c_char,
-            size: 0 as size_t,
-        };
-    };
-}
-pub unsafe extern "C" fn arena_take_arraybuilder(
-    mut arena: *mut Arena,
-    mut arr: *mut ArrayBuilder,
-) -> Array {
-    let mut ret: Array = arena_array(arena, (*arr).size);
-    ret.size = (*arr).size;
-    memcpy(
-        ret.items as *mut ::core::ffi::c_void,
-        (*arr).items as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<Object>().wrapping_mul(ret.size),
-    );
-    if (*arr).items != &raw mut (*arr).init_array as *mut Object {
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut (*arr).items as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL_0;
-        let _ = *ptr_;
-    }
-    return ret;
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn api_free_object(mut value: Object) {
-    match value.type_0 as ::core::ffi::c_uint {
-        4 => {
-            api_free_string(value.data.string);
-        }
-        5 => {
-            api_free_array(value.data.array);
-        }
-        6 => {
-            api_free_dict(value.data.dict);
-        }
-        7 => {
-            api_free_luaref(value.data.luaref);
-        }
-        0 | 1 | 2 | 3 | 8 | 9 | 10 | _ => {}
-    };
-}
-pub unsafe extern "C" fn api_free_array(mut value: Array) {
-    let mut i: size_t = 0 as size_t;
-    while i < value.size {
-        api_free_object(*value.items.offset(i as isize));
-        i = i.wrapping_add(1);
-    }
-    xfree(value.items as *mut ::core::ffi::c_void);
-}
-pub unsafe extern "C" fn api_free_dict(mut value: Dict) {
-    let mut i: size_t = 0 as size_t;
-    while i < value.size {
-        api_free_string((*value.items.offset(i as isize)).key);
-        api_free_object((*value.items.offset(i as isize)).value);
-        i = i.wrapping_add(1);
-    }
-    xfree(value.items as *mut ::core::ffi::c_void);
-}
-pub unsafe extern "C" fn api_clear_error(mut value: *mut Error) {
-    if !((*value).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
-        return;
-    }
-    xfree((*value).msg as *mut ::core::ffi::c_void);
-    (*value).msg = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    (*value).type_0 = kErrorTypeNone;
-}
-static mem_for_metadata: GlobalCell<ArenaMem> =
-    GlobalCell::new(::core::ptr::null_mut::<consumed_blk>());
-pub unsafe extern "C" fn api_metadata() -> Object {
-    static metadata: GlobalCell<Object> = GlobalCell::new(object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    });
-    if (*metadata.ptr()).type_0 as ::core::ffi::c_uint
-        == kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut arena: Arena = ARENA_EMPTY;
-        let mut err: Error = Error {
-            type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        };
-        metadata.set(unpack(
-            PACKED_API_METADATA.as_ptr() as *mut ::core::ffi::c_char,
-            PACKED_API_METADATA.len(),
-            &raw mut arena,
-            &raw mut err,
-        ));
-        if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
-            || (*metadata.ptr()).type_0 as ::core::ffi::c_uint
-                != kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            abort();
-        }
-        mem_for_metadata.set(arena_finish(&raw mut arena));
-    }
-    return metadata.get();
-}
-pub unsafe extern "C" fn api_metadata_raw() -> String_0 {
-    return String_0 {
-        data: PACKED_API_METADATA.as_ptr() as *mut ::core::ffi::c_char,
-        size: PACKED_API_METADATA.len(),
-    };
-}
-pub unsafe extern "C" fn copy_string(mut str: String_0, mut arena: *mut Arena) -> String_0 {
-    if !str.data.is_null() {
-        return String_0 {
-            data: arena_memdupz(arena, str.data, str.size),
-            size: str.size,
-        };
-    } else {
-        return STRING_INIT;
-    };
-}
-pub unsafe extern "C" fn copy_array(mut array: Array, mut arena: *mut Arena) -> Array {
-    let mut rv: Array = arena_array(arena, array.size);
-    let mut i: size_t = 0 as size_t;
-    while i < array.size {
-        if rv.size == rv.capacity {
-            rv.capacity = if rv.capacity != 0 {
-                rv.capacity << 1 as ::core::ffi::c_int
-            } else {
-                8 as size_t
-            };
-            rv.items = xrealloc(
-                rv.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<Object>().wrapping_mul(rv.capacity),
-            ) as *mut Object;
-        } else {
-        };
-        let c2rust_fresh2 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh2 as isize) =
-            copy_object(*array.items.offset(i as isize), arena);
-        i = i.wrapping_add(1);
-    }
-    return rv;
-}
-pub unsafe extern "C" fn copy_dict(mut dict: Dict, mut arena: *mut Arena) -> Dict {
-    let mut rv: Dict = arena_dict(arena, dict.size);
-    let mut i: size_t = 0 as size_t;
-    while i < dict.size {
-        let mut item: KeyValuePair = *dict.items.offset(i as isize);
-        let c2rust_fresh3 = rv.size;
-        rv.size = rv.size.wrapping_add(1);
-        *rv.items.offset(c2rust_fresh3 as isize) = key_value_pair {
-            key: cstr_as_string(copy_string(item.key, arena).data),
-            value: copy_object(item.value, arena),
-        };
-        i = i.wrapping_add(1);
-    }
-    return rv;
-}
-pub unsafe extern "C" fn copy_object(mut obj: Object, mut arena: *mut Arena) -> Object {
-    match obj.type_0 as ::core::ffi::c_uint {
-        8 | 10 | 9 | 0 | 1 | 2 | 3 => return obj,
-        4 => {
-            return object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: copy_string(obj.data.string, arena),
-                },
-            };
-        }
-        5 => {
-            return object {
-                type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed {
-                    array: copy_array(obj.data.array, arena),
-                },
-            };
-        }
-        6 => {
-            return object {
-                type_0: kObjectTypeDict,
-                data: C2Rust_Unnamed {
-                    dict: copy_dict(obj.data.dict, arena),
-                },
-            };
-        }
-        7 => {
-            return object {
-                type_0: kObjectTypeLuaRef,
-                data: C2Rust_Unnamed {
-                    luaref: api_new_luaref(obj.data.luaref),
-                },
-            };
-        }
-        _ => {}
-    }
-    unreachable!();
-}
-pub unsafe extern "C" fn api_set_error(
-    mut err: *mut Error,
-    mut errType: ErrorType,
-    mut format: *const ::core::ffi::c_char,
-    mut c2rust_args: ...
-) {
-    '_c2rust_label: {
-        if kErrorTypeNone as ::core::ffi::c_int != errType as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"kErrorTypeNone != errType\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/helpers.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                689 as ::core::ffi::c_uint,
-                b"void api_set_error(Error *, ErrorType, const char *, ...)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut args1: ::core::ffi::VaList;
-    let mut args2: ::core::ffi::VaList;
-    args1 = c2rust_args.clone();
-    args2 = args1.clone();
-    let mut len: ::core::ffi::c_int = vsnprintf(
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        0 as size_t,
-        format,
-        args1,
-    );
-    '_c2rust_label_0: {
-        if len >= 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/helpers.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                696 as ::core::ffi::c_uint,
-                b"void api_set_error(Error *, ErrorType, const char *, ...)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut bufsize: size_t = if (len as size_t).wrapping_add(1 as size_t)
-        < (1024 as ::core::ffi::c_int * 1024 as ::core::ffi::c_int) as size_t
-    {
-        (len as size_t).wrapping_add(1 as size_t)
-    } else {
-        (1024 as ::core::ffi::c_int * 1024 as ::core::ffi::c_int) as size_t
-    };
-    (*err).msg = xmalloc(bufsize) as *mut ::core::ffi::c_char;
-    vsnprintf((*err).msg, bufsize, format, args2);
-    (*err).type_0 = errType;
-}
-pub unsafe extern "C" fn api_object_to_bool(
-    mut obj: Object,
-    mut what: *const ::core::ffi::c_char,
-    mut nil_value: bool,
-    mut err: *mut Error,
-) -> bool {
-    if obj.type_0 as ::core::ffi::c_uint
-        == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        return obj.data.boolean as bool;
-    } else if obj.type_0 as ::core::ffi::c_uint
-        == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        return obj.data.integer != 0;
-    } else if obj.type_0 as ::core::ffi::c_uint
-        == kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        return nil_value;
-    } else {
-        if true {
-            api_err_exp(
-                err,
-                what,
-                b"boolean\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-            );
-        }
-        return false_0 != 0;
-    };
-}
-pub unsafe extern "C" fn object_to_hl_id(
-    mut obj: Object,
-    mut what: *const ::core::ffi::c_char,
-    mut err: *mut Error,
-) -> ::core::ffi::c_int {
-    if obj.type_0 as ::core::ffi::c_uint
-        == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut str: String_0 = obj.data.string;
-        return if str.size != 0 {
-            syn_check_group(str.data, str.size)
-        } else {
-            0 as ::core::ffi::c_int
-        };
-    } else if obj.type_0 as ::core::ffi::c_uint
-        == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut id: ::core::ffi::c_int = obj.data.integer as ::core::ffi::c_int;
-        return if 1 as ::core::ffi::c_int <= id && id <= highlight_num_groups() {
-            id
-        } else {
-            0 as ::core::ffi::c_int
-        };
-    } else {
-        if true {
+    // SAFETY: `buf` is a loaded buffer and `err` the caller's error slot.
+    unsafe {
+        if lnum >= MAXLNUM {
             api_err_invalid(
                 err,
-                b"hl_group\0".as_ptr() as *const ::core::ffi::c_char,
-                what,
-                0 as int64_t,
-                true_0 != 0,
+                c"line index".as_ptr(),
+                c"out of range".as_ptr(),
+                0,
+                false,
             );
+            return STRING_INIT;
         }
-        return 0 as ::core::ffi::c_int;
-    };
-}
-pub unsafe extern "C" fn api_typename(mut t: ObjectType) -> *mut ::core::ffi::c_char {
-    match t as ::core::ffi::c_uint {
-        0 => {
-            return b"nil\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        let bufstr = ml_get_buf(buf, lnum as linenr_T);
+        let line_length = ml_get_buf_len(buf, lnum as linenr_T) as int64_t;
+
+        let relative = |col: int64_t| if col < 0 { line_length + col + 1 } else { col };
+        let start_col = relative(start_col).clamp(0, line_length);
+        let end_col = relative(end_col).clamp(0, line_length);
+        if start_col > end_col {
+            let msg = c"start_col must be less than or equal to end_col".as_ptr();
+            api_set_error(err, kErrorTypeValidation, msg);
+            return STRING_INIT;
         }
-        1 => {
-            return b"Boolean\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        String_0 {
+            data: bufstr.offset(start_col as isize),
+            size: (end_col - start_col) as size_t,
         }
-        2 => {
-            return b"Integer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        3 => {
-            return b"Float\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        4 => {
-            return b"String\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        5 => {
-            return b"Array\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        6 => {
-            return b"Dict\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        7 => {
-            return b"Function\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        8 => {
-            return b"Buffer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        9 => {
-            return b"Window\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        10 => {
-            return b"Tabpage\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        _ => {}
     }
-    unreachable!();
 }
-pub unsafe extern "C" fn parse_hl_msg(
-    mut chunks: Array,
-    mut is_err: bool,
-    mut err: *mut Error,
-) -> HlMessage {
-    let mut hl_msg: HlMessage = HlMessage {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<HlMessageChunk>(),
-    };
-    let mut i: size_t = 0 as size_t;
-    '_free_exit: {
-        while i < chunks.size {
-            if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                != (*chunks.items.offset(i as isize)).type_0 as ::core::ffi::c_uint
-            {
-                api_err_exp(
-                    err,
-                    b"chunk\0".as_ptr() as *const ::core::ffi::c_char,
-                    api_typename(kObjectTypeArray),
-                    api_typename((*chunks.items.offset(i as isize)).type_0),
-                );
-                break '_free_exit;
-            } else {
-                let mut chunk: Array = (*chunks.items.offset(i as isize)).data.array;
-                if !(chunk.size > 0 as size_t
-                    && chunk.size <= 2 as size_t
-                    && (*chunk.items.offset(0 as ::core::ffi::c_int as isize)).type_0
-                        as ::core::ffi::c_uint
-                        == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint)
-                {
-                    api_set_error(
-                        err,
-                        kErrorTypeValidation,
-                        b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"Invalid chunk: expected Array with 1 or 2 Strings\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                    break '_free_exit;
-                } else {
-                    let mut str: String_0 = copy_string(
-                        (*chunk.items.offset(0 as ::core::ffi::c_int as isize))
-                            .data
-                            .string,
-                        ::core::ptr::null_mut::<Arena>(),
-                    );
-                    let mut hl_id: ::core::ffi::c_int = if chunk.size == 2 as size_t {
-                        object_to_hl_id(
-                            *chunk.items.offset(1 as ::core::ffi::c_int as isize),
-                            b"text highlight\0".as_ptr() as *const ::core::ffi::c_char,
-                            err,
-                        )
-                    } else if is_err as ::core::ffi::c_int != 0 {
-                        HLF_E as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    };
-                    if hl_msg.size == hl_msg.capacity {
-                        hl_msg.capacity = if hl_msg.capacity != 0 {
-                            hl_msg.capacity << 1 as ::core::ffi::c_int
-                        } else {
-                            8 as size_t
-                        };
-                        hl_msg.items = xrealloc(
-                            hl_msg.items as *mut ::core::ffi::c_void,
-                            ::core::mem::size_of::<HlMessageChunk>().wrapping_mul(hl_msg.capacity),
-                        ) as *mut HlMessageChunk;
-                    } else {
-                    };
-                    let c2rust_fresh4 = hl_msg.size;
-                    hl_msg.size = hl_msg.size.wrapping_add(1);
-                    *hl_msg.items.offset(c2rust_fresh4 as isize) = HlMessageChunk {
-                        text: str,
-                        hl_id: hl_id,
-                    };
-                    i = i.wrapping_add(1);
-                }
-            }
-        }
-        return hl_msg;
+
+// -- Arena allocation ------------------------------------------------------
+
+/// An empty array with room for `max_size` items, taken from `arena` — or
+/// from the heap when `arena` is null.
+pub(crate) fn arena_array(arena: *mut Arena, max_size: size_t) -> Array {
+    // SAFETY: `arena_alloc` accepts a null arena and falls back to `xmalloc`.
+    let items = unsafe { arena_alloc(arena, mem::size_of::<Object>() * max_size, true) };
+    Array {
+        size: 0,
+        capacity: max_size,
+        items: items.cast(),
     }
-    hl_msg_free(hl_msg);
-    return HlMessage {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<HlMessageChunk>(),
-    };
 }
-pub unsafe extern "C" fn api_dict_to_keydict(
-    mut retval: *mut ::core::ffi::c_void,
-    mut hashy: FieldHashfn,
-    mut dict: Dict,
-    mut err: *mut Error,
-) -> bool {
-    let mut i: size_t = 0 as size_t;
-    while i < dict.size {
-        let mut k: String_0 = (*dict.items.offset(i as isize)).key;
-        let mut field: *mut KeySetLink = hashy.expect("non-null function pointer")(k.data, k.size);
-        if field.is_null() {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                b"Invalid key: '%.*s'\0".as_ptr() as *const ::core::ffi::c_char,
-                k.size as ::core::ffi::c_int,
-                k.data,
-            );
-            return false_0 != 0;
-        }
-        if (*field).opt_index >= 0 as ::core::ffi::c_int {
-            let mut ks: *mut OptKeySet = retval as *mut OptKeySet;
-            (*ks).is_set_ = ((*ks).is_set_ as ::core::ffi::c_ulonglong
-                | (1 as ::core::ffi::c_ulonglong) << (*field).opt_index)
-                as OptionalKeys;
-        }
-        let mut mem: *mut ::core::ffi::c_char =
-            (retval as *mut ::core::ffi::c_char).offset((*field).ptr_off as isize);
-        let mut value: *mut Object = &raw mut (*dict.items.offset(i as isize)).value;
-        if (*field).type_0 == kObjectTypeNil as ::core::ffi::c_int {
-            *(mem as *mut Object) = *value;
-        } else if (*field).type_0 == kObjectTypeInteger as ::core::ffi::c_int {
-            if (*field).is_hlgroup {
-                let mut hl_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                if (*value).type_0 as ::core::ffi::c_uint
-                    != kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    hl_id = object_to_hl_id(*value, k.data, err);
-                    if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                        return false_0 != 0;
-                    }
-                }
-                *(mem as *mut Integer) = hl_id as Integer;
-            } else {
-                if kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                    != (*value).type_0 as ::core::ffi::c_uint
-                {
-                    api_err_exp(
-                        err,
-                        (*field).str,
-                        api_typename(kObjectTypeInteger),
-                        api_typename((*value).type_0),
-                    );
-                    return false;
-                }
-                *(mem as *mut Integer) = (*value).data.integer;
-            }
-        } else if (*field).type_0 == kObjectTypeFloat as ::core::ffi::c_int {
-            let mut val: *mut Float = mem as *mut Float;
-            if (*value).type_0 as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                *val = (*value).data.integer as Float;
-            } else {
-                if kObjectTypeFloat as ::core::ffi::c_int as ::core::ffi::c_uint
-                    != (*value).type_0 as ::core::ffi::c_uint
-                {
-                    api_err_exp(
-                        err,
-                        (*field).str,
-                        api_typename(kObjectTypeFloat),
-                        api_typename((*value).type_0),
-                    );
-                    return false;
-                }
-                *val = (*value).data.floating;
-            }
-        } else if (*field).type_0 == kObjectTypeBoolean as ::core::ffi::c_int {
-            *(mem as *mut Boolean) =
-                api_object_to_bool(*value, (*field).str, false_0 != 0, err) as Boolean;
-            if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                return false_0 != 0;
-            }
-        } else if (*field).type_0 == kObjectTypeString as ::core::ffi::c_int {
-            if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                != (*value).type_0 as ::core::ffi::c_uint
-            {
-                api_err_exp(
-                    err,
-                    (*field).str,
-                    api_typename(kObjectTypeString),
-                    api_typename((*value).type_0),
-                );
-                return false;
-            }
-            *(mem as *mut String_0) = (*value).data.string;
-        } else if (*field).type_0 == kObjectTypeArray as ::core::ffi::c_int {
-            if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                != (*value).type_0 as ::core::ffi::c_uint
-            {
-                api_err_exp(
-                    err,
-                    (*field).str,
-                    api_typename(kObjectTypeArray),
-                    api_typename((*value).type_0),
-                );
-                return false;
-            }
-            *(mem as *mut Array) = (*value).data.array;
-        } else if (*field).type_0 == kObjectTypeDict as ::core::ffi::c_int {
-            let mut val_0: *mut Dict = mem as *mut Dict;
-            if (*value).type_0 as ::core::ffi::c_uint
-                == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*value).data.array.size == 0 as size_t
-            {
-                *val_0 = Dict {
-                    size: 0 as size_t,
-                    capacity: 0 as size_t,
-                    items: ::core::ptr::null_mut::<KeyValuePair>(),
-                };
-            } else if (*value).type_0 as ::core::ffi::c_uint
-                == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                *val_0 = (*value).data.dict;
-            } else {
-                api_err_exp(
-                    err,
-                    (*field).str,
-                    api_typename((*field).type_0 as ObjectType),
-                    api_typename((*value).type_0),
-                );
-                return false_0 != 0;
-            }
-        } else if (*field).type_0 == kObjectTypeBuffer as ::core::ffi::c_int
-            || (*field).type_0 == kObjectTypeWindow as ::core::ffi::c_int
-            || (*field).type_0 == kObjectTypeTabpage as ::core::ffi::c_int
-        {
-            if (*value).type_0 as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                || (*value).type_0 as ::core::ffi::c_uint
-                    == (*field).type_0 as ObjectType as ::core::ffi::c_uint
-            {
-                *(mem as *mut handle_T) = (*value).data.integer as handle_T;
-            } else {
-                api_err_exp(
-                    err,
-                    (*field).str,
-                    api_typename((*field).type_0 as ObjectType),
-                    api_typename((*value).type_0),
-                );
-                return false_0 != 0;
-            }
-        } else if (*field).type_0 == kObjectTypeLuaRef as ::core::ffi::c_int {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                b"Invalid key: '%.*s' is only allowed from Lua\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                k.size as ::core::ffi::c_int,
-                k.data,
-            );
-            return false_0 != 0;
-        } else {
-            abort();
-        }
-        i = i.wrapping_add(1);
+
+/// [`arena_array`] for a dictionary.
+pub(crate) fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict {
+    // SAFETY: as `arena_array`.
+    let items = unsafe { arena_alloc(arena, mem::size_of::<KeyValuePair>() * max_size, true) };
+    Dict {
+        size: 0,
+        capacity: max_size,
+        items: items.cast(),
     }
-    return true_0 != 0;
 }
-pub unsafe extern "C" fn api_keydict_to_dict(
-    mut value: *mut ::core::ffi::c_void,
-    mut table: *mut KeySetLink,
-    mut max_size: size_t,
-    mut arena: *mut Arena,
-) -> Dict {
-    let mut rv: Dict = arena_dict(arena, max_size);
-    let mut i: size_t = 0 as size_t;
-    while !(*table.offset(i as isize)).str.is_null() {
-        let mut field: *mut KeySetLink = table.offset(i as isize);
-        let mut is_set: bool = true_0 != 0;
-        if (*field).opt_index >= 0 as ::core::ffi::c_int {
-            let mut ks: *mut OptKeySet = value as *mut OptKeySet;
-            is_set = (*ks).is_set_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << (*field).opt_index
-                != 0;
-        }
-        if is_set {
-            let mut mem: *mut ::core::ffi::c_char =
-                (value as *mut ::core::ffi::c_char).offset((*field).ptr_off as isize);
-            let mut val: Object = object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
+
+/// A copy of `str` in `arena`, NUL-terminated. The empty string is a shared
+/// literal rather than an allocation — but only when there is an arena to
+/// outlive it; without one the caller frees what it gets.
+pub(crate) unsafe fn arena_string(arena: *mut Arena, str: String_0) -> String_0 {
+    // SAFETY: `str` has `size` readable bytes.
+    unsafe {
+        if str.size != 0 {
+            return String_0 {
+                data: arena_memdupz(arena, str.data, str.size),
+                size: str.size,
             };
-            if (*field).type_0 == kObjectTypeNil as ::core::ffi::c_int {
-                val = *(mem as *mut Object);
-            } else if (*field).type_0 == kObjectTypeInteger as ::core::ffi::c_int {
-                val = object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed {
-                        integer: *(mem as *mut Integer),
-                    },
-                };
-            } else if (*field).type_0 == kObjectTypeFloat as ::core::ffi::c_int {
-                val = object {
-                    type_0: kObjectTypeFloat,
-                    data: C2Rust_Unnamed {
-                        floating: *(mem as *mut Float),
-                    },
-                };
-            } else if (*field).type_0 == kObjectTypeBoolean as ::core::ffi::c_int {
-                val = object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed {
-                        boolean: *(mem as *mut Boolean),
-                    },
-                };
-            } else if (*field).type_0 == kObjectTypeString as ::core::ffi::c_int {
-                val = object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: *(mem as *mut String_0),
-                    },
-                };
-            } else if (*field).type_0 == kObjectTypeArray as ::core::ffi::c_int {
-                val = object {
-                    type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed {
-                        array: *(mem as *mut Array),
-                    },
-                };
-            } else if (*field).type_0 == kObjectTypeDict as ::core::ffi::c_int {
-                val = object {
-                    type_0: kObjectTypeDict,
-                    data: C2Rust_Unnamed {
-                        dict: *(mem as *mut Dict),
-                    },
-                };
-            } else if (*field).type_0 == kObjectTypeBuffer as ::core::ffi::c_int
-                || (*field).type_0 == kObjectTypeWindow as ::core::ffi::c_int
-                || (*field).type_0 == kObjectTypeTabpage as ::core::ffi::c_int
-            {
-                val.data.integer = *(mem as *mut handle_T) as Integer;
-                val.type_0 = (*field).type_0 as ObjectType;
-            } else if (*field).type_0 == kObjectTypeLuaRef as ::core::ffi::c_int {
-            } else {
+        }
+        let empty = if arena.is_null() {
+            xstrdup(c"".as_ptr())
+        } else {
+            c"".as_ptr() as *mut c_char
+        };
+        String_0 {
+            data: empty,
+            size: 0,
+        }
+    }
+}
+
+/// Move a builder's items into an arena-allocated array of exactly the right
+/// size, freeing the builder's own buffer if it had grown onto the heap.
+pub(crate) unsafe fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayBuilder) -> Array {
+    // SAFETY: `arr` is the caller's builder, live for the call.
+    unsafe {
+        let mut items = InitVec::new(
+            &mut (*arr).size,
+            &mut (*arr).capacity,
+            &mut (*arr).items,
+            &mut (*arr).init_array,
+        );
+        let mut ret = arena_array(arena, items.len());
+        ret.size = items.len();
+        memcpy(
+            ret.items.cast(),
+            items.as_slice().as_ptr().cast(),
+            mem::size_of::<Object>() * ret.size,
+        );
+        let heap = items.take_heap();
+        xfree(heap);
+        ret
+    }
+}
+
+// -- Freeing ---------------------------------------------------------------
+
+pub(crate) unsafe fn api_free_string(value: String_0) {
+    // SAFETY: `value` owns its allocation.
+    unsafe { xfree(value.data.cast()) };
+}
+
+/// Free `value` and everything below it. Only for objects that were built on
+/// the heap; an arena-allocated object is freed with its arena.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn api_free_object(value: Object) {
+    // SAFETY: `value` owns whatever it points at.
+    unsafe {
+        match value.type_0 {
+            kObjectTypeString => api_free_string(value.data.string),
+            kObjectTypeArray => api_free_array(value.data.array),
+            kObjectTypeDict => api_free_dict(value.data.dict),
+            kObjectTypeLuaRef => api_free_luaref(value.data.luaref),
+            _ => {}
+        }
+    }
+}
+
+pub(crate) unsafe fn api_free_array(value: Array) {
+    // SAFETY: as `api_free_object`.
+    unsafe {
+        for i in 0..value.size {
+            api_free_object(*value.items.add(i));
+        }
+        xfree(value.items.cast());
+    }
+}
+
+pub(crate) unsafe fn api_free_dict(value: Dict) {
+    // SAFETY: as `api_free_object`.
+    unsafe {
+        for i in 0..value.size {
+            api_free_string((*value.items.add(i)).key);
+            api_free_object((*value.items.add(i)).value);
+        }
+        xfree(value.items.cast());
+    }
+}
+
+/// Release the Lua references `value` holds, without freeing `value` itself.
+/// For arena-allocated objects, whose memory the arena reclaims but whose
+/// references the Lua registry does not.
+pub(crate) unsafe fn api_luarefs_free_object(value: Object) {
+    // SAFETY: `value` owns the references it names.
+    unsafe {
+        match value.type_0 {
+            kObjectTypeLuaRef => api_free_luaref(value.data.luaref),
+            kObjectTypeArray => api_luarefs_free_array(value.data.array),
+            kObjectTypeDict => api_luarefs_free_dict(value.data.dict),
+            _ => {}
+        }
+    }
+}
+
+pub(crate) unsafe fn api_luarefs_free_array(value: Array) {
+    // SAFETY: as `api_luarefs_free_object`.
+    unsafe {
+        for i in 0..value.size {
+            api_luarefs_free_object(*value.items.add(i));
+        }
+    }
+}
+
+pub(crate) unsafe fn api_luarefs_free_dict(value: Dict) {
+    // SAFETY: as `api_luarefs_free_object`.
+    unsafe {
+        for i in 0..value.size {
+            api_luarefs_free_object((*value.items.add(i)).value);
+        }
+    }
+}
+
+/// [`api_luarefs_free_object`] over a keydict, walking `table` to find which
+/// of its fields can hold a reference.
+pub(crate) unsafe fn api_luarefs_free_keydict(dict: *mut c_void, table: *mut KeySetLink) {
+    // SAFETY: `table` is the generated table for `dict`'s type, so its
+    // offsets and types describe `dict`'s fields; it ends with a null name.
+    unsafe {
+        for field in keyset_fields(table) {
+            let mem = (dict as *mut c_char).add((*field).ptr_off);
+            match (*field).type_0 as ObjectType {
+                kObjectTypeNil => api_luarefs_free_object(*(mem as *mut Object)),
+                kObjectTypeLuaRef => api_free_luaref(*(mem as *mut LuaRef)),
+                kObjectTypeDict => api_luarefs_free_dict(*(mem as *mut Dict)),
+                _ => {}
+            }
+        }
+    }
+}
+
+// -- Copying ---------------------------------------------------------------
+
+/// A copy of `str` in `arena`. Unlike [`arena_string`] a null string stays
+/// null rather than becoming the empty one.
+pub(crate) unsafe fn copy_string(str: String_0, arena: *mut Arena) -> String_0 {
+    // SAFETY: `str` is null or has `size` readable bytes.
+    unsafe {
+        if str.data.is_null() {
+            return STRING_INIT;
+        }
+        String_0 {
+            data: arena_memdupz(arena, str.data, str.size),
+            size: str.size,
+        }
+    }
+}
+
+pub(crate) unsafe fn copy_array(array: Array, arena: *mut Arena) -> Array {
+    // SAFETY: `array` is live for the call.
+    unsafe {
+        // Sized for exactly this many items, so it cannot need to grow.
+        let mut rv = arena_array(arena, array.size);
+        for i in 0..array.size {
+            *rv.items.add(i) = copy_object(*array.items.add(i), arena);
+        }
+        rv.size = array.size;
+        rv
+    }
+}
+
+pub(crate) unsafe fn copy_dict(dict: Dict, arena: *mut Arena) -> Dict {
+    // SAFETY: `dict` is live for the call.
+    unsafe {
+        let mut rv = arena_dict(arena, dict.size);
+        for i in 0..dict.size {
+            let item = *dict.items.add(i);
+            *rv.items.add(i) = key_value_pair {
+                // The key's length is re-derived rather than copied, so a
+                // key holding a NUL comes back truncated. Upstream's shape.
+                key: cstr_as_string(copy_string(item.key, arena).data),
+                value: copy_object(item.value, arena),
+            };
+        }
+        rv.size = dict.size;
+        rv
+    }
+}
+
+/// A deep copy of `obj` in `arena`. Handles and scalars copy as they stand;
+/// a Lua reference gets a second registry reference of its own.
+pub(crate) unsafe fn copy_object(obj: Object, arena: *mut Arena) -> Object {
+    // SAFETY: `obj` is live for the call.
+    unsafe {
+        match obj.type_0 {
+            kObjectTypeString => object {
+                type_0: kObjectTypeString,
+                data: object_data {
+                    string: copy_string(obj.data.string, arena),
+                },
+            },
+            kObjectTypeArray => object {
+                type_0: kObjectTypeArray,
+                data: object_data {
+                    array: copy_array(obj.data.array, arena),
+                },
+            },
+            kObjectTypeDict => object {
+                type_0: kObjectTypeDict,
+                data: object_data {
+                    dict: copy_dict(obj.data.dict, arena),
+                },
+            },
+            kObjectTypeLuaRef => object {
+                type_0: kObjectTypeLuaRef,
+                data: object_data {
+                    luaref: api_new_luaref(obj.data.luaref),
+                },
+            },
+            _ => obj,
+        }
+    }
+}
+
+// -- Metadata --------------------------------------------------------------
+
+/// The arena `api_metadata`'s unpacked tree lives in, kept alive for the
+/// process's lifetime because the tree is handed out by reference.
+static METADATA_ARENA: GlobalCell<ArenaMem> = GlobalCell::new(ptr::null_mut::<consumed_blk>());
+
+/// The API description, as the `nvim_get_api_info` reply carries it. Unpacked
+/// from the blob on first use and then shared.
+pub(crate) unsafe fn api_metadata() -> Object {
+    static METADATA: GlobalCell<Object> = GlobalCell::new(NIL);
+    // SAFETY: the blob is a compile-time constant and a valid msgpack map.
+    unsafe {
+        if (*METADATA.ptr()).type_0 == kObjectTypeNil {
+            let mut arena = ARENA_EMPTY;
+            let mut err = Error {
+                type_0: kErrorTypeNone,
+                msg: ptr::null_mut(),
+            };
+            METADATA.set(unpack(
+                PACKED_API_METADATA.as_ptr() as *mut c_char,
+                PACKED_API_METADATA.len(),
+                &raw mut arena,
+                &raw mut err,
+            ));
+            if err.type_0 != kErrorTypeNone || (*METADATA.ptr()).type_0 != kObjectTypeDict {
                 abort();
             }
-            let c2rust_fresh5 = rv.size;
-            rv.size = rv.size.wrapping_add(1);
-            *rv.items.offset(c2rust_fresh5 as isize) = key_value_pair {
+            METADATA_ARENA.set(arena_finish(&raw mut arena));
+        }
+        METADATA.get()
+    }
+}
+
+/// [`api_metadata`] still packed, for a caller that is going to forward it
+/// over the wire unchanged.
+pub(crate) fn api_metadata_raw() -> String_0 {
+    String_0 {
+        data: PACKED_API_METADATA.as_ptr() as *mut c_char,
+        size: PACKED_API_METADATA.len(),
+    }
+}
+
+// -- Object conversion -----------------------------------------------------
+
+/// The name of `t` as the API's documentation and error messages spell it.
+pub(crate) fn api_typename(t: ObjectType) -> *mut c_char {
+    let name = match t {
+        kObjectTypeNil => c"nil",
+        kObjectTypeBoolean => c"Boolean",
+        kObjectTypeInteger => c"Integer",
+        kObjectTypeFloat => c"Float",
+        kObjectTypeString => c"String",
+        kObjectTypeArray => c"Array",
+        kObjectTypeDict => c"Dict",
+        kObjectTypeLuaRef => c"Function",
+        kObjectTypeBuffer => c"Buffer",
+        kObjectTypeWindow => c"Window",
+        kObjectTypeTabpage => c"Tabpage",
+        _ => unreachable!(),
+    };
+    name.as_ptr() as *mut c_char
+}
+
+/// `obj` as a boolean. An integer is true when nonzero and nil takes
+/// `nil_value`; anything else is an error naming `what`.
+pub(crate) unsafe fn api_object_to_bool(
+    obj: Object,
+    what: *const c_char,
+    nil_value: bool,
+    err: *mut Error,
+) -> bool {
+    // SAFETY: `obj` is live and `what`/`err` are the caller's.
+    unsafe {
+        match obj.type_0 {
+            kObjectTypeBoolean => obj.data.boolean,
+            kObjectTypeInteger => obj.data.integer != 0,
+            kObjectTypeNil => nil_value,
+            _ => {
+                api_err_exp(err, what, c"boolean".as_ptr(), ptr::null());
+                false
+            }
+        }
+    }
+}
+
+/// `obj` as a highlight group id, defining the group if it was named and does
+/// not exist yet. Zero for the empty name and for an id out of range.
+pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: *mut Error) -> c_int {
+    // SAFETY: `obj` is live and `what`/`err` are the caller's.
+    unsafe {
+        match obj.type_0 {
+            kObjectTypeString => {
+                let str = obj.data.string;
+                if str.size != 0 {
+                    syn_check_group(str.data, str.size)
+                } else {
+                    0
+                }
+            }
+            kObjectTypeInteger => {
+                let id = obj.data.integer as c_int;
+                if (1..=highlight_num_groups()).contains(&id) {
+                    id
+                } else {
+                    0
+                }
+            }
+            _ => {
+                api_err_invalid(err, c"hl_group".as_ptr(), what, 0, true);
+                0
+            }
+        }
+    }
+}
+
+/// `kv_push` for a plain kvec, which starts empty and doubles from 8.
+unsafe fn push_chunk(msg: &mut HlMessage, chunk: HlMessageChunk) {
+    // SAFETY: `items` is null with a zero capacity, or an allocation of
+    // `capacity` chunks.
+    unsafe {
+        if msg.size == msg.capacity {
+            msg.capacity = if msg.capacity != 0 {
+                msg.capacity * 2
+            } else {
+                8
+            };
+            let bytes = mem::size_of::<HlMessageChunk>() * msg.capacity;
+            msg.items = xrealloc(msg.items.cast(), bytes).cast();
+        }
+        *msg.items.add(msg.size) = chunk;
+        msg.size += 1;
+    }
+}
+
+/// Parse `[[text, hl], …]` — the shape `nvim_echo` and friends take — into a
+/// highlighted message. Empty, with `err` set, on the first bad chunk.
+pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: *mut Error) -> HlMessage {
+    // SAFETY: `chunks` is live for the call and `err` is the caller's.
+    unsafe {
+        let mut hl_msg = EMPTY_HL_MESSAGE;
+        for i in 0..chunks.size {
+            let item = *chunks.items.add(i);
+            if item.type_0 != kObjectTypeArray {
+                api_err_exp(
+                    err,
+                    c"chunk".as_ptr(),
+                    api_typename(kObjectTypeArray),
+                    api_typename(item.type_0),
+                );
+                hl_msg_free(hl_msg);
+                return EMPTY_HL_MESSAGE;
+            }
+            let chunk = item.data.array;
+            if !((1..=2).contains(&chunk.size) && (*chunk.items).type_0 == kObjectTypeString) {
+                let msg = c"Invalid chunk: expected Array with 1 or 2 Strings".as_ptr();
+                api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg);
+                hl_msg_free(hl_msg);
+                return EMPTY_HL_MESSAGE;
+            }
+            // Heap-allocated: the message outlives the caller's arena.
+            let text = copy_string((*chunk.items).data.string, ptr::null_mut());
+            let hl_id = if chunk.size == 2 {
+                object_to_hl_id(*chunk.items.add(1), c"text highlight".as_ptr(), err)
+            } else if is_err {
+                HLF_E
+            } else {
+                0
+            };
+            push_chunk(&mut hl_msg, HlMessageChunk { text, hl_id });
+        }
+        hl_msg
+    }
+}
+
+// -- Keydicts --------------------------------------------------------------
+
+/// The fields of a keydict, as its generated `KeySetLink` table lists them.
+/// The table ends with a null name.
+unsafe fn keyset_fields(table: *mut KeySetLink) -> impl Iterator<Item = *mut KeySetLink> {
+    // SAFETY: `table` is one of the generated tables, which are
+    // null-terminated by construction.
+    let len = unsafe {
+        let mut n = 0;
+        while !(*table.add(n)).str.is_null() {
+            n += 1;
+        }
+        n
+    };
+    (0..len).map(move |i| unsafe { table.add(i) })
+}
+
+/// Fill the keydict `retval` from `dict`, type-checking each value against
+/// what the field it names holds. False, with `err` set, on the first
+/// unknown key or wrong type.
+///
+/// `retval` is untyped because there is one such struct per API function;
+/// `hashy` is that struct's generated perfect-hash lookup and the
+/// `KeySetLink` it returns is what says where and what the field is.
+pub(crate) unsafe fn api_dict_to_keydict(
+    retval: *mut c_void,
+    hashy: FieldHashfn,
+    dict: Dict,
+    err: *mut Error,
+) -> bool {
+    // SAFETY: `hashy` is the generated lookup for `retval`'s type, so the
+    // offsets it hands back are inside `retval`.
+    unsafe {
+        for i in 0..dict.size {
+            let k = (*dict.items.add(i)).key;
+            let field = hashy.expect("non-null function pointer")(k.data, k.size);
+            if field.is_null() {
+                let fmt = c"Invalid key: '%.*s'".as_ptr();
+                api_set_error(err, kErrorTypeValidation, fmt, k.size as c_int, k.data);
+                return false;
+            }
+            // Optional fields record that they were given, so that the API
+            // function can tell "absent" from "set to the default".
+            if (*field).opt_index >= 0 {
+                let ks = retval as *mut OptKeySet;
+                (*ks).is_set_ |= (1 as OptionalKeys) << (*field).opt_index;
+            }
+
+            let mem = (retval as *mut c_char).add((*field).ptr_off);
+            let value = &raw mut (*dict.items.add(i)).value;
+            let expected = (*field).type_0 as ObjectType;
+            // A mismatch reports the field's name, not the key's: they are
+            // the same string.
+            let mut wrong_type = |want: ObjectType| {
+                api_err_exp(
+                    err,
+                    (*field).str,
+                    api_typename(want),
+                    api_typename((*value).type_0),
+                );
+            };
+
+            match expected {
+                // A nil-typed field takes the object as it stands.
+                kObjectTypeNil => *(mem as *mut Object) = *value,
+                kObjectTypeInteger if (*field).is_hlgroup => {
+                    let mut hl_id = 0;
+                    if (*value).type_0 != kObjectTypeNil {
+                        hl_id = object_to_hl_id(*value, k.data, err);
+                        if (*err).type_0 != kErrorTypeNone {
+                            return false;
+                        }
+                    }
+                    *(mem as *mut Integer) = hl_id as Integer;
+                }
+                kObjectTypeInteger => {
+                    if (*value).type_0 != kObjectTypeInteger {
+                        wrong_type(kObjectTypeInteger);
+                        return false;
+                    }
+                    *(mem as *mut Integer) = (*value).data.integer;
+                }
+                // A float field takes an integer too.
+                kObjectTypeFloat => match (*value).type_0 {
+                    kObjectTypeInteger => *(mem as *mut Float) = (*value).data.integer as Float,
+                    kObjectTypeFloat => *(mem as *mut Float) = (*value).data.floating,
+                    _ => {
+                        wrong_type(kObjectTypeFloat);
+                        return false;
+                    }
+                },
+                kObjectTypeBoolean => {
+                    *(mem as *mut Boolean) = api_object_to_bool(*value, (*field).str, false, err);
+                    if (*err).type_0 != kErrorTypeNone {
+                        return false;
+                    }
+                }
+                kObjectTypeString => {
+                    if (*value).type_0 != kObjectTypeString {
+                        wrong_type(kObjectTypeString);
+                        return false;
+                    }
+                    *(mem as *mut String_0) = (*value).data.string;
+                }
+                kObjectTypeArray => {
+                    if (*value).type_0 != kObjectTypeArray {
+                        wrong_type(kObjectTypeArray);
+                        return false;
+                    }
+                    *(mem as *mut Array) = (*value).data.array;
+                }
+                // An empty array is how msgpack spells an empty map.
+                kObjectTypeDict => match (*value).type_0 {
+                    kObjectTypeArray if (*value).data.array.size == 0 => {
+                        *(mem as *mut Dict) = EMPTY_DICT;
+                    }
+                    kObjectTypeDict => *(mem as *mut Dict) = (*value).data.dict,
+                    _ => {
+                        wrong_type(kObjectTypeDict);
+                        return false;
+                    }
+                },
+                kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage => {
+                    if (*value).type_0 != kObjectTypeInteger && (*value).type_0 != expected {
+                        wrong_type(expected);
+                        return false;
+                    }
+                    *(mem as *mut handle_T) = (*value).data.integer as handle_T;
+                }
+                kObjectTypeLuaRef => {
+                    let fmt = c"Invalid key: '%.*s' is only allowed from Lua".as_ptr();
+                    api_set_error(err, kErrorTypeValidation, fmt, k.size as c_int, k.data);
+                    return false;
+                }
+                _ => abort(),
+            }
+        }
+        true
+    }
+}
+
+/// The reverse of [`api_dict_to_keydict`]: the keydict `value` as a plain
+/// dictionary, holding only the fields that were set. Lua references are
+/// skipped — they mean nothing outside the Lua state.
+pub(crate) unsafe fn api_keydict_to_dict(
+    value: *mut c_void,
+    table: *mut KeySetLink,
+    max_size: size_t,
+    arena: *mut Arena,
+) -> Dict {
+    // SAFETY: as `api_dict_to_keydict`; `max_size` is the table's length.
+    unsafe {
+        let mut rv = arena_dict(arena, max_size);
+        for field in keyset_fields(table) {
+            if (*field).opt_index >= 0 {
+                let ks = value as *mut OptKeySet;
+                if (*ks).is_set_ & ((1 as OptionalKeys) << (*field).opt_index) == 0 {
+                    continue;
+                }
+            }
+            let mem = (value as *mut c_char).add((*field).ptr_off);
+            let mut val = NIL;
+            match (*field).type_0 as ObjectType {
+                kObjectTypeNil => val = *(mem as *mut Object),
+                kObjectTypeInteger => {
+                    val = object {
+                        type_0: kObjectTypeInteger,
+                        data: object_data {
+                            integer: *(mem as *mut Integer),
+                        },
+                    };
+                }
+                kObjectTypeFloat => {
+                    val = object {
+                        type_0: kObjectTypeFloat,
+                        data: object_data {
+                            floating: *(mem as *mut Float),
+                        },
+                    };
+                }
+                kObjectTypeBoolean => {
+                    val = object {
+                        type_0: kObjectTypeBoolean,
+                        data: object_data {
+                            boolean: *(mem as *mut Boolean),
+                        },
+                    };
+                }
+                kObjectTypeString => {
+                    val = object {
+                        type_0: kObjectTypeString,
+                        data: object_data {
+                            string: *(mem as *mut String_0),
+                        },
+                    };
+                }
+                kObjectTypeArray => {
+                    val = object {
+                        type_0: kObjectTypeArray,
+                        data: object_data {
+                            array: *(mem as *mut Array),
+                        },
+                    };
+                }
+                kObjectTypeDict => {
+                    val = object {
+                        type_0: kObjectTypeDict,
+                        data: object_data {
+                            dict: *(mem as *mut Dict),
+                        },
+                    };
+                }
+                handle @ (kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage) => {
+                    val.data.integer = *(mem as *mut handle_T) as Integer;
+                    val.type_0 = handle;
+                }
+                // A Lua reference is still counted as a key, with a nil value.
+                kObjectTypeLuaRef => {}
+                _ => abort(),
+            }
+            *rv.items.add(rv.size) = key_value_pair {
                 key: cstr_as_string((*field).str),
                 value: val,
             };
+            rv.size += 1;
         }
-        i = i.wrapping_add(1);
-    }
-    return rv;
-}
-pub unsafe extern "C" fn api_luarefs_free_object(mut value: Object) {
-    match value.type_0 as ::core::ffi::c_uint {
-        7 => {
-            api_free_luaref(value.data.luaref);
-        }
-        5 => {
-            api_luarefs_free_array(value.data.array);
-        }
-        6 => {
-            api_luarefs_free_dict(value.data.dict);
-        }
-        _ => {}
-    };
-}
-pub unsafe extern "C" fn api_luarefs_free_keydict(
-    mut dict: *mut ::core::ffi::c_void,
-    mut table: *mut KeySetLink,
-) {
-    let mut i: size_t = 0 as size_t;
-    while !(*table.offset(i as isize)).str.is_null() {
-        let mut mem: *mut ::core::ffi::c_char =
-            (dict as *mut ::core::ffi::c_char).offset((*table.offset(i as isize)).ptr_off as isize);
-        if (*table.offset(i as isize)).type_0 == kObjectTypeNil as ::core::ffi::c_int {
-            api_luarefs_free_object(*(mem as *mut Object));
-        } else if (*table.offset(i as isize)).type_0 == kObjectTypeLuaRef as ::core::ffi::c_int {
-            api_free_luaref(*(mem as *mut LuaRef));
-        } else if (*table.offset(i as isize)).type_0 == kObjectTypeDict as ::core::ffi::c_int {
-            api_luarefs_free_dict(*(mem as *mut Dict));
-        }
-        i = i.wrapping_add(1);
+        rv
     }
 }
-pub unsafe extern "C" fn api_luarefs_free_array(mut value: Array) {
-    let mut i: size_t = 0 as size_t;
-    while i < value.size {
-        api_luarefs_free_object(*value.items.offset(i as isize));
-        i = i.wrapping_add(1);
-    }
-}
-pub unsafe extern "C" fn api_luarefs_free_dict(mut value: Dict) {
-    let mut i: size_t = 0 as size_t;
-    while i < value.size {
-        api_luarefs_free_object((*value.items.offset(i as isize)).value);
-        i = i.wrapping_add(1);
-    }
-}
-pub unsafe extern "C" fn set_mark(
-    mut buf: *mut buf_T,
-    mut name: String_0,
-    mut line: Integer,
-    mut col: Integer,
-    mut err: *mut Error,
+
+// -- Odds and ends ---------------------------------------------------------
+
+/// Set the mark `name` in `buf` to line/column, or delete it when `line` is
+/// 0. False, with `err` set, when the position is out of range or the mark
+/// name is not one that can be set.
+pub(crate) unsafe fn set_mark(
+    buf: *mut buf_T,
+    name: String_0,
+    line: Integer,
+    col: Integer,
+    err: *mut Error,
 ) -> bool {
-    buf = if buf.is_null() { curbuf.get() } else { buf };
-    let mut res: bool = false_0 != 0;
-    let mut deleting: bool = false_0 != 0;
-    if line == 0 as Integer {
-        col = 0 as Integer;
-        deleting = true_0 != 0;
-    } else {
-        if col > MAXCOL as ::core::ffi::c_int as Integer {
-            api_err_invalid(
-                err,
-                b"column\0".as_ptr() as *const ::core::ffi::c_char,
-                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
-                0 as int64_t,
-                false_0 != 0,
-            );
-            return res;
-        }
-        if line < 1 as Integer || line > (*buf).b_ml.ml_line_count as Integer {
-            api_err_invalid(
-                err,
-                b"line\0".as_ptr() as *const ::core::ffi::c_char,
-                b"out of range\0".as_ptr() as *const ::core::ffi::c_char,
-                0 as int64_t,
-                false_0 != 0,
-            );
-            return res;
-        }
-    }
-    '_c2rust_label: {
-        if (-2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as Integer <= line
-            && line <= 2147483647 as Integer
-        {
+    // SAFETY: `name` names one character, and `buf`/`err` are the caller's.
+    unsafe {
+        let buf = if buf.is_null() { curbuf.get() } else { buf };
+        let mut col = col;
+        let mut deleting = false;
+        if line == 0 {
+            col = 0;
+            deleting = true;
         } else {
-            __assert_fail(
-                b"INT32_MIN <= line && line <= INT32_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/api/private/helpers.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1018 as ::core::ffi::c_uint,
-                b"_Bool set_mark(buf_T *, String, Integer, Integer, Error *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut pos: pos_T = pos_T {
-        lnum: line as linenr_T,
-        col: col as colnr_T,
-        coladd: 0 as colnr_T,
-    };
-    res = setmark_pos(
-        *name.data as ::core::ffi::c_int,
-        &raw mut pos,
-        (*buf).handle as ::core::ffi::c_int,
-        ::core::ptr::null_mut::<fmarkv_T>(),
-    ) != 0;
-    if !res {
-        if deleting {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                b"Failed to delete named mark: %c\0".as_ptr() as *const ::core::ffi::c_char,
-                *name.data as ::core::ffi::c_int,
-            );
-        } else {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                b"Failed to set named mark: %c\0".as_ptr() as *const ::core::ffi::c_char,
-                *name.data as ::core::ffi::c_int,
-            );
-        }
-    }
-    return res;
-}
-pub unsafe extern "C" fn get_default_stl_hl(
-    mut wp: *mut win_T,
-    mut use_winbar: bool,
-    mut stc_hl_id: ::core::ffi::c_int,
-) -> *const ::core::ffi::c_char {
-    if wp.is_null() {
-        return b"TabLineFill\0".as_ptr() as *const ::core::ffi::c_char;
-    } else if use_winbar {
-        return if wp == curwin.get() {
-            b"WinBar\0".as_ptr() as *const ::core::ffi::c_char
-        } else {
-            b"WinBarNC\0".as_ptr() as *const ::core::ffi::c_char
-        };
-    } else if stc_hl_id > 0 as ::core::ffi::c_int {
-        return syn_id2name(stc_hl_id);
-    } else {
-        return if wp == curwin.get() {
-            b"StatusLine\0".as_ptr() as *const ::core::ffi::c_char
-        } else {
-            b"StatusLineNC\0".as_ptr() as *const ::core::ffi::c_char
-        };
-    };
-}
-pub unsafe extern "C" fn api_set_sctx(mut channel_id: uint64_t) -> sctx_T {
-    let mut old_current_sctx: sctx_T = current_sctx.get();
-    if channel_id != VIML_INTERNAL_CALL {
-        (*current_sctx.ptr()).sc_lnum = 0 as ::core::ffi::c_int as linenr_T;
-        if channel_id == LUA_INTERNAL_CALL {
-            if !script_is_lua((*current_sctx.ptr()).sc_sid) {
-                (*current_sctx.ptr()).sc_sid = SID_LUA as scid_T;
+            if col > MAXCOL {
+                api_err_invalid(err, c"column".as_ptr(), c"out of range".as_ptr(), 0, false);
+                return false;
             }
+            if line < 1 || line > (*buf).b_ml.ml_line_count as Integer {
+                api_err_invalid(err, c"line".as_ptr(), c"out of range".as_ptr(), 0, false);
+                return false;
+            }
+        }
+        assert!((i32::MIN as Integer..=i32::MAX as Integer).contains(&line));
+
+        let mut pos = pos_T {
+            lnum: line as linenr_T,
+            col: col as colnr_T,
+            coladd: 0,
+        };
+        let mark = *name.data as c_int;
+        let res = setmark_pos(
+            mark,
+            &raw mut pos,
+            (*buf).handle,
+            ptr::null_mut::<fmarkv_T>(),
+        ) != 0;
+        if !res {
+            let fmt = if deleting {
+                c"Failed to delete named mark: %c".as_ptr()
+            } else {
+                c"Failed to set named mark: %c".as_ptr()
+            };
+            api_set_error(err, kErrorTypeException, fmt, mark);
+        }
+        res
+    }
+}
+
+/// The highlight group a status line, window bar or status column defaults
+/// to when its 'statusline' text names none. A null window is the tab line.
+pub(crate) fn get_default_stl_hl(
+    wp: *mut win_T,
+    use_winbar: bool,
+    stc_hl_id: c_int,
+) -> *const c_char {
+    // SAFETY: `syn_id2name` takes an id, not a pointer; `wp` is only
+    // compared, never followed.
+    unsafe {
+        if wp.is_null() {
+            c"TabLineFill".as_ptr()
+        } else if use_winbar {
+            if wp == curwin.get() {
+                c"WinBar".as_ptr()
+            } else {
+                c"WinBarNC".as_ptr()
+            }
+        } else if stc_hl_id > 0 {
+            syn_id2name(stc_hl_id)
+        } else if wp == curwin.get() {
+            c"StatusLine".as_ptr()
         } else {
-            (*current_sctx.ptr()).sc_sid = SID_API_CLIENT as scid_T;
-            (*current_sctx.ptr()).sc_chan = channel_id;
+            c"StatusLineNC".as_ptr()
         }
     }
-    return old_current_sctx;
 }
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const SID_LUA: ::core::ffi::c_int = -8 as ::core::ffi::c_int;
-pub const SID_API_CLIENT: ::core::ffi::c_int = -9 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
+
+/// Point `current_sctx` at whoever made this API call, so that `:verbose`
+/// and `<sfile>` name them, and return what it was pointing at.
+pub(crate) fn api_set_sctx(channel_id: uint64_t) -> sctx_T {
+    let old_current_sctx = current_sctx.get();
+    // SAFETY: `script_is_lua` takes a script id, not a pointer.
+    unsafe {
+        // A call from Vimscript is already running in the right context.
+        if channel_id != VIML_INTERNAL_CALL {
+            (*current_sctx.ptr()).sc_lnum = 0;
+            if channel_id == LUA_INTERNAL_CALL {
+                // Unless the caller is a Lua script, which keeps its own id.
+                if !script_is_lua((*current_sctx.ptr()).sc_sid) {
+                    (*current_sctx.ptr()).sc_sid = SID_LUA;
+                }
+            } else {
+                (*current_sctx.ptr()).sc_sid = SID_API_CLIENT;
+                (*current_sctx.ptr()).sc_chan = channel_id;
+            }
+        }
+    }
+    old_current_sctx
+}
