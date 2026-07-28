@@ -6,10 +6,7 @@
 //! Everything an option *is* — its name, type, scopes, flags, variable and
 //! default — lives in the generated [`crate::src::nvim::options`] table.
 
-use crate::src::nvim::api::private::helpers::{
-    api_set_error, arena_dict, cstr_as_string, cstr_to_string,
-};
-use crate::src::nvim::api::private::validate::api_err_invalid;
+use crate::src::nvim::api::private::helpers::{api_set_error, cstr_as_string, cstr_to_string};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, do_filetype_autocmd,
@@ -107,11 +104,10 @@ use crate::src::nvim::strings::{
 };
 use crate::src::nvim::tag::set_buflocal_tfu_callback;
 use crate::src::nvim::types::{
-    __uid_t, Arena, CMD_index, CallbackType, CharsOption, Dict, Error, ErrorType, FILE, HlAttrs,
-    Integer, KeyValuePair, Object, ObjectType, OptIndex, OptInt, OptScope, OptVal, OptValData,
-    OptValType, RgbValue, String_0, Terminal, TriState, VarType, VimVarIndex, aco_save_T,
-    auto_event, buf_T, bufref_T, colnr_T, estack_T, event_T, exarg_T, expand_T, fuzmatch_str_T,
-    garray_T, int16_t, int32_t, int64_t, key_value_pair, linenr_T, object, object_data,
+    __uid_t, CMD_index, CallbackType, CharsOption, Error, ErrorType, FILE, HlAttrs, Object,
+    ObjectType, OptIndex, OptInt, OptScope, OptVal, OptValData, OptValType, RgbValue, String_0,
+    Terminal, TriState, VarType, VimVarIndex, aco_save_T, auto_event, buf_T, bufref_T, colnr_T,
+    estack_T, event_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, int16_t, int32_t, linenr_T,
     optexpand_T, optset_T, ptrdiff_t, regmatch_T, scid_T, sctx_T, size_t, switchwin_T, tabpage_T,
     typval_T, uint8_t, uint32_t, uint64_t, uvarnumber_T, vimoption_T, win_T, winopt_T, xp_prefix_T,
 };
