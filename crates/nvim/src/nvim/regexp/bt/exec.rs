@@ -1,391 +1,426 @@
-//! Running a compiled program: try a start position, then the entry
-//! points the engine table names.
+//! The engine's entry points: the two `regexec` shapes the engine table
+//! names, and the loop over start columns between them.
 //!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! `bt_regexec_both` is where the shortcuts live — a `regmust` string the
+//! line has to contain somewhere, an anchored pattern that only tries column
+//! 0, and a known first character to skip to — and `regtry` is one attempt at
+//! one column.
 
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub(crate) unsafe extern "C" fn regtry(
-    mut prog: *mut bt_regprog_T,
-    mut col: colnr_T,
-    mut tm: *mut proftime_T,
-    mut timed_out: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    (*rex.ptr()).input = (*rex.ptr()).line.offset(col as isize);
-    (*rex.ptr()).need_clear_subexpr = true_0;
-    (*rex.ptr()).need_clear_zsubexpr =
-        ((*prog).reghasz as ::core::ffi::c_int == REX_SET) as ::core::ffi::c_int;
-    if regmatch(
-        (&raw mut (*prog).program as *mut uint8_t).offset(1 as ::core::ffi::c_int as isize),
-        tm,
-        timed_out,
-    ) as ::core::ffi::c_int
-        == 0 as ::core::ffi::c_int
-    {
-        return 0 as ::core::ffi::c_int;
-    }
-    cleanup_subexpr();
-    if (*rex.ptr()).reg_match.is_null() {
-        if (*(*rex.ptr())
-            .reg_startpos
-            .offset(0 as ::core::ffi::c_int as isize))
-        .lnum
-            < 0 as linenr_T
-        {
-            (*(*rex.ptr())
-                .reg_startpos
-                .offset(0 as ::core::ffi::c_int as isize))
-            .lnum = 0 as ::core::ffi::c_int as linenr_T;
-            (*(*rex.ptr())
-                .reg_startpos
-                .offset(0 as ::core::ffi::c_int as isize))
-            .col = col;
+use core::ffi::{c_char, c_int};
+
+use super::matcher::regmatch;
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init, ga_set_growsize};
+use crate::src::nvim::main::{curbuf, e_null, got_int, re_extmatch_out};
+use crate::src::nvim::mbyte::{mb_tolower, utf_fold, utf_ptr2char, utfc_ptr2len};
+use crate::src::nvim::memory::xfree;
+use crate::src::nvim::message::iemsg;
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::profile::profile_passed_limit;
+use crate::src::nvim::regexp::{
+    BACKPOS_INITIAL, NSUBEXP, NUL, RE_NOBREAK, REGSTACK_INITIAL, REX_SET, RF_ICASE, RF_ICOMBINE,
+    RF_NOICASE, backpos, backpos_T, bt_regprog_T, cleanup_subexpr, cleanup_zsubexpr, cstrchr,
+    cstrncmp, init_regexec_multi, make_extmatch, prog_magic_wrong, reg_endzp, reg_endzpos,
+    reg_getline, reg_startzp, reg_startzpos, reg_tofree, reg_tofreelen, reg_toolong, regstack, rex,
+    unref_extmatch,
+};
+use crate::src::nvim::strings::{vim_strchr, xstrnsave};
+use crate::src::nvim::types::{
+    buf_T, colnr_T, linenr_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t,
+    uint32_t, win_T,
+};
+
+/// How many start columns may be tried between two reads of the caller's
+/// time limit.
+const TIME_CHECK_INTERVAL: c_int = 20;
+
+/// How large `reg_tofree` — the copy of the line a `\n`-crossing match works
+/// over — may be left lying around between matches.
+const REG_TOFREE_KEEP: u32 = 400;
+
+/// Try to match the whole pattern starting at column `col`.
+///
+/// Returns 0 for no match, or one more than the line the match ended on.
+fn regtry(
+    prog: *mut bt_regprog_T,
+    col: colnr_T,
+    tm: *const proftime_T,
+    timed_out: *mut c_int,
+) -> c_int {
+    // SAFETY: `prog` is a live program of this engine and `rex` the match
+    // context `bt_regexec_both` set up, including the caller's capture
+    // arrays.
+    unsafe {
+        (*rex.ptr()).input = (*rex.ptr()).line.offset(col as isize);
+        (*rex.ptr()).need_clear_subexpr = 1;
+        (*rex.ptr()).need_clear_zsubexpr = ((*prog).reghasz as c_int == REX_SET) as c_int;
+
+        // The program starts one byte in: the first byte is the `MAGIC`
+        // stamp `prog_magic_wrong` checks.
+        if !regmatch(
+            (&raw mut (*prog).program).cast::<uint8_t>().add(1),
+            tm,
+            timed_out,
+        ) {
+            return 0;
         }
-        if (*(*rex.ptr())
-            .reg_endpos
-            .offset(0 as ::core::ffi::c_int as isize))
-        .lnum
-            < 0 as linenr_T
-        {
-            (*(*rex.ptr())
-                .reg_endpos
-                .offset(0 as ::core::ffi::c_int as isize))
-            .lnum = (*rex.ptr()).lnum;
-            (*(*rex.ptr())
-                .reg_endpos
-                .offset(0 as ::core::ffi::c_int as isize))
-            .col =
-                (*rex.ptr()).input.offset_from((*rex.ptr()).line) as ::core::ffi::c_int as colnr_T;
-        } else {
-            (*rex.ptr()).lnum = (*(*rex.ptr())
-                .reg_endpos
-                .offset(0 as ::core::ffi::c_int as isize))
-            .lnum;
-        }
-    } else {
-        if (*(*rex.ptr())
-            .reg_startp
-            .offset(0 as ::core::ffi::c_int as isize))
-        .is_null()
-        {
-            *(*rex.ptr())
-                .reg_startp
-                .offset(0 as ::core::ffi::c_int as isize) = (*rex.ptr()).line.offset(col as isize);
-        }
-        if (*(*rex.ptr())
-            .reg_endp
-            .offset(0 as ::core::ffi::c_int as isize))
-        .is_null()
-        {
-            *(*rex.ptr())
-                .reg_endp
-                .offset(0 as ::core::ffi::c_int as isize) = (*rex.ptr()).input;
-        }
-    }
-    unref_extmatch(re_extmatch_out.get());
-    re_extmatch_out.set(::core::ptr::null_mut::<reg_extmatch_T>());
-    if (*prog).reghasz as ::core::ffi::c_int == REX_SET {
-        let mut i: ::core::ffi::c_int = 0;
-        cleanup_zsubexpr();
-        re_extmatch_out.set(make_extmatch());
-        i = 0 as ::core::ffi::c_int;
-        while i < NSUBEXP as ::core::ffi::c_int {
-            if (*rex.ptr()).reg_match.is_null() {
-                if (*reg_startzpos.ptr())[i as usize].lnum >= 0 as linenr_T
-                    && (*reg_endzpos.ptr())[i as usize].lnum
-                        == (*reg_startzpos.ptr())[i as usize].lnum
-                    && (*reg_endzpos.ptr())[i as usize].col
-                        >= (*reg_startzpos.ptr())[i as usize].col
-                {
-                    (*re_extmatch_out.get()).matches[i as usize] = xstrnsave(
-                        reg_getline((*reg_startzpos.ptr())[i as usize].lnum)
-                            .offset((*reg_startzpos.ptr())[i as usize].col as isize),
-                        ((*reg_endzpos.ptr())[i as usize].col
-                            - (*reg_startzpos.ptr())[i as usize].col)
-                            as size_t,
-                    )
-                        as *mut uint8_t;
-                }
-            } else if !(*reg_startzp.ptr())[i as usize].is_null()
-                && !(*reg_endzp.ptr())[i as usize].is_null()
-            {
-                (*re_extmatch_out.get()).matches[i as usize] = xstrnsave(
-                    (*reg_startzp.ptr())[i as usize] as *mut ::core::ffi::c_char,
-                    (*reg_endzp.ptr())[i as usize].offset_from((*reg_startzp.ptr())[i as usize])
-                        as size_t,
-                ) as *mut uint8_t;
-            }
-            i += 1;
-        }
-    }
-    return 1 as ::core::ffi::c_int + (*rex.ptr()).lnum as ::core::ffi::c_int;
-}
-pub(crate) unsafe extern "C" fn bt_regexec_both(
-    mut line: *mut uint8_t,
-    mut startcol: colnr_T,
-    mut tm: *mut proftime_T,
-    mut timed_out: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut prog: *mut bt_regprog_T = ::core::ptr::null_mut::<bt_regprog_T>();
-    let mut s: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
-    let mut col: colnr_T = startcol;
-    let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if (*regstack.ptr()).ga_data.is_null() {
-        ga_init(regstack.ptr(), 1 as ::core::ffi::c_int, REGSTACK_INITIAL);
-        ga_grow(regstack.ptr(), REGSTACK_INITIAL);
-        ga_set_growsize(regstack.ptr(), REGSTACK_INITIAL * 8 as ::core::ffi::c_int);
-    }
-    if (*backpos.ptr()).ga_data.is_null() {
-        ga_init(
-            backpos.ptr(),
-            ::core::mem::size_of::<backpos_T>() as ::core::ffi::c_int,
-            BACKPOS_INITIAL,
-        );
-        ga_grow(backpos.ptr(), BACKPOS_INITIAL);
-        ga_set_growsize(backpos.ptr(), BACKPOS_INITIAL * 8 as ::core::ffi::c_int);
-    }
-    if (*rex.ptr()).reg_match.is_null() {
-        prog = (*(*rex.ptr()).reg_mmatch).regprog as *mut bt_regprog_T;
-        line = reg_getline(0 as linenr_T) as *mut uint8_t;
-        (*rex.ptr()).reg_startpos = &raw mut (*(*rex.ptr()).reg_mmatch).startpos as *mut lpos_T;
-        (*rex.ptr()).reg_endpos = &raw mut (*(*rex.ptr()).reg_mmatch).endpos as *mut lpos_T;
-    } else {
-        prog = (*(*rex.ptr()).reg_match).regprog as *mut bt_regprog_T;
-        (*rex.ptr()).reg_startp = &raw mut (*(*rex.ptr()).reg_match).startp
-            as *mut *mut ::core::ffi::c_char as *mut *mut uint8_t;
-        (*rex.ptr()).reg_endp = &raw mut (*(*rex.ptr()).reg_match).endp
-            as *mut *mut ::core::ffi::c_char as *mut *mut uint8_t;
-    }
-    '_theend: {
-        if prog.is_null() || line.is_null() {
-            iemsg(gettext(&raw const e_null as *const ::core::ffi::c_char));
-        } else if prog_magic_wrong() == 0 {
-            if !((*rex.ptr()).reg_maxcol > 0 as ::core::ffi::c_int
-                && col >= (*rex.ptr()).reg_maxcol)
-            {
-                if (*prog).regflags & RF_ICASE as ::core::ffi::c_uint != 0 {
-                    (*rex.ptr()).reg_ic = true_0 != 0;
-                } else if (*prog).regflags & RF_NOICASE as ::core::ffi::c_uint != 0 {
-                    (*rex.ptr()).reg_ic = false_0 != 0;
-                }
-                if (*prog).regflags & RF_ICOMBINE as ::core::ffi::c_uint != 0 {
-                    (*rex.ptr()).reg_icombine = true_0 != 0;
-                }
-                if !(*prog).regmust.is_null() {
-                    let mut c: ::core::ffi::c_int =
-                        utf_ptr2char((*prog).regmust as *mut ::core::ffi::c_char);
-                    s = line.offset(col as isize);
-                    if !(*rex.ptr()).reg_ic {
-                        loop {
-                            s = vim_strchr(s as *mut ::core::ffi::c_char, c) as *mut uint8_t;
-                            if s.is_null() {
-                                break;
-                            }
-                            if cstrncmp(
-                                s as *mut ::core::ffi::c_char,
-                                (*prog).regmust as *mut ::core::ffi::c_char,
-                                &mut (*prog).regmlen,
-                            ) == 0 as ::core::ffi::c_int
-                            {
-                                break;
-                            }
-                            s = s.offset(utfc_ptr2len(s as *mut ::core::ffi::c_char) as isize);
-                        }
-                    } else {
-                        loop {
-                            s = cstrchr(s as *mut ::core::ffi::c_char, c) as *mut uint8_t;
-                            if s.is_null() {
-                                break;
-                            }
-                            if cstrncmp(
-                                s as *mut ::core::ffi::c_char,
-                                (*prog).regmust as *mut ::core::ffi::c_char,
-                                &mut (*prog).regmlen,
-                            ) == 0 as ::core::ffi::c_int
-                            {
-                                break;
-                            }
-                            s = s.offset(utfc_ptr2len(s as *mut ::core::ffi::c_char) as isize);
-                        }
-                    }
-                    if s.is_null() {
-                        break '_theend;
-                    }
-                }
-                (*rex.ptr()).line = line;
-                (*rex.ptr()).lnum = 0 as ::core::ffi::c_int as linenr_T;
-                reg_toolong.set(false_0);
-                if (*prog).reganch != 0 {
-                    let mut c_0: ::core::ffi::c_int = utf_ptr2char(
-                        ((*rex.ptr()).line as *mut ::core::ffi::c_char).offset(col as isize),
-                    );
-                    if (*prog).regstart == NUL
-                        || (*prog).regstart == c_0
-                        || (*rex.ptr()).reg_ic as ::core::ffi::c_int != 0
-                            && (utf_fold((*prog).regstart) == utf_fold(c_0)
-                                || c_0 < 255 as ::core::ffi::c_int
-                                    && (*prog).regstart < 255 as ::core::ffi::c_int
-                                    && mb_tolower((*prog).regstart) == mb_tolower(c_0))
-                    {
-                        retval = regtry(prog, col, tm, timed_out);
-                    } else {
-                        retval = 0 as ::core::ffi::c_int;
-                    }
-                } else {
-                    let mut tm_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    while !got_int.get() {
-                        if (*prog).regstart != NUL {
-                            s = cstrchr(
-                                ((*rex.ptr()).line as *mut ::core::ffi::c_char)
-                                    .offset(col as isize),
-                                (*prog).regstart,
-                            ) as *mut uint8_t;
-                            if s.is_null() {
-                                retval = 0 as ::core::ffi::c_int;
-                                break;
-                            } else {
-                                col = s.offset_from((*rex.ptr()).line) as ::core::ffi::c_int
-                                    as colnr_T;
-                            }
-                        }
-                        if (*rex.ptr()).reg_maxcol > 0 as ::core::ffi::c_int
-                            && col >= (*rex.ptr()).reg_maxcol
-                        {
-                            retval = 0 as ::core::ffi::c_int;
-                            break;
-                        } else {
-                            retval = regtry(prog, col, tm, timed_out);
-                            if retval > 0 as ::core::ffi::c_int {
-                                break;
-                            }
-                            if (*rex.ptr()).lnum != 0 as linenr_T {
-                                (*rex.ptr()).lnum = 0 as ::core::ffi::c_int as linenr_T;
-                                (*rex.ptr()).line = reg_getline(0 as linenr_T) as *mut uint8_t;
-                            }
-                            if *(*rex.ptr()).line.offset(col as isize) as ::core::ffi::c_int == NUL
-                            {
-                                break;
-                            }
-                            col += utfc_ptr2len(
-                                ((*rex.ptr()).line as *mut ::core::ffi::c_char)
-                                    .offset(col as isize),
-                            );
-                            if !(!tm.is_null() && {
-                                tm_count += 1;
-                                tm_count == 20 as ::core::ffi::c_int
-                            }) {
-                                continue;
-                            }
-                            tm_count = 0 as ::core::ffi::c_int;
-                            if !profile_passed_limit(*tm) {
-                                continue;
-                            }
-                            if !timed_out.is_null() {
-                                *timed_out = true_0;
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if reg_tofreelen.get() > 400 as ::core::ffi::c_uint {
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            reg_tofree.ptr() as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL_0;
-        let _ = *ptr_;
-    }
-    if (*regstack.ptr()).ga_maxlen > REGSTACK_INITIAL {
-        ga_clear(regstack.ptr());
-    }
-    if (*backpos.ptr()).ga_maxlen > BACKPOS_INITIAL {
-        ga_clear(backpos.ptr());
-    }
-    if retval > 0 as ::core::ffi::c_int {
+
+        cleanup_subexpr();
         if (*rex.ptr()).reg_match.is_null() {
-            let start: *const lpos_T = (&raw mut (*(*rex.ptr()).reg_mmatch).startpos
-                as *mut lpos_T)
-                .offset(0 as ::core::ffi::c_int as isize);
-            let end: *const lpos_T = (&raw mut (*(*rex.ptr()).reg_mmatch).endpos as *mut lpos_T)
-                .offset(0 as ::core::ffi::c_int as isize);
-            if (*end).lnum < (*start).lnum
-                || (*end).lnum == (*start).lnum && (*end).col < (*start).col
-            {
-                (*(*rex.ptr()).reg_mmatch).endpos[0 as ::core::ffi::c_int as usize] =
-                    (*(*rex.ptr()).reg_mmatch).startpos[0 as ::core::ffi::c_int as usize];
+            // A `\zs` before the start, or a `\ze` before the end, can leave
+            // group 0 unset; it then covers what the matcher actually walked.
+            let start = (*rex.ptr()).reg_startpos;
+            let end = (*rex.ptr()).reg_endpos;
+            if (*start).lnum < 0 {
+                (*start).lnum = 0;
+                (*start).col = col;
             }
-            (*(*rex.ptr()).reg_mmatch).rmm_matchcol = col;
+            if (*end).lnum < 0 {
+                (*end).lnum = (*rex.ptr()).lnum;
+                (*end).col = (*rex.ptr()).input.offset_from((*rex.ptr()).line) as colnr_T;
+            } else {
+                (*rex.ptr()).lnum = (*end).lnum;
+            }
         } else {
-            if (*(*rex.ptr()).reg_match).endp[0 as ::core::ffi::c_int as usize]
-                < (*(*rex.ptr()).reg_match).startp[0 as ::core::ffi::c_int as usize]
-            {
-                (*(*rex.ptr()).reg_match).endp[0 as ::core::ffi::c_int as usize] =
-                    (*(*rex.ptr()).reg_match).startp[0 as ::core::ffi::c_int as usize];
+            if (*(*rex.ptr()).reg_startp).is_null() {
+                *(*rex.ptr()).reg_startp = (*rex.ptr()).line.offset(col as isize);
             }
-            (*(*rex.ptr()).reg_match).rm_matchcol = col;
+            if (*(*rex.ptr()).reg_endp).is_null() {
+                *(*rex.ptr()).reg_endp = (*rex.ptr()).input;
+            }
+        }
+
+        // The `\z(` captures go to the syntax highlighter as fresh copies,
+        // because it keeps them past the end of this match.
+        unref_extmatch(re_extmatch_out.get());
+        re_extmatch_out.set(core::ptr::null_mut::<reg_extmatch_T>());
+        if (*prog).reghasz as c_int == REX_SET {
+            cleanup_zsubexpr();
+            re_extmatch_out.set(make_extmatch());
+            save_z_captures();
+        }
+        1 + (*rex.ptr()).lnum as c_int
+    }
+}
+
+/// Copy what the `\z(` groups matched into the set the highlighter reads.
+///
+/// SAFETY: `re_extmatch_out` holds a fresh capture set, the capture arrays
+/// hold `NSUBEXP` slots each, and the match context is still the one that
+/// filled them.
+fn save_z_captures() {
+    unsafe {
+        for i in 0..NSUBEXP as usize {
+            let text = if (*rex.ptr()).reg_match.is_null() {
+                let (start, end) = ((*reg_startzpos.ptr())[i], (*reg_endzpos.ptr())[i]);
+                // A capture that spans lines cannot be handed over as one
+                // string, so it is dropped.
+                if start.lnum < 0 || end.lnum != start.lnum || end.col < start.col {
+                    continue;
+                }
+                xstrnsave(
+                    reg_getline(start.lnum).offset(start.col as isize),
+                    (end.col - start.col) as usize,
+                )
+            } else {
+                let (start, end) = ((*reg_startzp.ptr())[i], (*reg_endzp.ptr())[i]);
+                if start.is_null() || end.is_null() {
+                    continue;
+                }
+                xstrnsave(start.cast::<c_char>(), end.offset_from(start) as usize)
+            };
+            (*re_extmatch_out.get()).matches[i] = text as *mut uint8_t;
         }
     }
-    return retval;
 }
-pub(crate) unsafe extern "C" fn bt_regexec_nl(
-    mut rmp: *mut regmatch_T,
+
+/// Match `rex`'s program against `line`, starting at `startcol`.
+///
+/// SAFETY: `rex` has been pointed at the caller's match structure.
+fn bt_regexec_both(
     mut line: *mut uint8_t,
-    mut col: colnr_T,
-    mut line_lbr: bool,
-) -> ::core::ffi::c_int {
-    (*rex.ptr()).reg_match = rmp;
-    (*rex.ptr()).reg_mmatch = ::core::ptr::null_mut::<regmmatch_T>();
-    (*rex.ptr()).reg_maxline = 0 as ::core::ffi::c_int as linenr_T;
-    (*rex.ptr()).reg_line_lbr = line_lbr;
-    (*rex.ptr()).reg_buf = curbuf.get();
-    (*rex.ptr()).reg_win = ::core::ptr::null_mut::<win_T>();
-    (*rex.ptr()).reg_ic = (*rmp).rm_ic;
-    (*rex.ptr()).reg_icombine = false_0 != 0;
-    (*rex.ptr()).reg_nobreak = (*(*rmp).regprog).re_flags & RE_NOBREAK as ::core::ffi::c_uint != 0;
-    (*rex.ptr()).reg_maxcol = 0 as ::core::ffi::c_int as colnr_T;
-    let mut r: int64_t = bt_regexec_both(
-        line,
-        col,
-        ::core::ptr::null_mut::<proftime_T>(),
-        ::core::ptr::null_mut::<::core::ffi::c_int>(),
-    ) as int64_t;
-    assert!(r <= 2147483647 as int64_t, "r <= INT_MAX");
-    return r as ::core::ffi::c_int;
+    startcol: colnr_T,
+    tm: *const proftime_T,
+    timed_out: *mut c_int,
+) -> c_int {
+    unsafe {
+        // The two stacks the matcher works on are kept between calls, so
+        // that an ordinary match never allocates. `bt_regexec_both` is not
+        // re-entered: nothing the matcher runs calls back into the editor.
+        if (*regstack.ptr()).ga_data.is_null() {
+            ga_init(regstack.ptr(), 1, REGSTACK_INITIAL);
+            ga_grow(regstack.ptr(), REGSTACK_INITIAL);
+            ga_set_growsize(regstack.ptr(), REGSTACK_INITIAL * 8);
+        }
+        if (*backpos.ptr()).ga_data.is_null() {
+            ga_init(
+                backpos.ptr(),
+                size_of::<backpos_T>() as c_int,
+                BACKPOS_INITIAL,
+            );
+            ga_grow(backpos.ptr(), BACKPOS_INITIAL);
+            ga_set_growsize(backpos.ptr(), BACKPOS_INITIAL * 8);
+        }
+
+        let mut col = startcol;
+        let prog: *mut bt_regprog_T = if (*rex.ptr()).reg_match.is_null() {
+            line = reg_getline(0) as *mut uint8_t;
+            (*rex.ptr()).reg_startpos = (&raw mut (*(*rex.ptr()).reg_mmatch).startpos).cast();
+            (*rex.ptr()).reg_endpos = (&raw mut (*(*rex.ptr()).reg_mmatch).endpos).cast();
+            (*(*rex.ptr()).reg_mmatch).regprog.cast()
+        } else {
+            (*rex.ptr()).reg_startp = (&raw mut (*(*rex.ptr()).reg_match).startp).cast();
+            (*rex.ptr()).reg_endp = (&raw mut (*(*rex.ptr()).reg_match).endp).cast();
+            (*(*rex.ptr()).reg_match).regprog.cast()
+        };
+
+        let mut retval = 0;
+        if prog.is_null() || line.is_null() {
+            iemsg(gettext(&raw const e_null as *const c_char));
+        } else if prog_magic_wrong() == 0
+            && !((*rex.ptr()).reg_maxcol > 0 && col >= (*rex.ptr()).reg_maxcol)
+        {
+            // The pattern's own `\c`/`\C`/`\Z` override what the caller asked
+            // for.
+            if (*prog).regflags & RF_ICASE as u32 != 0 {
+                (*rex.ptr()).reg_ic = true;
+            } else if (*prog).regflags & RF_NOICASE as u32 != 0 {
+                (*rex.ptr()).reg_ic = false;
+            }
+            if (*prog).regflags & RF_ICOMBINE as u32 != 0 {
+                (*rex.ptr()).reg_icombine = true;
+            }
+
+            // A pattern with a literal run in it cannot match a line that
+            // does not hold that run anywhere past `col`.
+            if (*prog).regmust.is_null() || has_regmust(prog, line, col) {
+                (*rex.ptr()).line = line;
+                (*rex.ptr()).lnum = 0;
+                reg_toolong.set(0);
+                retval = if (*prog).reganch != 0 {
+                    try_anchored(prog, col, tm, timed_out)
+                } else {
+                    scan_columns(prog, &mut col, tm, timed_out)
+                };
+            }
+        }
+
+        // The line copy a `\n`-crossing match works over is kept for the next
+        // one, but not when it grew large.
+        if reg_tofreelen.get() > REG_TOFREE_KEEP {
+            xfree(reg_tofree.get().cast());
+            reg_tofree.set(core::ptr::null_mut());
+        }
+        // Likewise the two stacks: a pathological pattern must not leave its
+        // working set behind.
+        if (*regstack.ptr()).ga_maxlen > REGSTACK_INITIAL {
+            ga_clear(regstack.ptr());
+        }
+        if (*backpos.ptr()).ga_maxlen > BACKPOS_INITIAL {
+            ga_clear(backpos.ptr());
+        }
+
+        if retval > 0 {
+            // A `\ze` can put the end before the start; report an empty match
+            // rather than a backwards one.
+            if (*rex.ptr()).reg_match.is_null() {
+                let rmm = (*rex.ptr()).reg_mmatch;
+                let (start, end) = ((*rmm).startpos[0], (*rmm).endpos[0]);
+                if end.lnum < start.lnum || (end.lnum == start.lnum && end.col < start.col) {
+                    (*rmm).endpos[0] = start;
+                }
+                (*rmm).rmm_matchcol = col;
+            } else {
+                let rm = (*rex.ptr()).reg_match;
+                if (*rm).endp[0] < (*rm).startp[0] {
+                    (*rm).endp[0] = (*rm).startp[0];
+                }
+                (*rm).rm_matchcol = col;
+            }
+        }
+        retval
+    }
 }
+
+/// Does `line` hold the pattern's `regmust` run at or after `col`?
+///
+/// SAFETY: as `bt_regexec_both`. `regmust` is a NUL-terminated run the
+/// compiler kept and the walk below stops at `line`'s terminator.
+fn has_regmust(prog: *mut bt_regprog_T, line: *mut uint8_t, col: colnr_T) -> bool {
+    unsafe {
+        let c = utf_ptr2char((*prog).regmust as *mut c_char);
+        let mut s = line.offset(col as isize).cast::<c_char>();
+        loop {
+            // Case-insensitively, the first character has to be looked for
+            // with folding, which is what `cstrchr` adds over `vim_strchr`.
+            s = if (*rex.ptr()).reg_ic {
+                cstrchr(s, c)
+            } else {
+                vim_strchr(s, c)
+            };
+            if s.is_null() {
+                return false;
+            }
+            if cstrncmp(s, (*prog).regmust as *mut c_char, &mut (*prog).regmlen) == 0 {
+                return true;
+            }
+            s = s.add(utfc_ptr2len(s) as usize);
+        }
+    }
+}
+
+/// An anchored pattern can only match at `col`, and only if the character
+/// there is the one it starts with.
+///
+/// SAFETY: as `bt_regexec_both`; `rex.line` is set and `col` inside it.
+fn try_anchored(
+    prog: *mut bt_regprog_T,
+    col: colnr_T,
+    tm: *const proftime_T,
+    timed_out: *mut c_int,
+) -> c_int {
+    unsafe {
+        let start = (*prog).regstart;
+        let c = utf_ptr2char(((*rex.ptr()).line as *mut c_char).offset(col as isize));
+        let matches = start == NUL
+            || start == c
+            || ((*rex.ptr()).reg_ic
+                && (utf_fold(start) == utf_fold(c)
+                    // Latin-1 has case pairs that do not fold together.
+                    || (c < 255 && start < 255 && mb_tolower(start) == mb_tolower(c))));
+        if matches {
+            regtry(prog, col, tm, timed_out)
+        } else {
+            0
+        }
+    }
+}
+
+/// Try every column from `col` on, until one matches or the line runs out.
+///
+/// `col` comes back holding the column the reported match starts at.
+///
+/// SAFETY: as `bt_regexec_both`.
+fn scan_columns(
+    prog: *mut bt_regprog_T,
+    col: &mut colnr_T,
+    tm: *const proftime_T,
+    timed_out: *mut c_int,
+) -> c_int {
+    unsafe {
+        let mut tm_count = 0;
+        while !got_int.get() {
+            // The pattern's first character is known: skip straight to the
+            // next place it occurs.
+            if (*prog).regstart != NUL {
+                let from = ((*rex.ptr()).line as *mut c_char).offset(*col as isize);
+                let s = cstrchr(from, (*prog).regstart);
+                if s.is_null() {
+                    return 0;
+                }
+                *col = s.cast::<uint8_t>().offset_from((*rex.ptr()).line) as colnr_T;
+            }
+            if (*rex.ptr()).reg_maxcol > 0 && *col >= (*rex.ptr()).reg_maxcol {
+                return 0;
+            }
+
+            let retval = regtry(prog, *col, tm, timed_out);
+            if retval > 0 {
+                return retval;
+            }
+
+            // A failed attempt may have walked onto a later line.
+            if (*rex.ptr()).lnum != 0 {
+                (*rex.ptr()).lnum = 0;
+                (*rex.ptr()).line = reg_getline(0) as *mut uint8_t;
+            }
+            if *(*rex.ptr()).line.offset(*col as isize) as c_int == NUL {
+                return 0;
+            }
+            *col += utfc_ptr2len(((*rex.ptr()).line as *mut c_char).offset(*col as isize));
+
+            if !tm.is_null() {
+                tm_count += 1;
+                if tm_count == TIME_CHECK_INTERVAL {
+                    tm_count = 0;
+                    if profile_passed_limit(*tm) {
+                        if !timed_out.is_null() {
+                            *timed_out = 1;
+                        }
+                        return 0;
+                    }
+                }
+            }
+        }
+        0
+    }
+}
+
+/// Match against a string, treating `\n` as an ordinary character when
+/// `line_lbr` is set.
+///
+/// # Safety
+///
+/// `rmp` must hold a program this engine compiled, and `line` be a
+/// NUL-terminated string.
+pub(crate) unsafe extern "C" fn bt_regexec_nl(
+    rmp: *mut regmatch_T,
+    line: *mut uint8_t,
+    col: colnr_T,
+    line_lbr: bool,
+) -> c_int {
+    unsafe {
+        let r = &mut *rex.ptr();
+        r.reg_match = rmp;
+        r.reg_mmatch = core::ptr::null_mut::<regmmatch_T>();
+        r.reg_maxline = 0;
+        r.reg_line_lbr = line_lbr;
+        r.reg_buf = curbuf.get();
+        r.reg_win = core::ptr::null_mut::<win_T>();
+        r.reg_ic = (*rmp).rm_ic;
+        r.reg_icombine = false;
+        r.reg_nobreak = (*(*rmp).regprog).re_flags & RE_NOBREAK as u32 != 0;
+        r.reg_maxcol = 0;
+
+        bt_regexec_both(line, col, core::ptr::null(), core::ptr::null_mut())
+    }
+}
+
+/// Match against a buffer, starting at `lnum`.
+///
+/// # Safety
+///
+/// `rmp` must hold a program this engine compiled, and `buf`/`win` be the
+/// buffer and window the match runs over.
 pub(crate) unsafe extern "C" fn bt_regexec_multi(
-    mut rmp: *mut regmmatch_T,
-    mut win: *mut win_T,
-    mut buf: *mut buf_T,
-    mut lnum: linenr_T,
-    mut col: colnr_T,
-    mut tm: *mut proftime_T,
-    mut timed_out: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+    rmp: *mut regmmatch_T,
+    win: *mut win_T,
+    buf: *mut buf_T,
+    lnum: linenr_T,
+    col: colnr_T,
+    tm: *mut proftime_T,
+    timed_out: *mut c_int,
+) -> c_int {
+    // `init_regexec_multi` points `rex` at the caller's match structure,
+    // which is what `bt_regexec_both` reads it out of.
     init_regexec_multi(rmp, win, buf, lnum);
-    return bt_regexec_both(::core::ptr::null_mut::<uint8_t>(), col, tm, timed_out);
+    bt_regexec_both(core::ptr::null_mut::<uint8_t>(), col, tm, timed_out)
 }
-pub(crate) unsafe extern "C" fn re_num_cmp(
-    mut val: uint32_t,
-    mut scan: *const uint8_t,
-) -> ::core::ffi::c_int {
-    let mut n: uint32_t = (((*scan.offset(3 as ::core::ffi::c_int as isize) as int64_t)
-        << 24 as ::core::ffi::c_int)
-        + ((*scan.offset(4 as ::core::ffi::c_int as isize) as int64_t) << 16 as ::core::ffi::c_int)
-        + ((*scan.offset(5 as ::core::ffi::c_int as isize) as int64_t) << 8 as ::core::ffi::c_int)
-        + *scan.offset(6 as ::core::ffi::c_int as isize) as int64_t)
-        as uint32_t;
-    if *scan.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == '>' as ::core::ffi::c_int
-    {
-        return (val > n) as ::core::ffi::c_int;
+
+/// The `\%23l`-family comparison: the node's operand against `val`, with the
+/// `>`/`<`/`=` the pattern spelled out riding in the node's eighth byte.
+///
+/// SAFETY: `scan` is a `RE_LNUM`/`RE_COL`/`RE_VCOL` node, which the compiler
+/// emits eight bytes long.
+pub(crate) fn re_num_cmp(val: uint32_t, scan: *const uint8_t) -> bool {
+    unsafe {
+        let b = |i: usize| *scan.add(i) as u32;
+        let n = (b(3) << 24) + (b(4) << 16) + (b(5) << 8) + b(6);
+        match *scan.add(7) as c_int {
+            c if c == '>' as c_int => val > n,
+            c if c == '<' as c_int => val < n,
+            _ => val == n,
+        }
     }
-    if *scan.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == '<' as ::core::ffi::c_int
-    {
-        return (val < n) as ::core::ffi::c_int;
-    }
-    return (val == n) as ::core::ffi::c_int;
 }

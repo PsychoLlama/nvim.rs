@@ -4,19 +4,15 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::eval::typval::{tv_list_first, tv_list_len, tv_list_ref};
 use crate::src::nvim::eval::userfunc::call_func;
 use crate::src::nvim::eval_1::{eval_to_string, partial_name};
-use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::curbuf;
-use crate::src::nvim::main::{
-    e_null, e_re_damg, e_resulting_text_too_long, got_int, p_mmp, re_extmatch_out,
-};
+use crate::src::nvim::main::{e_null, e_re_damg, e_resulting_text_too_long, p_mmp};
 use crate::src::nvim::mbyte::{
-    mb_tolower, utf_char2bytes, utf_char2len, utf_fold, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
+    utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xrealloc, xstrdup};
 use crate::src::nvim::message::{emsg, iemsg};
 use crate::src::nvim::os::libc::{gettext, memmove, memset, strcpy, strlen, strncmp, strncpy};
-use crate::src::nvim::profile::profile_passed_limit;
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, ArgvFunc, BoolVarValue,

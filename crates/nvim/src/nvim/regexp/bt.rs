@@ -25,6 +25,5 @@ mod state;
 
 pub(crate) use self::compile::*;
 pub(crate) use self::exec::*;
-pub(crate) use self::matcher::*;
 pub use self::piece::*;
 pub(crate) use self::state::*;

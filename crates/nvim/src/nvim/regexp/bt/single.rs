@@ -94,10 +94,10 @@ pub(crate) fn match_one(
                     && re_num_cmp(
                         ((*rex.ptr()).lnum + (*rex.ptr()).reg_firstlnum) as uint32_t,
                         scan,
-                    ) != 0,
+                    ),
             ),
-            RE_COL => nomatch_unless(re_num_cmp((column() as uint32_t).wrapping_add(1), scan) != 0),
-            RE_VCOL => nomatch_unless(re_num_cmp(virtual_column().wrapping_add(1), scan) != 0),
+            RE_COL => nomatch_unless(re_num_cmp((column() as uint32_t).wrapping_add(1), scan)),
+            RE_VCOL => nomatch_unless(re_num_cmp(virtual_column().wrapping_add(1), scan)),
 
             // `\<` and `\>`: a change of character class, with the classes
             // below 2 (whitespace and punctuation) never starting a word.
