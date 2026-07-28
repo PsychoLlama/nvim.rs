@@ -124,7 +124,6 @@
     "crates/nvim/src/nvim/option/set.rs": 47,
     "crates/nvim/src/nvim/option/set_cmd.rs": 25,
     "crates/nvim/src/nvim/option/show.rs": 37,
-    "crates/nvim/src/nvim/option/stropt.rs": 10,
     "crates/nvim/src/nvim/optionstr/check.rs": 1,
     "crates/nvim/src/nvim/optionstr/flags.rs": 1,
     "crates/nvim/src/nvim/os/env.rs": 90,

@@ -57,16 +57,16 @@ use crate::src::nvim::main::{
     p_arshape, p_bdir, p_bin, p_bomb, p_cdpath, p_cfu, p_ch, p_chi, p_ci, p_cin, p_cink, p_cino,
     p_cinsd, p_cinw, p_cms, p_columns, p_com, p_cpo, p_cpt, p_deco, p_dir, p_ea, p_enc, p_et,
     p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp, p_fo, p_ft, p_hh, p_hlg, p_hls, p_icon,
-    p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_kp, p_lines, p_lisp,
-    p_lnr, p_lop, p_lrm, p_ma, p_ml, p_mle, p_mouse, p_mps, p_nf, p_ofu, p_paste, p_path, p_pi,
-    p_pp, p_qe, p_ri, p_rtp, p_ru, p_scbk, p_sh, p_si, p_sj, p_sm, p_smc, p_spc, p_spf, p_spl,
-    p_spo, p_sps, p_sta, p_sts, p_sua, p_sw, p_swf, p_syn, p_tags, p_tbidi, p_tfu, p_title,
-    p_titlelen, p_ts, p_tw, p_uc, p_udf, p_ul, p_vdir, p_verbose, p_vsts, p_vts, p_wbr, p_wc,
-    p_wcm, p_wh, p_window, p_wiw, p_wm, readonlymode, sandbox, secure, silent_mode, spo_flags,
-    starting, t_colors, topframe, updating_screen,
+    p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_lines, p_lisp, p_lnr,
+    p_lop, p_lrm, p_ma, p_ml, p_mle, p_mouse, p_mps, p_nf, p_ofu, p_paste, p_path, p_pi, p_pp,
+    p_qe, p_ri, p_rtp, p_ru, p_scbk, p_sh, p_si, p_sj, p_sm, p_smc, p_spc, p_spf, p_spl, p_spo,
+    p_sps, p_sta, p_sts, p_sua, p_sw, p_swf, p_syn, p_tags, p_tbidi, p_tfu, p_title, p_titlelen,
+    p_ts, p_tw, p_uc, p_udf, p_ul, p_vdir, p_verbose, p_vsts, p_vts, p_wbr, p_wc, p_wcm, p_wh,
+    p_window, p_wiw, p_wm, readonlymode, sandbox, secure, silent_mode, spo_flags, starting,
+    t_colors, topframe, updating_screen,
 };
 use crate::src::nvim::mapping::{langmap_init, put_escstr};
-use crate::src::nvim::mbyte::{enc_locale, utfc_ptr2len};
+use crate::src::nvim::mbyte::enc_locale;
 use crate::src::nvim::memfile::mf_close_file;
 use crate::src::nvim::memline::{ml_open_file, ml_open_files};
 use crate::src::nvim::memory::{strequal, xfree, xmalloc, xmemdupz, xrealloc, xstrdup, xstrlcpy};
@@ -89,7 +89,7 @@ use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::lang::{get_mess_lang, lang_init};
 use crate::src::nvim::os::libc::{
     __assert_fail, abort, bind_textdomain_codeset, fprintf, fputs, gettext, getuid, memmove,
-    memset, snprintf, strcmp, strcpy, strlen, strncasecmp, strncmp,
+    memset, snprintf, strcmp, strlen, strncasecmp, strncmp,
 };
 use crate::src::nvim::os::stdpaths::stdpaths_user_state_subpath;
 use crate::src::nvim::path::{
