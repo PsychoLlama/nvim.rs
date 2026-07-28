@@ -32,17 +32,16 @@ use crate::src::nvim::eval::encode::{
 };
 use crate::src::nvim::eval::typval::{
     tv_blob_alloc_ret, tv_check_for_buffer_arg, tv_check_for_dict_arg, tv_check_for_list_arg,
-    tv_check_for_lnum_arg, tv_check_for_nonnull_dict_arg, tv_check_for_number_arg,
-    tv_check_for_opt_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_arg,
-    tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_add_allocated_str, tv_dict_add_list,
-    tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len, tv_dict_alloc, tv_dict_alloc_ret,
-    tv_dict_extend, tv_dict_find, tv_dict_free, tv_dict_get_bool, tv_dict_get_callback,
-    tv_dict_get_number, tv_dict_get_string, tv_dict_item_remove, tv_get_bool, tv_get_lnum,
-    tv_get_lnum_buf, tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf,
-    tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret,
+    tv_check_for_lnum_arg, tv_check_for_number_arg, tv_check_for_opt_dict_arg,
+    tv_check_for_string_arg, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_add_allocated_str,
+    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len, tv_dict_alloc,
+    tv_dict_alloc_ret, tv_dict_extend, tv_dict_find, tv_dict_free, tv_dict_get_bool,
+    tv_dict_get_callback, tv_dict_get_number, tv_dict_get_string, tv_dict_item_remove, tv_get_bool,
+    tv_get_lnum, tv_get_lnum_buf, tv_get_number, tv_get_number_chk, tv_get_string,
+    tv_get_string_buf, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret,
     tv_list_append_allocated_string, tv_list_append_dict, tv_list_append_number,
-    tv_list_append_owned_tv, tv_list_append_string, tv_list_find, tv_list_find_nr,
-    tv_list_item_remove, tv_list_unref,
+    tv_list_append_owned_tv, tv_list_append_string, tv_list_find, tv_list_item_remove,
+    tv_list_unref,
 };
 use crate::src::nvim::eval::typval::{
     tv_blob_get, tv_blob_len, tv_dict_len, tv_list_first, tv_list_len, tv_list_locked, tv_list_ref,
@@ -59,22 +58,17 @@ use crate::src::nvim::eval::vars::{
 };
 use crate::src::nvim::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::src::nvim::eval_1::{
-    add_timer_info, add_timer_info_all, callback_from_typval, common_job_callbacks,
-    eval_expr_to_bool, eval_expr_typval, eval_expr_valid_arg, eval_has_provider, eval_option,
-    eval1, find_job, find_timer_by_nr, get_callback_depth, partial_name, prompt_get_input,
-    save_tv_as_string, script_host_eval, timer_due_cb, timer_start, timer_stop, timer_stop_all,
-    tv_to_argv,
+    common_job_callbacks, eval_expr_to_bool, eval_expr_typval, eval_expr_valid_arg,
+    eval_has_provider, eval_option, eval1, find_job, get_callback_depth, partial_name,
+    prompt_get_input, save_tv_as_string, script_host_eval, tv_to_argv,
 };
 use crate::src::nvim::event::libuv::{uv_kill, uv_strerror};
-use crate::src::nvim::event::r#loop::{loop_on_put, process_events_until};
+use crate::src::nvim::event::r#loop::loop_on_put;
 use crate::src::nvim::event::multiqueue::{
     multiqueue_free, multiqueue_new, multiqueue_process_events, multiqueue_replace_parent,
 };
 use crate::src::nvim::event::proc::proc_is_stopped;
 use crate::src::nvim::event::proc::{proc_stop, proc_wait};
-use crate::src::nvim::event::time::{
-    time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
-};
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_docmd::{
     cmd_exists, do_cmdline, do_cmdline_cmd, eval_vars, expand_filename,
@@ -82,9 +76,7 @@ use crate::src::nvim::ex_docmd::{
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::ex_getln::{get_user_input, text_locked, text_locked_msg};
 use crate::src::nvim::garray::{ga_append, ga_append_via_ptr, ga_grow, ga_init};
-use crate::src::nvim::getchar::{
-    restore_typeahead, save_typeahead, stuff_empty, using_script, vgetc,
-};
+use crate::src::nvim::getchar::{restore_typeahead, save_typeahead, stuff_empty, using_script};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint};
 use crate::src::nvim::hashtab::hash_removed;
@@ -105,7 +97,7 @@ use crate::src::nvim::main::{
     autocmd_fname_full, autocmd_match, called_emsg, capture_ga, cmdline_row, cmdline_star, curbuf,
     current_sctx, curtab, curwin, did_emsg, e_api_error, e_buffer_is_not_loaded, e_channotpty,
     e_invalid_buffer_name_str, e_invalwindow, e_invarg, e_invarg2, e_invargNval, e_invargval,
-    e_invexpr2, e_libcall, e_listarg, e_listblobarg, e_listdictarg, e_number_exp,
+    e_invexpr2, e_libcall, e_listarg, e_listblobarg, e_listdictarg,
     e_reduce_of_an_empty_str_with_no_initial_value, e_stdiochan2, e_toofewarg, e_toomanyarg,
     e_trailing_arg, e_unknown_function_str, empty_string_option, emsg_noredir, emsg_off,
     emsg_silent, firstwin, garbage_collect_at_exit, got_int, lastbuf, lines_left, main_loop,
@@ -149,7 +141,7 @@ use crate::src::nvim::os::env::{
 use crate::src::nvim::os::fs::{os_isdir, os_setperm};
 use crate::src::nvim::os::libc::{
     __assert_fail, atoi, gettext, memcpy, memmove, memset, snprintf, strcasecmp, strchr, strcmp,
-    strcpy, strlen, strncasecmp, strncmp, strtoul, time,
+    strcpy, strlen, strncasecmp, strncmp, strtoul,
 };
 use crate::src::nvim::os::pty_proc_unix::pty_proc_resize;
 use crate::src::nvim::os::shell::shell_free_argv;
@@ -158,9 +150,7 @@ use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::path::{concat_fnames_realloc, vim_FullName};
 use crate::src::nvim::popupmenu::{pum_set_event_info, pum_visible};
 use crate::src::nvim::pos::{clearpos, equalpos};
-use crate::src::nvim::profile::{
-    profile_end, profile_msg, profile_setlimit, profile_signed, profile_start, profile_sub,
-};
+use crate::src::nvim::profile::profile_setlimit;
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::search::searchit;
 use crate::src::nvim::state::{get_mode, get_was_safe_state};
@@ -1468,18 +1458,6 @@ pub const RE_SEARCH: C2Rust_Unnamed_64 = 0;
 pub const SEARCH_KEEP: C2Rust_Unnamed_63 = 1024;
 pub const SEARCH_START: C2Rust_Unnamed_63 = 256;
 pub const HL_CONCEAL: C2Rust_Unnamed_65 = 131072;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_47 {
-    pub split: C2Rust_Unnamed_48,
-    pub prof: proftime_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_48 {
-    pub low: int32_t,
-    pub high: int32_t,
-}
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
@@ -1636,18 +1614,6 @@ pub const VIM_WARNING: C2Rust_Unnamed_54 = 2;
 pub const VIM_INFO: C2Rust_Unnamed_54 = 3;
 pub const VIM_QUESTION: C2Rust_Unnamed_54 = 4;
 pub const VIM_ERROR: C2Rust_Unnamed_54 = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_50 {
-    pub low: int32_t,
-    pub high: int32_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_51 {
-    pub split: C2Rust_Unnamed_50,
-    pub prof: proftime_T,
-}
 pub const DOCMD_KEYTYPED: C2Rust_Unnamed_56 = 8;
 pub const DOCMD_REPEAT: C2Rust_Unnamed_56 = 4;
 pub const DOCMD_VERBOSE: C2Rust_Unnamed_56 = 1;

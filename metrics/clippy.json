@@ -59,7 +59,6 @@
     "crates/nvim/src/nvim/eval/funcs/runtime.rs": 116,
     "crates/nvim/src/nvim/eval/funcs/screen.rs": 3,
     "crates/nvim/src/nvim/eval/funcs/search.rs": 5,
-    "crates/nvim/src/nvim/eval/funcs/timer.rs": 4,
     "crates/nvim/src/nvim/eval/list.rs": 33,
     "crates/nvim/src/nvim/eval/typval.rs": 182,
     "crates/nvim/src/nvim/eval/userfunc.rs": 158,
