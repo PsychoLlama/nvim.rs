@@ -21,20 +21,17 @@ use crate::src::nvim::cmdexpand::cmdline_pum_active;
 use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::edit::buf_prompt_text;
 use crate::src::nvim::eval::buffer::find_buffer;
-use crate::src::nvim::eval::encode::encode_tv2echo;
 use crate::src::nvim::eval::typval::{
-    tv_blob_len, tv_list_first, tv_list_len, tv_list_ref, tv_list_set_ret, tv_list_uidx,
+    tv_blob_len, tv_list_first, tv_list_len, tv_list_ref, tv_list_set_ret,
 };
 use crate::src::nvim::eval::typval::{
-    tv_check_for_buffer_arg, tv_check_for_dict_arg, tv_check_for_list_arg, tv_check_for_lnum_arg,
-    tv_check_for_opt_dict_arg, tv_check_for_string_arg, tv_check_str_or_nr, tv_copy,
-    tv_dict_add_allocated_str, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
-    tv_dict_add_str_len, tv_dict_alloc, tv_dict_alloc_ret, tv_dict_extend, tv_dict_find,
-    tv_dict_free, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number, tv_dict_get_string,
-    tv_dict_item_remove, tv_get_bool, tv_get_lnum, tv_get_lnum_buf, tv_get_number,
-    tv_get_number_chk, tv_get_string, tv_get_string_buf, tv_get_string_buf_chk, tv_get_string_chk,
-    tv_list_alloc, tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_dict,
-    tv_list_append_number, tv_list_append_string, tv_list_find, tv_list_item_remove, tv_list_unref,
+    tv_check_for_dict_arg, tv_check_for_list_arg, tv_check_str_or_nr, tv_copy,
+    tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_alloc_ret, tv_dict_extend,
+    tv_dict_find, tv_dict_free, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
+    tv_dict_get_string, tv_dict_item_remove, tv_get_lnum, tv_get_number, tv_get_number_chk,
+    tv_get_string, tv_get_string_buf, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc,
+    tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_number,
+    tv_list_append_string, tv_list_unref,
 };
 use crate::src::nvim::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
@@ -81,22 +78,19 @@ use crate::src::nvim::lua::executor::{
 use crate::src::nvim::main::{
     EVALARG_EVALUATE, IObuff, NameBuff, Rows, State, autocmd_bufnr, autocmd_busy, autocmd_fname,
     autocmd_fname_full, autocmd_match, capture_ga, cmdline_row, cmdline_star, curbuf, current_sctx,
-    curtab, curwin, did_emsg, e_api_error, e_buffer_is_not_loaded, e_channotpty,
-    e_invalid_buffer_name_str, e_invalwindow, e_invarg, e_invarg2, e_invargNval, e_invargval,
+    curtab, curwin, e_api_error, e_channotpty, e_invalwindow, e_invarg, e_invarg2, e_invargNval,
     e_invexpr2, e_libcall, e_listarg, e_stdiochan2, e_toofewarg, e_toomanyarg, e_trailing_arg,
     e_unknown_function_str, empty_string_option, emsg_noredir, emsg_off, emsg_silent, firstwin,
     garbage_collect_at_exit, got_int, lastbuf, lines_left, main_loop, mouse_row, msg_col, msg_row,
-    msg_scroll, msg_scrolled, msg_silent, need_clr_eos, on_print, p_cpo, p_ic, p_magic, p_tgc,
-    p_verbose, p_ws, provider_call_nesting, provider_caller_scope, redir_off, starting,
-    stdin_isatty, stdout_isatty, typebuf, vgetc_busy, want_garbage_collect, wild_menu_showing,
-    windowsVersion,
+    msg_scroll, msg_scrolled, msg_silent, need_clr_eos, on_print, p_cpo, p_magic, p_tgc, p_verbose,
+    p_ws, provider_call_nesting, provider_caller_scope, redir_off, starting, stdin_isatty,
+    stdout_isatty, typebuf, vgetc_busy, want_garbage_collect, wild_menu_showing, windowsVersion,
 };
 use crate::src::nvim::mark::setpcmark;
-use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
-use crate::src::nvim::memline::{decl, incl, ml_get, ml_get_buf, ml_get_len, ml_open};
+use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len};
+use crate::src::nvim::memline::{decl, incl, ml_get, ml_get_len, ml_open};
 use crate::src::nvim::memory::{
-    ARENA_EMPTY, arena_finish, arena_mem_free, strnequal, xcalloc, xfree, xmalloc, xmemdup,
-    xmemdupz, xstrdup,
+    ARENA_EMPTY, arena_finish, arena_mem_free, strnequal, xcalloc, xfree, xmalloc, xmemdup, xstrdup,
 };
 use crate::src::nvim::menu::{get_menu_cmd_modes, menu_get};
 use crate::src::nvim::message::{
@@ -276,13 +270,6 @@ unsafe extern "C" {
         flags: ::core::ffi::c_uint,
         cb: uv_random_cb,
     ) -> ::core::ffi::c_int;
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
-    -> bool;
 }
 pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
 pub const UV_FILE: uv_handle_type = 17;
