@@ -35,44 +35,39 @@ use crate::src::nvim::eval::encode::{
 };
 use crate::src::nvim::eval::typval::{
     callback_free, tv_blob_alloc_ret, tv_check_for_buffer_arg, tv_check_for_dict_arg,
-    tv_check_for_list_arg, tv_check_for_list_or_blob_arg, tv_check_for_lnum_arg,
-    tv_check_for_nonnull_dict_arg, tv_check_for_number_arg, tv_check_for_opt_bool_arg,
-    tv_check_for_opt_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_arg,
-    tv_check_for_string_or_func_arg, tv_check_for_string_or_list_arg, tv_check_str_or_nr, tv_clear,
+    tv_check_for_list_arg, tv_check_for_lnum_arg, tv_check_for_nonnull_dict_arg,
+    tv_check_for_number_arg, tv_check_for_opt_dict_arg, tv_check_for_opt_number_arg,
+    tv_check_for_string_arg, tv_check_for_string_or_list_arg, tv_check_str_or_nr, tv_clear,
     tv_copy, tv_dict_add_allocated_str, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_nr,
     tv_dict_add_str, tv_dict_add_str_len, tv_dict_alloc, tv_dict_alloc_ret, tv_dict_extend,
     tv_dict_find, tv_dict_free, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
-    tv_dict_get_number_def, tv_dict_get_string, tv_dict_item_remove, tv_dict_watcher_add,
-    tv_dict_watcher_remove, tv_equal, tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_lnum_buf,
-    tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf, tv_get_string_buf_chk,
-    tv_get_string_chk, tv_islocked, tv_list_alloc, tv_list_alloc_ret,
-    tv_list_append_allocated_string, tv_list_append_dict, tv_list_append_list,
-    tv_list_append_number, tv_list_append_owned_tv, tv_list_append_string, tv_list_append_tv,
-    tv_list_copy, tv_list_find, tv_list_find_nr, tv_list_flatten, tv_list_item_remove,
-    tv_list_unref, value_check_lock,
+    tv_dict_get_string, tv_dict_item_remove, tv_dict_watcher_add, tv_dict_watcher_remove,
+    tv_get_bool, tv_get_lnum, tv_get_lnum_buf, tv_get_number, tv_get_number_chk, tv_get_string,
+    tv_get_string_buf, tv_get_string_buf_chk, tv_get_string_chk, tv_islocked, tv_list_alloc,
+    tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_dict, tv_list_append_list,
+    tv_list_append_number, tv_list_append_owned_tv, tv_list_append_string, tv_list_find,
+    tv_list_find_nr, tv_list_item_remove, tv_list_unref,
 };
 use crate::src::nvim::eval::typval::{
-    tv_blob_get, tv_blob_len, tv_dict_len, tv_dict_set_ret, tv_is_func, tv_list_first, tv_list_len,
-    tv_list_locked, tv_list_ref, tv_list_set_lock, tv_list_set_ret, tv_list_uidx,
+    tv_blob_get, tv_blob_len, tv_dict_len, tv_list_first, tv_list_len, tv_list_locked, tv_list_ref,
+    tv_list_set_lock, tv_list_set_ret, tv_list_uidx,
 };
 use crate::src::nvim::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
-    get_func_arity, get_scriptlocal_funcname, get_user_func_name, printable_func_name,
-    restore_funccal, save_funccal, save_function_name, set_current_funccal, trans_function_name,
-    translated_function_exists,
+    get_scriptlocal_funcname, get_user_func_name, restore_funccal, save_funccal,
+    save_function_name, set_current_funccal, trans_function_name, translated_function_exists,
 };
 use crate::src::nvim::eval::vars::{
     cat_prefix_varname, find_var, get_user_var_name, get_vim_var_nr, get_vim_var_str,
-    get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type, var_exists,
+    set_vim_var_nr, var_exists,
 };
 use crate::src::nvim::eval::window::{find_tabwin, find_win_by_nr_or_id, win_id2wp_tp};
 use crate::src::nvim::eval_1::{
     add_timer_info, add_timer_info_all, buf_byteidx_to_charidx, buf_charidx_to_byteidx,
     callback_from_typval, clear_lval, common_job_callbacks, eval_expr_to_bool, eval_expr_typval,
     eval_expr_valid_arg, eval_has_provider, eval_option, eval1, find_job, find_timer_by_nr,
-    get_callback_depth, get_copyID, get_lval, list2fpos, partial_name, prompt_get_input,
-    save_tv_as_string, script_host_eval, timer_due_cb, timer_start, timer_stop, timer_stop_all,
-    tv_to_argv, var_item_copy, var2fpos,
+    get_callback_depth, get_lval, list2fpos, partial_name, prompt_get_input, save_tv_as_string,
+    script_host_eval, timer_due_cb, timer_start, timer_stop, timer_stop_all, tv_to_argv, var2fpos,
 };
 use crate::src::nvim::event::libuv::{uv_kill, uv_strerror};
 use crate::src::nvim::event::r#loop::{loop_on_put, process_events_until};
@@ -115,16 +110,15 @@ use crate::src::nvim::main::{
     current_sctx, curtab, curwin, did_emsg, e_api_error, e_buffer_is_not_loaded,
     e_cannot_change_readonly_variable_str, e_channotpty, e_dictkey, e_invalid_buffer_name_str,
     e_invalid_column_number_nr, e_invalid_line_number_nr, e_invalwindow, e_invarg, e_invarg2,
-    e_invargNval, e_invargval, e_invexpr2, e_libcall, e_listarg, e_listblobarg, e_listblobreq,
-    e_listdictarg, e_listdictblobarg, e_number_exp, e_reduce_of_an_empty_str_with_no_initial_value,
-    e_stdiochan2, e_toofewarg, e_toomanyarg, e_trailing_arg, e_unknown_function_str,
-    empty_string_option, emsg_noredir, emsg_off, emsg_silent, firstwin, garbage_collect_at_exit,
-    got_int, lastbuf, lines_left, main_loop, mouse_row, msg_col, msg_row, msg_scroll, msg_scrolled,
-    msg_silent, need_clr_eos, on_print, p_cpo, p_ic, p_magic, p_sel, p_spk, p_tgc, p_verbose,
-    p_wic, p_ws, provider_call_nesting, provider_caller_scope, redir_off, reg_executing,
-    reg_recorded, reg_recording, skip_update_topline, starting, stdin_isatty, stdout_isatty,
-    typebuf, vgetc_busy, vim_ignored, virtual_op, want_garbage_collect, wild_menu_showing,
-    windowsVersion,
+    e_invargNval, e_invargval, e_invexpr2, e_libcall, e_listarg, e_listblobarg, e_listdictarg,
+    e_number_exp, e_reduce_of_an_empty_str_with_no_initial_value, e_stdiochan2, e_toofewarg,
+    e_toomanyarg, e_trailing_arg, e_unknown_function_str, empty_string_option, emsg_noredir,
+    emsg_off, emsg_silent, firstwin, garbage_collect_at_exit, got_int, lastbuf, lines_left,
+    main_loop, mouse_row, msg_col, msg_row, msg_scroll, msg_scrolled, msg_silent, need_clr_eos,
+    on_print, p_cpo, p_ic, p_magic, p_sel, p_spk, p_tgc, p_verbose, p_wic, p_ws,
+    provider_call_nesting, provider_caller_scope, redir_off, reg_executing, reg_recorded,
+    reg_recording, skip_update_topline, starting, stdin_isatty, stdout_isatty, typebuf, vgetc_busy,
+    vim_ignored, virtual_op, want_garbage_collect, wild_menu_showing, windowsVersion,
 };
 use crate::src::nvim::mark::{
     cleanup_jumplist, get_buf_local_marks, get_global_marks, setmark_pos, setpcmark,
@@ -142,8 +136,8 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::menu::{get_menu_cmd_modes, menu_get};
 use crate::src::nvim::message::{
-    do_dialog, emsg, internal_error, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts,
-    msg_scroll_flush, msg_start, semsg, semsg_multiline, verb_msg,
+    do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_scroll_flush,
+    msg_start, semsg, semsg_multiline, verb_msg,
 };
 use crate::src::nvim::r#move::{update_curswant, win_col_off};
 use crate::src::nvim::msgpack_rpc::channel::get_client_info;
