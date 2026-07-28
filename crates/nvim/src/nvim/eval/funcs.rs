@@ -44,9 +44,9 @@ use crate::src::nvim::eval::typval::{
     tv_dict_watcher_add, tv_dict_watcher_remove, tv_get_bool, tv_get_lnum, tv_get_lnum_buf,
     tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_buf, tv_get_string_buf_chk,
     tv_get_string_chk, tv_islocked, tv_list_alloc, tv_list_alloc_ret,
-    tv_list_append_allocated_string, tv_list_append_dict, tv_list_append_list,
-    tv_list_append_number, tv_list_append_owned_tv, tv_list_append_string, tv_list_find,
-    tv_list_find_nr, tv_list_item_remove, tv_list_unref,
+    tv_list_append_allocated_string, tv_list_append_dict, tv_list_append_number,
+    tv_list_append_owned_tv, tv_list_append_string, tv_list_find, tv_list_find_nr,
+    tv_list_item_remove, tv_list_unref,
 };
 use crate::src::nvim::eval::typval::{
     tv_blob_get, tv_blob_len, tv_dict_len, tv_list_first, tv_list_len, tv_list_locked, tv_list_ref,
@@ -117,9 +117,9 @@ use crate::src::nvim::main::{
     mouse_row, msg_col, msg_row, msg_scroll, msg_scrolled, msg_silent, need_clr_eos, on_print,
     p_cpo, p_ic, p_magic, p_tgc, p_verbose, p_wic, p_ws, provider_call_nesting,
     provider_caller_scope, redir_off, starting, stdin_isatty, stdout_isatty, typebuf, vgetc_busy,
-    vim_ignored, want_garbage_collect, wild_menu_showing, windowsVersion,
+    want_garbage_collect, wild_menu_showing, windowsVersion,
 };
-use crate::src::nvim::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks, setpcmark};
+use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::src::nvim::memline::{
     decl, incl, ml_get, ml_get_buf, ml_get_len, ml_open, recover_names, swapfile_dict,
@@ -173,7 +173,6 @@ use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_vsnprintf_typval};
 use crate::src::nvim::syntax::{
     get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char, syntax_present,
 };
-use crate::src::nvim::tag::{get_tagfname, get_tags, get_tagstack, set_tagstack, tagname_free};
 use crate::src::nvim::terminal::{terminal_buf, terminal_open, terminal_running};
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gid_t, __gnuc_va_list, __pthread_internal_list, __pthread_list_t,

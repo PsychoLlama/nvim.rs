@@ -1,270 +1,286 @@
 //! Marks, jumps, changes and tags.
-//!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+#![deny(unsafe_op_in_unsafe_fn)]
 
-use super::*;
+use super::args::frame;
+use super::{
+    FAIL, MAXPATHL, NUL, OK, find_tabwin, find_win_by_nr_or_id, kListLenMayKnow, kListLenUnknown,
+    tv_get_buf,
+};
+use crate::src::nvim::eval::typval::{
+    tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc,
+    tv_dict_alloc_ret, tv_get_number, tv_get_string, tv_get_string_chk, tv_list_alloc,
+    tv_list_alloc_ret, tv_list_append_dict, tv_list_append_list, tv_list_append_number,
+    tv_list_append_string,
+};
+use crate::src::nvim::main::{curbuf, curwin, emsg_off, vim_ignored};
+use crate::src::nvim::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks};
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::tag::{get_tagfname, get_tags, get_tagstack, set_tagstack, tagname_free};
+use crate::src::nvim::types::{
+    EvalFuncData, buf_T, dict_T, list_T, pos_T, tagname_T, typval_T, varnumber_T, win_T,
+};
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr;
 
+/// `changenr()` — the sequence number of the change the undo tree is at.
 pub unsafe extern "C" fn f_changenr(
-    mut _argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    _argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    (*rettv).vval.v_number = (*curbuf.get()).b_u_seq_cur as varnumber_T;
+    // SAFETY: `curbuf` is live and `rettv` is the cleared return value.
+    unsafe { (*rettv).vval.v_number = (*curbuf.get()).b_u_seq_cur as varnumber_T };
 }
+
+/// Add one `{lnum, col, coladd}` entry to `l`, skipping a cleared mark.
+///
+/// # Safety
+/// `l` is a live list.
+unsafe fn append_mark(l: *mut list_T, mark: pos_T) -> *mut dict_T {
+    // SAFETY: the caller's obligation; the dict is handed to the list
+    // immediately, so it is not leaked.
+    unsafe {
+        let d = tv_dict_alloc();
+        tv_list_append_dict(l, d);
+        tv_dict_add_nr(d, c"lnum".as_ptr(), 4, mark.lnum as varnumber_T);
+        tv_dict_add_nr(d, c"col".as_ptr(), 3, mark.col as varnumber_T);
+        tv_dict_add_nr(d, c"coladd".as_ptr(), 6, mark.coladd as varnumber_T);
+        d
+    }
+}
+
+/// `getchangelist([{buf}])` — `[changes, index]`.
 pub unsafe extern "C" fn f_getchangelist(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    tv_list_alloc_ret(rettv, 2 as ptrdiff_t);
-    let mut buf: *const buf_T = ::core::ptr::null::<buf_T>();
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        buf = curbuf.get();
-    } else {
-        vim_ignored.set(
-            tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int,
-        );
-        (*emsg_off.ptr()) += 1;
-        buf = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
-        (*emsg_off.ptr()) -= 1;
-    }
-    if buf.is_null() {
-        return;
-    }
-    let l: *mut list_T = tv_list_alloc((*buf).b_changelistlen as ptrdiff_t);
-    tv_list_append_list((*rettv).vval.v_list, l);
-    let mut changelistindex: ::core::ffi::c_int = 0;
-    if buf == (*curwin.get()).w_buffer as *const buf_T {
-        changelistindex = (*curwin.get()).w_changelistidx;
-    } else {
-        changelistindex = (*buf).b_changelistlen;
-        let mut i: size_t = 0 as size_t;
-        while i < (*buf).b_wininfo.size {
-            let mut wip: *mut WinInfo = *(*buf).b_wininfo.items.offset(i as isize);
-            if (*wip).wi_win == curwin.get() {
-                changelistindex = (*wip).wi_changelistidx;
-                break;
-            } else {
-                i = i.wrapping_add(1);
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals; `curwin` and its
+    // buffer's window-info vector are live for the whole call.
+    unsafe {
+        let out = tv_list_alloc_ret(rettv, 2);
+        let buf: *const buf_T = if !args.has(0) {
+            curbuf.get()
+        } else {
+            // The value is coerced to a Number purely so that a bad type
+            // reports; the result is thrown away and the argument is
+            // resolved as a buffer instead.
+            vim_ignored.set(tv_get_number(args.ptr(0)) as c_int);
+            *emsg_off.ptr() += 1;
+            let buf = tv_get_buf(args.ptr(0), 0);
+            *emsg_off.ptr() -= 1;
+            buf
+        };
+        if buf.is_null() {
+            return;
+        }
+        let l = tv_list_alloc((*buf).b_changelistlen as isize);
+        tv_list_append_list(out, l);
+
+        // The index is this window's if it is showing the buffer, and
+        // otherwise the one remembered for this window in the buffer's
+        // window-info list. A buffer this window has never shown reports
+        // the end of the list.
+        let index = if buf == (*curwin.get()).w_buffer as *const buf_T {
+            (*curwin.get()).w_changelistidx
+        } else {
+            (0..(*buf).b_wininfo.size)
+                .map(|i| *(*buf).b_wininfo.items.add(i))
+                .find(|wip| (**wip).wi_win == curwin.get())
+                .map_or((*buf).b_changelistlen, |wip| (*wip).wi_changelistidx)
+        };
+        tv_list_append_number(out, index as varnumber_T);
+
+        for i in 0..(*buf).b_changelistlen {
+            let mark = (*buf).b_changelist[i as usize].mark;
+            if mark.lnum != 0 {
+                append_mark(l, mark);
             }
         }
     }
-    tv_list_append_number((*rettv).vval.v_list, changelistindex as varnumber_T);
-    let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i_0 < (*buf).b_changelistlen {
-        if (*buf).b_changelist[i_0 as usize].mark.lnum != 0 as linenr_T {
-            let d: *mut dict_T = tv_dict_alloc();
-            tv_list_append_dict(l, d);
-            tv_dict_add_nr(
-                d,
-                b"lnum\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-                (*buf).b_changelist[i_0 as usize].mark.lnum as varnumber_T,
-            );
-            tv_dict_add_nr(
-                d,
-                b"col\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
-                (*buf).b_changelist[i_0 as usize].mark.col as varnumber_T,
-            );
-            tv_dict_add_nr(
-                d,
-                b"coladd\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-                (*buf).b_changelist[i_0 as usize].mark.coladd as varnumber_T,
-            );
-        }
-        i_0 += 1;
-    }
 }
+
+/// `getjumplist([{winnr} [, {tabnr}]])` — `[jumps, index]`.
 pub unsafe extern "C" fn f_getjumplist(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
-    let wp: *mut win_T = find_tabwin(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-        argvars.offset(1 as ::core::ffi::c_int as isize),
-    );
-    if wp.is_null() {
-        return;
-    }
-    cleanup_jumplist(wp, true_0 != 0);
-    let l: *mut list_T = tv_list_alloc((*wp).w_jumplistlen as ptrdiff_t);
-    tv_list_append_list((*rettv).vval.v_list, l);
-    tv_list_append_number((*rettv).vval.v_list, (*wp).w_jumplistidx as varnumber_T);
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < (*wp).w_jumplistlen {
-        if (*wp).w_jumplist[i as usize].fmark.mark.lnum != 0 as linenr_T {
-            let d: *mut dict_T = tv_dict_alloc();
-            tv_list_append_dict(l, d);
-            tv_dict_add_nr(
-                d,
-                b"lnum\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-                (*wp).w_jumplist[i as usize].fmark.mark.lnum as varnumber_T,
-            );
-            tv_dict_add_nr(
-                d,
-                b"col\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
-                (*wp).w_jumplist[i as usize].fmark.mark.col as varnumber_T,
-            );
-            tv_dict_add_nr(
-                d,
-                b"coladd\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-                (*wp).w_jumplist[i as usize].fmark.mark.coladd as varnumber_T,
-            );
-            tv_dict_add_nr(
-                d,
-                b"bufnr\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-                (*wp).w_jumplist[i as usize].fmark.fnum as varnumber_T,
-            );
-            if !(*wp).w_jumplist[i as usize].fname.is_null() {
-                tv_dict_add_str(
-                    d,
-                    b"filename\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t),
-                    (*wp).w_jumplist[i as usize].fname,
-                );
-            }
-        }
-        i += 1;
-    }
-}
-pub unsafe extern "C" fn f_getmarklist(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        get_global_marks((*rettv).vval.v_list);
-        return;
-    }
-    let mut buf: *mut buf_T = tv_get_buf(argvars.offset(0 as ::core::ffi::c_int as isize), false_0);
-    if buf.is_null() {
-        return;
-    }
-    get_buf_local_marks(buf, (*rettv).vval.v_list);
-}
-pub unsafe extern "C" fn f_gettagstack(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    let mut wp: *mut win_T = curwin.get();
-    tv_dict_alloc_ret(rettv);
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        wp = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals, and the jump
+    // list is compacted before it is read so no entry is stale.
+    unsafe {
+        let out = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
+        let wp: *mut win_T = find_tabwin(args.ptr(0), args.ptr(1));
         if wp.is_null() {
             return;
         }
-    }
-    get_tagstack(wp, (*rettv).vval.v_dict);
-}
-pub unsafe extern "C" fn f_settagstack(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    static e_invact2: GlobalCell<*const ::core::ffi::c_char> =
-        GlobalCell::new(b"E962: Invalid action: '%s'\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut action: ::core::ffi::c_char = 'r' as ::core::ffi::c_char;
-    (*rettv).vval.v_number = -1 as varnumber_T;
-    let mut wp: *mut win_T = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
-    if wp.is_null() {
-        return;
-    }
-    if tv_check_for_dict_arg(argvars, 1 as ::core::ffi::c_int) == FAIL {
-        return;
-    }
-    let mut d: *mut dict_T = (*argvars.offset(1 as ::core::ffi::c_int as isize))
-        .vval
-        .v_dict;
-    if d.is_null() {
-        return;
-    }
-    if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        if tv_check_for_string_arg(argvars, 2 as ::core::ffi::c_int) == FAIL {
-            return;
-        } else {
-            let mut actstr: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-            actstr = tv_get_string_chk(argvars.offset(2 as ::core::ffi::c_int as isize));
-            if actstr.is_null() {
-                return;
+        cleanup_jumplist(wp, true);
+        let l = tv_list_alloc((*wp).w_jumplistlen as isize);
+        tv_list_append_list(out, l);
+        tv_list_append_number(out, (*wp).w_jumplistidx as varnumber_T);
+        for i in 0..(*wp).w_jumplistlen {
+            let entry = &(*wp).w_jumplist[i as usize];
+            if entry.fmark.mark.lnum == 0 {
+                continue;
             }
-            if (*actstr as ::core::ffi::c_int == 'r' as ::core::ffi::c_int
-                || *actstr as ::core::ffi::c_int == 'a' as ::core::ffi::c_int
-                || *actstr as ::core::ffi::c_int == 't' as ::core::ffi::c_int)
-                && *actstr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-            {
-                action = *actstr;
-            } else {
-                semsg(gettext(e_invact2.get()), actstr);
-                return;
+            let d = append_mark(l, entry.fmark.mark);
+            tv_dict_add_nr(d, c"bufnr".as_ptr(), 5, entry.fmark.fnum as varnumber_T);
+            // A jump into a file that is no longer loaded keeps its name.
+            if !entry.fname.is_null() {
+                tv_dict_add_str(d, c"filename".as_ptr(), 8, entry.fname);
             }
         }
     }
-    if set_tagstack(wp, d, action as ::core::ffi::c_int) == OK {
-        (*rettv).vval.v_number = 0 as varnumber_T;
+}
+
+/// `getmarklist([{buf}])` — the global marks, or one buffer's local ones.
+pub unsafe extern "C" fn f_getmarklist(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals.
+    unsafe {
+        let out = tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
+        if !args.has(0) {
+            get_global_marks(out);
+            return;
+        }
+        let buf = tv_get_buf(args.ptr(0), 0);
+        if buf.is_null() {
+            return;
+        }
+        get_buf_local_marks(buf, out);
     }
 }
+
+/// `gettagstack([{winnr}])`.
+pub unsafe extern "C" fn f_gettagstack(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals. The dict is
+    // allocated before the window is resolved, so a bad window still
+    // yields an empty dict rather than nothing.
+    unsafe {
+        tv_dict_alloc_ret(rettv);
+        let wp = if !args.has(0) {
+            curwin.get()
+        } else {
+            find_win_by_nr_or_id(args.ptr(0))
+        };
+        if wp.is_null() {
+            return;
+        }
+        get_tagstack(wp, rettv.vval.v_dict);
+    }
+}
+
+/// `settagstack({winnr}, {dict} [, {action}])`.
+pub unsafe extern "C" fn f_settagstack(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    rettv.vval.v_number = -1;
+    // SAFETY: the arguments are live typvals; after the check argument 1's
+    // union holds a Dict pointer, which may still be null.
+    unsafe {
+        let wp = find_win_by_nr_or_id(args.ptr(0));
+        if wp.is_null() || tv_check_for_dict_arg(args.ptr(0), 1) == FAIL {
+            return;
+        }
+        let d = args.get(1).vval.v_dict;
+        if d.is_null() {
+            return;
+        }
+        // "r" replaces, "a" appends, "t" truncates; anything else, including
+        // a longer string starting with one of them, is E962.
+        let mut action = b'r' as c_char;
+        if args.has(2) {
+            if tv_check_for_string_arg(args.ptr(0), 2) == FAIL {
+                return;
+            }
+            let actstr = tv_get_string_chk(args.ptr(2));
+            if actstr.is_null() {
+                return;
+            }
+            match CStr::from_ptr(actstr).to_bytes() {
+                b"r" | b"a" | b"t" => action = *actstr,
+                _ => {
+                    semsg(gettext(c"E962: Invalid action: '%s'".as_ptr()), actstr);
+                    return;
+                }
+            }
+        }
+        if set_tagstack(wp, d, action as c_int) == OK {
+            rettv.vval.v_number = 0;
+        }
+    }
+}
+
+/// `tagfiles()` — the tags files that would be searched, in order.
 pub unsafe extern "C" fn f_tagfiles(
-    mut _argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    _argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t);
-    let mut fname: *mut ::core::ffi::c_char =
-        xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-    let mut first: bool = true_0 != 0;
-    let mut tn: tagname_T = tagname_T {
-        tn_tags: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        tn_np: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        tn_did_filefind_init: 0,
-        tn_hf_idx: 0,
-        tn_search_ctx: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    };
-    while get_tagfname(&raw mut tn, first as ::core::ffi::c_int, fname) == OK {
-        tv_list_append_string((*rettv).vval.v_list, fname, -1 as ssize_t);
-        first = false_0 != 0;
+    // SAFETY: `rettv` is the cleared return value. `fname` is a
+    // `MAXPATHL` buffer the walker fills each round and is freed here;
+    // `tn` is a live local the walker owns until `tagname_free`.
+    unsafe {
+        let out = tv_list_alloc_ret(rettv, kListLenUnknown as isize);
+        let fname = xmalloc(MAXPATHL as usize).cast::<c_char>();
+        let mut tn = tagname_T {
+            tn_tags: ptr::null_mut(),
+            tn_np: ptr::null_mut(),
+            tn_did_filefind_init: 0,
+            tn_hf_idx: 0,
+            tn_search_ctx: ptr::null_mut(),
+        };
+        let mut first = true;
+        while get_tagfname(&raw mut tn, first as c_int, fname) == OK {
+            tv_list_append_string(out, fname, -1);
+            first = false;
+        }
+        tagname_free(&raw mut tn);
+        xfree(fname.cast::<c_void>());
     }
-    tagname_free(&raw mut tn);
-    xfree(fname as *mut ::core::ffi::c_void);
 }
+
+/// `taglist({expr} [, {filename}])`.
 pub unsafe extern "C" fn f_taglist(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    let tag_pattern: *const ::core::ffi::c_char =
-        tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-    (*rettv).vval.v_number = false_0 as varnumber_T;
-    if *tag_pattern as ::core::ffi::c_int == NUL {
-        return;
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals; both strings are
+    // NUL-terminated and outlive the search.
+    unsafe {
+        let pattern = tv_get_string(args.ptr(0));
+        // An empty pattern answers 0 — a Number, not an empty List.
+        rettv.vval.v_number = 0;
+        if *pattern == NUL as c_char {
+            return;
+        }
+        let fname = if args.has(1) {
+            tv_get_string(args.ptr(1))
+        } else {
+            ptr::null()
+        };
+        get_tags(
+            tv_list_alloc_ret(rettv, kListLenUnknown as isize),
+            pattern as *mut c_char,
+            fname as *mut c_char,
+        );
     }
-    let mut fname: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        fname = tv_get_string(argvars.offset(1 as ::core::ffi::c_int as isize));
-    }
-    get_tags(
-        tv_list_alloc_ret(rettv, kListLenUnknown as ::core::ffi::c_int as ptrdiff_t),
-        tag_pattern as *mut ::core::ffi::c_char,
-        fname as *mut ::core::ffi::c_char,
-    );
 }
