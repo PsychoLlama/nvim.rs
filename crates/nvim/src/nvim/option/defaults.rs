@@ -531,10 +531,15 @@ pub(crate) unsafe fn find_dup_item(
             let starts_item = !comma_list
                 || s == origval
                 || (*s.offset(-1) as c_int == ',' as c_int && bs & 1 == 0);
-            let ends_item = !comma_list
-                || *s.add(newvallen) as c_int == ',' as c_int
-                || *s.add(newvallen) == NUL as c_char;
-            if starts_item && strncmp(s, newval, newvallen) == 0 && ends_item {
+            // The tail test must stay behind the comparison: only a match
+            // proves `s` has `newvallen` bytes, and so that `s[newvallen]`
+            // is at worst the terminator rather than past it.
+            let ends_item = || {
+                !comma_list
+                    || *s.add(newvallen) as c_int == ',' as c_int
+                    || *s.add(newvallen) == NUL as c_char
+            };
+            if starts_item && strncmp(s, newval, newvallen) == 0 && ends_item() {
                 return s;
             }
             let escaping = (s > origval.add(1)

@@ -198,13 +198,17 @@ pub(crate) unsafe fn showoneopt(opt: *mut vimoption_T, opt_flags: c_int) {
         let varp = get_varp_scope(opt, opt_flags);
         let boolean = option_has_type(opt_idx, kOptValTypeBoolean);
 
-        // 'modified' has no variable worth reading; the undo state decides.
-        let is_off = if varp.cast::<c_int>() == &raw mut (*curbuf.get()).b_changed {
-            !curbufIsChanged()
-        } else {
-            *varp.cast::<c_int>() == 0
+        // The variable is only read for a boolean option, because for
+        // anything else it is not an `int` at all. 'modified' has no
+        // variable worth reading either; the undo state decides.
+        let is_off = || {
+            if varp.cast::<c_int>() == &raw mut (*curbuf.get()).b_changed {
+                !curbufIsChanged()
+            } else {
+                *varp.cast::<c_int>() == 0
+            }
         };
-        msg_puts(if boolean && is_off {
+        msg_puts(if boolean && is_off() {
             c"no".as_ptr()
         } else if boolean && *varp.cast::<c_int>() < 0 {
             // A global-local boolean with no local value.
