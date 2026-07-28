@@ -176,22 +176,24 @@ fn push_frame(op: c_int, scan: *mut uint8_t, next: &mut *mut uint8_t) -> c_int {
             // A loop's back edge. Coming back to the same node at the same
             // input position means the loop is not making progress.
             BACK => {
-                let seen = (*backpos.ptr()).ga_data.cast::<backpos_T>();
+                let seen = || (*backpos.ptr()).ga_data.cast::<backpos_T>();
                 let count = (*backpos.ptr()).ga_len;
                 let mut i = 0;
-                while i < count && (*seen.add(i as usize)).bp_scan != scan {
+                while i < count && (*seen().add(i as usize)).bp_scan != scan {
                     i += 1;
                 }
                 let mut status = RA_CONT;
                 if i == count {
+                    // Appending can move the array, so `seen` is re-read
+                    // rather than held across the call.
                     let fresh = ga_append_via_ptr(backpos.ptr(), size_of::<backpos_T>())
                         .cast::<backpos_T>();
                     (*fresh).bp_scan = scan;
-                } else if reg_save_equal(&raw mut (*seen.add(i as usize)).bp_pos) {
+                } else if reg_save_equal(&raw mut (*seen().add(i as usize)).bp_pos) {
                     status = RA_NOMATCH;
                 }
                 if status != RA_NOMATCH {
-                    reg_save(&raw mut (*seen.add(i as usize)).bp_pos, backpos.ptr());
+                    reg_save(&raw mut (*seen().add(i as usize)).bp_pos, backpos.ptr());
                 }
                 status
             }
