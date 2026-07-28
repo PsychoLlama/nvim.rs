@@ -1,626 +1,671 @@
-//! Positions in a buffer: the cursor, `line()`, `col()`,
-//! `virtcol()`, `getpos()`/`setpos()` and the character-search state.
-//!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! Positions in a buffer: the cursor, `line()`, `col()`, `virtcol()`,
+//! `getpos()`/`setpos()` and the character-search state.
+#![deny(unsafe_op_in_unsafe_fn)]
 
-use super::*;
+use super::args::{Args, frame};
+use super::find_win_by_nr_or_id;
+use super::{
+    BACKWARD, FAIL, FORWARD, MAXCOL, NUL, OK, VALID_VIRTCOL, VAR_LIST, VAR_NUMBER, VAR_STRING,
+};
+use crate::src::nvim::cursor::check_cursor;
+use crate::src::nvim::eval::typval::{
+    tv_check_for_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_or_list_arg,
+    tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_string,
+    tv_get_bool, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string, tv_get_string_chk,
+    tv_list_alloc_ret, tv_list_append_number,
+};
+use crate::src::nvim::eval::window::win_id2wp_tp;
+use crate::src::nvim::eval_1::{
+    buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos,
+};
+use crate::src::nvim::main::{curbuf, curwin, e_invarg, e_invarg2, p_spk, skip_update_topline};
+use crate::src::nvim::mark::setmark_pos;
+use crate::src::nvim::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
+use crate::src::nvim::memline::{ml_find_line_or_offset, ml_get_buf, ml_get_buf_len};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::r#move::update_curswant;
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::plines::{getvvcol, win_chartabsize};
+use crate::src::nvim::search::{
+    last_csearch, last_csearch_forward, last_csearch_until, set_csearch_direction,
+    set_csearch_until, set_last_csearch,
+};
+use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::types::{
+    Direction, EvalFuncData, buf_T, colnr_T, list_T, pos_T, tabpage_T, typval_T, varnumber_T, win_T,
+};
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
+/// "End of line", the column sentinel. `MAXCOL` is spelled as an unsigned
+/// constant but every column it is compared against is a `colnr_T`.
+const END_OF_LINE: colnr_T = MAXCOL as colnr_T;
+
+/// The zeroed position both the getters and the setters start from.
+const NOWHERE: pos_T = pos_T {
+    lnum: 0,
+    col: 0,
+    coladd: 0,
+};
+
+/// `byte2line({byte})` — which line a byte offset falls in.
 pub unsafe extern "C" fn f_byte2line(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    let mut boff: ::core::ffi::c_int =
-        tv_get_number(argvars.offset(0 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
-            - 1 as ::core::ffi::c_int;
-    if boff < 0 as ::core::ffi::c_int {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-    } else {
-        (*rettv).vval.v_number =
-            ml_find_line_or_offset(curbuf.get(), 0 as linenr_T, &raw mut boff, false_0 != 0)
-                as varnumber_T;
-    };
-}
-unsafe extern "C" fn get_col(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut charcol: bool,
-) {
-    if tv_check_for_string_or_list_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
-        || tv_check_for_opt_number_arg(argvars, 1 as ::core::ffi::c_int) == FAIL
-    {
-        return;
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: `args.ptr(0)` is a live typval and `curbuf` is the current
+    // buffer; `boff` is a live local the callee reads and writes.
+    unsafe {
+        let mut boff = tv_get_number(args.ptr(0)) as c_int - 1;
+        rettv.vval.v_number = if boff < 0 {
+            -1
+        } else {
+            ml_find_line_or_offset(curbuf.get(), 0, &raw mut boff, false) as varnumber_T
+        };
     }
-    let mut wp: *mut win_T = curwin.get();
-    if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
-        wp = win_id2wp_tp(
-            tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int,
-            &raw mut tp,
-        );
+}
+
+/// `line2byte({lnum})` — the byte offset a line starts at, one-based, or -1
+/// past the end. One past the last line is allowed: it is the buffer size.
+pub unsafe extern "C" fn f_line2byte(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: `args.ptr(0)` is a live typval and `curbuf` is the current
+    // buffer.
+    unsafe {
+        let lnum = tv_get_lnum(args.ptr(0));
+        rettv.vval.v_number = if lnum < 1 || lnum > (*curbuf.get()).b_ml.ml_line_count + 1 {
+            -1
+        } else {
+            ml_find_line_or_offset(curbuf.get(), lnum, ptr::null_mut(), false) as varnumber_T
+        };
+        // The offset is zero-based inside memline and one-based here; -1
+        // stays -1 because the bump only applies to a found offset.
+        if rettv.vval.v_number >= 0 {
+            rettv.vval.v_number += 1;
+        }
+    }
+}
+
+/// `col({expr} [, {winid}])`.
+pub unsafe extern "C" fn f_col(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals.
+    unsafe { get_col(args, rettv, false) };
+}
+
+/// `charcol({expr} [, {winid}])` — as `col()` but counting characters.
+pub unsafe extern "C" fn f_charcol(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals.
+    unsafe { get_col(args, rettv, true) };
+}
+
+/// The window argument `col()`, `charcol()` and `virtcol()` share: the
+/// current window unless a window id names another, in which case its
+/// cursor is validated first. `None` means the id named no window, which
+/// every caller treats as "no answer".
+///
+/// # Safety
+/// `args.ptr(idx)` is a live typval.
+unsafe fn window_arg(args: Args<'_>, idx: usize) -> Option<*mut win_T> {
+    // SAFETY: the caller's obligation; `tp` is a live local.
+    unsafe {
+        if !args.has(idx) {
+            return Some(curwin.get());
+        }
+        let mut tp: *mut tabpage_T = ptr::null_mut();
+        let wp = win_id2wp_tp(tv_get_number(args.ptr(idx)) as c_int, &raw mut tp);
         if wp.is_null() || tp.is_null() {
-            return;
+            return None;
         }
         check_cursor(wp);
+        Some(wp)
     }
-    let mut bp: *mut buf_T = (*wp).w_buffer;
-    let mut col: colnr_T = 0 as colnr_T;
-    let mut fnum: ::core::ffi::c_int = (*bp).handle as ::core::ffi::c_int;
-    let mut fp: *mut pos_T = var2fpos(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-        false_0 != 0,
-        &raw mut fnum,
-        charcol,
-        wp,
-    );
-    if !fp.is_null() && fnum == (*bp).handle {
-        if (*fp).col == MAXCOL as ::core::ffi::c_int {
-            if (*fp).lnum <= (*bp).b_ml.ml_line_count {
-                col = (ml_get_buf_len(bp, (*fp).lnum) + 1 as ::core::ffi::c_int) as colnr_T;
-            } else {
-                col = MAXCOL as ::core::ffi::c_int as colnr_T;
-            }
-        } else {
-            col = ((*fp).col as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as colnr_T;
-            if virtual_active(wp) as ::core::ffi::c_int != 0 && fp == &raw mut (*wp).w_cursor {
-                let mut p: *mut ::core::ffi::c_char =
-                    ml_get_buf(bp, (*wp).w_cursor.lnum).offset((*wp).w_cursor.col as isize);
-                if (*wp).w_cursor.coladd
-                    >= win_chartabsize(wp, p, (*wp).w_virtcol - (*wp).w_cursor.coladd)
-                {
-                    let mut l: ::core::ffi::c_int = 0;
-                    if *p as ::core::ffi::c_int != NUL && {
-                        l = utfc_ptr2len(p);
-                        *p.offset(l as isize) as ::core::ffi::c_int == NUL
-                    } {
-                        col += l;
-                    }
-                }
-            }
-        }
-    }
-    (*rettv).vval.v_number = col as varnumber_T;
 }
-pub unsafe extern "C" fn f_charcol(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    get_col(argvars, rettv, true_0 != 0);
-}
-pub unsafe extern "C" fn f_col(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    get_col(argvars, rettv, false_0 != 0);
-}
-unsafe extern "C" fn set_cursorpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut charcol: bool,
-) {
-    let mut lnum: linenr_T = 0;
-    let mut col: colnr_T = 0;
-    let mut coladd: colnr_T = 0 as colnr_T;
-    let mut set_curswant: bool = true_0 != 0;
-    (*rettv).vval.v_number = -1 as varnumber_T;
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut pos: pos_T = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        let mut curswant: colnr_T = -1 as colnr_T;
-        if list2fpos(
-            argvars,
-            &raw mut pos,
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            &raw mut curswant,
-            charcol,
-        ) == FAIL
+
+/// # Safety
+/// The arguments and `rettv` are live typvals.
+unsafe fn get_col(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
+    // SAFETY: the caller's obligation; `fnum` is a live local and
+    // `var2fpos` hands back a pointer into the named window or buffer.
+    unsafe {
+        if tv_check_for_string_or_list_arg(args.ptr(0), 0) == FAIL
+            || tv_check_for_opt_number_arg(args.ptr(0), 1) == FAIL
         {
-            emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
             return;
         }
-        lnum = pos.lnum;
-        col = pos.col;
-        coladd = pos.coladd;
-        if curswant >= 0 as ::core::ffi::c_int {
-            (*curwin.get()).w_curswant =
-                (curswant as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as colnr_T;
-            set_curswant = false_0 != 0;
-        }
-    } else if ((*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint)
-        && ((*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-            || (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint)
-    {
-        lnum = tv_get_lnum(argvars);
-        if lnum < 0 as linenr_T {
-            semsg(
-                gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize)),
-            );
-        } else if lnum == 0 as linenr_T {
-            lnum = (*curwin.get()).w_cursor.lnum;
-        }
-        col = tv_get_number_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            ::core::ptr::null_mut::<bool>(),
-        ) as colnr_T;
-        if charcol {
-            col = (buf_charidx_to_byteidx(curbuf.get(), lnum, col) + 1 as ::core::ffi::c_int)
-                as colnr_T;
-        }
-        if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            coladd = tv_get_number_chk(
-                argvars.offset(2 as ::core::ffi::c_int as isize),
-                ::core::ptr::null_mut::<bool>(),
-            ) as colnr_T;
-        }
-    } else {
-        emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
-        return;
-    }
-    if lnum < 0 as linenr_T || col < 0 as ::core::ffi::c_int || coladd < 0 as ::core::ffi::c_int {
-        return;
-    }
-    if lnum > 0 as linenr_T {
-        (*curwin.get()).w_cursor.lnum = lnum;
-    }
-    if col != MAXCOL as ::core::ffi::c_int && {
-        col -= 1;
-        col < 0 as ::core::ffi::c_int
-    } {
-        col = 0 as ::core::ffi::c_int as colnr_T;
-    }
-    (*curwin.get()).w_cursor.col = col;
-    (*curwin.get()).w_cursor.coladd = coladd;
-    check_cursor(curwin.get());
-    mb_adjust_cursor();
-    (*curwin.get()).w_set_curswant = set_curswant as ::core::ffi::c_int;
-    (*rettv).vval.v_number = 0 as varnumber_T;
-}
-pub unsafe extern "C" fn f_cursor(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    set_cursorpos(argvars, rettv, false_0 != 0);
-}
-unsafe extern "C" fn getpos_both(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut getcurpos: bool,
-    mut charcol: bool,
-) {
-    let mut fp: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-    let mut pos: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut wp: *mut win_T = curwin.get();
-    let mut fnum: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    if getcurpos {
-        if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            wp = find_win_by_nr_or_id(argvars.offset(0 as ::core::ffi::c_int as isize));
-            if !wp.is_null() {
-                fp = &raw mut (*wp).w_cursor;
-            }
-        } else {
-            fp = &raw mut (*curwin.get()).w_cursor;
-        }
-        if !fp.is_null() && charcol as ::core::ffi::c_int != 0 {
-            pos = *fp;
-            pos.col =
-                buf_byteidx_to_charidx((*wp).w_buffer, pos.lnum, pos.col as ::core::ffi::c_int)
-                    as colnr_T;
-            fp = &raw mut pos;
-        }
-    } else {
-        fp = var2fpos(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-            true_0 != 0,
-            &raw mut fnum,
-            charcol,
-            curwin.get(),
-        );
-    }
-    let l: *mut list_T = tv_list_alloc_ret(
-        rettv,
-        (4 as ::core::ffi::c_int + getcurpos as ::core::ffi::c_int) as ptrdiff_t,
-    );
-    tv_list_append_number(
-        l,
-        if fnum != -1 as ::core::ffi::c_int {
-            fnum as varnumber_T
-        } else {
-            0 as ::core::ffi::c_int as varnumber_T
-        },
-    );
-    tv_list_append_number(
-        l,
-        if !fp.is_null() {
-            (*fp).lnum as varnumber_T
-        } else {
-            0 as ::core::ffi::c_int as varnumber_T
-        },
-    );
-    tv_list_append_number(
-        l,
-        if !fp.is_null() {
-            (if (*fp).col == MAXCOL as ::core::ffi::c_int {
-                MAXCOL as ::core::ffi::c_int
+        let Some(wp) = window_arg(args, 1) else {
+            return;
+        };
+        let bp = (*wp).w_buffer;
+        let mut fnum = (*bp).handle as c_int;
+        let fp = var2fpos(args.ptr(0), false, &raw mut fnum, charcol, wp);
+        let mut col: colnr_T = 0;
+        if !fp.is_null() && fnum == (*bp).handle {
+            if (*fp).col == END_OF_LINE {
+                // MAXCOL means "end of line"; past the last line there is
+                // no line to measure, so it stays MAXCOL.
+                col = if (*fp).lnum <= (*bp).b_ml.ml_line_count {
+                    ml_get_buf_len(bp, (*fp).lnum) + 1
+                } else {
+                    END_OF_LINE
+                };
             } else {
-                (*fp).col as ::core::ffi::c_int + 1 as ::core::ffi::c_int
-            }) as varnumber_T
+                col = (*fp).col + 1;
+                col += virtualedit_tail(wp, bp, fp);
+            }
+        }
+        rettv.vval.v_number = col as varnumber_T;
+    }
+}
+
+/// With 'virtualedit' on, a cursor sitting past the last character of the
+/// line reports the column *after* it rather than on it — but only when it
+/// is past the whole character, and only for the cursor itself.
+///
+/// # Safety
+/// `wp`, `bp` and `fp` are live, and `fp` is a position in `bp`.
+unsafe fn virtualedit_tail(wp: *mut win_T, bp: *mut buf_T, fp: *mut pos_T) -> colnr_T {
+    // SAFETY: the caller's obligation; `p` points into the cursor's line
+    // and is only walked forward by one character.
+    unsafe {
+        if !virtual_active(wp) || fp != &raw mut (*wp).w_cursor {
+            return 0;
+        }
+        let p = ml_get_buf(bp, (*wp).w_cursor.lnum).offset((*wp).w_cursor.col as isize);
+        if (*wp).w_cursor.coladd < win_chartabsize(wp, p, (*wp).w_virtcol - (*wp).w_cursor.coladd) {
+            return 0;
+        }
+        // Only the last character of the line counts: the test is that the
+        // byte after this character is the terminator.
+        if *p == NUL as c_char {
+            return 0;
+        }
+        let l = utfc_ptr2len(p);
+        if *p.offset(l as isize) == NUL as c_char {
+            l
         } else {
-            0 as ::core::ffi::c_int as varnumber_T
-        },
-    );
-    tv_list_append_number(
-        l,
-        if !fp.is_null() {
-            (*fp).coladd as varnumber_T
+            0
+        }
+    }
+}
+
+/// `virtcol({expr} [, {list} [, {winid}]])`.
+pub unsafe extern "C" fn f_virtcol(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    let mut vcol_start: colnr_T = 0;
+    let mut vcol_end: colnr_T = 0;
+    // SAFETY: the arguments and `rettv` are live typvals; `var2fpos` hands
+    // back a pointer into the named window or buffer, which the clamp
+    // below writes through — that is upstream's behaviour and is why a
+    // position from a List argument is clamped in place.
+    unsafe {
+        // The window argument is only honoured when the `{list}` argument
+        // was given too, because it is the third.
+        let wp = if args.has(1) && args.has(2) {
+            window_arg(args, 2)
         } else {
-            0 as ::core::ffi::c_int as varnumber_T
-        },
-    );
-    if getcurpos {
-        let save_set_curswant: bool = (*curwin.get()).w_set_curswant != 0;
-        let save_curswant: colnr_T = (*curwin.get()).w_curswant;
-        let save_virtcol: colnr_T = (*curwin.get()).w_virtcol;
-        if wp == curwin.get() {
+            Some(curwin.get())
+        };
+        if let Some(wp) = wp {
+            let bp = (*wp).w_buffer;
+            let mut fnum = (*bp).handle as c_int;
+            let fp = var2fpos(args.ptr(0), false, &raw mut fnum, false, wp);
+            if !fp.is_null() && (*fp).lnum <= (*bp).b_ml.ml_line_count && fnum == (*bp).handle {
+                // Clamped in place, which is why a position handed in as
+                // a List comes back changed.
+                if (*fp).col < 0 {
+                    (*fp).col = 0;
+                } else {
+                    let len = ml_get_buf_len(bp, (*fp).lnum);
+                    if (*fp).col > len {
+                        (*fp).col = len;
+                    }
+                }
+                getvvcol(
+                    wp,
+                    fp,
+                    &raw mut vcol_start,
+                    ptr::null_mut(),
+                    &raw mut vcol_end,
+                );
+                vcol_start += 1;
+                vcol_end += 1;
+            }
+        }
+        if args.has(1) && tv_get_bool(args.ptr(1)) != 0 {
+            let l = tv_list_alloc_ret(rettv, 2);
+            tv_list_append_number(l, vcol_start as varnumber_T);
+            tv_list_append_number(l, vcol_end as varnumber_T);
+        } else {
+            rettv.vval.v_number = vcol_end as varnumber_T;
+        }
+    }
+}
+
+/// `line({expr} [, {winid}])`.
+pub unsafe extern "C" fn f_line(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments are live typvals and `var2fpos` hands back a
+    // pointer into the named window or buffer.
+    let fp = unsafe {
+        let mut fnum: c_int = 0;
+        if !args.has(1) {
+            var2fpos(args.ptr(0), true, &raw mut fnum, false, curwin.get())
+        } else {
+            let mut tp: *mut tabpage_T = ptr::null_mut();
+            let wp = win_id2wp_tp(tv_get_number(args.ptr(1)) as c_int, &raw mut tp);
+            if wp.is_null() || tp.is_null() {
+                ptr::null_mut()
+            } else {
+                // Resolving a position in another window moves its cursor,
+                // and 'splitkeep' decides whether that is allowed to
+                // scroll it. Diff-mode windows are always exempt because
+                // their scroll is bound to this one's.
+                if *p_spk.get() != b'c' as c_char
+                    || ((*wp).w_onebuf_opt.wo_diff != 0
+                        && (*curwin.get()).w_onebuf_opt.wo_diff != 0)
+                {
+                    skip_update_topline.set(true);
+                }
+                check_cursor(wp);
+                let fp = var2fpos(args.ptr(0), true, &raw mut fnum, false, wp);
+                skip_update_topline.set(false);
+                fp
+            }
+        }
+    };
+    // SAFETY: `fp` is null or a live position.
+    rettv.vval.v_number = if fp.is_null() {
+        0
+    } else {
+        unsafe { (*fp).lnum as varnumber_T }
+    };
+}
+
+/// `getpos({expr})`.
+pub unsafe extern "C" fn f_getpos(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals.
+    unsafe { getpos_both(args, rettv, false, false) };
+}
+
+/// `getcharpos({expr})` — as `getpos()` but with a character column.
+pub unsafe extern "C" fn f_getcharpos(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals.
+    unsafe { getpos_both(args, rettv, false, true) };
+}
+
+/// `getcurpos([{winid}])` — the cursor, plus a fifth 'curswant' element.
+pub unsafe extern "C" fn f_getcurpos(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals.
+    unsafe { getpos_both(args, rettv, true, false) };
+}
+
+/// `getcursorcharpos([{winid}])`.
+pub unsafe extern "C" fn f_getcursorcharpos(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals.
+    unsafe { getpos_both(args, rettv, true, true) };
+}
+
+/// The four getters' shared body. `getcurpos` takes the cursor of the
+/// window its argument names rather than resolving a position expression,
+/// and appends 'curswant'.
+///
+/// # Safety
+/// The arguments and `rettv` are live typvals.
+unsafe fn getpos_both(args: Args<'_>, rettv: &mut typval_T, getcurpos: bool, charcol: bool) {
+    // SAFETY: the caller's obligation. `pos` outlives the list building it
+    // feeds, which is the only reason `fp` may point at it.
+    unsafe {
+        let mut pos = NOWHERE;
+        let mut wp = curwin.get();
+        let mut fnum: c_int = -1;
+        let fp = if !getcurpos {
+            var2fpos(args.ptr(0), true, &raw mut fnum, charcol, curwin.get())
+        } else {
+            let mut fp: *mut pos_T = ptr::null_mut();
+            if args.has(0) {
+                wp = find_win_by_nr_or_id(args.ptr(0));
+                if !wp.is_null() {
+                    fp = &raw mut (*wp).w_cursor;
+                }
+            } else {
+                fp = &raw mut (*curwin.get()).w_cursor;
+            }
+            if !fp.is_null() && charcol {
+                pos = *fp;
+                pos.col = buf_byteidx_to_charidx((*wp).w_buffer, pos.lnum, pos.col) as colnr_T;
+                fp = &raw mut pos;
+            }
+            fp
+        };
+
+        let l = tv_list_alloc_ret(rettv, 4 + isize::from(getcurpos));
+        tv_list_append_number(l, if fnum != -1 { fnum as varnumber_T } else { 0 });
+        let (lnum, col, coladd) = if fp.is_null() {
+            (0, 0, 0)
+        } else {
+            // MAXCOL is passed through rather than made one-based.
+            let col = if (*fp).col == END_OF_LINE {
+                END_OF_LINE
+            } else {
+                (*fp).col + 1
+            };
+            (
+                (*fp).lnum as varnumber_T,
+                col as varnumber_T,
+                (*fp).coladd as varnumber_T,
+            )
+        };
+        tv_list_append_number(l, lnum);
+        tv_list_append_number(l, col);
+        tv_list_append_number(l, coladd);
+        if getcurpos {
+            append_curswant(l, wp);
+        }
+    }
+}
+
+/// `getcurpos()`'s fifth element. Reading it means recomputing 'curswant',
+/// which is a side effect the caller must not see — so the three fields
+/// that recomputation touches are put back, and the cached virtual column
+/// invalidated so the next reader recomputes it properly.
+///
+/// # Safety
+/// `l` is a live list and `wp` is a window pointer or null.
+unsafe fn append_curswant(l: *mut list_T, wp: *mut win_T) {
+    // SAFETY: the caller's obligation.
+    unsafe {
+        let cur = curwin.get();
+        let saved_set_curswant = (*cur).w_set_curswant;
+        let saved_curswant = (*cur).w_curswant;
+        let saved_virtcol = (*cur).w_virtcol;
+        if wp == cur {
             update_curswant();
         }
         tv_list_append_number(
             l,
             if wp.is_null() {
-                0 as varnumber_T
-            } else if (*wp).w_curswant == MAXCOL as ::core::ffi::c_int {
-                MAXCOL as ::core::ffi::c_int as varnumber_T
+                0
+            } else if (*wp).w_curswant == END_OF_LINE {
+                MAXCOL as varnumber_T
             } else {
-                (*wp).w_curswant as varnumber_T + 1 as varnumber_T
+                (*wp).w_curswant as varnumber_T + 1
             },
         );
-        if wp == curwin.get() && save_set_curswant as ::core::ffi::c_int != 0 {
-            (*curwin.get()).w_set_curswant = save_set_curswant as ::core::ffi::c_int;
-            (*curwin.get()).w_curswant = save_curswant;
-            (*curwin.get()).w_virtcol = save_virtcol;
-            (*curwin.get()).w_valid &= !VALID_VIRTCOL;
+        // Only restored when 'curswant' was due to be recomputed anyway:
+        // if it was already valid, `update_curswant` did not change it.
+        if wp == cur && saved_set_curswant != 0 {
+            (*cur).w_set_curswant = saved_set_curswant;
+            (*cur).w_curswant = saved_curswant;
+            (*cur).w_virtcol = saved_virtcol;
+            (*cur).w_valid &= !VALID_VIRTCOL;
         }
     }
 }
-pub unsafe extern "C" fn f_getcharpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+
+/// `cursor({lnum}, {col} [, {off}])` or `cursor({list})`.
+pub unsafe extern "C" fn f_cursor(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    getpos_both(argvars, rettv, false_0 != 0, true_0 != 0);
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals.
+    unsafe { set_cursorpos(args, rettv, false) };
 }
-pub unsafe extern "C" fn f_getcharsearch(
-    mut _argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    tv_dict_alloc_ret(rettv);
-    let mut dict: *mut dict_T = (*rettv).vval.v_dict;
-    tv_dict_add_str(
-        dict,
-        b"char\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        last_csearch(),
-    );
-    tv_dict_add_nr(
-        dict,
-        b"forward\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        last_csearch_forward() as varnumber_T,
-    );
-    tv_dict_add_nr(
-        dict,
-        b"until\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        last_csearch_until() as varnumber_T,
-    );
-}
-pub unsafe extern "C" fn f_getcurpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    getpos_both(argvars, rettv, true_0 != 0, false_0 != 0);
-}
-pub unsafe extern "C" fn f_getcursorcharpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    getpos_both(argvars, rettv, true_0 != 0, true_0 != 0);
-}
-pub unsafe extern "C" fn f_getpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    getpos_both(argvars, rettv, false_0 != 0, false_0 != 0);
-}
-pub unsafe extern "C" fn f_line(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    let mut lnum: linenr_T = 0 as linenr_T;
-    let mut fp: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-    let mut fnum: ::core::ffi::c_int = 0;
-    if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut id: ::core::ffi::c_int =
-            tv_get_number(argvars.offset(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int;
-        let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
-        let mut wp: *mut win_T = win_id2wp_tp(id, &raw mut tp);
-        if !wp.is_null() && !tp.is_null() {
-            if *p_spk.get() as ::core::ffi::c_int != 'c' as ::core::ffi::c_int
-                || (*wp).w_onebuf_opt.wo_diff != 0 && (*curwin.get()).w_onebuf_opt.wo_diff != 0
-            {
-                skip_update_topline.set(true_0 != 0);
-            }
-            check_cursor(wp);
-            fp = var2fpos(
-                argvars.offset(0 as ::core::ffi::c_int as isize),
-                true_0 != 0,
-                &raw mut fnum,
-                false_0 != 0,
-                wp,
-            );
-            skip_update_topline.set(false_0 != 0);
-        }
-    } else {
-        fp = var2fpos(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-            true_0 != 0,
-            &raw mut fnum,
-            false_0 != 0,
-            curwin.get(),
-        );
-    }
-    if !fp.is_null() {
-        lnum = (*fp).lnum;
-    }
-    (*rettv).vval.v_number = lnum as varnumber_T;
-}
-pub unsafe extern "C" fn f_line2byte(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    let lnum: linenr_T = tv_get_lnum(argvars);
-    if lnum < 1 as linenr_T || lnum > (*curbuf.get()).b_ml.ml_line_count + 1 as linenr_T {
-        (*rettv).vval.v_number = -1 as varnumber_T;
-    } else {
-        (*rettv).vval.v_number = ml_find_line_or_offset(
-            curbuf.get(),
-            lnum,
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            false_0 != 0,
-        ) as varnumber_T;
-    }
-    if (*rettv).vval.v_number >= 0 as varnumber_T {
-        (*rettv).vval.v_number += 1;
-    }
-}
-unsafe extern "C" fn set_position(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut charpos: bool,
-) {
-    let mut curswant: colnr_T = -1 as colnr_T;
-    (*rettv).vval.v_number = -1 as varnumber_T;
-    let name: *const ::core::ffi::c_char = tv_get_string_chk(argvars);
-    if name.is_null() {
-        return;
-    }
-    let mut pos: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut fnum: ::core::ffi::c_int = 0;
-    if list2fpos(
-        argvars.offset(1 as ::core::ffi::c_int as isize),
-        &raw mut pos,
-        &raw mut fnum,
-        &raw mut curswant,
-        charpos,
-    ) != OK
-    {
-        return;
-    }
-    if pos.col != MAXCOL as ::core::ffi::c_int && {
-        pos.col -= 1;
-        pos.col < 0 as ::core::ffi::c_int
-    } {
-        pos.col = 0 as ::core::ffi::c_int as colnr_T;
-    }
-    if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == '.' as ::core::ffi::c_int
-        && *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-    {
-        (*curwin.get()).w_cursor = pos;
-        if curswant >= 0 as ::core::ffi::c_int {
-            (*curwin.get()).w_curswant =
-                (curswant as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as colnr_T;
-            (*curwin.get()).w_set_curswant = false_0;
-        }
-        check_cursor(curwin.get());
-        (*rettv).vval.v_number = 0 as varnumber_T;
-    } else if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == '\'' as ::core::ffi::c_int
-        && *name.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-        && *name.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-    {
-        if setmark_pos(
-            *name.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
-            &raw mut pos,
-            fnum,
-            ::core::ptr::null_mut::<fmarkv_T>(),
-        ) == OK
-        {
-            (*rettv).vval.v_number = 0 as varnumber_T;
-        }
-    } else {
-        emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
-    };
-}
-pub unsafe extern "C" fn f_setcharpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    set_position(argvars, rettv, true_0 != 0);
-}
-pub unsafe extern "C" fn f_setcharsearch(
-    mut argvars: *mut typval_T,
-    mut _rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    if tv_check_for_dict_arg(argvars, 0 as ::core::ffi::c_int) == FAIL {
-        return;
-    }
-    let mut d: *mut dict_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
-        .vval
-        .v_dict;
-    if d.is_null() {
-        return;
-    }
-    let csearch: *mut ::core::ffi::c_char = tv_dict_get_string(
-        d,
-        b"char\0".as_ptr() as *const ::core::ffi::c_char,
-        false_0 != 0,
-    );
-    if !csearch.is_null() {
-        let mut c: ::core::ffi::c_int = utf_ptr2char(csearch);
-        set_last_csearch(c, csearch, utfc_ptr2len(csearch));
-    }
-    let mut di: *mut dictitem_T = tv_dict_find(
-        d,
-        b"forward\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize) as ptrdiff_t,
-    );
-    if !di.is_null() {
-        set_csearch_direction(
-            (if tv_get_number(&raw mut (*di).di_tv) != 0 {
-                FORWARD as ::core::ffi::c_int
-            } else {
-                BACKWARD as ::core::ffi::c_int
-            }) as Direction,
-        );
-    }
-    di = tv_dict_find(
-        d,
-        b"until\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize) as ptrdiff_t,
-    );
-    if !di.is_null() {
-        set_csearch_until((tv_get_number(&raw mut (*di).di_tv) != 0) as ::core::ffi::c_int);
-    }
-}
+
+/// `setcursorcharpos({lnum}, {col} [, {off}])` or with a List.
 pub unsafe extern "C" fn f_setcursorcharpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    set_cursorpos(argvars, rettv, true_0 != 0);
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals.
+    unsafe { set_cursorpos(args, rettv, true) };
 }
-pub unsafe extern "C" fn f_setpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    set_position(argvars, rettv, false_0 != 0);
-}
-pub unsafe extern "C" fn f_virtcol(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    let mut bp: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-    let mut fnum: ::core::ffi::c_int = 0;
-    let mut fp: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-    let mut vcol_start: colnr_T = 0 as colnr_T;
-    let mut vcol_end: colnr_T = 0 as colnr_T;
-    let mut wp: *mut win_T = curwin.get();
-    '_theend: {
-        if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
-            wp = win_id2wp_tp(
-                tv_get_number(argvars.offset(2 as ::core::ffi::c_int as isize))
-                    as ::core::ffi::c_int,
-                &raw mut tp,
-            );
-            if wp.is_null() || tp.is_null() {
-                break '_theend;
-            } else {
-                check_cursor(wp);
+
+/// # Safety
+/// The arguments and `rettv` are live typvals.
+unsafe fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
+    // SAFETY: the caller's obligation; `pos` and `curswant` are live
+    // locals the List parser fills.
+    unsafe {
+        rettv.vval.v_number = -1;
+        let mut set_curswant = true;
+        let (lnum, mut col, coladd) = if args.ty(0) == VAR_LIST {
+            let mut pos = NOWHERE;
+            let mut curswant: colnr_T = -1;
+            if list2fpos(
+                args.ptr(0),
+                &raw mut pos,
+                ptr::null_mut(),
+                &raw mut curswant,
+                charcol,
+            ) == FAIL
+            {
+                emsg(gettext(e_invarg.ptr() as *const c_char));
+                return;
             }
-        }
-        bp = (*wp).w_buffer;
-        fnum = (*bp).handle as ::core::ffi::c_int;
-        fp = var2fpos(
-            argvars.offset(0 as ::core::ffi::c_int as isize),
-            false_0 != 0,
-            &raw mut fnum,
-            false_0 != 0,
-            wp,
-        );
-        if !fp.is_null() && (*fp).lnum <= (*bp).b_ml.ml_line_count && fnum == (*bp).handle {
-            if (*fp).col < 0 as ::core::ffi::c_int {
-                (*fp).col = 0 as ::core::ffi::c_int as colnr_T;
+            if curswant >= 0 {
+                (*curwin.get()).w_curswant = curswant - 1;
+                set_curswant = false;
+            }
+            (pos.lnum, pos.col, pos.coladd)
+        } else if matches!(args.ty(0), VAR_NUMBER | VAR_STRING)
+            && matches!(args.ty(1), VAR_NUMBER | VAR_STRING)
+        {
+            let mut lnum = tv_get_lnum(args.ptr(0));
+            if lnum < 0 {
+                // Kept on the variadic message call: the argument is
+                // arbitrary user bytes. Note that this reports and then
+                // carries on to the range check below.
+                semsg(
+                    gettext(e_invarg2.ptr() as *const c_char),
+                    tv_get_string(args.ptr(0)),
+                );
+            } else if lnum == 0 {
+                lnum = (*curwin.get()).w_cursor.lnum;
+            }
+            let mut col = tv_get_number_chk(args.ptr(1), ptr::null_mut()) as colnr_T;
+            if charcol {
+                col = buf_charidx_to_byteidx(curbuf.get(), lnum, col) + 1;
+            }
+            let coladd = if args.has(2) {
+                tv_get_number_chk(args.ptr(2), ptr::null_mut()) as colnr_T
             } else {
-                let len: colnr_T = ml_get_buf_len(bp, (*fp).lnum);
-                if (*fp).col > len {
-                    (*fp).col = len;
+                0
+            };
+            (lnum, col, coladd)
+        } else {
+            emsg(gettext(e_invarg.ptr() as *const c_char));
+            return;
+        };
+
+        if lnum < 0 || col < 0 || coladd < 0 {
+            return;
+        }
+        if lnum > 0 {
+            (*curwin.get()).w_cursor.lnum = lnum;
+        }
+        // The column is one-based on the way in, except for MAXCOL which
+        // means "end of line" and is passed through.
+        if col != END_OF_LINE {
+            col = (col - 1).max(0);
+        }
+        (*curwin.get()).w_cursor.col = col;
+        (*curwin.get()).w_cursor.coladd = coladd;
+        check_cursor(curwin.get());
+        mb_adjust_cursor();
+        (*curwin.get()).w_set_curswant = set_curswant as c_int;
+        rettv.vval.v_number = 0;
+    }
+}
+
+/// `setpos({expr}, {list})`.
+pub unsafe extern "C" fn f_setpos(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals.
+    unsafe { set_position(args, rettv, false) };
+}
+
+/// `setcharpos({expr}, {list})` — as `setpos()` with a character column.
+pub unsafe extern "C" fn f_setcharpos(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals.
+    unsafe { set_position(args, rettv, true) };
+}
+
+/// # Safety
+/// The arguments and `rettv` are live typvals.
+unsafe fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
+    // SAFETY: the caller's obligation; `pos`, `fnum` and `curswant` are
+    // live locals the List parser fills, and `name` is NUL-terminated.
+    unsafe {
+        rettv.vval.v_number = -1;
+        let name = tv_get_string_chk(args.ptr(0));
+        if name.is_null() {
+            return;
+        }
+        let mut pos = NOWHERE;
+        let mut fnum: c_int = 0;
+        let mut curswant: colnr_T = -1;
+        if list2fpos(
+            args.ptr(1),
+            &raw mut pos,
+            &raw mut fnum,
+            &raw mut curswant,
+            charpos,
+        ) != OK
+        {
+            return;
+        }
+        if pos.col != END_OF_LINE {
+            pos.col = (pos.col - 1).max(0);
+        }
+        match CStr::from_ptr(name).to_bytes() {
+            b"." => {
+                (*curwin.get()).w_cursor = pos;
+                if curswant >= 0 {
+                    (*curwin.get()).w_curswant = curswant - 1;
+                    (*curwin.get()).w_set_curswant = 0;
+                }
+                check_cursor(curwin.get());
+                rettv.vval.v_number = 0;
+            }
+            // A mark name is exactly one byte after the quote.
+            [b'\'', c] => {
+                if setmark_pos(*c as c_int, &raw mut pos, fnum, ptr::null_mut()) == OK {
+                    rettv.vval.v_number = 0;
                 }
             }
-            getvvcol(
-                wp,
-                fp,
-                &raw mut vcol_start,
-                ::core::ptr::null_mut::<colnr_T>(),
-                &raw mut vcol_end,
-            );
-            vcol_start += 1;
-            vcol_end += 1;
+            _ => {
+                emsg(gettext(e_invarg.ptr() as *const c_char));
+            }
         }
     }
-    if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-        && tv_get_bool(argvars.offset(1 as ::core::ffi::c_int as isize)) != 0
-    {
-        tv_list_alloc_ret(rettv, 2 as ptrdiff_t);
-        tv_list_append_number((*rettv).vval.v_list, vcol_start as varnumber_T);
-        tv_list_append_number((*rettv).vval.v_list, vcol_end as varnumber_T);
-    } else {
-        (*rettv).vval.v_number = vcol_end as varnumber_T;
-    };
+}
+
+/// `getcharsearch()` — the state `;` and `,` repeat.
+pub unsafe extern "C" fn f_getcharsearch(
+    _argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    // SAFETY: `rettv` is the dispatcher's cleared return value; the three
+    // readers answer from the process-wide character-search state.
+    unsafe {
+        tv_dict_alloc_ret(rettv);
+        let dict = (*rettv).vval.v_dict;
+        tv_dict_add_str(dict, c"char".as_ptr(), 4, last_csearch());
+        tv_dict_add_nr(
+            dict,
+            c"forward".as_ptr(),
+            7,
+            last_csearch_forward() as varnumber_T,
+        );
+        tv_dict_add_nr(
+            dict,
+            c"until".as_ptr(),
+            5,
+            last_csearch_until() as varnumber_T,
+        );
+    }
+}
+
+/// `setcharsearch({dict})` — each key is optional and missing keys leave
+/// that part of the state alone.
+pub unsafe extern "C" fn f_setcharsearch(
+    argvars: *mut typval_T,
+    _rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, _rettv) = frame!(argvars, _rettv);
+    // SAFETY: `args.ptr(0)` is a live typval; after the check the union
+    // holds a Dict pointer, which may still be null.
+    unsafe {
+        if tv_check_for_dict_arg(args.ptr(0), 0) == FAIL {
+            return;
+        }
+        let d = args.get(0).vval.v_dict;
+        if d.is_null() {
+            return;
+        }
+        let csearch = tv_dict_get_string(d, c"char".as_ptr(), false);
+        if !csearch.is_null() {
+            set_last_csearch(utf_ptr2char(csearch), csearch, utfc_ptr2len(csearch));
+        }
+        let di = tv_dict_find(d, c"forward".as_ptr(), 7);
+        if !di.is_null() {
+            let forward = tv_get_number(&raw mut (*di).di_tv) != 0;
+            set_csearch_direction(if forward { FORWARD } else { BACKWARD } as Direction);
+        }
+        let di = tv_dict_find(d, c"until".as_ptr(), 5);
+        if !di.is_null() {
+            set_csearch_until((tv_get_number(&raw mut (*di).di_tv) != 0) as c_int);
+        }
+    }
 }

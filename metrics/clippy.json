@@ -56,7 +56,6 @@
     "crates/nvim/src/nvim/eval/funcs/job.rs": 51,
     "crates/nvim/src/nvim/eval/funcs/marks.rs": 10,
     "crates/nvim/src/nvim/eval/funcs/msgpack.rs": 19,
-    "crates/nvim/src/nvim/eval/funcs/position.rs": 8,
     "crates/nvim/src/nvim/eval/funcs/reduce.rs": 5,
     "crates/nvim/src/nvim/eval/funcs/regexp.rs": 16,
     "crates/nvim/src/nvim/eval/funcs/region.rs": 12,
