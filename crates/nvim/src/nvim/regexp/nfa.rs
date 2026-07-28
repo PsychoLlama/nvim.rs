@@ -1,10 +1,12 @@
-//! The NFA engine, transpiled from upstream's regexp_nfa.c.
+//! The NFA engine: a Pike VM, from upstream's regexp_nfa.c.
 //!
-//! A pattern compiles to postfix form, the postfix form to a state
-//! machine, and the matcher advances a list of threads over the input.
+//! A pattern is parsed into a postfix program ([`parse`], [`atom`] and the
+//! families under them, over [`postfix`]), the program is built into a state
+//! machine ([`build`]), and the machine is run by advancing a list of threads
+//! over the input one character at a time ([`matcher`], [`step`]).
 //!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! Only [`sub`] — `addstate` and the thread lists it grows — is still as
+//! transpilation left it.
 
 #[allow(unused_imports)]
 use super::*;
@@ -28,10 +30,5 @@ mod run;
 mod step;
 mod sub;
 
-pub(crate) use self::build::*;
-pub(crate) use self::compile::*;
 pub(crate) use self::exec::*;
-pub(crate) use self::matcher::*;
-pub(crate) use self::parse::*;
 pub(crate) use self::run::*;
-pub(crate) use self::sub::*;
