@@ -30,12 +30,11 @@ use crate::src::nvim::main::p_mmp;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::regexp::{
-    ADDSTATE_HERE_OFFSET, C2Rust_Unnamed_19, C2Rust_Unnamed_20,
-    E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, NFA_BOF, NFA_BOL, NFA_EMPTY, NFA_MATCH,
-    NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE9, NFA_MOPEN, NFA_MOPEN9, NFA_NCLOSE, NFA_NOPEN,
-    NFA_PIM_UNUSED, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9,
-    NFA_ZSTART, NUL, multipos, nfa_endp, nfa_ll_index, nfa_pim_T, nfa_state_T, nfa_thread_T,
-    regsub_T, regsubs_T, rex,
+    ADDSTATE_HERE_OFFSET, CaptureSlots, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, NFA_BOF,
+    NFA_BOL, NFA_EMPTY, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE9, NFA_MOPEN, NFA_MOPEN9,
+    NFA_NCLOSE, NFA_NOPEN, NFA_PIM_UNUSED, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND,
+    NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, NUL, PimEnd, multipos, nfa_endp, nfa_ll_index, nfa_pim_T,
+    nfa_state_T, nfa_thread_T, regsub_T, regsubs_T, rex,
 };
 use crate::src::nvim::types::{colnr_T, linenr_T, uint8_t};
 
@@ -79,7 +78,7 @@ const BLANK_THREAD: nfa_thread_T = nfa_thread_T {
         result: NFA_PIM_UNUSED,
         state: core::ptr::null_mut(),
         subs: BLANK_SUBS,
-        end: C2Rust_Unnamed_20 {
+        end: PimEnd {
             ptr: core::ptr::null_mut(),
         },
     },
@@ -88,7 +87,7 @@ const BLANK_THREAD: nfa_thread_T = nfa_thread_T {
 
 const BLANK_SUB: regsub_T = regsub_T {
     in_use: 0,
-    list: C2Rust_Unnamed_19 {
+    list: CaptureSlots {
         multi: [multipos {
             start_lnum: 0,
             end_lnum: 0,

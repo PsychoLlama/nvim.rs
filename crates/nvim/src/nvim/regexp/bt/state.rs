@@ -34,9 +34,9 @@ use crate::src::nvim::main::p_mmp;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::regexp::{
-    C2Rust_Unnamed_21, C2Rust_Unnamed_22, C2Rust_Unnamed_23,
-    E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, NSUBEXP, REGSTACK_INITIAL, reg_getline,
-    regbehind_T, regitem_T, regsave_T, regstar_T, regstate_T, rex, save_se_T,
+    E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, FrameSave, InputPos, NSUBEXP, REGSTACK_INITIAL,
+    SavedPos, reg_getline, regbehind_T, regitem_T, regsave_T, regstar_T, regstate_T, rex,
+    save_se_T,
 };
 use crate::src::nvim::types::{colnr_T, garray_T, lpos_T, uint8_t};
 
@@ -45,9 +45,9 @@ const BLANK_FRAME: regitem_T = regitem_T {
     rs_state: 0,
     rs_no: 0,
     rs_scan: core::ptr::null_mut(),
-    rs_un: C2Rust_Unnamed_22 {
+    rs_un: FrameSave {
         regsave: regsave_T {
-            rs_u: C2Rust_Unnamed_23 {
+            rs_u: InputPos {
                 ptr: core::ptr::null_mut(),
             },
             rs_len: 0,
@@ -65,14 +65,14 @@ const BLANK_BEHIND: regbehind_T = regbehind_T {
 };
 
 const BLANK_FRAME_SAVE: regsave_T = regsave_T {
-    rs_u: C2Rust_Unnamed_23 {
+    rs_u: InputPos {
         ptr: core::ptr::null_mut(),
     },
     rs_len: 0,
 };
 
 const BLANK_SE: save_se_T = save_se_T {
-    se_u: C2Rust_Unnamed_21 {
+    se_u: SavedPos {
         ptr: core::ptr::null_mut(),
     },
 };

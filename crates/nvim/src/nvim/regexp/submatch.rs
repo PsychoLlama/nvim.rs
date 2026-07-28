@@ -1,54 +1,29 @@
-//! What the last match captured: the `submatch()` accessors and the
-//! list the `\\=` expression evaluator sees.
+//! What the last match captured, for the code that runs *inside* a
+//! substitution: `submatch()` and `submatch(n, 1)`, and the list a `\=`
+//! expression's function is handed as its argument.
 //!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! These read `rsm`, not `rex`. A `\=` expression may run a search or a
+//! substitution of its own, which takes `rex` over; `rsm` is the snapshot
+//! [`super::substitute`] takes of the outermost match before evaluating, so
+//! that `submatch()` keeps answering about the substitution the user wrote.
+//! `can_f_submatch` is what says the snapshot is live.
 
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub(crate) unsafe extern "C" fn fill_submatch_list(
-    mut _argc: ::core::ffi::c_int,
-    mut argv: *mut typval_T,
-    mut argskip: ::core::ffi::c_int,
-    mut fp: *mut ufunc_T,
-) -> ::core::ffi::c_int {
-    let mut listarg: *mut typval_T = argv.offset(argskip as isize);
-    if (*fp).uf_varargs == 0 && (*fp).uf_args.ga_len <= argskip {
-        return argskip;
-    }
-    tv_list_init_static10((*listarg).vval.v_list as *mut staticList10_T);
-    let mut li: *mut listitem_T = tv_list_first((*listarg).vval.v_list);
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < 10 as ::core::ffi::c_int {
-        let mut s: *mut ::core::ffi::c_char = (*(*rsm.ptr()).sm_match).startp[i as usize];
-        if s.is_null() || (*(*rsm.ptr()).sm_match).endp[i as usize].is_null() {
-            s = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        } else {
-            s = xstrnsave(
-                s,
-                (*(*rsm.ptr()).sm_match).endp[i as usize].offset_from(s) as size_t,
-            );
-        }
-        (*li).li_tv.v_type = VAR_STRING;
-        (*li).li_tv.vval.v_string = s;
-        li = (*li).li_next;
-        i += 1;
-    }
-    return argskip + 1 as ::core::ffi::c_int;
-}
-pub(crate) unsafe extern "C" fn clear_submatch_list(mut sl: *mut staticList10_T) {
-    let l_: *mut list_T = &raw mut (*sl).sl_list;
-    if !l_.is_null() {
-        let mut li: *mut listitem_T = (*l_).lv_first;
-        while !li.is_null() {
-            xfree((*li).li_tv.vval.v_string as *mut ::core::ffi::c_void);
-            li = (*li).li_next;
-        }
-    }
-}
+use core::ffi::{c_char, c_int};
+
+use super::{LineOrigin, NUL, VAR_STRING, can_f_submatch, reg_line, reg_line_len, rsm};
+use crate::src::nvim::eval::typval::{
+    tv_list_alloc, tv_list_append_string, tv_list_first, tv_list_init_static10, tv_list_ref,
+};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz};
+use crate::src::nvim::os::libc::{strcpy, strncpy};
+use crate::src::nvim::strings::xstrnsave;
+use crate::src::nvim::types::{colnr_T, linenr_T, list_T, staticList10_T, typval_T, ufunc_T};
+
 /// The text of the submatch line `lnum` lines into the match `submatch()`
-/// and a `\\=` expression see.
-pub(crate) fn reg_getline_submatch(lnum: linenr_T) -> *mut ::core::ffi::c_char {
+/// and a `\=` expression see.
+pub(crate) fn reg_getline_submatch(lnum: linenr_T) -> *mut c_char {
     reg_line(lnum, LineOrigin::Submatch)
 }
 
@@ -57,139 +32,201 @@ pub(crate) fn reg_getline_submatch_len(lnum: linenr_T) -> colnr_T {
     reg_line_len(lnum, LineOrigin::Submatch)
 }
 
-pub unsafe extern "C" fn reg_submatch(mut no: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
-    let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut round: ::core::ffi::c_int = 0;
-    let mut lnum: linenr_T = 0;
-    if !can_f_submatch.get() || no < 0 as ::core::ffi::c_int {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+/// Fill `argv[argskip]` — a ten-item static list — with the submatches, and
+/// report how many arguments the call now has.
+///
+/// This is the `fe_argv_func` a `\=` expression's function is called
+/// through, so it runs before the function body sees its arguments. A
+/// function that does not take a submatches argument gets none: the list
+/// stays as the caller left it, which is what tells [`super::substitute`]
+/// there is nothing to free.
+pub(crate) unsafe extern "C" fn fill_submatch_list(
+    _argc: c_int,
+    argv: *mut typval_T,
+    argskip: c_int,
+    fp: *mut ufunc_T,
+) -> c_int {
+    // SAFETY: `argv` has at least `argskip + 1` slots and `argv[argskip]`
+    // holds the `staticList10_T` the caller keeps alive across the call;
+    // `rsm` describes a live string match.
+    unsafe {
+        let listarg = argv.offset(argskip as isize);
+        if (*fp).uf_varargs == 0 && (*fp).uf_args.ga_len <= argskip {
+            return argskip;
+        }
+
+        // Relies on `sl_list` being the first member of `staticList10_T`.
+        tv_list_init_static10((*listarg).vval.v_list as *mut staticList10_T);
+
+        // A `staticList10_T` always has exactly ten items, one per capture.
+        let match_ = (*rsm.ptr()).sm_match;
+        let mut li = tv_list_first((*listarg).vval.v_list);
+        for i in 0..10 {
+            let start = (*match_).startp[i];
+            let text = if start.is_null() || (*match_).endp[i].is_null() {
+                core::ptr::null_mut()
+            } else {
+                xstrnsave(start, (*match_).endp[i].offset_from(start) as usize)
+            };
+            (*li).li_tv.v_type = VAR_STRING;
+            (*li).li_tv.vval.v_string = text;
+            li = (*li).li_next;
+        }
+        argskip + 1
     }
-    if (*rsm.ptr()).sm_match.is_null() {
-        let mut len: ssize_t = 0;
-        round = 1 as ::core::ffi::c_int;
-        while round <= 2 as ::core::ffi::c_int {
-            lnum = (*(*rsm.ptr()).sm_mmatch).startpos[no as usize].lnum;
-            if lnum < 0 as linenr_T
-                || (*(*rsm.ptr()).sm_mmatch).endpos[no as usize].lnum < 0 as linenr_T
-            {
-                return ::core::ptr::null_mut::<::core::ffi::c_char>();
+}
+
+/// Free the strings [`fill_submatch_list`] allocated into `sl`.
+pub(crate) unsafe fn clear_submatch_list(sl: *mut staticList10_T) {
+    // SAFETY: `sl` is the caller's list, whose items own their strings.
+    unsafe {
+        let mut li = (*sl).sl_list.lv_first;
+        while !li.is_null() {
+            xfree((*li).li_tv.vval.v_string.cast());
+            li = (*li).li_next;
+        }
+    }
+}
+
+/// The text capture `no` matched, as an allocated string the caller owns.
+/// Null outside a substitution and for a capture that did not participate.
+///
+/// A buffer match's capture can span lines, in which case the breaks come
+/// back as newlines. That length is not known without walking the lines, so
+/// the walk runs twice: round 1 measures and allocates, round 2 copies.
+/// Both rounds must agree, so keep them in step.
+pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
+    // SAFETY: guarded by `can_f_submatch`, which is only set while `rsm`
+    // describes a live match; `no` is bounds-checked against the ten
+    // capture slots by its caller (`submatch()` rejects anything else).
+    unsafe {
+        if !can_f_submatch.get() || no < 0 {
+            return core::ptr::null_mut();
+        }
+        let no = no as usize;
+
+        // A string match has no lines to cross.
+        if !(*rsm.ptr()).sm_match.is_null() {
+            let match_ = (*rsm.ptr()).sm_match;
+            let start = (*match_).startp[no];
+            if start.is_null() || (*match_).endp[no].is_null() {
+                return core::ptr::null_mut();
             }
-            s = reg_getline_submatch(lnum);
-            if s.is_null() {
+            return xstrnsave(start, (*match_).endp[no].offset_from(start) as usize);
+        }
+
+        let mmatch = (*rsm.ptr()).sm_mmatch;
+        let mut retval: *mut c_char = core::ptr::null_mut();
+        for round in 1..=2 {
+            let mut lnum = (*mmatch).startpos[no].lnum;
+            if lnum < 0 || (*mmatch).endpos[no].lnum < 0 {
+                return core::ptr::null_mut();
+            }
+            let line = reg_getline_submatch(lnum);
+            if line.is_null() {
+                // Anti-crash check; cannot happen.
                 break;
             }
-            s = s.offset((*(*rsm.ptr()).sm_mmatch).startpos[no as usize].col as isize);
-            if (*(*rsm.ptr()).sm_mmatch).endpos[no as usize].lnum == lnum {
-                len = ((*(*rsm.ptr()).sm_mmatch).endpos[no as usize].col
-                    - (*(*rsm.ptr()).sm_mmatch).startpos[no as usize].col)
-                    as ssize_t;
-                if round == 2 as ::core::ffi::c_int {
-                    xmemcpyz(
-                        retval as *mut ::core::ffi::c_void,
-                        s as *const ::core::ffi::c_void,
-                        len as size_t,
-                    );
+            let scol = (*mmatch).startpos[no].col;
+            let ecol = (*mmatch).endpos[no].col;
+            let s = line.offset(scol as isize);
+
+            // Counts the terminating NUL, so that it is also the size to
+            // allocate at the end of round 1.
+            let mut len: usize;
+            if (*mmatch).endpos[no].lnum == lnum {
+                // Within one line: from the start column to the end one.
+                len = (ecol - scol) as usize;
+                if round == 2 {
+                    xmemcpyz(retval.cast(), s.cast(), len);
                 }
                 len += 1;
             } else {
-                len = (reg_getline_submatch_len(lnum)
-                    - (*(*rsm.ptr()).sm_mmatch).startpos[no as usize].col)
-                    as ssize_t;
-                if round == 2 as ::core::ffi::c_int {
+                // The rest of the start line, then whole lines, then the
+                // head of the end line. Each break travels as a newline.
+                len = (reg_getline_submatch_len(lnum) - scol) as usize;
+                if round == 2 {
                     strcpy(retval, s);
-                    *retval.offset(len as isize) = '\n' as ::core::ffi::c_char;
+                    *retval.add(len) = b'\n' as c_char;
                 }
                 len += 1;
                 lnum += 1;
-                while lnum < (*(*rsm.ptr()).sm_mmatch).endpos[no as usize].lnum {
-                    s = reg_getline_submatch(lnum);
-                    if round == 2 as ::core::ffi::c_int {
-                        strcpy(retval.offset(len as isize), s);
+                while lnum < (*mmatch).endpos[no].lnum {
+                    let line = reg_getline_submatch(lnum);
+                    if round == 2 {
+                        strcpy(retval.add(len), line);
                     }
-                    len += reg_getline_submatch_len(lnum) as ssize_t;
-                    if round == 2 as ::core::ffi::c_int {
-                        *retval.offset(len as isize) = '\n' as ::core::ffi::c_char;
+                    len += reg_getline_submatch_len(lnum) as usize;
+                    if round == 2 {
+                        *retval.add(len) = b'\n' as c_char;
                     }
                     len += 1;
                     lnum += 1;
                 }
-                if round == 2 as ::core::ffi::c_int {
-                    strncpy(
-                        retval.offset(len as isize),
-                        reg_getline_submatch(lnum),
-                        (*(*rsm.ptr()).sm_mmatch).endpos[no as usize].col as size_t,
-                    );
+                if round == 2 {
+                    strncpy(retval.add(len), reg_getline_submatch(lnum), ecol as usize);
                 }
-                len += (*(*rsm.ptr()).sm_mmatch).endpos[no as usize].col as ssize_t;
-                if round == 2 as ::core::ffi::c_int {
-                    *retval.offset(len as isize) = NUL as ::core::ffi::c_char;
+                len += ecol as usize;
+                if round == 2 {
+                    *retval.add(len) = NUL as c_char;
                 }
                 len += 1;
             }
+
             if retval.is_null() {
-                retval = xmalloc(len as size_t) as *mut ::core::ffi::c_char;
+                retval = xmalloc(len).cast();
             }
-            round += 1;
         }
-    } else {
-        s = (*(*rsm.ptr()).sm_match).startp[no as usize];
-        if s.is_null() || (*(*rsm.ptr()).sm_match).endp[no as usize].is_null() {
-            retval = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        } else {
-            retval = xstrnsave(
-                s,
-                (*(*rsm.ptr()).sm_match).endp[no as usize].offset_from(s) as size_t,
-            );
-        }
+        retval
     }
-    return retval;
 }
-pub unsafe extern "C" fn reg_submatch_list(mut no: ::core::ffi::c_int) -> *mut list_T {
-    if !can_f_submatch.get() || no < 0 as ::core::ffi::c_int {
-        return ::core::ptr::null_mut::<list_T>();
-    }
-    let mut slnum: linenr_T = 0;
-    let mut elnum: linenr_T = 0;
-    let mut list: *mut list_T = ::core::ptr::null_mut::<list_T>();
-    let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    if (*rsm.ptr()).sm_match.is_null() {
-        slnum = (*(*rsm.ptr()).sm_mmatch).startpos[no as usize].lnum;
-        elnum = (*(*rsm.ptr()).sm_mmatch).endpos[no as usize].lnum;
-        if slnum < 0 as linenr_T || elnum < 0 as linenr_T {
-            return ::core::ptr::null_mut::<list_T>();
+
+/// [`reg_submatch`] as one list item per line, which is what
+/// `submatch(no, 1)` returns. Unlike [`reg_submatch`] this keeps NULs in the
+/// text apart from the line breaks, because each line is its own item.
+pub(crate) unsafe fn reg_submatch_list(no: c_int) -> *mut list_T {
+    // SAFETY: as [`reg_submatch`].
+    unsafe {
+        if !can_f_submatch.get() || no < 0 {
+            return core::ptr::null_mut();
         }
-        let mut scol: colnr_T = (*(*rsm.ptr()).sm_mmatch).startpos[no as usize].col;
-        let mut ecol: colnr_T = (*(*rsm.ptr()).sm_mmatch).endpos[no as usize].col;
-        list = tv_list_alloc((elnum - slnum + 1 as linenr_T) as ptrdiff_t);
-        s = reg_getline_submatch(slnum).offset(scol as isize);
-        if slnum == elnum {
-            tv_list_append_string(list, s, (ecol - scol) as ssize_t);
-        } else {
-            let mut max_lnum: ::core::ffi::c_int =
-                elnum as ::core::ffi::c_int - slnum as ::core::ffi::c_int;
-            tv_list_append_string(list, s, -1 as ssize_t);
-            let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            while i < max_lnum {
-                s = reg_getline_submatch(slnum + i as linenr_T);
-                tv_list_append_string(list, s, -1 as ssize_t);
-                i += 1;
+        let no = no as usize;
+
+        // A string match is one item.
+        if !(*rsm.ptr()).sm_match.is_null() {
+            let match_ = (*rsm.ptr()).sm_match;
+            let start = (*match_).startp[no];
+            if start.is_null() || (*match_).endp[no].is_null() {
+                return core::ptr::null_mut();
             }
-            s = reg_getline_submatch(elnum);
-            tv_list_append_string(list, s, ecol as ssize_t);
+            let list = tv_list_alloc(1);
+            tv_list_append_string(list, start, (*match_).endp[no].offset_from(start));
+            tv_list_ref(list);
+            return list;
         }
-    } else {
-        s = (*(*rsm.ptr()).sm_match).startp[no as usize];
-        if s.is_null() || (*(*rsm.ptr()).sm_match).endp[no as usize].is_null() {
-            return ::core::ptr::null_mut::<list_T>();
+
+        let mmatch = (*rsm.ptr()).sm_mmatch;
+        let slnum = (*mmatch).startpos[no].lnum;
+        let elnum = (*mmatch).endpos[no].lnum;
+        if slnum < 0 || elnum < 0 {
+            return core::ptr::null_mut();
         }
-        list = tv_list_alloc(1 as ptrdiff_t);
-        tv_list_append_string(
-            list,
-            s,
-            (*(*rsm.ptr()).sm_match).endp[no as usize].offset_from(s) as ssize_t,
-        );
+        let scol = (*mmatch).startpos[no].col;
+        let ecol = (*mmatch).endpos[no].col;
+
+        let list = tv_list_alloc((elnum - slnum + 1) as isize);
+        let s = reg_getline_submatch(slnum).offset(scol as isize);
+        if slnum == elnum {
+            tv_list_append_string(list, s, (ecol - scol) as isize);
+        } else {
+            // A negative length means "to the end of the line".
+            tv_list_append_string(list, s, -1);
+            for lnum in slnum + 1..elnum {
+                tv_list_append_string(list, reg_getline_submatch(lnum), -1);
+            }
+            tv_list_append_string(list, reg_getline_submatch(elnum), ecol as isize);
+        }
+        tv_list_ref(list);
+        list
     }
-    tv_list_ref(list);
-    return list;
 }

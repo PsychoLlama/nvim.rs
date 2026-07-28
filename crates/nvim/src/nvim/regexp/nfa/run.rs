@@ -231,7 +231,7 @@ pub(crate) fn recursive_regmatch(
         // A lookbehind has to start earlier in the line and stop where the
         // outer match stands; `endpos` is that stopping point.
         let mut endpos = save_se_T {
-            se_u: crate::src::nvim::regexp::C2Rust_Unnamed_21 {
+            se_u: crate::src::nvim::regexp::SavedPos {
                 ptr: core::ptr::null_mut(),
             },
         };

@@ -28,11 +28,11 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::os::libc::{gettext, snprintf};
 use crate::src::nvim::os::time::os_time;
-use crate::src::nvim::regexp::{regmatch_T, vim_regcomp, vim_regexec, vim_regfree};
+use crate::src::nvim::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::src::nvim::strings::xstrnsave;
 use crate::src::nvim::types::{
     AdditionalData, EvalFuncData, HistoryType, OptInt, Timestamp, VarType, exarg_T, expand_T,
-    size_t, typval_T, varnumber_T,
+    regmatch_T, size_t, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
