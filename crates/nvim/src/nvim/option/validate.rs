@@ -1,275 +1,290 @@
 //! Vetting a new value before anything is allowed to see it.
+//!
+//! Two rounds, and the difference between them matters.
+//! [`validate_num_option`] rejects a number the option can never hold —
+//! that is a user error and the set fails. [`check_num_option_bounds`] then
+//! clamps the handful of options whose limit is the size of the screen
+//! ('lines', 'columns', 'scroll', 'scrolljump', 'pumblend'): those report a
+//! message *and* take the corrected value, because the screen can shrink
+//! under a value that was legal when it was set.
+//!
+//! Every message comes back as a `*const c_char` the caller shows; a null
+//! one means the value is good. The two that need a number in the text are
+//! formatted into the caller's `errbuf`.
 
-#[allow(unused_imports)]
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub(crate) unsafe extern "C" fn check_num_option_bounds(
-    mut opt_idx: OptIndex,
-    mut newval: *mut OptInt,
-    mut errbuf: *mut c_char,
-    mut errbuflen: size_t,
-) -> *const c_char {
-    let mut errmsg: *const c_char = ::core::ptr::null::<c_char>();
-    match opt_idx as c_int {
-        169 => {
-            if *newval < min_rows_for_all_tabpages() as OptInt && full_screen.get() as c_int != 0 {
-                vim_snprintf(
-                    errbuf,
-                    errbuflen,
-                    gettext(b"E593: Need at least %d lines\0".as_ptr() as *const c_char),
-                    min_rows_for_all_tabpages(),
-                );
-                errmsg = errbuf;
-                *newval = min_rows_for_all_tabpages() as OptInt;
-            }
-            *newval = if *newval < 2147483647 as OptInt {
-                *newval
-            } else {
-                2147483647 as OptInt
-            };
-        }
-        47 => {
-            if *newval < MIN_COLUMNS as c_int as OptInt && full_screen.get() as c_int != 0 {
-                vim_snprintf(
-                    errbuf,
-                    errbuflen,
-                    gettext(b"E594: Need at least %d columns\0".as_ptr() as *const c_char),
-                    MIN_COLUMNS as c_int,
-                );
-                errmsg = errbuf;
-                *newval = MIN_COLUMNS as c_int as OptInt;
-            }
-            *newval = if *newval < 2147483647 as OptInt {
-                *newval
-            } else {
-                2147483647 as OptInt
-            };
-        }
-        222 => {
-            *newval = if (if *newval < 100 as OptInt {
-                *newval
-            } else {
-                100 as OptInt
-            }) > 0 as OptInt
-            {
-                if *newval < 100 as OptInt {
-                    *newval
-                } else {
-                    100 as OptInt
-                }
-            } else {
-                0 as OptInt
-            };
-        }
-        246 => {
-            if (*newval < -100 as OptInt || *newval >= Rows.get() as OptInt)
-                && full_screen.get() as c_int != 0
-            {
-                errmsg = &raw const e_scroll as *const c_char;
-                *newval = 1 as OptInt;
-            }
-        }
-        243 => {
-            if (*newval <= 0 as OptInt
-                || *newval > (*curwin.get()).w_view_height as OptInt
-                    && (*curwin.get()).w_view_height > 0 as c_int)
-                && full_screen.get() as c_int != 0
-            {
-                if *newval != 0 as OptInt {
-                    errmsg = &raw const e_scroll as *const c_char;
-                }
-                *newval = win_default_scroll(curwin.get());
-            }
-        }
-        _ => {}
-    }
-    return errmsg;
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
+
+use crate::src::nvim::main::{
+    Rows, curwin, e_invarg, e_positive, e_scroll, e_winheight, e_winwidth, full_screen, p_wh,
+    p_wiw, p_wmh, p_wmw,
+};
+use crate::src::nvim::memory::xfree;
+use crate::src::nvim::options::*;
+use crate::src::nvim::os::libc::{gettext, snprintf};
+use crate::src::nvim::strings::vim_snprintf;
+use crate::src::nvim::types::{OptIndex, OptInt, OptVal, size_t, vimoption_T};
+use crate::src::nvim::window::{min_rows_for_all_tabpages, win_default_scroll};
+
+use super::{
+    B_IMODE_LAST, INT_MAX, INT_MIN, IOSIZE, MAX_MCO, MAX_NUMBERWIDTH, MAX_SEARCH_COUNT,
+    MIN_COLUMNS, OPT_GLOBAL, OPT_LOCAL, SB_MAX, TABSTOP_MAX,
+    e_cannot_have_more_than_hundred_quickfix, e_cannot_have_negative_or_zero_number_of_quickfix,
+    get_option_unset_value, kOptValTypeNil, kOptValTypeNumber, option_has_type,
+    option_is_global_local, optval_copy, optval_equal, optval_to_cstr, optval_type_name,
+};
+
+/// "E487: Argument must be positive", for a value below its floor.
+fn too_small() -> *const c_char {
+    e_positive.ptr().cast::<c_char>()
 }
 
-pub(crate) unsafe extern "C" fn validate_num_option(
-    mut opt_idx: OptIndex,
-    mut newval: *mut OptInt,
-    mut errbuf: *mut c_char,
-    mut errbuflen: size_t,
-) -> *const c_char {
-    let mut value: OptInt = *newval;
-    if value < INT_MIN as OptInt || value > INT_MAX as OptInt {
-        return &raw const e_invarg as *const c_char;
-    }
-    match opt_idx as c_int {
-        129 | 325 | 335 | 236 | 336 | 275 | 106 | 266 | 318 | 373 | 323 => {
-            if value < 0 as OptInt {
-                return &raw const e_positive as *const c_char;
-            }
-        }
-        362 => {
-            if value < 1 as OptInt {
-                return &raw const e_positive as *const c_char;
-            } else if p_wmh.get() > value {
-                return &raw const e_winheight as *const c_char;
-            }
-        }
-        364 => {
-            if value < 0 as OptInt {
-                return &raw const e_positive as *const c_char;
-            } else if value > p_wh.get() {
-                return &raw const e_winheight as *const c_char;
-            }
-        }
-        366 => {
-            if value < 1 as OptInt {
-                return &raw const e_positive as *const c_char;
-            } else if p_wmw.get() > value {
-                return &raw const e_winwidth as *const c_char;
-            }
-        }
-        365 => {
-            if value < 0 as OptInt {
-                return &raw const e_positive as *const c_char;
-            } else if value > p_wiw.get() {
-                return &raw const e_winwidth as *const c_char;
-            }
-        }
-        183 => {
-            *newval = MAX_MCO as OptInt;
-        }
-        44 => {
-            if value < 0 as OptInt {
-                return &raw const e_positive as *const c_char;
-            }
-        }
-        133 => {
-            if value < 0 as OptInt {
-                return &raw const e_positive as *const c_char;
-            } else if value > 10000 as OptInt {
-                return &raw const e_invarg as *const c_char;
-            }
-        }
-        227 => {
-            if value == 0 as OptInt {
-                *newval = 3 as OptInt;
-            } else if value != 3 as OptInt {
-                return &raw const e_invarg as *const c_char;
-            }
-        }
-        233 => {
-            if value < 0 as OptInt || value > 2 as OptInt {
-                return &raw const e_invarg as *const c_char;
-            }
-        }
-        247 => {
-            if value < 0 as OptInt && full_screen.get() as c_int != 0 {
-                return &raw const e_positive as *const c_char;
-            }
-        }
-        276 => {
-            if value < 0 as OptInt && full_screen.get() as c_int != 0 {
-                return &raw const e_positive as *const c_char;
-            }
-        }
-        45 => {
-            if value < 1 as OptInt {
-                return &raw const e_positive as *const c_char;
-            }
-        }
-        58 => {
-            if value < 0 as OptInt {
-                return &raw const e_positive as *const c_char;
-            } else if value > 3 as OptInt {
-                return &raw const e_invarg as *const c_char;
-            }
-        }
-        207 => {
-            if value < 1 as OptInt {
-                return &raw const e_positive as *const c_char;
-            } else if value > MAX_NUMBERWIDTH as OptInt {
-                return &raw const e_invarg as *const c_char;
-            }
-        }
-        142 => {
-            if value < 0 as OptInt || value > B_IMODE_LAST as OptInt {
-                return &raw const e_invarg as *const c_char;
-            }
-        }
-        143 => {
-            if value < -1 as OptInt || value > B_IMODE_LAST as OptInt {
-                return &raw const e_invarg as *const c_char;
-            }
-        }
-        35 => return &raw const e_invarg as *const c_char,
-        244 => {
-            if value < -1 as OptInt || value > SB_MAX as OptInt {
-                return &raw const e_invarg as *const c_char;
-            }
-        }
-        304 => {
-            if value < 1 as OptInt {
-                return &raw const e_positive as *const c_char;
-            } else if value > TABSTOP_MAX as OptInt {
-                return &raw const e_invarg as *const c_char;
-            }
-        }
-        37 | 167 => {
-            if value < 1 as OptInt {
-                return (e_cannot_have_negative_or_zero_number_of_quickfix.ptr() as *const _)
-                    as *const c_char;
-            } else if value > 100 as OptInt {
-                return (e_cannot_have_more_than_hundred_quickfix.ptr() as *const _)
-                    as *const c_char;
-            }
-        }
-        187 => {
-            if value <= 0 as OptInt {
-                return &raw const e_positive as *const c_char;
-            } else if value > MAX_SEARCH_COUNT as c_int as OptInt {
-                return &raw const e_invarg as *const c_char;
-            }
-        }
-        _ => {}
-    }
-    return check_num_option_bounds(opt_idx, newval, errbuf, errbuflen);
+/// "E474: Invalid argument", for a value the option cannot hold at all.
+fn invalid() -> *const c_char {
+    e_invarg.ptr().cast::<c_char>()
 }
 
-pub(crate) unsafe extern "C" fn validate_option_value(
+/// The bound test almost every numeric option shares. `low` and `high` are
+/// inclusive; each side names its own message, because "too small" is
+/// usually E487 but is E474 for the options where a small value is not
+/// wrong so much as meaningless.
+fn bounded(
+    value: OptInt,
+    low: OptInt,
+    below: *const c_char,
+    high: OptInt,
+    above: *const c_char,
+) -> *const c_char {
+    if value < low {
+        below
+    } else if value > high {
+        above
+    } else {
+        ptr::null()
+    }
+}
+
+/// Clamp the options whose limit is the size of the screen. Unlike
+/// [`validate_num_option`], a message here comes with a corrected value: it
+/// is a warning, not a rejection.
+///
+/// # Safety
+///
+/// `errbuf` must have room for `errbuflen` bytes.
+pub(crate) unsafe fn check_num_option_bounds(
     opt_idx: OptIndex,
-    mut newval: *mut OptVal,
-    mut opt_flags: c_int,
-    mut errbuf: *mut c_char,
-    mut errbuflen: size_t,
+    newval: &mut OptInt,
+    errbuf: *mut c_char,
+    errbuflen: size_t,
 ) -> *const c_char {
-    let mut errmsg: *const c_char = ::core::ptr::null::<c_char>();
-    let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-    if option_is_global_local(opt_idx) as c_int != 0
-        && opt_flags & OPT_LOCAL as c_int != 0
-        && optval_equal(*newval, get_option_unset_value(opt_idx)) as c_int != 0
-    {
-        return ::core::ptr::null::<c_char>();
-    }
-    if (*newval).type_0 as c_int == kOptValTypeNil as c_int {
-        if opt_flags == OPT_GLOBAL as c_int {
-            errmsg = gettext(b"Cannot unset global option value\0".as_ptr() as *const c_char);
-        } else {
-            *newval = optval_copy(get_option_unset_value(opt_idx));
+    let mut errmsg: *const c_char = ptr::null();
+    // SAFETY: the caller's `errbuf` has room for `errbuflen` bytes, and
+    // `curwin` is live.
+    unsafe {
+        match opt_idx {
+            kOptLines => {
+                let least = min_rows_for_all_tabpages();
+                if *newval < least as OptInt && full_screen.get() {
+                    vim_snprintf(
+                        errbuf,
+                        errbuflen,
+                        gettext(c"E593: Need at least %d lines".as_ptr()),
+                        least,
+                    );
+                    errmsg = errbuf;
+                    *newval = least as OptInt;
+                }
+                *newval = (*newval).min(INT_MAX as OptInt);
+            }
+            kOptColumns => {
+                if *newval < MIN_COLUMNS as OptInt && full_screen.get() {
+                    vim_snprintf(
+                        errbuf,
+                        errbuflen,
+                        gettext(c"E594: Need at least %d columns".as_ptr()),
+                        MIN_COLUMNS as c_int,
+                    );
+                    errmsg = errbuf;
+                    *newval = MIN_COLUMNS as OptInt;
+                }
+                *newval = (*newval).min(INT_MAX as OptInt);
+            }
+            // 'pumblend' saturates silently rather than reporting.
+            kOptPumblend => *newval = (*newval).clamp(0, 100),
+            kOptScrolljump => {
+                if (*newval < -100 || *newval >= Rows.get() as OptInt) && full_screen.get() {
+                    errmsg = e_scroll.ptr().cast::<c_char>();
+                    *newval = 1;
+                }
+            }
+            kOptScroll => {
+                let height = (*curwin.get()).w_view_height;
+                if (*newval <= 0 || (*newval > height as OptInt && height > 0)) && full_screen.get()
+                {
+                    // Zero is how `:set scroll=0` asks for the default, so
+                    // it is corrected without a message.
+                    if *newval != 0 {
+                        errmsg = e_scroll.ptr().cast::<c_char>();
+                    }
+                    *newval = win_default_scroll(curwin.get());
+                }
+            }
+            _ => {}
         }
-    } else if !option_has_type(opt_idx, (*newval).type_0) {
-        let mut rep: *mut c_char = optval_to_cstr(*newval);
-        let mut type_str: *const c_char = optval_type_name((*opt).type_0).as_ptr();
-        snprintf(
-            errbuf,
-            IOSIZE as size_t,
-            gettext(
-                b"Invalid value for option '%s': expected %s, got %s %s\0".as_ptr()
-                    as *const c_char,
-            ),
-            (*opt).fullname,
-            type_str,
-            optval_type_name((*newval).type_0).as_ptr(),
-            rep,
-        );
-        xfree(rep as *mut c_void);
-        errmsg = errbuf;
-    } else if (*newval).type_0 as c_int == kOptValTypeNumber as c_int {
-        errmsg = validate_num_option(opt_idx, &raw mut (*newval).data.number, errbuf, errbuflen);
     }
-    return errmsg;
+    errmsg
+}
+
+/// Reject a number the option can never hold. A message here fails the set;
+/// `newval` is only written by the two options that answer a legal but
+/// meaningless value with a fixed one.
+///
+/// # Safety
+///
+/// `errbuf` must have room for `errbuflen` bytes.
+pub(crate) unsafe fn validate_num_option(
+    opt_idx: OptIndex,
+    newval: &mut OptInt,
+    errbuf: *mut c_char,
+    errbuflen: size_t,
+) -> *const c_char {
+    let value = *newval;
+    // Every numeric option ends up in an `int` somewhere down the line.
+    if value < INT_MIN as OptInt || value > INT_MAX as OptInt {
+        return invalid();
+    }
+    let errmsg = match opt_idx {
+        kOptHelpheight | kOptTitlelen | kOptUpdatecount | kOptReport | kOptUpdatetime
+        | kOptSidescroll | kOptFoldlevel | kOptShiftwidth | kOptTextwidth | kOptWritedelay
+        | kOptTimeoutlen | kOptCmdheight => bounded(value, 0, too_small(), OptInt::MAX, invalid()),
+        kOptCmdwinheight => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
+        // The four window-size options each cross-check their partner.
+        kOptWinheight if value >= 1 && p_wmh.get() > value => e_winheight.ptr().cast::<c_char>(),
+        kOptWinheight => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
+        kOptWinminheight => bounded(
+            value,
+            0,
+            too_small(),
+            p_wh.get(),
+            e_winheight.ptr().cast::<c_char>(),
+        ),
+        kOptWinwidth if value >= 1 && p_wmw.get() > value => e_winwidth.ptr().cast::<c_char>(),
+        kOptWinwidth => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
+        kOptWinminwidth => bounded(
+            value,
+            0,
+            too_small(),
+            p_wiw.get(),
+            e_winwidth.ptr().cast::<c_char>(),
+        ),
+        // 'maxcombine' is fixed: whatever is asked for, this is the answer.
+        kOptMaxcombine => {
+            *newval = MAX_MCO as OptInt;
+            ptr::null()
+        }
+        kOptHistory => bounded(value, 0, too_small(), 10000, invalid()),
+        // 'pyxversion' only ever means Python 3; 0 asks for the default.
+        kOptPyxversion => match value {
+            0 => {
+                *newval = 3;
+                ptr::null()
+            }
+            3 => ptr::null(),
+            _ => invalid(),
+        },
+        kOptRegexpengine => bounded(value, 0, invalid(), 2, invalid()),
+        // The two offsets may be negative before the screen exists: that is
+        // how a window says it does not override the global value.
+        kOptScrolloff | kOptSidescrolloff => {
+            if value < 0 && full_screen.get() {
+                too_small()
+            } else {
+                ptr::null()
+            }
+        }
+        kOptConceallevel => bounded(value, 0, too_small(), 3, invalid()),
+        kOptNumberwidth => bounded(value, 1, too_small(), MAX_NUMBERWIDTH as OptInt, invalid()),
+        kOptIminsert => bounded(value, 0, invalid(), B_IMODE_LAST as OptInt, invalid()),
+        // 'imsearch' has one value more than 'iminsert': -1 is "follow it".
+        kOptImsearch => bounded(value, -1, invalid(), B_IMODE_LAST as OptInt, invalid()),
+        // 'channel' is read-only; every value is refused.
+        kOptChannel => invalid(),
+        kOptScrollback => bounded(value, -1, invalid(), SB_MAX as OptInt, invalid()),
+        kOptTabstop => bounded(value, 1, too_small(), TABSTOP_MAX as OptInt, invalid()),
+        kOptChistory | kOptLhistory => bounded(
+            value,
+            1,
+            e_cannot_have_negative_or_zero_number_of_quickfix
+                .ptr()
+                .cast::<c_char>(),
+            100,
+            e_cannot_have_more_than_hundred_quickfix
+                .ptr()
+                .cast::<c_char>(),
+        ),
+        kOptMaxsearchcount => bounded(value, 1, too_small(), MAX_SEARCH_COUNT as OptInt, invalid()),
+        _ => ptr::null(),
+    };
+    if !errmsg.is_null() {
+        return errmsg;
+    }
+    // SAFETY: the caller's `errbuf` has room for `errbuflen` bytes.
+    unsafe { check_num_option_bounds(opt_idx, newval, errbuf, errbuflen) }
+}
+
+/// Vet a whole value: the right type for the option, and within bounds if it
+/// is a number. `newval` may be rewritten — an unset value becomes the
+/// option's "not set here" sentinel, and a number may be clamped.
+///
+/// # Safety
+///
+/// `errbuf` must have room for `IOSIZE` bytes, which is what the
+/// type-mismatch message writes regardless of `errbuflen`.
+pub(crate) unsafe fn validate_option_value(
+    opt_idx: OptIndex,
+    newval: &mut OptVal,
+    opt_flags: c_int,
+    errbuf: *mut c_char,
+    errbuflen: size_t,
+) -> *const c_char {
+    // SAFETY: the caller's `errbuf` has room, and the option table is a
+    // plain array.
+    unsafe {
+        // `:setlocal` writing a global-local option's sentinel is how it is
+        // unset; nothing else needs to look at the value.
+        if option_is_global_local(opt_idx)
+            && opt_flags & OPT_LOCAL as c_int != 0
+            && optval_equal(*newval, get_option_unset_value(opt_idx))
+        {
+            return ptr::null();
+        }
+        let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
+        if newval.type_0 == kOptValTypeNil {
+            // A global value has no "unset" state to fall back to.
+            if opt_flags == OPT_GLOBAL as c_int {
+                return gettext(c"Cannot unset global option value".as_ptr());
+            }
+            *newval = optval_copy(get_option_unset_value(opt_idx));
+            ptr::null()
+        } else if !option_has_type(opt_idx, newval.type_0) {
+            let rep = optval_to_cstr(*newval);
+            snprintf(
+                errbuf,
+                IOSIZE as size_t,
+                gettext(c"Invalid value for option '%s': expected %s, got %s %s".as_ptr()),
+                (*opt).fullname,
+                optval_type_name((*opt).type_0).as_ptr(),
+                optval_type_name(newval.type_0).as_ptr(),
+                rep,
+            );
+            xfree(rep.cast::<c_void>());
+            errbuf
+        } else if newval.type_0 == kOptValTypeNumber {
+            validate_num_option(opt_idx, &mut newval.data.number, errbuf, errbuflen)
+        } else {
+            ptr::null()
+        }
+    }
 }

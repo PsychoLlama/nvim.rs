@@ -475,7 +475,7 @@ pub(crate) unsafe extern "C" fn set_option(
     };
     let mut errmsg: *const c_char = ::core::ptr::null::<c_char>();
     if !direct {
-        errmsg = validate_option_value(opt_idx, &raw mut value, opt_flags, errbuf, errbuflen);
+        errmsg = validate_option_value(opt_idx, &mut value, opt_flags, errbuf, errbuflen);
         if !errmsg.is_null() {
             optval_free(value);
             return errmsg;

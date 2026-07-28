@@ -54,19 +54,19 @@ use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
     Columns, IObuff, NameBuff, Rows, clear_cmdline, cmdline_row, cmdmod, curbuf, current_sctx,
-    curtab, curwin, e_invarg, e_positive, e_sandbox, e_scroll, e_secure, e_trailing,
-    e_unknown_option2, e_unsupportedoption, e_winheight, e_winwidth, empty_string_option,
-    escape_chars, fenc_default, first_tabpage, firstbuf, firstwin, full_screen, got_int,
-    info_message, lastwin, need_maketitle, no_wait_return, p_ai, p_arshape, p_bdir, p_bin, p_bomb,
-    p_cdpath, p_cfu, p_ch, p_chi, p_ci, p_cin, p_cink, p_cino, p_cinsd, p_cinw, p_cms, p_columns,
-    p_com, p_cpo, p_cpt, p_deco, p_dir, p_ea, p_enc, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol,
-    p_flp, p_fo, p_ft, p_hh, p_hlg, p_hls, p_icon, p_iminsert, p_imsearch, p_inde, p_indk, p_inex,
-    p_inf, p_isk, p_keymap, p_kp, p_lines, p_lisp, p_lnr, p_lop, p_lrm, p_ma, p_ml, p_mle, p_mouse,
-    p_mps, p_nf, p_ofu, p_paste, p_path, p_pi, p_pp, p_qe, p_ri, p_rtp, p_ru, p_scbk, p_sh, p_si,
-    p_sj, p_sm, p_smc, p_spc, p_spf, p_spl, p_spo, p_sps, p_sta, p_sts, p_sua, p_sw, p_swf, p_syn,
-    p_tags, p_tbidi, p_tfu, p_title, p_titlelen, p_ts, p_tw, p_uc, p_udf, p_ul, p_vdir, p_verbose,
-    p_vsts, p_vts, p_wbr, p_wc, p_wcm, p_wh, p_window, p_wiw, p_wm, p_wmh, p_wmw, readonlymode,
-    sandbox, secure, silent_mode, spo_flags, starting, t_colors, topframe, updating_screen,
+    curtab, curwin, e_invarg, e_sandbox, e_secure, e_trailing, e_unknown_option2,
+    e_unsupportedoption, empty_string_option, escape_chars, fenc_default, first_tabpage, firstbuf,
+    firstwin, full_screen, got_int, info_message, lastwin, need_maketitle, no_wait_return, p_ai,
+    p_arshape, p_bdir, p_bin, p_bomb, p_cdpath, p_cfu, p_ch, p_chi, p_ci, p_cin, p_cink, p_cino,
+    p_cinsd, p_cinw, p_cms, p_columns, p_com, p_cpo, p_cpt, p_deco, p_dir, p_ea, p_enc, p_et,
+    p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp, p_fo, p_ft, p_hh, p_hlg, p_hls, p_icon,
+    p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_kp, p_lines, p_lisp,
+    p_lnr, p_lop, p_lrm, p_ma, p_ml, p_mle, p_mouse, p_mps, p_nf, p_ofu, p_paste, p_path, p_pi,
+    p_pp, p_qe, p_ri, p_rtp, p_ru, p_scbk, p_sh, p_si, p_sj, p_sm, p_smc, p_spc, p_spf, p_spl,
+    p_spo, p_sps, p_sta, p_sts, p_sua, p_sw, p_swf, p_syn, p_tags, p_tbidi, p_tfu, p_title,
+    p_titlelen, p_ts, p_tw, p_uc, p_udf, p_ul, p_vdir, p_verbose, p_vsts, p_vts, p_wbr, p_wc,
+    p_wcm, p_wh, p_window, p_wiw, p_wm, readonlymode, sandbox, secure, silent_mode, spo_flags,
+    starting, t_colors, topframe, updating_screen,
 };
 use crate::src::nvim::mapping::{langmap_init, put_escstr};
 use crate::src::nvim::mbyte::{enc_locale, utfc_ptr2len};
@@ -119,9 +119,8 @@ use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::undo::{bufIsChanged, curbufIsChanged, u_compute_hash, u_read_undo, u_sync};
 use crate::src::nvim::window::{
     check_colorcolumn, command_height, frame_new_height, global_stl_height, last_status, min_rows,
-    min_rows_for_all_tabpages, set_winbar, set_winbar_win, tabline_height, win_comp_pos,
-    win_comp_scroll, win_default_scroll, win_equal, win_find_tabpage, win_new_screen_rows,
-    win_setheight, win_setwidth,
+    set_winbar, set_winbar_win, tabline_height, win_comp_pos, win_comp_scroll, win_equal,
+    win_find_tabpage, win_new_screen_rows, win_setheight, win_setwidth,
 };
 use crate::src::nvim::winfloat::win_float_update_statusline;
 use core::ffi::{c_char, c_int, c_uint, c_void};
