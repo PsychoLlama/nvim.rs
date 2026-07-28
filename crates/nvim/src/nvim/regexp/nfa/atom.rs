@@ -203,10 +203,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         let c2rust_fresh57 = post_ptr.get();
                                         post_ptr.set((*post_ptr.ptr()).offset(1));
                                         *c2rust_fresh57 = NFA_ZSTART as ::core::ffi::c_int;
-                                        if !re_mult_next(b"\\zs\0".as_ptr()
-                                            as *const ::core::ffi::c_char
-                                            as *mut ::core::ffi::c_char)
-                                        {
+                                        if !re_mult_next("\\zs") {
                                             return false_0;
                                         }
                                     }
@@ -218,10 +215,7 @@ pub(crate) unsafe extern "C" fn nfa_regatom() -> ::core::ffi::c_int {
                                         post_ptr.set((*post_ptr.ptr()).offset(1));
                                         *c2rust_fresh58 = NFA_ZEND as ::core::ffi::c_int;
                                         (*rex.ptr()).nfa_has_zend = true_0;
-                                        if !re_mult_next(b"\\ze\0".as_ptr()
-                                            as *const ::core::ffi::c_char
-                                            as *mut ::core::ffi::c_char)
-                                        {
+                                        if !re_mult_next("\\ze") {
                                             return false_0;
                                         }
                                     }

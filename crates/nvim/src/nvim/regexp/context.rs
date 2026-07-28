@@ -1,433 +1,493 @@
-//! The match-time context (`rex`): the line the engines read, the
-//! submatch bookkeeping, the Visual-area and back-reference tests.
+//! The match-time context: the lines an engine reads, the capture slots it
+//! clears, and the position tests (`\%V`, `\<`, a back-reference) both
+//! engines ask this layer rather than answering themselves.
 //!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! `rex` is that context. It is a global rather than a parameter because
+//! the engines reach it from everywhere; [`super::api`] saves and restores
+//! it around a nested match, which is what lets a `\=` expression run a
+//! search of its own.
 
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub(crate) unsafe extern "C" fn reg_breakcheck() {
-    if !(*rex.ptr()).reg_nobreak {
-        fast_breakcheck();
+use core::ffi::{c_char, c_int};
+
+use super::{
+    Ctrl_V, MAXCOL, MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, RE_NOBREAK, REGMAGIC,
+    bt_regprog_T, cstrncmp, nfa_regengine, peekchr, re_multi_type, reg_endzp, reg_endzpos,
+    reg_startzp, reg_startzpos, reg_tofree, reg_tofreelen, rex, rsm,
+};
+use crate::semsg;
+use crate::src::nvim::charset::vim_iswordc_buf;
+use crate::src::nvim::main::{
+    VIsual, VIsual_active, VIsual_mode, curbuf, curwin, e_re_corr, got_int, p_sel, rc_did_emsg,
+};
+use crate::src::nvim::mbyte::{mb_get_class_tab, mb_strnicmp, utf_head_off};
+use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
+use crate::src::nvim::memory::{xcalloc, xfree, xmalloc};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::os::input::fast_breakcheck;
+use crate::src::nvim::os::libc::{gettext, strcpy, strlen};
+use crate::src::nvim::plines::{getvvcol, win_linetabsize};
+use crate::src::nvim::pos::lt;
+use crate::src::nvim::types::{
+    buf_T, colnr_T, linenr_T, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, uint8_t,
+    win_T,
+};
+
+/// Let the user interrupt a long match, unless the caller asked for an
+/// uninterruptible one (`RE_NOBREAK`, for matches run where input cannot
+/// be read).
+pub(crate) fn reg_breakcheck() {
+    if !rex.with(|r| r.reg_nobreak) {
+        // SAFETY: polls input state on the main thread.
+        unsafe { fast_breakcheck() };
     }
 }
-pub(crate) unsafe extern "C" fn reg_iswordc(mut c: ::core::ffi::c_int) -> bool {
-    return vim_iswordc_buf(c, (*rex.ptr()).reg_buf);
+
+/// Is `c` a keyword character? 'iskeyword' is buffer-local and the buffer
+/// being matched is not always the current one.
+pub(crate) fn reg_iswordc(c: c_int) -> bool {
+    // SAFETY: `reg_buf` is the buffer the match was set up against.
+    unsafe { vim_iswordc_buf(c, reg_buf()) }
 }
-pub(crate) unsafe extern "C" fn reg_getline_common(
-    mut lnum: linenr_T,
-    mut flags: reg_getline_flags_T,
-    mut line: *mut *mut ::core::ffi::c_char,
-    mut length: *mut colnr_T,
-) {
-    let mut get_line: bool =
-        flags as ::core::ffi::c_uint & RGLF_LINE as ::core::ffi::c_int as ::core::ffi::c_uint != 0;
-    let mut get_length: bool = flags as ::core::ffi::c_uint
-        & RGLF_LENGTH as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0;
-    let mut firstlnum: linenr_T = 0;
-    let mut maxline: linenr_T = 0;
-    if flags as ::core::ffi::c_uint & RGLF_SUBMATCH as ::core::ffi::c_int as ::core::ffi::c_uint
-        != 0
-    {
-        firstlnum = (*rsm.ptr()).sm_firstlnum + lnum;
-        maxline = (*rsm.ptr()).sm_maxline;
+
+/// Which line numbering to resolve against: the running match, or the
+/// snapshot `submatch()` and a `\=` expression see.
+#[derive(Clone, Copy)]
+pub(crate) enum LineOrigin {
+    Exec,
+    Submatch,
+}
+
+/// Where a line relative to the match's first line lands.
+enum Located {
+    /// Above line 1 — the caller asked for context before the buffer.
+    Before,
+    /// Past the match's last line.
+    Past,
+    At(linenr_T),
+}
+
+fn locate(lnum: linenr_T, origin: LineOrigin) -> Located {
+    let (first, maxline) = match origin {
+        LineOrigin::Exec => rex.with(|r| (r.reg_firstlnum, r.reg_maxline)),
+        LineOrigin::Submatch => rsm.with(|s| (s.sm_firstlnum, s.sm_maxline)),
+    };
+    if first + lnum < 1 {
+        Located::Before
+    } else if lnum > maxline {
+        Located::Past
     } else {
-        firstlnum = (*rex.ptr()).reg_firstlnum + lnum;
-        maxline = (*rex.ptr()).reg_maxline;
-    }
-    if firstlnum < 1 as linenr_T {
-        if get_line {
-            *line = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        }
-        if get_length {
-            *length = 0 as ::core::ffi::c_int as colnr_T;
-        }
-        return;
-    }
-    if lnum > maxline {
-        if get_line {
-            *line = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        if get_length {
-            *length = 0 as ::core::ffi::c_int as colnr_T;
-        }
-        return;
-    }
-    if get_line {
-        *line = ml_get_buf((*rex.ptr()).reg_buf, firstlnum);
-    }
-    if get_length {
-        *length = ml_get_buf_len((*rex.ptr()).reg_buf, firstlnum);
+        Located::At(first + lnum)
     }
 }
-pub(crate) unsafe extern "C" fn reg_getline(mut lnum: linenr_T) -> *mut ::core::ffi::c_char {
-    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    reg_getline_common(
-        lnum,
-        RGLF_LINE,
-        &raw mut line,
-        ::core::ptr::null_mut::<colnr_T>(),
-    );
-    return line;
+
+/// The buffer the match reads. Note that a submatch line comes from this
+/// buffer even though its line numbering comes from `rsm`.
+fn reg_buf() -> *mut buf_T {
+    rex.with(|r| r.reg_buf)
 }
-pub(crate) unsafe extern "C" fn reg_getline_len(mut lnum: linenr_T) -> colnr_T {
-    let mut length: colnr_T = 0;
-    reg_getline_common(
-        lnum,
-        RGLF_LENGTH,
-        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-        &raw mut length,
-    );
-    return length;
+
+/// The text `lnum` lines into the match: NULL above the buffer, an empty
+/// string past the match's last line.
+pub(crate) fn reg_line(lnum: linenr_T, origin: LineOrigin) -> *mut c_char {
+    match locate(lnum, origin) {
+        Located::Before => core::ptr::null_mut(),
+        Located::Past => c"".as_ptr().cast_mut(),
+        // SAFETY: `locate` established the line is in the buffer.
+        Located::At(lnum) => unsafe { ml_get_buf(reg_buf(), lnum) },
+    }
 }
-pub(crate) unsafe extern "C" fn make_extmatch() -> *mut reg_extmatch_T {
-    let mut em: *mut reg_extmatch_T =
-        xcalloc(1 as size_t, ::core::mem::size_of::<reg_extmatch_T>()) as *mut reg_extmatch_T;
-    (*em).refcnt = 1 as int16_t;
-    return em;
+
+/// The length of [`reg_line`]'s text; 0 for either stand-in.
+pub(crate) fn reg_line_len(lnum: linenr_T, origin: LineOrigin) -> colnr_T {
+    match locate(lnum, origin) {
+        Located::Before | Located::Past => 0,
+        // SAFETY: as `reg_line`.
+        Located::At(lnum) => unsafe { ml_get_buf_len(reg_buf(), lnum) },
+    }
 }
-pub unsafe extern "C" fn ref_extmatch(mut em: *mut reg_extmatch_T) -> *mut reg_extmatch_T {
+
+pub(crate) fn reg_getline(lnum: linenr_T) -> *mut c_char {
+    reg_line(lnum, LineOrigin::Exec)
+}
+
+pub(crate) fn reg_getline_len(lnum: linenr_T) -> colnr_T {
+    reg_line_len(lnum, LineOrigin::Exec)
+}
+
+/// A fresh `\z1`..`\z9` capture set, refcounted because a syntax item
+/// hands it to a highlighter that outlives the match.
+pub(crate) fn make_extmatch() -> *mut reg_extmatch_T {
+    // SAFETY: xcalloc returns a zeroed allocation of the requested size.
+    unsafe {
+        let em = xcalloc(1, size_of::<reg_extmatch_T>()) as *mut reg_extmatch_T;
+        (*em).refcnt = 1;
+        em
+    }
+}
+
+/// Take a reference to `em`, which may be NULL.
+///
+/// # Safety
+///
+/// `em` must be null or a live [`make_extmatch`] allocation.
+pub unsafe fn ref_extmatch(em: *mut reg_extmatch_T) -> *mut reg_extmatch_T {
     if !em.is_null() {
-        (*em).refcnt += 1;
+        unsafe { (*em).refcnt += 1 };
     }
-    return em;
+    em
 }
-pub unsafe extern "C" fn unref_extmatch(mut em: *mut reg_extmatch_T) {
-    let mut i: ::core::ffi::c_int = 0;
-    if !em.is_null() && {
+
+/// Drop a reference to `em`, freeing it and its captures at zero.
+///
+/// # Safety
+///
+/// `em` must be null or a live [`make_extmatch`] allocation.
+pub unsafe fn unref_extmatch(em: *mut reg_extmatch_T) {
+    unsafe {
+        if em.is_null() {
+            return;
+        }
         (*em).refcnt -= 1;
-        (*em).refcnt as ::core::ffi::c_int <= 0 as ::core::ffi::c_int
-    } {
-        i = 0 as ::core::ffi::c_int;
-        while i < NSUBEXP as ::core::ffi::c_int {
-            xfree((*em).matches[i as usize] as *mut ::core::ffi::c_void);
-            i += 1;
+        if (*em).refcnt > 0 {
+            return;
         }
-        xfree(em as *mut ::core::ffi::c_void);
+        for m in (*em).matches {
+            xfree(m.cast());
+        }
+        xfree(em.cast());
     }
 }
-pub(crate) unsafe extern "C" fn reg_prev_class() -> ::core::ffi::c_int {
-    if (*rex.ptr()).input > (*rex.ptr()).line {
-        return mb_get_class_tab(
-            ((*rex.ptr()).input as *mut ::core::ffi::c_char)
-                .offset(-(1 as ::core::ffi::c_int as isize))
-                .offset(
-                    -(utf_head_off(
-                        (*rex.ptr()).line as *mut ::core::ffi::c_char,
-                        ((*rex.ptr()).input as *mut ::core::ffi::c_char)
-                            .offset(-(1 as ::core::ffi::c_int as isize)),
-                    ) as isize),
-                ),
-            &raw mut (*(*rex.ptr()).reg_buf).b_chartab as *mut uint64_t,
-        );
+
+/// The character class of the character before the cursor, or -1 at the
+/// start of the line. Backs `\<` and `\>`.
+pub(crate) fn reg_prev_class() -> c_int {
+    // SAFETY: `input` and `line` point into the line being matched, and
+    // `utf_head_off` walks back no further than `line`.
+    unsafe {
+        let (line, input) = rex.with(|r| (r.line as *mut c_char, r.input as *mut c_char));
+        if input <= line {
+            return -1;
+        }
+        let prev = input.sub(1);
+        mb_get_class_tab(
+            prev.sub(utf_head_off(line, prev) as usize),
+            &raw mut (*reg_buf()).b_chartab as *mut u64,
+        )
     }
-    return -1 as ::core::ffi::c_int;
 }
-pub(crate) unsafe extern "C" fn reg_match_visual() -> bool {
-    let mut top: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut bot: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut lnum: linenr_T = 0;
-    let mut col: colnr_T = 0;
-    let mut wp: *mut win_T = if (*rex.ptr()).reg_win.is_null() {
-        curwin.get()
-    } else {
-        (*rex.ptr()).reg_win
-    };
-    let mut mode: ::core::ffi::c_int = 0;
-    let mut start: colnr_T = 0;
-    let mut end: colnr_T = 0;
-    let mut start2: colnr_T = 0;
-    let mut end2: colnr_T = 0;
-    let mut curswant: colnr_T = 0;
-    if (*rex.ptr()).reg_buf != curbuf.get()
-        || (*VIsual.ptr()).lnum == 0 as linenr_T
-        || !(*rex.ptr()).reg_match.is_null()
-    {
-        return false_0 != 0;
-    }
-    if VIsual_active.get() {
-        if lt(VIsual.get(), (*wp).w_cursor) {
-            top = VIsual.get();
-            bot = (*wp).w_cursor;
+
+/// Is the position being matched inside the Visual area? Backs `\%V`.
+pub(crate) fn reg_match_visual() -> bool {
+    // SAFETY: reads window and buffer state on the main thread; every
+    // pointer is `curwin`/`curbuf` or the match's own window.
+    unsafe {
+        let wp = match rex.with(|r| r.reg_win) {
+            w if w.is_null() => curwin.get(),
+            w => w,
+        };
+        // `\%V` is a buffer-position test, so it only applies to a
+        // multi-line match in the current buffer.
+        if reg_buf() != curbuf.get()
+            || VIsual.with(|v| v.lnum) == 0
+            || !rex.with(|r| r.reg_match).is_null()
+        {
+            return false;
+        }
+
+        let (top, bot, mode, curswant) = if VIsual_active.get() {
+            let (top, bot) = if lt(VIsual.get(), (*wp).w_cursor) {
+                (VIsual.get(), (*wp).w_cursor)
+            } else {
+                ((*wp).w_cursor, VIsual.get())
+            };
+            (top, bot, VIsual_mode.get(), (*wp).w_curswant)
         } else {
-            top = (*wp).w_cursor;
-            bot = VIsual.get();
+            // Not in Visual mode: the buffer's last Visual area.
+            let buf = curbuf.get();
+            let (start, end) = ((*buf).b_visual.vi_start, (*buf).b_visual.vi_end);
+            let (top, mut bot) = if lt(start, end) {
+                (start, end)
+            } else {
+                (end, start)
+            };
+            bot.lnum = bot.lnum.min((*buf).b_ml.ml_line_count);
+            (
+                top,
+                bot,
+                (*buf).b_visual.vi_mode,
+                (*buf).b_visual.vi_curswant,
+            )
+        };
+
+        let lnum = rex.with(|r| r.lnum + r.reg_firstlnum);
+        if lnum < top.lnum || lnum > bot.lnum {
+            return false;
         }
-        mode = VIsual_mode.get();
-        curswant = (*wp).w_curswant;
-    } else {
-        if lt(
-            (*curbuf.get()).b_visual.vi_start,
-            (*curbuf.get()).b_visual.vi_end,
-        ) {
-            top = (*curbuf.get()).b_visual.vi_start;
-            bot = (*curbuf.get()).b_visual.vi_end;
+        let col = rex.with(|r| r.input.offset_from(r.line)) as colnr_T;
+        if mode == 'v' as c_int {
+            // 'selection' decides whether the last character is included.
+            let inclusive = (*p_sel.get() as u8 != b'e') as colnr_T;
+            !((lnum == top.lnum && col < top.col)
+                || (lnum == bot.lnum && col >= bot.col + inclusive))
+        } else if mode == Ctrl_V {
+            let (mut start, mut end, mut start2, mut end2) = (0, 0, 0, 0);
+            let nul = core::ptr::null_mut();
+            let (mut top, mut bot) = (top, bot);
+            getvvcol(wp, &raw mut top, &raw mut start, nul, &raw mut end);
+            getvvcol(wp, &raw mut bot, &raw mut start2, nul, &raw mut end2);
+            start = start.min(start2);
+            end = end.max(end2);
+            // `$` in blockwise Visual stretches the block to end of line.
+            if top.col == MAXCOL as c_int
+                || bot.col == MAXCOL as c_int
+                || curswant == MAXCOL as c_int
+            {
+                end = MAXCOL as c_int;
+            }
+            // `getvvcol` can have moved the line out from under the match.
+            let line = reg_getline(rex.with(|r| r.lnum)) as *mut uint8_t;
+            rex.with_mut(|r| {
+                r.line = line;
+                r.input = line.offset(col as isize);
+            });
+            let lnum = rex.with(|r| r.reg_firstlnum + r.lnum);
+            let cols = win_linetabsize(wp, lnum, line as *mut c_char, col);
+            cols >= start && cols <= end - (*p_sel.get() as u8 == b'e') as colnr_T
         } else {
-            top = (*curbuf.get()).b_visual.vi_end;
-            bot = (*curbuf.get()).b_visual.vi_start;
-        }
-        if bot.lnum > (*curbuf.get()).b_ml.ml_line_count {
-            bot.lnum = (*curbuf.get()).b_ml.ml_line_count;
-        }
-        mode = (*curbuf.get()).b_visual.vi_mode;
-        curswant = (*curbuf.get()).b_visual.vi_curswant;
-    }
-    lnum = (*rex.ptr()).lnum + (*rex.ptr()).reg_firstlnum;
-    if lnum < top.lnum || lnum > bot.lnum {
-        return false_0 != 0;
-    }
-    col = (*rex.ptr()).input.offset_from((*rex.ptr()).line) as colnr_T;
-    if mode == 'v' as ::core::ffi::c_int {
-        if lnum == top.lnum && col < top.col
-            || lnum == bot.lnum
-                && col
-                    >= bot.col as ::core::ffi::c_int
-                        + (*p_sel.get() as ::core::ffi::c_int != 'e' as ::core::ffi::c_int)
-                            as ::core::ffi::c_int
-        {
-            return false_0 != 0;
-        }
-    } else if mode == Ctrl_V {
-        getvvcol(
-            wp,
-            &raw mut top,
-            &raw mut start,
-            ::core::ptr::null_mut::<colnr_T>(),
-            &raw mut end,
-        );
-        getvvcol(
-            wp,
-            &raw mut bot,
-            &raw mut start2,
-            ::core::ptr::null_mut::<colnr_T>(),
-            &raw mut end2,
-        );
-        if start2 < start {
-            start = start2;
-        }
-        if end2 > end {
-            end = end2;
-        }
-        if top.col == MAXCOL as ::core::ffi::c_int
-            || bot.col == MAXCOL as ::core::ffi::c_int
-            || curswant == MAXCOL as ::core::ffi::c_int
-        {
-            end = MAXCOL as ::core::ffi::c_int as colnr_T;
-        }
-        (*rex.ptr()).line = reg_getline((*rex.ptr()).lnum) as *mut uint8_t;
-        (*rex.ptr()).input = (*rex.ptr()).line.offset(col as isize);
-        let mut cols: colnr_T = win_linetabsize(
-            wp,
-            (*rex.ptr()).reg_firstlnum + (*rex.ptr()).lnum,
-            (*rex.ptr()).line as *mut ::core::ffi::c_char,
-            col,
-        );
-        if cols < start
-            || cols
-                > end as ::core::ffi::c_int
-                    - (*p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int)
-                        as ::core::ffi::c_int
-        {
-            return false_0 != 0;
+            true
         }
     }
-    return true_0 != 0;
 }
-pub(crate) unsafe extern "C" fn prog_magic_wrong() -> ::core::ffi::c_int {
-    let mut prog: *mut regprog_T = ::core::ptr::null_mut::<regprog_T>();
-    prog = if (*rex.ptr()).reg_match.is_null() {
-        (*(*rex.ptr()).reg_mmatch).regprog
-    } else {
-        (*(*rex.ptr()).reg_match).regprog
-    };
-    if (*prog).engine == nfa_regengine.ptr() {
-        return false_0;
+
+/// Does the running program belong to the backtracking engine, and has its
+/// magic number survived? Only that engine's programs carry one.
+pub(crate) fn prog_magic_wrong() -> c_int {
+    // SAFETY: a running match holds a live program.
+    unsafe {
+        let prog: *mut regprog_T = rex.with(|r| {
+            if r.reg_match.is_null() {
+                (*r.reg_mmatch).regprog
+            } else {
+                (*r.reg_match).regprog
+            }
+        });
+        if (*prog).engine == nfa_regengine.ptr() {
+            return 0;
+        }
+        if *(&raw mut (*(prog as *mut bt_regprog_T)).program as *mut uint8_t) as c_int != REGMAGIC {
+            emsg(gettext(&raw const e_re_corr as *const c_char));
+            return 1;
+        }
+        0
     }
-    if *(&raw mut (*(prog as *mut bt_regprog_T)).program as *mut uint8_t) as ::core::ffi::c_int
-        != REGMAGIC
-    {
-        emsg(gettext(&raw const e_re_corr as *const ::core::ffi::c_char));
-        return true_0;
-    }
-    return false_0;
 }
-pub(crate) unsafe extern "C" fn cleanup_subexpr() {
-    if (*rex.ptr()).need_clear_subexpr == 0 {
+
+/// Reset the `\1`..`\9` slots, or with `z` the `\z1`..`\z9` ones — which
+/// live in this module's own arrays rather than in the caller's match
+/// structure. Lazy: an engine only pays for this if a match reaches a
+/// back-reference.
+fn cleanup(z: bool) {
+    let need = rex.with(|r| {
+        if z {
+            r.need_clear_zsubexpr
+        } else {
+            r.need_clear_subexpr
+        }
+    });
+    if need == 0 {
         return;
     }
-    if (*rex.ptr()).reg_match.is_null() {
-        memset(
-            (*rex.ptr()).reg_startpos as *mut ::core::ffi::c_void,
-            0xff as ::core::ffi::c_int,
-            ::core::mem::size_of::<lpos_T>().wrapping_mul(NSUBEXP as ::core::ffi::c_int as size_t),
-        );
-        memset(
-            (*rex.ptr()).reg_endpos as *mut ::core::ffi::c_void,
-            0xff as ::core::ffi::c_int,
-            ::core::mem::size_of::<lpos_T>().wrapping_mul(NSUBEXP as ::core::ffi::c_int as size_t),
-        );
-    } else {
-        memset(
-            (*rex.ptr()).reg_startp as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                .wrapping_mul(NSUBEXP as ::core::ffi::c_int as size_t),
-        );
-        memset(
-            (*rex.ptr()).reg_endp as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                .wrapping_mul(NSUBEXP as ::core::ffi::c_int as size_t),
-        );
+    // A buffer match records positions and marks a slot unset with -1; a
+    // string match records pointers and marks it unset with NULL.
+    let multi = rex.with(|r| r.reg_match.is_null());
+    // SAFETY: the caller's match structure and this module's own arrays
+    // both hold NSUBEXP of each.
+    unsafe {
+        let n = NSUBEXP as usize;
+        if multi {
+            let (starts, ends) = if z {
+                (reg_startzpos.ptr().cast(), reg_endzpos.ptr().cast())
+            } else {
+                rex.with(|r| (r.reg_startpos, r.reg_endpos))
+            };
+            blank(
+                core::slice::from_raw_parts_mut(starts, n),
+                lpos_T { lnum: -1, col: -1 },
+            );
+            blank(
+                core::slice::from_raw_parts_mut(ends, n),
+                lpos_T { lnum: -1, col: -1 },
+            );
+        } else {
+            let (starts, ends) = if z {
+                (reg_startzp.ptr().cast(), reg_endzp.ptr().cast())
+            } else {
+                rex.with(|r| (r.reg_startp, r.reg_endp))
+            };
+            blank(
+                core::slice::from_raw_parts_mut(starts, n),
+                core::ptr::null_mut::<uint8_t>(),
+            );
+            blank(
+                core::slice::from_raw_parts_mut(ends, n),
+                core::ptr::null_mut::<uint8_t>(),
+            );
+        }
     }
-    (*rex.ptr()).need_clear_subexpr = false_0;
+    rex.with_mut(|r| {
+        if z {
+            r.need_clear_zsubexpr = 0;
+        } else {
+            r.need_clear_subexpr = 0;
+        }
+    });
 }
-pub(crate) unsafe extern "C" fn cleanup_zsubexpr() {
-    if (*rex.ptr()).need_clear_zsubexpr == 0 {
-        return;
-    }
-    if (*rex.ptr()).reg_match.is_null() {
-        memset(
-            reg_startzpos.ptr() as *mut lpos_T as *mut ::core::ffi::c_void,
-            0xff as ::core::ffi::c_int,
-            ::core::mem::size_of::<lpos_T>().wrapping_mul(NSUBEXP as ::core::ffi::c_int as size_t),
-        );
-        memset(
-            reg_endzpos.ptr() as *mut lpos_T as *mut ::core::ffi::c_void,
-            0xff as ::core::ffi::c_int,
-            ::core::mem::size_of::<lpos_T>().wrapping_mul(NSUBEXP as ::core::ffi::c_int as size_t),
-        );
-    } else {
-        memset(
-            reg_startzp.ptr() as *mut *mut uint8_t as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                .wrapping_mul(NSUBEXP as ::core::ffi::c_int as size_t),
-        );
-        memset(
-            reg_endzp.ptr() as *mut *mut uint8_t as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                .wrapping_mul(NSUBEXP as ::core::ffi::c_int as size_t),
-        );
-    }
-    (*rex.ptr()).need_clear_zsubexpr = false_0;
+
+fn blank<T: Copy>(slots: &mut [T], unset: T) {
+    slots.fill(unset);
 }
-pub(crate) unsafe extern "C" fn reg_nextline() {
-    (*rex.ptr()).lnum += 1;
-    (*rex.ptr()).line = reg_getline((*rex.ptr()).lnum) as *mut uint8_t;
-    (*rex.ptr()).input = (*rex.ptr()).line;
+
+pub(crate) fn cleanup_subexpr() {
+    cleanup(false);
+}
+
+pub(crate) fn cleanup_zsubexpr() {
+    cleanup(true);
+}
+
+/// Step the match on to the next line.
+pub(crate) fn reg_nextline() {
+    rex.with_mut(|r| r.lnum += 1);
+    let line = reg_getline(rex.with(|r| r.lnum)) as *mut uint8_t;
+    rex.with_mut(|r| {
+        r.line = line;
+        r.input = line;
+    });
     reg_breakcheck();
 }
-pub(crate) unsafe extern "C" fn match_with_backref(
-    mut start_lnum: linenr_T,
-    mut start_col: colnr_T,
-    mut end_lnum: linenr_T,
-    mut end_col: colnr_T,
-    mut bytelen: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut clnum: linenr_T = start_lnum;
-    let mut ccol: colnr_T = start_col;
-    let mut len: ::core::ffi::c_int = 0;
-    let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if !bytelen.is_null() {
-        *bytelen = 0 as ::core::ffi::c_int;
-    }
-    loop {
-        if (*rex.ptr()).line != reg_tofree.get() {
-            len = strlen((*rex.ptr()).line as *mut ::core::ffi::c_char) as ::core::ffi::c_int;
-            if (*reg_tofree.ptr()).is_null() || len >= reg_tofreelen.get() as ::core::ffi::c_int {
-                len += 50 as ::core::ffi::c_int;
-                xfree(reg_tofree.get() as *mut ::core::ffi::c_void);
-                reg_tofree.set(xmalloc(len as size_t) as *mut uint8_t);
-                reg_tofreelen.set(len as ::core::ffi::c_uint);
+
+/// Match the text a back-reference captured, which may span lines. On
+/// success `*bytelen` is the length matched on the *last* line, which is
+/// what the caller advances by.
+///
+pub(crate) fn match_with_backref(
+    start_lnum: linenr_T,
+    start_col: colnr_T,
+    end_lnum: linenr_T,
+    end_col: colnr_T,
+    mut bytelen: Option<&mut c_int>,
+) -> c_int {
+    // SAFETY: the positions come from this match's own capture slots, and
+    // every pointer below is the match's own line or scratch buffer.
+    unsafe {
+        let mut clnum = start_lnum;
+        let mut ccol = start_col;
+        if let Some(n) = bytelen.as_deref_mut() {
+            *n = 0;
+        }
+        loop {
+            // `reg_getline` below hands out the memline's own buffer, so
+            // it can invalidate the line being matched. Take a private
+            // copy first, growing the scratch buffer when it no longer
+            // fits.
+            if rex.with(|r| r.line) != reg_tofree.get() {
+                let mut len = strlen(rex.with(|r| r.line) as *mut c_char) as c_int;
+                if reg_tofree.get().is_null() || len >= reg_tofreelen.get() as c_int {
+                    len += 50;
+                    xfree(reg_tofree.get().cast());
+                    reg_tofree.set(xmalloc(len as usize) as *mut uint8_t);
+                    reg_tofreelen.set(len as u32);
+                }
+                strcpy(
+                    reg_tofree.get() as *mut c_char,
+                    rex.with(|r| r.line) as *mut c_char,
+                );
+                rex.with_mut(|r| {
+                    r.input = reg_tofree.get().offset(r.input.offset_from(r.line));
+                    r.line = reg_tofree.get();
+                });
             }
-            strcpy(
-                reg_tofree.get() as *mut ::core::ffi::c_char,
-                (*rex.ptr()).line as *mut ::core::ffi::c_char,
-            );
-            (*rex.ptr()).input = (*reg_tofree.ptr())
-                .offset((*rex.ptr()).input.offset_from((*rex.ptr()).line) as isize);
-            (*rex.ptr()).line = reg_tofree.get();
-        }
-        p = reg_getline(clnum);
-        assert!(!p.is_null(), "p");
-        if clnum == end_lnum {
-            len = (end_col - ccol) as ::core::ffi::c_int;
-        } else {
-            len = (reg_getline_len(clnum) - ccol) as ::core::ffi::c_int;
-        }
-        if !(*rex.ptr()).reg_ic
-            && cstrncmp(
-                p.offset(ccol as isize),
-                (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                &mut len,
-            ) != 0 as ::core::ffi::c_int
-            || (*rex.ptr()).reg_ic as ::core::ffi::c_int != 0
-                && mb_strnicmp(
-                    p.offset(ccol as isize),
-                    (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                    len as size_t,
-                ) != 0 as ::core::ffi::c_int
-        {
-            return RA_NOMATCH;
-        }
-        if !bytelen.is_null() {
-            *bytelen += len;
-        }
-        if clnum == end_lnum {
-            break;
-        }
-        if (*rex.ptr()).lnum >= (*rex.ptr()).reg_maxline {
-            return RA_NOMATCH;
-        }
-        reg_nextline();
-        if !bytelen.is_null() {
-            *bytelen = 0 as ::core::ffi::c_int;
-        }
-        clnum += 1;
-        ccol = 0 as ::core::ffi::c_int as colnr_T;
-        if got_int.get() {
-            return RA_FAIL;
+
+            let p = reg_getline(clnum);
+            assert!(!p.is_null(), "p");
+            let mut len = if clnum == end_lnum {
+                end_col - ccol
+            } else {
+                reg_getline_len(clnum) - ccol
+            };
+            let captured = p.offset(ccol as isize);
+            let input = rex.with(|r| r.input) as *mut c_char;
+            // `cstrncmp` can shorten `len` when a fold changed the encoded
+            // length, and the caller is told how far to advance from it.
+            let differs = if rex.with(|r| r.reg_ic) {
+                mb_strnicmp(captured, input, len as usize) != 0
+            } else {
+                cstrncmp(captured, input, &mut len) != 0
+            };
+            if differs {
+                return RA_NOMATCH;
+            }
+            if let Some(n) = bytelen.as_deref_mut() {
+                *n += len;
+            }
+            if clnum == end_lnum {
+                return RA_MATCH;
+            }
+            if rex.with(|r| r.lnum >= r.reg_maxline) {
+                return RA_NOMATCH;
+            }
+            // The capture continues on the next line, so the match must
+            // too, and `*bytelen` restarts from that line's column 0.
+            reg_nextline();
+            if let Some(n) = bytelen.as_deref_mut() {
+                *n = 0;
+            }
+            clnum += 1;
+            ccol = 0;
+            if got_int.get() {
+                return RA_FAIL;
+            }
         }
     }
-    return RA_MATCH;
 }
-pub(crate) unsafe extern "C" fn re_mult_next(mut what: *mut ::core::ffi::c_char) -> bool {
+
+/// Reject a repeat applied to `what`, a zero-width atom such as `\zs`.
+pub(crate) fn re_mult_next(what: &str) -> bool {
     if re_multi_type(peekchr()) == MULTI_MULT {
-        semsg(
-            gettext(b"E888: (NFA regexp) cannot repeat %s\0".as_ptr() as *const ::core::ffi::c_char),
-            what,
-        );
-        rc_did_emsg.set(true_0 != 0);
-        return false_0 != 0;
+        semsg!("E888: (NFA regexp) cannot repeat {what}");
+        rc_did_emsg.set(true);
+        return false;
     }
-    return true_0 != 0;
+    true
 }
-pub(crate) unsafe extern "C" fn init_regexec_multi(
-    mut rmp: *mut regmmatch_T,
-    mut win: *mut win_T,
-    mut buf: *mut buf_T,
-    mut lnum: linenr_T,
+
+/// Point `rex` at a buffer match about to run.
+///
+/// # Safety
+///
+/// `rmp` must be live, with a compiled program, for the match's duration,
+/// and `buf` must be the buffer it runs over.
+pub(crate) unsafe fn init_regexec_multi(
+    rmp: *mut regmmatch_T,
+    win: *mut win_T,
+    buf: *mut buf_T,
+    lnum: linenr_T,
 ) {
-    (*rex.ptr()).reg_match = ::core::ptr::null_mut::<regmatch_T>();
-    (*rex.ptr()).reg_mmatch = rmp;
-    (*rex.ptr()).reg_buf = buf;
-    (*rex.ptr()).reg_win = win;
-    (*rex.ptr()).reg_firstlnum = lnum;
-    (*rex.ptr()).reg_maxline = (*(*rex.ptr()).reg_buf).b_ml.ml_line_count - lnum;
-    (*rex.ptr()).reg_line_lbr = false_0 != 0;
-    (*rex.ptr()).reg_ic = (*rmp).rmm_ic != 0;
-    (*rex.ptr()).reg_icombine = false_0 != 0;
-    (*rex.ptr()).reg_nobreak = (*(*rmp).regprog).re_flags & RE_NOBREAK as ::core::ffi::c_uint != 0;
-    (*rex.ptr()).reg_maxcol = (*rmp).rmm_maxcol;
+    unsafe {
+        rex.with_mut(|r| {
+            r.reg_match = core::ptr::null_mut::<regmatch_T>();
+            r.reg_mmatch = rmp;
+            r.reg_buf = buf;
+            r.reg_win = win;
+            r.reg_firstlnum = lnum;
+            r.reg_maxline = (*buf).b_ml.ml_line_count - lnum;
+            r.reg_line_lbr = false;
+            r.reg_ic = (*rmp).rmm_ic != 0;
+            r.reg_icombine = false;
+            r.reg_nobreak = (*(*rmp).regprog).re_flags & RE_NOBREAK as u32 != 0;
+            r.reg_maxcol = (*rmp).rmm_maxcol;
+        });
+    }
 }

@@ -1010,7 +1010,7 @@ pub(crate) unsafe extern "C" fn regmatch(
                                         (*(*rex.ptr()).reg_startpos.offset(no as isize)).col,
                                         (*(*rex.ptr()).reg_endpos.offset(no as isize)).lnum,
                                         (*(*rex.ptr()).reg_endpos.offset(no as isize)).col,
-                                        &raw mut len_2,
+                                        Some(&mut len_2),
                                     );
                                     if r != RA_MATCH {
                                         status = r;

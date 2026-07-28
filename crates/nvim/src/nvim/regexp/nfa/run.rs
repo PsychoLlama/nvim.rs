@@ -177,7 +177,7 @@ pub(crate) unsafe extern "C" fn match_backref(
                     (*sub).list.multi[subidx as usize].start_col,
                     (*sub).list.multi[subidx as usize].end_lnum,
                     (*sub).list.multi[subidx as usize].end_col,
-                    bytelen,
+                    bytelen.as_mut(),
                 ) == RA_MATCH
                 {
                     return true_0;

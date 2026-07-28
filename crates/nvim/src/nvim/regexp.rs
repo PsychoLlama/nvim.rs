@@ -1,7 +1,5 @@
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_isxdigit};
-use crate::src::nvim::charset::{
-    vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordc_buf, vim_iswordp_buf,
-};
+use crate::src::nvim::charset::{vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordp_buf};
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_get_string_buf_chk, tv_list_alloc, tv_list_append_string, tv_list_init_static10,
 };
@@ -11,29 +9,26 @@ use crate::src::nvim::eval_1::{eval_to_string, partial_name};
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
-    VIsual, VIsual_active, VIsual_mode, called_emsg, e_internal_error_in_regexp, e_nopresub,
-    e_null, e_re_corr, e_re_damg, e_resulting_text_too_long, e_toomsbra, e_trailing, got_int,
-    p_mmp, p_re, p_sel, p_verbose, rc_did_emsg, re_extmatch_in, re_extmatch_out, reg_do_extmatch,
+    called_emsg, e_internal_error_in_regexp, e_nopresub, e_null, e_re_corr, e_re_damg,
+    e_resulting_text_too_long, e_toomsbra, e_trailing, got_int, p_mmp, p_re, p_verbose,
+    rc_did_emsg, re_extmatch_in, re_extmatch_out, reg_do_extmatch,
 };
 use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::mark::mark_get;
 use crate::src::nvim::mbyte::{
-    mb_get_class_tab, mb_islower, mb_isupper, mb_ptr2char_adv, mb_strnicmp, mb_tolower, mb_toupper,
+    mb_get_class_tab, mb_islower, mb_isupper, mb_ptr2char_adv, mb_tolower, mb_toupper,
     utf_char2bytes, utf_char2len, utf_composinglike, utf_fold, utf_head_off,
     utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
-use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
-use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xrealloc, xstrdup};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xrealloc, xstrdup};
 use crate::src::nvim::message::{
     emsg, iemsg, internal_error, msg_puts, semsg, siemsg, verbose_enter, verbose_leave,
 };
-use crate::src::nvim::os::input::fast_breakcheck;
 use crate::src::nvim::os::libc::{
     __assert_fail, __ctype_b_loc, gettext, memmove, memset, strcpy, strlen, strncmp, strncpy,
 };
 use crate::src::nvim::plines::getvvcol;
 use crate::src::nvim::plines::win_linetabsize;
-use crate::src::nvim::pos::lt;
 use crate::src::nvim::profile::profile_passed_limit;
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 pub use crate::src::nvim::types::{
@@ -198,10 +193,6 @@ pub const CLASS_ALNUM: C2Rust_Unnamed_26 = 0;
 /// The case hook `\\u`, `\\U`, `\\l` and `\\L` install for the rest of a
 /// `:substitute` replacement.
 pub type CaseFolder = fn(::core::ffi::c_int) -> ::core::ffi::c_int;
-pub type reg_getline_flags_T = ::core::ffi::c_uint;
-pub const RGLF_SUBMATCH: reg_getline_flags_T = 4;
-pub const RGLF_LENGTH: reg_getline_flags_T = 2;
-pub const RGLF_LINE: reg_getline_flags_T = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct regexec_T {

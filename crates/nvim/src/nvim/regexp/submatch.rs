@@ -46,30 +46,17 @@ pub(crate) unsafe extern "C" fn clear_submatch_list(mut sl: *mut staticList10_T)
         }
     }
 }
-pub(crate) unsafe extern "C" fn reg_getline_submatch(
-    mut lnum: linenr_T,
-) -> *mut ::core::ffi::c_char {
-    let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    reg_getline_common(
-        lnum,
-        (RGLF_LINE as ::core::ffi::c_int | RGLF_SUBMATCH as ::core::ffi::c_int)
-            as reg_getline_flags_T,
-        &raw mut line,
-        ::core::ptr::null_mut::<colnr_T>(),
-    );
-    return line;
+/// The text of the submatch line `lnum` lines into the match `submatch()`
+/// and a `\\=` expression see.
+pub(crate) fn reg_getline_submatch(lnum: linenr_T) -> *mut ::core::ffi::c_char {
+    reg_line(lnum, LineOrigin::Submatch)
 }
-pub(crate) unsafe extern "C" fn reg_getline_submatch_len(mut lnum: linenr_T) -> colnr_T {
-    let mut length: colnr_T = 0;
-    reg_getline_common(
-        lnum,
-        (RGLF_LENGTH as ::core::ffi::c_int | RGLF_SUBMATCH as ::core::ffi::c_int)
-            as reg_getline_flags_T,
-        ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-        &raw mut length,
-    );
-    return length;
+
+/// Its length.
+pub(crate) fn reg_getline_submatch_len(lnum: linenr_T) -> colnr_T {
+    reg_line_len(lnum, LineOrigin::Submatch)
 }
+
 pub unsafe extern "C" fn reg_submatch(mut no: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
     let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();

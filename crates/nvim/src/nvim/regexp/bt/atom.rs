@@ -216,19 +216,13 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                 }
                                 115 => {
                                     ret = regnode(MOPEN + 0 as ::core::ffi::c_int);
-                                    if !re_mult_next(b"\\zs\0".as_ptr()
-                                        as *const ::core::ffi::c_char
-                                        as *mut ::core::ffi::c_char)
-                                    {
+                                    if !re_mult_next("\\zs") {
                                         return ::core::ptr::null_mut::<uint8_t>();
                                     }
                                 }
                                 101 => {
                                     ret = regnode(MCLOSE + 0 as ::core::ffi::c_int);
-                                    if !re_mult_next(b"\\ze\0".as_ptr()
-                                        as *const ::core::ffi::c_char
-                                        as *mut ::core::ffi::c_char)
-                                    {
+                                    if !re_mult_next("\\ze") {
                                         return ::core::ptr::null_mut::<uint8_t>();
                                     }
                                 }
