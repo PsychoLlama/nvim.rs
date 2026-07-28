@@ -5,7 +5,7 @@
 //! so "a then b" is emitted as `a b NFA_CONCAT` and the operators the
 //! grammar recognises land after their operands.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 use core::ffi::c_int;
 
