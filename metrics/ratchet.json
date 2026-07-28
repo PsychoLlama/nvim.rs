@@ -80,7 +80,7 @@
     "crates/nvim/src/nvim/drawline.rs": {"lines": 4825, "unsafe": 33},
     "crates/nvim/src/nvim/drawscreen.rs": {"lines": 3862, "no_mangle": 5, "unsafe": 53},
     "crates/nvim/src/nvim/edit.rs": {"lines": 5100, "unsafe": 89},
-    "crates/nvim/src/nvim/eval.rs": {"lines": 9883, "no_mangle": 1, "unsafe": 173},
+    "crates/nvim/src/nvim/eval.rs": {"lines": 7744, "no_mangle": 1, "unsafe": 172},
     "crates/nvim/src/nvim/eval/buffer.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/eval/buffer/info.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/eval/buffer/lines.rs": {"unsafe": 12},
