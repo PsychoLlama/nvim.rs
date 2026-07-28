@@ -113,8 +113,7 @@ pub unsafe fn get_all_vimoptions(arena: *mut Arena) -> Dict {
         let mut retval = arena_dict(arena, kOptCount as size_t);
         for opt_idx in kOptAleph..kOptCount {
             let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-            let opt_dict =
-                vimoption2dict(opt, OPT_GLOBAL as c_int, curbuf.get(), curwin.get(), arena);
+            let opt_dict = vimoption2dict(opt, OPT_GLOBAL, curbuf.get(), curwin.get(), arena);
             *retval.items.add(retval.size) = key_value_pair {
                 key: cstr_as_string((*opt).fullname),
                 value: object {
@@ -146,7 +145,7 @@ unsafe fn last_set(
 ) -> sctx_T {
     // SAFETY: the caller's pointers are live for the scopes reached below.
     unsafe {
-        if opt_flags == OPT_GLOBAL as c_int {
+        if opt_flags == OPT_GLOBAL {
             return (*opt).script_ctx;
         }
         let mut script_ctx = sctx_T {
@@ -162,7 +161,7 @@ unsafe fn last_set(
             script_ctx =
                 (*win).w_onebuf_opt.wo_script_ctx[(*opt).scope_idx[kOptScopeWin as usize] as usize];
         }
-        if opt_flags != OPT_LOCAL as c_int && script_ctx.sc_sid == 0 {
+        if opt_flags != OPT_LOCAL && script_ctx.sc_sid == 0 {
             script_ctx = (*opt).script_ctx;
         }
         script_ctx

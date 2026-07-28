@@ -156,7 +156,7 @@ pub unsafe fn get_varp_scope_from(
     // SAFETY: the caller's pointers are live, and `p` is a table row.
     unsafe {
         let opt_idx = get_opt_idx(p);
-        if opt_flags & OPT_GLOBAL as c_int != 0 && !option_is_global_only(opt_idx) {
+        if opt_flags & OPT_GLOBAL != 0 && !option_is_global_only(opt_idx) {
             // A window-local option's global copy is its own field in the
             // window's second `winopt_T`, not the table's `var`.
             if option_is_window_local(opt_idx) {
@@ -167,7 +167,7 @@ pub unsafe fn get_varp_scope_from(
             }
             return (*p).var;
         }
-        if opt_flags & OPT_LOCAL as c_int != 0 && option_is_global_local(opt_idx) {
+        if opt_flags & OPT_LOCAL != 0 && option_is_global_local(opt_idx) {
             // The local variable itself, sentinel and all.
             return match opt_idx {
                 kOptFormatprg => (&raw mut (*buf).b_p_fp).cast(),

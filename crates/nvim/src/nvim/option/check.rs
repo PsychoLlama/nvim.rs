@@ -20,6 +20,7 @@ use crate::src::nvim::drawscreen::{
     redraw_all_later, redraw_buf_later, redraw_later, status_redraw_all,
 };
 use crate::src::nvim::ex_getln::{check_opt_wim, did_set_cedit};
+use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::ns_hl_def;
 use crate::src::nvim::highlight_group::{highlight_changed, syn_check_group};
 use crate::src::nvim::indent::tabstop_set;
@@ -47,9 +48,16 @@ use super::{
     HL_GLOBAL, HLATTRS_INIT, NO_SCREEN, NUL, NULL_STRING, OPT_GLOBAL, OPT_LOCAL, UPD_NOT_VALID,
     didset_options_sctx, didset_window_options, get_varp, kFillchars, kListchars, kOptFlagHLOnly,
     kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl,
-    kOptFlagRedrWin, kOptValTypeString, option_has_type, p_et_nobin, p_ml_nobin, p_tw_nobin,
-    p_wm_nobin,
+    kOptFlagRedrWin, kOptValTypeString, option_has_type,
 };
+
+/// What 'binary' overrode, so that switching it off again restores the
+/// values the user set rather than the defaults. The per-buffer copies live
+/// in `buf_T`; these are the global ones.
+pub(crate) static p_tw_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
+pub(crate) static p_wm_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
+pub(crate) static p_ml_nobin: GlobalCell<c_int> = GlobalCell::new(0);
+pub(crate) static p_et_nobin: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// The options 'binary' overrides while it is on, and so re-attributes to
 /// whatever script set 'binary'.
@@ -67,8 +75,8 @@ pub fn did_set_title() {
 /// overrides. Their pre-'binary' values are stashed so that turning it off
 /// again restores them rather than the defaults.
 pub fn set_options_bin(oldval: c_int, newval: c_int, opt_flags: c_int) {
-    let local = opt_flags & OPT_GLOBAL as c_int == 0;
-    let global = opt_flags & OPT_LOCAL as c_int == 0;
+    let local = opt_flags & OPT_GLOBAL == 0;
+    let global = opt_flags & OPT_LOCAL == 0;
     // SAFETY: `curbuf` is live.
     unsafe {
         let buf = curbuf.get();
@@ -210,7 +218,7 @@ pub unsafe fn was_set_insecurely(wp: *mut win_T, opt_idx: OptIndex, opt_flags: c
 pub unsafe fn insecure_flag(wp: *mut win_T, opt_idx: OptIndex, opt_flags: c_int) -> *mut uint32_t {
     // SAFETY: the caller's window is live where the arms below need it.
     unsafe {
-        if opt_flags & OPT_LOCAL as c_int != 0 {
+        if opt_flags & OPT_LOCAL != 0 {
             assert!(!wp.is_null());
             match opt_idx {
                 kOptWrap => return &raw mut (*wp).w_onebuf_opt.wo_wrap_flags,

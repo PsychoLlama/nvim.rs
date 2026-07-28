@@ -29,6 +29,11 @@ use crate::src::nvim::main::{
     p_sts, p_sua, p_sw, p_swf, p_tfu, p_ts, p_tw, p_udf, p_vsts, p_vts, p_wm, spo_flags,
 };
 use crate::src::nvim::memory::xstrdup;
+
+use super::check::{p_et_nobin, p_ml_nobin, p_tw_nobin, p_wm_nobin};
+use super::paste::{
+    p_ai_nopaste, p_et_nopaste, p_sts_nopaste, p_tw_nopaste, p_vsts_nopaste, p_wm_nopaste,
+};
 use crate::src::nvim::options::{
     BufOptIndex, buf_opt_idx, kBufOptAutoindent, kBufOptBinary, kBufOptBomb, kBufOptCindent,
     kBufOptCinkeys, kBufOptCinoptions, kBufOptCinscopedecls, kBufOptCinwords, kBufOptComments,
@@ -55,12 +60,15 @@ use crate::src::nvim::types::{
 use crate::src::nvim::window::{check_colorcolumn, set_winbar_win};
 
 use super::{
-    BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, CMOD_NOSWAPFILE, CPO_BUFOPT, CPO_BUFOPTGLOB, KEYMAP_INIT,
-    NO_LOCAL_UNDOLEVEL, NUL, change_option_default, check_blending, fill_culopt_flags, kFalse,
-    kFillchars, kListchars, kOptValTypeBoolean, p_ai_nopaste, p_et_nobin, p_et_nopaste, p_ml_nobin,
-    p_sts_nopaste, p_tw_nobin, p_tw_nopaste, p_vsts_nopaste, p_wm_nobin, p_wm_nopaste,
-    parse_winhl_opt, set_chars_option,
+    BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, CMOD_NOSWAPFILE, KEYMAP_INIT, NO_LOCAL_UNDOLEVEL, NUL,
+    change_option_default, check_blending, fill_culopt_flags, kFalse, kFillchars, kListchars,
+    kOptValTypeBoolean, parse_winhl_opt, set_chars_option,
 };
+
+/// The two 'cpo' flags that decide when a buffer's options are copied:
+/// 's' copies them the first time the buffer is entered, 'S' every time.
+const CPO_BUFOPT: c_int = 's' as c_int;
+const CPO_BUFOPTGLOB: c_int = 'S' as c_int;
 
 /// The string every unset string option shares.
 fn unset_string() -> *mut c_char {

@@ -14,7 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::src::nvim::main::{
@@ -29,12 +29,21 @@ use crate::src::nvim::types::{OptIndex, OptInt, OptVal, size_t, vimoption_T};
 use crate::src::nvim::window::{min_rows_for_all_tabpages, win_default_scroll};
 
 use super::{
-    B_IMODE_LAST, INT_MAX, INT_MIN, IOSIZE, MAX_MCO, MAX_NUMBERWIDTH, MAX_SEARCH_COUNT,
-    MIN_COLUMNS, OPT_GLOBAL, OPT_LOCAL, SB_MAX, TABSTOP_MAX,
-    e_cannot_have_more_than_hundred_quickfix, e_cannot_have_negative_or_zero_number_of_quickfix,
-    get_option_unset_value, kOptValTypeNil, kOptValTypeNumber, option_has_type,
+    INT_MAX, INT_MIN, IOSIZE, MAX_MCO, MAX_NUMBERWIDTH, MIN_COLUMNS, OPT_GLOBAL, OPT_LOCAL, SB_MAX,
+    TABSTOP_MAX, get_option_unset_value, kOptValTypeNil, kOptValTypeNumber, option_has_type,
     option_is_global_local, optval_copy, optval_equal, optval_to_cstr, optval_type_name,
 };
+
+/// The two messages the quickfix-stack bounds report.
+const E_QUICKFIX_TOO_FEW: &CStr =
+    c"E1542: Cannot have a negative or zero number of quickfix/location lists";
+const E_QUICKFIX_TOO_MANY: &CStr =
+    c"E1543: Cannot have more than a hundred quickfix/location lists";
+
+/// The most matches 'maxsearchcount' may ask the search-count display for.
+const MAX_SEARCH_COUNT: c_int = 9999;
+/// The largest 'iminsert'/'imsearch' value: the language-mapping mode.
+const B_IMODE_LAST: c_int = 1;
 
 /// "E487: Argument must be positive", for a value below its floor.
 fn too_small() -> *const c_char {
@@ -216,13 +225,9 @@ pub(crate) unsafe fn validate_num_option(
         kOptChistory | kOptLhistory => bounded(
             value,
             1,
-            e_cannot_have_negative_or_zero_number_of_quickfix
-                .ptr()
-                .cast::<c_char>(),
+            E_QUICKFIX_TOO_FEW.as_ptr(),
             100,
-            e_cannot_have_more_than_hundred_quickfix
-                .ptr()
-                .cast::<c_char>(),
+            E_QUICKFIX_TOO_MANY.as_ptr(),
         ),
         kOptMaxsearchcount => bounded(value, 1, too_small(), MAX_SEARCH_COUNT as OptInt, invalid()),
         _ => ptr::null(),
@@ -255,7 +260,7 @@ pub(crate) unsafe fn validate_option_value(
         // `:setlocal` writing a global-local option's sentinel is how it is
         // unset; nothing else needs to look at the value.
         if option_is_global_local(opt_idx)
-            && opt_flags & OPT_LOCAL as c_int != 0
+            && opt_flags & OPT_LOCAL != 0
             && optval_equal(*newval, get_option_unset_value(opt_idx))
         {
             return ptr::null();
@@ -263,7 +268,7 @@ pub(crate) unsafe fn validate_option_value(
         let opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
         if newval.type_0 == kOptValTypeNil {
             // A global value has no "unset" state to fall back to.
-            if opt_flags == OPT_GLOBAL as c_int {
+            if opt_flags == OPT_GLOBAL {
                 return gettext(c"Cannot unset global option value".as_ptr());
             }
             *newval = optval_copy(get_option_unset_value(opt_idx));

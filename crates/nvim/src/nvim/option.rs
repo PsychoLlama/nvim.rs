@@ -5,56 +5,77 @@
 //!
 //! Everything an option *is* — its name, type, scopes, flags, variable and
 //! default — lives in the generated [`crate::src::nvim::options`] table.
+//! The string options' own callbacks live in
+//! [`crate::src::nvim::optionstr`].
+//!
+//! The module is one file per kind of work; the parent holds no code, only
+//! the vocabulary more than one child needs and the constants the
+//! transpiled headers left behind.
+//!
+//! | child | what |
+//! | --- | --- |
+//! | [`value`] | the `OptVal` union: free, copy, compare, convert |
+//! | [`scope`] | which variable a scope reaches |
+//! | [`query`] | the accessors the rest of the editor reads through |
+//! | [`validate`] | vetting a value before anything sees it |
+//! | [`set`] | `set_option`, and the ordering it depends on |
+//! | [`context`] | doing that for another window or buffer |
+//! | [`set_cmd`] | the `:set` argument parser |
+//! | [`stropt`] | the `+=`/`^=`/`-=` value assembly |
+//! | [`didset`] | the boolean and numeric `did_set_*` callbacks |
+//! | [`paste`] | 'paste', and everything it switches off |
+//! | [`check`] | the sweeps that re-vet an option nothing set |
+//! | [`defaults`] | where a default comes from, and the startup passes |
+//! | [`copy`] | handing a new window or buffer its own values |
+//! | [`show`] | `:set` listing, `:mkvimrc`, the UI broadcast |
+//! | [`expand`] | command-line completion |
+//! | [`info`] | `nvim_get_option_info` |
+
+#![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::empty_string_option;
-use crate::src::nvim::options::*;
 use crate::src::nvim::optionstr::set_chars_option;
 use crate::src::nvim::types::{
-    CMD_index, CallbackType, CharsOption, ErrorType, HlAttrs, ObjectType, OptIndex, OptInt,
-    OptScope, OptValType, RgbValue, String_0, Terminal, TriState, VarType, VimVarIndex, auto_event,
-    colnr_T, int16_t, int32_t, regmatch_T, size_t, vimoption_T, win_T, xp_prefix_T,
+    CMD_index, CallbackType, CharsOption, ErrorType, HlAttrs, ObjectType, OptScope, OptValType,
+    RgbValue, String_0, TriState, VarType, VimVarIndex, auto_event, int16_t, int32_t, size_t,
+    xp_prefix_T,
 };
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_uint};
 
-// The carve of a 9,000-line transpiled module; see the child docs.
-mod defaults;
-pub use self::defaults::*;
-mod stropt;
-pub(crate) use self::stropt::*;
-mod set_cmd;
-pub use self::set_cmd::*;
-mod didset;
-pub use self::didset::*;
-mod paste;
-pub use self::paste::*;
-mod validate;
-pub(crate) use self::validate::*;
-mod value;
-pub use self::value::*;
-mod scope;
-pub use self::scope::*;
-mod set;
-pub use self::set::*;
-mod context;
-pub use self::context::*;
-mod show;
-pub use self::show::*;
-mod expand;
-pub use self::expand::*;
-mod copy;
-pub use self::copy::*;
-mod info;
-pub use self::info::*;
-mod query;
-pub use self::query::*;
 mod check;
+mod context;
+mod copy;
+mod defaults;
+mod didset;
+mod expand;
+mod info;
+mod paste;
+mod query;
+mod scope;
+mod set;
+mod set_cmd;
+mod show;
+mod stropt;
+mod validate;
+mod value;
+
 pub use self::check::*;
-unsafe extern "C" {
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const c_char, col: colnr_T) -> bool;
-    fn on_scrollback_option_changed(term: *mut Terminal);
-    fn ll_resize_stack(wp: *mut win_T, n: c_int);
-}
+pub use self::context::*;
+pub use self::copy::*;
+pub use self::defaults::*;
+pub use self::didset::*;
+pub use self::expand::*;
+pub use self::info::*;
+pub use self::paste::*;
+pub use self::query::*;
+pub use self::scope::*;
+pub use self::set::*;
+pub use self::set_cmd::*;
+pub use self::show::*;
+pub(crate) use self::stropt::*;
+pub(crate) use self::validate::*;
+pub use self::value::*;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
 pub const kObjectTypeDict: ObjectType = 6;
@@ -88,6 +109,7 @@ pub const EXPAND_DIRECTORIES: c_int = 3;
 pub const EXPAND_FILES: c_int = 2;
 pub const EXPAND_NOTHING: c_int = 0;
 pub const EXPAND_UNSUCCESSFUL: c_int = -2;
+/// What the generated table's `flags` column can say about an option.
 pub type OptFlags = c_uint;
 pub const kOptFlagColon: OptFlags = 33554432;
 pub const kOptFlagFunc: OptFlags = 16777216;
@@ -123,6 +145,7 @@ pub const kOptValTypeNil: OptValType = -1;
 pub const kOptScopeBuf: OptScope = 2;
 pub const kOptScopeWin: OptScope = 1;
 pub const kOptScopeGlobal: OptScope = 0;
+/// Which of `=`, `+=`, `^=` and `-=` a `:set` argument used.
 pub type set_op_T = c_uint;
 pub const OP_REMOVING: set_op_T = 3;
 pub const OP_PREPENDING: set_op_T = 2;
@@ -158,31 +181,32 @@ pub const FSK_KEYCODE: c_uint = 1;
 pub const BCO_NOHELP: c_uint = 4;
 pub const BCO_ALWAYS: c_uint = 2;
 pub const BCO_ENTER: c_uint = 1;
-pub const OPT_SKIPRTP: c_uint = 128;
-pub const OPT_ONECOLUMN: c_uint = 32;
-pub const OPT_NOWIN: c_uint = 16;
-pub const OPT_WINONLY: c_uint = 8;
-pub const OPT_MODELINE: c_uint = 4;
-pub const OPT_LOCAL: c_uint = 2;
-pub const OPT_GLOBAL: c_uint = 1;
+/// The scope and behaviour bits every `opt_flags` argument carries.
+///
+/// `OPT_LOCAL` and `OPT_GLOBAL` name a scope; neither means "both", which
+/// is what a bare `:set` does. `OPT_MODELINE` says the value came from a
+/// modeline and so must be treated as insecure; `OPT_WINONLY`/`OPT_NOWIN`
+/// restrict a sweep to one kind of option; `OPT_ONECOLUMN` is `:set!`'s
+/// one-per-line listing; `OPT_SKIPRTP` is `:mksession` leaving the runtime
+/// paths alone.
+pub const OPT_SKIPRTP: c_int = 128;
+pub const OPT_ONECOLUMN: c_int = 32;
+pub const OPT_NOWIN: c_int = 16;
+pub const OPT_WINONLY: c_int = 8;
+pub const OPT_MODELINE: c_int = 4;
+pub const OPT_LOCAL: c_int = 2;
+pub const OPT_GLOBAL: c_int = 1;
 pub const STATUS_HEIGHT: c_uint = 1;
 pub const DIP_ALL: c_uint = 1;
 pub const MIN_COLUMNS: c_uint = 12;
-pub const MAX_SEARCH_COUNT: c_uint = 9999;
 pub const kListchars: CharsOption = 1;
 pub const kFillchars: CharsOption = 0;
-pub type set_prefix_T = c_uint;
-pub const PREFIX_INV: set_prefix_T = 2;
-pub const PREFIX_NONE: set_prefix_T = 1;
-pub const PREFIX_NO: set_prefix_T = 0;
-pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
-pub const DEFAULT_MAXPATHL: c_int = 4096 as c_int;
-pub const MAXPATHL: c_int = DEFAULT_MAXPATHL;
+/// The longest path the option module will build or expand.
+pub const MAXPATHL: c_int = 4096;
 pub const ROOT_UID: c_int = 0 as c_int;
 pub const BF_SYN_SET: c_int = 0x200 as c_int;
 pub const B_IMODE_USE_INSERT: c_int = -1 as c_int;
 pub const B_IMODE_NONE: c_int = 0 as c_int;
-pub const B_IMODE_LAST: c_int = 1 as c_int;
 pub const KEYMAP_INIT: c_int = 1 as c_int;
 pub const NULL_STRING: String_0 = String_0 {
     data: ::core::ptr::null_mut::<c_char>(),
@@ -241,8 +265,6 @@ pub const EOL_MAC: c_int = 2 as c_int;
 pub const DFLT_FO_VIM: [c_char; 5] =
     unsafe { ::core::mem::transmute::<[u8; 5], [c_char; 5]>(*b"tcqj\0") };
 pub const MAX_MCO: c_int = 6 as c_int;
-pub const CPO_BUFOPT: c_int = 's' as c_int;
-pub const CPO_BUFOPTGLOB: c_int = 'S' as c_int;
 pub const CPO_VIM: [c_char; 9] =
     unsafe { ::core::mem::transmute::<[u8; 9], [c_char; 9]>(*b"aABceFs_\0") };
 pub const BS_START: c_int = 's' as c_int;
@@ -273,72 +295,8 @@ pub const DFLT_ROWS: c_int = 24 as c_int;
 pub const SID_NONE: c_int = -6 as c_int;
 pub const K_ZERO: c_int = -(255 as c_int + (('X' as c_int) << 8 as c_int));
 pub const K_KENTER: c_int = -('K' as c_int + (('A' as c_int) << 8 as c_int));
-static e_unknown_option: GlobalCell<[c_char; 21]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 21], [c_char; 21]>(*b"E518: Unknown option\0")
-});
-static e_not_allowed_in_modeline: GlobalCell<[c_char; 32]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 32], [c_char; 32]>(*b"E520: Not allowed in a modeline\0")
-});
-static e_not_allowed_in_modeline_when_modelineexpr_is_off: GlobalCell<[c_char; 59]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 59], [c_char; 59]>(
-            *b"E992: Not allowed in a modeline when 'modelineexpr' is off\0",
-        )
-    });
-static e_number_required_after_equal: GlobalCell<[c_char; 30]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 30], [c_char; 30]>(*b"E521: Number required after =\0")
-});
-static e_preview_window_already_exists: GlobalCell<[c_char; 38]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 38], [c_char; 38]>(*b"E590: A preview window already exists\0")
-});
-static e_cannot_have_negative_or_zero_number_of_quickfix: GlobalCell<[c_char; 72]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 72], [c_char; 72]>(
-            *b"E1542: Cannot have a negative or zero number of quickfix/location lists\0",
-        )
-    });
-static e_cannot_have_more_than_hundred_quickfix: GlobalCell<[c_char; 63]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 63], [c_char; 63]>(
-            *b"E1543: Cannot have more than a hundred quickfix/location lists\0",
-        )
-    });
-static p_term: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
-static p_ttytype: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
-static p_et_nobin: GlobalCell<c_int> = GlobalCell::new(0);
-static p_ml_nobin: GlobalCell<c_int> = GlobalCell::new(0);
-static p_tw_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
-static p_wm_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
-static p_ai_nopaste: GlobalCell<c_int> = GlobalCell::new(0);
-static p_et_nopaste: GlobalCell<c_int> = GlobalCell::new(0);
-static p_sts_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
-static p_tw_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
-static p_wm_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
-static p_vsts_nopaste: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub const OPTION_COUNT: usize = ::core::mem::size_of::<[vimoption_T; 374]>()
-    .wrapping_div(::core::mem::size_of::<vimoption_T>())
-    .wrapping_div(
-        (::core::mem::size_of::<[vimoption_T; 374]>()
-            .wrapping_rem(::core::mem::size_of::<vimoption_T>())
-            == 0) as c_int as usize,
-    );
-pub const INC: c_int = 20 as c_int;
-pub const GAP: c_int = 3 as c_int;
-static expand_option_idx: GlobalCell<OptIndex> = GlobalCell::new(kOptInvalid);
-static expand_option_start_col: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-static expand_option_name: GlobalCell<[c_char; 5]> = GlobalCell::new([
-    't' as c_char,
-    '_' as c_char,
-    NUL as c_char,
-    NUL as c_char,
-    NUL as c_char,
-]);
-static expand_option_flags: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-static expand_option_append: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const INT_MIN: c_int = -INT_MAX - 1 as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;
-pub const true_0: c_int = 1 as c_int;
-pub const false_0: c_int = 0 as c_int;
 pub const PROJECT_NAME: [c_char; 5] =
     unsafe { ::core::mem::transmute::<[u8; 5], [c_char; 5]>(*b"nvim\0") };
 pub const __INT_MAX__: c_int = 2147483647 as c_int;

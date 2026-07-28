@@ -14,7 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::{set_op_T, ui_refresh_options};
@@ -41,22 +41,23 @@ use crate::src::nvim::types::{
 
 use super::{
     CMD_setglobal, CMD_setlocal, FAIL, FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, IOSIZE, K_ZERO,
-    NUL, OK, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OPT_ONECOLUMN, OPT_WINONLY,
-    STR2NR_ALL, UPD_CLEAR, didset_options, didset_options2, e_not_allowed_in_modeline,
-    e_not_allowed_in_modeline_when_modelineexpr_is_off, e_number_required_after_equal,
-    e_unknown_option, get_option_default, get_option_value, get_varp, get_varp_scope,
-    is_tty_option, kFalse, kNone, kOptFlagMLE, kOptFlagSecure, kOptScopeBuf, kOptScopeWin,
-    kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber, kOptValTypeString, kTrue,
-    option_has_scope, option_has_type, option_is_global_local, option_is_window_local,
-    option_scope_idx, optval_copy, optval_from_varp, set_option, set_options_default, showoneopt,
-    showoptions, stropt_get_newval, unset_option_local_value,
+    NUL, OK, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE,
+    OPT_NOWIN, OPT_ONECOLUMN, OPT_WINONLY, STR2NR_ALL, UPD_CLEAR, didset_options, didset_options2,
+    get_option_default, get_option_value, get_varp, get_varp_scope, is_tty_option, kFalse, kNone,
+    kOptFlagMLE, kOptFlagSecure, kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean, kOptValTypeNil,
+    kOptValTypeNumber, kOptValTypeString, kTrue, option_has_scope, option_has_type,
+    option_is_global_local, option_is_window_local, option_scope_idx, optval_copy,
+    optval_from_varp, set_option, set_options_default, showoneopt, showoptions, stropt_get_newval,
+    unset_option_local_value,
 };
 
-/// The scope bits, in the `c_int` shape every caller passes.
-const OPT_GLOBAL: c_int = super::OPT_GLOBAL as c_int;
-const OPT_LOCAL: c_int = super::OPT_LOCAL as c_int;
-const OPT_MODELINE: c_int = super::OPT_MODELINE as c_int;
-const OPT_NOWIN: c_int = super::OPT_NOWIN as c_int;
+/// The messages the parse reports. They go back to [`do_set`] rather than
+/// being emitted here, so that the offending argument can be appended.
+const E_UNKNOWN_OPTION: &CStr = c"E518: Unknown option";
+const E_NOT_ALLOWED_IN_MODELINE: &CStr = c"E520: Not allowed in a modeline";
+const E_MODELINE_NEEDS_MODELINEEXPR: &CStr =
+    c"E992: Not allowed in a modeline when 'modelineexpr' is off";
+const E_NUMBER_REQUIRED_AFTER_EQUAL: &CStr = c"E521: Number required after =";
 
 /// What `no` or `inv` in front of a boolean option's name asks for.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -81,7 +82,7 @@ pub unsafe extern "C" fn ex_set(eap: *mut exarg_T) {
         };
         // `:set!` lists one option per line.
         if (*eap).forceit != 0 {
-            flags |= OPT_ONECOLUMN as c_int;
+            flags |= OPT_ONECOLUMN;
         }
         do_set((*eap).arg, flags);
     }
@@ -147,7 +148,7 @@ unsafe fn validate_opt_idx(
         return FAIL;
     }
     // A `:set` sweeping over windows or buffers only wants its own kind.
-    if opt_flags & OPT_WINONLY as c_int != 0 && !option_is_window_local(opt_idx) {
+    if opt_flags & OPT_WINONLY != 0 && !option_is_window_local(opt_idx) {
         return FAIL;
     }
     if opt_flags & OPT_NOWIN != 0 && option_is_window_local(opt_idx) {
@@ -155,13 +156,11 @@ unsafe fn validate_opt_idx(
     }
     if opt_flags & OPT_MODELINE != 0 {
         if flags & kOptFlagSecure as uint32_t != 0 {
-            *errmsg = e_not_allowed_in_modeline.ptr().cast::<c_char>();
+            *errmsg = E_NOT_ALLOWED_IN_MODELINE.as_ptr();
             return FAIL;
         }
         if flags & kOptFlagMLE as uint32_t != 0 && p_mle.get() == 0 {
-            *errmsg = e_not_allowed_in_modeline_when_modelineexpr_is_off
-                .ptr()
-                .cast::<c_char>();
+            *errmsg = E_MODELINE_NEEDS_MODELINEEXPR.as_ptr();
             return FAIL;
         }
         // A modeline must not undo what `:diffthis` set up.
@@ -405,7 +404,7 @@ unsafe fn take_number(
         }
 
         if *arg as c_int != '-' as c_int && !ascii_isdigit(*arg as c_int) {
-            *errmsg = e_number_required_after_equal.ptr().cast::<c_char>();
+            *errmsg = E_NUMBER_REQUIRED_AFTER_EQUAL.as_ptr();
             return None;
         }
         let mut len: c_int = 0;
@@ -425,7 +424,7 @@ unsafe fn take_number(
             || (*arg.offset(len as isize) != NUL as c_char
                 && !ascii_iswhite(*arg.offset(len as isize) as c_int))
         {
-            *errmsg = e_number_required_after_equal.ptr().cast::<c_char>();
+            *errmsg = E_NUMBER_REQUIRED_AFTER_EQUAL.as_ptr();
             return None;
         }
         Some(number)
@@ -456,7 +455,7 @@ unsafe fn do_one_set_option(
         if opt_idx == kOptInvalid {
             // A terminal option is accepted and discarded.
             if !is_tty_option(arg) {
-                *errmsg = e_unknown_option.ptr().cast::<c_char>();
+                *errmsg = E_UNKNOWN_OPTION.as_ptr();
             }
             return;
         }

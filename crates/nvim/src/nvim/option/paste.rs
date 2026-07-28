@@ -23,16 +23,19 @@ use crate::src::nvim::options::{
     kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,
 };
 use crate::src::nvim::optionstr::free_string_option;
-use crate::src::nvim::types::{OptIndex, colnr_T, optset_T};
+use crate::src::nvim::types::{OptIndex, OptInt, colnr_T, optset_T};
 
-use super::{
-    buffers, didset_options_sctx, p_ai_nopaste, p_et_nopaste, p_sts_nopaste, p_tw_nopaste,
-    p_vsts_nopaste, p_wm_nopaste,
-};
+use super::{OPT_GLOBAL, OPT_LOCAL, buffers, didset_options_sctx};
 
-/// The scope bits of `os_flags`, in the `c_int` shape the frame carries.
-const OPT_GLOBAL: c_int = super::OPT_GLOBAL as c_int;
-const OPT_LOCAL: c_int = super::OPT_LOCAL as c_int;
+/// What 'paste' overrode, so that switching it off again restores the
+/// values the user set. The per-buffer copies live in `buf_T`; these are
+/// the global ones.
+pub(crate) static p_ai_nopaste: GlobalCell<c_int> = GlobalCell::new(0);
+pub(crate) static p_et_nopaste: GlobalCell<c_int> = GlobalCell::new(0);
+pub(crate) static p_sts_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
+pub(crate) static p_tw_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
+pub(crate) static p_wm_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
+pub(crate) static p_vsts_nopaste: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 
 /// The options 'paste' overrides while it is on, and so re-attributes to
 /// whatever script set 'paste'.

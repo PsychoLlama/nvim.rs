@@ -67,14 +67,11 @@ use crate::src::nvim::winfloat::win_float_update_statusline;
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, Ctrl_C, DIP_ALL, EVENT_BUFADD, EVENT_BUFDELETE,
-    EVENT_SYNTAX, HLF_W, K_KENTER, NO_SCREEN, NUL, STATUS_HEIGHT, UPD_NOT_VALID, UPD_SOME_VALID,
-    VV_WARNINGMSG, check_blending, did_set_title, kFalse, kOptValTypeNumber, kOptValTypeString,
-    option_was_set, redraw_titles, set_option_value, set_option_varp, set_options_bin,
+    EVENT_SYNTAX, HLF_W, K_KENTER, NO_SCREEN, NUL, OPT_GLOBAL, OPT_LOCAL, STATUS_HEIGHT,
+    UPD_NOT_VALID, UPD_SOME_VALID, VV_WARNINGMSG, check_blending, did_set_title, kFalse,
+    kOptValTypeNumber, kOptValTypeString, option_was_set, redraw_titles, set_option_value,
+    set_option_varp, set_options_bin,
 };
-
-/// The scope bits of `os_flags`, in the `c_int` shape the frame carries.
-const OPT_GLOBAL: c_int = super::OPT_GLOBAL as c_int;
-const OPT_LOCAL: c_int = super::OPT_LOCAL as c_int;
 
 /// "E590", the one message a callback in this module reports.
 const E_PREVIEW_WINDOW_EXISTS: &CStr = c"E590: A preview window already exists";

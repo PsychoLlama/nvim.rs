@@ -58,18 +58,14 @@ use crate::src::nvim::types::{
 use crate::src::nvim::window::{last_status, win_comp_scroll};
 
 use super::{
-    LOGLVL_INF, NO_LOCAL_UNDOLEVEL, NUL, PATHSEPSTR, PROJECT_NAME, ROOT_UID, SHAPE_CURSOR,
-    SID_NONE, check_options, check_win_options, default_fileformat, didset_options,
+    LOGLVL_INF, NO_LOCAL_UNDOLEVEL, NUL, OPT_GLOBAL, OPT_LOCAL, PATHSEPSTR, PROJECT_NAME, ROOT_UID,
+    SHAPE_CURSOR, SID_NONE, check_options, check_win_options, default_fileformat, didset_options,
     didset_options2, get_option_unset_value, insecure_flag, kFalse, kOptFlagComma, kOptFlagGettext,
     kOptFlagInsecure, kOptFlagNoDefExp, kOptFlagNoDefault, kOptFlagWasSet, kOptValTypeBoolean,
     kOptValTypeNumber, kOptValTypeString, kTrue, option_expand, option_has_type,
     option_is_global_local, option_was_set, optval_copy, optval_free, set_fileformat,
     set_option_direct, set_option_value_give_err, set_option_varp,
 };
-
-/// The scope bits, in the `c_int` shape every caller passes.
-const OPT_GLOBAL: c_int = super::OPT_GLOBAL as c_int;
-const OPT_LOCAL: c_int = super::OPT_LOCAL as c_int;
 
 /// Every option, in table order.
 fn all_options() -> impl Iterator<Item = OptIndex> {

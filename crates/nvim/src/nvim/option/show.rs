@@ -45,17 +45,13 @@ use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::undo::curbufIsChanged;
 
 use super::{
-    FAIL, MAXPATHL, NUL, OK, OPT_ONECOLUMN, OPT_SKIPRTP, copy_option_part, get_opt_idx,
-    get_option_unset_value, get_varp, get_varp_scope, kNone, kOptFlagComma, kOptFlagExpand,
-    kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc, kOptFlagUIOption, kOptValTypeBoolean,
-    kOptValTypeNumber, kOptValTypeString, kTrue, option_has_type, option_is_global_local,
-    option_is_global_only, option_is_window_local, optval_as_object, optval_equal,
-    optval_from_varp, optval_is_default,
+    FAIL, MAXPATHL, NUL, OK, OPT_GLOBAL, OPT_LOCAL, OPT_ONECOLUMN, OPT_SKIPRTP, copy_option_part,
+    get_opt_idx, get_option_unset_value, get_varp, get_varp_scope, kNone, kOptFlagComma,
+    kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc, kOptFlagUIOption,
+    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, kTrue, option_has_type,
+    option_is_global_local, option_is_global_only, option_is_window_local, optval_as_object,
+    optval_equal, optval_from_varp, optval_is_default,
 };
-
-/// The scope bits, in the `c_int` shape every caller passes.
-const OPT_GLOBAL: c_int = super::OPT_GLOBAL as c_int;
-const OPT_LOCAL: c_int = super::OPT_LOCAL as c_int;
 
 /// The column width one option gets in the multi-column listing, and the
 /// gap kept between columns.
@@ -116,7 +112,7 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: c_int) {
                     continue;
                 }
                 // `:set!` gives every option a line of its own.
-                let len = if opt_flags & OPT_ONECOLUMN as c_int != 0 {
+                let len = if opt_flags & OPT_ONECOLUMN != 0 {
                     Columns.get()
                 } else if option_has_type(opt_idx, kOptValTypeBoolean) {
                     1
@@ -272,7 +268,7 @@ pub unsafe fn makeset(fd: *mut FILE, opt_flags: c_int, local_only: c_int) -> c_i
                 }
                 // `:mksession` skips the runtime paths, which belong to the
                 // installation rather than the session.
-                if opt_flags & OPT_SKIPRTP as c_int != 0
+                if opt_flags & OPT_SKIPRTP != 0
                     && ((*opt).var == p_rtp.ptr().cast::<c_void>()
                         || (*opt).var == p_pp.ptr().cast::<c_void>())
                 {

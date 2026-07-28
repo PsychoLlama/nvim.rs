@@ -18,6 +18,8 @@
 //! | [`complete`] | the callbacks for completion, spelling and tags |
 //! | [`statusline`] | the callbacks for format strings and session specs |
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::types::{
     AlignTextPos, CharsOption, ErrorType, FloatRelative, OptValType, Terminal, WinSplit, WinStyle,
