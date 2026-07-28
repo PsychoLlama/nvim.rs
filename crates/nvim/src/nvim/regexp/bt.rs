@@ -18,7 +18,6 @@ mod piece;
 mod repeat;
 mod state;
 
-pub(crate) use self::atom::*;
 pub(crate) use self::compile::*;
 pub(crate) use self::equi_class::*;
 pub(crate) use self::exec::*;

@@ -11,7 +11,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::main::{
     e_internal_error_in_regexp, e_nopresub, e_null, e_re_corr, e_re_damg,
-    e_resulting_text_too_long, e_toomsbra, e_trailing, got_int, p_mmp, rc_did_emsg, re_extmatch_in,
+    e_resulting_text_too_long, e_toomsbra, got_int, p_mmp, rc_did_emsg, re_extmatch_in,
     re_extmatch_out, reg_do_extmatch,
 };
 use crate::src::nvim::mark::mark_get;

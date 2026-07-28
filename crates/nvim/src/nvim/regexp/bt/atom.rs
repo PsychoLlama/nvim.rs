@@ -87,7 +87,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                 rc_did_emsg.set(true_0 != 0);
                                 return NULL_0 as *mut uint8_t;
                             }
-                            ret = reg(REG_PAREN, &raw mut flags);
+                            ret = reg(REG_PAREN, &mut flags);
                             if ret.is_null() {
                                 return ::core::ptr::null_mut::<uint8_t>();
                             }
@@ -198,7 +198,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                         rc_did_emsg.set(true_0 != 0);
                                         return NULL_0 as *mut uint8_t;
                                     }
-                                    ret = reg(REG_ZPAREN, &raw mut flags);
+                                    ret = reg(REG_ZPAREN, &mut flags);
                                     if ret.is_null() {
                                         return ::core::ptr::null_mut::<uint8_t>();
                                     }
@@ -255,7 +255,7 @@ pub(crate) unsafe extern "C" fn regatom(mut flagp: *mut ::core::ffi::c_int) -> *
                                             rc_did_emsg.set(true_0 != 0);
                                             return NULL_0 as *mut uint8_t;
                                         }
-                                        ret = reg(REG_NPAREN, &raw mut flags);
+                                        ret = reg(REG_NPAREN, &mut flags);
                                         if ret.is_null() {
                                             return ::core::ptr::null_mut::<uint8_t>();
                                         }

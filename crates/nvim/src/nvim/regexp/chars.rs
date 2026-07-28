@@ -11,8 +11,8 @@ use super::{
     CLASS_ALNUM, CLASS_ALPHA, CLASS_BACKSPACE, CLASS_BLANK, CLASS_CNTRL, CLASS_DIGIT, CLASS_ESCAPE,
     CLASS_FNAME, CLASS_GRAPH, CLASS_IDENT, CLASS_KEYWORD, CLASS_LOWER, CLASS_NONE, CLASS_PRINT,
     CLASS_PUNCT, CLASS_RETURN, CLASS_SPACE, CLASS_TAB, CLASS_UPPER, CLASS_XDIGIT, CPO_LITERAL,
-    RF_HASNL, RI_ALPHA, RI_DIGIT, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WHITE, RI_WORD,
-    reg_cpo_lit,
+    MAGIC_ALL, RF_HASNL, RI_ALPHA, RI_DIGIT, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER,
+    RI_WHITE, RI_WORD, reg_cpo_lit, reg_magic,
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::p_cpo;
@@ -29,6 +29,23 @@ pub(crate) fn unmagic(c: c_int) -> c_int {
 
 pub(crate) fn toggle_magic(c: c_int) -> c_int {
     if c < 0 { c + 256 } else { c - 256 }
+}
+
+/// The marker form of the metacharacter `c`, for matching against what
+/// [`super::peekchr`] returns.
+pub(crate) const fn magic(c: u8) -> c_int {
+    c as c_int - 256
+}
+
+/// The backslash an error message has to print in front of a metacharacter
+/// for the message to echo what the user typed: none under `\v`, where
+/// every metacharacter is bare, one otherwise.
+pub(crate) fn magic_prefix() -> &'static str {
+    if reg_magic.get() == MAGIC_ALL {
+        ""
+    } else {
+        "\\"
+    }
 }
 
 /// The control character a `\r`/`\t`/`\e`/`\b` abbreviation stands for.
