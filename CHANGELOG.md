@@ -19,6 +19,8 @@ Behavior-preserving: same features, formats, and RPC surface.
 - Rewrote the option logic, covering `:set` and its relatives, option
   validation, the per-option callbacks, and how a window or buffer gets its
   own values.
+- Rewrote the Vimscript builtin functions, covering every builtin the editor
+  answers to and how one is dispatched, from `abs()` to `wordcount()`.
 - Generated the API dispatch layer from the API signatures again
   (`just apigen`), covering every msgpack-RPC method, the `vim.api` Lua
   binding, and `nvim --api-info`.
