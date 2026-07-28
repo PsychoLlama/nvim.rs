@@ -48,7 +48,6 @@
     "crates/nvim/src/nvim/eval/encode.rs": 438,
     "crates/nvim/src/nvim/eval/fs.rs": 104,
     "crates/nvim/src/nvim/eval/funcs.rs": 9,
-    "crates/nvim/src/nvim/eval/funcs/call.rs": 10,
     "crates/nvim/src/nvim/eval/funcs/channel.rs": 45,
     "crates/nvim/src/nvim/eval/funcs/input.rs": 4,
     "crates/nvim/src/nvim/eval/funcs/job.rs": 51,
