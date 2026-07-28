@@ -145,7 +145,7 @@ pub unsafe extern "C" fn did_set_backupext_or_patchmode(_args: *mut optset_T) ->
             }
         };
         if strcmp(undotted(p_bex.get()), undotted(p_pm.get())) == 0 {
-            return e_backupext_and_patchmode_are_equal.ptr().cast::<c_char>();
+            return e_backupext_and_patchmode_are_equal.as_ptr();
         }
     }
     ptr::null()
@@ -486,7 +486,7 @@ pub unsafe extern "C" fn did_set_foldmarker(args: *mut optset_T) -> *const c_cha
         // Two markers separated by a comma, neither of them empty.
         let comma = vim_strchr(value, c_int::from(b','));
         if comma.is_null() {
-            return e_comma_required.ptr().cast::<c_char>();
+            return e_comma_required.as_ptr();
         }
         if comma == value || c_int::from(*comma.add(1)) == NUL {
             return invalid();

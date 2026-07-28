@@ -107,7 +107,7 @@ pub(crate) unsafe fn illegal_char_after_chr(
         vim_snprintf(
             errbuf,
             errbuflen,
-            gettext(e_illegal_character_after_chr.ptr().cast::<c_char>()),
+            gettext(e_illegal_character_after_chr.as_ptr()),
             c,
         );
     }
@@ -424,14 +424,14 @@ pub unsafe extern "C" fn check_stl_option(s: *mut c_char) -> *const c_char {
                 rest.iter().position(|&b| b == b'}')
             };
             let Some(close) = close else {
-                return e_unclosed_expression_sequence.ptr().cast::<c_char>();
+                return e_unclosed_expression_sequence.as_ptr();
             };
             rest = &rest[close..];
         }
     }
 
     if groupdepth != 0 {
-        return e_unbalanced_groups.ptr().cast::<c_char>();
+        return e_unbalanced_groups.as_ptr();
     }
     ptr::null()
 }

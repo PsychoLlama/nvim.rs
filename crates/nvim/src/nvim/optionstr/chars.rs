@@ -408,7 +408,7 @@ pub unsafe extern "C" fn set_chars_option(
                 field_value_err(
                     errbuf,
                     errbuflen,
-                    e_wrong_character_width_for_field_str.ptr().cast::<c_char>(),
+                    e_wrong_character_width_for_field_str.as_ptr(),
                     name,
                 )
             };
@@ -416,9 +416,7 @@ pub unsafe extern "C" fn set_chars_option(
                 field_value_err(
                     errbuf,
                     errbuflen,
-                    e_wrong_number_of_characters_for_field_str
-                        .ptr()
-                        .cast::<c_char>(),
+                    e_wrong_number_of_characters_for_field_str.as_ptr(),
                     name,
                 )
             };
@@ -751,9 +749,9 @@ pub unsafe extern "C" fn check_chars_options() -> *const c_char {
         if unsafe { set_chars_option(wp, value, what, apply, ptr::null_mut(), 0) }.is_null() {
             ptr::null()
         } else if is_listchars(what) {
-            e_conflicts_with_value_of_listchars.ptr().cast::<c_char>()
+            e_conflicts_with_value_of_listchars.as_ptr()
         } else {
-            e_conflicts_with_value_of_fillchars.ptr().cast::<c_char>()
+            e_conflicts_with_value_of_fillchars.as_ptr()
         }
     };
 

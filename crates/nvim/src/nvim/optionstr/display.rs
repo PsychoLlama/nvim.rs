@@ -378,9 +378,7 @@ pub unsafe extern "C" fn did_set_showbreak(args: *mut optset_T) -> *const c_char
         let mut s = *varp(args);
         while *s != 0 {
             if ptr2cells(s) != 1 {
-                return e_showbreak_contains_unprintable_or_wide_character
-                    .ptr()
-                    .cast::<c_char>();
+                return e_showbreak_contains_unprintable_or_wide_character.as_ptr();
             }
             s = s.add(utfc_ptr2len(s) as usize);
         }

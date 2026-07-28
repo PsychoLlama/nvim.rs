@@ -249,7 +249,7 @@
     "crates/nvim/src/nvim/option/stropt.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/option/validate.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/option/value.rs": {"unsafe": 20},
-    "crates/nvim/src/nvim/optionstr.rs": {"unsafe": 13},
+    "crates/nvim/src/nvim/optionstr.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/optionstr/buffer.rs": {"unsafe": 81},
     "crates/nvim/src/nvim/optionstr/chars.rs": {"unsafe": 38},
     "crates/nvim/src/nvim/optionstr/check.rs": {"unsafe": 30},
