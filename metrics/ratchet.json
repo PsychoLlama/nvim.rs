@@ -1,7 +1,7 @@
 {
   "internal_exports": 120,
   "files_without_forbid_unsafe": 373,
-  "files_without_deny_unsafe_op": 268,
+  "files_without_deny_unsafe_op": 266,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -250,10 +250,10 @@
     "crates/nvim/src/nvim/option/validate.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/option/value.rs": {"unsafe": 20},
     "crates/nvim/src/nvim/optionstr.rs": {"unsafe": 13},
-    "crates/nvim/src/nvim/optionstr/buffer.rs": {"unsafe": 27},
+    "crates/nvim/src/nvim/optionstr/buffer.rs": {"unsafe": 81},
     "crates/nvim/src/nvim/optionstr/chars.rs": {"unsafe": 38},
     "crates/nvim/src/nvim/optionstr/check.rs": {"unsafe": 30},
-    "crates/nvim/src/nvim/optionstr/complete.rs": {"unsafe": 13},
+    "crates/nvim/src/nvim/optionstr/complete.rs": {"unsafe": 34},
     "crates/nvim/src/nvim/optionstr/display.rs": {"unsafe": 85},
     "crates/nvim/src/nvim/optionstr/expand.rs": {"unsafe": 81},
     "crates/nvim/src/nvim/optionstr/flags.rs": {"no_mangle": 1, "unsafe": 23},
