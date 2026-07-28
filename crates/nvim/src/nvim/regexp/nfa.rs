@@ -11,19 +11,21 @@ use super::*;
 
 mod atom;
 mod build;
+mod collection;
 mod compile;
+mod cursor;
 mod equi_class;
+mod escape;
 mod exec;
+mod literal;
 mod matcher;
 mod parse;
 mod postfix;
 mod run;
 mod sub;
 
-pub(crate) use self::atom::*;
 pub(crate) use self::build::*;
 pub(crate) use self::compile::*;
-pub(crate) use self::equi_class::*;
 pub(crate) use self::exec::*;
 pub(crate) use self::matcher::*;
 pub(crate) use self::parse::*;

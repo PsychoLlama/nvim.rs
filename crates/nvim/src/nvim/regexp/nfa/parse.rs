@@ -9,6 +9,7 @@
 
 use core::ffi::c_int;
 
+use super::atom::nfa_regatom as regatom;
 use super::postfix;
 use crate::semsg;
 use crate::src::nvim::main::rc_did_emsg;
@@ -45,13 +46,6 @@ const M_Z_UPPER: c_int = magic(b'Z');
 /// its atom `m` times, so a large bound costs states linearly.
 const AUTO_MAX_REPEAT: c_int = 500;
 const AUTO_MAX_SPAN: c_int = 200;
-
-/// [`super::nfa_regatom`] is still the transpiled form. One block for its
-/// three call sites; it goes away when the atom parser is rewritten.
-fn regatom() -> c_int {
-    // SAFETY: reads and advances this module's own parse cursor.
-    unsafe { super::nfa_regatom() }
-}
 
 /// A blank parse-cursor snapshot for [`save_parse_state`] to fill in.
 fn no_state() -> parse_state_T {

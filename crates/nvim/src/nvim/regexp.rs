@@ -10,8 +10,8 @@ use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::main::{
-    e_nopresub, e_null, e_re_damg, e_resulting_text_too_long, got_int, p_mmp, rc_did_emsg,
-    re_extmatch_in, re_extmatch_out, reg_do_extmatch,
+    e_null, e_re_damg, e_resulting_text_too_long, got_int, p_mmp, rc_did_emsg, re_extmatch_in,
+    re_extmatch_out,
 };
 use crate::src::nvim::mark::mark_get;
 use crate::src::nvim::mbyte::{
@@ -19,11 +19,10 @@ use crate::src::nvim::mbyte::{
     utf_head_off, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xrealloc, xstrdup};
-use crate::src::nvim::message::{emsg, iemsg, semsg, siemsg};
+use crate::src::nvim::message::{emsg, iemsg, siemsg};
 use crate::src::nvim::os::libc::{
     __assert_fail, __ctype_b_loc, gettext, memmove, memset, strcpy, strlen, strncmp, strncpy,
 };
-use crate::src::nvim::plines::getvvcol;
 use crate::src::nvim::plines::win_linetabsize;
 use crate::src::nvim::profile::profile_passed_limit;
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
