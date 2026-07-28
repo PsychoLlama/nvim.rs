@@ -134,7 +134,6 @@
     "crates/nvim/src/nvim/regexp/nfa/build.rs": 7,
     "crates/nvim/src/nvim/regexp/nfa/exec.rs": 2,
     "crates/nvim/src/nvim/regexp/nfa/matcher.rs": 18,
-    "crates/nvim/src/nvim/regexp/nfa/parse.rs": 12,
     "crates/nvim/src/nvim/regexp/nfa/run.rs": 2,
     "crates/nvim/src/nvim/regexp/nfa/sub.rs": 2,
     "crates/nvim/src/nvim/regexp/substitute.rs": 16,
