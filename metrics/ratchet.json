@@ -234,7 +234,7 @@
     "crates/nvim/src/nvim/msgpack_rpc/unpacker.rs": {"no_mangle": 4, "unsafe": 24},
     "crates/nvim/src/nvim/normal.rs": {"lines": 10039, "unsafe": 359},
     "crates/nvim/src/nvim/ops.rs": {"lines": 5265, "no_mangle": 1, "unsafe": 49},
-    "crates/nvim/src/nvim/option.rs": {"lines": 9202, "no_mangle": 1, "unsafe": 236},
+    "crates/nvim/src/nvim/option.rs": {"lines": 7361, "no_mangle": 1, "unsafe": 236},
     "crates/nvim/src/nvim/optionstr.rs": {"lines": 4014, "no_mangle": 1, "unsafe": 154},
     "crates/nvim/src/nvim/os/dl.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/os/env.rs": {"lines": 1719, "no_mangle": 12, "static_mut": 3, "unsafe": 39},

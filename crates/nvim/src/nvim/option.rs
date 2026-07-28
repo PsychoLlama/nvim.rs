@@ -1,3 +1,11 @@
+//! Everything an option *does*: `:set` and its relatives, the validation a
+//! new value has to pass, the `did_set_*` callbacks that react to one, and
+//! the per-scope plumbing that decides which copy of a value a window or
+//! buffer is looking at.
+//!
+//! Everything an option *is* — its name, type, scopes, flags, variable and
+//! default — lives in the generated [`crate::src::nvim::options`] table.
+
 use crate::src::nvim::api::extmark::nvim_create_namespace;
 use crate::src::nvim::api::private::helpers::{
     api_free_string, api_set_error, arena_dict, copy_string, cstr_as_string, cstr_to_string,
@@ -113,46 +121,15 @@ use crate::src::nvim::strings::{
     vim_snprintf, vim_snprintf_safelen, vim_strchr, vim_strsave_escaped,
 };
 use crate::src::nvim::tag::set_buflocal_tfu_callback;
-pub use crate::src::nvim::types::{
-    __off_t, __off64_t, __time_t, __uid_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
-    _IO_wide_data, AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S,
-    BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback,
-    Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, CharsOption, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorProvider,
-    DecorProvider_state as C2Rust_Unnamed_14, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Direction, Error, ErrorType, ExtmarkUndoObject,
-    FILE, FileID, Float, FloatAnchor, FloatRelative, GridView, HLGroupID, HlAttrs, Integer,
-    Intersection, KeyDict_highlight, KeyValuePair, LineGetter, LuaRef, MTKey, MTNode, MTPos,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
-    MarkTree, NS, Object, ObjectType, OptIndex, OptInt, OptScope, OptScopeFlags, OptVal,
-    OptValData, OptValType, OptionalKeys, QUEUE, RgbValue, ScopeDictDictItem, ScopeType,
-    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal, Timestamp, TriState,
-    VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    WinConfig, WinInfo, WinSplit, WinStyle, Window, aco_save_T, alist_T, auto_event, bhdr_T,
-    blob_T, blobvar_S, blocknr_T, buf_T, bufref_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T,
-    cmdmod_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_24, dict_T, dictvar_S, diff_T,
-    diffblock_S, disptick_T, eslist_T, eslist_elem, estack_T,
-    estack_T_es_info as C2Rust_Unnamed_32, etype_T, event_T, exarg, exarg_T, except_T,
-    except_type_T, expand_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_3, file_buffer_b_wininfo as C2Rust_Unnamed_11,
-    file_buffer_update_callbacks as C2Rust_Unnamed_0,
-    file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
-    funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, fuzmatch_str_T, garray_T,
-    handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, key_value_pair,
-    lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T,
-    llpos_T, lpos_T, mapblock, mapblock_T, match_T, matchitem, matchitem_T, memfile_T, memline_T,
-    mfdirty_T, msglist, msglist_T, mtnode_inner_s, mtnode_s, object, object_data as C2Rust_Unnamed,
-    opt_did_set_cb_T, opt_expand_cb_T, optexpand_T, optmagic_T, optset_T, partial_S, partial_T,
-    pos_T, pos_save_T, proftime_T, ptr_t, ptrdiff_t, qf_info_S, qf_info_T, queue, reg_extmatch_T,
-    regmatch_T, regmmatch_T, regprog, regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t, ssize_t,
-    switchwin_T, syn_state, syn_state_sst_union as C2Rust_Unnamed_4, syn_time_T, synblock_T,
-    synstate_T, tabpage_S, tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union,
-    u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8,
-    u_header_uh_alt_prev as C2Rust_Unnamed_7, u_header_uh_next as C2Rust_Unnamed_10,
-    u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
-    undo_object, uvarnumber_T, varnumber_T, vim_exception, vimoption_T, virt_line, visualinfo_T,
-    win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T,
+use crate::src::nvim::types::{
+    __uid_t, Arena, CMD_index, Callback, Callback_data, CallbackType, CharsOption, DecorProvider,
+    Dict, Error, ErrorType, FILE, HlAttrs, Integer, KeyDict_highlight, KeyValuePair, NS, Object,
+    ObjectType, OptIndex, OptInt, OptScope, OptVal, OptValData, OptValType, RgbValue, String_0,
+    Terminal, TriState, VarType, VimVarIndex, aco_save_T, auto_event, buf_T, bufref_T, colnr_T,
+    dict_T, estack_T, event_T, exarg_T, expand_T, fuzmatch_str_T, garray_T, int16_t, int32_t,
+    int64_t, key_value_pair, linenr_T, object, object_data, optexpand_T, optset_T, ptrdiff_t,
+    regmatch_T, scid_T, sctx_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T, uint8_t,
+    uint32_t, uint64_t, uvarnumber_T, vimoption_T, win_T, winopt_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::undo::{bufIsChanged, curbufIsChanged, u_compute_hash, u_read_undo, u_sync};
@@ -163,273 +140,46 @@ use crate::src::nvim::window::{
     win_setheight, win_setwidth,
 };
 use crate::src::nvim::winfloat::win_float_update_statusline;
+use core::ffi::{c_char, c_int, c_uchar, c_uint, c_void};
 unsafe extern "C" {
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
+    fn vim_regexec(rmp: *mut regmatch_T, line: *const c_char, col: colnr_T) -> bool;
     fn on_scrollback_option_changed(term: *mut Terminal);
-    fn ll_resize_stack(wp: *mut win_T, n: ::core::ffi::c_int);
+    fn ll_resize_stack(wp: *mut win_T, n: c_int);
 }
-pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
 pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
 pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
 pub const kObjectTypeInteger: ObjectType = 2;
 pub const kObjectTypeBoolean: ObjectType = 1;
 pub const kObjectTypeNil: ObjectType = 0;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
 pub const kCallbackNone: CallbackType = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_12 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_12 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_12 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_12 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
-pub const MF_DIRTY_YES: mfdirty_T = 1;
-pub const MF_DIRTY_NO: mfdirty_T = 0;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
-pub const kDecorProviderDisabled: C2Rust_Unnamed_14 = 4;
-pub const kDecorProviderRedrawDisabled: C2Rust_Unnamed_14 = 3;
-pub const kDecorProviderWinDisabled: C2Rust_Unnamed_14 = 2;
-pub const kDecorProviderActive: C2Rust_Unnamed_14 = 1;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const HL_GLOBAL: C2Rust_Unnamed_15 = 16384;
-pub const HL_DEFAULT: C2Rust_Unnamed_15 = 8192;
-pub const HL_FG_INDEXED: C2Rust_Unnamed_15 = 4096;
-pub const HL_BG_INDEXED: C2Rust_Unnamed_15 = 2048;
-pub const HL_NOCOMBINE: C2Rust_Unnamed_15 = 1024;
-pub const HL_OVERLINE: C2Rust_Unnamed_15 = 131072;
-pub const HL_CONCEALED: C2Rust_Unnamed_15 = 65536;
-pub const HL_BLINK: C2Rust_Unnamed_15 = 32768;
-pub const HL_DIM: C2Rust_Unnamed_15 = 512;
-pub const HL_ALTFONT: C2Rust_Unnamed_15 = 256;
-pub const HL_STRIKETHROUGH: C2Rust_Unnamed_15 = 128;
-pub const HL_STANDOUT: C2Rust_Unnamed_15 = 64;
-pub const HL_UNDERDASHED: C2Rust_Unnamed_15 = 40;
-pub const HL_UNDERDOTTED: C2Rust_Unnamed_15 = 32;
-pub const HL_UNDERDOUBLE: C2Rust_Unnamed_15 = 24;
-pub const HL_UNDERCURL: C2Rust_Unnamed_15 = 16;
-pub const HL_UNDERLINE: C2Rust_Unnamed_15 = 8;
-pub const HL_UNDERLINE_MASK: C2Rust_Unnamed_15 = 56;
-pub const HL_ITALIC: C2Rust_Unnamed_15 = 4;
-pub const HL_BOLD: C2Rust_Unnamed_15 = 2;
-pub const HL_INVERSE: C2Rust_Unnamed_15 = 1;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_16 = 76;
-pub const HLF_PRE: C2Rust_Unnamed_16 = 75;
-pub const HLF_OK: C2Rust_Unnamed_16 = 74;
-pub const HLF_SO: C2Rust_Unnamed_16 = 73;
-pub const HLF_SE: C2Rust_Unnamed_16 = 72;
-pub const HLF_TSNC: C2Rust_Unnamed_16 = 71;
-pub const HLF_TS: C2Rust_Unnamed_16 = 70;
-pub const HLF_BFOOTER: C2Rust_Unnamed_16 = 69;
-pub const HLF_BTITLE: C2Rust_Unnamed_16 = 68;
-pub const HLF_CU: C2Rust_Unnamed_16 = 67;
-pub const HLF_WBRNC: C2Rust_Unnamed_16 = 66;
-pub const HLF_WBR: C2Rust_Unnamed_16 = 65;
-pub const HLF_BORDER: C2Rust_Unnamed_16 = 64;
-pub const HLF_MSG: C2Rust_Unnamed_16 = 63;
-pub const HLF_NFLOAT: C2Rust_Unnamed_16 = 62;
-pub const HLF_MSGSEP: C2Rust_Unnamed_16 = 61;
-pub const HLF_INACTIVE: C2Rust_Unnamed_16 = 60;
-pub const HLF_0: C2Rust_Unnamed_16 = 59;
-pub const HLF_QFL: C2Rust_Unnamed_16 = 58;
-pub const HLF_MC: C2Rust_Unnamed_16 = 57;
-pub const HLF_CUL: C2Rust_Unnamed_16 = 56;
-pub const HLF_CUC: C2Rust_Unnamed_16 = 55;
-pub const HLF_TPF: C2Rust_Unnamed_16 = 54;
-pub const HLF_TPS: C2Rust_Unnamed_16 = 53;
-pub const HLF_TP: C2Rust_Unnamed_16 = 52;
-pub const HLF_PBR: C2Rust_Unnamed_16 = 51;
-pub const HLF_PST: C2Rust_Unnamed_16 = 50;
-pub const HLF_PSB: C2Rust_Unnamed_16 = 49;
-pub const HLF_PSX: C2Rust_Unnamed_16 = 48;
-pub const HLF_PNX: C2Rust_Unnamed_16 = 47;
-pub const HLF_PSK: C2Rust_Unnamed_16 = 46;
-pub const HLF_PNK: C2Rust_Unnamed_16 = 45;
-pub const HLF_PMSI: C2Rust_Unnamed_16 = 44;
-pub const HLF_PMNI: C2Rust_Unnamed_16 = 43;
-pub const HLF_PSI: C2Rust_Unnamed_16 = 42;
-pub const HLF_PNI: C2Rust_Unnamed_16 = 41;
-pub const HLF_SPL: C2Rust_Unnamed_16 = 40;
-pub const HLF_SPR: C2Rust_Unnamed_16 = 39;
-pub const HLF_SPC: C2Rust_Unnamed_16 = 38;
-pub const HLF_SPB: C2Rust_Unnamed_16 = 37;
-pub const HLF_CONCEAL: C2Rust_Unnamed_16 = 36;
-pub const HLF_SC: C2Rust_Unnamed_16 = 35;
-pub const HLF_TXA: C2Rust_Unnamed_16 = 34;
-pub const HLF_TXD: C2Rust_Unnamed_16 = 33;
-pub const HLF_DED: C2Rust_Unnamed_16 = 32;
-pub const HLF_CHD: C2Rust_Unnamed_16 = 31;
-pub const HLF_ADD: C2Rust_Unnamed_16 = 30;
-pub const HLF_FC: C2Rust_Unnamed_16 = 29;
-pub const HLF_FL: C2Rust_Unnamed_16 = 28;
-pub const HLF_WM: C2Rust_Unnamed_16 = 27;
-pub const HLF_W: C2Rust_Unnamed_16 = 26;
-pub const HLF_VNC: C2Rust_Unnamed_16 = 25;
-pub const HLF_V: C2Rust_Unnamed_16 = 24;
-pub const HLF_T: C2Rust_Unnamed_16 = 23;
-pub const HLF_VSP: C2Rust_Unnamed_16 = 22;
-pub const HLF_C: C2Rust_Unnamed_16 = 21;
-pub const HLF_SNC: C2Rust_Unnamed_16 = 20;
-pub const HLF_S: C2Rust_Unnamed_16 = 19;
-pub const HLF_R: C2Rust_Unnamed_16 = 18;
-pub const HLF_CLF: C2Rust_Unnamed_16 = 17;
-pub const HLF_CLS: C2Rust_Unnamed_16 = 16;
-pub const HLF_CLN: C2Rust_Unnamed_16 = 15;
-pub const HLF_LNB: C2Rust_Unnamed_16 = 14;
-pub const HLF_LNA: C2Rust_Unnamed_16 = 13;
-pub const HLF_N: C2Rust_Unnamed_16 = 12;
-pub const HLF_CM: C2Rust_Unnamed_16 = 11;
-pub const HLF_M: C2Rust_Unnamed_16 = 10;
-pub const HLF_LC: C2Rust_Unnamed_16 = 9;
-pub const HLF_L: C2Rust_Unnamed_16 = 8;
-pub const HLF_I: C2Rust_Unnamed_16 = 7;
-pub const HLF_E: C2Rust_Unnamed_16 = 6;
-pub const HLF_D: C2Rust_Unnamed_16 = 5;
-pub const HLF_AT: C2Rust_Unnamed_16 = 4;
-pub const HLF_TERM: C2Rust_Unnamed_16 = 3;
-pub const HLF_EOB: C2Rust_Unnamed_16 = 2;
-pub const HLF_8: C2Rust_Unnamed_16 = 1;
-pub const HLF_NONE: C2Rust_Unnamed_16 = 0;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const NUMBUFLEN: C2Rust_Unnamed_17 = 65;
-pub const BACKWARD_FILE: Direction = -3;
-pub const FORWARD_FILE: Direction = 3;
-pub const BACKWARD: Direction = -1;
-pub const FORWARD: Direction = 1;
-pub const kDirectionNotSet: Direction = 0;
+pub const MAXCOL: c_uint = 2147483647;
+pub const HL_GLOBAL: c_uint = 16384;
+pub const HLF_W: c_uint = 26;
+pub const NUMBUFLEN: c_uint = 65;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
-pub const XP_PREFIX_NONE: xp_prefix_T = 0;
-pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const XP_BS_COMMA: C2Rust_Unnamed_18 = 4;
-pub const XP_BS_THREE: C2Rust_Unnamed_18 = 2;
-pub const XP_BS_ONE: C2Rust_Unnamed_18 = 1;
-pub const XP_BS_NONE: C2Rust_Unnamed_18 = 0;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;
-pub const EXPAND_LSP: C2Rust_Unnamed_19 = 64;
-pub const EXPAND_LUA: C2Rust_Unnamed_19 = 63;
-pub const EXPAND_CHECKHEALTH: C2Rust_Unnamed_19 = 62;
-pub const EXPAND_RETAB: C2Rust_Unnamed_19 = 61;
-pub const EXPAND_PATTERN_IN_BUF: C2Rust_Unnamed_19 = 60;
-pub const EXPAND_FILETYPECMD: C2Rust_Unnamed_19 = 59;
-pub const EXPAND_FINDFUNC: C2Rust_Unnamed_19 = 58;
-pub const EXPAND_SHELLCMDLINE: C2Rust_Unnamed_19 = 57;
-pub const EXPAND_DIRS_IN_CDPATH: C2Rust_Unnamed_19 = 56;
-pub const EXPAND_KEYMAP: C2Rust_Unnamed_19 = 55;
-pub const EXPAND_ARGOPT: C2Rust_Unnamed_19 = 54;
-pub const EXPAND_SETTING_SUBTRACT: C2Rust_Unnamed_19 = 53;
-pub const EXPAND_STRING_SETTING: C2Rust_Unnamed_19 = 52;
-pub const EXPAND_RUNTIME: C2Rust_Unnamed_19 = 51;
-pub const EXPAND_SCRIPTNAMES: C2Rust_Unnamed_19 = 50;
-pub const EXPAND_BREAKPOINT: C2Rust_Unnamed_19 = 49;
-pub const EXPAND_DIFF_BUFFERS: C2Rust_Unnamed_19 = 48;
-pub const EXPAND_ARGLIST: C2Rust_Unnamed_19 = 47;
-pub const EXPAND_MAPCLEAR: C2Rust_Unnamed_19 = 46;
-pub const EXPAND_MESSAGES: C2Rust_Unnamed_19 = 45;
-pub const EXPAND_PACKADD: C2Rust_Unnamed_19 = 44;
-pub const EXPAND_USER_ADDR_TYPE: C2Rust_Unnamed_19 = 43;
-pub const EXPAND_SYNTIME: C2Rust_Unnamed_19 = 42;
-pub const EXPAND_USER: C2Rust_Unnamed_19 = 41;
-pub const EXPAND_HISTORY: C2Rust_Unnamed_19 = 40;
-pub const EXPAND_LOCALES: C2Rust_Unnamed_19 = 39;
-pub const EXPAND_OWNSYNTAX: C2Rust_Unnamed_19 = 38;
-pub const EXPAND_FILES_IN_PATH: C2Rust_Unnamed_19 = 37;
-pub const EXPAND_FILETYPE: C2Rust_Unnamed_19 = 36;
-pub const EXPAND_PROFILE: C2Rust_Unnamed_19 = 35;
-pub const EXPAND_SIGN: C2Rust_Unnamed_19 = 34;
-pub const EXPAND_SHELLCMD: C2Rust_Unnamed_19 = 33;
-pub const EXPAND_USER_LUA: C2Rust_Unnamed_19 = 32;
-pub const EXPAND_USER_LIST: C2Rust_Unnamed_19 = 31;
-pub const EXPAND_USER_DEFINED: C2Rust_Unnamed_19 = 30;
-pub const EXPAND_COMPILER: C2Rust_Unnamed_19 = 29;
-pub const EXPAND_COLORS: C2Rust_Unnamed_19 = 28;
-pub const EXPAND_LANGUAGE: C2Rust_Unnamed_19 = 27;
-pub const EXPAND_ENV_VARS: C2Rust_Unnamed_19 = 26;
-pub const EXPAND_USER_COMPLETE: C2Rust_Unnamed_19 = 25;
-pub const EXPAND_USER_NARGS: C2Rust_Unnamed_19 = 24;
-pub const EXPAND_USER_CMD_FLAGS: C2Rust_Unnamed_19 = 23;
-pub const EXPAND_USER_COMMANDS: C2Rust_Unnamed_19 = 22;
-pub const EXPAND_MENUNAMES: C2Rust_Unnamed_19 = 21;
-pub const EXPAND_EXPRESSION: C2Rust_Unnamed_19 = 20;
-pub const EXPAND_USER_FUNC: C2Rust_Unnamed_19 = 19;
-pub const EXPAND_FUNCTIONS: C2Rust_Unnamed_19 = 18;
-pub const EXPAND_TAGS_LISTFILES: C2Rust_Unnamed_19 = 17;
-pub const EXPAND_MAPPINGS: C2Rust_Unnamed_19 = 16;
-pub const EXPAND_USER_VARS: C2Rust_Unnamed_19 = 15;
-pub const EXPAND_AUGROUP: C2Rust_Unnamed_19 = 14;
-pub const EXPAND_HIGHLIGHT: C2Rust_Unnamed_19 = 13;
-pub const EXPAND_SYNTAX: C2Rust_Unnamed_19 = 12;
-pub const EXPAND_MENUS: C2Rust_Unnamed_19 = 11;
-pub const EXPAND_EVENTS: C2Rust_Unnamed_19 = 10;
-pub const EXPAND_BUFFERS: C2Rust_Unnamed_19 = 9;
-pub const EXPAND_HELP: C2Rust_Unnamed_19 = 8;
-pub const EXPAND_OLD_SETTING: C2Rust_Unnamed_19 = 7;
-pub const EXPAND_TAGS: C2Rust_Unnamed_19 = 6;
-pub const EXPAND_BOOL_SETTINGS: C2Rust_Unnamed_19 = 5;
-pub const EXPAND_SETTINGS: C2Rust_Unnamed_19 = 4;
-pub const EXPAND_DIRECTORIES: C2Rust_Unnamed_19 = 3;
-pub const EXPAND_FILES: C2Rust_Unnamed_19 = 2;
-pub const EXPAND_COMMANDS: C2Rust_Unnamed_19 = 1;
-pub const EXPAND_NOTHING: C2Rust_Unnamed_19 = 0;
-pub const EXPAND_OK: C2Rust_Unnamed_19 = -1;
-pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_19 = -2;
-pub const OPTION_MAGIC_OFF: optmagic_T = 2;
-pub const OPTION_MAGIC_ON: optmagic_T = 1;
-pub const OPTION_MAGIC_NOT_SET: optmagic_T = 0;
-pub type OptFlags = ::core::ffi::c_uint;
+pub const XP_BS_COMMA: c_uint = 4;
+pub const XP_BS_THREE: c_uint = 2;
+pub const XP_BS_ONE: c_uint = 1;
+pub const EXPAND_KEYMAP: c_int = 55;
+pub const EXPAND_SETTING_SUBTRACT: c_int = 53;
+pub const EXPAND_STRING_SETTING: c_int = 52;
+pub const EXPAND_OWNSYNTAX: c_int = 38;
+pub const EXPAND_FILETYPE: c_int = 36;
+pub const EXPAND_OLD_SETTING: c_int = 7;
+pub const EXPAND_BOOL_SETTINGS: c_int = 5;
+pub const EXPAND_SETTINGS: c_int = 4;
+pub const EXPAND_DIRECTORIES: c_int = 3;
+pub const EXPAND_FILES: c_int = 2;
+pub const EXPAND_NOTHING: c_int = 0;
+pub const EXPAND_UNSUCCESSFUL: c_int = -2;
+pub type OptFlags = c_uint;
 pub const kOptFlagColon: OptFlags = 33554432;
 pub const kOptFlagFunc: OptFlags = 16777216;
 pub const kOptFlagMLE: OptFlags = 8388608;
@@ -446,7 +196,6 @@ pub const kOptFlagFlagList: OptFlags = 8192;
 pub const kOptFlagNoDup: OptFlags = 4096;
 pub const kOptFlagOneComma: OptFlags = 3072;
 pub const kOptFlagComma: OptFlags = 1024;
-pub const kOptFlagRedrClear: OptFlags = 896;
 pub const kOptFlagRedrAll: OptFlags = 768;
 pub const kOptFlagRedrBuf: OptFlags = 512;
 pub const kOptFlagRedrWin: OptFlags = 256;
@@ -465,987 +214,82 @@ pub const kOptValTypeNil: OptValType = -1;
 pub const kOptScopeBuf: OptScope = 2;
 pub const kOptScopeWin: OptScope = 1;
 pub const kOptScopeGlobal: OptScope = 0;
-pub type set_op_T = ::core::ffi::c_uint;
+pub type set_op_T = c_uint;
 pub const OP_REMOVING: set_op_T = 3;
 pub const OP_PREPENDING: set_op_T = 2;
 pub const OP_ADDING: set_op_T = 1;
 pub const OP_NONE: set_op_T = 0;
-pub const ET_INTERRUPT: except_type_T = 2;
-pub const ET_ERROR: except_type_T = 1;
-pub const ET_USER: except_type_T = 0;
-pub const CMD_USER_BUF: CMD_index = -2;
-pub const CMD_USER: CMD_index = -1;
-pub const CMD_SIZE: CMD_index = 557;
-pub const CMD_Next: CMD_index = 556;
-pub const CMD_tilde: CMD_index = 555;
-pub const CMD_at: CMD_index = 554;
-pub const CMD_rshift: CMD_index = 553;
-pub const CMD_equal: CMD_index = 552;
-pub const CMD_lshift: CMD_index = 551;
-pub const CMD_and: CMD_index = 550;
-pub const CMD_pound: CMD_index = 549;
-pub const CMD_bang: CMD_index = 548;
-pub const CMD_z: CMD_index = 547;
-pub const CMD_yank: CMD_index = 546;
-pub const CMD_xunmenu: CMD_index = 545;
-pub const CMD_xunmap: CMD_index = 544;
-pub const CMD_xnoremenu: CMD_index = 543;
-pub const CMD_xnoremap: CMD_index = 542;
-pub const CMD_xmenu: CMD_index = 541;
-pub const CMD_xmapclear: CMD_index = 540;
-pub const CMD_xmap: CMD_index = 539;
-pub const CMD_xall: CMD_index = 538;
-pub const CMD_xit: CMD_index = 537;
-pub const CMD_wviminfo: CMD_index = 536;
-pub const CMD_wundo: CMD_index = 535;
-pub const CMD_wshada: CMD_index = 534;
-pub const CMD_wqall: CMD_index = 533;
-pub const CMD_wq: CMD_index = 532;
-pub const CMD_wprevious: CMD_index = 531;
-pub const CMD_wnext: CMD_index = 530;
-pub const CMD_winpos: CMD_index = 529;
-pub const CMD_windo: CMD_index = 528;
-pub const CMD_wincmd: CMD_index = 527;
-pub const CMD_winsize: CMD_index = 526;
-pub const CMD_while: CMD_index = 525;
-pub const CMD_wall: CMD_index = 524;
-pub const CMD_wNext: CMD_index = 523;
-pub const CMD_write: CMD_index = 522;
-pub const CMD_vunmenu: CMD_index = 521;
-pub const CMD_vunmap: CMD_index = 520;
-pub const CMD_vsplit: CMD_index = 519;
-pub const CMD_vnoremenu: CMD_index = 518;
-pub const CMD_vnew: CMD_index = 517;
-pub const CMD_vnoremap: CMD_index = 516;
-pub const CMD_vmenu: CMD_index = 515;
-pub const CMD_vmapclear: CMD_index = 514;
-pub const CMD_vmap: CMD_index = 513;
-pub const CMD_viusage: CMD_index = 512;
-pub const CMD_vimgrepadd: CMD_index = 511;
-pub const CMD_vimgrep: CMD_index = 510;
-pub const CMD_view: CMD_index = 509;
-pub const CMD_visual: CMD_index = 508;
-pub const CMD_vertical: CMD_index = 507;
-pub const CMD_verbose: CMD_index = 506;
-pub const CMD_version: CMD_index = 505;
-pub const CMD_vglobal: CMD_index = 504;
-pub const CMD_update: CMD_index = 503;
-pub const CMD_unsilent: CMD_index = 502;
-pub const CMD_unmenu: CMD_index = 501;
-pub const CMD_unmap: CMD_index = 500;
-pub const CMD_unlockvar: CMD_index = 499;
-pub const CMD_unlet: CMD_index = 498;
-pub const CMD_uniq: CMD_index = 497;
-pub const CMD_unhide: CMD_index = 496;
-pub const CMD_unabbreviate: CMD_index = 495;
-pub const CMD_undolist: CMD_index = 494;
-pub const CMD_undojoin: CMD_index = 493;
-pub const CMD_undo: CMD_index = 492;
-pub const CMD_tunmap: CMD_index = 491;
-pub const CMD_tunmenu: CMD_index = 490;
-pub const CMD_tselect: CMD_index = 489;
-pub const CMD_try: CMD_index = 488;
-pub const CMD_trust: CMD_index = 487;
-pub const CMD_trewind: CMD_index = 486;
-pub const CMD_tprevious: CMD_index = 485;
-pub const CMD_topleft: CMD_index = 484;
-pub const CMD_tnoremap: CMD_index = 483;
-pub const CMD_tnext: CMD_index = 482;
-pub const CMD_tmapclear: CMD_index = 481;
-pub const CMD_tmap: CMD_index = 480;
-pub const CMD_tmenu: CMD_index = 479;
-pub const CMD_tlunmenu: CMD_index = 478;
-pub const CMD_tlnoremenu: CMD_index = 477;
-pub const CMD_tlmenu: CMD_index = 476;
-pub const CMD_tlast: CMD_index = 475;
-pub const CMD_tjump: CMD_index = 474;
-pub const CMD_throw: CMD_index = 473;
-pub const CMD_tfirst: CMD_index = 472;
-pub const CMD_terminal: CMD_index = 471;
-pub const CMD_tclfile: CMD_index = 470;
-pub const CMD_tcldo: CMD_index = 469;
-pub const CMD_tcl: CMD_index = 468;
-pub const CMD_tabs: CMD_index = 467;
-pub const CMD_tabrewind: CMD_index = 466;
-pub const CMD_tabNext: CMD_index = 465;
-pub const CMD_tabprevious: CMD_index = 464;
-pub const CMD_tabonly: CMD_index = 463;
-pub const CMD_tabnew: CMD_index = 462;
-pub const CMD_tabnext: CMD_index = 461;
-pub const CMD_tablast: CMD_index = 460;
-pub const CMD_tabmove: CMD_index = 459;
-pub const CMD_tabfirst: CMD_index = 458;
-pub const CMD_tabfind: CMD_index = 457;
-pub const CMD_tabedit: CMD_index = 456;
-pub const CMD_tabdo: CMD_index = 455;
-pub const CMD_tabclose: CMD_index = 454;
-pub const CMD_tab: CMD_index = 453;
-pub const CMD_tags: CMD_index = 452;
-pub const CMD_tag: CMD_index = 451;
-pub const CMD_tNext: CMD_index = 450;
-pub const CMD_tchdir: CMD_index = 449;
-pub const CMD_tcd: CMD_index = 448;
-pub const CMD_t: CMD_index = 447;
-pub const CMD_syncbind: CMD_index = 446;
-pub const CMD_syntime: CMD_index = 445;
-pub const CMD_syntax: CMD_index = 444;
-pub const CMD_swapname: CMD_index = 443;
-pub const CMD_sview: CMD_index = 442;
-pub const CMD_suspend: CMD_index = 441;
-pub const CMD_sunmenu: CMD_index = 440;
-pub const CMD_sunmap: CMD_index = 439;
-pub const CMD_sunhide: CMD_index = 438;
-pub const CMD_stselect: CMD_index = 437;
-pub const CMD_stjump: CMD_index = 436;
-pub const CMD_stopinsert: CMD_index = 435;
-pub const CMD_startreplace: CMD_index = 434;
-pub const CMD_startgreplace: CMD_index = 433;
-pub const CMD_startinsert: CMD_index = 432;
-pub const CMD_stag: CMD_index = 431;
-pub const CMD_stop: CMD_index = 430;
-pub const CMD_srewind: CMD_index = 429;
-pub const CMD_sprevious: CMD_index = 428;
-pub const CMD_spellwrong: CMD_index = 427;
-pub const CMD_spellundo: CMD_index = 426;
-pub const CMD_spellrare: CMD_index = 425;
-pub const CMD_spellrepall: CMD_index = 424;
-pub const CMD_spellinfo: CMD_index = 423;
-pub const CMD_spelldump: CMD_index = 422;
-pub const CMD_spellgood: CMD_index = 421;
-pub const CMD_split: CMD_index = 420;
-pub const CMD_sort: CMD_index = 419;
-pub const CMD_source: CMD_index = 418;
-pub const CMD_snoremenu: CMD_index = 417;
-pub const CMD_snoremap: CMD_index = 416;
-pub const CMD_snomagic: CMD_index = 415;
-pub const CMD_snext: CMD_index = 414;
-pub const CMD_smenu: CMD_index = 413;
-pub const CMD_smapclear: CMD_index = 412;
-pub const CMD_smap: CMD_index = 411;
-pub const CMD_smagic: CMD_index = 410;
-pub const CMD_slast: CMD_index = 409;
-pub const CMD_sleep: CMD_index = 408;
-pub const CMD_silent: CMD_index = 407;
-pub const CMD_sign: CMD_index = 406;
-pub const CMD_simalt: CMD_index = 405;
-pub const CMD_sfirst: CMD_index = 404;
-pub const CMD_sfind: CMD_index = 403;
 pub const CMD_setlocal: CMD_index = 402;
 pub const CMD_setglobal: CMD_index = 401;
-pub const CMD_setfiletype: CMD_index = 400;
-pub const CMD_set: CMD_index = 399;
-pub const CMD_scriptencoding: CMD_index = 398;
-pub const CMD_scriptnames: CMD_index = 397;
-pub const CMD_sbrewind: CMD_index = 396;
-pub const CMD_sbprevious: CMD_index = 395;
-pub const CMD_sbnext: CMD_index = 394;
-pub const CMD_sbmodified: CMD_index = 393;
-pub const CMD_sblast: CMD_index = 392;
-pub const CMD_sbfirst: CMD_index = 391;
-pub const CMD_sball: CMD_index = 390;
-pub const CMD_sbNext: CMD_index = 389;
-pub const CMD_sbuffer: CMD_index = 388;
-pub const CMD_saveas: CMD_index = 387;
-pub const CMD_sandbox: CMD_index = 386;
-pub const CMD_sall: CMD_index = 385;
-pub const CMD_sargument: CMD_index = 384;
-pub const CMD_sNext: CMD_index = 383;
-pub const CMD_substitute: CMD_index = 382;
-pub const CMD_rviminfo: CMD_index = 381;
-pub const CMD_rubyfile: CMD_index = 380;
-pub const CMD_rubydo: CMD_index = 379;
-pub const CMD_ruby: CMD_index = 378;
-pub const CMD_rundo: CMD_index = 377;
-pub const CMD_runtime: CMD_index = 376;
-pub const CMD_rshada: CMD_index = 375;
-pub const CMD_rightbelow: CMD_index = 374;
-pub const CMD_right: CMD_index = 373;
-pub const CMD_rewind: CMD_index = 372;
-pub const CMD_return: CMD_index = 371;
-pub const CMD_retab: CMD_index = 370;
-pub const CMD_restart: CMD_index = 369;
-pub const CMD_resize: CMD_index = 368;
-pub const CMD_registers: CMD_index = 367;
-pub const CMD_redrawtabline: CMD_index = 366;
-pub const CMD_redrawstatus: CMD_index = 365;
-pub const CMD_redraw: CMD_index = 364;
-pub const CMD_redir: CMD_index = 363;
-pub const CMD_redo: CMD_index = 362;
-pub const CMD_recover: CMD_index = 361;
-pub const CMD_read: CMD_index = 360;
-pub const CMD_qall: CMD_index = 359;
-pub const CMD_quitall: CMD_index = 358;
-pub const CMD_quit: CMD_index = 357;
-pub const CMD_pyxfile: CMD_index = 356;
-pub const CMD_pythonx: CMD_index = 355;
-pub const CMD_pyxdo: CMD_index = 354;
-pub const CMD_pyx: CMD_index = 353;
-pub const CMD_py3file: CMD_index = 352;
-pub const CMD_python3: CMD_index = 351;
-pub const CMD_py3do: CMD_index = 350;
-pub const CMD_py3: CMD_index = 349;
-pub const CMD_pyfile: CMD_index = 348;
-pub const CMD_pydo: CMD_index = 347;
-pub const CMD_python: CMD_index = 346;
-pub const CMD_pwd: CMD_index = 345;
-pub const CMD_put: CMD_index = 344;
-pub const CMD_ptselect: CMD_index = 343;
-pub const CMD_ptrewind: CMD_index = 342;
-pub const CMD_ptprevious: CMD_index = 341;
-pub const CMD_ptnext: CMD_index = 340;
-pub const CMD_ptlast: CMD_index = 339;
-pub const CMD_ptjump: CMD_index = 338;
-pub const CMD_ptfirst: CMD_index = 337;
-pub const CMD_ptNext: CMD_index = 336;
-pub const CMD_ptag: CMD_index = 335;
-pub const CMD_psearch: CMD_index = 334;
-pub const CMD_profdel: CMD_index = 333;
-pub const CMD_profile: CMD_index = 332;
-pub const CMD_previous: CMD_index = 331;
-pub const CMD_preserve: CMD_index = 330;
-pub const CMD_ppop: CMD_index = 329;
-pub const CMD_popup: CMD_index = 328;
-pub const CMD_pop: CMD_index = 327;
-pub const CMD_pedit: CMD_index = 326;
-pub const CMD_perlfile: CMD_index = 325;
-pub const CMD_perldo: CMD_index = 324;
-pub const CMD_perl: CMD_index = 323;
-pub const CMD_pclose: CMD_index = 322;
-pub const CMD_pbuffer: CMD_index = 321;
-pub const CMD_packloadall: CMD_index = 320;
-pub const CMD_packadd: CMD_index = 319;
-pub const CMD_print: CMD_index = 318;
-pub const CMD_ownsyntax: CMD_index = 317;
-pub const CMD_ounmenu: CMD_index = 316;
-pub const CMD_ounmap: CMD_index = 315;
-pub const CMD_options: CMD_index = 314;
-pub const CMD_onoremenu: CMD_index = 313;
-pub const CMD_onoremap: CMD_index = 312;
-pub const CMD_only: CMD_index = 311;
-pub const CMD_omenu: CMD_index = 310;
-pub const CMD_omapclear: CMD_index = 309;
-pub const CMD_omap: CMD_index = 308;
-pub const CMD_oldfiles: CMD_index = 307;
-pub const CMD_nunmenu: CMD_index = 306;
-pub const CMD_nunmap: CMD_index = 305;
-pub const CMD_number: CMD_index = 304;
-pub const CMD_normal: CMD_index = 303;
-pub const CMD_noswapfile: CMD_index = 302;
-pub const CMD_noremenu: CMD_index = 301;
-pub const CMD_noreabbrev: CMD_index = 300;
-pub const CMD_nohlsearch: CMD_index = 299;
-pub const CMD_noautocmd: CMD_index = 298;
-pub const CMD_noremap: CMD_index = 297;
-pub const CMD_nnoremenu: CMD_index = 296;
-pub const CMD_nnoremap: CMD_index = 295;
-pub const CMD_nmenu: CMD_index = 294;
-pub const CMD_nmapclear: CMD_index = 293;
-pub const CMD_nmap: CMD_index = 292;
-pub const CMD_new: CMD_index = 291;
-pub const CMD_next: CMD_index = 290;
-pub const CMD_mzfile: CMD_index = 289;
-pub const CMD_mzscheme: CMD_index = 288;
-pub const CMD_mode: CMD_index = 287;
-pub const CMD_mkview: CMD_index = 286;
-pub const CMD_mkvimrc: CMD_index = 285;
-pub const CMD_mkspell: CMD_index = 284;
-pub const CMD_mksession: CMD_index = 283;
-pub const CMD_mkexrc: CMD_index = 282;
-pub const CMD_messages: CMD_index = 281;
-pub const CMD_menutranslate: CMD_index = 280;
-pub const CMD_menu: CMD_index = 279;
-pub const CMD_match: CMD_index = 278;
-pub const CMD_marks: CMD_index = 277;
-pub const CMD_mapclear: CMD_index = 276;
-pub const CMD_map: CMD_index = 275;
-pub const CMD_make: CMD_index = 274;
-pub const CMD_mark: CMD_index = 273;
-pub const CMD_move: CMD_index = 272;
-pub const CMD_lsp: CMD_index = 271;
-pub const CMD_ls: CMD_index = 270;
-pub const CMD_lwindow: CMD_index = 269;
-pub const CMD_lvimgrepadd: CMD_index = 268;
-pub const CMD_lvimgrep: CMD_index = 267;
-pub const CMD_luafile: CMD_index = 266;
-pub const CMD_luado: CMD_index = 265;
-pub const CMD_lua: CMD_index = 264;
-pub const CMD_lunmap: CMD_index = 263;
-pub const CMD_ltag: CMD_index = 262;
-pub const CMD_lrewind: CMD_index = 261;
-pub const CMD_lpfile: CMD_index = 260;
-pub const CMD_lprevious: CMD_index = 259;
-pub const CMD_lopen: CMD_index = 258;
-pub const CMD_lolder: CMD_index = 257;
-pub const CMD_lockvar: CMD_index = 256;
-pub const CMD_lockmarks: CMD_index = 255;
-pub const CMD_loadkeymap: CMD_index = 254;
-pub const CMD_loadview: CMD_index = 253;
-pub const CMD_lnfile: CMD_index = 252;
-pub const CMD_lnewer: CMD_index = 251;
-pub const CMD_lnext: CMD_index = 250;
-pub const CMD_lnoremap: CMD_index = 249;
-pub const CMD_lmake: CMD_index = 248;
-pub const CMD_lmapclear: CMD_index = 247;
-pub const CMD_lmap: CMD_index = 246;
-pub const CMD_llist: CMD_index = 245;
-pub const CMD_llast: CMD_index = 244;
-pub const CMD_ll: CMD_index = 243;
-pub const CMD_lhistory: CMD_index = 242;
-pub const CMD_lhelpgrep: CMD_index = 241;
-pub const CMD_lgrepadd: CMD_index = 240;
-pub const CMD_lgrep: CMD_index = 239;
-pub const CMD_lgetexpr: CMD_index = 238;
-pub const CMD_lgetbuffer: CMD_index = 237;
-pub const CMD_lgetfile: CMD_index = 236;
-pub const CMD_lfirst: CMD_index = 235;
-pub const CMD_lfdo: CMD_index = 234;
-pub const CMD_lfile: CMD_index = 233;
-pub const CMD_lexpr: CMD_index = 232;
-pub const CMD_let: CMD_index = 231;
-pub const CMD_leftabove: CMD_index = 230;
-pub const CMD_left: CMD_index = 229;
-pub const CMD_ldo: CMD_index = 228;
-pub const CMD_lclose: CMD_index = 227;
-pub const CMD_lchdir: CMD_index = 226;
-pub const CMD_lcd: CMD_index = 225;
-pub const CMD_lbottom: CMD_index = 224;
-pub const CMD_lbelow: CMD_index = 223;
-pub const CMD_lbefore: CMD_index = 222;
-pub const CMD_lbuffer: CMD_index = 221;
-pub const CMD_later: CMD_index = 220;
-pub const CMD_lafter: CMD_index = 219;
-pub const CMD_laddfile: CMD_index = 218;
-pub const CMD_laddbuffer: CMD_index = 217;
-pub const CMD_laddexpr: CMD_index = 216;
-pub const CMD_language: CMD_index = 215;
-pub const CMD_labove: CMD_index = 214;
-pub const CMD_last: CMD_index = 213;
-pub const CMD_lNfile: CMD_index = 212;
-pub const CMD_lNext: CMD_index = 211;
-pub const CMD_list: CMD_index = 210;
-pub const CMD_keepalt: CMD_index = 209;
-pub const CMD_keeppatterns: CMD_index = 208;
-pub const CMD_keepjumps: CMD_index = 207;
-pub const CMD_keepmarks: CMD_index = 206;
-pub const CMD_k: CMD_index = 205;
-pub const CMD_jumps: CMD_index = 204;
-pub const CMD_join: CMD_index = 203;
-pub const CMD_iunmenu: CMD_index = 202;
-pub const CMD_iunabbrev: CMD_index = 201;
-pub const CMD_iunmap: CMD_index = 200;
-pub const CMD_isplit: CMD_index = 199;
-pub const CMD_isearch: CMD_index = 198;
-pub const CMD_iput: CMD_index = 197;
-pub const CMD_intro: CMD_index = 196;
-pub const CMD_inoremenu: CMD_index = 195;
-pub const CMD_inoreabbrev: CMD_index = 194;
-pub const CMD_inoremap: CMD_index = 193;
-pub const CMD_imenu: CMD_index = 192;
-pub const CMD_imapclear: CMD_index = 191;
-pub const CMD_imap: CMD_index = 190;
-pub const CMD_ilist: CMD_index = 189;
-pub const CMD_ijump: CMD_index = 188;
-pub const CMD_if: CMD_index = 187;
-pub const CMD_iabclear: CMD_index = 186;
-pub const CMD_iabbrev: CMD_index = 185;
-pub const CMD_insert: CMD_index = 184;
-pub const CMD_horizontal: CMD_index = 183;
-pub const CMD_history: CMD_index = 182;
-pub const CMD_hide: CMD_index = 181;
-pub const CMD_highlight: CMD_index = 180;
-pub const CMD_helptags: CMD_index = 179;
-pub const CMD_helpgrep: CMD_index = 178;
-pub const CMD_helpclose: CMD_index = 177;
-pub const CMD_help: CMD_index = 176;
-pub const CMD_gvim: CMD_index = 175;
-pub const CMD_gui: CMD_index = 174;
-pub const CMD_grepadd: CMD_index = 173;
-pub const CMD_grep: CMD_index = 172;
-pub const CMD_goto: CMD_index = 171;
-pub const CMD_global: CMD_index = 170;
-pub const CMD_fclose: CMD_index = 169;
-pub const CMD_function: CMD_index = 168;
-pub const CMD_for: CMD_index = 167;
-pub const CMD_foldopen: CMD_index = 166;
-pub const CMD_folddoclosed: CMD_index = 165;
-pub const CMD_folddoopen: CMD_index = 164;
-pub const CMD_foldclose: CMD_index = 163;
-pub const CMD_fold: CMD_index = 162;
-pub const CMD_first: CMD_index = 161;
-pub const CMD_finish: CMD_index = 160;
-pub const CMD_finally: CMD_index = 159;
-pub const CMD_find: CMD_index = 158;
-pub const CMD_filter: CMD_index = 157;
-pub const CMD_filetype: CMD_index = 156;
-pub const CMD_files: CMD_index = 155;
-pub const CMD_file: CMD_index = 154;
-pub const CMD_exusage: CMD_index = 153;
-pub const CMD_exit: CMD_index = 152;
-pub const CMD_execute: CMD_index = 151;
-pub const CMD_ex: CMD_index = 150;
-pub const CMD_eval: CMD_index = 149;
-pub const CMD_enew: CMD_index = 148;
-pub const CMD_endwhile: CMD_index = 147;
-pub const CMD_endtry: CMD_index = 146;
-pub const CMD_endfor: CMD_index = 145;
-pub const CMD_endfunction: CMD_index = 144;
-pub const CMD_endif: CMD_index = 143;
-pub const CMD_emenu: CMD_index = 142;
-pub const CMD_elseif: CMD_index = 141;
-pub const CMD_else: CMD_index = 140;
-pub const CMD_echon: CMD_index = 139;
-pub const CMD_echomsg: CMD_index = 138;
-pub const CMD_echohl: CMD_index = 137;
-pub const CMD_echoerr: CMD_index = 136;
-pub const CMD_echo: CMD_index = 135;
-pub const CMD_earlier: CMD_index = 134;
-pub const CMD_edit: CMD_index = 133;
-pub const CMD_dsplit: CMD_index = 132;
-pub const CMD_dsearch: CMD_index = 131;
-pub const CMD_drop: CMD_index = 130;
-pub const CMD_doautoall: CMD_index = 129;
-pub const CMD_doautocmd: CMD_index = 128;
-pub const CMD_dlist: CMD_index = 127;
-pub const CMD_djump: CMD_index = 126;
-pub const CMD_digraphs: CMD_index = 125;
-pub const CMD_diffthis: CMD_index = 124;
-pub const CMD_diffsplit: CMD_index = 123;
-pub const CMD_diffput: CMD_index = 122;
-pub const CMD_diffpatch: CMD_index = 121;
-pub const CMD_diffoff: CMD_index = 120;
-pub const CMD_diffget: CMD_index = 119;
-pub const CMD_diffupdate: CMD_index = 118;
-pub const CMD_display: CMD_index = 117;
-pub const CMD_detach: CMD_index = 116;
-pub const CMD_delfunction: CMD_index = 115;
-pub const CMD_delcommand: CMD_index = 114;
-pub const CMD_defer: CMD_index = 113;
-pub const CMD_debuggreedy: CMD_index = 112;
-pub const CMD_debug: CMD_index = 111;
-pub const CMD_delmarks: CMD_index = 110;
-pub const CMD_delete: CMD_index = 109;
-pub const CMD_cwindow: CMD_index = 108;
-pub const CMD_cunmenu: CMD_index = 107;
-pub const CMD_cunabbrev: CMD_index = 106;
-pub const CMD_cunmap: CMD_index = 105;
-pub const CMD_crewind: CMD_index = 104;
-pub const CMD_cquit: CMD_index = 103;
-pub const CMD_cpfile: CMD_index = 102;
-pub const CMD_cprevious: CMD_index = 101;
-pub const CMD_copen: CMD_index = 100;
-pub const CMD_const: CMD_index = 99;
-pub const CMD_connect: CMD_index = 98;
-pub const CMD_confirm: CMD_index = 97;
-pub const CMD_continue: CMD_index = 96;
-pub const CMD_compiler: CMD_index = 95;
-pub const CMD_comclear: CMD_index = 94;
-pub const CMD_command: CMD_index = 93;
-pub const CMD_colorscheme: CMD_index = 92;
-pub const CMD_colder: CMD_index = 91;
-pub const CMD_copy: CMD_index = 90;
-pub const CMD_cnoremenu: CMD_index = 89;
-pub const CMD_cnoreabbrev: CMD_index = 88;
-pub const CMD_cnoremap: CMD_index = 87;
-pub const CMD_cnfile: CMD_index = 86;
-pub const CMD_cnewer: CMD_index = 85;
-pub const CMD_cnext: CMD_index = 84;
-pub const CMD_cmenu: CMD_index = 83;
-pub const CMD_cmapclear: CMD_index = 82;
-pub const CMD_cmap: CMD_index = 81;
-pub const CMD_clearjumps: CMD_index = 80;
-pub const CMD_close: CMD_index = 79;
-pub const CMD_clast: CMD_index = 78;
-pub const CMD_clist: CMD_index = 77;
-pub const CMD_chistory: CMD_index = 76;
-pub const CMD_checktime: CMD_index = 75;
-pub const CMD_checkpath: CMD_index = 74;
-pub const CMD_checkhealth: CMD_index = 73;
-pub const CMD_changes: CMD_index = 72;
-pub const CMD_chdir: CMD_index = 71;
-pub const CMD_cgetexpr: CMD_index = 70;
-pub const CMD_cgetbuffer: CMD_index = 69;
-pub const CMD_cgetfile: CMD_index = 68;
-pub const CMD_cfirst: CMD_index = 67;
-pub const CMD_cfdo: CMD_index = 66;
-pub const CMD_cfile: CMD_index = 65;
-pub const CMD_cexpr: CMD_index = 64;
-pub const CMD_center: CMD_index = 63;
-pub const CMD_cdo: CMD_index = 62;
-pub const CMD_cd: CMD_index = 61;
-pub const CMD_cclose: CMD_index = 60;
-pub const CMD_cc: CMD_index = 59;
-pub const CMD_cbottom: CMD_index = 58;
-pub const CMD_cbelow: CMD_index = 57;
-pub const CMD_cbefore: CMD_index = 56;
-pub const CMD_cbuffer: CMD_index = 55;
-pub const CMD_catch: CMD_index = 54;
-pub const CMD_call: CMD_index = 53;
-pub const CMD_cafter: CMD_index = 52;
-pub const CMD_caddfile: CMD_index = 51;
-pub const CMD_caddexpr: CMD_index = 50;
-pub const CMD_caddbuffer: CMD_index = 49;
-pub const CMD_cabove: CMD_index = 48;
-pub const CMD_cabclear: CMD_index = 47;
-pub const CMD_cabbrev: CMD_index = 46;
-pub const CMD_cNfile: CMD_index = 45;
-pub const CMD_cNext: CMD_index = 44;
-pub const CMD_change: CMD_index = 43;
-pub const CMD_bwipeout: CMD_index = 42;
-pub const CMD_bunload: CMD_index = 41;
-pub const CMD_bufdo: CMD_index = 40;
-pub const CMD_buffers: CMD_index = 39;
-pub const CMD_browse: CMD_index = 38;
-pub const CMD_breaklist: CMD_index = 37;
-pub const CMD_breakdel: CMD_index = 36;
-pub const CMD_breakadd: CMD_index = 35;
-pub const CMD_break: CMD_index = 34;
-pub const CMD_brewind: CMD_index = 33;
-pub const CMD_bprevious: CMD_index = 32;
-pub const CMD_botright: CMD_index = 31;
-pub const CMD_bnext: CMD_index = 30;
-pub const CMD_bmodified: CMD_index = 29;
-pub const CMD_blast: CMD_index = 28;
-pub const CMD_bfirst: CMD_index = 27;
-pub const CMD_belowright: CMD_index = 26;
-pub const CMD_bdelete: CMD_index = 25;
-pub const CMD_balt: CMD_index = 24;
-pub const CMD_badd: CMD_index = 23;
-pub const CMD_ball: CMD_index = 22;
-pub const CMD_bNext: CMD_index = 21;
-pub const CMD_buffer: CMD_index = 20;
-pub const CMD_aunmenu: CMD_index = 19;
-pub const CMD_augroup: CMD_index = 18;
-pub const CMD_autocmd: CMD_index = 17;
-pub const CMD_ascii: CMD_index = 16;
-pub const CMD_argument: CMD_index = 15;
-pub const CMD_arglocal: CMD_index = 14;
-pub const CMD_argglobal: CMD_index = 13;
-pub const CMD_argedit: CMD_index = 12;
-pub const CMD_argdedupe: CMD_index = 11;
-pub const CMD_argdo: CMD_index = 10;
-pub const CMD_argdelete: CMD_index = 9;
-pub const CMD_argadd: CMD_index = 8;
-pub const CMD_args: CMD_index = 7;
-pub const CMD_anoremenu: CMD_index = 6;
-pub const CMD_amenu: CMD_index = 5;
-pub const CMD_all: CMD_index = 4;
-pub const CMD_aboveleft: CMD_index = 3;
-pub const CMD_abclear: CMD_index = 2;
-pub const CMD_abbreviate: CMD_index = 1;
-pub const CMD_append: CMD_index = 0;
-pub const ADDR_NONE: cmd_addr_T = 11;
-pub const ADDR_OTHER: cmd_addr_T = 10;
-pub const ADDR_UNSIGNED: cmd_addr_T = 9;
-pub const ADDR_QUICKFIX: cmd_addr_T = 8;
-pub const ADDR_QUICKFIX_VALID: cmd_addr_T = 7;
-pub const ADDR_TABS_RELATIVE: cmd_addr_T = 6;
-pub const ADDR_TABS: cmd_addr_T = 5;
-pub const ADDR_BUFFERS: cmd_addr_T = 4;
-pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
-pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
-pub const ADDR_WINDOWS: cmd_addr_T = 1;
-pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
-pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_25 = 8192;
-pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_25 = 4096;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_25 = 2048;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_25 = 1024;
-pub const CMOD_KEEPMARKS: C2Rust_Unnamed_25 = 512;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_25 = 256;
-pub const CMOD_CONFIRM: C2Rust_Unnamed_25 = 128;
-pub const CMOD_BROWSE: C2Rust_Unnamed_25 = 64;
-pub const CMOD_HIDE: C2Rust_Unnamed_25 = 32;
-pub const CMOD_NOAUTOCMD: C2Rust_Unnamed_25 = 16;
-pub const CMOD_UNSILENT: C2Rust_Unnamed_25 = 8;
-pub const CMOD_ERRSILENT: C2Rust_Unnamed_25 = 4;
-pub const CMOD_SILENT: C2Rust_Unnamed_25 = 2;
-pub const CMOD_SANDBOX: C2Rust_Unnamed_25 = 1;
-pub const NUM_EVENTS: auto_event = 145;
-pub const EVENT_WINSCROLLED: auto_event = 144;
-pub const EVENT_WINRESIZED: auto_event = 143;
-pub const EVENT_WINNEWPRE: auto_event = 142;
-pub const EVENT_WINNEW: auto_event = 141;
-pub const EVENT_WINLEAVE: auto_event = 140;
-pub const EVENT_WINENTER: auto_event = 139;
-pub const EVENT_WINCLOSED: auto_event = 138;
-pub const EVENT_VIMSUSPEND: auto_event = 137;
-pub const EVENT_VIMRESUME: auto_event = 136;
-pub const EVENT_VIMRESIZED: auto_event = 135;
-pub const EVENT_VIMLEAVEPRE: auto_event = 134;
-pub const EVENT_VIMLEAVE: auto_event = 133;
-pub const EVENT_VIMENTER: auto_event = 132;
-pub const EVENT_USER: auto_event = 131;
-pub const EVENT_UILEAVE: auto_event = 130;
-pub const EVENT_UIENTER: auto_event = 129;
-pub const EVENT_TEXTYANKPOST: auto_event = 128;
-pub const EVENT_TEXTCHANGEDT: auto_event = 127;
-pub const EVENT_TEXTCHANGEDP: auto_event = 126;
-pub const EVENT_TEXTCHANGEDI: auto_event = 125;
-pub const EVENT_TEXTCHANGED: auto_event = 124;
-pub const EVENT_TERMRESPONSE: auto_event = 123;
-pub const EVENT_TERMREQUEST: auto_event = 122;
-pub const EVENT_TERMOPEN: auto_event = 121;
-pub const EVENT_TERMLEAVE: auto_event = 120;
-pub const EVENT_TERMENTER: auto_event = 119;
-pub const EVENT_TERMCLOSE: auto_event = 118;
-pub const EVENT_TERMCHANGED: auto_event = 117;
-pub const EVENT_TABNEWENTERED: auto_event = 116;
-pub const EVENT_TABNEW: auto_event = 115;
-pub const EVENT_TABLEAVE: auto_event = 114;
-pub const EVENT_TABENTER: auto_event = 113;
-pub const EVENT_TABCLOSEDPRE: auto_event = 112;
-pub const EVENT_TABCLOSED: auto_event = 111;
+pub const CMOD_NOSWAPFILE: c_uint = 8192;
 pub const EVENT_SYNTAX: auto_event = 110;
-pub const EVENT_SWAPEXISTS: auto_event = 109;
-pub const EVENT_STDINREADPRE: auto_event = 108;
-pub const EVENT_STDINREADPOST: auto_event = 107;
-pub const EVENT_SPELLFILEMISSING: auto_event = 106;
-pub const EVENT_SOURCEPRE: auto_event = 105;
-pub const EVENT_SOURCEPOST: auto_event = 104;
-pub const EVENT_SOURCECMD: auto_event = 103;
-pub const EVENT_SIGNAL: auto_event = 102;
-pub const EVENT_SHELLFILTERPOST: auto_event = 101;
-pub const EVENT_SHELLCMDPOST: auto_event = 100;
-pub const EVENT_SESSIONWRITEPOST: auto_event = 99;
-pub const EVENT_SESSIONLOADPRE: auto_event = 98;
-pub const EVENT_SESSIONLOADPOST: auto_event = 97;
-pub const EVENT_SEARCHWRAPPED: auto_event = 96;
-pub const EVENT_SAFESTATE: auto_event = 95;
-pub const EVENT_REMOTEREPLY: auto_event = 94;
-pub const EVENT_RECORDINGLEAVE: auto_event = 93;
-pub const EVENT_RECORDINGENTER: auto_event = 92;
-pub const EVENT_QUITPRE: auto_event = 91;
-pub const EVENT_QUICKFIXCMDPRE: auto_event = 90;
-pub const EVENT_QUICKFIXCMDPOST: auto_event = 89;
-pub const EVENT_PROGRESS: auto_event = 88;
-pub const EVENT_PACKCHANGEDPRE: auto_event = 87;
-pub const EVENT_PACKCHANGED: auto_event = 86;
 pub const EVENT_OPTIONSET: auto_event = 85;
-pub const EVENT_MODECHANGED: auto_event = 84;
-pub const EVENT_MENUPOPUP: auto_event = 83;
-pub const EVENT_MARKSET: auto_event = 82;
-pub const EVENT_LSPTOKENUPDATE: auto_event = 81;
-pub const EVENT_LSPREQUEST: auto_event = 80;
-pub const EVENT_LSPPROGRESS: auto_event = 79;
-pub const EVENT_LSPNOTIFY: auto_event = 78;
-pub const EVENT_LSPDETACH: auto_event = 77;
-pub const EVENT_LSPATTACH: auto_event = 76;
-pub const EVENT_INSERTLEAVEPRE: auto_event = 75;
-pub const EVENT_INSERTLEAVE: auto_event = 74;
-pub const EVENT_INSERTENTER: auto_event = 73;
-pub const EVENT_INSERTCHARPRE: auto_event = 72;
-pub const EVENT_INSERTCHANGE: auto_event = 71;
-pub const EVENT_GUIFAILED: auto_event = 70;
-pub const EVENT_GUIENTER: auto_event = 69;
-pub const EVENT_FUNCUNDEFINED: auto_event = 68;
-pub const EVENT_FOCUSLOST: auto_event = 67;
-pub const EVENT_FOCUSGAINED: auto_event = 66;
-pub const EVENT_FILTERWRITEPRE: auto_event = 65;
-pub const EVENT_FILTERWRITEPOST: auto_event = 64;
-pub const EVENT_FILTERREADPRE: auto_event = 63;
-pub const EVENT_FILTERREADPOST: auto_event = 62;
-pub const EVENT_FILEWRITEPRE: auto_event = 61;
-pub const EVENT_FILEWRITEPOST: auto_event = 60;
-pub const EVENT_FILEWRITECMD: auto_event = 59;
-pub const EVENT_FILETYPE: auto_event = 58;
-pub const EVENT_FILEREADPRE: auto_event = 57;
-pub const EVENT_FILEREADPOST: auto_event = 56;
-pub const EVENT_FILEREADCMD: auto_event = 55;
-pub const EVENT_FILEENCODING: auto_event = 54;
-pub const EVENT_FILECHANGEDSHELLPOST: auto_event = 53;
-pub const EVENT_FILECHANGEDSHELL: auto_event = 52;
-pub const EVENT_FILECHANGEDRO: auto_event = 51;
-pub const EVENT_FILEAPPENDPRE: auto_event = 50;
-pub const EVENT_FILEAPPENDPOST: auto_event = 49;
-pub const EVENT_FILEAPPENDCMD: auto_event = 48;
-pub const EVENT_EXITPRE: auto_event = 47;
-pub const EVENT_ENCODINGCHANGED: auto_event = 46;
-pub const EVENT_DIRCHANGEDPRE: auto_event = 45;
-pub const EVENT_DIRCHANGED: auto_event = 44;
-pub const EVENT_DIFFUPDATED: auto_event = 43;
-pub const EVENT_DIAGNOSTICCHANGED: auto_event = 42;
-pub const EVENT_CURSORMOVEDI: auto_event = 41;
-pub const EVENT_CURSORMOVEDC: auto_event = 40;
-pub const EVENT_CURSORMOVED: auto_event = 39;
-pub const EVENT_CURSORHOLDI: auto_event = 38;
-pub const EVENT_CURSORHOLD: auto_event = 37;
-pub const EVENT_COMPLETEDONEPRE: auto_event = 36;
-pub const EVENT_COMPLETEDONE: auto_event = 35;
-pub const EVENT_COMPLETECHANGED: auto_event = 34;
-pub const EVENT_COLORSCHEMEPRE: auto_event = 33;
-pub const EVENT_COLORSCHEME: auto_event = 32;
-pub const EVENT_CMDWINLEAVE: auto_event = 31;
-pub const EVENT_CMDWINENTER: auto_event = 30;
-pub const EVENT_CMDUNDEFINED: auto_event = 29;
-pub const EVENT_CMDLINELEAVEPRE: auto_event = 28;
-pub const EVENT_CMDLINELEAVE: auto_event = 27;
-pub const EVENT_CMDLINEENTER: auto_event = 26;
-pub const EVENT_CMDLINECHANGED: auto_event = 25;
-pub const EVENT_CHANOPEN: auto_event = 24;
-pub const EVENT_CHANINFO: auto_event = 23;
-pub const EVENT_BUFWRITEPRE: auto_event = 22;
-pub const EVENT_BUFWRITEPOST: auto_event = 21;
-pub const EVENT_BUFWRITECMD: auto_event = 20;
-pub const EVENT_BUFWRITE: auto_event = 19;
-pub const EVENT_BUFWIPEOUT: auto_event = 18;
-pub const EVENT_BUFWINLEAVE: auto_event = 17;
-pub const EVENT_BUFWINENTER: auto_event = 16;
-pub const EVENT_BUFUNLOAD: auto_event = 15;
-pub const EVENT_BUFREADPRE: auto_event = 14;
-pub const EVENT_BUFREADPOST: auto_event = 13;
-pub const EVENT_BUFREADCMD: auto_event = 12;
-pub const EVENT_BUFREAD: auto_event = 11;
-pub const EVENT_BUFNEWFILE: auto_event = 10;
-pub const EVENT_BUFNEW: auto_event = 9;
-pub const EVENT_BUFMODIFIEDSET: auto_event = 8;
-pub const EVENT_BUFLEAVE: auto_event = 7;
-pub const EVENT_BUFHIDDEN: auto_event = 6;
-pub const EVENT_BUFFILEPRE: auto_event = 5;
-pub const EVENT_BUFFILEPOST: auto_event = 4;
-pub const EVENT_BUFENTER: auto_event = 3;
 pub const EVENT_BUFDELETE: auto_event = 2;
-pub const EVENT_BUFCREATE: auto_event = 1;
 pub const EVENT_BUFADD: auto_event = 0;
-pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
-pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_28 = 83;
-pub const SHM_FILEINFO: C2Rust_Unnamed_28 = 70;
-pub const SHM_RECORDING: C2Rust_Unnamed_28 = 113;
-pub const SHM_COMPLETIONSCAN: C2Rust_Unnamed_28 = 67;
-pub const SHM_COMPLETIONMENU: C2Rust_Unnamed_28 = 99;
-pub const SHM_INTRO: C2Rust_Unnamed_28 = 73;
-pub const SHM_ATTENTION: C2Rust_Unnamed_28 = 65;
-pub const SHM_SEARCH: C2Rust_Unnamed_28 = 115;
-pub const SHM_OVERALL: C2Rust_Unnamed_28 = 79;
-pub const SHM_OVER: C2Rust_Unnamed_28 = 111;
-pub const SHM_TRUNCALL: C2Rust_Unnamed_28 = 84;
-pub const SHM_TRUNC: C2Rust_Unnamed_28 = 116;
-pub const SHM_WRITE: C2Rust_Unnamed_28 = 87;
-pub const SHM_ABBREVIATIONS: C2Rust_Unnamed_28 = 97;
-pub const SHM_WRI: C2Rust_Unnamed_28 = 119;
-pub const SHM_LINES: C2Rust_Unnamed_28 = 108;
-pub const SHM_MOD: C2Rust_Unnamed_28 = 109;
-pub const SHM_RO: C2Rust_Unnamed_28 = 114;
-pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub const STR2NR_QUOTE: C2Rust_Unnamed_29 = 16;
-pub const STR2NR_NO_OCT: C2Rust_Unnamed_29 = 13;
-pub const STR2NR_ALL: C2Rust_Unnamed_29 = 15;
-pub const STR2NR_FORCE: C2Rust_Unnamed_29 = 128;
-pub const STR2NR_OOCT: C2Rust_Unnamed_29 = 8;
-pub const STR2NR_HEX: C2Rust_Unnamed_29 = 4;
-pub const STR2NR_OCT: C2Rust_Unnamed_29 = 2;
-pub const STR2NR_BIN: C2Rust_Unnamed_29 = 1;
-pub const STR2NR_DEC: C2Rust_Unnamed_29 = 0;
-pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_30 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_30 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_30 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_30 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_30 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_30 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_30 = 10;
-pub const VV_EXITREASON: VimVarIndex = 105;
-pub const VV_STARTTIME: VimVarIndex = 104;
-pub const VV_VIRTNUM: VimVarIndex = 103;
-pub const VV_RELNUM: VimVarIndex = 102;
-pub const VV_LUA: VimVarIndex = 101;
-pub const VV__NULL_BLOB: VimVarIndex = 100;
-pub const VV__NULL_DICT: VimVarIndex = 99;
-pub const VV__NULL_LIST: VimVarIndex = 98;
-pub const VV__NULL_STRING: VimVarIndex = 97;
-pub const VV_MSGPACK_TYPES: VimVarIndex = 96;
-pub const VV_STDERR: VimVarIndex = 95;
-pub const VV_VIM_DID_INIT: VimVarIndex = 94;
-pub const VV_STACKTRACE: VimVarIndex = 93;
-pub const VV_MAXCOL: VimVarIndex = 92;
-pub const VV_EXITING: VimVarIndex = 91;
-pub const VV_COLLATE: VimVarIndex = 90;
-pub const VV_ARGV: VimVarIndex = 89;
-pub const VV_ARGF: VimVarIndex = 88;
-pub const VV_ECHOSPACE: VimVarIndex = 87;
-pub const VV_VERSIONLONG: VimVarIndex = 86;
-pub const VV_EVENT: VimVarIndex = 85;
-pub const VV_TYPE_BLOB: VimVarIndex = 84;
-pub const VV_TYPE_BOOL: VimVarIndex = 83;
-pub const VV_TYPE_FLOAT: VimVarIndex = 82;
-pub const VV_TYPE_DICT: VimVarIndex = 81;
-pub const VV_TYPE_LIST: VimVarIndex = 80;
-pub const VV_TYPE_FUNC: VimVarIndex = 79;
-pub const VV_TYPE_STRING: VimVarIndex = 78;
-pub const VV_TYPE_NUMBER: VimVarIndex = 77;
-pub const VV_TESTING: VimVarIndex = 76;
-pub const VV_VIM_DID_ENTER: VimVarIndex = 75;
-pub const VV_NUMBERSIZE: VimVarIndex = 74;
-pub const VV_NUMBERMIN: VimVarIndex = 73;
-pub const VV_NUMBERMAX: VimVarIndex = 72;
-pub const VV_NULL: VimVarIndex = 71;
-pub const VV_TRUE: VimVarIndex = 70;
-pub const VV_FALSE: VimVarIndex = 69;
-pub const VV_ERRORS: VimVarIndex = 68;
+pub const SHM_WRI: c_uint = 119;
+pub const SHM_LINES: c_uint = 108;
+pub const SHM_MOD: c_uint = 109;
+pub const SHM_RO: c_uint = 114;
+pub const STR2NR_ALL: c_uint = 15;
+pub const UPD_CLEAR: c_uint = 50;
+pub const UPD_NOT_VALID: c_uint = 40;
+pub const UPD_SOME_VALID: c_uint = 35;
 pub const VV_OPTION_TYPE: VimVarIndex = 67;
 pub const VV_OPTION_COMMAND: VimVarIndex = 66;
 pub const VV_OPTION_OLDGLOBAL: VimVarIndex = 65;
 pub const VV_OPTION_OLDLOCAL: VimVarIndex = 64;
 pub const VV_OPTION_OLD: VimVarIndex = 63;
 pub const VV_OPTION_NEW: VimVarIndex = 62;
-pub const VV_COMPLETED_ITEM: VimVarIndex = 61;
-pub const VV_PROGPATH: VimVarIndex = 60;
-pub const VV_WINDOWID: VimVarIndex = 59;
-pub const VV_OLDFILES: VimVarIndex = 58;
-pub const VV_HLSEARCH: VimVarIndex = 57;
-pub const VV_SEARCHFORWARD: VimVarIndex = 56;
-pub const VV_OP: VimVarIndex = 55;
-pub const VV_MOUSE_COL: VimVarIndex = 54;
-pub const VV_MOUSE_LNUM: VimVarIndex = 53;
-pub const VV_MOUSE_WINID: VimVarIndex = 52;
-pub const VV_MOUSE_WIN: VimVarIndex = 51;
-pub const VV_CHAR: VimVarIndex = 50;
-pub const VV_SWAPCOMMAND: VimVarIndex = 49;
-pub const VV_SWAPCHOICE: VimVarIndex = 48;
-pub const VV_SWAPNAME: VimVarIndex = 47;
-pub const VV_SCROLLSTART: VimVarIndex = 46;
-pub const VV_BEVAL_TEXT: VimVarIndex = 45;
-pub const VV_BEVAL_COL: VimVarIndex = 44;
-pub const VV_BEVAL_LNUM: VimVarIndex = 43;
-pub const VV_BEVAL_WINID: VimVarIndex = 42;
-pub const VV_BEVAL_WINNR: VimVarIndex = 41;
-pub const VV_BEVAL_BUFNR: VimVarIndex = 40;
-pub const VV_FCS_CHOICE: VimVarIndex = 39;
-pub const VV_FCS_REASON: VimVarIndex = 38;
-pub const VV_PROFILING: VimVarIndex = 37;
-pub const VV_KEY: VimVarIndex = 36;
-pub const VV_VAL: VimVarIndex = 35;
-pub const VV_INSERTMODE: VimVarIndex = 34;
-pub const VV_CMDBANG: VimVarIndex = 33;
-pub const VV_REG: VimVarIndex = 32;
-pub const VV_THROWPOINT: VimVarIndex = 31;
-pub const VV_EXCEPTION: VimVarIndex = 30;
-pub const VV_DYING: VimVarIndex = 29;
-pub const VV_SEND_SERVER: VimVarIndex = 28;
-pub const VV_PROGNAME: VimVarIndex = 27;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_CMDARG: VimVarIndex = 22;
-pub const VV_FNAME_DIFF: VimVarIndex = 21;
-pub const VV_FNAME_NEW: VimVarIndex = 20;
-pub const VV_FNAME_OUT: VimVarIndex = 19;
-pub const VV_FNAME_IN: VimVarIndex = 18;
-pub const VV_CC_TO: VimVarIndex = 17;
-pub const VV_CC_FROM: VimVarIndex = 16;
-pub const VV_CTYPE: VimVarIndex = 15;
-pub const VV_LC_TIME: VimVarIndex = 14;
-pub const VV_LANG: VimVarIndex = 13;
-pub const VV_FNAME: VimVarIndex = 12;
-pub const VV_TERMRESPONSE: VimVarIndex = 11;
-pub const VV_TERMREQUEST: VimVarIndex = 10;
-pub const VV_LNUM: VimVarIndex = 9;
-pub const VV_VERSION: VimVarIndex = 8;
-pub const VV_THIS_SESSION: VimVarIndex = 7;
-pub const VV_SHELL_ERROR: VimVarIndex = 6;
-pub const VV_STATUSMSG: VimVarIndex = 5;
 pub const VV_WARNINGMSG: VimVarIndex = 4;
-pub const VV_ERRMSG: VimVarIndex = 3;
-pub const VV_PREVCOUNT: VimVarIndex = 2;
-pub const VV_COUNT1: VimVarIndex = 1;
-pub const VV_COUNT: VimVarIndex = 0;
-pub type C2Rust_Unnamed_31 = ::core::ffi::c_int;
-pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_31 = -2147483648;
-pub const ETYPE_SPELL: etype_T = 9;
-pub const ETYPE_INTERNAL: etype_T = 8;
-pub const ETYPE_ENV: etype_T = 7;
-pub const ETYPE_ARGS: etype_T = 6;
-pub const ETYPE_EXCEPT: etype_T = 5;
-pub const ETYPE_MODELINE: etype_T = 4;
-pub const ETYPE_AUCMD: etype_T = 3;
-pub const ETYPE_UFUNC: etype_T = 2;
-pub const ETYPE_SCRIPT: etype_T = 1;
-pub const ETYPE_TOP: etype_T = 0;
-pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_33 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_33 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_33 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_33 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_33 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_33 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_33 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_33 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_33 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_33 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_33 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_33 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_33 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_33 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_33 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_33 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_33 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_33 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_33 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_33 = 1;
-pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
-pub const FSK_SIMPLIFY: C2Rust_Unnamed_34 = 8;
-pub const FSK_IN_STRING: C2Rust_Unnamed_34 = 4;
-pub const FSK_KEEP_X_KEY: C2Rust_Unnamed_34 = 2;
-pub const FSK_KEYCODE: C2Rust_Unnamed_34 = 1;
-pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
-pub const BCO_NOHELP: C2Rust_Unnamed_35 = 4;
-pub const BCO_ALWAYS: C2Rust_Unnamed_35 = 2;
-pub const BCO_ENTER: C2Rust_Unnamed_35 = 1;
-pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
-pub const OPT_SKIPRTP: C2Rust_Unnamed_36 = 128;
-pub const OPT_NO_REDRAW: C2Rust_Unnamed_36 = 64;
-pub const OPT_ONECOLUMN: C2Rust_Unnamed_36 = 32;
-pub const OPT_NOWIN: C2Rust_Unnamed_36 = 16;
-pub const OPT_WINONLY: C2Rust_Unnamed_36 = 8;
-pub const OPT_MODELINE: C2Rust_Unnamed_36 = 4;
-pub const OPT_LOCAL: C2Rust_Unnamed_36 = 2;
-pub const OPT_GLOBAL: C2Rust_Unnamed_36 = 1;
-pub const STATUS_HEIGHT: C2Rust_Unnamed_40 = 1;
-pub const DIP_ALL: C2Rust_Unnamed_39 = 1;
-pub const MIN_COLUMNS: C2Rust_Unnamed_40 = 12;
-pub const MAX_SEARCH_COUNT: C2Rust_Unnamed_37 = 9999;
-pub type C2Rust_Unnamed_37 = ::core::ffi::c_uint;
+pub const FUZZY_SCORE_NONE: c_int = -2147483648;
+pub const MODE_TERMINAL: c_uint = 128;
+pub const FSK_SIMPLIFY: c_uint = 8;
+pub const FSK_KEEP_X_KEY: c_uint = 2;
+pub const FSK_KEYCODE: c_uint = 1;
+pub const BCO_NOHELP: c_uint = 4;
+pub const BCO_ALWAYS: c_uint = 2;
+pub const BCO_ENTER: c_uint = 1;
+pub const OPT_SKIPRTP: c_uint = 128;
+pub const OPT_ONECOLUMN: c_uint = 32;
+pub const OPT_NOWIN: c_uint = 16;
+pub const OPT_WINONLY: c_uint = 8;
+pub const OPT_MODELINE: c_uint = 4;
+pub const OPT_LOCAL: c_uint = 2;
+pub const OPT_GLOBAL: c_uint = 1;
+pub const STATUS_HEIGHT: c_uint = 1;
+pub const DIP_ALL: c_uint = 1;
+pub const MIN_COLUMNS: c_uint = 12;
+pub const MAX_SEARCH_COUNT: c_uint = 9999;
 pub const kListchars: CharsOption = 1;
 pub const kFillchars: CharsOption = 0;
-pub type set_prefix_T = ::core::ffi::c_uint;
+pub type set_prefix_T = c_uint;
 pub const PREFIX_INV: set_prefix_T = 2;
 pub const PREFIX_NONE: set_prefix_T = 1;
 pub const PREFIX_NO: set_prefix_T = 0;
-pub type C2Rust_Unnamed_39 = ::core::ffi::c_uint;
-pub const DIP_DIRFILE: C2Rust_Unnamed_39 = 512;
-pub const DIP_AFTER: C2Rust_Unnamed_39 = 128;
-pub const DIP_NOAFTER: C2Rust_Unnamed_39 = 64;
-pub const DIP_NORTP: C2Rust_Unnamed_39 = 32;
-pub const DIP_OPT: C2Rust_Unnamed_39 = 16;
-pub const DIP_START: C2Rust_Unnamed_39 = 8;
-pub const DIP_ERR: C2Rust_Unnamed_39 = 4;
-pub const DIP_DIR: C2Rust_Unnamed_39 = 2;
-pub type C2Rust_Unnamed_40 = ::core::ffi::c_uint;
-pub const MIN_LINES: C2Rust_Unnamed_40 = 2;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
-pub const ROOT_UID: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const BF_SYN_SET: ::core::ffi::c_int = 0x200 as ::core::ffi::c_int;
-pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const B_IMODE_LAST: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYMAP_INIT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
+pub const DEFAULT_MAXPATHL: c_int = 4096 as c_int;
+pub const MAXPATHL: c_int = DEFAULT_MAXPATHL;
+pub const ROOT_UID: c_int = 0 as c_int;
+pub const BF_SYN_SET: c_int = 0x200 as c_int;
+pub const B_IMODE_USE_INSERT: c_int = -1 as c_int;
+pub const B_IMODE_NONE: c_int = 0 as c_int;
+pub const B_IMODE_LAST: c_int = 1 as c_int;
+pub const KEYMAP_INIT: c_int = 1 as c_int;
 pub const NULL_STRING: String_0 = String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    data: ::core::ptr::null_mut::<c_char>(),
     size: 0 as size_t,
 };
-pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const CTRL_F_STR: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\x06\0") };
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const PATHSEPSTR: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"/\0") };
-pub const FORCE_BIN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub const LOGLVL_INF: c_int = 2 as c_int;
+pub const OK: c_int = 1 as c_int;
+pub const FAIL: c_int = 0 as c_int;
+pub const NUL: c_int = '\0' as c_int;
+pub const TAB: c_int = '\t' as c_int;
+pub const CTRL_F_STR: [c_char; 2] =
+    unsafe { ::core::mem::transmute::<[u8; 2], [c_char; 2]>(*b"\x06\0") };
+pub const Ctrl_C: c_int = 3 as c_int;
+pub const PATHSEPSTR: [c_char; 2] =
+    unsafe { ::core::mem::transmute::<[u8; 2], [c_char; 2]>(*b"/\0") };
+pub const FORCE_BIN: c_int = 1 as c_int;
 pub const HLATTRS_INIT: HlAttrs = HlAttrs {
     rgb_ae_attr: 0 as int32_t,
     cterm_ae_attr: 0 as int32_t,
@@ -1457,238 +301,212 @@ pub const HLATTRS_INIT: HlAttrs = HlAttrs {
     hl_blend: -1 as int32_t,
     url: -1 as int32_t,
 };
-pub const HIGHLIGHT_INIT: [::core::ffi::c_char; 779] = unsafe {
+pub const HIGHLIGHT_INIT: [c_char; 779] = unsafe {
     ::core::mem::transmute::<
         [u8; 779],
-        [::core::ffi::c_char; 779],
+        [c_char; 779],
     >(
         *b"8:SpecialKey,~:EndOfBuffer,z:TermCursor,@:NonText,d:Directory,e:ErrorMsg,i:IncSearch,l:Search,y:CurSearch,m:MoreMsg,M:ModeMsg,n:LineNr,a:LineNrAbove,b:LineNrBelow,N:CursorLineNr,G:CursorLineSign,O:CursorLineFold,r:Question,s:StatusLine,S:StatusLineNC,c:VertSplit,t:Title,v:Visual,V:VisualNOS,w:WarningMsg,W:WildMenu,f:Folded,F:FoldColumn,A:DiffAdd,C:DiffChange,D:DiffDelete,T:DiffText,E:DiffTextAdd,>:SignColumn,-:Conceal,B:SpellBad,P:SpellCap,R:SpellRare,L:SpellLocal,+:Pmenu,=:PmenuSel,k:PmenuMatch,<:PmenuMatchSel,[:PmenuKind,]:PmenuKindSel,{:PmenuExtra,}:PmenuExtraSel,x:PmenuSbar,X:PmenuThumb,*:TabLine,#:TabLineSel,_:TabLineFill,!:CursorColumn,.:CursorLine,o:ColorColumn,q:QuickFixLine,z:StatusLineTerm,Z:StatusLineTermNC,g:MsgArea,h:ComplMatchIns,0:Whitespace,I:PreInsert\0",
     )
 };
-pub const DFLT_EFM: [::core::ffi::c_char; 667] = unsafe {
+pub const DFLT_EFM: [c_char; 667] = unsafe {
     ::core::mem::transmute::<
         [u8; 667],
-        [::core::ffi::c_char; 667],
+        [c_char; 667],
     >(
         *b"%*[^\"]\"%f\"%*\\D%l: %m,\"%f\"%*\\D%l: %m,%-Gg%\\?make[%*\\d]: *** [%f:%l:%m,%-Gg%\\?make: *** [%f:%l:%m,%-G%f:%l: (Each undeclared identifier is reported only once,%-G%f:%l: for each function it appears in.),%-GIn file included from %f:%l:%c:,%-GIn file included from %f:%l:%c\\,,%-GIn file included from %f:%l:%c,%-GIn file included from %f:%l,%-G%*[ ]from %f:%l:%c,%-G%*[ ]from %f:%l:,%-G%*[ ]from %f:%l\\,,%-G%*[ ]from %f:%l,%f:%l:%c:%m,%f(%l):%m,%f:%l:%m,\"%f\"\\, line %l%*\\D%c%*[^ ] %m,%D%*\\a[%*\\d]: Entering directory %*[`']%f',%X%*\\a[%*\\d]: Leaving directory %*[`']%f',%D%*\\a: Entering directory %*[`']%f',%X%*\\a: Leaving directory %*[`']%f',%DMaking %*\\a in %f,%f|%l| %m\0",
     )
 };
-pub const DFLT_GFN: [::core::ffi::c_char; 55] = unsafe {
-    ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
+pub const DFLT_GFN: [c_char; 55] = unsafe {
+    ::core::mem::transmute::<[u8; 55], [c_char; 55]>(
         *b"Source Code Pro,DejaVu Sans Mono,Courier New,monospace\0",
     )
 };
-pub const DFLT_GREPFORMAT: [::core::ffi::c_char; 26] = unsafe {
-    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"%f:%l:%m,%f:%l%m,%f  %l%m\0")
-};
-pub const ENC_DFLT: [::core::ffi::c_char; 6] =
-    unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"utf-8\0") };
-pub const EOL_UNIX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const DFLT_FO_VIM: [::core::ffi::c_char; 5] =
-    unsafe { ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"tcqj\0") };
-pub const MAX_MCO: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-pub const CPO_BUFOPT: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
-pub const CPO_BUFOPTGLOB: ::core::ffi::c_int = 'S' as ::core::ffi::c_int;
-pub const CPO_VIM: [::core::ffi::c_char; 9] =
-    unsafe { ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"aABceFs_\0") };
-pub const BS_START: ::core::ffi::c_int = 's' as ::core::ffi::c_int;
-pub const BS_NOSTOP: ::core::ffi::c_int = 'p' as ::core::ffi::c_int;
-pub const LISPWORD_VALUE: [::core::ffi::c_char; 746] = unsafe {
+pub const DFLT_GREPFORMAT: [c_char; 26] =
+    unsafe { ::core::mem::transmute::<[u8; 26], [c_char; 26]>(*b"%f:%l:%m,%f:%l%m,%f  %l%m\0") };
+pub const ENC_DFLT: [c_char; 6] =
+    unsafe { ::core::mem::transmute::<[u8; 6], [c_char; 6]>(*b"utf-8\0") };
+pub const EOL_UNIX: c_int = 0 as c_int;
+pub const EOL_DOS: c_int = 1 as c_int;
+pub const EOL_MAC: c_int = 2 as c_int;
+pub const DFLT_FO_VIM: [c_char; 5] =
+    unsafe { ::core::mem::transmute::<[u8; 5], [c_char; 5]>(*b"tcqj\0") };
+pub const MAX_MCO: c_int = 6 as c_int;
+pub const CPO_BUFOPT: c_int = 's' as c_int;
+pub const CPO_BUFOPTGLOB: c_int = 'S' as c_int;
+pub const CPO_VIM: [c_char; 9] =
+    unsafe { ::core::mem::transmute::<[u8; 9], [c_char; 9]>(*b"aABceFs_\0") };
+pub const BS_START: c_int = 's' as c_int;
+pub const BS_NOSTOP: c_int = 'p' as c_int;
+pub const LISPWORD_VALUE: [c_char; 746] = unsafe {
     ::core::mem::transmute::<
         [u8; 746],
-        [::core::ffi::c_char; 746],
+        [c_char; 746],
     >(
         *b"defun,define,defmacro,set!,lambda,if,case,let,flet,let*,letrec,do,do*,define-syntax,let-syntax,letrec-syntax,destructuring-bind,defpackage,defparameter,defstruct,deftype,defvar,do-all-symbols,do-external-symbols,do-symbols,dolist,dotimes,ecase,etypecase,eval-when,labels,macrolet,multiple-value-bind,multiple-value-call,multiple-value-prog1,multiple-value-setq,prog1,progv,typecase,unless,unwind-protect,when,with-input-from-string,with-open-file,with-open-stream,with-output-to-string,with-package-iterator,define-condition,handler-bind,handler-case,restart-bind,restart-case,with-simple-restart,store-value,use-value,muffle-warning,abort,continue,with-slots,with-slots*,with-accessors,with-accessors*,defclass,defmethod,print-unreadable-object\0",
     )
 };
-pub static p_vfile: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new((empty_string_option.as_raw() as *const _) as *mut ::core::ffi::c_char);
-pub const NO_LOCAL_UNDOLEVEL: ::core::ffi::c_int = -123456 as ::core::ffi::c_int;
-pub const SB_MAX: ::core::ffi::c_int = 1000000 as ::core::ffi::c_int;
-pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-pub const TABSTOP_MAX: ::core::ffi::c_int = 9999 as ::core::ffi::c_int;
-pub const SHAPE_CURSOR: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const DFLT_ERRORFILE: [::core::ffi::c_char; 11] =
-    unsafe { ::core::mem::transmute::<[u8; 11], [::core::ffi::c_char; 11]>(*b"errors.err\0") };
-pub const DFLT_HELPFILE: [::core::ffi::c_char; 25] = unsafe {
-    ::core::mem::transmute::<[u8; 25], [::core::ffi::c_char; 25]>(*b"$VIMRUNTIME/doc/help.txt\0")
-};
-pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const DFLT_COLS: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
-pub const DFLT_ROWS: ::core::ffi::c_int = 24 as ::core::ffi::c_int;
-pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int =
-    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KENTER: ::core::ffi::c_int =
-    -('K' as ::core::ffi::c_int + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub static p_vfile: GlobalCell<*mut c_char> =
+    GlobalCell::new((empty_string_option.as_raw() as *const _) as *mut c_char);
+pub const NO_LOCAL_UNDOLEVEL: c_int = -123456 as c_int;
+pub const SB_MAX: c_int = 1000000 as c_int;
+pub const MAX_NUMBERWIDTH: c_int = 20 as c_int;
+pub const TABSTOP_MAX: c_int = 9999 as c_int;
+pub const SHAPE_CURSOR: c_int = 2 as c_int;
+pub const IOSIZE: c_int = 1024 as c_int + 1 as c_int;
+pub const DFLT_ERRORFILE: [c_char; 11] =
+    unsafe { ::core::mem::transmute::<[u8; 11], [c_char; 11]>(*b"errors.err\0") };
+pub const DFLT_HELPFILE: [c_char; 25] =
+    unsafe { ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"$VIMRUNTIME/doc/help.txt\0") };
+pub const NO_SCREEN: c_int = 2 as c_int;
+pub const DFLT_COLS: c_int = 80 as c_int;
+pub const DFLT_ROWS: c_int = 24 as c_int;
+pub const SID_NONE: c_int = -6 as c_int;
+pub const K_ZERO: c_int = -(255 as c_int + (('X' as c_int) << 8 as c_int));
+pub const K_KENTER: c_int = -('K' as c_int + (('A' as c_int) << 8 as c_int));
 #[inline]
 unsafe extern "C" fn is_power_of_two(mut x: uint64_t) -> bool {
     return x != 0 as uint64_t && x & x.wrapping_sub(1 as uint64_t) == 0 as uint64_t;
 }
 #[inline]
-unsafe extern "C" fn optval_type_get_name(type_0: OptValType) -> *const ::core::ffi::c_char {
-    match type_0 as ::core::ffi::c_int {
-        -1 => return b"nil\0".as_ptr() as *const ::core::ffi::c_char,
-        0 => return b"boolean\0".as_ptr() as *const ::core::ffi::c_char,
-        1 => return b"number\0".as_ptr() as *const ::core::ffi::c_char,
-        2 => return b"string\0".as_ptr() as *const ::core::ffi::c_char,
+unsafe extern "C" fn optval_type_get_name(type_0: OptValType) -> *const c_char {
+    match type_0 as c_int {
+        -1 => return b"nil\0".as_ptr() as *const c_char,
+        0 => return b"boolean\0".as_ptr() as *const c_char,
+        1 => return b"number\0".as_ptr() as *const c_char,
+        2 => return b"string\0".as_ptr() as *const c_char,
         _ => {}
     }
     unreachable!();
 }
-static e_unknown_option: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E518: Unknown option\0")
+static e_unknown_option: GlobalCell<[c_char; 21]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 21], [c_char; 21]>(*b"E518: Unknown option\0")
 });
-static e_not_allowed_in_modeline: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
-        *b"E520: Not allowed in a modeline\0",
-    )
+static e_not_allowed_in_modeline: GlobalCell<[c_char; 32]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 32], [c_char; 32]>(*b"E520: Not allowed in a modeline\0")
 });
-static e_not_allowed_in_modeline_when_modelineexpr_is_off: GlobalCell<[::core::ffi::c_char; 59]> =
+static e_not_allowed_in_modeline_when_modelineexpr_is_off: GlobalCell<[c_char; 59]> =
     GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 59], [::core::ffi::c_char; 59]>(
+        ::core::mem::transmute::<[u8; 59], [c_char; 59]>(
             *b"E992: Not allowed in a modeline when 'modelineexpr' is off\0",
         )
     });
-static e_number_required_after_equal: GlobalCell<[::core::ffi::c_char; 30]> =
+static e_number_required_after_equal: GlobalCell<[c_char; 30]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 30], [c_char; 30]>(*b"E521: Number required after =\0")
+});
+static e_preview_window_already_exists: GlobalCell<[c_char; 38]> = GlobalCell::new(unsafe {
+    ::core::mem::transmute::<[u8; 38], [c_char; 38]>(*b"E590: A preview window already exists\0")
+});
+static e_cannot_have_negative_or_zero_number_of_quickfix: GlobalCell<[c_char; 72]> =
     GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 30], [::core::ffi::c_char; 30]>(
-            *b"E521: Number required after =\0",
-        )
-    });
-static e_preview_window_already_exists: GlobalCell<[::core::ffi::c_char; 38]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
-            *b"E590: A preview window already exists\0",
-        )
-    });
-static e_cannot_have_negative_or_zero_number_of_quickfix: GlobalCell<[::core::ffi::c_char; 72]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 72], [::core::ffi::c_char; 72]>(
+        ::core::mem::transmute::<[u8; 72], [c_char; 72]>(
             *b"E1542: Cannot have a negative or zero number of quickfix/location lists\0",
         )
     });
-static e_cannot_have_more_than_hundred_quickfix: GlobalCell<[::core::ffi::c_char; 63]> =
+static e_cannot_have_more_than_hundred_quickfix: GlobalCell<[c_char; 63]> =
     GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 63], [::core::ffi::c_char; 63]>(
+        ::core::mem::transmute::<[u8; 63], [c_char; 63]>(
             *b"E1543: Cannot have more than a hundred quickfix/location lists\0",
         )
     });
-static p_term: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-static p_ttytype: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-static p_et_nobin: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static p_ml_nobin: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static p_term: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
+static p_ttytype: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
+static p_et_nobin: GlobalCell<c_int> = GlobalCell::new(0);
+static p_ml_nobin: GlobalCell<c_int> = GlobalCell::new(0);
 static p_tw_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
 static p_wm_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
-static p_ai_nopaste: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static p_et_nopaste: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static p_ai_nopaste: GlobalCell<c_int> = GlobalCell::new(0);
+static p_et_nopaste: GlobalCell<c_int> = GlobalCell::new(0);
 static p_sts_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
 static p_tw_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
 static p_wm_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
-static p_vsts_nopaste: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static p_vsts_nopaste: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub const OPTION_COUNT: usize = ::core::mem::size_of::<[vimoption_T; 374]>()
     .wrapping_div(::core::mem::size_of::<vimoption_T>())
     .wrapping_div(
         (::core::mem::size_of::<[vimoption_T; 374]>()
             .wrapping_rem(::core::mem::size_of::<vimoption_T>())
-            == 0) as ::core::ffi::c_int as usize,
+            == 0) as c_int as usize,
     );
-static p_bin_dep_opts: GlobalCell<[::core::ffi::c_int; 5]> = GlobalCell::new([
-    kOptTextwidth as ::core::ffi::c_int,
-    kOptWrapmargin as ::core::ffi::c_int,
-    kOptModeline as ::core::ffi::c_int,
-    kOptExpandtab as ::core::ffi::c_int,
-    kOptInvalid as ::core::ffi::c_int,
+static p_bin_dep_opts: GlobalCell<[c_int; 5]> = GlobalCell::new([
+    kOptTextwidth as c_int,
+    kOptWrapmargin as c_int,
+    kOptModeline as c_int,
+    kOptExpandtab as c_int,
+    kOptInvalid as c_int,
 ]);
-static p_paste_dep_opts: GlobalCell<[::core::ffi::c_int; 11]> = GlobalCell::new([
-    kOptAutoindent as ::core::ffi::c_int,
-    kOptExpandtab as ::core::ffi::c_int,
-    kOptRuler as ::core::ffi::c_int,
-    kOptShowmatch as ::core::ffi::c_int,
-    kOptSmarttab as ::core::ffi::c_int,
-    kOptSofttabstop as ::core::ffi::c_int,
-    kOptTextwidth as ::core::ffi::c_int,
-    kOptWrapmargin as ::core::ffi::c_int,
-    kOptRevins as ::core::ffi::c_int,
-    kOptVarsofttabstop as ::core::ffi::c_int,
-    kOptInvalid as ::core::ffi::c_int,
+static p_paste_dep_opts: GlobalCell<[c_int; 11]> = GlobalCell::new([
+    kOptAutoindent as c_int,
+    kOptExpandtab as c_int,
+    kOptRuler as c_int,
+    kOptShowmatch as c_int,
+    kOptSmarttab as c_int,
+    kOptSofttabstop as c_int,
+    kOptTextwidth as c_int,
+    kOptWrapmargin as c_int,
+    kOptRevins as c_int,
+    kOptVarsofttabstop as c_int,
+    kOptInvalid as c_int,
 ]);
 pub unsafe extern "C" fn set_init_tablocal() {
     p_ch.set(
-        (*options.ptr())[kOptCmdheight as ::core::ffi::c_int as usize]
+        (*options.ptr())[kOptCmdheight as c_int as usize]
             .def_val
             .data
             .number,
     );
 }
 unsafe extern "C" fn set_init_default_shell() {
-    let mut shell: *mut ::core::ffi::c_char =
-        os_getenv(b"SHELL\0".as_ptr() as *const ::core::ffi::c_char);
+    let mut shell: *mut c_char = os_getenv(b"SHELL\0".as_ptr() as *const c_char);
     if !shell.is_null() {
-        if !vim_strchr(shell, ' ' as ::core::ffi::c_int).is_null() {
+        if !vim_strchr(shell, ' ' as c_int).is_null() {
             let len: size_t = strlen(shell).wrapping_add(3 as size_t);
-            let cmd: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
-            snprintf(
-                cmd,
-                len,
-                b"\"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
-                shell,
-            );
+            let cmd: *mut c_char = xmalloc(len) as *mut c_char;
+            snprintf(cmd, len, b"\"%s\"\0".as_ptr() as *const c_char, shell);
             set_string_default(kOptShell, cmd, true_0 != 0);
         } else {
             set_string_default(kOptShell, shell, false_0 != 0);
         }
-        xfree(shell as *mut ::core::ffi::c_void);
+        xfree(shell as *mut c_void);
     }
 }
 unsafe extern "C" fn set_init_default_backupskip() {
-    static names: GlobalCell<[*mut ::core::ffi::c_char; 4]> = GlobalCell::new([
-        b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"TMPDIR\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"TEMP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"TMP\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+    static names: GlobalCell<[*mut c_char; 4]> = GlobalCell::new([
+        b"\0".as_ptr() as *const c_char as *mut c_char,
+        b"TMPDIR\0".as_ptr() as *const c_char as *mut c_char,
+        b"TEMP\0".as_ptr() as *const c_char as *mut c_char,
+        b"TMP\0".as_ptr() as *const c_char as *mut c_char,
     ]);
     let mut ga: garray_T = garray_T {
         ga_len: 0,
         ga_maxlen: 0,
         ga_itemsize: 0,
         ga_growsize: 0,
-        ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+        ga_data: ::core::ptr::null_mut::<c_void>(),
     };
     let mut opt_idx: OptIndex = kOptBackupskip;
-    ga_init(
-        &raw mut ga,
-        1 as ::core::ffi::c_int,
-        100 as ::core::ffi::c_int,
-    );
+    ga_init(&raw mut ga, 1 as c_int, 100 as c_int);
     let mut i: size_t = 0 as size_t;
-    while i < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
-        .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+    while i < ::core::mem::size_of::<[*mut c_char; 4]>()
+        .wrapping_div(::core::mem::size_of::<*mut c_char>())
         .wrapping_div(
-            (::core::mem::size_of::<[*mut ::core::ffi::c_char; 4]>()
-                .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                == 0) as ::core::ffi::c_int as usize,
+            (::core::mem::size_of::<[*mut c_char; 4]>()
+                .wrapping_rem(::core::mem::size_of::<*mut c_char>())
+                == 0) as c_int as usize,
         )
     {
         let mut mustfree: bool = true_0 != 0;
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let mut p: *mut c_char = ::core::ptr::null_mut::<c_char>();
         let mut plen: size_t = 0;
-        if *(*names.ptr())[i as usize] as ::core::ffi::c_int == NUL {
-            p = b"/tmp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-            plen = ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as usize)
-                as size_t;
+        if *(*names.ptr())[i as usize] as c_int == NUL {
+            p = b"/tmp\0".as_ptr() as *const c_char as *mut c_char;
+            plen = ::core::mem::size_of::<[c_char; 5]>().wrapping_sub(1 as usize) as size_t;
             mustfree = false_0 != 0;
         } else {
-            p = vim_getenv((*names.ptr())[i as usize] as *const ::core::ffi::c_char);
+            p = vim_getenv((*names.ptr())[i as usize] as *const c_char);
             plen = 0 as size_t;
         }
-        if !p.is_null() && *p as ::core::ffi::c_int != NUL {
+        if !p.is_null() && *p as c_int != NUL {
             let mut has_trailing_path_sep: bool = false_0 != 0;
             if plen == 0 as size_t {
                 plen = strlen(p);
@@ -1698,32 +516,32 @@ unsafe extern "C" fn set_init_default_backupskip() {
             }
             let mut itemsize: size_t = plen
                 .wrapping_add(
-                    (if has_trailing_path_sep as ::core::ffi::c_int != 0 {
-                        0 as ::core::ffi::c_int
+                    (if has_trailing_path_sep as c_int != 0 {
+                        0 as c_int
                     } else {
-                        1 as ::core::ffi::c_int
+                        1 as c_int
                     }) as size_t,
                 )
                 .wrapping_add(2 as size_t);
-            let mut item: *mut ::core::ffi::c_char = xmalloc(itemsize) as *mut ::core::ffi::c_char;
-            let mut itemseplen: size_t = (if ga.ga_len == 0 as ::core::ffi::c_int {
-                0 as ::core::ffi::c_int
+            let mut item: *mut c_char = xmalloc(itemsize) as *mut c_char;
+            let mut itemseplen: size_t = (if ga.ga_len == 0 as c_int {
+                0 as c_int
             } else {
-                1 as ::core::ffi::c_int
+                1 as c_int
             }) as size_t;
             let mut itemlen: size_t = vim_snprintf(
                 item,
                 itemsize,
-                b"%s%s*\0".as_ptr() as *const ::core::ffi::c_char,
+                b"%s%s*\0".as_ptr() as *const c_char,
                 p,
-                if has_trailing_path_sep as ::core::ffi::c_int != 0 {
-                    b"\0".as_ptr() as *const ::core::ffi::c_char
+                if has_trailing_path_sep as c_int != 0 {
+                    b"\0".as_ptr() as *const c_char
                 } else {
                     PATHSEPSTR.as_ptr()
                 },
             ) as size_t;
             if find_dup_item(
-                ga.ga_data as *const ::core::ffi::c_char,
+                ga.ga_data as *const c_char,
                 item,
                 itemlen,
                 (*options.ptr())[opt_idx as usize].flags,
@@ -1732,62 +550,56 @@ unsafe extern "C" fn set_init_default_backupskip() {
             {
                 ga_grow(
                     &raw mut ga,
-                    itemseplen.wrapping_add(itemlen).wrapping_add(1 as size_t)
-                        as ::core::ffi::c_int,
+                    itemseplen.wrapping_add(itemlen).wrapping_add(1 as size_t) as c_int,
                 );
                 ga.ga_len += vim_snprintf(
-                    (ga.ga_data as *mut ::core::ffi::c_char).offset(ga.ga_len as isize),
+                    (ga.ga_data as *mut c_char).offset(ga.ga_len as isize),
                     itemseplen.wrapping_add(itemlen).wrapping_add(1 as size_t),
-                    b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"%s%s\0".as_ptr() as *const c_char,
                     if itemseplen > 0 as size_t {
-                        b",\0".as_ptr() as *const ::core::ffi::c_char
+                        b",\0".as_ptr() as *const c_char
                     } else {
-                        b"\0".as_ptr() as *const ::core::ffi::c_char
+                        b"\0".as_ptr() as *const c_char
                     },
                     item,
                 );
             }
-            xfree(item as *mut ::core::ffi::c_void);
+            xfree(item as *mut c_void);
         }
         if mustfree {
-            xfree(p as *mut ::core::ffi::c_void);
+            xfree(p as *mut c_void);
         }
         i = i.wrapping_add(1);
     }
     if !ga.ga_data.is_null() {
-        set_string_default(
-            kOptBackupskip,
-            ga.ga_data as *mut ::core::ffi::c_char,
-            true_0 != 0,
-        );
+        set_string_default(kOptBackupskip, ga.ga_data as *mut c_char, true_0 != 0);
     }
 }
 unsafe extern "C" fn set_init_default_cdpath() {
-    let mut cdpath: *mut ::core::ffi::c_char =
-        vim_getenv(b"CDPATH\0".as_ptr() as *const ::core::ffi::c_char);
+    let mut cdpath: *mut c_char = vim_getenv(b"CDPATH\0".as_ptr() as *const c_char);
     if cdpath.is_null() {
         return;
     }
-    let mut buf: *mut ::core::ffi::c_char = xmalloc(
+    let mut buf: *mut c_char = xmalloc(
         (2 as size_t)
             .wrapping_mul(strlen(cdpath))
             .wrapping_add(2 as size_t),
-    ) as *mut ::core::ffi::c_char;
-    *buf.offset(0 as ::core::ffi::c_int as isize) = ',' as ::core::ffi::c_char;
-    let mut j: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while *cdpath.offset(i as isize) as ::core::ffi::c_int != NUL {
-        if vim_ispathlistsep(*cdpath.offset(i as isize) as ::core::ffi::c_int) {
+    ) as *mut c_char;
+    *buf.offset(0 as c_int as isize) = ',' as c_char;
+    let mut j: c_int = 1 as c_int;
+    let mut i: c_int = 0 as c_int;
+    while *cdpath.offset(i as isize) as c_int != NUL {
+        if vim_ispathlistsep(*cdpath.offset(i as isize) as c_int) {
             let c2rust_fresh0 = j;
             j = j + 1;
-            *buf.offset(c2rust_fresh0 as isize) = ',' as ::core::ffi::c_char;
+            *buf.offset(c2rust_fresh0 as isize) = ',' as c_char;
         } else {
-            if *cdpath.offset(i as isize) as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-                || *cdpath.offset(i as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int
+            if *cdpath.offset(i as isize) as c_int == ' ' as c_int
+                || *cdpath.offset(i as isize) as c_int == ',' as c_int
             {
                 let c2rust_fresh1 = j;
                 j = j + 1;
-                *buf.offset(c2rust_fresh1 as isize) = '\\' as ::core::ffi::c_char;
+                *buf.offset(c2rust_fresh1 as isize) = '\\' as c_char;
             }
             let c2rust_fresh2 = j;
             j = j + 1;
@@ -1795,7 +607,7 @@ unsafe extern "C" fn set_init_default_cdpath() {
         }
         i += 1;
     }
-    *buf.offset(j as isize) = NUL as ::core::ffi::c_char;
+    *buf.offset(j as isize) = NUL as c_char;
     change_option_default(
         kOptCdpath,
         OptVal {
@@ -1805,21 +617,19 @@ unsafe extern "C" fn set_init_default_cdpath() {
             },
         },
     );
-    xfree(cdpath as *mut ::core::ffi::c_void);
+    xfree(cdpath as *mut c_void);
 }
 unsafe extern "C" fn set_init_expand_env() {
     let mut opt_idx: OptIndex = kOptAleph;
-    while (opt_idx as ::core::ffi::c_int) < kOptCount {
+    while (opt_idx as c_int) < kOptCount {
         let mut opt: *mut vimoption_T =
             (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-        if (*opt).flags & kOptFlagNoDefExp as ::core::ffi::c_int as uint32_t == 0 {
-            let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            if (*opt).flags & kOptFlagGettext as ::core::ffi::c_int as uint32_t != 0
-                && !(*opt).var.is_null()
-            {
-                p = gettext(*((*opt).var as *mut *mut ::core::ffi::c_char));
+        if (*opt).flags & kOptFlagNoDefExp as c_int as uint32_t == 0 {
+            let mut p: *mut c_char = ::core::ptr::null_mut::<c_char>();
+            if (*opt).flags & kOptFlagGettext as c_int as uint32_t != 0 && !(*opt).var.is_null() {
+                p = gettext(*((*opt).var as *mut *mut c_char));
             } else {
-                p = option_expand(opt_idx, ::core::ptr::null::<::core::ffi::c_char>());
+                p = option_expand(opt_idx, ::core::ptr::null::<c_char>());
             }
             if !p.is_null() {
                 set_option_varp(
@@ -1848,12 +658,12 @@ unsafe extern "C" fn set_init_expand_env() {
     }
 }
 unsafe extern "C" fn set_init_fenc_default() {
-    let mut p: *mut ::core::ffi::c_char = enc_locale();
+    let mut p: *mut c_char = enc_locale();
     if p.is_null() {
         p = xmemdupz(
-            b"utf-8\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        ) as *mut ::core::ffi::c_char;
+            b"utf-8\0".as_ptr() as *const c_char as *const c_void,
+            ::core::mem::size_of::<[c_char; 6]>().wrapping_sub(1 as size_t),
+        ) as *mut c_char;
     }
     fenc_default.set(p);
 }
@@ -1863,31 +673,31 @@ pub unsafe extern "C" fn set_init_1(mut clean_arg: bool) {
     set_init_default_shell();
     set_init_default_backupskip();
     set_init_default_cdpath();
-    let mut backupdir: *mut ::core::ffi::c_char = stdpaths_user_state_subpath(
-        b"backup\0".as_ptr() as *const ::core::ffi::c_char,
+    let mut backupdir: *mut c_char = stdpaths_user_state_subpath(
+        b"backup\0".as_ptr() as *const c_char,
         2 as size_t,
         true_0 != 0,
     );
     let backupdir_len: size_t = strlen(backupdir);
     backupdir = xrealloc(
-        backupdir as *mut ::core::ffi::c_void,
+        backupdir as *mut c_void,
         backupdir_len.wrapping_add(3 as size_t),
-    ) as *mut ::core::ffi::c_char;
+    ) as *mut c_char;
     memmove(
-        backupdir.offset(2 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-        backupdir as *const ::core::ffi::c_void,
+        backupdir.offset(2 as c_int as isize) as *mut c_void,
+        backupdir as *const c_void,
         backupdir_len.wrapping_add(1 as size_t),
     );
     memmove(
-        backupdir as *mut ::core::ffi::c_void,
-        b".,\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
+        backupdir as *mut c_void,
+        b".,\0".as_ptr() as *const c_char as *const c_void,
         2 as size_t,
     );
     set_string_default(kOptBackupdir, backupdir, true_0 != 0);
     set_string_default(
         kOptViewdir,
         stdpaths_user_state_subpath(
-            b"view\0".as_ptr() as *const ::core::ffi::c_char,
+            b"view\0".as_ptr() as *const c_char,
             2 as size_t,
             true_0 != 0,
         ),
@@ -1896,7 +706,7 @@ pub unsafe extern "C" fn set_init_1(mut clean_arg: bool) {
     set_string_default(
         kOptDirectory,
         stdpaths_user_state_subpath(
-            b"swap\0".as_ptr() as *const ::core::ffi::c_char,
+            b"swap\0".as_ptr() as *const c_char,
             2 as size_t,
             true_0 != 0,
         ),
@@ -1905,23 +715,23 @@ pub unsafe extern "C" fn set_init_1(mut clean_arg: bool) {
     set_string_default(
         kOptUndodir,
         stdpaths_user_state_subpath(
-            b"undo\0".as_ptr() as *const ::core::ffi::c_char,
+            b"undo\0".as_ptr() as *const c_char,
             2 as size_t,
             true_0 != 0,
         ),
         true_0 != 0,
     );
-    let mut rtp: *mut ::core::ffi::c_char = runtimepath_default(clean_arg);
+    let mut rtp: *mut c_char = runtimepath_default(clean_arg);
     if !rtp.is_null() {
         set_string_default(kOptRuntimepath, rtp, true_0 != 0);
         set_string_default(kOptPackpath, rtp, false_0 != 0);
-        rtp = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        rtp = ::core::ptr::null_mut::<c_char>();
     }
-    set_options_default(0 as ::core::ffi::c_int);
+    set_options_default(0 as c_int);
     (*curbuf.get()).b_p_initialized = true_0 != 0;
-    (*curbuf.get()).b_p_ac = -1 as ::core::ffi::c_int;
-    (*curbuf.get()).b_p_ar = -1 as ::core::ffi::c_int;
-    (*curbuf.get()).b_p_fs = -1 as ::core::ffi::c_int;
+    (*curbuf.get()).b_p_ac = -1 as c_int;
+    (*curbuf.get()).b_p_ar = -1 as c_int;
+    (*curbuf.get()).b_p_fs = -1 as c_int;
     (*curbuf.get()).b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
     check_buf_options(curbuf.get());
     check_win_options(curwin.get());
@@ -1930,31 +740,25 @@ pub unsafe extern "C" fn set_init_1(mut clean_arg: bool) {
     didset_options();
     init_spell_chartab();
     set_init_expand_env();
-    if os_env_exists(
-        b"NVIM_NOTTYFAST\0".as_ptr() as *const ::core::ffi::c_char,
-        false_0 != 0,
-    ) {
+    if os_env_exists(b"NVIM_NOTTYFAST\0".as_ptr() as *const c_char, false_0 != 0) {
         set_option_value_give_err(
             kOptTtyfast,
             OptVal {
                 type_0: kOptValTypeBoolean,
                 data: OptValData { boolean: kFalse },
             },
-            0 as ::core::ffi::c_int,
+            0 as c_int,
         );
     }
     save_file_ff(curbuf.get());
-    if os_env_exists(
-        b"MLTERM\0".as_ptr() as *const ::core::ffi::c_char,
-        false_0 != 0,
-    ) {
+    if os_env_exists(b"MLTERM\0".as_ptr() as *const c_char, false_0 != 0) {
         set_option_value_give_err(
             kOptTermbidi,
             OptVal {
                 type_0: kOptValTypeBoolean,
                 data: OptValData { boolean: kTrue },
             },
-            0 as ::core::ffi::c_int,
+            0 as c_int,
         );
     }
     didset_options2();
@@ -1963,29 +767,21 @@ pub unsafe extern "C" fn set_init_1(mut clean_arg: bool) {
     bind_textdomain_codeset(PROJECT_NAME.as_ptr(), p_enc.get());
     set_helplang_default(get_mess_lang());
 }
-pub unsafe extern "C" fn get_option_default(
-    opt_idx: OptIndex,
-    mut opt_flags: ::core::ffi::c_int,
-) -> OptVal {
+pub unsafe extern "C" fn get_option_default(opt_idx: OptIndex, mut opt_flags: c_int) -> OptVal {
     let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
     let mut is_global_local_option: bool = option_is_global_local(opt_idx);
-    if opt_idx as ::core::ffi::c_int == kOptModeline as ::core::ffi::c_int
-        && getuid() == ROOT_UID as __uid_t
-    {
+    if opt_idx as c_int == kOptModeline as c_int && getuid() == ROOT_UID as __uid_t {
         return OptVal {
             type_0: kOptValTypeBoolean,
             data: OptValData { boolean: kFalse },
         };
     }
-    if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0
-        && is_global_local_option as ::core::ffi::c_int != 0
-    {
+    if opt_flags & OPT_LOCAL as c_int != 0 && is_global_local_option as c_int != 0 {
         return get_option_unset_value(opt_idx);
-    } else if option_has_type(opt_idx, kOptValTypeString) as ::core::ffi::c_int != 0
-        && (*opt).flags & kOptFlagNoDefExp as ::core::ffi::c_int as uint32_t == 0
+    } else if option_has_type(opt_idx, kOptValTypeString) as c_int != 0
+        && (*opt).flags & kOptFlagNoDefExp as c_int as uint32_t == 0
     {
-        let mut s: *mut ::core::ffi::c_char =
-            option_expand(opt_idx, (*opt).def_val.data.string.data);
+        let mut s: *mut c_char = option_expand(opt_idx, (*opt).def_val.data.string.data);
         return if s.is_null() {
             (*opt).def_val
         } else {
@@ -2002,7 +798,7 @@ pub unsafe extern "C" fn get_option_default(
 }
 unsafe extern "C" fn alloc_options_default() {
     let mut opt_idx: OptIndex = kOptAleph;
-    while (opt_idx as ::core::ffi::c_int) < kOptCount {
+    while (opt_idx as c_int) < kOptCount {
         (*options.ptr())[opt_idx as usize].def_val =
             optval_copy((*options.ptr())[opt_idx as usize].def_val);
         opt_idx += 1;
@@ -2012,29 +808,24 @@ unsafe extern "C" fn change_option_default(opt_idx: OptIndex, mut value: OptVal)
     optval_free((*options.ptr())[opt_idx as usize].def_val);
     (*options.ptr())[opt_idx as usize].def_val = value;
 }
-unsafe extern "C" fn set_option_default(opt_idx: OptIndex, mut opt_flags: ::core::ffi::c_int) {
-    let mut both: bool = opt_flags
-        & (OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int)
-        == 0 as ::core::ffi::c_int;
+unsafe extern "C" fn set_option_default(opt_idx: OptIndex, mut opt_flags: c_int) {
+    let mut both: bool = opt_flags & (OPT_LOCAL as c_int | OPT_GLOBAL as c_int) == 0 as c_int;
     let mut def_val: OptVal = get_option_default(opt_idx, opt_flags);
     set_option_direct(opt_idx, def_val, opt_flags, (*current_sctx.ptr()).sc_sid);
-    if opt_idx as ::core::ffi::c_int == kOptScroll as ::core::ffi::c_int {
+    if opt_idx as c_int == kOptScroll as c_int {
         win_comp_scroll(curwin.get());
     }
     let mut flagsp: *mut uint32_t = insecure_flag(curwin.get(), opt_idx, opt_flags);
-    *flagsp = *flagsp & !(kOptFlagInsecure as ::core::ffi::c_int as uint32_t);
+    *flagsp = *flagsp & !(kOptFlagInsecure as c_int as uint32_t);
     if both {
-        flagsp = insecure_flag(curwin.get(), opt_idx, OPT_LOCAL as ::core::ffi::c_int);
-        *flagsp = *flagsp & !(kOptFlagInsecure as ::core::ffi::c_int as uint32_t);
+        flagsp = insecure_flag(curwin.get(), opt_idx, OPT_LOCAL as c_int);
+        *flagsp = *flagsp & !(kOptFlagInsecure as c_int as uint32_t);
     }
 }
-unsafe extern "C" fn set_options_default(mut opt_flags: ::core::ffi::c_int) {
+unsafe extern "C" fn set_options_default(mut opt_flags: c_int) {
     let mut opt_idx: OptIndex = kOptAleph;
-    while (opt_idx as ::core::ffi::c_int) < kOptCount {
-        if (*options.ptr())[opt_idx as usize].flags
-            & kOptFlagNoDefault as ::core::ffi::c_int as uint32_t
-            == 0
-        {
+    while (opt_idx as c_int) < kOptCount {
+        if (*options.ptr())[opt_idx as usize].flags & kOptFlagNoDefault as c_int as uint32_t == 0 {
             set_option_default(opt_idx, opt_flags);
         }
         opt_idx += 1;
@@ -2056,18 +847,17 @@ unsafe extern "C" fn set_options_default(mut opt_flags: ::core::ffi::c_int) {
 }
 unsafe extern "C" fn set_string_default(
     mut opt_idx: OptIndex,
-    mut val: *mut ::core::ffi::c_char,
+    mut val: *mut c_char,
     mut allocated: bool,
 ) {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        if opt_idx as c_int != kOptInvalid as c_int {
         } else {
             __assert_fail(
-                b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                546 as ::core::ffi::c_uint,
-                b"void set_string_default(OptIndex, char *, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"opt_idx != kOptInvalid\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                546 as c_uint,
+                b"void set_string_default(OptIndex, char *, _Bool)\0".as_ptr() as *const c_char,
             );
         }
     };
@@ -2076,7 +866,7 @@ unsafe extern "C" fn set_string_default(
         OptVal {
             type_0: kOptValTypeString,
             data: OptValData {
-                string: cstr_as_string(if allocated as ::core::ffi::c_int != 0 {
+                string: cstr_as_string(if allocated as c_int != 0 {
                     val
                 } else {
                     xstrdup(val)
@@ -2086,123 +876,103 @@ unsafe extern "C" fn set_string_default(
     );
 }
 unsafe extern "C" fn find_dup_item(
-    mut origval: *const ::core::ffi::c_char,
-    mut newval: *const ::core::ffi::c_char,
+    mut origval: *const c_char,
+    mut newval: *const c_char,
     newvallen: size_t,
     mut flags: uint32_t,
-) -> *const ::core::ffi::c_char {
+) -> *const c_char {
     if origval.is_null() {
-        return ::core::ptr::null::<::core::ffi::c_char>();
+        return ::core::ptr::null::<c_char>();
     }
-    let mut bs: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut s: *const ::core::ffi::c_char = origval;
-    while *s as ::core::ffi::c_int != NUL {
-        if (flags & kOptFlagComma as ::core::ffi::c_int as uint32_t == 0
+    let mut bs: c_int = 0 as c_int;
+    let mut s: *const c_char = origval;
+    while *s as c_int != NUL {
+        if (flags & kOptFlagComma as c_int as uint32_t == 0
             || s == origval
-            || *s.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == ',' as ::core::ffi::c_int
-                && bs & 1 as ::core::ffi::c_int == 0)
-            && strncmp(s, newval, newvallen) == 0 as ::core::ffi::c_int
-            && (flags & kOptFlagComma as ::core::ffi::c_int as uint32_t == 0
-                || *s.offset(newvallen as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-                || *s.offset(newvallen as isize) as ::core::ffi::c_int == NUL)
+            || *s.offset(-1 as c_int as isize) as c_int == ',' as c_int && bs & 1 as c_int == 0)
+            && strncmp(s, newval, newvallen) == 0 as c_int
+            && (flags & kOptFlagComma as c_int as uint32_t == 0
+                || *s.offset(newvallen as isize) as c_int == ',' as c_int
+                || *s.offset(newvallen as isize) as c_int == NUL)
         {
             return s;
         }
-        if s > origval.offset(1 as ::core::ffi::c_int as isize)
-            && *s.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '\\' as ::core::ffi::c_int
-            && *s.offset(-2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != ',' as ::core::ffi::c_int
-            || s == origval.offset(1 as ::core::ffi::c_int as isize)
-                && *s.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '\\' as ::core::ffi::c_int
+        if s > origval.offset(1 as c_int as isize)
+            && *s.offset(-1 as c_int as isize) as c_int == '\\' as c_int
+            && *s.offset(-2 as c_int as isize) as c_int != ',' as c_int
+            || s == origval.offset(1 as c_int as isize)
+                && *s.offset(-1 as c_int as isize) as c_int == '\\' as c_int
         {
             bs += 1;
         } else {
-            bs = 0 as ::core::ffi::c_int;
+            bs = 0 as c_int;
         }
         s = s.offset(1);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
 pub unsafe extern "C" fn set_init_2(mut _headless: bool) {
     logmsg(
         LOGLVL_INF,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"set_init_2\0".as_ptr() as *const ::core::ffi::c_char,
-        613 as ::core::ffi::c_int,
+        ::core::ptr::null::<c_char>(),
+        b"set_init_2\0".as_ptr() as *const c_char,
+        613 as c_int,
         true_0 != 0,
-        b"startup runtimepath/packpath value: %s\0".as_ptr() as *const ::core::ffi::c_char,
+        b"startup runtimepath/packpath value: %s\0".as_ptr() as *const c_char,
         p_rtp.get(),
     );
-    if (*options.ptr())[kOptScroll as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+    if (*options.ptr())[kOptScroll as c_int as usize].flags & kOptFlagWasSet as c_int as uint32_t
         == 0
     {
-        set_option_default(kOptScroll, OPT_LOCAL as ::core::ffi::c_int);
+        set_option_default(kOptScroll, OPT_LOCAL as c_int);
     }
     comp_col();
     if !option_was_set(kOptWindow) {
-        p_window.set((Rows.get() - 1 as ::core::ffi::c_int) as OptInt);
+        p_window.set((Rows.get() - 1 as c_int) as OptInt);
     }
     change_option_default(
         kOptWindow,
         OptVal {
             type_0: kOptValTypeNumber,
             data: OptValData {
-                number: (Rows.get() - 1 as ::core::ffi::c_int) as OptInt,
+                number: (Rows.get() - 1 as c_int) as OptInt,
             },
         },
     );
 }
 pub unsafe extern "C" fn set_init_3() {
     parse_shape_opt(SHAPE_CURSOR);
-    let mut do_srr: bool = (*options.ptr())[kOptShellredir as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+    let mut do_srr: bool = (*options.ptr())[kOptShellredir as c_int as usize].flags
+        & kOptFlagWasSet as c_int as uint32_t
         == 0;
-    let mut do_sp: bool = (*options.ptr())[kOptShellpipe as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+    let mut do_sp: bool = (*options.ptr())[kOptShellpipe as c_int as usize].flags
+        & kOptFlagWasSet as c_int as uint32_t
         == 0;
     let mut len: size_t = 0 as size_t;
-    let mut p: *mut ::core::ffi::c_char =
-        invocation_path_tail(p_sh.get(), &raw mut len) as *mut ::core::ffi::c_char;
-    p = xmemdupz(p as *const ::core::ffi::c_void, len) as *mut ::core::ffi::c_char;
-    let mut is_csh: bool = path_fnamecmp(p, b"csh\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
-        || path_fnamecmp(p, b"tcsh\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int;
-    let mut is_known_shell: bool = path_fnamecmp(p, b"sh\0".as_ptr() as *const ::core::ffi::c_char)
-        == 0 as ::core::ffi::c_int
-        || path_fnamecmp(p, b"ksh\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        || path_fnamecmp(p, b"mksh\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        || path_fnamecmp(p, b"pdksh\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        || path_fnamecmp(p, b"zsh\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        || path_fnamecmp(p, b"zsh-beta\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        || path_fnamecmp(p, b"bash\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        || path_fnamecmp(p, b"fish\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        || path_fnamecmp(p, b"ash\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        || path_fnamecmp(p, b"dash\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int;
-    if is_csh as ::core::ffi::c_int != 0 || is_known_shell as ::core::ffi::c_int != 0 {
+    let mut p: *mut c_char = invocation_path_tail(p_sh.get(), &raw mut len) as *mut c_char;
+    p = xmemdupz(p as *const c_void, len) as *mut c_char;
+    let mut is_csh: bool = path_fnamecmp(p, b"csh\0".as_ptr() as *const c_char) == 0 as c_int
+        || path_fnamecmp(p, b"tcsh\0".as_ptr() as *const c_char) == 0 as c_int;
+    let mut is_known_shell: bool = path_fnamecmp(p, b"sh\0".as_ptr() as *const c_char)
+        == 0 as c_int
+        || path_fnamecmp(p, b"ksh\0".as_ptr() as *const c_char) == 0 as c_int
+        || path_fnamecmp(p, b"mksh\0".as_ptr() as *const c_char) == 0 as c_int
+        || path_fnamecmp(p, b"pdksh\0".as_ptr() as *const c_char) == 0 as c_int
+        || path_fnamecmp(p, b"zsh\0".as_ptr() as *const c_char) == 0 as c_int
+        || path_fnamecmp(p, b"zsh-beta\0".as_ptr() as *const c_char) == 0 as c_int
+        || path_fnamecmp(p, b"bash\0".as_ptr() as *const c_char) == 0 as c_int
+        || path_fnamecmp(p, b"fish\0".as_ptr() as *const c_char) == 0 as c_int
+        || path_fnamecmp(p, b"ash\0".as_ptr() as *const c_char) == 0 as c_int
+        || path_fnamecmp(p, b"dash\0".as_ptr() as *const c_char) == 0 as c_int;
+    if is_csh as c_int != 0 || is_known_shell as c_int != 0 {
         if do_sp {
-            let sp: OptVal = if is_csh as ::core::ffi::c_int != 0 {
+            let sp: OptVal = if is_csh as c_int != 0 {
                 OptVal {
                     type_0: kOptValTypeString,
                     data: OptValData {
                         string: String_0 {
-                            data: b"|& tee\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                            size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                                .wrapping_sub(1 as size_t),
+                            data: b"|& tee\0".as_ptr() as *const c_char as *mut c_char,
+                            size: ::core::mem::size_of::<[c_char; 7]>().wrapping_sub(1 as size_t),
                         },
                     },
                 }
@@ -2211,27 +981,23 @@ pub unsafe extern "C" fn set_init_3() {
                     type_0: kOptValTypeString,
                     data: OptValData {
                         string: String_0 {
-                            data: b"2>&1| tee\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                            size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                                .wrapping_sub(1 as size_t),
+                            data: b"2>&1| tee\0".as_ptr() as *const c_char as *mut c_char,
+                            size: ::core::mem::size_of::<[c_char; 10]>().wrapping_sub(1 as size_t),
                         },
                     },
                 }
             };
-            set_option_direct(kOptShellpipe, sp, 0 as ::core::ffi::c_int, SID_NONE);
+            set_option_direct(kOptShellpipe, sp, 0 as c_int, SID_NONE);
             change_option_default(kOptShellpipe, optval_copy(sp));
         }
         if do_srr {
-            let srr: OptVal = if is_csh as ::core::ffi::c_int != 0 {
+            let srr: OptVal = if is_csh as c_int != 0 {
                 OptVal {
                     type_0: kOptValTypeString,
                     data: OptValData {
                         string: String_0 {
-                            data: b">&\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                            size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                .wrapping_sub(1 as size_t),
+                            data: b">&\0".as_ptr() as *const c_char as *mut c_char,
+                            size: ::core::mem::size_of::<[c_char; 3]>().wrapping_sub(1 as size_t),
                         },
                     },
                 }
@@ -2240,30 +1006,28 @@ pub unsafe extern "C" fn set_init_3() {
                     type_0: kOptValTypeString,
                     data: OptValData {
                         string: String_0 {
-                            data: b">%s 2>&1\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                            size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                                .wrapping_sub(1 as size_t),
+                            data: b">%s 2>&1\0".as_ptr() as *const c_char as *mut c_char,
+                            size: ::core::mem::size_of::<[c_char; 9]>().wrapping_sub(1 as size_t),
                         },
                     },
                 }
             };
-            set_option_direct(kOptShellredir, srr, 0 as ::core::ffi::c_int, SID_NONE);
+            set_option_direct(kOptShellredir, srr, 0 as c_int, SID_NONE);
             change_option_default(kOptShellredir, optval_copy(srr));
         }
     }
-    xfree(p as *mut ::core::ffi::c_void);
+    xfree(p as *mut c_void);
     if buf_is_empty(curbuf.get()) {
-        if (*options.ptr())[kOptFileformats as ::core::ffi::c_int as usize].flags
-            & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+        if (*options.ptr())[kOptFileformats as c_int as usize].flags
+            & kOptFlagWasSet as c_int as uint32_t
             != 0
         {
-            set_fileformat(default_fileformat(), OPT_LOCAL as ::core::ffi::c_int);
+            set_fileformat(default_fileformat(), OPT_LOCAL as c_int);
         }
     }
     set_title_defaults();
 }
-pub unsafe extern "C" fn set_helplang_default(mut lang: *const ::core::ffi::c_char) {
+pub unsafe extern "C" fn set_helplang_default(mut lang: *const c_char) {
     if lang.is_null() {
         return;
     }
@@ -2271,52 +1035,44 @@ pub unsafe extern "C" fn set_helplang_default(mut lang: *const ::core::ffi::c_ch
     if lang_len < 2 as size_t {
         return;
     }
-    if (*options.ptr())[kOptHelplang as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+    if (*options.ptr())[kOptHelplang as c_int as usize].flags & kOptFlagWasSet as c_int as uint32_t
         != 0
     {
         return;
     }
     free_string_option(p_hlg.get());
-    p_hlg.set(xmemdupz(lang as *const ::core::ffi::c_void, lang_len) as *mut ::core::ffi::c_char);
+    p_hlg.set(xmemdupz(lang as *const c_void, lang_len) as *mut c_char);
     if strncasecmp(
         p_hlg.get(),
-        b"zh_\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        3 as ::core::ffi::c_int as size_t,
-    ) == 0 as ::core::ffi::c_int
+        b"zh_\0".as_ptr() as *const c_char as *mut c_char,
+        3 as c_int as size_t,
+    ) == 0 as c_int
         && lang_len >= 5 as size_t
     {
-        *(*p_hlg.ptr()).offset(0 as ::core::ffi::c_int as isize) =
-            (if (*(*p_hlg.ptr()).offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                < 'A' as ::core::ffi::c_int
-                || *(*p_hlg.ptr()).offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    > 'Z' as ::core::ffi::c_int
+        *(*p_hlg.ptr()).offset(0 as c_int as isize) =
+            (if (*(*p_hlg.ptr()).offset(3 as c_int as isize) as c_int) < 'A' as c_int
+                || *(*p_hlg.ptr()).offset(3 as c_int as isize) as c_int > 'Z' as c_int
             {
-                *(*p_hlg.ptr()).offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                *(*p_hlg.ptr()).offset(3 as c_int as isize) as c_int
             } else {
-                *(*p_hlg.ptr()).offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-            }) as ::core::ffi::c_char;
-        *(*p_hlg.ptr()).offset(1 as ::core::ffi::c_int as isize) =
-            (if (*(*p_hlg.ptr()).offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                < 'A' as ::core::ffi::c_int
-                || *(*p_hlg.ptr()).offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    > 'Z' as ::core::ffi::c_int
+                *(*p_hlg.ptr()).offset(3 as c_int as isize) as c_int + ('a' as c_int - 'A' as c_int)
+            }) as c_char;
+        *(*p_hlg.ptr()).offset(1 as c_int as isize) =
+            (if (*(*p_hlg.ptr()).offset(4 as c_int as isize) as c_int) < 'A' as c_int
+                || *(*p_hlg.ptr()).offset(4 as c_int as isize) as c_int > 'Z' as c_int
             {
-                *(*p_hlg.ptr()).offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
+                *(*p_hlg.ptr()).offset(4 as c_int as isize) as c_int
             } else {
-                *(*p_hlg.ptr()).offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-            }) as ::core::ffi::c_char;
-    } else if lang_len != 0 && *p_hlg.get() as ::core::ffi::c_int == 'C' as ::core::ffi::c_int {
-        *(*p_hlg.ptr()).offset(0 as ::core::ffi::c_int as isize) = 'e' as ::core::ffi::c_char;
-        *(*p_hlg.ptr()).offset(1 as ::core::ffi::c_int as isize) = 'n' as ::core::ffi::c_char;
+                *(*p_hlg.ptr()).offset(4 as c_int as isize) as c_int + ('a' as c_int - 'A' as c_int)
+            }) as c_char;
+    } else if lang_len != 0 && *p_hlg.get() as c_int == 'C' as c_int {
+        *(*p_hlg.ptr()).offset(0 as c_int as isize) = 'e' as c_char;
+        *(*p_hlg.ptr()).offset(1 as c_int as isize) = 'n' as c_char;
     }
-    *(*p_hlg.ptr()).offset(2 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
+    *(*p_hlg.ptr()).offset(2 as c_int as isize) = NUL as c_char;
 }
 pub unsafe extern "C" fn set_title_defaults() {
-    if (*options.ptr())[kOptTitle as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
+    if (*options.ptr())[kOptTitle as c_int as usize].flags & kOptFlagWasSet as c_int as uint32_t
         == 0
     {
         change_option_default(
@@ -2326,11 +1082,9 @@ pub unsafe extern "C" fn set_title_defaults() {
                 data: OptValData { boolean: kFalse },
             },
         );
-        p_title.set(0 as ::core::ffi::c_int);
+        p_title.set(0 as c_int);
     }
-    if (*options.ptr())[kOptIcon as ::core::ffi::c_int as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
-        == 0
+    if (*options.ptr())[kOptIcon as c_int as usize].flags & kOptFlagWasSet as c_int as uint32_t == 0
     {
         change_option_default(
             kOptIcon,
@@ -2339,47 +1093,41 @@ pub unsafe extern "C" fn set_title_defaults() {
                 data: OptValData { boolean: kFalse },
             },
         );
-        p_icon.set(0 as ::core::ffi::c_int);
+        p_icon.set(0 as c_int);
     }
 }
 pub unsafe extern "C" fn ex_set(mut eap: *mut exarg_T) {
-    let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if (*eap).cmdidx as ::core::ffi::c_int == CMD_setlocal as ::core::ffi::c_int {
-        flags = OPT_LOCAL as ::core::ffi::c_int;
-    } else if (*eap).cmdidx as ::core::ffi::c_int == CMD_setglobal as ::core::ffi::c_int {
-        flags = OPT_GLOBAL as ::core::ffi::c_int;
+    let mut flags: c_int = 0 as c_int;
+    if (*eap).cmdidx as c_int == CMD_setlocal as c_int {
+        flags = OPT_LOCAL as c_int;
+    } else if (*eap).cmdidx as c_int == CMD_setglobal as c_int {
+        flags = OPT_GLOBAL as c_int;
     }
     if (*eap).forceit != 0 {
-        flags |= OPT_ONECOLUMN as ::core::ffi::c_int;
+        flags |= OPT_ONECOLUMN as c_int;
     }
     do_set((*eap).arg, flags);
 }
 unsafe extern "C" fn stropt_copy_value(
-    mut origval: *const ::core::ffi::c_char,
-    mut argp: *mut *mut ::core::ffi::c_char,
+    mut origval: *const c_char,
+    mut argp: *mut *mut c_char,
     mut op: set_op_T,
     mut _flags: uint32_t,
-) -> *mut ::core::ffi::c_char {
-    let mut arg: *mut ::core::ffi::c_char = *argp;
+) -> *mut c_char {
+    let mut arg: *mut c_char = *argp;
     let mut newlen: size_t = strlen(arg).wrapping_add(1 as size_t);
-    if op as ::core::ffi::c_uint != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint {
+    if op as c_uint != OP_NONE as c_int as c_uint {
         newlen = newlen.wrapping_add(strlen(origval).wrapping_add(1 as size_t));
     }
-    let mut newval: *mut ::core::ffi::c_char = xmalloc(newlen) as *mut ::core::ffi::c_char;
-    let mut s: *mut ::core::ffi::c_char = newval;
-    while *arg as ::core::ffi::c_int != NUL && !ascii_iswhite(*arg as ::core::ffi::c_int) {
-        if *arg as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-            && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-        {
+    let mut newval: *mut c_char = xmalloc(newlen) as *mut c_char;
+    let mut s: *mut c_char = newval;
+    while *arg as c_int != NUL && !ascii_iswhite(*arg as c_int) {
+        if *arg as c_int == '\\' as c_int && *arg.offset(1 as c_int as isize) as c_int != NUL {
             arg = arg.offset(1);
         }
-        let mut i: ::core::ffi::c_int = utfc_ptr2len(arg);
-        if i > 1 as ::core::ffi::c_int {
-            memmove(
-                s as *mut ::core::ffi::c_void,
-                arg as *const ::core::ffi::c_void,
-                i as size_t,
-            );
+        let mut i: c_int = utfc_ptr2len(arg);
+        if i > 1 as c_int {
+            memmove(s as *mut c_void, arg as *const c_void, i as size_t);
             arg = arg.offset(i as isize);
             s = s.offset(i as isize);
         } else {
@@ -2390,89 +1138,86 @@ unsafe extern "C" fn stropt_copy_value(
             *c2rust_fresh5 = *c2rust_fresh4;
         }
     }
-    *s = NUL as ::core::ffi::c_char;
+    *s = NUL as c_char;
     *argp = arg;
     return newval;
 }
 unsafe extern "C" fn stropt_expand_envvar(
     mut opt_idx: OptIndex,
-    mut origval: *const ::core::ffi::c_char,
-    mut newval: *mut ::core::ffi::c_char,
+    mut origval: *const c_char,
+    mut newval: *mut c_char,
     mut op: set_op_T,
-) -> *mut ::core::ffi::c_char {
-    let mut s: *mut ::core::ffi::c_char = option_expand(opt_idx, newval);
+) -> *mut c_char {
+    let mut s: *mut c_char = option_expand(opt_idx, newval);
     if s.is_null() {
         return newval;
     }
-    xfree(newval as *mut ::core::ffi::c_void);
+    xfree(newval as *mut c_void);
     let mut newlen: uint32_t = (strlen(s) as uint32_t).wrapping_add(1 as uint32_t);
-    if op as ::core::ffi::c_uint != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint {
-        newlen = (newlen as ::core::ffi::c_uint).wrapping_add(
-            (strlen(origval) as ::core::ffi::c_uint).wrapping_add(1 as ::core::ffi::c_uint),
-        ) as uint32_t;
+    if op as c_uint != OP_NONE as c_int as c_uint {
+        newlen = (newlen as c_uint)
+            .wrapping_add((strlen(origval) as c_uint).wrapping_add(1 as c_uint))
+            as uint32_t;
     }
-    newval = xmalloc(newlen as size_t) as *mut ::core::ffi::c_char;
+    newval = xmalloc(newlen as size_t) as *mut c_char;
     strcpy(newval, s);
     return newval;
 }
 unsafe extern "C" fn stropt_concat_with_comma(
-    mut origval: *const ::core::ffi::c_char,
-    mut newval: *mut ::core::ffi::c_char,
+    mut origval: *const c_char,
+    mut newval: *mut c_char,
     mut op: set_op_T,
     mut flags: uint32_t,
 ) {
-    let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut comma: ::core::ffi::c_int =
-        (flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0
-            && *origval as ::core::ffi::c_int != NUL
-            && *newval as ::core::ffi::c_int != NUL) as ::core::ffi::c_int;
-    if op as ::core::ffi::c_uint == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint {
-        len = strlen(origval) as ::core::ffi::c_int;
+    let mut len: c_int = 0 as c_int;
+    let mut comma: c_int = (flags & kOptFlagComma as c_int as uint32_t != 0
+        && *origval as c_int != NUL
+        && *newval as c_int != NUL) as c_int;
+    if op as c_uint == OP_ADDING as c_int as c_uint {
+        len = strlen(origval) as c_int;
         if comma != 0
-            && len > 1 as ::core::ffi::c_int
-            && flags & kOptFlagOneComma as ::core::ffi::c_int as uint32_t
-                == kOptFlagOneComma as ::core::ffi::c_int as uint32_t
-            && *origval.offset((len - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-                == ',' as ::core::ffi::c_int
-            && *origval.offset((len - 2 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-                != '\\' as ::core::ffi::c_int
+            && len > 1 as c_int
+            && flags & kOptFlagOneComma as c_int as uint32_t
+                == kOptFlagOneComma as c_int as uint32_t
+            && *origval.offset((len - 1 as c_int) as isize) as c_int == ',' as c_int
+            && *origval.offset((len - 2 as c_int) as isize) as c_int != '\\' as c_int
         {
             len -= 1;
         }
         memmove(
-            newval.offset(len as isize).offset(comma as isize) as *mut ::core::ffi::c_void,
-            newval as *const ::core::ffi::c_void,
+            newval.offset(len as isize).offset(comma as isize) as *mut c_void,
+            newval as *const c_void,
             strlen(newval).wrapping_add(1 as size_t),
         );
         memmove(
-            newval as *mut ::core::ffi::c_void,
-            origval as *const ::core::ffi::c_void,
+            newval as *mut c_void,
+            origval as *const c_void,
             len as size_t,
         );
     } else {
-        len = strlen(newval) as ::core::ffi::c_int;
+        len = strlen(newval) as c_int;
         memmove(
-            newval.offset(len as isize).offset(comma as isize) as *mut ::core::ffi::c_void,
-            origval as *const ::core::ffi::c_void,
+            newval.offset(len as isize).offset(comma as isize) as *mut c_void,
+            origval as *const c_void,
             strlen(origval).wrapping_add(1 as size_t),
         );
     }
     if comma != 0 {
-        *newval.offset(len as isize) = ',' as ::core::ffi::c_char;
+        *newval.offset(len as isize) = ',' as c_char;
     }
 }
 unsafe extern "C" fn stropt_remove_val(
-    mut origval: *const ::core::ffi::c_char,
-    mut newval: *mut ::core::ffi::c_char,
+    mut origval: *const c_char,
+    mut newval: *mut c_char,
     mut flags: uint32_t,
-    mut strval: *const ::core::ffi::c_char,
-    mut len: ::core::ffi::c_int,
+    mut strval: *const c_char,
+    mut len: c_int,
 ) {
-    strcpy(newval, origval as *mut ::core::ffi::c_char);
+    strcpy(newval, origval as *mut c_char);
     if *strval != 0 {
-        if flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0 {
+        if flags & kOptFlagComma as c_int as uint32_t != 0 {
             if strval == origval {
-                if *strval.offset(len as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
+                if *strval.offset(len as isize) as c_int == ',' as c_int {
                     len += 1;
                 }
             } else {
@@ -2481,26 +1226,24 @@ unsafe extern "C" fn stropt_remove_val(
             }
         }
         memmove(
-            newval.offset(strval.offset_from(origval) as isize) as *mut ::core::ffi::c_void,
-            strval.offset(len as isize) as *const ::core::ffi::c_void,
+            newval.offset(strval.offset_from(origval) as isize) as *mut c_void,
+            strval.offset(len as isize) as *const c_void,
             strlen(strval.offset(len as isize)).wrapping_add(1 as size_t),
         );
     }
 }
 unsafe extern "C" fn find_key_item(
-    mut src: *mut ::core::ffi::c_char,
-    mut key: *mut ::core::ffi::c_char,
+    mut src: *mut c_char,
+    mut key: *mut c_char,
     mut keylen: ptrdiff_t,
     mut itemlenp: *mut ptrdiff_t,
-) -> *mut ::core::ffi::c_char {
-    let mut p: *mut ::core::ffi::c_char = src;
-    while *p as ::core::ffi::c_int != NUL {
-        if (p == src
-            || *p.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
-                == ',' as ::core::ffi::c_int)
-            && strncmp(p, key, keylen as size_t) == 0 as ::core::ffi::c_int
+) -> *mut c_char {
+    let mut p: *mut c_char = src;
+    while *p as c_int != NUL {
+        if (p == src || *p.offset(-(1 as c_int as isize)) as c_int == ',' as c_int)
+            && strncmp(p, key, keylen as size_t) == 0 as c_int
         {
-            let mut end: *mut ::core::ffi::c_char = vim_strchr(p, ',' as ::core::ffi::c_int);
+            let mut end: *mut c_char = vim_strchr(p, ',' as c_int);
             if end.is_null() {
                 end = p.offset(strlen(p) as isize);
             }
@@ -2509,53 +1252,48 @@ unsafe extern "C" fn find_key_item(
         }
         p = p.offset(1);
     }
-    return ::core::ptr::null_mut::<::core::ffi::c_char>();
+    return ::core::ptr::null_mut::<c_char>();
 }
 unsafe extern "C" fn remove_comma_item(
-    mut str: *const ::core::ffi::c_char,
-    mut item: *mut ::core::ffi::c_char,
+    mut str: *const c_char,
+    mut item: *mut c_char,
     mut itemlen: ptrdiff_t,
 ) {
-    if *item.offset(itemlen as isize) as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
+    if *item.offset(itemlen as isize) as c_int == ',' as c_int {
         memmove(
-            item as *mut ::core::ffi::c_void,
-            item.offset(itemlen as isize)
-                .offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-            strlen(
-                item.offset(itemlen as isize)
-                    .offset(1 as ::core::ffi::c_int as isize),
-            )
-            .wrapping_add(1 as size_t),
+            item as *mut c_void,
+            item.offset(itemlen as isize).offset(1 as c_int as isize) as *const c_void,
+            strlen(item.offset(itemlen as isize).offset(1 as c_int as isize))
+                .wrapping_add(1 as size_t),
         );
-    } else if item > str as *mut ::core::ffi::c_char
-        && *item.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
-            == ',' as ::core::ffi::c_int
+    } else if item > str as *mut c_char
+        && *item.offset(-(1 as c_int as isize)) as c_int == ',' as c_int
     {
         memmove(
-            item.offset(-(1 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_void,
-            item.offset(itemlen as isize) as *const ::core::ffi::c_void,
+            item.offset(-(1 as c_int as isize)) as *mut c_void,
+            item.offset(itemlen as isize) as *const c_void,
             strlen(item.offset(itemlen as isize)).wrapping_add(1 as size_t),
         );
     } else {
-        *item = NUL as ::core::ffi::c_char;
+        *item = NUL as c_char;
     };
 }
 unsafe extern "C" fn remove_key_item(
-    mut str: *mut ::core::ffi::c_char,
-    mut key: *mut ::core::ffi::c_char,
+    mut str: *mut c_char,
+    mut key: *mut c_char,
     mut keylen: ptrdiff_t,
-    mut skip: *const ::core::ffi::c_char,
+    mut skip: *const c_char,
 ) {
     let mut itemlen: ptrdiff_t = 0;
-    let mut found: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut found: *mut c_char = ::core::ptr::null_mut::<c_char>();
     loop {
         found = find_key_item(str, key, keylen, &raw mut itemlen);
         if found.is_null() {
             break;
         }
-        if found == skip as *mut ::core::ffi::c_char {
-            let mut next: *mut ::core::ffi::c_char = found.offset(itemlen as isize);
-            if *next as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
+        if found == skip as *mut c_char {
+            let mut next: *mut c_char = found.offset(itemlen as isize);
+            if *next as c_int == ',' as c_int {
                 next = next.offset(1);
             }
             found = find_key_item(next, key, keylen, &raw mut itemlen);
@@ -2567,86 +1305,80 @@ unsafe extern "C" fn remove_key_item(
     }
 }
 unsafe extern "C" fn append_item(
-    mut str: *mut ::core::ffi::c_char,
-    mut item: *mut ::core::ffi::c_char,
+    mut str: *mut c_char,
+    mut item: *mut c_char,
     mut item_len: ptrdiff_t,
 ) {
     let mut len: ptrdiff_t = strlen(str) as ptrdiff_t;
     if len > 0 as ptrdiff_t {
         let c2rust_fresh3 = len;
         len = len + 1;
-        *str.offset(c2rust_fresh3 as isize) = ',' as ::core::ffi::c_char;
+        *str.offset(c2rust_fresh3 as isize) = ',' as c_char;
     }
     memmove(
-        str.offset(len as isize) as *mut ::core::ffi::c_void,
-        item as *const ::core::ffi::c_void,
+        str.offset(len as isize) as *mut c_void,
+        item as *const c_void,
         item_len as size_t,
     );
-    *str.offset((len + item_len) as isize) = NUL as ::core::ffi::c_char;
+    *str.offset((len + item_len) as isize) = NUL as c_char;
 }
 unsafe extern "C" fn prepend_item(
-    mut str: *mut ::core::ffi::c_char,
-    mut item: *mut ::core::ffi::c_char,
+    mut str: *mut c_char,
+    mut item: *mut c_char,
     mut item_len: ptrdiff_t,
 ) {
     let mut len: ptrdiff_t = strlen(str) as ptrdiff_t;
-    let mut comma: ::core::ffi::c_int = if len > 0 as ptrdiff_t {
-        1 as ::core::ffi::c_int
+    let mut comma: c_int = if len > 0 as ptrdiff_t {
+        1 as c_int
     } else {
-        0 as ::core::ffi::c_int
+        0 as c_int
     };
     memmove(
-        str.offset(item_len as isize).offset(comma as isize) as *mut ::core::ffi::c_void,
-        str as *const ::core::ffi::c_void,
+        str.offset(item_len as isize).offset(comma as isize) as *mut c_void,
+        str as *const c_void,
         (len as size_t).wrapping_add(1 as size_t),
     );
     memmove(
-        str as *mut ::core::ffi::c_void,
-        item as *const ::core::ffi::c_void,
+        str as *mut c_void,
+        item as *const c_void,
         item_len as size_t,
     );
     if comma != 0 {
-        *str.offset(item_len as isize) = ',' as ::core::ffi::c_char;
+        *str.offset(item_len as isize) = ',' as c_char;
     }
 }
 unsafe extern "C" fn stropt_handle_keymatch(
-    mut origval: *const ::core::ffi::c_char,
-    mut newval: *mut ::core::ffi::c_char,
+    mut origval: *const c_char,
+    mut newval: *mut c_char,
     mut op: set_op_T,
     mut _flags: uint32_t,
 ) -> bool {
-    if vim_strchr(newval, ':' as ::core::ffi::c_int).is_null()
-        && vim_strchr(newval, ',' as ::core::ffi::c_int).is_null()
-    {
+    if vim_strchr(newval, ':' as c_int).is_null() && vim_strchr(newval, ',' as c_int).is_null() {
         return false_0 != 0;
     }
-    let mut newval_copy: *mut ::core::ffi::c_char = xstrdup(newval);
-    strcpy(newval, origval as *mut ::core::ffi::c_char);
-    let mut item_start: *mut ::core::ffi::c_char = newval_copy;
+    let mut newval_copy: *mut c_char = xstrdup(newval);
+    strcpy(newval, origval as *mut c_char);
+    let mut item_start: *mut c_char = newval_copy;
     loop {
-        let mut p: *mut ::core::ffi::c_char = vim_strchr(item_start, ',' as ::core::ffi::c_int);
+        let mut p: *mut c_char = vim_strchr(item_start, ',' as c_int);
         let mut item_len: ptrdiff_t = if p.is_null() {
             strlen(item_start) as ptrdiff_t
         } else {
             p.offset_from(item_start)
         };
         if item_len > 0 as ptrdiff_t {
-            let mut colon: *mut ::core::ffi::c_char =
-                vim_strchr(item_start, ':' as ::core::ffi::c_int);
+            let mut colon: *mut c_char = vim_strchr(item_start, ':' as c_int);
             if !colon.is_null() && colon < item_start.offset(item_len as isize) {
                 let mut keylen: ptrdiff_t = colon.offset_from(item_start) + 1 as ptrdiff_t;
-                if op as ::core::ffi::c_uint
-                    == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint
-                    || op as ::core::ffi::c_uint
-                        == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint
+                if op as c_uint == OP_ADDING as c_int as c_uint
+                    || op as c_uint == OP_PREPENDING as c_int as c_uint
                 {
                     let mut old_itemlen: ptrdiff_t = 0;
-                    let mut found: *mut ::core::ffi::c_char =
+                    let mut found: *mut c_char =
                         find_key_item(newval, item_start, keylen, &raw mut old_itemlen);
                     if !found.is_null() {
                         if old_itemlen == item_len
-                            && strncmp(found, item_start, item_len as size_t)
-                                == 0 as ::core::ffi::c_int
+                            && strncmp(found, item_start, item_len as size_t) == 0 as c_int
                         {
                             remove_key_item(newval, item_start, keylen, found);
                         } else {
@@ -2654,63 +1386,45 @@ unsafe extern "C" fn stropt_handle_keymatch(
                                 newval,
                                 item_start,
                                 keylen,
-                                ::core::ptr::null::<::core::ffi::c_char>(),
+                                ::core::ptr::null::<c_char>(),
                             );
-                            if op as ::core::ffi::c_uint
-                                == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
+                            if op as c_uint == OP_PREPENDING as c_int as c_uint {
                                 prepend_item(newval, item_start, item_len);
                             } else {
                                 append_item(newval, item_start, item_len);
                             }
                         }
-                    } else if op as ::core::ffi::c_uint
-                        == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
+                    } else if op as c_uint == OP_PREPENDING as c_int as c_uint {
                         prepend_item(newval, item_start, item_len);
                     } else {
                         append_item(newval, item_start, item_len);
                     }
-                } else if op as ::core::ffi::c_uint
-                    == OP_REMOVING as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    remove_key_item(
-                        newval,
-                        item_start,
-                        keylen,
-                        ::core::ptr::null::<::core::ffi::c_char>(),
-                    );
+                } else if op as c_uint == OP_REMOVING as c_int as c_uint {
+                    remove_key_item(newval, item_start, keylen, ::core::ptr::null::<c_char>());
                 }
-            } else if op as ::core::ffi::c_uint
-                == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint
-                || op as ::core::ffi::c_uint
-                    == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint
+            } else if op as c_uint == OP_ADDING as c_int as c_uint
+                || op as c_uint == OP_PREPENDING as c_int as c_uint
             {
-                let mut found_0: *const ::core::ffi::c_char = find_dup_item(
+                let mut found_0: *const c_char = find_dup_item(
                     newval,
                     item_start,
                     item_len as size_t,
-                    kOptFlagComma as ::core::ffi::c_int as uint32_t,
+                    kOptFlagComma as c_int as uint32_t,
                 );
                 if found_0.is_null() {
-                    if op as ::core::ffi::c_uint
-                        == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
+                    if op as c_uint == OP_PREPENDING as c_int as c_uint {
                         prepend_item(newval, item_start, item_len);
                     } else {
                         append_item(newval, item_start, item_len);
                     }
                 }
-            } else if op as ::core::ffi::c_uint
-                == OP_REMOVING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let mut found_1: *mut ::core::ffi::c_char = find_dup_item(
+            } else if op as c_uint == OP_REMOVING as c_int as c_uint {
+                let mut found_1: *mut c_char = find_dup_item(
                     newval,
                     item_start,
                     item_len as size_t,
-                    kOptFlagComma as ::core::ffi::c_int as uint32_t,
-                )
-                    as *mut ::core::ffi::c_char;
+                    kOptFlagComma as c_int as uint32_t,
+                ) as *mut c_char;
                 if !found_1.is_null() {
                     remove_comma_item(newval, found_1, item_len);
                 }
@@ -2719,47 +1433,34 @@ unsafe extern "C" fn stropt_handle_keymatch(
         if p.is_null() {
             break;
         }
-        item_start = p.offset(1 as ::core::ffi::c_int as isize);
+        item_start = p.offset(1 as c_int as isize);
     }
-    xfree(newval_copy as *mut ::core::ffi::c_void);
+    xfree(newval_copy as *mut c_void);
     return true_0 != 0;
 }
-unsafe extern "C" fn stropt_remove_dupflags(
-    mut newval: *mut ::core::ffi::c_char,
-    mut flags: uint32_t,
-) {
-    let mut s: *mut ::core::ffi::c_char = newval;
+unsafe extern "C" fn stropt_remove_dupflags(mut newval: *mut c_char, mut flags: uint32_t) {
+    let mut s: *mut c_char = newval;
     s = newval;
     while *s != 0 {
-        if flags & kOptFlagOneComma as ::core::ffi::c_int as uint32_t != 0 {
-            if *s as ::core::ffi::c_int != ',' as ::core::ffi::c_int
-                && *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == ',' as ::core::ffi::c_int
-                && !vim_strchr(
-                    s.offset(2 as ::core::ffi::c_int as isize),
-                    *s as uint8_t as ::core::ffi::c_int,
-                )
-                .is_null()
+        if flags & kOptFlagOneComma as c_int as uint32_t != 0 {
+            if *s as c_int != ',' as c_int
+                && *s.offset(1 as c_int as isize) as c_int == ',' as c_int
+                && !vim_strchr(s.offset(2 as c_int as isize), *s as uint8_t as c_int).is_null()
             {
                 memmove(
-                    s as *mut ::core::ffi::c_void,
-                    s.offset(2 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                    strlen(s.offset(2 as ::core::ffi::c_int as isize)).wrapping_add(1 as size_t),
+                    s as *mut c_void,
+                    s.offset(2 as c_int as isize) as *const c_void,
+                    strlen(s.offset(2 as c_int as isize)).wrapping_add(1 as size_t),
                 );
                 continue;
             }
-        } else if (flags & kOptFlagComma as ::core::ffi::c_int as uint32_t == 0
-            || *s as ::core::ffi::c_int != ',' as ::core::ffi::c_int)
-            && !vim_strchr(
-                s.offset(1 as ::core::ffi::c_int as isize),
-                *s as uint8_t as ::core::ffi::c_int,
-            )
-            .is_null()
+        } else if (flags & kOptFlagComma as c_int as uint32_t == 0 || *s as c_int != ',' as c_int)
+            && !vim_strchr(s.offset(1 as c_int as isize), *s as uint8_t as c_int).is_null()
         {
             memmove(
-                s as *mut ::core::ffi::c_void,
-                s.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-                strlen(s.offset(1 as ::core::ffi::c_int as isize)).wrapping_add(1 as size_t),
+                s as *mut c_void,
+                s.offset(1 as c_int as isize) as *const c_void,
+                strlen(s.offset(1 as c_int as isize)).wrapping_add(1 as size_t),
             );
             continue;
         }
@@ -2767,68 +1468,61 @@ unsafe extern "C" fn stropt_remove_dupflags(
     }
 }
 unsafe extern "C" fn stropt_get_newval(
-    mut _nextchar: ::core::ffi::c_int,
+    mut _nextchar: c_int,
     mut opt_idx: OptIndex,
-    mut argp: *mut *mut ::core::ffi::c_char,
-    mut varp: *mut ::core::ffi::c_void,
-    mut origval: *const ::core::ffi::c_char,
+    mut argp: *mut *mut c_char,
+    mut varp: *mut c_void,
+    mut origval: *const c_char,
     mut op_arg: *mut set_op_T,
     mut flags: uint32_t,
-) -> *mut ::core::ffi::c_char {
-    let mut arg: *mut ::core::ffi::c_char = *argp;
+) -> *mut c_char {
+    let mut arg: *mut c_char = *argp;
     let mut op: set_op_T = *op_arg;
-    let mut save_arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut newval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut save_arg: *mut c_char = ::core::ptr::null_mut::<c_char>();
+    let mut newval: *mut c_char = ::core::ptr::null_mut::<c_char>();
+    let mut s: *const c_char = ::core::ptr::null::<c_char>();
     arg = arg.offset(1);
-    if varp == p_kp.ptr() as *mut ::core::ffi::c_void
-        && (*arg as ::core::ffi::c_int == NUL
-            || *arg as ::core::ffi::c_int == ' ' as ::core::ffi::c_int)
+    if varp == p_kp.ptr() as *mut c_void && (*arg as c_int == NUL || *arg as c_int == ' ' as c_int)
     {
         save_arg = arg;
-        arg = b":help\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        arg = b":help\0".as_ptr() as *const c_char as *mut c_char;
     }
     newval = stropt_copy_value(origval, &raw mut arg, op, flags);
-    if op as ::core::ffi::c_uint == OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
-        || flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0
+    if op as c_uint == OP_NONE as c_int as c_uint || flags & kOptFlagComma as c_int as uint32_t != 0
     {
         newval = stropt_expand_envvar(opt_idx, origval, newval, op);
     }
-    if !(flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0
-        && flags & kOptFlagColon as ::core::ffi::c_int as uint32_t != 0
-        && op as ::core::ffi::c_uint != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
-        && stropt_handle_keymatch(origval, newval, op, flags) as ::core::ffi::c_int != 0)
+    if !(flags & kOptFlagComma as c_int as uint32_t != 0
+        && flags & kOptFlagColon as c_int as uint32_t != 0
+        && op as c_uint != OP_NONE as c_int as c_uint
+        && stropt_handle_keymatch(origval, newval, op, flags) as c_int != 0)
     {
-        let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if op as ::core::ffi::c_uint == OP_REMOVING as ::core::ffi::c_int as ::core::ffi::c_uint
-            || flags & kOptFlagNoDup as ::core::ffi::c_int as uint32_t != 0
+        let mut len: c_int = 0 as c_int;
+        if op as c_uint == OP_REMOVING as c_int as c_uint
+            || flags & kOptFlagNoDup as c_int as uint32_t != 0
         {
-            len = strlen(newval) as ::core::ffi::c_int;
+            len = strlen(newval) as c_int;
             s = find_dup_item(origval, newval, len as size_t, flags);
-            if (op as ::core::ffi::c_uint == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint
-                || op as ::core::ffi::c_uint
-                    == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint)
+            if (op as c_uint == OP_ADDING as c_int as c_uint
+                || op as c_uint == OP_PREPENDING as c_int as c_uint)
                 && !s.is_null()
             {
                 op = OP_NONE;
-                strcpy(newval, origval as *mut ::core::ffi::c_char);
+                strcpy(newval, origval as *mut c_char);
             }
             if s.is_null() {
-                s = origval.offset(strlen(origval) as ::core::ffi::c_int as isize);
+                s = origval.offset(strlen(origval) as c_int as isize);
             }
         }
-        if op as ::core::ffi::c_uint == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint
-            || op as ::core::ffi::c_uint
-                == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint
+        if op as c_uint == OP_ADDING as c_int as c_uint
+            || op as c_uint == OP_PREPENDING as c_int as c_uint
         {
             stropt_concat_with_comma(origval, newval, op, flags);
-        } else if op as ::core::ffi::c_uint
-            == OP_REMOVING as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        } else if op as c_uint == OP_REMOVING as c_int as c_uint {
             stropt_remove_val(origval, newval, flags, s, len);
         }
     }
-    if flags & kOptFlagFlagList as ::core::ffi::c_int as uint32_t != 0 {
+    if flags & kOptFlagFlagList as c_int as uint32_t != 0 {
         stropt_remove_dupflags(newval, flags);
     }
     if !save_arg.is_null() {
@@ -2838,38 +1532,25 @@ unsafe extern "C" fn stropt_get_newval(
     *op_arg = op;
     return newval;
 }
-unsafe extern "C" fn get_op(mut arg: *const ::core::ffi::c_char) -> set_op_T {
+unsafe extern "C" fn get_op(mut arg: *const c_char) -> set_op_T {
     let mut op: set_op_T = OP_NONE;
-    if *arg as ::core::ffi::c_int != NUL
-        && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '=' as ::core::ffi::c_int
-    {
-        if *arg as ::core::ffi::c_int == '+' as ::core::ffi::c_int {
+    if *arg as c_int != NUL && *arg.offset(1 as c_int as isize) as c_int == '=' as c_int {
+        if *arg as c_int == '+' as c_int {
             op = OP_ADDING;
-        } else if *arg as ::core::ffi::c_int == '^' as ::core::ffi::c_int {
+        } else if *arg as c_int == '^' as c_int {
             op = OP_PREPENDING;
-        } else if *arg as ::core::ffi::c_int == '-' as ::core::ffi::c_int {
+        } else if *arg as c_int == '-' as c_int {
             op = OP_REMOVING;
         }
     }
     return op;
 }
-unsafe extern "C" fn get_option_prefix(mut argp: *mut *mut ::core::ffi::c_char) -> set_prefix_T {
-    if strncmp(
-        *argp,
-        b"no\0".as_ptr() as *const ::core::ffi::c_char,
-        2 as size_t,
-    ) == 0 as ::core::ffi::c_int
-    {
-        *argp = (*argp).offset(2 as ::core::ffi::c_int as isize);
+unsafe extern "C" fn get_option_prefix(mut argp: *mut *mut c_char) -> set_prefix_T {
+    if strncmp(*argp, b"no\0".as_ptr() as *const c_char, 2 as size_t) == 0 as c_int {
+        *argp = (*argp).offset(2 as c_int as isize);
         return PREFIX_NO;
-    } else if strncmp(
-        *argp,
-        b"inv\0".as_ptr() as *const ::core::ffi::c_char,
-        3 as size_t,
-    ) == 0 as ::core::ffi::c_int
-    {
-        *argp = (*argp).offset(3 as ::core::ffi::c_int as isize);
+    } else if strncmp(*argp, b"inv\0".as_ptr() as *const c_char, 3 as size_t) == 0 as c_int {
+        *argp = (*argp).offset(3 as c_int as isize);
         return PREFIX_INV;
     }
     return PREFIX_NONE;
@@ -2877,102 +1558,90 @@ unsafe extern "C" fn get_option_prefix(mut argp: *mut *mut ::core::ffi::c_char) 
 unsafe extern "C" fn validate_opt_idx(
     mut win: *mut win_T,
     mut opt_idx: OptIndex,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut flags: uint32_t,
     mut prefix: set_prefix_T,
-    mut errmsg: *mut *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+    mut errmsg: *mut *const c_char,
+) -> c_int {
     if !option_has_type(opt_idx, kOptValTypeBoolean)
-        && prefix as ::core::ffi::c_uint != PREFIX_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
+        && prefix as c_uint != PREFIX_NONE as c_int as c_uint
     {
-        *errmsg = &raw const e_invarg as *const ::core::ffi::c_char;
+        *errmsg = &raw const e_invarg as *const c_char;
         return FAIL;
     }
-    if opt_flags & OPT_WINONLY as ::core::ffi::c_int != 0 && !option_is_window_local(opt_idx) {
+    if opt_flags & OPT_WINONLY as c_int != 0 && !option_is_window_local(opt_idx) {
         return FAIL;
     }
-    if opt_flags & OPT_NOWIN as ::core::ffi::c_int != 0
-        && option_is_window_local(opt_idx) as ::core::ffi::c_int != 0
-    {
+    if opt_flags & OPT_NOWIN as c_int != 0 && option_is_window_local(opt_idx) as c_int != 0 {
         return FAIL;
     }
-    if opt_flags & OPT_MODELINE as ::core::ffi::c_int != 0 {
-        if flags & kOptFlagSecure as ::core::ffi::c_int as uint32_t != 0 {
-            *errmsg = (e_not_allowed_in_modeline.ptr() as *const _) as *const ::core::ffi::c_char;
+    if opt_flags & OPT_MODELINE as c_int != 0 {
+        if flags & kOptFlagSecure as c_int as uint32_t != 0 {
+            *errmsg = (e_not_allowed_in_modeline.ptr() as *const _) as *const c_char;
             return FAIL;
         }
-        if flags & kOptFlagMLE as ::core::ffi::c_int as uint32_t != 0 && p_mle.get() == 0 {
+        if flags & kOptFlagMLE as c_int as uint32_t != 0 && p_mle.get() == 0 {
             *errmsg = (e_not_allowed_in_modeline_when_modelineexpr_is_off.ptr() as *const _)
-                as *const ::core::ffi::c_char;
+                as *const c_char;
             return FAIL;
         }
         if (*win).w_onebuf_opt.wo_diff != 0
-            && (opt_idx as ::core::ffi::c_int == kOptFoldmethod as ::core::ffi::c_int
-                || opt_idx as ::core::ffi::c_int == kOptWrap as ::core::ffi::c_int)
+            && (opt_idx as c_int == kOptFoldmethod as c_int
+                || opt_idx as c_int == kOptWrap as c_int)
         {
             return FAIL;
         }
     }
-    if sandbox.get() != 0 as ::core::ffi::c_int
-        && flags & kOptFlagSecure as ::core::ffi::c_int as uint32_t != 0
-    {
-        *errmsg = &raw const e_sandbox as *const ::core::ffi::c_char;
+    if sandbox.get() != 0 as c_int && flags & kOptFlagSecure as c_int as uint32_t != 0 {
+        *errmsg = &raw const e_sandbox as *const c_char;
         return FAIL;
     }
     return OK;
 }
-unsafe extern "C" fn find_tty_option_end(
-    mut arg: *const ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
-    if strequal(arg, b"term\0".as_ptr() as *const ::core::ffi::c_char) {
+unsafe extern "C" fn find_tty_option_end(mut arg: *const c_char) -> *const c_char {
+    if strequal(arg, b"term\0".as_ptr() as *const c_char) {
         return arg
-            .offset(::core::mem::size_of::<[::core::ffi::c_char; 5]>() as isize)
-            .offset(-(1 as ::core::ffi::c_int as isize));
-    } else if strequal(arg, b"ttytype\0".as_ptr() as *const ::core::ffi::c_char) {
+            .offset(::core::mem::size_of::<[c_char; 5]>() as isize)
+            .offset(-(1 as c_int as isize));
+    } else if strequal(arg, b"ttytype\0".as_ptr() as *const c_char) {
         return arg
-            .offset(::core::mem::size_of::<[::core::ffi::c_char; 8]>() as isize)
-            .offset(-(1 as ::core::ffi::c_int as isize));
+            .offset(::core::mem::size_of::<[c_char; 8]>() as isize)
+            .offset(-(1 as c_int as isize));
     }
-    let mut p: *const ::core::ffi::c_char = arg;
+    let mut p: *const c_char = arg;
     let mut delimit: bool = false_0 != 0;
-    if *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == '<' as ::core::ffi::c_int
-    {
+    if *arg.offset(0 as c_int as isize) as c_int == '<' as c_int {
         delimit = true_0 != 0;
         p = p.offset(1);
     }
-    if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == 't' as ::core::ffi::c_int
-        && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '_' as ::core::ffi::c_int
-        && *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != 0
-        && *p.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != 0
+    if *p.offset(0 as c_int as isize) as c_int == 't' as c_int
+        && *p.offset(1 as c_int as isize) as c_int == '_' as c_int
+        && *p.offset(2 as c_int as isize) as c_int != 0
+        && *p.offset(3 as c_int as isize) as c_int != 0
     {
-        p = p.offset(4 as ::core::ffi::c_int as isize);
+        p = p.offset(4 as c_int as isize);
     } else if delimit {
-        while *p as ::core::ffi::c_int != NUL
-            && *p as ::core::ffi::c_int != '>' as ::core::ffi::c_int
-        {
+        while *p as c_int != NUL && *p as c_int != '>' as c_int {
             p = p.offset(1);
         }
     }
     if delimit {
-        if *p as ::core::ffi::c_int != '>' as ::core::ffi::c_int {
-            return ::core::ptr::null::<::core::ffi::c_char>();
+        if *p as c_int != '>' as c_int {
+            return ::core::ptr::null::<c_char>();
         }
         p = p.offset(1);
     }
     return if arg == p {
-        ::core::ptr::null::<::core::ffi::c_char>()
+        ::core::ptr::null::<c_char>()
     } else {
         p
     };
 }
 pub unsafe extern "C" fn find_option_end(
-    mut arg: *const ::core::ffi::c_char,
+    mut arg: *const c_char,
     mut opt_idxp: *mut OptIndex,
-) -> *const ::core::ffi::c_char {
-    let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+) -> *const c_char {
+    let mut p: *const c_char = ::core::ptr::null::<c_char>();
     p = find_tty_option_end(arg);
     if !p.is_null() {
         *opt_idxp = kOptInvalid;
@@ -2980,18 +1649,14 @@ pub unsafe extern "C" fn find_option_end(
     } else {
         p = arg;
     }
-    if !(*p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-        && *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-        || *p as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-            && *p as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint)
+    if !(*p as c_uint >= 'A' as c_uint && *p as c_uint <= 'Z' as c_uint
+        || *p as c_uint >= 'a' as c_uint && *p as c_uint <= 'z' as c_uint)
     {
         *opt_idxp = kOptInvalid;
-        return ::core::ptr::null::<::core::ffi::c_char>();
+        return ::core::ptr::null::<c_char>();
     }
-    while *p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-        && *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-        || *p as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-            && *p as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
+    while *p as c_uint >= 'A' as c_uint && *p as c_uint <= 'Z' as c_uint
+        || *p as c_uint >= 'a' as c_uint && *p as c_uint <= 'z' as c_uint
     {
         p = p.offset(1);
     }
@@ -3000,37 +1665,37 @@ pub unsafe extern "C" fn find_option_end(
 }
 unsafe extern "C" fn get_option_newval(
     mut opt_idx: OptIndex,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut prefix: set_prefix_T,
-    mut argp: *mut *mut ::core::ffi::c_char,
-    mut nextchar: ::core::ffi::c_int,
+    mut argp: *mut *mut c_char,
+    mut nextchar: c_int,
     mut op: set_op_T,
     mut flags: uint32_t,
-    mut varp: *mut ::core::ffi::c_void,
-    mut _errbuf: *mut ::core::ffi::c_char,
+    mut varp: *mut c_void,
+    mut _errbuf: *mut c_char,
     _errbuflen: size_t,
-    mut errmsg: *mut *const ::core::ffi::c_char,
+    mut errmsg: *mut *const c_char,
 ) -> OptVal {
     '_c2rust_label: {
         if !varp.is_null() {
         } else {
             __assert_fail(
-                b"varp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
+                b"varp != NULL\0".as_ptr() as *const c_char,
                 b"src/nvim/option.rs\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                1322 as ::core::ffi::c_uint,
+                    as *const c_char,
+                1322 as c_uint,
                 b"OptVal get_option_newval(OptIndex, int, set_prefix_T, char **, int, set_op_T, uint32_t, void *, char *, const size_t, const char **)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                    .as_ptr() as *const c_char,
             );
         }
     };
     let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-    let mut arg: *mut ::core::ffi::c_char = *argp;
-    let oldval_is_global: bool = option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
-        && opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0;
+    let mut arg: *mut c_char = *argp;
+    let oldval_is_global: bool =
+        option_is_global_local(opt_idx) as c_int != 0 && opt_flags & OPT_LOCAL as c_int != 0;
     let mut oldval: OptVal = optval_from_varp(
         opt_idx,
-        if oldval_is_global as ::core::ffi::c_int != 0 {
+        if oldval_is_global as c_int != 0 {
             get_varp(opt)
         } else {
             varp
@@ -3040,27 +1705,22 @@ unsafe extern "C" fn get_option_newval(
         type_0: kOptValTypeNil,
         data: OptValData { boolean: kFalse },
     };
-    if nextchar == '&' as ::core::ffi::c_int {
-        return optval_copy(get_option_default(
-            opt_idx,
-            OPT_GLOBAL as ::core::ffi::c_int,
-        ));
-    } else if nextchar == '<' as ::core::ffi::c_int {
-        if option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
-            && opt_flags & OPT_LOCAL as ::core::ffi::c_int == 0
-        {
+    if nextchar == '&' as c_int {
+        return optval_copy(get_option_default(opt_idx, OPT_GLOBAL as c_int));
+    } else if nextchar == '<' as c_int {
+        if option_is_global_local(opt_idx) as c_int != 0 && opt_flags & OPT_LOCAL as c_int == 0 {
             unset_option_local_value(opt_idx);
         }
-        return get_option_value(opt_idx, OPT_GLOBAL as ::core::ffi::c_int);
+        return get_option_value(opt_idx, OPT_GLOBAL as c_int);
     }
-    match oldval.type_0 as ::core::ffi::c_int {
+    match oldval.type_0 as c_int {
         -1 => {
             abort();
         }
         0 => {
             let mut newval_bool: TriState = kFalse;
-            if nextchar == '!' as ::core::ffi::c_int {
-                match oldval.data.boolean as ::core::ffi::c_int {
+            if nextchar == '!' as c_int {
+                match oldval.data.boolean as c_int {
                     -1 => {
                         newval_bool = kNone;
                     }
@@ -3072,18 +1732,13 @@ unsafe extern "C" fn get_option_newval(
                     }
                     _ => {}
                 }
-            } else if prefix as ::core::ffi::c_uint
-                == PREFIX_INV as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                newval_bool =
-                    (*(varp as *mut ::core::ffi::c_int) ^ 1 as ::core::ffi::c_int) as TriState;
+            } else if prefix as c_uint == PREFIX_INV as c_int as c_uint {
+                newval_bool = (*(varp as *mut c_int) ^ 1 as c_int) as TriState;
             } else {
-                newval_bool = (if prefix as ::core::ffi::c_uint
-                    == PREFIX_NO as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    0 as ::core::ffi::c_int
+                newval_bool = (if prefix as c_uint == PREFIX_NO as c_int as c_uint {
+                    0 as c_int
                 } else {
-                    1 as ::core::ffi::c_int
+                    1 as c_int
                 }) as TriState;
             }
             newval = OptVal {
@@ -3098,59 +1753,50 @@ unsafe extern "C" fn get_option_newval(
             let mut newval_num: OptInt = 0;
             arg = arg.offset(1);
             if (varp as *mut OptInt == p_wc.ptr() || varp as *mut OptInt == p_wcm.ptr())
-                && (*arg as ::core::ffi::c_int == '<' as ::core::ffi::c_int
-                    || *arg as ::core::ffi::c_int == '^' as ::core::ffi::c_int
-                    || *arg as ::core::ffi::c_int != NUL
-                        && (*arg.offset(1 as ::core::ffi::c_int as isize) == 0
-                            || ascii_iswhite(
-                                *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            ) as ::core::ffi::c_int
+                && (*arg as c_int == '<' as c_int
+                    || *arg as c_int == '^' as c_int
+                    || *arg as c_int != NUL
+                        && (*arg.offset(1 as c_int as isize) == 0
+                            || ascii_iswhite(*arg.offset(1 as c_int as isize) as c_int) as c_int
                                 != 0)
-                        && !ascii_isdigit(*arg as ::core::ffi::c_int))
+                        && !ascii_isdigit(*arg as c_int))
             {
                 newval_num = string_to_key(arg) as OptInt;
                 if newval_num == 0 as OptInt {
-                    *errmsg = &raw const e_invarg as *const ::core::ffi::c_char;
+                    *errmsg = &raw const e_invarg as *const c_char;
                     return newval;
                 }
-            } else if *arg as ::core::ffi::c_int == '-' as ::core::ffi::c_int
-                || ascii_isdigit(*arg as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-            {
-                let mut i: ::core::ffi::c_int = 0;
+            } else if *arg as c_int == '-' as c_int || ascii_isdigit(*arg as c_int) as c_int != 0 {
+                let mut i: c_int = 0;
                 vim_str2nr(
                     arg,
-                    ::core::ptr::null_mut::<::core::ffi::c_int>(),
+                    ::core::ptr::null_mut::<c_int>(),
                     &raw mut i,
-                    STR2NR_ALL as ::core::ffi::c_int,
+                    STR2NR_ALL as c_int,
                     &raw mut newval_num,
                     ::core::ptr::null_mut::<uvarnumber_T>(),
-                    0 as ::core::ffi::c_int,
+                    0 as c_int,
                     true_0 != 0,
                     ::core::ptr::null_mut::<bool>(),
                 );
-                if i == 0 as ::core::ffi::c_int
-                    || *arg.offset(i as isize) as ::core::ffi::c_int != NUL
-                        && !ascii_iswhite(*arg.offset(i as isize) as ::core::ffi::c_int)
+                if i == 0 as c_int
+                    || *arg.offset(i as isize) as c_int != NUL
+                        && !ascii_iswhite(*arg.offset(i as isize) as c_int)
                 {
-                    *errmsg = (e_number_required_after_equal.ptr() as *const _)
-                        as *const ::core::ffi::c_char;
+                    *errmsg = (e_number_required_after_equal.ptr() as *const _) as *const c_char;
                     return newval;
                 }
             } else {
-                *errmsg =
-                    (e_number_required_after_equal.ptr() as *const _) as *const ::core::ffi::c_char;
+                *errmsg = (e_number_required_after_equal.ptr() as *const _) as *const c_char;
                 return newval;
             }
-            if op as ::core::ffi::c_uint == OP_ADDING as ::core::ffi::c_int as ::core::ffi::c_uint {
+            if op as c_uint == OP_ADDING as c_int as c_uint {
                 newval_num = oldval_num + newval_num;
             }
-            if op as ::core::ffi::c_uint
-                == OP_PREPENDING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
+            if op as c_uint == OP_PREPENDING as c_int as c_uint {
                 newval_num = oldval_num * newval_num;
             }
-            if op as ::core::ffi::c_uint == OP_REMOVING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
+            if op as c_uint == OP_REMOVING as c_int as c_uint {
                 newval_num = oldval_num - newval_num;
             }
             newval = OptVal {
@@ -3159,8 +1805,8 @@ unsafe extern "C" fn get_option_newval(
             };
         }
         2 => {
-            let mut oldval_str: *const ::core::ffi::c_char = oldval.data.string.data;
-            let mut newval_str: *const ::core::ffi::c_char = stropt_get_newval(
+            let mut oldval_str: *const c_char = oldval.data.string.data;
+            let mut newval_str: *const c_char = stropt_get_newval(
                 nextchar,
                 opt_idx,
                 argp,
@@ -3181,103 +1827,84 @@ unsafe extern "C" fn get_option_newval(
     return newval;
 }
 unsafe extern "C" fn do_one_set_option(
-    mut opt_flags: ::core::ffi::c_int,
-    mut argp: *mut *mut ::core::ffi::c_char,
+    mut opt_flags: c_int,
+    mut argp: *mut *mut c_char,
     mut did_show: *mut bool,
-    mut errbuf: *mut ::core::ffi::c_char,
+    mut errbuf: *mut c_char,
     mut errbuflen: size_t,
-    mut errmsg: *mut *const ::core::ffi::c_char,
+    mut errmsg: *mut *const c_char,
 ) {
     let mut prefix: set_prefix_T = get_option_prefix(argp);
-    let mut arg: *mut ::core::ffi::c_char = *argp;
+    let mut arg: *mut c_char = *argp;
     let mut opt_idx: OptIndex = kOptAleph;
-    let option_end: *const ::core::ffi::c_char = find_option_end(arg, &raw mut opt_idx);
-    if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+    let option_end: *const c_char = find_option_end(arg, &raw mut opt_idx);
+    if opt_idx as c_int != kOptInvalid as c_int {
         '_c2rust_label: {
-            if option_end >= arg as *const ::core::ffi::c_char {
+            if option_end >= arg as *const c_char {
             } else {
                 __assert_fail(
-                    b"option_end >= arg\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"option_end >= arg\0".as_ptr() as *const c_char,
                     b"src/nvim/option.rs\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                    1448 as ::core::ffi::c_uint,
+                        as *const c_char,
+                    1448 as c_uint,
                     b"void do_one_set_option(int, char **, _Bool *, char *, size_t, const char **)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
+                        .as_ptr() as *const c_char,
                 );
             }
         };
     } else if is_tty_option(arg) {
         return;
     } else {
-        *errmsg = (e_unknown_option.ptr() as *const _) as *const ::core::ffi::c_char;
+        *errmsg = (e_unknown_option.ptr() as *const _) as *const c_char;
         return;
     }
     let mut afterchar: uint8_t = *option_end as uint8_t;
-    let mut p: *mut ::core::ffi::c_char = option_end as *mut ::core::ffi::c_char;
-    while ascii_iswhite(*p as ::core::ffi::c_int) {
+    let mut p: *mut c_char = option_end as *mut c_char;
+    while ascii_iswhite(*p as c_int) {
         p = p.offset(1);
     }
     let mut op: set_op_T = get_op(p);
-    if op as ::core::ffi::c_uint != OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint {
+    if op as c_uint != OP_NONE as c_int as c_uint {
         p = p.offset(1);
     }
     let mut nextchar: uint8_t = *p as uint8_t;
     let mut flags: uint32_t = (*options.ptr())[opt_idx as usize].flags;
-    let mut varp: *mut ::core::ffi::c_void = get_varp_scope(
+    let mut varp: *mut c_void = get_varp_scope(
         (options.ptr() as *mut vimoption_T).offset(opt_idx as isize),
         opt_flags,
     );
     if validate_opt_idx(curwin.get(), opt_idx, opt_flags, flags, prefix, errmsg) == FAIL {
         return;
     }
-    if !vim_strchr(
-        b"?=:!&<\0".as_ptr() as *const ::core::ffi::c_char,
-        nextchar as ::core::ffi::c_int,
-    )
-    .is_null()
-    {
+    if !vim_strchr(b"?=:!&<\0".as_ptr() as *const c_char, nextchar as c_int).is_null() {
         *argp = p;
-        if nextchar as ::core::ffi::c_int == '&' as ::core::ffi::c_int
-            && *(*argp).offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 'v' as ::core::ffi::c_int
-            && *(*argp).offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 'i' as ::core::ffi::c_int
+        if nextchar as c_int == '&' as c_int
+            && *(*argp).offset(1 as c_int as isize) as c_int == 'v' as c_int
+            && *(*argp).offset(2 as c_int as isize) as c_int == 'i' as c_int
         {
-            if *(*argp).offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == 'm' as ::core::ffi::c_int
-            {
-                *argp = (*argp).offset(3 as ::core::ffi::c_int as isize);
+            if *(*argp).offset(3 as c_int as isize) as c_int == 'm' as c_int {
+                *argp = (*argp).offset(3 as c_int as isize);
             } else {
-                *argp = (*argp).offset(2 as ::core::ffi::c_int as isize);
+                *argp = (*argp).offset(2 as c_int as isize);
             }
         }
-        if !vim_strchr(
-            b"?!&<\0".as_ptr() as *const ::core::ffi::c_char,
-            nextchar as ::core::ffi::c_int,
-        )
-        .is_null()
-            && *(*argp).offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL
-            && !ascii_iswhite(
-                *(*argp).offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            )
+        if !vim_strchr(b"?!&<\0".as_ptr() as *const c_char, nextchar as c_int).is_null()
+            && *(*argp).offset(1 as c_int as isize) as c_int != NUL
+            && !ascii_iswhite(*(*argp).offset(1 as c_int as isize) as c_int)
         {
-            *errmsg = &raw const e_trailing as *const ::core::ffi::c_char;
+            *errmsg = &raw const e_trailing as *const c_char;
             return;
         }
     }
-    if nextchar as ::core::ffi::c_int == '?' as ::core::ffi::c_int
-        || prefix as ::core::ffi::c_uint == PREFIX_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
-            && vim_strchr(
-                b"=:&<\0".as_ptr() as *const ::core::ffi::c_char,
-                nextchar as ::core::ffi::c_int,
-            )
-            .is_null()
+    if nextchar as c_int == '?' as c_int
+        || prefix as c_uint == PREFIX_NONE as c_int as c_uint
+            && vim_strchr(b"=:&<\0".as_ptr() as *const c_char, nextchar as c_int).is_null()
             && !option_has_type(opt_idx, kOptValTypeBoolean)
     {
         if *did_show {
-            msg_putchar('\n' as ::core::ffi::c_int);
+            msg_putchar('\n' as c_int);
         } else {
-            msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
+            msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const c_char);
             gotocmdline(true_0 != 0);
             *did_show = true_0 != 0;
         }
@@ -3300,42 +1927,28 @@ unsafe extern "C" fn do_one_set_option(
                 );
             }
         }
-        if nextchar as ::core::ffi::c_int != '?' as ::core::ffi::c_int
-            && nextchar as ::core::ffi::c_int != NUL
-            && !ascii_iswhite(afterchar as ::core::ffi::c_int)
+        if nextchar as c_int != '?' as c_int
+            && nextchar as c_int != NUL
+            && !ascii_iswhite(afterchar as c_int)
         {
-            *errmsg = &raw const e_trailing as *const ::core::ffi::c_char;
+            *errmsg = &raw const e_trailing as *const c_char;
         }
         return;
     }
     if option_has_type(opt_idx, kOptValTypeBoolean) {
-        if !vim_strchr(
-            b"=:\0".as_ptr() as *const ::core::ffi::c_char,
-            nextchar as ::core::ffi::c_int,
-        )
-        .is_null()
-        {
-            *errmsg = &raw const e_invarg as *const ::core::ffi::c_char;
+        if !vim_strchr(b"=:\0".as_ptr() as *const c_char, nextchar as c_int).is_null() {
+            *errmsg = &raw const e_invarg as *const c_char;
             return;
         }
-        if vim_strchr(
-            b"!&<\0".as_ptr() as *const ::core::ffi::c_char,
-            nextchar as ::core::ffi::c_int,
-        )
-        .is_null()
-            && nextchar as ::core::ffi::c_int != NUL
-            && !ascii_iswhite(afterchar as ::core::ffi::c_int)
+        if vim_strchr(b"!&<\0".as_ptr() as *const c_char, nextchar as c_int).is_null()
+            && nextchar as c_int != NUL
+            && !ascii_iswhite(afterchar as c_int)
         {
-            *errmsg = &raw const e_trailing as *const ::core::ffi::c_char;
+            *errmsg = &raw const e_trailing as *const c_char;
             return;
         }
-    } else if vim_strchr(
-        b"=:&<\0".as_ptr() as *const ::core::ffi::c_char,
-        nextchar as ::core::ffi::c_int,
-    )
-    .is_null()
-    {
-        *errmsg = &raw const e_invarg as *const ::core::ffi::c_char;
+    } else if vim_strchr(b"=:&<\0".as_ptr() as *const c_char, nextchar as c_int).is_null() {
+        *errmsg = &raw const e_invarg as *const c_char;
         return;
     }
     let mut newval: OptVal = get_option_newval(
@@ -3343,7 +1956,7 @@ unsafe extern "C" fn do_one_set_option(
         opt_flags,
         prefix,
         argp,
-        nextchar as ::core::ffi::c_int,
+        nextchar as c_int,
         op,
         flags,
         varp,
@@ -3351,9 +1964,7 @@ unsafe extern "C" fn do_one_set_option(
         errbuflen,
         errmsg,
     );
-    if newval.type_0 as ::core::ffi::c_int == kOptValTypeNil as ::core::ffi::c_int
-        || !(*errmsg).is_null()
-    {
+    if newval.type_0 as c_int == kOptValTypeNil as c_int || !(*errmsg).is_null() {
         return;
     }
     *errmsg = set_option(
@@ -3362,109 +1973,95 @@ unsafe extern "C" fn do_one_set_option(
         opt_flags,
         0 as scid_T,
         false_0 != 0,
-        op as ::core::ffi::c_uint == OP_NONE as ::core::ffi::c_int as ::core::ffi::c_uint,
+        op as c_uint == OP_NONE as c_int as c_uint,
         errbuf,
         errbuflen,
     );
 }
-pub unsafe extern "C" fn do_set(
-    mut arg: *mut ::core::ffi::c_char,
-    mut opt_flags: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn do_set(mut arg: *mut c_char, mut opt_flags: c_int) -> c_int {
     let mut did_show: bool = false_0 != 0;
-    if *arg as ::core::ffi::c_int == NUL {
+    if *arg as c_int == NUL {
         showoptions(false_0 != 0, opt_flags);
         did_show = true_0 != 0;
     } else {
-        while *arg as ::core::ffi::c_int != NUL {
-            if strncmp(
-                arg,
-                b"all\0".as_ptr() as *const ::core::ffi::c_char,
-                3 as size_t,
-            ) == 0 as ::core::ffi::c_int
-                && !(*arg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                    >= 'A' as ::core::ffi::c_uint
-                    && *arg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                        <= 'Z' as ::core::ffi::c_uint
-                    || *arg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                        >= 'a' as ::core::ffi::c_uint
-                        && *arg.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_uint
-                            <= 'z' as ::core::ffi::c_uint)
-                && opt_flags & OPT_MODELINE as ::core::ffi::c_int == 0
+        while *arg as c_int != NUL {
+            if strncmp(arg, b"all\0".as_ptr() as *const c_char, 3 as size_t) == 0 as c_int
+                && !(*arg.offset(3 as c_int as isize) as c_uint >= 'A' as c_uint
+                    && *arg.offset(3 as c_int as isize) as c_uint <= 'Z' as c_uint
+                    || *arg.offset(3 as c_int as isize) as c_uint >= 'a' as c_uint
+                        && *arg.offset(3 as c_int as isize) as c_uint <= 'z' as c_uint)
+                && opt_flags & OPT_MODELINE as c_int == 0
             {
-                arg = arg.offset(3 as ::core::ffi::c_int as isize);
-                if *arg as ::core::ffi::c_int == '&' as ::core::ffi::c_int {
+                arg = arg.offset(3 as c_int as isize);
+                if *arg as c_int == '&' as c_int {
                     arg = arg.offset(1);
                     set_options_default(opt_flags);
                     didset_options();
                     didset_options2();
                     ui_refresh_options();
-                    redraw_all_later(UPD_CLEAR as ::core::ffi::c_int);
+                    redraw_all_later(UPD_CLEAR as c_int);
                 } else {
                     showoptions(true_0 != 0, opt_flags);
                     did_show = true_0 != 0;
                 }
             } else {
-                let mut startarg: *mut ::core::ffi::c_char = arg;
-                let mut errmsg: *const ::core::ffi::c_char =
-                    ::core::ptr::null::<::core::ffi::c_char>();
-                let mut errbuf: [::core::ffi::c_char; 80] = [0; 80];
+                let mut startarg: *mut c_char = arg;
+                let mut errmsg: *const c_char = ::core::ptr::null::<c_char>();
+                let mut errbuf: [c_char; 80] = [0; 80];
                 do_one_set_option(
                     opt_flags,
                     &raw mut arg,
                     &raw mut did_show,
-                    &raw mut errbuf as *mut ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 80]>(),
+                    &raw mut errbuf as *mut c_char,
+                    ::core::mem::size_of::<[c_char; 80]>(),
                     &raw mut errmsg,
                 );
-                let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while i < 2 as ::core::ffi::c_int {
+                let mut i: c_int = 0 as c_int;
+                while i < 2 as c_int {
                     arg = skiptowhite_esc(arg);
                     arg = skipwhite(arg);
-                    if *arg as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
+                    if *arg as c_int != '=' as c_int {
                         break;
                     }
                     i += 1;
                 }
                 if !errmsg.is_null() {
-                    let mut i_0: ::core::ffi::c_int = vim_snprintf(
-                        IObuff.ptr() as *mut ::core::ffi::c_char,
+                    let mut i_0: c_int = vim_snprintf(
+                        IObuff.ptr() as *mut c_char,
                         IOSIZE as size_t,
-                        b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+                        b"%s\0".as_ptr() as *const c_char,
                         gettext(errmsg),
-                    ) + 2 as ::core::ffi::c_int;
+                    ) + 2 as c_int;
                     if i_0 as isize + arg.offset_from(startarg) < IOSIZE as isize {
                         xstrlcpy(
-                            (IObuff.ptr() as *mut ::core::ffi::c_char)
+                            (IObuff.ptr() as *mut c_char)
                                 .offset(i_0 as isize)
-                                .offset(-(2 as ::core::ffi::c_int as isize)),
-                            b": \0".as_ptr() as *const ::core::ffi::c_char,
-                            (IOSIZE - i_0 + 2 as ::core::ffi::c_int) as size_t,
+                                .offset(-(2 as c_int as isize)),
+                            b": \0".as_ptr() as *const c_char,
+                            (IOSIZE - i_0 + 2 as c_int) as size_t,
                         );
                         '_c2rust_label: {
                             if arg >= startarg {
                             } else {
                                 __assert_fail(
-                                    b"arg >= startarg\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                                    1620 as ::core::ffi::c_uint,
-                                    b"int do_set(char *, int)\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                    b"arg >= startarg\0".as_ptr() as *const c_char,
+                                    b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                                    1620 as c_uint,
+                                    b"int do_set(char *, int)\0".as_ptr() as *const c_char,
                                 );
                             }
                         };
                         memmove(
-                            (IObuff.ptr() as *mut ::core::ffi::c_char).offset(i_0 as isize)
-                                as *mut ::core::ffi::c_void,
-                            startarg as *const ::core::ffi::c_void,
+                            (IObuff.ptr() as *mut c_char).offset(i_0 as isize) as *mut c_void,
+                            startarg as *const c_void,
                             arg.offset_from(startarg) as size_t,
                         );
                         (*IObuff.ptr())[(i_0 as isize + arg.offset_from(startarg)) as usize] =
-                            NUL as ::core::ffi::c_char;
+                            NUL as c_char;
                     }
-                    trans_characters(IObuff.ptr() as *mut ::core::ffi::c_char, IOSIZE);
+                    trans_characters(IObuff.ptr() as *mut c_char, IOSIZE);
                     (*no_wait_return.ptr()) += 1;
-                    emsg(IObuff.ptr() as *mut ::core::ffi::c_char);
+                    emsg(IObuff.ptr() as *mut c_char);
                     (*no_wait_return.ptr()) -= 1;
                     return FAIL;
                 }
@@ -3472,85 +2069,65 @@ pub unsafe extern "C" fn do_set(
             arg = skipwhite(arg);
         }
     }
-    if silent_mode.get() as ::core::ffi::c_int != 0 && did_show as ::core::ffi::c_int != 0 {
+    if silent_mode.get() as c_int != 0 && did_show as c_int != 0 {
         silent_mode.set(false_0 != 0);
         info_message.set(true_0 != 0);
-        msg_putchar('\n' as ::core::ffi::c_int);
+        msg_putchar('\n' as c_int);
         silent_mode.set(true_0 != 0);
         info_message.set(false_0 != 0);
     }
     return OK;
 }
 unsafe extern "C" fn find_key_len(
-    mut arg_arg: *const ::core::ffi::c_char,
+    mut arg_arg: *const c_char,
     mut len: size_t,
     mut has_lt: bool,
-) -> ::core::ffi::c_int {
-    let mut key: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut arg: *const ::core::ffi::c_char = arg_arg;
+) -> c_int {
+    let mut key: c_int = 0 as c_int;
+    let mut arg: *const c_char = arg_arg;
     if len >= 4 as size_t
-        && *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == 't' as ::core::ffi::c_int
-        && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '_' as ::core::ffi::c_int
+        && *arg.offset(0 as c_int as isize) as c_int == 't' as c_int
+        && *arg.offset(1 as c_int as isize) as c_int == '_' as c_int
     {
-        if !has_lt
-            || *arg.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '>' as ::core::ffi::c_int
-        {
-            key = -(*arg.offset(2 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-                + ((*arg.offset(3 as ::core::ffi::c_int as isize) as uint8_t
-                    as ::core::ffi::c_int)
-                    << 8 as ::core::ffi::c_int));
+        if !has_lt || *arg.offset(4 as c_int as isize) as c_int == '>' as c_int {
+            key = -(*arg.offset(2 as c_int as isize) as uint8_t as c_int
+                + ((*arg.offset(3 as c_int as isize) as uint8_t as c_int) << 8 as c_int));
         }
     } else if has_lt {
         arg = arg.offset(-1);
-        let mut modifiers: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+        let mut modifiers: c_int = 0 as c_int;
         key = find_special_key(
             &raw mut arg,
             len.wrapping_add(1 as size_t),
             &raw mut modifiers,
-            FSK_KEYCODE as ::core::ffi::c_int
-                | FSK_KEEP_X_KEY as ::core::ffi::c_int
-                | FSK_SIMPLIFY as ::core::ffi::c_int,
+            FSK_KEYCODE as c_int | FSK_KEEP_X_KEY as c_int | FSK_SIMPLIFY as c_int,
             ::core::ptr::null_mut::<bool>(),
         );
         if modifiers != 0 {
-            key = 0 as ::core::ffi::c_int;
+            key = 0 as c_int;
         }
     }
     return key;
 }
-pub unsafe extern "C" fn string_to_key(mut arg: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    if *arg as ::core::ffi::c_int == '<' as ::core::ffi::c_int
-        && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != 0
-    {
-        return find_key_len(
-            arg.offset(1 as ::core::ffi::c_int as isize),
-            strlen(arg),
-            true_0 != 0,
-        );
+pub unsafe extern "C" fn string_to_key(mut arg: *mut c_char) -> c_int {
+    if *arg as c_int == '<' as c_int && *arg.offset(1 as c_int as isize) as c_int != 0 {
+        return find_key_len(arg.offset(1 as c_int as isize), strlen(arg), true_0 != 0);
     }
-    if *arg as ::core::ffi::c_int == '^' as ::core::ffi::c_int
-        && *arg.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != 0
-    {
-        let mut key: ::core::ffi::c_int = (if (*arg.offset(1 as ::core::ffi::c_int as isize)
-            as uint8_t as ::core::ffi::c_int)
-            < 'a' as ::core::ffi::c_int
-            || *arg.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-                > 'z' as ::core::ffi::c_int
+    if *arg as c_int == '^' as c_int && *arg.offset(1 as c_int as isize) as c_int != 0 {
+        let mut key: c_int = (if (*arg.offset(1 as c_int as isize) as uint8_t as c_int)
+            < 'a' as c_int
+            || *arg.offset(1 as c_int as isize) as uint8_t as c_int > 'z' as c_int
         {
-            *arg.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
+            *arg.offset(1 as c_int as isize) as uint8_t as c_int
         } else {
-            *arg.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-                - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-        }) ^ 0x40 as ::core::ffi::c_int;
-        if key == 0 as ::core::ffi::c_int {
+            *arg.offset(1 as c_int as isize) as uint8_t as c_int - ('a' as c_int - 'A' as c_int)
+        }) ^ 0x40 as c_int;
+        if key == 0 as c_int {
             key = K_ZERO;
         }
         return key;
     }
-    return *arg as uint8_t as ::core::ffi::c_int;
+    return *arg as uint8_t as c_int;
 }
 pub unsafe extern "C" fn did_set_title() {
     if starting.get() != NO_SCREEN {
@@ -3558,32 +2135,32 @@ pub unsafe extern "C" fn did_set_title() {
     }
 }
 pub unsafe extern "C" fn set_options_bin(
-    mut oldval: ::core::ffi::c_int,
-    mut newval: ::core::ffi::c_int,
-    mut opt_flags: ::core::ffi::c_int,
+    mut oldval: c_int,
+    mut newval: c_int,
+    mut opt_flags: c_int,
 ) {
     if newval != 0 {
         if oldval == 0 {
-            if opt_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
+            if opt_flags & OPT_GLOBAL as c_int == 0 {
                 (*curbuf.get()).b_p_tw_nobin = (*curbuf.get()).b_p_tw;
                 (*curbuf.get()).b_p_wm_nobin = (*curbuf.get()).b_p_wm;
                 (*curbuf.get()).b_p_ml_nobin = (*curbuf.get()).b_p_ml;
                 (*curbuf.get()).b_p_et_nobin = (*curbuf.get()).b_p_et;
             }
-            if opt_flags & OPT_LOCAL as ::core::ffi::c_int == 0 {
+            if opt_flags & OPT_LOCAL as c_int == 0 {
                 p_tw_nobin.set(p_tw.get());
                 p_wm_nobin.set(p_wm.get());
                 p_ml_nobin.set(p_ml.get());
                 p_et_nobin.set(p_et.get());
             }
         }
-        if opt_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
+        if opt_flags & OPT_GLOBAL as c_int == 0 {
             (*curbuf.get()).b_p_tw = 0 as OptInt;
             (*curbuf.get()).b_p_wm = 0 as OptInt;
-            (*curbuf.get()).b_p_ml = 0 as ::core::ffi::c_int;
-            (*curbuf.get()).b_p_et = 0 as ::core::ffi::c_int;
+            (*curbuf.get()).b_p_ml = 0 as c_int;
+            (*curbuf.get()).b_p_et = 0 as c_int;
         }
-        if opt_flags & OPT_LOCAL as ::core::ffi::c_int == 0 {
+        if opt_flags & OPT_LOCAL as c_int == 0 {
             p_tw.set(0 as OptInt);
             p_wm.set(0 as OptInt);
             p_ml.set(false_0);
@@ -3591,56 +2168,51 @@ pub unsafe extern "C" fn set_options_bin(
             p_bin.set(true_0);
         }
     } else if oldval != 0 {
-        if opt_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
+        if opt_flags & OPT_GLOBAL as c_int == 0 {
             (*curbuf.get()).b_p_tw = (*curbuf.get()).b_p_tw_nobin;
             (*curbuf.get()).b_p_wm = (*curbuf.get()).b_p_wm_nobin;
             (*curbuf.get()).b_p_ml = (*curbuf.get()).b_p_ml_nobin;
             (*curbuf.get()).b_p_et = (*curbuf.get()).b_p_et_nobin;
         }
-        if opt_flags & OPT_LOCAL as ::core::ffi::c_int == 0 {
+        if opt_flags & OPT_LOCAL as c_int == 0 {
             p_tw.set(p_tw_nobin.get());
             p_wm.set(p_wm_nobin.get());
             p_ml.set(p_ml_nobin.get());
             p_et.set(p_et_nobin.get());
         }
     }
-    didset_options_sctx(opt_flags, p_bin_dep_opts.ptr() as *mut ::core::ffi::c_int);
+    didset_options_sctx(opt_flags, p_bin_dep_opts.ptr() as *mut c_int);
 }
-unsafe extern "C" fn option_expand(
-    mut opt_idx: OptIndex,
-    mut val: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    if (*options.ptr())[opt_idx as usize].flags & kOptFlagExpand as ::core::ffi::c_int as uint32_t
-        == 0
-        || is_option_hidden(opt_idx) as ::core::ffi::c_int != 0
+unsafe extern "C" fn option_expand(mut opt_idx: OptIndex, mut val: *const c_char) -> *mut c_char {
+    if (*options.ptr())[opt_idx as usize].flags & kOptFlagExpand as c_int as uint32_t == 0
+        || is_option_hidden(opt_idx) as c_int != 0
     {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        return ::core::ptr::null_mut::<c_char>();
     }
     if val.is_null() {
-        val = *((*options.ptr())[opt_idx as usize].var as *mut *mut ::core::ffi::c_char);
+        val = *((*options.ptr())[opt_idx as usize].var as *mut *mut c_char);
     }
     if val.is_null() || strlen(val) > MAXPATHL as size_t {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        return ::core::ptr::null_mut::<c_char>();
     }
-    let mut var: *mut *mut ::core::ffi::c_char =
-        (*options.ptr())[opt_idx as usize].var as *mut *mut ::core::ffi::c_char;
+    let mut var: *mut *mut c_char = (*options.ptr())[opt_idx as usize].var as *mut *mut c_char;
     let mut esc: bool = var == p_tags.ptr() || var == p_path.ptr();
     expand_env_esc(
         val,
-        NameBuff.ptr() as *mut ::core::ffi::c_char,
+        NameBuff.ptr() as *mut c_char,
         MAXPATHL,
         esc,
         false_0 != 0,
-        (if (*options.ptr())[opt_idx as usize].var as *mut *mut ::core::ffi::c_char == p_sps.ptr() {
-            b"file:\0".as_ptr() as *const ::core::ffi::c_char
+        (if (*options.ptr())[opt_idx as usize].var as *mut *mut c_char == p_sps.ptr() {
+            b"file:\0".as_ptr() as *const c_char
         } else {
-            ::core::ptr::null::<::core::ffi::c_char>()
-        }) as *mut ::core::ffi::c_char,
+            ::core::ptr::null::<c_char>()
+        }) as *mut c_char,
     );
-    if strcmp(NameBuff.ptr() as *mut ::core::ffi::c_char, val) == 0 as ::core::ffi::c_int {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+    if strcmp(NameBuff.ptr() as *mut c_char, val) == 0 as c_int {
+        return ::core::ptr::null_mut::<c_char>();
     }
-    return NameBuff.ptr() as *mut ::core::ffi::c_char;
+    return NameBuff.ptr() as *mut c_char;
 }
 unsafe extern "C" fn didset_options() {
     init_chartab();
@@ -3660,7 +2232,7 @@ unsafe extern "C" fn didset_options2() {
         (*curwin.get()).w_onebuf_opt.wo_fcs,
         kFillchars,
         true_0 != 0,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        ::core::ptr::null_mut::<c_char>(),
         0 as size_t,
     );
     set_chars_option(
@@ -3668,16 +2240,16 @@ unsafe extern "C" fn didset_options2() {
         (*curwin.get()).w_onebuf_opt.wo_lcs,
         kListchars,
         true_0 != 0,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        ::core::ptr::null_mut::<c_char>(),
         0 as size_t,
     );
     check_opt_wim();
-    xfree((*curbuf.get()).b_p_vsts_array as *mut ::core::ffi::c_void);
+    xfree((*curbuf.get()).b_p_vsts_array as *mut c_void);
     tabstop_set(
         (*curbuf.get()).b_p_vsts,
         &raw mut (*curbuf.get()).b_p_vsts_array,
     );
-    xfree((*curbuf.get()).b_p_vts_array as *mut ::core::ffi::c_void);
+    xfree((*curbuf.get()).b_p_vts_array as *mut c_void);
     tabstop_set(
         (*curbuf.get()).b_p_vts,
         &raw mut (*curbuf.get()).b_p_vts_array,
@@ -3685,13 +2257,13 @@ unsafe extern "C" fn didset_options2() {
 }
 pub unsafe extern "C" fn check_options() {
     let mut opt_idx: OptIndex = kOptAleph;
-    while (opt_idx as ::core::ffi::c_int) < kOptCount {
-        if option_has_type(opt_idx, kOptValTypeString) as ::core::ffi::c_int != 0
+    while (opt_idx as c_int) < kOptCount {
+        if option_has_type(opt_idx, kOptValTypeString) as c_int != 0
             && !(*options.ptr())[opt_idx as usize].var.is_null()
         {
             check_string_option(get_varp(
                 (options.ptr() as *mut vimoption_T).offset(opt_idx as isize),
-            ) as *mut *mut ::core::ffi::c_char);
+            ) as *mut *mut c_char);
         }
         opt_idx += 1;
     }
@@ -3699,43 +2271,41 @@ pub unsafe extern "C" fn check_options() {
 pub unsafe extern "C" fn was_set_insecurely(
     wp: *mut win_T,
     mut opt_idx: OptIndex,
-    mut opt_flags: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+    mut opt_flags: c_int,
+) -> c_int {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        if opt_idx as c_int != kOptInvalid as c_int {
         } else {
             __assert_fail(
-                b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1855 as ::core::ffi::c_uint,
-                b"int was_set_insecurely(win_T *const, OptIndex, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"opt_idx != kOptInvalid\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                1855 as c_uint,
+                b"int was_set_insecurely(win_T *const, OptIndex, int)\0".as_ptr() as *const c_char,
             );
         }
     };
     let mut flagp: *mut uint32_t = insecure_flag(wp, opt_idx, opt_flags);
-    return (*flagp & kOptFlagInsecure as ::core::ffi::c_int as uint32_t != 0 as uint32_t)
-        as ::core::ffi::c_int;
+    return (*flagp & kOptFlagInsecure as c_int as uint32_t != 0 as uint32_t) as c_int;
 }
 pub unsafe extern "C" fn insecure_flag(
     wp: *mut win_T,
     mut opt_idx: OptIndex,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
 ) -> *mut uint32_t {
-    if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
+    if opt_flags & OPT_LOCAL as c_int != 0 {
         '_c2rust_label: {
             if !wp.is_null() {
             } else {
                 __assert_fail(
-                    b"wp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1868 as ::core::ffi::c_uint,
+                    b"wp != NULL\0".as_ptr() as *const c_char,
+                    b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                    1868 as c_uint,
                     b"uint32_t *insecure_flag(win_T *const, OptIndex, int)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
+                        as *const c_char,
                 );
             }
         };
-        match opt_idx as ::core::ffi::c_int {
+        match opt_idx as c_int {
             367 => return &raw mut (*wp).w_onebuf_opt.wo_wrap_flags,
             294 => return &raw mut (*wp).w_onebuf_opt.wo_stl_flags,
             355 => return &raw mut (*wp).w_onebuf_opt.wo_wbr_flags,
@@ -3747,7 +2317,7 @@ pub unsafe extern "C" fn insecure_flag(
             _ => {}
         }
     } else {
-        match opt_idx as ::core::ffi::c_int {
+        match opt_idx as c_int {
             367 => return &raw mut (*wp).w_allbuf_opt.wo_wrap_flags,
             104 => return &raw mut (*wp).w_allbuf_opt.wo_fde_flags,
             113 => return &raw mut (*wp).w_allbuf_opt.wo_fdt_flags,
@@ -3760,18 +2330,13 @@ pub unsafe extern "C" fn redraw_titles() {
     need_maketitle.set(true_0 != 0);
     redraw_tabline.set(true_0 != 0);
 }
-pub unsafe extern "C" fn valid_name(
-    mut val: *const ::core::ffi::c_char,
-    mut allowed: *const ::core::ffi::c_char,
-) -> bool {
-    let mut s: *const ::core::ffi::c_char = val;
-    while *s as ::core::ffi::c_int != NUL {
-        if !(*s as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-            && *s as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-            || *s as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                && *s as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-            || ascii_isdigit(*s as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
-            && vim_strchr(allowed, *s as uint8_t as ::core::ffi::c_int).is_null()
+pub unsafe extern "C" fn valid_name(mut val: *const c_char, mut allowed: *const c_char) -> bool {
+    let mut s: *const c_char = val;
+    while *s as c_int != NUL {
+        if !(*s as c_uint >= 'A' as c_uint && *s as c_uint <= 'Z' as c_uint
+            || *s as c_uint >= 'a' as c_uint && *s as c_uint <= 'z' as c_uint
+            || ascii_isdigit(*s as c_int) as c_int != 0)
+            && vim_strchr(allowed, *s as uint8_t as c_int).is_null()
         {
             return false_0 != 0;
         }
@@ -3781,72 +2346,65 @@ pub unsafe extern "C" fn valid_name(
 }
 pub unsafe extern "C" fn check_blending(mut wp: *mut win_T) {
     (*wp).w_grid_alloc.blending = (*wp).w_onebuf_opt.wo_winbl > 0 as OptInt
-        || (*wp).w_floating as ::core::ffi::c_int != 0
-            && (*wp).w_config.shadow as ::core::ffi::c_int != 0;
+        || (*wp).w_floating as c_int != 0 && (*wp).w_config.shadow as c_int != 0;
 }
-pub unsafe extern "C" fn parse_winhl_opt(
-    mut winhl: *const ::core::ffi::c_char,
-    mut wp: *mut win_T,
-) -> bool {
-    let mut p: *const ::core::ffi::c_char = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+pub unsafe extern "C" fn parse_winhl_opt(mut winhl: *const c_char, mut wp: *mut win_T) -> bool {
+    let mut p: *const c_char = empty_string_option.ptr() as *mut c_char;
     if !winhl.is_null() {
         p = winhl;
     } else if !wp.is_null() {
         p = (*wp).w_onebuf_opt.wo_winhl;
     }
     if *p == 0 {
-        if !wp.is_null()
-            && (*wp).w_ns_hl_winhl > 0 as ::core::ffi::c_int
-            && (*wp).w_ns_hl == (*wp).w_ns_hl_winhl
+        if !wp.is_null() && (*wp).w_ns_hl_winhl > 0 as c_int && (*wp).w_ns_hl == (*wp).w_ns_hl_winhl
         {
-            (*wp).w_ns_hl = 0 as ::core::ffi::c_int;
+            (*wp).w_ns_hl = 0 as c_int;
             (*wp).w_hl_needs_update = true_0;
         }
         return true_0 != 0;
     }
-    let mut ns_hl: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    let mut ns_hl: c_int = 0 as c_int;
     if !wp.is_null() {
-        if (*wp).w_ns_hl_winhl == 0 as ::core::ffi::c_int {
-            (*wp).w_ns_hl_winhl = nvim_create_namespace(NULL_STRING) as ::core::ffi::c_int;
+        if (*wp).w_ns_hl_winhl == 0 as c_int {
+            (*wp).w_ns_hl_winhl = nvim_create_namespace(NULL_STRING) as c_int;
         } else {
             let mut dp: *mut DecorProvider =
                 get_decor_provider((*wp).w_ns_hl_winhl as NS, true_0 != 0);
             (*dp).hl_valid += 1;
         }
         ns_hl = (*wp).w_ns_hl_winhl;
-        if (*wp).w_ns_hl <= 0 as ::core::ffi::c_int {
+        if (*wp).w_ns_hl <= 0 as c_int {
             (*wp).w_ns_hl = (*wp).w_ns_hl_winhl;
         }
     }
     while *p != 0 {
-        let mut colon: *const ::core::ffi::c_char = strchr(p, ':' as ::core::ffi::c_int);
+        let mut colon: *const c_char = strchr(p, ':' as c_int);
         if colon.is_null() {
             return false_0 != 0;
         }
         let mut nlen: size_t = colon.offset_from(p) as size_t;
-        let mut hi: *const ::core::ffi::c_char = colon.offset(1 as ::core::ffi::c_int as isize);
-        let mut commap: *const ::core::ffi::c_char = xstrchrnul(hi, ',' as ::core::ffi::c_char);
+        let mut hi: *const c_char = colon.offset(1 as c_int as isize);
+        let mut commap: *const c_char = xstrchrnul(hi, ',' as c_char);
         let mut len: size_t = commap.offset_from(hi) as size_t;
-        let mut hl_id: ::core::ffi::c_int = if len != 0 {
+        let mut hl_id: c_int = if len != 0 {
             syn_check_group(hi, len)
         } else {
-            -1 as ::core::ffi::c_int
+            -1 as c_int
         };
-        if hl_id == 0 as ::core::ffi::c_int {
+        if hl_id == 0 as c_int {
             return false_0 != 0;
         }
-        let mut hl_id_link: ::core::ffi::c_int = if nlen != 0 {
+        let mut hl_id_link: c_int = if nlen != 0 {
             syn_check_group(p, nlen)
         } else {
-            0 as ::core::ffi::c_int
+            0 as c_int
         };
-        if hl_id_link == 0 as ::core::ffi::c_int {
+        if hl_id_link == 0 as c_int {
             return false_0 != 0;
         }
         if !wp.is_null() {
             let mut attrs: HlAttrs = HLATTRS_INIT;
-            attrs.rgb_ae_attr = (attrs.rgb_ae_attr as ::core::ffi::c_int
-                | HL_GLOBAL as ::core::ffi::c_int) as int32_t;
+            attrs.rgb_ae_attr = (attrs.rgb_ae_attr as c_int | HL_GLOBAL as c_int) as int32_t;
             ns_hl_def(
                 ns_hl as NS,
                 hl_id_link,
@@ -3855,10 +2413,10 @@ pub unsafe extern "C" fn parse_winhl_opt(
                 ::core::ptr::null_mut::<KeyDict_highlight>(),
             );
         }
-        p = if *commap as ::core::ffi::c_int != 0 {
-            commap.offset(1 as ::core::ffi::c_int as isize)
+        p = if *commap as c_int != 0 {
+            commap.offset(1 as c_int as isize)
         } else {
-            b"\0".as_ptr() as *const ::core::ffi::c_char
+            b"\0".as_ptr() as *const c_char
         };
     }
     if !wp.is_null() {
@@ -3868,13 +2426,13 @@ pub unsafe extern "C" fn parse_winhl_opt(
 }
 pub unsafe extern "C" fn get_option_sctx(mut opt_idx: OptIndex) -> *mut sctx_T {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        if opt_idx as c_int != kOptInvalid as c_int {
         } else {
             __assert_fail(
-                b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                2008 as ::core::ffi::c_uint,
-                b"sctx_T *get_option_sctx(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
+                b"opt_idx != kOptInvalid\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                2008 as c_uint,
+                b"sctx_T *get_option_sctx(OptIndex)\0".as_ptr() as *const c_char,
             );
         }
     };
@@ -3882,25 +2440,23 @@ pub unsafe extern "C" fn get_option_sctx(mut opt_idx: OptIndex) -> *mut sctx_T {
 }
 pub unsafe extern "C" fn set_option_sctx(
     mut opt_idx: OptIndex,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut script_ctx: sctx_T,
 ) {
-    let mut both: bool = opt_flags
-        & (OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int)
-        == 0 as ::core::ffi::c_int;
-    if opt_flags & OPT_MODELINE as ::core::ffi::c_int == 0 {
+    let mut both: bool = opt_flags & (OPT_LOCAL as c_int | OPT_GLOBAL as c_int) == 0 as c_int;
+    if opt_flags & OPT_MODELINE as c_int == 0 {
         script_ctx.sc_lnum += (*((*exestack.ptr()).ga_data as *mut estack_T)
-            .offset(((*exestack.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize))
+            .offset(((*exestack.ptr()).ga_len - 1 as c_int) as isize))
         .es_lnum;
     }
     nlua_set_sctx(&raw mut script_ctx);
-    if both as ::core::ffi::c_int != 0
-        || opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
-        || option_is_global_only(opt_idx) as ::core::ffi::c_int != 0
+    if both as c_int != 0
+        || opt_flags & OPT_GLOBAL as c_int != 0
+        || option_is_global_only(opt_idx) as c_int != 0
     {
         (*options.ptr())[opt_idx as usize].script_ctx = script_ctx;
     }
-    if both as ::core::ffi::c_int != 0 || opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
+    if both as c_int != 0 || opt_flags & OPT_LOCAL as c_int != 0 {
         if option_has_scope(opt_idx, kOptScopeBuf) {
             (*curbuf.get()).b_p_script_ctx[option_scope_idx(opt_idx, kOptScopeBuf) as usize] =
                 script_ctx;
@@ -3916,20 +2472,18 @@ pub unsafe extern "C" fn set_option_sctx(
 }
 unsafe extern "C" fn apply_optionset_autocmd(
     mut opt_idx: OptIndex,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut oldval: OptVal,
     mut oldval_g: OptVal,
     mut oldval_l: OptVal,
     mut newval: OptVal,
-    mut errmsg: *const ::core::ffi::c_char,
+    mut errmsg: *const c_char,
 ) {
-    if starting.get() != 0
-        || !errmsg.is_null()
-        || *get_vim_var_str(VV_OPTION_TYPE) as ::core::ffi::c_int != NUL
+    if starting.get() != 0 || !errmsg.is_null() || *get_vim_var_str(VV_OPTION_TYPE) as c_int != NUL
     {
         return;
     }
-    let mut buf_type: [::core::ffi::c_char; 7] = [0; 7];
+    let mut buf_type: [c_char; 7] = [0; 7];
     let mut oldval_tv: typval_T = optval_as_tv(oldval, false_0 != 0);
     let mut oldval_g_tv: typval_T = optval_as_tv(oldval_g, false_0 != 0);
     let mut oldval_l_tv: typval_T = optval_as_tv(oldval_l, false_0 != 0);
@@ -3937,71 +2491,65 @@ unsafe extern "C" fn apply_optionset_autocmd(
     set_vim_var_tv(VV_OPTION_OLD, &raw mut oldval_tv);
     set_vim_var_tv(VV_OPTION_NEW, &raw mut newval_tv);
     let mut typelen: size_t = vim_snprintf_safelen(
-        &raw mut buf_type as *mut ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 7]>(),
-        b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-        if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
-            b"local\0".as_ptr() as *const ::core::ffi::c_char
+        &raw mut buf_type as *mut c_char,
+        ::core::mem::size_of::<[c_char; 7]>(),
+        b"%s\0".as_ptr() as *const c_char,
+        if opt_flags & OPT_LOCAL as c_int != 0 {
+            b"local\0".as_ptr() as *const c_char
         } else {
-            b"global\0".as_ptr() as *const ::core::ffi::c_char
+            b"global\0".as_ptr() as *const c_char
         },
     );
     set_vim_var_string(
         VV_OPTION_TYPE,
-        &raw mut buf_type as *mut ::core::ffi::c_char,
+        &raw mut buf_type as *mut c_char,
         typelen as ptrdiff_t,
     );
-    if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
+    if opt_flags & OPT_LOCAL as c_int != 0 {
         set_vim_var_string(
             VV_OPTION_COMMAND,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
+            b"setlocal\0".as_ptr() as *const c_char,
+            ::core::mem::size_of::<[c_char; 9]>().wrapping_sub(1 as usize) as ptrdiff_t,
         );
         set_vim_var_tv(VV_OPTION_OLDLOCAL, &raw mut oldval_tv);
     }
-    if opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0 {
+    if opt_flags & OPT_GLOBAL as c_int != 0 {
         set_vim_var_string(
             VV_OPTION_COMMAND,
-            b"setglobal\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
+            b"setglobal\0".as_ptr() as *const c_char,
+            ::core::mem::size_of::<[c_char; 10]>().wrapping_sub(1 as usize) as ptrdiff_t,
         );
         set_vim_var_tv(VV_OPTION_OLDGLOBAL, &raw mut oldval_tv);
     }
-    if opt_flags & (OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int)
-        == 0 as ::core::ffi::c_int
-    {
+    if opt_flags & (OPT_LOCAL as c_int | OPT_GLOBAL as c_int) == 0 as c_int {
         set_vim_var_string(
             VV_OPTION_COMMAND,
-            b"set\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
+            b"set\0".as_ptr() as *const c_char,
+            ::core::mem::size_of::<[c_char; 4]>().wrapping_sub(1 as usize) as ptrdiff_t,
         );
         set_vim_var_tv(VV_OPTION_OLDLOCAL, &raw mut oldval_l_tv);
         set_vim_var_tv(VV_OPTION_OLDGLOBAL, &raw mut oldval_g_tv);
     }
-    if opt_flags & OPT_MODELINE as ::core::ffi::c_int != 0 {
+    if opt_flags & OPT_MODELINE as c_int != 0 {
         set_vim_var_string(
             VV_OPTION_COMMAND,
-            b"modeline\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
+            b"modeline\0".as_ptr() as *const c_char,
+            ::core::mem::size_of::<[c_char; 9]>().wrapping_sub(1 as usize) as ptrdiff_t,
         );
         set_vim_var_tv(VV_OPTION_OLDLOCAL, &raw mut oldval_tv);
     }
     apply_autocmds(
         EVENT_OPTIONSET,
         (*options.ptr())[opt_idx as usize].fullname,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        ::core::ptr::null_mut::<c_char>(),
         false_0 != 0,
         ::core::ptr::null_mut::<buf_T>(),
     );
     reset_v_option_vars();
 }
-pub unsafe extern "C" fn did_set_arabic(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_arabic(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut errmsg: *const c_char = ::core::ptr::null::<c_char>();
     if (*win).w_onebuf_opt.wo_arab != 0 {
         if p_tbidi.get() == 0 {
             if (*win).w_onebuf_opt.wo_rl == 0 {
@@ -4010,20 +2558,16 @@ pub unsafe extern "C" fn did_set_arabic(mut args: *mut optset_T) -> *const ::cor
             }
             if p_arshape.get() == 0 {
                 p_arshape.set(true_0);
-                redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+                redraw_all_later(UPD_NOT_VALID as c_int);
             }
         }
-        if strcmp(
-            p_enc.get(),
-            b"utf-8\0".as_ptr() as *const ::core::ffi::c_char,
-        ) != 0 as ::core::ffi::c_int
-        {
-            static w_arabic: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
-                b"W17: Arabic requires UTF-8, do ':set encoding=utf-8'\0".as_ptr()
-                    as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        if strcmp(p_enc.get(), b"utf-8\0".as_ptr() as *const c_char) != 0 as c_int {
+            static w_arabic: GlobalCell<*mut c_char> = GlobalCell::new(
+                b"W17: Arabic requires UTF-8, do ':set encoding=utf-8'\0".as_ptr() as *const c_char
+                    as *mut c_char,
             );
-            msg_source(HLF_W as ::core::ffi::c_int);
-            msg(gettext(w_arabic.get()), HLF_W as ::core::ffi::c_int);
+            msg_source(HLF_W as c_int);
+            msg(gettext(w_arabic.get()), HLF_W as c_int);
             set_vim_var_string(VV_WARNINGMSG, gettext(w_arabic.get()), -1 as ptrdiff_t);
         }
         p_deco.set(true_0);
@@ -4033,14 +2577,12 @@ pub unsafe extern "C" fn did_set_arabic(mut args: *mut optset_T) -> *const ::cor
                 type_0: kOptValTypeString,
                 data: OptValData {
                     string: String_0 {
-                        data: b"arabic\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                            .wrapping_sub(1 as size_t),
+                        data: b"arabic\0".as_ptr() as *const c_char as *mut c_char,
+                        size: ::core::mem::size_of::<[c_char; 7]>().wrapping_sub(1 as size_t),
                     },
                 },
             },
-            OPT_LOCAL as ::core::ffi::c_int,
+            OPT_LOCAL as c_int,
         );
     } else {
         if p_tbidi.get() == 0 {
@@ -4054,142 +2596,125 @@ pub unsafe extern "C" fn did_set_arabic(mut args: *mut optset_T) -> *const ::cor
     }
     return errmsg;
 }
-pub unsafe extern "C" fn did_set_autochdir(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_autochdir(mut _args: *mut optset_T) -> *const c_char {
     do_autochdir();
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_binary(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_binary(mut args: *mut optset_T) -> *const c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     set_options_bin(
-        (*args).os_oldval.boolean as ::core::ffi::c_int,
+        (*args).os_oldval.boolean as c_int,
         (*buf).b_p_bin,
         (*args).os_flags,
     );
     redraw_titles();
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_buflisted(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_buflisted(mut args: *mut optset_T) -> *const c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
-    if (*args).os_oldval.boolean as ::core::ffi::c_int != (*buf).b_p_bl {
+    if (*args).os_oldval.boolean as c_int != (*buf).b_p_bl {
         apply_autocmds(
             (if (*buf).b_p_bl != 0 {
-                EVENT_BUFADD as ::core::ffi::c_int
+                EVENT_BUFADD as c_int
             } else {
-                EVENT_BUFDELETE as ::core::ffi::c_int
+                EVENT_BUFDELETE as c_int
             }) as event_T,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            ::core::ptr::null_mut::<c_char>(),
+            ::core::ptr::null_mut::<c_char>(),
             true_0 != 0,
             buf,
         );
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_cmdheight(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_cmdheight(mut args: *mut optset_T) -> *const c_char {
     let mut old_value: OptInt = (*args).os_oldval.number;
-    if p_ch.get() > (Rows.get() - min_rows(curtab.get()) + 1 as ::core::ffi::c_int) as OptInt {
-        p_ch.set((Rows.get() - min_rows(curtab.get()) + 1 as ::core::ffi::c_int) as OptInt);
+    if p_ch.get() > (Rows.get() - min_rows(curtab.get()) + 1 as c_int) as OptInt {
+        p_ch.set((Rows.get() - min_rows(curtab.get()) + 1 as c_int) as OptInt);
     }
     if (p_ch.get() != old_value
         || (tabline_height() + global_stl_height() + (*topframe.get()).fr_height) as OptInt
             != Rows.get() as OptInt - p_ch.get())
-        && full_screen.get() as ::core::ffi::c_int != 0
+        && full_screen.get() as c_int != 0
     {
         command_height();
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_diff(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_diff(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     diff_buf_adjust(win);
     if foldmethodIsDiff(win) {
         foldUpdateAll(win);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_eof_eol_fixeol_bomb(
-    mut _args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_eof_eol_fixeol_bomb(mut _args: *mut optset_T) -> *const c_char {
     redraw_titles();
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_equalalways(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_equalalways(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if p_ea.get() != 0 && (*args).os_oldval.boolean as u64 == 0 {
-        win_equal(win, false_0 != 0, 0 as ::core::ffi::c_int);
+        win_equal(win, false_0 != 0, 0 as c_int);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_foldlevel(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_foldlevel(mut _args: *mut optset_T) -> *const c_char {
     newFoldLevel();
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_foldminlines(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_foldminlines(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     foldUpdateAll(win);
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_foldnestmax(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_foldnestmax(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    if foldmethodIsSyntax(win) as ::core::ffi::c_int != 0
-        || foldmethodIsIndent(win) as ::core::ffi::c_int != 0
-    {
+    if foldmethodIsSyntax(win) as c_int != 0 || foldmethodIsIndent(win) as c_int != 0 {
         foldUpdateAll(win);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_helpheight(
-    mut _args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_helpheight(mut _args: *mut optset_T) -> *const c_char {
     if !(firstwin.get() == lastwin.get()) {
-        if (*curbuf.get()).b_help as ::core::ffi::c_int != 0
-            && ((*curwin.get()).w_height as OptInt) < p_hh.get()
+        if (*curbuf.get()).b_help as c_int != 0 && ((*curwin.get()).w_height as OptInt) < p_hh.get()
         {
-            win_setheight(p_hh.get() as ::core::ffi::c_int);
+            win_setheight(p_hh.get() as c_int);
         }
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_hlsearch(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_hlsearch(mut _args: *mut optset_T) -> *const c_char {
     set_no_hlsearch(false_0 != 0);
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_ignorecase(
-    mut _args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_ignorecase(mut _args: *mut optset_T) -> *const c_char {
     if p_hls.get() != 0 {
-        redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_SOME_VALID as c_int);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_iminsert(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_iminsert(mut _args: *mut optset_T) -> *const c_char {
     showmode();
     status_redraw_curbuf();
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_langnoremap(
-    mut _args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
-    p_lrm.set((p_lnr.get() == 0) as ::core::ffi::c_int);
-    return ::core::ptr::null::<::core::ffi::c_char>();
+pub unsafe extern "C" fn did_set_langnoremap(mut _args: *mut optset_T) -> *const c_char {
+    p_lrm.set((p_lnr.get() == 0) as c_int);
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_langremap(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
-    p_lnr.set((p_lrm.get() == 0) as ::core::ffi::c_int);
-    return ::core::ptr::null::<::core::ffi::c_char>();
+pub unsafe extern "C" fn did_set_langremap(mut _args: *mut optset_T) -> *const c_char {
+    p_lnr.set((p_lrm.get() == 0) as c_int);
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_laststatus(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_laststatus(mut args: *mut optset_T) -> *const c_char {
     let mut old_value: OptInt = (*args).os_oldval.number;
     let mut value: OptInt = (*args).os_newval.number;
     if value == 3 as OptInt && old_value != 3 as OptInt {
         frame_new_height(
             topframe.get(),
-            (*topframe.get()).fr_height - STATUS_HEIGHT as ::core::ffi::c_int,
+            (*topframe.get()).fr_height - STATUS_HEIGHT as c_int,
             false_0 != 0,
             false_0 != 0,
             false_0 != 0,
@@ -4200,7 +2725,7 @@ pub unsafe extern "C" fn did_set_laststatus(mut args: *mut optset_T) -> *const :
     if old_value == 3 as OptInt && value != 3 as OptInt {
         frame_new_height(
             topframe.get(),
-            (*topframe.get()).fr_height + STATUS_HEIGHT as ::core::ffi::c_int,
+            (*topframe.get()).fr_height + STATUS_HEIGHT as c_int,
             false_0 != 0,
             false_0 != 0,
             false_0 != 0,
@@ -4210,11 +2735,9 @@ pub unsafe extern "C" fn did_set_laststatus(mut args: *mut optset_T) -> *const :
     status_redraw_curbuf();
     last_status(false_0 != 0);
     win_float_update_statusline();
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_lines_or_columns(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_lines_or_columns(mut args: *mut optset_T) -> *const c_char {
     if p_lines.get() != Rows.get() as OptInt || p_columns.get() != Columns.get() as OptInt {
         if updating_screen.get() {
             let mut oldval: OptVal = OptVal {
@@ -4223,31 +2746,27 @@ pub unsafe extern "C" fn did_set_lines_or_columns(
             };
             set_option_varp((*args).os_idx, (*args).os_varp, oldval, false_0 != 0);
         } else if full_screen.get() {
-            screen_resize(
-                p_columns.get() as ::core::ffi::c_int,
-                p_lines.get() as ::core::ffi::c_int,
-            );
+            screen_resize(p_columns.get() as c_int, p_lines.get() as c_int);
         } else {
-            Rows.set(p_lines.get() as ::core::ffi::c_int);
-            Columns.set(p_columns.get() as ::core::ffi::c_int);
+            Rows.set(p_lines.get() as c_int);
+            Columns.set(p_columns.get() as c_int);
             check_screensize();
-            let mut new_row: ::core::ffi::c_int = (Rows.get() as OptInt
+            let mut new_row: c_int = (Rows.get() as OptInt
                 - (if p_ch.get() > 1 as OptInt {
                     p_ch.get()
                 } else {
                     1 as OptInt
-                })) as ::core::ffi::c_int;
+                })) as c_int;
             if cmdline_row.get() > new_row && Rows.get() as OptInt > p_ch.get() {
                 '_c2rust_label: {
-                    if p_ch.get() >= 0 as OptInt && new_row <= 2147483647 as ::core::ffi::c_int {
+                    if p_ch.get() >= 0 as OptInt && new_row <= 2147483647 as c_int {
                     } else {
                         __assert_fail(
-                            b"p_ch >= 0 && new_row <= INT_MAX\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                            b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            2359 as ::core::ffi::c_uint,
+                            b"p_ch >= 0 && new_row <= INT_MAX\0".as_ptr() as *const c_char,
+                            b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                            2359 as c_uint,
                             b"const char *did_set_lines_or_columns(optset_T *)\0".as_ptr()
-                                as *const ::core::ffi::c_char,
+                                as *const c_char,
                         );
                     }
                 };
@@ -4255,57 +2774,51 @@ pub unsafe extern "C" fn did_set_lines_or_columns(
             }
         }
         if p_window.get() >= Rows.get() as OptInt || !option_was_set(kOptWindow) {
-            p_window.set((Rows.get() - 1 as ::core::ffi::c_int) as OptInt);
+            p_window.set((Rows.get() - 1 as c_int) as OptInt);
         }
     }
-    if p_sj.get() >= Rows.get() as OptInt && full_screen.get() as ::core::ffi::c_int != 0 {
-        p_sj.set((Rows.get() / 2 as ::core::ffi::c_int) as OptInt);
+    if p_sj.get() >= Rows.get() as OptInt && full_screen.get() as c_int != 0 {
+        p_sj.set((Rows.get() / 2 as c_int) as OptInt);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_lisp(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_lisp(mut args: *mut optset_T) -> *const c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     buf_init_chartab(buf, false);
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_modifiable(
-    mut _args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_modifiable(mut _args: *mut optset_T) -> *const c_char {
     redraw_titles();
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_modified(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_modified(mut args: *mut optset_T) -> *const c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     if (*args).os_newval.boolean as u64 == 0 {
         save_file_ff(buf);
     }
     redraw_titles();
-    (*buf).b_modified_was_set = (*args).os_newval.boolean as ::core::ffi::c_int != 0;
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    (*buf).b_modified_was_set = (*args).os_newval.boolean as c_int != 0;
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_number_relativenumber(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_number_relativenumber(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    if *(*win).w_onebuf_opt.wo_stc as ::core::ffi::c_int != NUL {
-        (*win).w_nrwidth_line_count = 0 as ::core::ffi::c_int as linenr_T;
+    if *(*win).w_onebuf_opt.wo_stc as c_int != NUL {
+        (*win).w_nrwidth_line_count = 0 as c_int as linenr_T;
     }
-    check_signcolumn(::core::ptr::null_mut::<::core::ffi::c_char>(), win);
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    check_signcolumn(::core::ptr::null_mut::<c_char>(), win);
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_numberwidth(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_numberwidth(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
-    (*win).w_nrwidth_line_count = 0 as ::core::ffi::c_int as linenr_T;
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    (*win).w_nrwidth_line_count = 0 as c_int as linenr_T;
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
-    static old_p_paste: GlobalCell<::core::ffi::c_int> = GlobalCell::new(false_0);
-    static save_sm: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-    static save_sta: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-    static save_ru: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-    static save_ri: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+pub unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const c_char {
+    static old_p_paste: GlobalCell<c_int> = GlobalCell::new(false_0);
+    static save_sm: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+    static save_sta: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+    static save_ru: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+    static save_ri: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
     if p_paste.get() != 0 {
         if old_p_paste.get() == 0 {
             let mut buf: *mut buf_T = firstbuf.get();
@@ -4316,14 +2829,14 @@ pub unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::cor
                 (*buf).b_p_ai_nopaste = (*buf).b_p_ai;
                 (*buf).b_p_et_nopaste = (*buf).b_p_et;
                 if !(*buf).b_p_vsts_nopaste.is_null() {
-                    xfree((*buf).b_p_vsts_nopaste as *mut ::core::ffi::c_void);
+                    xfree((*buf).b_p_vsts_nopaste as *mut c_void);
                 }
                 (*buf).b_p_vsts_nopaste = if !(*buf).b_p_vsts.is_null()
-                    && (*buf).b_p_vsts != empty_string_option.ptr() as *mut ::core::ffi::c_char
+                    && (*buf).b_p_vsts != empty_string_option.ptr() as *mut c_char
                 {
                     xstrdup((*buf).b_p_vsts)
                 } else {
-                    ::core::ptr::null_mut::<::core::ffi::c_char>()
+                    ::core::ptr::null_mut::<c_char>()
                 };
                 buf = (*buf).b_next;
             }
@@ -4337,15 +2850,15 @@ pub unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::cor
             p_tw_nopaste.set(p_tw.get());
             p_wm_nopaste.set(p_wm.get());
             if !(*p_vsts_nopaste.ptr()).is_null() {
-                xfree(p_vsts_nopaste.get() as *mut ::core::ffi::c_void);
+                xfree(p_vsts_nopaste.get() as *mut c_void);
             }
             p_vsts_nopaste.set(
                 if !(*p_vsts.ptr()).is_null()
-                    && p_vsts.get() != empty_string_option.ptr() as *mut ::core::ffi::c_char
+                    && p_vsts.get() != empty_string_option.ptr() as *mut c_char
                 {
                     xstrdup(p_vsts.get())
                 } else {
-                    ::core::ptr::null_mut::<::core::ffi::c_char>()
+                    ::core::ptr::null_mut::<c_char>()
                 },
             );
         }
@@ -4354,35 +2867,34 @@ pub unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::cor
             (*buf_0).b_p_tw = 0 as OptInt;
             (*buf_0).b_p_wm = 0 as OptInt;
             (*buf_0).b_p_sts = 0 as OptInt;
-            (*buf_0).b_p_ai = 0 as ::core::ffi::c_int;
-            (*buf_0).b_p_et = 0 as ::core::ffi::c_int;
+            (*buf_0).b_p_ai = 0 as c_int;
+            (*buf_0).b_p_et = 0 as c_int;
             if !(*buf_0).b_p_vsts.is_null() {
                 free_string_option((*buf_0).b_p_vsts);
             }
-            (*buf_0).b_p_vsts = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut (*buf_0).b_p_vsts_array as *mut *mut ::core::ffi::c_void;
+            (*buf_0).b_p_vsts = empty_string_option.ptr() as *mut c_char;
+            let mut ptr_: *mut *mut c_void = &raw mut (*buf_0).b_p_vsts_array as *mut *mut c_void;
             xfree(*ptr_);
             *ptr_ = NULL;
             let _ = *ptr_;
             buf_0 = (*buf_0).b_next;
         }
-        p_sm.set(0 as ::core::ffi::c_int);
-        p_sta.set(0 as ::core::ffi::c_int);
+        p_sm.set(0 as c_int);
+        p_sta.set(0 as c_int);
         if p_ru.get() != 0 {
             status_redraw_all();
         }
-        p_ru.set(0 as ::core::ffi::c_int);
-        p_ri.set(0 as ::core::ffi::c_int);
+        p_ru.set(0 as c_int);
+        p_ri.set(0 as c_int);
         p_tw.set(0 as OptInt);
         p_wm.set(0 as OptInt);
         p_sts.set(0 as OptInt);
-        p_ai.set(0 as ::core::ffi::c_int);
-        p_et.set(0 as ::core::ffi::c_int);
+        p_ai.set(0 as c_int);
+        p_et.set(0 as c_int);
         if !(*p_vsts.ptr()).is_null() {
             free_string_option(p_vsts.get());
         }
-        p_vsts.set(empty_string_option.ptr() as *mut ::core::ffi::c_char);
+        p_vsts.set(empty_string_option.ptr() as *mut c_char);
     } else if old_p_paste.get() != 0 {
         let mut buf_1: *mut buf_T = firstbuf.get();
         while !buf_1.is_null() {
@@ -4397,11 +2909,11 @@ pub unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::cor
             (*buf_1).b_p_vsts = if !(*buf_1).b_p_vsts_nopaste.is_null() {
                 xstrdup((*buf_1).b_p_vsts_nopaste)
             } else {
-                empty_string_option.ptr() as *mut ::core::ffi::c_char
+                empty_string_option.ptr() as *mut c_char
             };
-            xfree((*buf_1).b_p_vsts_array as *mut ::core::ffi::c_void);
+            xfree((*buf_1).b_p_vsts_array as *mut c_void);
             if !(*buf_1).b_p_vsts.is_null()
-                && (*buf_1).b_p_vsts != empty_string_option.ptr() as *mut ::core::ffi::c_char
+                && (*buf_1).b_p_vsts != empty_string_option.ptr() as *mut c_char
             {
                 tabstop_set((*buf_1).b_p_vsts, &raw mut (*buf_1).b_p_vsts_array);
             } else {
@@ -4427,22 +2939,20 @@ pub unsafe extern "C" fn did_set_paste(mut _args: *mut optset_T) -> *const ::cor
         p_vsts.set(if !(*p_vsts_nopaste.ptr()).is_null() {
             xstrdup(p_vsts_nopaste.get())
         } else {
-            empty_string_option.ptr() as *mut ::core::ffi::c_char
+            empty_string_option.ptr() as *mut c_char
         });
     }
     old_p_paste.set(p_paste.get());
     didset_options_sctx(
-        OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int,
-        p_paste_dep_opts.ptr() as *mut ::core::ffi::c_int,
+        OPT_LOCAL as c_int | OPT_GLOBAL as c_int,
+        p_paste_dep_opts.ptr() as *mut c_int,
     );
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_previewwindow(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_previewwindow(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if (*win).w_onebuf_opt.wo_pvw == 0 {
-        return ::core::ptr::null::<::core::ffi::c_char>();
+        return ::core::ptr::null::<c_char>();
     }
     let mut wp: *mut win_T = if curtab.get() == curtab.get() {
         firstwin.get()
@@ -4452,54 +2962,49 @@ pub unsafe extern "C" fn did_set_previewwindow(
     while !wp.is_null() {
         if (*wp).w_onebuf_opt.wo_pvw != 0 && wp != win {
             (*win).w_onebuf_opt.wo_pvw = false_0;
-            return (e_preview_window_already_exists.ptr() as *const _)
-                as *const ::core::ffi::c_char;
+            return (e_preview_window_already_exists.ptr() as *const _) as *const c_char;
         }
         wp = (*wp).w_next;
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_pumblend(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_pumblend(mut _args: *mut optset_T) -> *const c_char {
     hl_invalidate_blends();
     if pum_drawn() {
         pum_redraw();
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_readonly(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_readonly(mut args: *mut optset_T) -> *const c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
-    if (*buf).b_p_ro == 0
-        && (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-    {
+    if (*buf).b_p_ro == 0 && (*args).os_flags & OPT_LOCAL as c_int == 0 as c_int {
         readonlymode.set(false_0 != 0);
     }
     if (*buf).b_p_ro != 0 {
         (*buf).b_did_warn = false_0 != 0;
     }
     redraw_titles();
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_scrollback(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_scrollback(mut args: *mut optset_T) -> *const c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut old_value: OptInt = (*args).os_oldval.number;
     let mut value: OptInt = (*args).os_newval.number;
     if !(*buf).terminal.is_null() && value < old_value {
         on_scrollback_option_changed((*buf).terminal);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_scrollbind(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_scrollbind(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if (*win).w_onebuf_opt.wo_scb == 0 {
-        return ::core::ptr::null::<::core::ffi::c_char>();
+        return ::core::ptr::null::<c_char>();
     }
     do_check_scrollbind(false_0 != 0);
     (*win).w_scbind_pos = get_vtopline(win);
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_shiftwidth_tabstop(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_shiftwidth_tabstop(mut args: *mut optset_T) -> *const c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     let mut pp: *mut OptInt = (*args).os_varp as *mut OptInt;
@@ -4509,40 +3014,36 @@ pub unsafe extern "C" fn did_set_shiftwidth_tabstop(
     if pp == &raw mut (*buf).b_p_sw || (*buf).b_p_sw == 0 as OptInt {
         parse_cino(buf);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_showtabline(
-    mut _args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_showtabline(mut _args: *mut optset_T) -> *const c_char {
     win_new_screen_rows();
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_smoothscroll(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_smoothscroll(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if (*win).w_onebuf_opt.wo_sms == 0 {
-        (*win).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
+        (*win).w_skipcol = 0 as c_int as colnr_T;
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_spell(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_spell(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if (*win).w_onebuf_opt.wo_spell != 0 {
         return parse_spelllang(win);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_swapfile(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_swapfile(mut args: *mut optset_T) -> *const c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     if (*buf).b_p_swf != 0 && p_uc.get() != 0 {
         ml_open_file(buf);
     } else {
         mf_close_file(buf, true_0 != 0);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_textwidth(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_textwidth(mut _args: *mut optset_T) -> *const c_char {
     let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
     while !tp.is_null() {
         let mut wp: *mut win_T = if tp == curtab.get() {
@@ -4551,71 +3052,69 @@ pub unsafe extern "C" fn did_set_textwidth(mut _args: *mut optset_T) -> *const :
             (*tp).tp_firstwin
         };
         while !wp.is_null() {
-            check_colorcolumn(::core::ptr::null_mut::<::core::ffi::c_char>(), wp);
+            check_colorcolumn(::core::ptr::null_mut::<c_char>(), wp);
             wp = (*wp).w_next;
         }
         tp = (*tp).tp_next as *mut tabpage_T;
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_title_icon(
-    mut _args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_title_icon(mut _args: *mut optset_T) -> *const c_char {
     did_set_title();
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_titlelen(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_titlelen(mut args: *mut optset_T) -> *const c_char {
     let mut old_value: OptInt = (*args).os_oldval.number;
     if starting.get() != NO_SCREEN && old_value != p_titlelen.get() {
         need_maketitle.set(true_0 != 0);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_undofile(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_undofile(mut args: *mut optset_T) -> *const c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     if (*buf).b_p_udf == 0 && p_udf.get() == 0 {
-        return ::core::ptr::null::<::core::ffi::c_char>();
+        return ::core::ptr::null::<c_char>();
     }
     let mut hash: [uint8_t; 32] = [0; 32];
     let mut bp: *mut buf_T = firstbuf.get();
     while !bp.is_null() {
         if (buf == bp
-            || (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
-            || (*args).os_flags == 0 as ::core::ffi::c_int)
+            || (*args).os_flags & OPT_GLOBAL as c_int != 0
+            || (*args).os_flags == 0 as c_int)
             && !bufIsChanged(bp)
             && !(*bp).b_ml.ml_mfp.is_null()
         {
             u_compute_hash(bp, &raw mut hash as *mut uint8_t);
             u_read_undo(
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                ::core::ptr::null_mut::<c_char>(),
                 &raw mut hash as *mut uint8_t,
                 (*bp).b_fname,
             );
         }
         bp = (*bp).b_next;
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
 pub unsafe extern "C" fn did_set_global_undolevels(
     mut value: OptInt,
     mut old_value: OptInt,
-) -> *const ::core::ffi::c_char {
+) -> *const c_char {
     p_ul.set(old_value);
     u_sync(true_0 != 0);
     p_ul.set(value);
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
 pub unsafe extern "C" fn did_set_buflocal_undolevels(
     mut buf: *mut buf_T,
     mut value: OptInt,
     mut old_value: OptInt,
-) -> *const ::core::ffi::c_char {
+) -> *const c_char {
     (*buf).b_p_ul = old_value;
     u_sync(true_0 != 0);
     (*buf).b_p_ul = value;
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_undolevels(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_undolevels(mut args: *mut optset_T) -> *const c_char {
     let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
     let mut pp: *mut OptInt = (*args).os_varp as *mut OptInt;
     if pp == p_ul.ptr() {
@@ -4623,29 +3122,27 @@ pub unsafe extern "C" fn did_set_undolevels(mut args: *mut optset_T) -> *const :
     } else if pp == &raw mut (*buf).b_p_ul {
         did_set_buflocal_undolevels(buf, (*args).os_newval.number, (*args).os_oldval.number);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_updatecount(
-    mut args: *mut optset_T,
-) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_updatecount(mut args: *mut optset_T) -> *const c_char {
     let mut old_value: OptInt = (*args).os_oldval.number;
     if p_uc.get() != 0 && old_value == 0 {
         ml_open_files();
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_wildchar(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_wildchar(mut args: *mut optset_T) -> *const c_char {
     let mut c: OptInt = *((*args).os_varp as *mut OptInt);
     if c == Ctrl_C as OptInt
         || c == '\n' as OptInt
         || c == '\r' as OptInt
         || c == K_KENTER as OptInt
     {
-        return &raw const e_invarg as *const ::core::ffi::c_char;
+        return &raw const e_invarg as *const c_char;
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_winblend(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_winblend(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     let mut old_value: OptInt = (*args).os_oldval.number;
     let mut value: OptInt = (*args).os_newval.number;
@@ -4667,87 +3164,80 @@ pub unsafe extern "C" fn did_set_winblend(mut args: *mut optset_T) -> *const ::c
         (*win).w_hl_needs_update = true_0;
         check_blending(win);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_window(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_window(mut _args: *mut optset_T) -> *const c_char {
     if p_window.get() < 1 as OptInt {
-        p_window.set((Rows.get() - 1 as ::core::ffi::c_int) as OptInt);
+        p_window.set((Rows.get() - 1 as c_int) as OptInt);
     } else if p_window.get() >= Rows.get() as OptInt {
-        p_window.set((Rows.get() - 1 as ::core::ffi::c_int) as OptInt);
+        p_window.set((Rows.get() - 1 as c_int) as OptInt);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_winheight(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_winheight(mut _args: *mut optset_T) -> *const c_char {
     if !(firstwin.get() == lastwin.get()) {
         if ((*curwin.get()).w_height as OptInt) < p_wh.get() {
-            win_setheight(p_wh.get() as ::core::ffi::c_int);
+            win_setheight(p_wh.get() as c_int);
         }
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_winwidth(mut _args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_winwidth(mut _args: *mut optset_T) -> *const c_char {
     if !(firstwin.get() == lastwin.get()) && ((*curwin.get()).w_width as OptInt) < p_wiw.get() {
-        win_setwidth(p_wiw.get() as ::core::ffi::c_int);
+        win_setwidth(p_wiw.get() as c_int);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_wrap(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_wrap(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     if (*win).w_onebuf_opt.wo_wrap != 0 {
-        (*win).w_leftcol = 0 as ::core::ffi::c_int as colnr_T;
+        (*win).w_leftcol = 0 as c_int as colnr_T;
     } else {
-        (*win).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
+        (*win).w_skipcol = 0 as c_int as colnr_T;
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
-pub unsafe extern "C" fn did_set_xhistory(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe extern "C" fn did_set_xhistory(mut args: *mut optset_T) -> *const c_char {
     let mut win: *mut win_T = (*args).os_win as *mut win_T;
     let mut is_p_chi: bool = (*args).os_varp as *mut OptInt == p_chi.ptr();
-    let mut arg: *mut OptInt = if is_p_chi as ::core::ffi::c_int != 0 {
+    let mut arg: *mut OptInt = if is_p_chi as c_int != 0 {
         p_chi.ptr()
     } else {
         (*args).os_varp as *mut OptInt
     };
     if is_p_chi {
-        qf_resize_stack(*arg as ::core::ffi::c_int);
+        qf_resize_stack(*arg as c_int);
     } else {
-        ll_resize_stack(win, *arg as ::core::ffi::c_int);
+        ll_resize_stack(win, *arg as c_int);
     }
-    return ::core::ptr::null::<::core::ffi::c_char>();
+    return ::core::ptr::null::<c_char>();
 }
 unsafe extern "C" fn do_syntax_autocmd(mut buf: *mut buf_T, mut value_changed: bool) {
-    static syn_recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+    static syn_recursive: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
     (*syn_recursive.ptr()) += 1;
     (*buf).b_flags |= BF_SYN_SET;
     apply_autocmds(
         EVENT_SYNTAX,
         (*buf).b_p_syn,
         (*buf).b_fname,
-        value_changed as ::core::ffi::c_int != 0 || syn_recursive.get() == 1 as ::core::ffi::c_int,
+        value_changed as c_int != 0 || syn_recursive.get() == 1 as c_int,
         buf,
     );
     (*syn_recursive.ptr()) -= 1;
 }
 unsafe extern "C" fn do_spelllang_source(mut win: *mut win_T) {
-    let mut fname: [::core::ffi::c_char; 200] = [0; 200];
-    let mut q: *mut ::core::ffi::c_char = (*(*win).w_s).b_p_spl;
-    if strncmp(
-        q,
-        b"cjk,\0".as_ptr() as *const ::core::ffi::c_char,
-        4 as size_t,
-    ) == 0 as ::core::ffi::c_int
-    {
-        q = q.offset(4 as ::core::ffi::c_int as isize);
+    let mut fname: [c_char; 200] = [0; 200];
+    let mut q: *mut c_char = (*(*win).w_s).b_p_spl;
+    if strncmp(q, b"cjk,\0".as_ptr() as *const c_char, 4 as size_t) == 0 as c_int {
+        q = q.offset(4 as c_int as isize);
     }
-    let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut p: *mut c_char = ::core::ptr::null_mut::<c_char>();
     p = q;
-    while *p as ::core::ffi::c_int != NUL {
-        if !(*p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-            && *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-            || *p as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                && *p as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-            || ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0)
-            && *p as ::core::ffi::c_int != '-' as ::core::ffi::c_int
+    while *p as c_int != NUL {
+        if !(*p as c_uint >= 'A' as c_uint && *p as c_uint <= 'Z' as c_uint
+            || *p as c_uint >= 'a' as c_uint && *p as c_uint <= 'z' as c_uint
+            || ascii_isdigit(*p as c_int) as c_int != 0)
+            && *p as c_int != '-' as c_int
         {
             break;
         }
@@ -4755,36 +3245,29 @@ unsafe extern "C" fn do_spelllang_source(mut win: *mut win_T) {
     }
     if p > q {
         vim_snprintf(
-            &raw mut fname as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 200]>(),
-            b"spell/%.*s.*\0".as_ptr() as *const ::core::ffi::c_char,
-            p.offset_from(q) as ::core::ffi::c_int,
+            &raw mut fname as *mut c_char,
+            ::core::mem::size_of::<[c_char; 200]>(),
+            b"spell/%.*s.*\0".as_ptr() as *const c_char,
+            p.offset_from(q) as c_int,
             q,
         );
-        source_runtime_vim_lua(
-            &raw mut fname as *mut ::core::ffi::c_char,
-            DIP_ALL as ::core::ffi::c_int,
-        );
+        source_runtime_vim_lua(&raw mut fname as *mut c_char, DIP_ALL as c_int);
     }
 }
 unsafe extern "C" fn check_num_option_bounds(
     mut opt_idx: OptIndex,
     mut newval: *mut OptInt,
-    mut errbuf: *mut ::core::ffi::c_char,
+    mut errbuf: *mut c_char,
     mut errbuflen: size_t,
-) -> *const ::core::ffi::c_char {
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    match opt_idx as ::core::ffi::c_int {
+) -> *const c_char {
+    let mut errmsg: *const c_char = ::core::ptr::null::<c_char>();
+    match opt_idx as c_int {
         169 => {
-            if *newval < min_rows_for_all_tabpages() as OptInt
-                && full_screen.get() as ::core::ffi::c_int != 0
-            {
+            if *newval < min_rows_for_all_tabpages() as OptInt && full_screen.get() as c_int != 0 {
                 vim_snprintf(
                     errbuf,
                     errbuflen,
-                    gettext(
-                        b"E593: Need at least %d lines\0".as_ptr() as *const ::core::ffi::c_char
-                    ),
+                    gettext(b"E593: Need at least %d lines\0".as_ptr() as *const c_char),
                     min_rows_for_all_tabpages(),
                 );
                 errmsg = errbuf;
@@ -4797,19 +3280,15 @@ unsafe extern "C" fn check_num_option_bounds(
             };
         }
         47 => {
-            if *newval < MIN_COLUMNS as ::core::ffi::c_int as OptInt
-                && full_screen.get() as ::core::ffi::c_int != 0
-            {
+            if *newval < MIN_COLUMNS as c_int as OptInt && full_screen.get() as c_int != 0 {
                 vim_snprintf(
                     errbuf,
                     errbuflen,
-                    gettext(
-                        b"E594: Need at least %d columns\0".as_ptr() as *const ::core::ffi::c_char
-                    ),
-                    MIN_COLUMNS as ::core::ffi::c_int,
+                    gettext(b"E594: Need at least %d columns\0".as_ptr() as *const c_char),
+                    MIN_COLUMNS as c_int,
                 );
                 errmsg = errbuf;
-                *newval = MIN_COLUMNS as ::core::ffi::c_int as OptInt;
+                *newval = MIN_COLUMNS as c_int as OptInt;
             }
             *newval = if *newval < 2147483647 as OptInt {
                 *newval
@@ -4835,20 +3314,20 @@ unsafe extern "C" fn check_num_option_bounds(
         }
         246 => {
             if (*newval < -100 as OptInt || *newval >= Rows.get() as OptInt)
-                && full_screen.get() as ::core::ffi::c_int != 0
+                && full_screen.get() as c_int != 0
             {
-                errmsg = &raw const e_scroll as *const ::core::ffi::c_char;
+                errmsg = &raw const e_scroll as *const c_char;
                 *newval = 1 as OptInt;
             }
         }
         243 => {
             if (*newval <= 0 as OptInt
                 || *newval > (*curwin.get()).w_view_height as OptInt
-                    && (*curwin.get()).w_view_height > 0 as ::core::ffi::c_int)
-                && full_screen.get() as ::core::ffi::c_int != 0
+                    && (*curwin.get()).w_view_height > 0 as c_int)
+                && full_screen.get() as c_int != 0
             {
                 if *newval != 0 as OptInt {
-                    errmsg = &raw const e_scroll as *const ::core::ffi::c_char;
+                    errmsg = &raw const e_scroll as *const c_char;
                 }
                 *newval = win_default_scroll(curwin.get());
             }
@@ -4860,45 +3339,45 @@ unsafe extern "C" fn check_num_option_bounds(
 unsafe extern "C" fn validate_num_option(
     mut opt_idx: OptIndex,
     mut newval: *mut OptInt,
-    mut errbuf: *mut ::core::ffi::c_char,
+    mut errbuf: *mut c_char,
     mut errbuflen: size_t,
-) -> *const ::core::ffi::c_char {
+) -> *const c_char {
     let mut value: OptInt = *newval;
     if value < INT_MIN as OptInt || value > INT_MAX as OptInt {
-        return &raw const e_invarg as *const ::core::ffi::c_char;
+        return &raw const e_invarg as *const c_char;
     }
-    match opt_idx as ::core::ffi::c_int {
+    match opt_idx as c_int {
         129 | 325 | 335 | 236 | 336 | 275 | 106 | 266 | 318 | 373 | 323 => {
             if value < 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
             }
         }
         362 => {
             if value < 1 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
             } else if p_wmh.get() > value {
-                return &raw const e_winheight as *const ::core::ffi::c_char;
+                return &raw const e_winheight as *const c_char;
             }
         }
         364 => {
             if value < 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
             } else if value > p_wh.get() {
-                return &raw const e_winheight as *const ::core::ffi::c_char;
+                return &raw const e_winheight as *const c_char;
             }
         }
         366 => {
             if value < 1 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
             } else if p_wmw.get() > value {
-                return &raw const e_winwidth as *const ::core::ffi::c_char;
+                return &raw const e_winwidth as *const c_char;
             }
         }
         365 => {
             if value < 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
             } else if value > p_wiw.get() {
-                return &raw const e_winwidth as *const ::core::ffi::c_char;
+                return &raw const e_winwidth as *const c_char;
             }
         }
         183 => {
@@ -4906,94 +3385,94 @@ unsafe extern "C" fn validate_num_option(
         }
         44 => {
             if value < 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
             }
         }
         133 => {
             if value < 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
             } else if value > 10000 as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char;
+                return &raw const e_invarg as *const c_char;
             }
         }
         227 => {
             if value == 0 as OptInt {
                 *newval = 3 as OptInt;
             } else if value != 3 as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char;
+                return &raw const e_invarg as *const c_char;
             }
         }
         233 => {
             if value < 0 as OptInt || value > 2 as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char;
+                return &raw const e_invarg as *const c_char;
             }
         }
         247 => {
-            if value < 0 as OptInt && full_screen.get() as ::core::ffi::c_int != 0 {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+            if value < 0 as OptInt && full_screen.get() as c_int != 0 {
+                return &raw const e_positive as *const c_char;
             }
         }
         276 => {
-            if value < 0 as OptInt && full_screen.get() as ::core::ffi::c_int != 0 {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+            if value < 0 as OptInt && full_screen.get() as c_int != 0 {
+                return &raw const e_positive as *const c_char;
             }
         }
         45 => {
             if value < 1 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
             }
         }
         58 => {
             if value < 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
             } else if value > 3 as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char;
+                return &raw const e_invarg as *const c_char;
             }
         }
         207 => {
             if value < 1 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
             } else if value > MAX_NUMBERWIDTH as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char;
+                return &raw const e_invarg as *const c_char;
             }
         }
         142 => {
             if value < 0 as OptInt || value > B_IMODE_LAST as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char;
+                return &raw const e_invarg as *const c_char;
             }
         }
         143 => {
             if value < -1 as OptInt || value > B_IMODE_LAST as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char;
+                return &raw const e_invarg as *const c_char;
             }
         }
-        35 => return &raw const e_invarg as *const ::core::ffi::c_char,
+        35 => return &raw const e_invarg as *const c_char,
         244 => {
             if value < -1 as OptInt || value > SB_MAX as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char;
+                return &raw const e_invarg as *const c_char;
             }
         }
         304 => {
             if value < 1 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
             } else if value > TABSTOP_MAX as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char;
+                return &raw const e_invarg as *const c_char;
             }
         }
         37 | 167 => {
             if value < 1 as OptInt {
                 return (e_cannot_have_negative_or_zero_number_of_quickfix.ptr() as *const _)
-                    as *const ::core::ffi::c_char;
+                    as *const c_char;
             } else if value > 100 as OptInt {
                 return (e_cannot_have_more_than_hundred_quickfix.ptr() as *const _)
-                    as *const ::core::ffi::c_char;
+                    as *const c_char;
             }
         }
         187 => {
             if value <= 0 as OptInt {
-                return &raw const e_positive as *const ::core::ffi::c_char;
-            } else if value > MAX_SEARCH_COUNT as ::core::ffi::c_int as OptInt {
-                return &raw const e_invarg as *const ::core::ffi::c_char;
+                return &raw const e_positive as *const c_char;
+            } else if value > MAX_SEARCH_COUNT as c_int as OptInt {
+                return &raw const e_invarg as *const c_char;
             }
         }
         _ => {}
@@ -5005,69 +3484,65 @@ pub unsafe extern "C" fn check_redraw_for(
     mut win: *mut win_T,
     mut flags: uint32_t,
 ) {
-    let mut all: bool = flags & kOptFlagRedrAll as ::core::ffi::c_int as uint32_t
-        == kOptFlagRedrAll as ::core::ffi::c_int as uint32_t;
-    if flags & kOptFlagRedrStat as ::core::ffi::c_int as uint32_t != 0
-        || all as ::core::ffi::c_int != 0
-    {
+    let mut all: bool =
+        flags & kOptFlagRedrAll as c_int as uint32_t == kOptFlagRedrAll as c_int as uint32_t;
+    if flags & kOptFlagRedrStat as c_int as uint32_t != 0 || all as c_int != 0 {
         status_redraw_all();
     }
-    if flags & kOptFlagRedrTabl as ::core::ffi::c_int as uint32_t != 0
-        || all as ::core::ffi::c_int != 0
-    {
+    if flags & kOptFlagRedrTabl as c_int as uint32_t != 0 || all as c_int != 0 {
         redraw_tabline.set(true_0 != 0);
     }
-    if flags & kOptFlagRedrBuf as ::core::ffi::c_int as uint32_t != 0
-        || flags & kOptFlagRedrWin as ::core::ffi::c_int as uint32_t != 0
-        || all as ::core::ffi::c_int != 0
+    if flags & kOptFlagRedrBuf as c_int as uint32_t != 0
+        || flags & kOptFlagRedrWin as c_int as uint32_t != 0
+        || all as c_int != 0
     {
-        if flags & kOptFlagHLOnly as ::core::ffi::c_int as uint32_t != 0 {
-            redraw_later(win, UPD_NOT_VALID as ::core::ffi::c_int);
+        if flags & kOptFlagHLOnly as c_int as uint32_t != 0 {
+            redraw_later(win, UPD_NOT_VALID as c_int);
         } else {
             changed_window_setting(win);
         }
     }
-    if flags & kOptFlagRedrBuf as ::core::ffi::c_int as uint32_t != 0 {
-        redraw_buf_later(buf, UPD_NOT_VALID as ::core::ffi::c_int);
+    if flags & kOptFlagRedrBuf as c_int as uint32_t != 0 {
+        redraw_buf_later(buf, UPD_NOT_VALID as c_int);
     }
     if all {
-        redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_NOT_VALID as c_int);
     }
 }
 pub unsafe extern "C" fn check_redraw(mut flags: uint32_t) {
     check_redraw_for(curbuf.get(), curwin.get(), flags);
 }
-pub unsafe extern "C" fn is_tty_option(mut name: *const ::core::ffi::c_char) -> bool {
+pub unsafe extern "C" fn is_tty_option(mut name: *const c_char) -> bool {
     return !find_tty_option_end(name).is_null();
 }
-pub unsafe extern "C" fn get_tty_option(mut name: *const ::core::ffi::c_char) -> OptVal {
-    let mut value: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if strequal(name, b"t_Co\0".as_ptr() as *const ::core::ffi::c_char) {
-        if t_colors.get() <= 1 as ::core::ffi::c_int {
-            value = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
+pub unsafe extern "C" fn get_tty_option(mut name: *const c_char) -> OptVal {
+    let mut value: *mut c_char = ::core::ptr::null_mut::<c_char>();
+    if strequal(name, b"t_Co\0".as_ptr() as *const c_char) {
+        if t_colors.get() <= 1 as c_int {
+            value = xstrdup(b"\0".as_ptr() as *const c_char);
         } else {
-            value = xmalloc(NUMBUFLEN as ::core::ffi::c_int as size_t) as *mut ::core::ffi::c_char;
+            value = xmalloc(NUMBUFLEN as c_int as size_t) as *mut c_char;
             snprintf(
                 value,
-                NUMBUFLEN as ::core::ffi::c_int as size_t,
-                b"%d\0".as_ptr() as *const ::core::ffi::c_char,
+                NUMBUFLEN as c_int as size_t,
+                b"%d\0".as_ptr() as *const c_char,
                 t_colors.get(),
             );
         }
-    } else if strequal(name, b"term\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if strequal(name, b"term\0".as_ptr() as *const c_char) {
         value = if !(*p_term.ptr()).is_null() {
             xstrdup(p_term.get())
         } else {
-            xstrdup(b"nvim\0".as_ptr() as *const ::core::ffi::c_char)
+            xstrdup(b"nvim\0".as_ptr() as *const c_char)
         };
-    } else if strequal(name, b"ttytype\0".as_ptr() as *const ::core::ffi::c_char) {
+    } else if strequal(name, b"ttytype\0".as_ptr() as *const c_char) {
         value = if !(*p_ttytype.ptr()).is_null() {
             xstrdup(p_ttytype.get())
         } else {
-            xstrdup(b"nvim\0".as_ptr() as *const ::core::ffi::c_char)
+            xstrdup(b"nvim\0".as_ptr() as *const c_char)
         };
     } else if is_tty_option(name) {
-        value = xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char);
+        value = xstrdup(b"\0".as_ptr() as *const c_char);
     }
     return if value.is_null() {
         OptVal {
@@ -5083,43 +3558,37 @@ pub unsafe extern "C" fn get_tty_option(mut name: *const ::core::ffi::c_char) ->
         }
     };
 }
-pub unsafe extern "C" fn set_tty_option(
-    mut name: *const ::core::ffi::c_char,
-    mut value: *mut ::core::ffi::c_char,
-) -> bool {
-    if strequal(name, b"term\0".as_ptr() as *const ::core::ffi::c_char) {
+pub unsafe extern "C" fn set_tty_option(mut name: *const c_char, mut value: *mut c_char) -> bool {
+    if strequal(name, b"term\0".as_ptr() as *const c_char) {
         if !(*p_term.ptr()).is_null() {
-            xfree(p_term.get() as *mut ::core::ffi::c_void);
+            xfree(p_term.get() as *mut c_void);
         }
         p_term.set(value);
         return true_0 != 0;
     }
-    if strequal(name, b"ttytype\0".as_ptr() as *const ::core::ffi::c_char) {
+    if strequal(name, b"ttytype\0".as_ptr() as *const c_char) {
         if !(*p_ttytype.ptr()).is_null() {
-            xfree(p_ttytype.get() as *mut ::core::ffi::c_void);
+            xfree(p_ttytype.get() as *mut c_void);
         }
         p_ttytype.set(value);
         return true_0 != 0;
     }
     return false_0 != 0;
 }
-pub unsafe extern "C" fn find_option_len(
-    name: *const ::core::ffi::c_char,
-    len: size_t,
-) -> OptIndex {
+pub unsafe extern "C" fn find_option_len(name: *const c_char, len: size_t) -> OptIndex {
     if len == 0 {
         return kOptInvalid;
     }
     // SAFETY: the caller passes `len` readable bytes at `name`.
     find_option_index(unsafe { ::core::slice::from_raw_parts(name.cast::<u8>(), len) })
 }
-pub unsafe extern "C" fn find_option(name: *const ::core::ffi::c_char) -> OptIndex {
+pub unsafe extern "C" fn find_option(name: *const c_char) -> OptIndex {
     return find_option_len(name, strlen(name));
 }
 pub unsafe extern "C" fn optval_free(mut o: OptVal) {
-    match o.type_0 as ::core::ffi::c_int {
+    match o.type_0 as c_int {
         2 => {
-            if o.data.string.data != empty_string_option.ptr() as *mut ::core::ffi::c_char {
+            if o.data.string.data != empty_string_option.ptr() as *mut c_char {
                 api_free_string(o.data.string);
             }
         }
@@ -5127,7 +3596,7 @@ pub unsafe extern "C" fn optval_free(mut o: OptVal) {
     };
 }
 pub unsafe extern "C" fn optval_copy(mut o: OptVal) -> OptVal {
-    match o.type_0 as ::core::ffi::c_int {
+    match o.type_0 as c_int {
         -1 | 0 | 1 => return o,
         2 => {
             return OptVal {
@@ -5142,13 +3611,13 @@ pub unsafe extern "C" fn optval_copy(mut o: OptVal) -> OptVal {
     unreachable!();
 }
 pub unsafe extern "C" fn optval_equal(mut o1: OptVal, mut o2: OptVal) -> bool {
-    if o1.type_0 as ::core::ffi::c_int != o2.type_0 as ::core::ffi::c_int {
+    if o1.type_0 as c_int != o2.type_0 as c_int {
         return false_0 != 0;
     }
-    match o1.type_0 as ::core::ffi::c_int {
+    match o1.type_0 as c_int {
         -1 => return true_0 != 0,
         0 => {
-            return o1.data.boolean as ::core::ffi::c_int == o2.data.boolean as ::core::ffi::c_int;
+            return o1.data.boolean as c_int == o2.data.boolean as c_int;
         }
         1 => return o1.data.number == o2.data.number,
         2 => {
@@ -5158,7 +3627,7 @@ pub unsafe extern "C" fn optval_equal(mut o1: OptVal, mut o2: OptVal) -> bool {
                         o1.data.string.data,
                         o2.data.string.data,
                         o1.data.string.size,
-                    ) as ::core::ffi::c_int
+                    ) as c_int
                         != 0);
         }
         _ => {}
@@ -5168,11 +3637,8 @@ pub unsafe extern "C" fn optval_equal(mut o1: OptVal, mut o2: OptVal) -> bool {
 unsafe extern "C" fn option_get_type(opt_idx: OptIndex) -> OptValType {
     return (*options.ptr())[opt_idx as usize].type_0;
 }
-pub unsafe extern "C" fn optval_from_varp(
-    mut opt_idx: OptIndex,
-    mut varp: *mut ::core::ffi::c_void,
-) -> OptVal {
-    if varp as *mut ::core::ffi::c_int == &raw mut (*curbuf.get()).b_changed {
+pub unsafe extern "C" fn optval_from_varp(mut opt_idx: OptIndex, mut varp: *mut c_void) -> OptVal {
+    if varp as *mut c_int == &raw mut (*curbuf.get()).b_changed {
         return OptVal {
             type_0: kOptValTypeBoolean,
             data: OptValData {
@@ -5181,7 +3647,7 @@ pub unsafe extern "C" fn optval_from_varp(
         };
     }
     let mut type_0: OptValType = option_get_type(opt_idx);
-    match type_0 as ::core::ffi::c_int {
+    match type_0 as c_int {
         -1 => {
             return OptVal {
                 type_0: kOptValTypeNil,
@@ -5192,12 +3658,12 @@ pub unsafe extern "C" fn optval_from_varp(
             return OptVal {
                 type_0: kOptValTypeBoolean,
                 data: OptValData {
-                    boolean: (if *(varp as *mut ::core::ffi::c_int) == 0 as ::core::ffi::c_int {
-                        kFalse as ::core::ffi::c_int
-                    } else if *(varp as *mut ::core::ffi::c_int) >= 1 as ::core::ffi::c_int {
-                        kTrue as ::core::ffi::c_int
+                    boolean: (if *(varp as *mut c_int) == 0 as c_int {
+                        kFalse as c_int
+                    } else if *(varp as *mut c_int) >= 1 as c_int {
+                        kTrue as c_int
                     } else {
-                        kNone as ::core::ffi::c_int
+                        kNone as c_int
                     }) as TriState,
                 },
             };
@@ -5214,7 +3680,7 @@ pub unsafe extern "C" fn optval_from_varp(
             return OptVal {
                 type_0: kOptValTypeString,
                 data: OptValData {
-                    string: cstr_as_string(*(varp as *mut *mut ::core::ffi::c_char)),
+                    string: cstr_as_string(*(varp as *mut *mut c_char)),
                 },
             };
         }
@@ -5224,7 +3690,7 @@ pub unsafe extern "C" fn optval_from_varp(
 }
 unsafe extern "C" fn set_option_varp(
     mut opt_idx: OptIndex,
-    mut varp: *mut ::core::ffi::c_void,
+    mut varp: *mut c_void,
     mut value: OptVal,
     mut free_oldval: bool,
 ) {
@@ -5232,23 +3698,23 @@ unsafe extern "C" fn set_option_varp(
         if option_has_type(opt_idx, value.type_0) {
         } else {
             __assert_fail(
-                b"option_has_type(opt_idx, value.type)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3401 as ::core::ffi::c_uint,
+                b"option_has_type(opt_idx, value.type)\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                3401 as c_uint,
                 b"void set_option_varp(OptIndex, void *, OptVal, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                    as *const c_char,
             );
         }
     };
     if free_oldval {
         optval_free(optval_from_varp(opt_idx, varp));
     }
-    match value.type_0 as ::core::ffi::c_int {
+    match value.type_0 as c_int {
         -1 => {
             abort();
         }
         0 => {
-            *(varp as *mut ::core::ffi::c_int) = value.data.boolean as ::core::ffi::c_int;
+            *(varp as *mut c_int) = value.data.boolean as c_int;
             return;
         }
         1 => {
@@ -5256,41 +3722,40 @@ unsafe extern "C" fn set_option_varp(
             return;
         }
         2 => {
-            *(varp as *mut *mut ::core::ffi::c_char) = value.data.string.data;
+            *(varp as *mut *mut c_char) = value.data.string.data;
             return;
         }
         _ => {}
     }
     unreachable!();
 }
-unsafe extern "C" fn optval_to_cstr(mut o: OptVal) -> *mut ::core::ffi::c_char {
-    match o.type_0 as ::core::ffi::c_int {
-        -1 => return xstrdup(b"\0".as_ptr() as *const ::core::ffi::c_char),
+unsafe extern "C" fn optval_to_cstr(mut o: OptVal) -> *mut c_char {
+    match o.type_0 as c_int {
+        -1 => return xstrdup(b"\0".as_ptr() as *const c_char),
         0 => {
-            return xstrdup(if o.data.boolean as ::core::ffi::c_int != 0 {
-                b"true\0".as_ptr() as *const ::core::ffi::c_char
+            return xstrdup(if o.data.boolean as c_int != 0 {
+                b"true\0".as_ptr() as *const c_char
             } else {
-                b"false\0".as_ptr() as *const ::core::ffi::c_char
+                b"false\0".as_ptr() as *const c_char
             });
         }
         1 => {
-            let mut buf: *mut ::core::ffi::c_char =
-                xmalloc(NUMBUFLEN as ::core::ffi::c_int as size_t) as *mut ::core::ffi::c_char;
+            let mut buf: *mut c_char = xmalloc(NUMBUFLEN as c_int as size_t) as *mut c_char;
             snprintf(
                 buf,
-                NUMBUFLEN as ::core::ffi::c_int as size_t,
-                b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
+                NUMBUFLEN as c_int as size_t,
+                b"%ld\0".as_ptr() as *const c_char,
                 o.data.number,
             );
             return buf;
         }
         2 => {
-            let mut buf_0: *mut ::core::ffi::c_char =
-                xmalloc(o.data.string.size.wrapping_add(3 as size_t)) as *mut ::core::ffi::c_char;
+            let mut buf_0: *mut c_char =
+                xmalloc(o.data.string.size.wrapping_add(3 as size_t)) as *mut c_char;
             snprintf(
                 buf_0,
                 o.data.string.size.wrapping_add(3 as size_t),
-                b"\"%s\"\0".as_ptr() as *const ::core::ffi::c_char,
+                b"\"%s\"\0".as_ptr() as *const c_char,
                 o.data.string.data,
             );
             return buf_0;
@@ -5300,19 +3765,19 @@ unsafe extern "C" fn optval_to_cstr(mut o: OptVal) -> *mut ::core::ffi::c_char {
     unreachable!();
 }
 pub unsafe extern "C" fn optval_as_object(mut o: OptVal) -> Object {
-    match o.type_0 as ::core::ffi::c_int {
+    match o.type_0 as c_int {
         -1 => {
             return object {
                 type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
+                data: object_data { boolean: false },
             };
         }
         0 => {
-            match o.data.boolean as ::core::ffi::c_int {
+            match o.data.boolean as c_int {
                 0 | 1 => {
                     return object {
                         type_0: kObjectTypeBoolean,
-                        data: C2Rust_Unnamed {
+                        data: object_data {
                             boolean: o.data.boolean as u64 != 0,
                         },
                     };
@@ -5320,7 +3785,7 @@ pub unsafe extern "C" fn optval_as_object(mut o: OptVal) -> Object {
                 -1 => {
                     return object {
                         type_0: kObjectTypeNil,
-                        data: C2Rust_Unnamed { boolean: false },
+                        data: object_data { boolean: false },
                     };
                 }
                 _ => {}
@@ -5330,7 +3795,7 @@ pub unsafe extern "C" fn optval_as_object(mut o: OptVal) -> Object {
         1 => {
             return object {
                 type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
+                data: object_data {
                     integer: o.data.number,
                 },
             };
@@ -5338,7 +3803,7 @@ pub unsafe extern "C" fn optval_as_object(mut o: OptVal) -> Object {
         2 => {
             return object {
                 type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
+                data: object_data {
                     string: o.data.string,
                 },
             };
@@ -5348,7 +3813,7 @@ pub unsafe extern "C" fn optval_as_object(mut o: OptVal) -> Object {
     unreachable!();
 }
 pub unsafe extern "C" fn object_as_optval(mut o: Object, mut error: *mut bool) -> OptVal {
-    match o.type_0 as ::core::ffi::c_uint {
+    match o.type_0 as c_uint {
         0 => {
             return OptVal {
                 type_0: kOptValTypeNil,
@@ -5389,88 +3854,75 @@ pub unsafe extern "C" fn object_as_optval(mut o: Object, mut error: *mut bool) -
     };
 }
 pub unsafe extern "C" fn is_option_hidden(mut opt_idx: OptIndex) -> bool {
-    return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && (*options.ptr())[opt_idx as usize].immutable as ::core::ffi::c_int != 0
+    return opt_idx as c_int != kOptInvalid as c_int
+        && (*options.ptr())[opt_idx as usize].immutable as c_int != 0
         && (*options.ptr())[opt_idx as usize].var
             == &raw mut (*(options.ptr() as *mut vimoption_T).offset(opt_idx as isize))
                 .def_val
-                .data as *mut ::core::ffi::c_void;
+                .data as *mut c_void;
 }
 pub unsafe extern "C" fn option_has_type(mut opt_idx: OptIndex, mut type_0: OptValType) -> bool {
-    return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && (*options.ptr())[opt_idx as usize].type_0 as ::core::ffi::c_int
-            == type_0 as ::core::ffi::c_int;
+    return opt_idx as c_int != kOptInvalid as c_int
+        && (*options.ptr())[opt_idx as usize].type_0 as c_int == type_0 as c_int;
 }
 pub unsafe extern "C" fn option_has_scope(mut opt_idx: OptIndex, mut scope: OptScope) -> bool {
     '_c2rust_label: {
-        if scope as ::core::ffi::c_uint
-            >= kOptScopeGlobal as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (scope as ::core::ffi::c_uint)
-                < (kOptScopeBuf as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                    as ::core::ffi::c_uint
+        if scope as c_uint >= kOptScopeGlobal as c_int as c_uint
+            && (scope as c_uint) < (kOptScopeBuf as c_int + 1 as c_int) as c_uint
         {
         } else {
             __assert_fail(
-                b"scope >= kOptScopeGlobal && scope < kOptScopeSize\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3512 as ::core::ffi::c_uint,
-                b"_Bool option_has_scope(OptIndex, OptScope)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"scope >= kOptScopeGlobal && scope < kOptScopeSize\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                3512 as c_uint,
+                b"_Bool option_has_scope(OptIndex, OptScope)\0".as_ptr() as *const c_char,
             );
         }
     };
-    return (*get_option(opt_idx)).scope_flags as ::core::ffi::c_int
-        & (1 as ::core::ffi::c_int) << scope as ::core::ffi::c_uint
-        != 0;
+    return (*get_option(opt_idx)).scope_flags as c_int & (1 as c_int) << scope as c_uint != 0;
 }
 #[inline]
 unsafe extern "C" fn option_is_global_local(mut opt_idx: OptIndex) -> bool {
-    return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
+    return opt_idx as c_int != kOptInvalid as c_int
         && !is_power_of_two((*options.ptr())[opt_idx as usize].scope_flags as uint64_t);
 }
 #[inline]
 unsafe extern "C" fn option_is_global_only(mut opt_idx: OptIndex) -> bool {
-    return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && is_power_of_two((*options.ptr())[opt_idx as usize].scope_flags as uint64_t)
-            as ::core::ffi::c_int
+    return opt_idx as c_int != kOptInvalid as c_int
+        && is_power_of_two((*options.ptr())[opt_idx as usize].scope_flags as uint64_t) as c_int
             != 0
-        && option_has_scope(opt_idx, kOptScopeGlobal) as ::core::ffi::c_int != 0;
+        && option_has_scope(opt_idx, kOptScopeGlobal) as c_int != 0;
 }
 #[inline]
 unsafe extern "C" fn option_is_window_local(mut opt_idx: OptIndex) -> bool {
-    return opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
-        && is_power_of_two((*options.ptr())[opt_idx as usize].scope_flags as uint64_t)
-            as ::core::ffi::c_int
+    return opt_idx as c_int != kOptInvalid as c_int
+        && is_power_of_two((*options.ptr())[opt_idx as usize].scope_flags as uint64_t) as c_int
             != 0
-        && option_has_scope(opt_idx, kOptScopeWin) as ::core::ffi::c_int != 0;
+        && option_has_scope(opt_idx, kOptScopeWin) as c_int != 0;
 }
 pub unsafe extern "C" fn option_scope_idx(mut opt_idx: OptIndex, mut scope: OptScope) -> ssize_t {
     return (*options.ptr())[opt_idx as usize].scope_idx[scope as usize];
 }
-pub unsafe extern "C" fn get_option_value(
-    mut opt_idx: OptIndex,
-    mut opt_flags: ::core::ffi::c_int,
-) -> OptVal {
-    if opt_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
+pub unsafe extern "C" fn get_option_value(mut opt_idx: OptIndex, mut opt_flags: c_int) -> OptVal {
+    if opt_idx as c_int == kOptInvalid as c_int {
         return OptVal {
             type_0: kOptValTypeNil,
             data: OptValData { boolean: kFalse },
         };
     }
     let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-    let mut varp: *mut ::core::ffi::c_void = get_varp_scope(opt, opt_flags);
+    let mut varp: *mut c_void = get_varp_scope(opt, opt_flags);
     return optval_copy(optval_from_varp(opt_idx, varp));
 }
 pub unsafe extern "C" fn get_option(mut opt_idx: OptIndex) -> *mut vimoption_T {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        if opt_idx as c_int != kOptInvalid as c_int {
         } else {
             __assert_fail(
-                b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3580 as ::core::ffi::c_uint,
-                b"vimoption_T *get_option(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
+                b"opt_idx != kOptInvalid\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                3580 as c_uint,
+                b"vimoption_T *get_option(OptIndex)\0".as_ptr() as *const c_char,
             );
         }
     };
@@ -5478,13 +3930,13 @@ pub unsafe extern "C" fn get_option(mut opt_idx: OptIndex) -> *mut vimoption_T {
 }
 unsafe extern "C" fn get_option_unset_value(mut opt_idx: OptIndex) -> OptVal {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        if opt_idx as c_int != kOptInvalid as c_int {
         } else {
             __assert_fail(
-                b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3593 as ::core::ffi::c_uint,
-                b"OptVal get_option_unset_value(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
+                b"opt_idx != kOptInvalid\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                3593 as c_uint,
+                b"OptVal get_option_unset_value(OptIndex)\0".as_ptr() as *const c_char,
             );
         }
     };
@@ -5495,15 +3947,13 @@ unsafe extern "C" fn get_option_unset_value(mut opt_idx: OptIndex) -> OptVal {
                 type_0: kOptValTypeString,
                 data: OptValData {
                     string: String_0 {
-                        data: b"\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 1]>()
-                            .wrapping_sub(1 as size_t),
+                        data: b"\0".as_ptr() as *const c_char as *mut c_char,
+                        size: ::core::mem::size_of::<[c_char; 1]>().wrapping_sub(1 as size_t),
                     },
                 },
             };
         }
-        match opt_idx as ::core::ffi::c_int {
+        match opt_idx as c_int {
             6 | 10 | 118 => {
                 return OptVal {
                     type_0: kOptValTypeBoolean,
@@ -5531,36 +3981,32 @@ unsafe extern "C" fn get_option_unset_value(mut opt_idx: OptIndex) -> OptVal {
             }
         }
     }
-    return optval_from_varp(
-        opt_idx,
-        get_varp_scope(opt, OPT_GLOBAL as ::core::ffi::c_int),
-    );
+    return optval_from_varp(opt_idx, get_varp_scope(opt, OPT_GLOBAL as c_int));
 }
 unsafe extern "C" fn is_option_local_value_unset(mut opt_idx: OptIndex) -> bool {
     let mut opt: *mut vimoption_T = get_option(opt_idx);
     if !option_is_global_local(opt_idx) {
         return false_0 != 0;
     }
-    let mut varp_local: *mut ::core::ffi::c_void =
-        get_varp_scope(opt, OPT_LOCAL as ::core::ffi::c_int);
+    let mut varp_local: *mut c_void = get_varp_scope(opt, OPT_LOCAL as c_int);
     let mut local_value: OptVal = optval_from_varp(opt_idx, varp_local);
     let mut unset_local_value: OptVal = get_option_unset_value(opt_idx);
     return optval_equal(local_value, unset_local_value);
 }
 unsafe extern "C" fn did_set_option(
     mut opt_idx: OptIndex,
-    mut varp: *mut ::core::ffi::c_void,
+    mut varp: *mut c_void,
     mut old_value: OptVal,
     mut new_value: OptVal,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut set_sid: scid_T,
     direct: bool,
     value_replaced: bool,
-    mut errbuf: *mut ::core::ffi::c_char,
+    mut errbuf: *mut c_char,
     mut errbuflen: size_t,
-) -> *const ::core::ffi::c_char {
+) -> *const c_char {
     let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut errmsg: *const c_char = ::core::ptr::null::<c_char>();
     let mut restore_chartab: bool = false_0 != 0;
     let mut value_changed: bool = false_0 != 0;
     let mut value_checked: bool = false_0 != 0;
@@ -5575,22 +4021,20 @@ unsafe extern "C" fn did_set_option(
         os_restore_chartab: false_0 != 0,
         os_errbuf: errbuf,
         os_errbuflen: errbuflen,
-        os_win: curwin.get() as *mut ::core::ffi::c_void,
-        os_buf: curbuf.get() as *mut ::core::ffi::c_void,
+        os_win: curwin.get() as *mut c_void,
+        os_buf: curbuf.get() as *mut c_void,
     };
     if !direct {
-        if (*opt).immutable as ::core::ffi::c_int != 0 && !optval_equal(old_value, new_value) {
-            errmsg = &raw const e_unsupportedoption as *const ::core::ffi::c_char;
-        } else if (secure.get() != 0 || sandbox.get() != 0 as ::core::ffi::c_int)
-            && (*opt).flags & kOptFlagSecure as ::core::ffi::c_int as uint32_t != 0
+        if (*opt).immutable as c_int != 0 && !optval_equal(old_value, new_value) {
+            errmsg = &raw const e_unsupportedoption as *const c_char;
+        } else if (secure.get() != 0 || sandbox.get() != 0 as c_int)
+            && (*opt).flags & kOptFlagSecure as c_int as uint32_t != 0
         {
-            errmsg = &raw const e_secure as *const ::core::ffi::c_char;
-        } else if new_value.type_0 as ::core::ffi::c_int == kOptValTypeString as ::core::ffi::c_int
-            && check_illegal_path_names(*(varp as *mut *mut ::core::ffi::c_char), (*opt).flags)
-                as ::core::ffi::c_int
-                != 0
+            errmsg = &raw const e_secure as *const c_char;
+        } else if new_value.type_0 as c_int == kOptValTypeString as c_int
+            && check_illegal_path_names(*(varp as *mut *mut c_char), (*opt).flags) as c_int != 0
         {
-            errmsg = &raw const e_invarg as *const ::core::ffi::c_char;
+            errmsg = &raw const e_invarg as *const c_char;
         } else if (*opt).opt_did_set_cb.is_some() {
             errmsg =
                 (*opt).opt_did_set_cb.expect("non-null function pointer")(&raw mut did_set_cb_args);
@@ -5608,7 +4052,7 @@ unsafe extern "C" fn did_set_option(
     }
     new_value = optval_from_varp(opt_idx, varp);
     if set_sid != SID_NONE {
-        let mut script_ctx: sctx_T = if set_sid == 0 as ::core::ffi::c_int {
+        let mut script_ctx: sctx_T = if set_sid == 0 as c_int {
             current_sctx.get()
         } else {
             sctx_T {
@@ -5621,13 +4065,10 @@ unsafe extern "C" fn did_set_option(
         set_option_sctx(opt_idx, opt_flags, script_ctx);
     }
     optval_free(old_value);
-    let scope_both: bool = opt_flags
-        & (OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int)
-        == 0 as ::core::ffi::c_int;
+    let scope_both: bool = opt_flags & (OPT_LOCAL as c_int | OPT_GLOBAL as c_int) == 0 as c_int;
     if scope_both {
         if option_is_global_local(opt_idx) {
-            let mut varp_local: *mut ::core::ffi::c_void =
-                get_varp_scope(opt, OPT_LOCAL as ::core::ffi::c_int);
+            let mut varp_local: *mut c_void = get_varp_scope(opt, OPT_LOCAL as c_int);
             let mut local_unset_value: OptVal = get_option_unset_value(opt_idx);
             set_option_varp(
                 opt_idx,
@@ -5636,73 +4077,65 @@ unsafe extern "C" fn did_set_option(
                 true_0 != 0,
             );
         } else {
-            let mut varp_global: *mut ::core::ffi::c_void =
-                get_varp_scope(opt, OPT_GLOBAL as ::core::ffi::c_int);
+            let mut varp_global: *mut c_void = get_varp_scope(opt, OPT_GLOBAL as c_int);
             set_option_varp(opt_idx, varp_global, optval_copy(new_value), true_0 != 0);
         }
     }
     if direct {
         return errmsg;
     }
-    if varp == &raw mut (*curbuf.get()).b_p_syn as *mut ::core::ffi::c_void {
+    if varp == &raw mut (*curbuf.get()).b_p_syn as *mut c_void {
         do_syntax_autocmd(curbuf.get(), value_changed);
-    } else if varp == &raw mut (*curbuf.get()).b_p_ft as *mut ::core::ffi::c_void {
-        if opt_flags & OPT_MODELINE as ::core::ffi::c_int == 0
-            || value_changed as ::core::ffi::c_int != 0
-        {
+    } else if varp == &raw mut (*curbuf.get()).b_p_ft as *mut c_void {
+        if opt_flags & OPT_MODELINE as c_int == 0 || value_changed as c_int != 0 {
             do_filetype_autocmd(curbuf.get(), value_changed);
         }
-    } else if varp == &raw mut (*(*curwin.get()).w_s).b_p_spl as *mut ::core::ffi::c_void {
+    } else if varp == &raw mut (*(*curwin.get()).w_s).b_p_spl as *mut c_void {
         do_spelllang_source(curwin.get());
     }
     comp_col();
-    if varp == p_mouse.ptr() as *mut ::core::ffi::c_void {
+    if varp == p_mouse.ptr() as *mut c_void {
         setmouse();
-    } else if (varp == p_flp.ptr() as *mut ::core::ffi::c_void
-        || varp == &raw mut (*curbuf.get()).b_p_flp as *mut ::core::ffi::c_void)
+    } else if (varp == p_flp.ptr() as *mut c_void
+        || varp == &raw mut (*curbuf.get()).b_p_flp as *mut c_void)
         && (*curwin.get()).w_briopt_list != 0
     {
-        redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
-    } else if varp == p_wbr.ptr() as *mut ::core::ffi::c_void
-        || varp == &raw mut (*curwin.get()).w_onebuf_opt.wo_wbr as *mut ::core::ffi::c_void
+        redraw_all_later(UPD_NOT_VALID as c_int);
+    } else if varp == p_wbr.ptr() as *mut c_void
+        || varp == &raw mut (*curwin.get()).w_onebuf_opt.wo_wbr as *mut c_void
     {
         set_winbar(true_0 != 0);
     }
-    if (*curwin.get()).w_curswant != MAXCOL as ::core::ffi::c_int
-        && (*opt).flags
-            & (kOptFlagCurswant as ::core::ffi::c_int | kOptFlagRedrAll as ::core::ffi::c_int)
-                as uint32_t
+    if (*curwin.get()).w_curswant != MAXCOL as c_int
+        && (*opt).flags & (kOptFlagCurswant as c_int | kOptFlagRedrAll as c_int) as uint32_t
             != 0 as uint32_t
-        && (*opt).flags & kOptFlagHLOnly as ::core::ffi::c_int as uint32_t == 0 as uint32_t
+        && (*opt).flags & kOptFlagHLOnly as c_int as uint32_t == 0 as uint32_t
     {
         (*curwin.get()).w_set_curswant = true_0;
     }
     check_redraw((*opt).flags);
     if errmsg.is_null() {
-        (*opt).flags |= kOptFlagWasSet as ::core::ffi::c_int as uint32_t;
+        (*opt).flags |= kOptFlagWasSet as c_int as uint32_t;
         let mut flagsp: *mut uint32_t = insecure_flag(curwin.get(), opt_idx, opt_flags);
-        let mut flagsp_local: *mut uint32_t = if scope_both as ::core::ffi::c_int != 0 {
-            insecure_flag(curwin.get(), opt_idx, OPT_LOCAL as ::core::ffi::c_int)
+        let mut flagsp_local: *mut uint32_t = if scope_both as c_int != 0 {
+            insecure_flag(curwin.get(), opt_idx, OPT_LOCAL as c_int)
         } else {
             ::core::ptr::null_mut::<uint32_t>()
         };
         if !value_checked
             && (secure.get() != 0
-                || sandbox.get() != 0 as ::core::ffi::c_int
-                || opt_flags & OPT_MODELINE as ::core::ffi::c_int != 0)
+                || sandbox.get() != 0 as c_int
+                || opt_flags & OPT_MODELINE as c_int != 0)
         {
-            *flagsp |= kOptFlagInsecure as ::core::ffi::c_int as uint32_t;
+            *flagsp |= kOptFlagInsecure as c_int as uint32_t;
             if !flagsp_local.is_null() {
-                *flagsp_local |= kOptFlagInsecure as ::core::ffi::c_int as uint32_t;
+                *flagsp_local |= kOptFlagInsecure as c_int as uint32_t;
             }
         } else if value_replaced {
-            *flagsp = (*flagsp as ::core::ffi::c_uint
-                & !(kOptFlagInsecure as ::core::ffi::c_int as ::core::ffi::c_uint))
-                as uint32_t;
+            *flagsp = (*flagsp as c_uint & !(kOptFlagInsecure as c_int as c_uint)) as uint32_t;
             if !flagsp_local.is_null() {
-                *flagsp_local = (*flagsp_local as ::core::ffi::c_uint
-                    & !(kOptFlagInsecure as ::core::ffi::c_int as ::core::ffi::c_uint))
-                    as uint32_t;
+                *flagsp_local =
+                    (*flagsp_local as c_uint & !(kOptFlagInsecure as c_int as c_uint)) as uint32_t;
             }
         }
     }
@@ -5711,44 +4144,42 @@ unsafe extern "C" fn did_set_option(
 unsafe extern "C" fn validate_option_value(
     opt_idx: OptIndex,
     mut newval: *mut OptVal,
-    mut opt_flags: ::core::ffi::c_int,
-    mut errbuf: *mut ::core::ffi::c_char,
+    mut opt_flags: c_int,
+    mut errbuf: *mut c_char,
     mut errbuflen: size_t,
-) -> *const ::core::ffi::c_char {
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+) -> *const c_char {
+    let mut errmsg: *const c_char = ::core::ptr::null::<c_char>();
     let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-    if option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
-        && opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0
-        && optval_equal(*newval, get_option_unset_value(opt_idx)) as ::core::ffi::c_int != 0
+    if option_is_global_local(opt_idx) as c_int != 0
+        && opt_flags & OPT_LOCAL as c_int != 0
+        && optval_equal(*newval, get_option_unset_value(opt_idx)) as c_int != 0
     {
-        return ::core::ptr::null::<::core::ffi::c_char>();
+        return ::core::ptr::null::<c_char>();
     }
-    if (*newval).type_0 as ::core::ffi::c_int == kOptValTypeNil as ::core::ffi::c_int {
-        if opt_flags == OPT_GLOBAL as ::core::ffi::c_int {
-            errmsg = gettext(
-                b"Cannot unset global option value\0".as_ptr() as *const ::core::ffi::c_char
-            );
+    if (*newval).type_0 as c_int == kOptValTypeNil as c_int {
+        if opt_flags == OPT_GLOBAL as c_int {
+            errmsg = gettext(b"Cannot unset global option value\0".as_ptr() as *const c_char);
         } else {
             *newval = optval_copy(get_option_unset_value(opt_idx));
         }
     } else if !option_has_type(opt_idx, (*newval).type_0) {
-        let mut rep: *mut ::core::ffi::c_char = optval_to_cstr(*newval);
-        let mut type_str: *const ::core::ffi::c_char = optval_type_get_name((*opt).type_0);
+        let mut rep: *mut c_char = optval_to_cstr(*newval);
+        let mut type_str: *const c_char = optval_type_get_name((*opt).type_0);
         snprintf(
             errbuf,
             IOSIZE as size_t,
             gettext(
                 b"Invalid value for option '%s': expected %s, got %s %s\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                    as *const c_char,
             ),
             (*opt).fullname,
             type_str,
             optval_type_get_name((*newval).type_0),
             rep,
         );
-        xfree(rep as *mut ::core::ffi::c_void);
+        xfree(rep as *mut c_void);
         errmsg = errbuf;
-    } else if (*newval).type_0 as ::core::ffi::c_int == kOptValTypeNumber as ::core::ffi::c_int {
+    } else if (*newval).type_0 as c_int == kOptValTypeNumber as c_int {
         errmsg = validate_num_option(opt_idx, &raw mut (*newval).data.number, errbuf, errbuflen);
     }
     return errmsg;
@@ -5756,27 +4187,27 @@ unsafe extern "C" fn validate_option_value(
 unsafe extern "C" fn set_option(
     opt_idx: OptIndex,
     mut value: OptVal,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut set_sid: scid_T,
     direct: bool,
     value_replaced: bool,
-    mut errbuf: *mut ::core::ffi::c_char,
+    mut errbuf: *mut c_char,
     mut errbuflen: size_t,
-) -> *const ::core::ffi::c_char {
+) -> *const c_char {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        if opt_idx as c_int != kOptInvalid as c_int {
         } else {
             __assert_fail(
-                b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
+                b"opt_idx != kOptInvalid\0".as_ptr() as *const c_char,
                 b"src/nvim/option.rs\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                3871 as ::core::ffi::c_uint,
+                    as *const c_char,
+                3871 as c_uint,
                 b"const char *set_option(const OptIndex, OptVal, int, scid_T, const _Bool, const _Bool, char *, size_t)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+                    .as_ptr() as *const c_char,
             );
         }
     };
-    let mut errmsg: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut errmsg: *const c_char = ::core::ptr::null::<c_char>();
     if !direct {
         errmsg = validate_option_value(opt_idx, &raw mut value, opt_flags, errbuf, errbuflen);
         if !errmsg.is_null() {
@@ -5785,46 +4216,42 @@ unsafe extern "C" fn set_option(
         }
     }
     let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-    let scope_local: bool = opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0;
-    let scope_global: bool = opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0;
+    let scope_local: bool = opt_flags & OPT_LOCAL as c_int != 0;
+    let scope_global: bool = opt_flags & OPT_GLOBAL as c_int != 0;
     let scope_both: bool = !scope_local && !scope_global;
     let is_opt_local_unset: bool = is_option_local_value_unset(opt_idx);
-    let mut varp: *mut ::core::ffi::c_void = if scope_both as ::core::ffi::c_int != 0
-        && option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
-    {
-        (*opt).var
-    } else {
-        get_varp_scope(opt, opt_flags)
-    };
-    let mut varp_local: *mut ::core::ffi::c_void =
-        get_varp_scope(opt, OPT_LOCAL as ::core::ffi::c_int);
-    let mut varp_global: *mut ::core::ffi::c_void =
-        get_varp_scope(opt, OPT_GLOBAL as ::core::ffi::c_int);
+    let mut varp: *mut c_void =
+        if scope_both as c_int != 0 && option_is_global_local(opt_idx) as c_int != 0 {
+            (*opt).var
+        } else {
+            get_varp_scope(opt, opt_flags)
+        };
+    let mut varp_local: *mut c_void = get_varp_scope(opt, OPT_LOCAL as c_int);
+    let mut varp_global: *mut c_void = get_varp_scope(opt, OPT_GLOBAL as c_int);
     let mut old_value: OptVal = optval_from_varp(opt_idx, varp);
     let mut old_global_value: OptVal = optval_from_varp(opt_idx, varp_global);
-    let mut old_local_value: OptVal = if is_opt_local_unset as ::core::ffi::c_int != 0 {
+    let mut old_local_value: OptVal = if is_opt_local_unset as c_int != 0 {
         old_global_value
     } else {
         optval_from_varp(opt_idx, varp_local)
     };
-    let mut used_old_value: OptVal = if scope_local as ::core::ffi::c_int != 0
-        && is_opt_local_unset as ::core::ffi::c_int != 0
-    {
-        optval_from_varp(opt_idx, get_varp(opt))
-    } else {
-        old_value
-    };
+    let mut used_old_value: OptVal =
+        if scope_local as c_int != 0 && is_opt_local_unset as c_int != 0 {
+            optval_from_varp(opt_idx, get_varp(opt))
+        } else {
+            old_value
+        };
     let mut saved_used_value: OptVal = optval_copy(used_old_value);
     let mut saved_old_global_value: OptVal = optval_copy(old_global_value);
     let mut saved_old_local_value: OptVal = optval_copy(old_local_value);
     let mut saved_new_value: OptVal = optval_copy(value);
     let mut p: *mut uint32_t = insecure_flag(curwin.get(), opt_idx, opt_flags);
-    let secure_saved: ::core::ffi::c_int = secure.get();
-    if opt_flags & OPT_MODELINE as ::core::ffi::c_int != 0
-        || sandbox.get() != 0 as ::core::ffi::c_int
-        || !value_replaced && *p & kOptFlagInsecure as ::core::ffi::c_int as uint32_t != 0
+    let secure_saved: c_int = secure.get();
+    if opt_flags & OPT_MODELINE as c_int != 0
+        || sandbox.get() != 0 as c_int
+        || !value_replaced && *p & kOptFlagInsecure as c_int as uint32_t != 0
     {
-        secure.set(1 as ::core::ffi::c_int);
+        secure.set(1 as c_int);
     }
     set_option_varp(opt_idx, varp, value, false_0 != 0);
     errmsg = did_set_option(
@@ -5852,7 +4279,7 @@ unsafe extern "C" fn set_option(
                 errmsg,
             );
         }
-        if (*opt).flags & kOptFlagUIOption as ::core::ffi::c_int as uint32_t != 0 {
+        if (*opt).flags & kOptFlagUIOption as c_int as uint32_t != 0 {
             ui_call_option_set(
                 cstr_as_string((*opt).fullname),
                 optval_as_object(saved_new_value),
@@ -5868,32 +4295,32 @@ unsafe extern "C" fn set_option(
 pub unsafe extern "C" fn set_option_direct(
     mut opt_idx: OptIndex,
     mut value: OptVal,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut set_sid: scid_T,
 ) {
-    static errbuf: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
+    static errbuf: GlobalCell<[c_char; 1025]> = GlobalCell::new([0; 1025]);
     if is_option_hidden(opt_idx) {
         return;
     }
-    let mut errmsg: *const ::core::ffi::c_char = set_option(
+    let mut errmsg: *const c_char = set_option(
         opt_idx,
         optval_copy(value),
         opt_flags,
         set_sid,
         true_0 != 0,
         true_0 != 0,
-        errbuf.ptr() as *mut ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
+        errbuf.ptr() as *mut c_char,
+        ::core::mem::size_of::<[c_char; 1025]>(),
     );
     '_c2rust_label: {
         if errmsg.is_null() {
         } else {
             __assert_fail(
-                b"errmsg == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3975 as ::core::ffi::c_uint,
+                b"errmsg == NULL\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                3975 as c_uint,
                 b"void set_option_direct(OptIndex, OptVal, int, scid_T)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                    as *const c_char,
             );
         }
     };
@@ -5901,14 +4328,14 @@ pub unsafe extern "C" fn set_option_direct(
 pub unsafe extern "C" fn set_option_direct_for(
     mut opt_idx: OptIndex,
     mut value: OptVal,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut set_sid: scid_T,
     mut scope: OptScope,
-    from: *mut ::core::ffi::c_void,
+    from: *mut c_void,
 ) {
     let mut save_curbuf: *mut buf_T = curbuf.get();
     let mut save_curwin: *mut win_T = curwin.get();
-    match scope as ::core::ffi::c_uint {
+    match scope as c_uint {
         1 => {
             curwin.set(from as *mut win_T);
             curbuf.set((*curwin.get()).w_buffer);
@@ -5925,26 +4352,24 @@ pub unsafe extern "C" fn set_option_direct_for(
 pub unsafe extern "C" fn set_option_value(
     opt_idx: OptIndex,
     value: OptVal,
-    mut opt_flags: ::core::ffi::c_int,
-) -> *const ::core::ffi::c_char {
+    mut opt_flags: c_int,
+) -> *const c_char {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        if opt_idx as c_int != kOptInvalid as c_int {
         } else {
             __assert_fail(
-                b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4025 as ::core::ffi::c_uint,
+                b"opt_idx != kOptInvalid\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                4025 as c_uint,
                 b"const char *set_option_value(const OptIndex, const OptVal, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                    as *const c_char,
             );
         }
     };
-    static errbuf: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
+    static errbuf: GlobalCell<[c_char; 1025]> = GlobalCell::new([0; 1025]);
     let mut flags: uint32_t = (*options.ptr())[opt_idx as usize].flags;
-    if sandbox.get() > 0 as ::core::ffi::c_int
-        && flags & kOptFlagSecure as ::core::ffi::c_int as uint32_t != 0
-    {
-        return gettext(&raw const e_sandbox as *const ::core::ffi::c_char);
+    if sandbox.get() > 0 as c_int && flags & kOptFlagSecure as c_int as uint32_t != 0 {
+        return gettext(&raw const e_sandbox as *const c_char);
     }
     return set_option(
         opt_idx,
@@ -5953,68 +4378,63 @@ pub unsafe extern "C" fn set_option_value(
         0 as scid_T,
         false_0 != 0,
         true_0 != 0,
-        errbuf.ptr() as *mut ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
+        errbuf.ptr() as *mut c_char,
+        ::core::mem::size_of::<[c_char; 1025]>(),
     );
 }
 #[inline]
-unsafe extern "C" fn unset_option_local_value(opt_idx: OptIndex) -> *const ::core::ffi::c_char {
+unsafe extern "C" fn unset_option_local_value(opt_idx: OptIndex) -> *const c_char {
     '_c2rust_label: {
         if option_is_global_local(opt_idx) {
         } else {
             __assert_fail(
-                b"option_is_global_local(opt_idx)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                4045 as ::core::ffi::c_uint,
-                b"const char *unset_option_local_value(const OptIndex)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"option_is_global_local(opt_idx)\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                4045 as c_uint,
+                b"const char *unset_option_local_value(const OptIndex)\0".as_ptr() as *const c_char,
             );
         }
     };
-    return set_option_value(
-        opt_idx,
-        get_option_unset_value(opt_idx),
-        OPT_LOCAL as ::core::ffi::c_int,
-    );
+    return set_option_value(opt_idx, get_option_unset_value(opt_idx), OPT_LOCAL as c_int);
 }
 pub unsafe extern "C" fn set_option_value_handle_tty(
-    mut name: *const ::core::ffi::c_char,
+    mut name: *const c_char,
     mut opt_idx: OptIndex,
     value: OptVal,
-    mut opt_flags: ::core::ffi::c_int,
-) -> *const ::core::ffi::c_char {
-    static errbuf: GlobalCell<[::core::ffi::c_char; 1025]> = GlobalCell::new([0; 1025]);
-    if opt_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
+    mut opt_flags: c_int,
+) -> *const c_char {
+    static errbuf: GlobalCell<[c_char; 1025]> = GlobalCell::new([0; 1025]);
+    if opt_idx as c_int == kOptInvalid as c_int {
         if is_tty_option(name) {
-            return ::core::ptr::null::<::core::ffi::c_char>();
+            return ::core::ptr::null::<c_char>();
         }
         snprintf(
-            errbuf.ptr() as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
-            gettext(&raw const e_unknown_option2 as *const ::core::ffi::c_char),
+            errbuf.ptr() as *mut c_char,
+            ::core::mem::size_of::<[c_char; 1025]>(),
+            gettext(&raw const e_unknown_option2 as *const c_char),
             name,
         );
-        return errbuf.ptr() as *mut ::core::ffi::c_char;
+        return errbuf.ptr() as *mut c_char;
     }
     return set_option_value(opt_idx, value, opt_flags);
 }
 pub unsafe extern "C" fn set_option_value_give_err(
     opt_idx: OptIndex,
     mut value: OptVal,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
 ) {
-    let mut errmsg: *const ::core::ffi::c_char = set_option_value(opt_idx, value, opt_flags);
+    let mut errmsg: *const c_char = set_option_value(opt_idx, value, opt_flags);
     if !errmsg.is_null() {
         emsg(gettext(errmsg));
     }
 }
 unsafe extern "C" fn switch_option_context(
-    ctx: *mut ::core::ffi::c_void,
+    ctx: *mut c_void,
     mut scope: OptScope,
-    from: *mut ::core::ffi::c_void,
+    from: *mut c_void,
     mut err: *mut Error,
 ) -> bool {
-    match scope as ::core::ffi::c_uint {
+    match scope as c_uint {
         0 => return false_0 != 0,
         1 => {
             let win: *mut win_T = from as *mut win_T;
@@ -6024,13 +4444,13 @@ unsafe extern "C" fn switch_option_context(
             }
             if switch_win_noblock(switchwin, win, win_find_tabpage(win), true_0 != 0) == FAIL {
                 restore_win_noblock(switchwin, true_0 != 0);
-                if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                if (*err).type_0 as c_int != kErrorTypeNone as c_int {
                     return false_0 != 0;
                 }
                 api_set_error(
                     err,
                     kErrorTypeException,
-                    b"Problem while switching windows\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"Problem while switching windows\0".as_ptr() as *const c_char,
                 );
                 return false_0 != 0;
             }
@@ -6049,8 +4469,8 @@ unsafe extern "C" fn switch_option_context(
     }
     unreachable!();
 }
-unsafe extern "C" fn restore_option_context(ctx: *mut ::core::ffi::c_void, mut scope: OptScope) {
-    match scope as ::core::ffi::c_uint {
+unsafe extern "C" fn restore_option_context(ctx: *mut c_void, mut scope: OptScope) {
+    match scope as c_uint {
         1 => {
             restore_win_noblock(ctx as *mut switchwin_T, true_0 != 0);
         }
@@ -6062,9 +4482,9 @@ unsafe extern "C" fn restore_option_context(ctx: *mut ::core::ffi::c_void, mut s
 }
 pub unsafe extern "C" fn get_option_value_for(
     mut opt_idx: OptIndex,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     scope: OptScope,
-    from: *mut ::core::ffi::c_void,
+    from: *mut c_void,
     mut err: *mut Error,
 ) -> OptVal {
     let mut switchwin: switchwin_T = switchwin_T {
@@ -6083,24 +4503,20 @@ pub unsafe extern "C" fn get_option_value_for(
             br_fnum: 0,
             br_buf_free_count: 0,
         },
-        tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        tp_localdir: ::core::ptr::null_mut::<c_char>(),
+        globaldir: ::core::ptr::null_mut::<c_char>(),
         save_VIsual_active: false,
         save_prompt_insert: 0,
     };
-    let mut ctx: *mut ::core::ffi::c_void = if scope as ::core::ffi::c_uint
-        == kOptScopeWin as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        &raw mut switchwin as *mut ::core::ffi::c_void
-    } else if scope as ::core::ffi::c_uint
-        == kOptScopeBuf as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        &raw mut aco as *mut ::core::ffi::c_void
+    let mut ctx: *mut c_void = if scope as c_uint == kOptScopeWin as c_int as c_uint {
+        &raw mut switchwin as *mut c_void
+    } else if scope as c_uint == kOptScopeBuf as c_int as c_uint {
+        &raw mut aco as *mut c_void
     } else {
         NULL
     };
     let mut switched: bool = switch_option_context(ctx, scope, from, err);
-    if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if (*err).type_0 as c_int != kErrorTypeNone as c_int {
         return OptVal {
             type_0: kOptValTypeNil,
             data: OptValData { boolean: kFalse },
@@ -6113,12 +4529,12 @@ pub unsafe extern "C" fn get_option_value_for(
     return retv;
 }
 pub unsafe extern "C" fn set_option_value_for(
-    mut name: *const ::core::ffi::c_char,
+    mut name: *const c_char,
     mut opt_idx: OptIndex,
     mut value: OptVal,
-    opt_flags: ::core::ffi::c_int,
+    opt_flags: c_int,
     scope: OptScope,
-    from: *mut ::core::ffi::c_void,
+    from: *mut c_void,
     mut err: *mut Error,
 ) {
     let mut switchwin: switchwin_T = switchwin_T {
@@ -6137,33 +4553,28 @@ pub unsafe extern "C" fn set_option_value_for(
             br_fnum: 0,
             br_buf_free_count: 0,
         },
-        tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        tp_localdir: ::core::ptr::null_mut::<c_char>(),
+        globaldir: ::core::ptr::null_mut::<c_char>(),
         save_VIsual_active: false,
         save_prompt_insert: 0,
     };
-    let mut ctx: *mut ::core::ffi::c_void = if scope as ::core::ffi::c_uint
-        == kOptScopeWin as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        &raw mut switchwin as *mut ::core::ffi::c_void
-    } else if scope as ::core::ffi::c_uint
-        == kOptScopeBuf as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        &raw mut aco as *mut ::core::ffi::c_void
+    let mut ctx: *mut c_void = if scope as c_uint == kOptScopeWin as c_int as c_uint {
+        &raw mut switchwin as *mut c_void
+    } else if scope as c_uint == kOptScopeBuf as c_int as c_uint {
+        &raw mut aco as *mut c_void
     } else {
         NULL
     };
     let mut switched: bool = switch_option_context(ctx, scope, from, err);
-    if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if (*err).type_0 as c_int != kErrorTypeNone as c_int {
         return;
     }
-    let errmsg: *const ::core::ffi::c_char =
-        set_option_value_handle_tty(name, opt_idx, value, opt_flags);
+    let errmsg: *const c_char = set_option_value_handle_tty(name, opt_idx, value, opt_flags);
     if !errmsg.is_null() {
         api_set_error(
             err,
             kErrorTypeException,
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
+            b"%s\0".as_ptr() as *const c_char,
             errmsg,
         );
     }
@@ -6171,58 +4582,51 @@ pub unsafe extern "C" fn set_option_value_for(
         restore_option_context(ctx, scope);
     }
 }
-unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_int) {
+unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: c_int) {
     let mut items: *mut *mut vimoption_T =
         xmalloc(::core::mem::size_of::<*mut vimoption_T>().wrapping_mul(OPTION_COUNT))
             as *mut *mut vimoption_T;
-    msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
-    if opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0 {
+    msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const c_char);
+    if opt_flags & OPT_GLOBAL as c_int != 0 {
         msg_puts_title(gettext(
-            b"\n--- Global option values ---\0".as_ptr() as *const ::core::ffi::c_char
+            b"\n--- Global option values ---\0".as_ptr() as *const c_char
         ));
-    } else if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
+    } else if opt_flags & OPT_LOCAL as c_int != 0 {
         msg_puts_title(gettext(
-            b"\n--- Local option values ---\0".as_ptr() as *const ::core::ffi::c_char
+            b"\n--- Local option values ---\0".as_ptr() as *const c_char
         ));
     } else {
-        msg_puts_title(gettext(
-            b"\n--- Options ---\0".as_ptr() as *const ::core::ffi::c_char
-        ));
+        msg_puts_title(gettext(b"\n--- Options ---\0".as_ptr() as *const c_char));
     }
-    let mut run: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while run <= 2 as ::core::ffi::c_int && !got_int.get() {
-        let mut item_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    let mut run: c_int = 1 as c_int;
+    while run <= 2 as c_int && !got_int.get() {
+        let mut item_count: c_int = 0 as c_int;
         let mut opt: *mut vimoption_T = ::core::ptr::null_mut::<vimoption_T>();
         let mut opt_idx: OptIndex = kOptAleph;
-        while (opt_idx as ::core::ffi::c_int) < kOptCount {
+        while (opt_idx as c_int) < kOptCount {
             opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
             if !message_filtered((*opt).fullname) {
-                let mut varp: *mut ::core::ffi::c_void = NULL;
-                if opt_flags & (OPT_LOCAL as ::core::ffi::c_int | OPT_GLOBAL as ::core::ffi::c_int)
-                    != 0 as ::core::ffi::c_int
-                {
+                let mut varp: *mut c_void = NULL;
+                if opt_flags & (OPT_LOCAL as c_int | OPT_GLOBAL as c_int) != 0 as c_int {
                     if !option_is_global_only(opt_idx) {
                         varp = get_varp_scope(opt, opt_flags);
                     }
                 } else {
                     varp = get_varp(opt);
                 }
-                if !varp.is_null()
-                    && (all as ::core::ffi::c_int != 0 || optval_default(opt_idx, varp) == 0)
-                {
-                    let mut len: ::core::ffi::c_int = 0;
-                    if opt_flags & OPT_ONECOLUMN as ::core::ffi::c_int != 0 {
+                if !varp.is_null() && (all as c_int != 0 || optval_default(opt_idx, varp) == 0) {
+                    let mut len: c_int = 0;
+                    if opt_flags & OPT_ONECOLUMN as c_int != 0 {
                         len = Columns.get();
                     } else if option_has_type(opt_idx, kOptValTypeBoolean) {
-                        len = 1 as ::core::ffi::c_int;
+                        len = 1 as c_int;
                     } else {
                         option_value2string(opt, opt_flags);
-                        len = strlen((*opt).fullname) as ::core::ffi::c_int
-                            + vim_strsize(NameBuff.ptr() as *mut ::core::ffi::c_char)
-                            + 1 as ::core::ffi::c_int;
+                        len = strlen((*opt).fullname) as c_int
+                            + vim_strsize(NameBuff.ptr() as *mut c_char)
+                            + 1 as c_int;
                     }
-                    if len <= INC - GAP && run == 1 as ::core::ffi::c_int
-                        || len > INC - GAP && run == 2 as ::core::ffi::c_int
+                    if len <= INC - GAP && run == 1 as c_int || len > INC - GAP && run == 2 as c_int
                     {
                         let c2rust_fresh6 = item_count;
                         item_count = item_count + 1;
@@ -6233,49 +4637,44 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
             }
             opt_idx += 1;
         }
-        let mut rows: ::core::ffi::c_int = 0;
-        if run == 1 as ::core::ffi::c_int {
+        let mut rows: c_int = 0;
+        if run == 1 as c_int {
             '_c2rust_label: {
-                if Columns.get() <= 2147483647 as ::core::ffi::c_int - 3 as ::core::ffi::c_int
-                    && Columns.get() + 3 as ::core::ffi::c_int
-                        >= -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                            + 3 as ::core::ffi::c_int
-                    && (Columns.get() + 3 as ::core::ffi::c_int - 3 as ::core::ffi::c_int)
-                        / 20 as ::core::ffi::c_int
-                        >= -2147483647 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-                    && (Columns.get() + 3 as ::core::ffi::c_int - 3 as ::core::ffi::c_int)
-                        / 20 as ::core::ffi::c_int
-                        <= 2147483647 as ::core::ffi::c_int
+                if Columns.get() <= 2147483647 as c_int - 3 as c_int
+                    && Columns.get() + 3 as c_int >= -2147483647 as c_int - 1 as c_int + 3 as c_int
+                    && (Columns.get() + 3 as c_int - 3 as c_int) / 20 as c_int
+                        >= -2147483647 as c_int - 1 as c_int
+                    && (Columns.get() + 3 as c_int - 3 as c_int) / 20 as c_int
+                        <= 2147483647 as c_int
                 {
                 } else {
                     __assert_fail(
                         b"Columns <= INT_MAX - GAP && Columns + GAP >= INT_MIN + 3 && (Columns + GAP - 3) / INC >= INT_MIN && (Columns + GAP - 3) / INC <= INT_MAX\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
+                            .as_ptr() as *const c_char,
                         b"src/nvim/option.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        4288 as ::core::ffi::c_uint,
+                            .as_ptr() as *const c_char,
+                        4288 as c_uint,
                         b"void showoptions(_Bool, int)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                            as *const c_char,
                     );
                 }
             };
-            let mut cols: ::core::ffi::c_int =
-                (Columns.get() + GAP - 3 as ::core::ffi::c_int) / INC;
-            if cols == 0 as ::core::ffi::c_int {
-                cols = 1 as ::core::ffi::c_int;
+            let mut cols: c_int = (Columns.get() + GAP - 3 as c_int) / INC;
+            if cols == 0 as c_int {
+                cols = 1 as c_int;
             }
-            rows = (item_count + cols - 1 as ::core::ffi::c_int) / cols;
+            rows = (item_count + cols - 1 as c_int) / cols;
         } else {
             rows = item_count;
         }
-        let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+        let mut row: c_int = 0 as c_int;
         while row < rows && !got_int.get() {
-            msg_putchar('\n' as ::core::ffi::c_int);
+            msg_putchar('\n' as c_int);
             if got_int.get() {
                 break;
             }
-            let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            let mut i: ::core::ffi::c_int = row;
+            let mut col: c_int = 0 as c_int;
+            let mut i: c_int = row;
             while i < item_count {
                 msg_advance(col);
                 showoneopt(*items.offset(i as isize), opt_flags);
@@ -6287,27 +4686,24 @@ unsafe extern "C" fn showoptions(mut all: bool, mut opt_flags: ::core::ffi::c_in
         }
         run += 1;
     }
-    xfree(items as *mut ::core::ffi::c_void);
+    xfree(items as *mut c_void);
 }
-pub const INC: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-pub const GAP: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-unsafe extern "C" fn optval_default(
-    mut opt_idx: OptIndex,
-    mut varp: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
+pub const INC: c_int = 20 as c_int;
+pub const GAP: c_int = 3 as c_int;
+unsafe extern "C" fn optval_default(mut opt_idx: OptIndex, mut varp: *mut c_void) -> c_int {
     let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
     if is_option_hidden(opt_idx) {
         return true_0;
     }
     let mut current_val: OptVal = optval_from_varp(opt_idx, varp);
     let mut default_val: OptVal = (*opt).def_val;
-    return optval_equal(current_val, default_val) as ::core::ffi::c_int;
+    return optval_equal(current_val, default_val) as c_int;
 }
 pub unsafe extern "C" fn ui_refresh_options() {
     let mut opt_idx: OptIndex = kOptAleph;
-    while (opt_idx as ::core::ffi::c_int) < kOptCount {
+    while (opt_idx as c_int) < kOptCount {
         let mut flags: uint32_t = (*options.ptr())[opt_idx as usize].flags;
-        if flags & kOptFlagUIOption as ::core::ffi::c_int as uint32_t != 0 {
+        if flags & kOptFlagUIOption as c_int as uint32_t != 0 {
             let mut name: String_0 = cstr_as_string((*options.ptr())[opt_idx as usize].fullname);
             let mut value: Object = optval_as_object(optval_from_varp(
                 opt_idx,
@@ -6321,37 +4717,33 @@ pub unsafe extern "C" fn ui_refresh_options() {
         setmouse();
     }
 }
-unsafe extern "C" fn showoneopt(mut opt: *mut vimoption_T, mut opt_flags: ::core::ffi::c_int) {
-    let mut save_silent: ::core::ffi::c_int = silent_mode.get() as ::core::ffi::c_int;
+unsafe extern "C" fn showoneopt(mut opt: *mut vimoption_T, mut opt_flags: c_int) {
+    let mut save_silent: c_int = silent_mode.get() as c_int;
     silent_mode.set(false_0 != 0);
     info_message.set(true_0 != 0);
     let mut opt_idx: OptIndex = get_opt_idx(opt);
-    let mut varp: *mut ::core::ffi::c_void = get_varp_scope(opt, opt_flags);
-    if option_has_type(opt_idx, kOptValTypeBoolean) as ::core::ffi::c_int != 0
-        && (if varp as *mut ::core::ffi::c_int == &raw mut (*curbuf.get()).b_changed {
-            !curbufIsChanged() as ::core::ffi::c_int
+    let mut varp: *mut c_void = get_varp_scope(opt, opt_flags);
+    if option_has_type(opt_idx, kOptValTypeBoolean) as c_int != 0
+        && (if varp as *mut c_int == &raw mut (*curbuf.get()).b_changed {
+            !curbufIsChanged() as c_int
         } else {
-            (*(varp as *mut ::core::ffi::c_int) == 0) as ::core::ffi::c_int
+            (*(varp as *mut c_int) == 0) as c_int
         }) != 0
     {
-        msg_puts(b"no\0".as_ptr() as *const ::core::ffi::c_char);
-    } else if option_has_type(opt_idx, kOptValTypeBoolean) as ::core::ffi::c_int != 0
-        && *(varp as *mut ::core::ffi::c_int) < 0 as ::core::ffi::c_int
+        msg_puts(b"no\0".as_ptr() as *const c_char);
+    } else if option_has_type(opt_idx, kOptValTypeBoolean) as c_int != 0
+        && *(varp as *mut c_int) < 0 as c_int
     {
-        msg_puts(b"--\0".as_ptr() as *const ::core::ffi::c_char);
+        msg_puts(b"--\0".as_ptr() as *const c_char);
     } else {
-        msg_puts(b"  \0".as_ptr() as *const ::core::ffi::c_char);
+        msg_puts(b"  \0".as_ptr() as *const c_char);
     }
     msg_puts((*opt).fullname);
     if !option_has_type(opt_idx, kOptValTypeBoolean) {
-        msg_putchar('=' as ::core::ffi::c_int);
+        msg_putchar('=' as c_int);
         option_value2string(opt, opt_flags);
-        if *(NameBuff.ptr() as *mut ::core::ffi::c_char) as ::core::ffi::c_int != NUL {
-            msg_outtrans(
-                NameBuff.ptr() as *mut ::core::ffi::c_char,
-                0 as ::core::ffi::c_int,
-                false_0 != 0,
-            );
+        if *(NameBuff.ptr() as *mut c_char) as c_int != NUL {
+            msg_outtrans(NameBuff.ptr() as *mut c_char, 0 as c_int, false_0 != 0);
         }
     }
     silent_mode.set(save_silent != 0);
@@ -6359,86 +4751,76 @@ unsafe extern "C" fn showoneopt(mut opt: *mut vimoption_T, mut opt_flags: ::core
 }
 pub unsafe extern "C" fn makeset(
     mut fd: *mut FILE,
-    mut opt_flags: ::core::ffi::c_int,
-    mut local_only: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut pri: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while pri >= 0 as ::core::ffi::c_int {
+    mut opt_flags: c_int,
+    mut local_only: c_int,
+) -> c_int {
+    let mut pri: c_int = 1 as c_int;
+    while pri >= 0 as c_int {
         let mut opt: *mut vimoption_T = ::core::ptr::null_mut::<vimoption_T>();
         let mut opt_idx: OptIndex = kOptAleph;
-        while (opt_idx as ::core::ffi::c_int) < kOptCount {
+        while (opt_idx as c_int) < kOptCount {
             opt = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
             's_14: {
-                if (*opt).flags & kOptFlagNoMkrc as ::core::ffi::c_int as uint32_t == 0
-                    && (pri == 1 as ::core::ffi::c_int) as ::core::ffi::c_int
-                        == ((*opt).flags & kOptFlagPriMkrc as ::core::ffi::c_int as uint32_t
-                            != 0 as uint32_t) as ::core::ffi::c_int
+                if (*opt).flags & kOptFlagNoMkrc as c_int as uint32_t == 0
+                    && (pri == 1 as c_int) as c_int
+                        == ((*opt).flags & kOptFlagPriMkrc as c_int as uint32_t != 0 as uint32_t)
+                            as c_int
                 {
-                    if !(option_is_global_only(opt_idx) as ::core::ffi::c_int != 0
-                        && opt_flags & OPT_GLOBAL as ::core::ffi::c_int == 0)
+                    if !(option_is_global_only(opt_idx) as c_int != 0
+                        && opt_flags & OPT_GLOBAL as c_int == 0)
                     {
-                        if !(opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
-                            && (*opt).flags & kOptFlagNoGlob as ::core::ffi::c_int as uint32_t != 0)
+                        if !(opt_flags & OPT_GLOBAL as c_int != 0
+                            && (*opt).flags & kOptFlagNoGlob as c_int as uint32_t != 0)
                         {
-                            let mut varp: *mut ::core::ffi::c_void = get_varp_scope(opt, opt_flags);
+                            let mut varp: *mut c_void = get_varp_scope(opt, opt_flags);
                             if !varp.is_null() {
-                                if !(opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
+                                if !(opt_flags & OPT_GLOBAL as c_int != 0
                                     && optval_default(opt_idx, varp) != 0)
                                 {
-                                    if !(opt_flags & OPT_SKIPRTP as ::core::ffi::c_int != 0
-                                        && ((*opt).var == p_rtp.ptr() as *mut ::core::ffi::c_void
-                                            || (*opt).var
-                                                == p_pp.ptr() as *mut ::core::ffi::c_void))
+                                    if !(opt_flags & OPT_SKIPRTP as c_int != 0
+                                        && ((*opt).var == p_rtp.ptr() as *mut c_void
+                                            || (*opt).var == p_pp.ptr() as *mut c_void))
                                     {
-                                        let mut round: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-                                        let mut varp_local: *mut ::core::ffi::c_void = NULL;
+                                        let mut round: c_int = 2 as c_int;
+                                        let mut varp_local: *mut c_void = NULL;
                                         if option_is_window_local(opt_idx) {
-                                            if opt_flags & OPT_LOCAL as ::core::ffi::c_int == 0 {
+                                            if opt_flags & OPT_LOCAL as c_int == 0 {
                                                 break 's_14;
-                                            } else if opt_flags & OPT_GLOBAL as ::core::ffi::c_int
-                                                == 0
+                                            } else if opt_flags & OPT_GLOBAL as c_int == 0
                                                 && local_only == 0
                                             {
-                                                let mut varp_fresh: *mut ::core::ffi::c_void =
-                                                    get_varp_scope(
-                                                        opt,
-                                                        OPT_GLOBAL as ::core::ffi::c_int,
-                                                    );
+                                                let mut varp_fresh: *mut c_void =
+                                                    get_varp_scope(opt, OPT_GLOBAL as c_int);
                                                 if optval_default(opt_idx, varp_fresh) == 0 {
-                                                    round = 1 as ::core::ffi::c_int;
+                                                    round = 1 as c_int;
                                                     varp_local = varp;
                                                     varp = varp_fresh;
                                                 }
                                             }
                                         }
-                                        while round <= 2 as ::core::ffi::c_int {
-                                            let mut cmd: *mut ::core::ffi::c_char =
-                                                ::core::ptr::null_mut::<::core::ffi::c_char>();
-                                            if round == 1 as ::core::ffi::c_int
-                                                || opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0
+                                        while round <= 2 as c_int {
+                                            let mut cmd: *mut c_char =
+                                                ::core::ptr::null_mut::<c_char>();
+                                            if round == 1 as c_int
+                                                || opt_flags & OPT_GLOBAL as c_int != 0
                                             {
-                                                cmd = b"set\0".as_ptr()
-                                                    as *const ::core::ffi::c_char
-                                                    as *mut ::core::ffi::c_char;
+                                                cmd = b"set\0".as_ptr() as *const c_char
+                                                    as *mut c_char;
                                             } else {
-                                                cmd = b"setlocal\0".as_ptr()
-                                                    as *const ::core::ffi::c_char
-                                                    as *mut ::core::ffi::c_char;
+                                                cmd = b"setlocal\0".as_ptr() as *const c_char
+                                                    as *mut c_char;
                                             }
                                             let mut do_endif: bool = false_0 != 0;
-                                            if opt_idx as ::core::ffi::c_int
-                                                == kOptSyntax as ::core::ffi::c_int
-                                                || opt_idx as ::core::ffi::c_int
-                                                    == kOptFiletype as ::core::ffi::c_int
+                                            if opt_idx as c_int == kOptSyntax as c_int
+                                                || opt_idx as c_int == kOptFiletype as c_int
                                             {
                                                 if fprintf(
                                                     fd,
-                                                    b"if &%s != '%s'\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
+                                                    b"if &%s != '%s'\0".as_ptr() as *const c_char,
                                                     (*opt).fullname,
-                                                    *(varp as *mut *mut ::core::ffi::c_char),
-                                                ) < 0 as ::core::ffi::c_int
-                                                    || put_eol(fd) < 0 as ::core::ffi::c_int
+                                                    *(varp as *mut *mut c_char),
+                                                ) < 0 as c_int
+                                                    || put_eol(fd) < 0 as c_int
                                                 {
                                                     return FAIL;
                                                 }
@@ -6450,9 +4832,8 @@ pub unsafe extern "C" fn makeset(
                                             if do_endif {
                                                 if put_line(
                                                     fd,
-                                                    b"endif\0".as_ptr()
-                                                        as *const ::core::ffi::c_char
-                                                        as *mut ::core::ffi::c_char,
+                                                    b"endif\0".as_ptr() as *const c_char
+                                                        as *mut c_char,
                                                 ) == FAIL
                                                 {
                                                     return FAIL;
@@ -6474,54 +4855,54 @@ pub unsafe extern "C" fn makeset(
     }
     return OK;
 }
-pub unsafe extern "C" fn makefoldset(mut fd: *mut FILE) -> ::core::ffi::c_int {
+pub unsafe extern "C" fn makefoldset(mut fd: *mut FILE) -> c_int {
     if put_set(
         fd,
-        b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+        b"setlocal\0".as_ptr() as *const c_char as *mut c_char,
         kOptFoldmethod,
-        &raw mut (*curwin.get()).w_onebuf_opt.wo_fdm as *mut ::core::ffi::c_void,
+        &raw mut (*curwin.get()).w_onebuf_opt.wo_fdm as *mut c_void,
     ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const c_char as *mut c_char,
             kOptFoldexpr,
-            &raw mut (*curwin.get()).w_onebuf_opt.wo_fde as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fde as *mut c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const c_char as *mut c_char,
             kOptFoldmarker,
-            &raw mut (*curwin.get()).w_onebuf_opt.wo_fmr as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fmr as *mut c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const c_char as *mut c_char,
             kOptFoldignore,
-            &raw mut (*curwin.get()).w_onebuf_opt.wo_fdi as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fdi as *mut c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const c_char as *mut c_char,
             kOptFoldlevel,
-            &raw mut (*curwin.get()).w_onebuf_opt.wo_fdl as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fdl as *mut c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const c_char as *mut c_char,
             kOptFoldminlines,
-            &raw mut (*curwin.get()).w_onebuf_opt.wo_fml as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fml as *mut c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const c_char as *mut c_char,
             kOptFoldnestmax,
-            &raw mut (*curwin.get()).w_onebuf_opt.wo_fdn as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fdn as *mut c_void,
         ) == FAIL
         || put_set(
             fd,
-            b"setlocal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            b"setlocal\0".as_ptr() as *const c_char as *mut c_char,
             kOptFoldenable,
-            &raw mut (*curwin.get()).w_onebuf_opt.wo_fen as *mut ::core::ffi::c_void,
+            &raw mut (*curwin.get()).w_onebuf_opt.wo_fen as *mut c_void,
         ) == FAIL
     {
         return FAIL;
@@ -6530,106 +4911,84 @@ pub unsafe extern "C" fn makefoldset(mut fd: *mut FILE) -> ::core::ffi::c_int {
 }
 unsafe extern "C" fn put_set(
     mut fd: *mut FILE,
-    mut cmd: *mut ::core::ffi::c_char,
+    mut cmd: *mut c_char,
     mut opt_idx: OptIndex,
-    mut varp: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
+    mut varp: *mut c_void,
+) -> c_int {
     let mut value: OptVal = optval_from_varp(opt_idx, varp);
     let mut opt: *mut vimoption_T = (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-    let mut name: *mut ::core::ffi::c_char = (*opt).fullname;
+    let mut name: *mut c_char = (*opt).fullname;
     let mut flags: uint64_t = (*opt).flags as uint64_t;
-    if option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
+    if option_is_global_local(opt_idx) as c_int != 0
         && varp != (*opt).var
-        && optval_equal(value, get_option_unset_value(opt_idx)) as ::core::ffi::c_int != 0
+        && optval_equal(value, get_option_unset_value(opt_idx)) as c_int != 0
     {
         return OK;
     }
-    match value.type_0 as ::core::ffi::c_int {
+    match value.type_0 as c_int {
         -1 => {
             abort();
         }
         0 => {
             '_c2rust_label: {
-                if value.data.boolean as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
+                if value.data.boolean as c_int != kNone as c_int {
                 } else {
                     __assert_fail(
-                        b"value.data.boolean != kNone\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        4544 as ::core::ffi::c_uint,
+                        b"value.data.boolean != kNone\0".as_ptr() as *const c_char,
+                        b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                        4544 as c_uint,
                         b"int put_set(FILE *, char *, OptIndex, void *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
+                            as *const c_char,
                     );
                 }
             };
-            let mut value_bool: bool =
-                if value.data.boolean as ::core::ffi::c_int == kTrue as ::core::ffi::c_int {
-                    true_0
-                } else if value.data.boolean as ::core::ffi::c_int == kFalse as ::core::ffi::c_int {
-                    false_0
-                } else {
-                    0 as ::core::ffi::c_int
-                } != 0;
+            let mut value_bool: bool = if value.data.boolean as c_int == kTrue as c_int {
+                true_0
+            } else if value.data.boolean as c_int == kFalse as c_int {
+                false_0
+            } else {
+                0 as c_int
+            } != 0;
             if fprintf(
                 fd,
-                b"%s %s%s\0".as_ptr() as *const ::core::ffi::c_char,
+                b"%s %s%s\0".as_ptr() as *const c_char,
                 cmd,
-                if value_bool as ::core::ffi::c_int != 0 {
-                    b"\0".as_ptr() as *const ::core::ffi::c_char
+                if value_bool as c_int != 0 {
+                    b"\0".as_ptr() as *const c_char
                 } else {
-                    b"no\0".as_ptr() as *const ::core::ffi::c_char
+                    b"no\0".as_ptr() as *const c_char
                 },
                 name,
-            ) < 0 as ::core::ffi::c_int
+            ) < 0 as c_int
             {
                 return FAIL;
             }
         }
         1 => {
-            if fprintf(
-                fd,
-                b"%s %s=\0".as_ptr() as *const ::core::ffi::c_char,
-                cmd,
-                name,
-            ) < 0 as ::core::ffi::c_int
-            {
+            if fprintf(fd, b"%s %s=\0".as_ptr() as *const c_char, cmd, name) < 0 as c_int {
                 return FAIL;
             }
             let mut value_num: OptInt = value.data.number;
             let mut wc: OptInt = 0;
             if wc_use_keyname(varp, &raw mut wc) != 0 {
-                if fputs(
-                    get_special_key_name(wc as ::core::ffi::c_int, 0 as ::core::ffi::c_int),
-                    fd,
-                ) < 0 as ::core::ffi::c_int
-                {
+                if fputs(get_special_key_name(wc as c_int, 0 as c_int), fd) < 0 as c_int {
                     return FAIL;
                 }
-            } else if fprintf(
-                fd,
-                b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
-                value_num,
-            ) < 0 as ::core::ffi::c_int
-            {
+            } else if fprintf(fd, b"%ld\0".as_ptr() as *const c_char, value_num) < 0 as c_int {
                 return FAIL;
             }
         }
         2 => {
-            if fprintf(
-                fd,
-                b"%s %s=\0".as_ptr() as *const ::core::ffi::c_char,
-                cmd,
-                name,
-            ) < 0 as ::core::ffi::c_int
-            {
+            if fprintf(fd, b"%s %s=\0".as_ptr() as *const c_char, cmd, name) < 0 as c_int {
                 return FAIL;
             }
-            let mut value_str: *const ::core::ffi::c_char = value.data.string.data;
-            let mut buf: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            let mut part: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+            let mut value_str: *const c_char = value.data.string.data;
+            let mut buf: *mut c_char = ::core::ptr::null_mut::<c_char>();
+            let mut part: *mut c_char = ::core::ptr::null_mut::<c_char>();
             if !value_str.is_null() {
-                if flags & kOptFlagExpand as ::core::ffi::c_int as uint64_t != 0 as uint64_t {
+                if flags & kOptFlagExpand as c_int as uint64_t != 0 as uint64_t {
                     let mut size: size_t = strlen(value_str).wrapping_add(1 as size_t);
-                    buf = xmalloc(size) as *mut ::core::ffi::c_char;
+                    buf = xmalloc(size) as *mut c_char;
                     home_replace(
                         ::core::ptr::null::<buf_T>(),
                         value_str,
@@ -6638,20 +4997,20 @@ unsafe extern "C" fn put_set(
                         false_0 != 0,
                     );
                     if size >= MAXPATHL as size_t
-                        && flags & kOptFlagComma as ::core::ffi::c_int as uint64_t != 0 as uint64_t
-                        && !vim_strchr(value_str, ',' as ::core::ffi::c_int).is_null()
+                        && flags & kOptFlagComma as c_int as uint64_t != 0 as uint64_t
+                        && !vim_strchr(value_str, ',' as c_int).is_null()
                     {
-                        part = xmalloc(size) as *mut ::core::ffi::c_char;
+                        part = xmalloc(size) as *mut c_char;
                         '_fail: {
                             if put_eol(fd) != FAIL {
-                                let mut p: *mut ::core::ffi::c_char = buf;
-                                while *p as ::core::ffi::c_int != NUL {
+                                let mut p: *mut c_char = buf;
+                                while *p as c_int != NUL {
                                     if fprintf(
                                         fd,
-                                        b"%s %s+=\0".as_ptr() as *const ::core::ffi::c_char,
+                                        b"%s %s+=\0".as_ptr() as *const c_char,
                                         cmd,
                                         name,
-                                    ) < 0 as ::core::ffi::c_int
+                                    ) < 0 as c_int
                                     {
                                         break '_fail;
                                     }
@@ -6659,97 +5018,94 @@ unsafe extern "C" fn put_set(
                                         &raw mut p,
                                         part,
                                         size,
-                                        b",\0".as_ptr() as *const ::core::ffi::c_char
-                                            as *mut ::core::ffi::c_char,
+                                        b",\0".as_ptr() as *const c_char as *mut c_char,
                                     );
-                                    if put_escstr(fd, part, 2 as ::core::ffi::c_int) == FAIL
+                                    if put_escstr(fd, part, 2 as c_int) == FAIL
                                         || put_eol(fd) == FAIL
                                     {
                                         break '_fail;
                                     }
                                 }
-                                xfree(buf as *mut ::core::ffi::c_void);
-                                xfree(part as *mut ::core::ffi::c_void);
+                                xfree(buf as *mut c_void);
+                                xfree(part as *mut c_void);
                                 return OK;
                             }
                         }
-                        xfree(buf as *mut ::core::ffi::c_void);
-                        xfree(part as *mut ::core::ffi::c_void);
+                        xfree(buf as *mut c_void);
+                        xfree(part as *mut c_void);
                         return FAIL;
                     } else {
-                        if put_escstr(fd, buf, 2 as ::core::ffi::c_int) == FAIL {
-                            xfree(buf as *mut ::core::ffi::c_void);
+                        if put_escstr(fd, buf, 2 as c_int) == FAIL {
+                            xfree(buf as *mut c_void);
                             return FAIL;
                         }
-                        xfree(buf as *mut ::core::ffi::c_void);
+                        xfree(buf as *mut c_void);
                     }
-                } else if put_escstr(fd, value_str, 2 as ::core::ffi::c_int) == FAIL {
+                } else if put_escstr(fd, value_str, 2 as c_int) == FAIL {
                     return FAIL;
                 }
             }
         }
         _ => {}
     }
-    if put_eol(fd) < 0 as ::core::ffi::c_int {
+    if put_eol(fd) < 0 as c_int {
         return FAIL;
     }
     return OK;
 }
 pub unsafe extern "C" fn get_varp_scope_from(
     mut p: *mut vimoption_T,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut buf: *mut buf_T,
     mut win: *mut win_T,
-) -> *mut ::core::ffi::c_void {
+) -> *mut c_void {
     let mut opt_idx: OptIndex = get_opt_idx(p);
-    if opt_flags & OPT_GLOBAL as ::core::ffi::c_int != 0 && !option_is_global_only(opt_idx) {
+    if opt_flags & OPT_GLOBAL as c_int != 0 && !option_is_global_only(opt_idx) {
         if option_is_window_local(opt_idx) {
-            return (get_varp_from(p, buf, win) as *mut ::core::ffi::c_char)
+            return (get_varp_from(p, buf, win) as *mut c_char)
                 .offset(::core::mem::size_of::<winopt_T>() as isize)
-                as *mut ::core::ffi::c_void;
+                as *mut c_void;
         }
         return (*p).var;
     }
-    if opt_flags & OPT_LOCAL as ::core::ffi::c_int != 0
-        && option_is_global_local(opt_idx) as ::core::ffi::c_int != 0
-    {
-        match opt_idx as ::core::ffi::c_int {
-            117 => return &raw mut (*buf).b_p_fp as *mut ::core::ffi::c_void,
-            118 => return &raw mut (*buf).b_p_fs as *mut ::core::ffi::c_void,
-            99 => return &raw mut (*buf).b_p_ffu as *mut ::core::ffi::c_void,
-            87 => return &raw mut (*buf).b_p_efm as *mut ::core::ffi::c_void,
-            120 => return &raw mut (*buf).b_p_gefm as *mut ::core::ffi::c_void,
-            121 => return &raw mut (*buf).b_p_gp as *mut ::core::ffi::c_void,
-            180 => return &raw mut (*buf).b_p_mp as *mut ::core::ffi::c_void,
-            84 => return &raw mut (*buf).b_p_ep as *mut ::core::ffi::c_void,
-            160 => return &raw mut (*buf).b_p_kp as *mut ::core::ffi::c_void,
-            217 => return &raw mut (*buf).b_p_path as *mut ::core::ffi::c_void,
-            6 => return &raw mut (*buf).b_p_ac as *mut ::core::ffi::c_void,
-            10 => return &raw mut (*buf).b_p_ar as *mut ::core::ffi::c_void,
-            310 => return &raw mut (*buf).b_p_tags as *mut ::core::ffi::c_void,
-            306 => return &raw mut (*buf).b_p_tc as *mut ::core::ffi::c_void,
+    if opt_flags & OPT_LOCAL as c_int != 0 && option_is_global_local(opt_idx) as c_int != 0 {
+        match opt_idx as c_int {
+            117 => return &raw mut (*buf).b_p_fp as *mut c_void,
+            118 => return &raw mut (*buf).b_p_fs as *mut c_void,
+            99 => return &raw mut (*buf).b_p_ffu as *mut c_void,
+            87 => return &raw mut (*buf).b_p_efm as *mut c_void,
+            120 => return &raw mut (*buf).b_p_gefm as *mut c_void,
+            121 => return &raw mut (*buf).b_p_gp as *mut c_void,
+            180 => return &raw mut (*buf).b_p_mp as *mut c_void,
+            84 => return &raw mut (*buf).b_p_ep as *mut c_void,
+            160 => return &raw mut (*buf).b_p_kp as *mut c_void,
+            217 => return &raw mut (*buf).b_p_path as *mut c_void,
+            6 => return &raw mut (*buf).b_p_ac as *mut c_void,
+            10 => return &raw mut (*buf).b_p_ar as *mut c_void,
+            310 => return &raw mut (*buf).b_p_tags as *mut c_void,
+            306 => return &raw mut (*buf).b_p_tc as *mut c_void,
             276 => {
-                return &raw mut (*win).w_onebuf_opt.wo_siso as *mut ::core::ffi::c_void;
+                return &raw mut (*win).w_onebuf_opt.wo_siso as *mut c_void;
             }
-            247 => return &raw mut (*win).w_onebuf_opt.wo_so as *mut ::core::ffi::c_void,
-            67 => return &raw mut (*buf).b_p_def as *mut ::core::ffi::c_void,
-            145 => return &raw mut (*buf).b_p_inc as *mut ::core::ffi::c_void,
-            54 => return &raw mut (*buf).b_p_cot as *mut ::core::ffi::c_void,
-            69 => return &raw mut (*buf).b_p_dict as *mut ::core::ffi::c_void,
-            71 => return &raw mut (*buf).b_p_dia as *mut ::core::ffi::c_void,
-            319 => return &raw mut (*buf).b_p_tsr as *mut ::core::ffi::c_void,
-            320 => return &raw mut (*buf).b_p_tsrfu as *mut ::core::ffi::c_void,
-            307 => return &raw mut (*buf).b_p_tfu as *mut ::core::ffi::c_void,
-            268 => return &raw mut (*win).w_onebuf_opt.wo_sbr as *mut ::core::ffi::c_void,
-            294 => return &raw mut (*win).w_onebuf_opt.wo_stl as *mut ::core::ffi::c_void,
-            355 => return &raw mut (*win).w_onebuf_opt.wo_wbr as *mut ::core::ffi::c_void,
-            333 => return &raw mut (*buf).b_p_ul as *mut ::core::ffi::c_void,
-            173 => return &raw mut (*buf).b_p_lw as *mut ::core::ffi::c_void,
-            16 => return &raw mut (*buf).b_p_bkc as *mut ::core::ffi::c_void,
-            179 => return &raw mut (*buf).b_p_menc as *mut ::core::ffi::c_void,
-            98 => return &raw mut (*win).w_onebuf_opt.wo_fcs as *mut ::core::ffi::c_void,
-            175 => return &raw mut (*win).w_onebuf_opt.wo_lcs as *mut ::core::ffi::c_void,
-            343 => return &raw mut (*win).w_onebuf_opt.wo_ve as *mut ::core::ffi::c_void,
+            247 => return &raw mut (*win).w_onebuf_opt.wo_so as *mut c_void,
+            67 => return &raw mut (*buf).b_p_def as *mut c_void,
+            145 => return &raw mut (*buf).b_p_inc as *mut c_void,
+            54 => return &raw mut (*buf).b_p_cot as *mut c_void,
+            69 => return &raw mut (*buf).b_p_dict as *mut c_void,
+            71 => return &raw mut (*buf).b_p_dia as *mut c_void,
+            319 => return &raw mut (*buf).b_p_tsr as *mut c_void,
+            320 => return &raw mut (*buf).b_p_tsrfu as *mut c_void,
+            307 => return &raw mut (*buf).b_p_tfu as *mut c_void,
+            268 => return &raw mut (*win).w_onebuf_opt.wo_sbr as *mut c_void,
+            294 => return &raw mut (*win).w_onebuf_opt.wo_stl as *mut c_void,
+            355 => return &raw mut (*win).w_onebuf_opt.wo_wbr as *mut c_void,
+            333 => return &raw mut (*buf).b_p_ul as *mut c_void,
+            173 => return &raw mut (*buf).b_p_lw as *mut c_void,
+            16 => return &raw mut (*buf).b_p_bkc as *mut c_void,
+            179 => return &raw mut (*buf).b_p_menc as *mut c_void,
+            98 => return &raw mut (*win).w_onebuf_opt.wo_fcs as *mut c_void,
+            175 => return &raw mut (*win).w_onebuf_opt.wo_lcs as *mut c_void,
+            343 => return &raw mut (*win).w_onebuf_opt.wo_ve as *mut c_void,
             _ => {
                 abort();
             }
@@ -6759,16 +5115,16 @@ pub unsafe extern "C" fn get_varp_scope_from(
 }
 pub unsafe extern "C" fn get_varp_scope(
     mut p: *mut vimoption_T,
-    mut opt_flags: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_void {
+    mut opt_flags: c_int,
+) -> *mut c_void {
     return get_varp_scope_from(p, opt_flags, curbuf.get(), curwin.get());
 }
 pub unsafe extern "C" fn get_option_varp_scope_from(
     mut opt_idx: OptIndex,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut buf: *mut buf_T,
     mut win: *mut win_T,
-) -> *mut ::core::ffi::c_void {
+) -> *mut c_void {
     return get_varp_scope_from(
         (options.ptr() as *mut vimoption_T).offset(opt_idx as isize),
         opt_flags,
@@ -6780,378 +5136,374 @@ pub unsafe extern "C" fn get_varp_from(
     mut p: *mut vimoption_T,
     mut buf: *mut buf_T,
     mut win: *mut win_T,
-) -> *mut ::core::ffi::c_void {
+) -> *mut c_void {
     let mut opt_idx: OptIndex = get_opt_idx(p);
-    if is_option_hidden(opt_idx) as ::core::ffi::c_int != 0
-        || option_is_global_only(opt_idx) as ::core::ffi::c_int != 0
-    {
+    if is_option_hidden(opt_idx) as c_int != 0 || option_is_global_only(opt_idx) as c_int != 0 {
         return (*p).var;
     }
-    match opt_idx as ::core::ffi::c_int {
+    match opt_idx as c_int {
         84 => {
-            return if *(*buf).b_p_ep as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_ep as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_ep as c_int != NUL {
+                &raw mut (*buf).b_p_ep as *mut c_void
             } else {
                 (*p).var
             };
         }
         160 => {
-            return if *(*buf).b_p_kp as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_kp as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_kp as c_int != NUL {
+                &raw mut (*buf).b_p_kp as *mut c_void
             } else {
                 (*p).var
             };
         }
         217 => {
-            return if *(*buf).b_p_path as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_path as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_path as c_int != NUL {
+                &raw mut (*buf).b_p_path as *mut c_void
             } else {
                 (*p).var
             };
         }
         6 => {
-            return if (*buf).b_p_ac >= 0 as ::core::ffi::c_int {
-                &raw mut (*buf).b_p_ac as *mut ::core::ffi::c_void
+            return if (*buf).b_p_ac >= 0 as c_int {
+                &raw mut (*buf).b_p_ac as *mut c_void
             } else {
                 (*p).var
             };
         }
         10 => {
-            return if (*buf).b_p_ar >= 0 as ::core::ffi::c_int {
-                &raw mut (*buf).b_p_ar as *mut ::core::ffi::c_void
+            return if (*buf).b_p_ar >= 0 as c_int {
+                &raw mut (*buf).b_p_ar as *mut c_void
             } else {
                 (*p).var
             };
         }
         310 => {
-            return if *(*buf).b_p_tags as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_tags as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_tags as c_int != NUL {
+                &raw mut (*buf).b_p_tags as *mut c_void
             } else {
                 (*p).var
             };
         }
         306 => {
-            return if *(*buf).b_p_tc as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_tc as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_tc as c_int != NUL {
+                &raw mut (*buf).b_p_tc as *mut c_void
             } else {
                 (*p).var
             };
         }
         276 => {
             return if (*win).w_onebuf_opt.wo_siso >= 0 as OptInt {
-                &raw mut (*win).w_onebuf_opt.wo_siso as *mut ::core::ffi::c_void
+                &raw mut (*win).w_onebuf_opt.wo_siso as *mut c_void
             } else {
                 (*p).var
             };
         }
         247 => {
             return if (*win).w_onebuf_opt.wo_so >= 0 as OptInt {
-                &raw mut (*win).w_onebuf_opt.wo_so as *mut ::core::ffi::c_void
+                &raw mut (*win).w_onebuf_opt.wo_so as *mut c_void
             } else {
                 (*p).var
             };
         }
         16 => {
-            return if *(*buf).b_p_bkc as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_bkc as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_bkc as c_int != NUL {
+                &raw mut (*buf).b_p_bkc as *mut c_void
             } else {
                 (*p).var
             };
         }
         67 => {
-            return if *(*buf).b_p_def as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_def as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_def as c_int != NUL {
+                &raw mut (*buf).b_p_def as *mut c_void
             } else {
                 (*p).var
             };
         }
         145 => {
-            return if *(*buf).b_p_inc as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_inc as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_inc as c_int != NUL {
+                &raw mut (*buf).b_p_inc as *mut c_void
             } else {
                 (*p).var
             };
         }
         54 => {
-            return if *(*buf).b_p_cot as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_cot as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_cot as c_int != NUL {
+                &raw mut (*buf).b_p_cot as *mut c_void
             } else {
                 (*p).var
             };
         }
         69 => {
-            return if *(*buf).b_p_dict as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_dict as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_dict as c_int != NUL {
+                &raw mut (*buf).b_p_dict as *mut c_void
             } else {
                 (*p).var
             };
         }
         71 => {
-            return if *(*buf).b_p_dia as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_dia as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_dia as c_int != NUL {
+                &raw mut (*buf).b_p_dia as *mut c_void
             } else {
                 (*p).var
             };
         }
         319 => {
-            return if *(*buf).b_p_tsr as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_tsr as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_tsr as c_int != NUL {
+                &raw mut (*buf).b_p_tsr as *mut c_void
             } else {
                 (*p).var
             };
         }
         320 => {
-            return if *(*buf).b_p_tsrfu as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_tsrfu as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_tsrfu as c_int != NUL {
+                &raw mut (*buf).b_p_tsrfu as *mut c_void
             } else {
                 (*p).var
             };
         }
         117 => {
-            return if *(*buf).b_p_fp as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_fp as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_fp as c_int != NUL {
+                &raw mut (*buf).b_p_fp as *mut c_void
             } else {
                 (*p).var
             };
         }
         118 => {
-            return if (*buf).b_p_fs >= 0 as ::core::ffi::c_int {
-                &raw mut (*buf).b_p_fs as *mut ::core::ffi::c_void
+            return if (*buf).b_p_fs >= 0 as c_int {
+                &raw mut (*buf).b_p_fs as *mut c_void
             } else {
                 (*p).var
             };
         }
         99 => {
-            return if *(*buf).b_p_ffu as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_ffu as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_ffu as c_int != NUL {
+                &raw mut (*buf).b_p_ffu as *mut c_void
             } else {
                 (*p).var
             };
         }
         87 => {
-            return if *(*buf).b_p_efm as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_efm as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_efm as c_int != NUL {
+                &raw mut (*buf).b_p_efm as *mut c_void
             } else {
                 (*p).var
             };
         }
         120 => {
-            return if *(*buf).b_p_gefm as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_gefm as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_gefm as c_int != NUL {
+                &raw mut (*buf).b_p_gefm as *mut c_void
             } else {
                 (*p).var
             };
         }
         121 => {
-            return if *(*buf).b_p_gp as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_gp as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_gp as c_int != NUL {
+                &raw mut (*buf).b_p_gp as *mut c_void
             } else {
                 (*p).var
             };
         }
         180 => {
-            return if *(*buf).b_p_mp as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_mp as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_mp as c_int != NUL {
+                &raw mut (*buf).b_p_mp as *mut c_void
             } else {
                 (*p).var
             };
         }
         268 => {
-            return if *(*win).w_onebuf_opt.wo_sbr as ::core::ffi::c_int != NUL {
-                &raw mut (*win).w_onebuf_opt.wo_sbr as *mut ::core::ffi::c_void
+            return if *(*win).w_onebuf_opt.wo_sbr as c_int != NUL {
+                &raw mut (*win).w_onebuf_opt.wo_sbr as *mut c_void
             } else {
                 (*p).var
             };
         }
         294 => {
-            return if *(*win).w_onebuf_opt.wo_stl as ::core::ffi::c_int != NUL {
-                &raw mut (*win).w_onebuf_opt.wo_stl as *mut ::core::ffi::c_void
+            return if *(*win).w_onebuf_opt.wo_stl as c_int != NUL {
+                &raw mut (*win).w_onebuf_opt.wo_stl as *mut c_void
             } else {
                 (*p).var
             };
         }
         355 => {
-            return if *(*win).w_onebuf_opt.wo_wbr as ::core::ffi::c_int != NUL {
-                &raw mut (*win).w_onebuf_opt.wo_wbr as *mut ::core::ffi::c_void
+            return if *(*win).w_onebuf_opt.wo_wbr as c_int != NUL {
+                &raw mut (*win).w_onebuf_opt.wo_wbr as *mut c_void
             } else {
                 (*p).var
             };
         }
         333 => {
             return if (*buf).b_p_ul != NO_LOCAL_UNDOLEVEL as OptInt {
-                &raw mut (*buf).b_p_ul as *mut ::core::ffi::c_void
+                &raw mut (*buf).b_p_ul as *mut c_void
             } else {
                 (*p).var
             };
         }
         173 => {
-            return if *(*buf).b_p_lw as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_lw as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_lw as c_int != NUL {
+                &raw mut (*buf).b_p_lw as *mut c_void
             } else {
                 (*p).var
             };
         }
         179 => {
-            return if *(*buf).b_p_menc as ::core::ffi::c_int != NUL {
-                &raw mut (*buf).b_p_menc as *mut ::core::ffi::c_void
+            return if *(*buf).b_p_menc as c_int != NUL {
+                &raw mut (*buf).b_p_menc as *mut c_void
             } else {
                 (*p).var
             };
         }
         98 => {
-            return if *(*win).w_onebuf_opt.wo_fcs as ::core::ffi::c_int != NUL {
-                &raw mut (*win).w_onebuf_opt.wo_fcs as *mut ::core::ffi::c_void
+            return if *(*win).w_onebuf_opt.wo_fcs as c_int != NUL {
+                &raw mut (*win).w_onebuf_opt.wo_fcs as *mut c_void
             } else {
                 (*p).var
             };
         }
         175 => {
-            return if *(*win).w_onebuf_opt.wo_lcs as ::core::ffi::c_int != NUL {
-                &raw mut (*win).w_onebuf_opt.wo_lcs as *mut ::core::ffi::c_void
+            return if *(*win).w_onebuf_opt.wo_lcs as c_int != NUL {
+                &raw mut (*win).w_onebuf_opt.wo_lcs as *mut c_void
             } else {
                 (*p).var
             };
         }
         343 => {
-            return if *(*win).w_onebuf_opt.wo_ve as ::core::ffi::c_int != NUL {
-                &raw mut (*win).w_onebuf_opt.wo_ve as *mut ::core::ffi::c_void
+            return if *(*win).w_onebuf_opt.wo_ve as c_int != NUL {
+                &raw mut (*win).w_onebuf_opt.wo_ve as *mut c_void
             } else {
                 (*p).var
             };
         }
-        3 => return &raw mut (*win).w_onebuf_opt.wo_arab as *mut ::core::ffi::c_void,
-        174 => return &raw mut (*win).w_onebuf_opt.wo_list as *mut ::core::ffi::c_void,
-        283 => return &raw mut (*win).w_onebuf_opt.wo_spell as *mut ::core::ffi::c_void,
-        63 => return &raw mut (*win).w_onebuf_opt.wo_cuc as *mut ::core::ffi::c_void,
-        64 => return &raw mut (*win).w_onebuf_opt.wo_cul as *mut ::core::ffi::c_void,
-        65 => return &raw mut (*win).w_onebuf_opt.wo_culopt as *mut ::core::ffi::c_void,
-        46 => return &raw mut (*win).w_onebuf_opt.wo_cc as *mut ::core::ffi::c_void,
-        70 => return &raw mut (*win).w_onebuf_opt.wo_diff as *mut ::core::ffi::c_void,
-        89 => return &raw mut (*win).w_onebuf_opt.wo_eiw as *mut ::core::ffi::c_void,
-        102 => return &raw mut (*win).w_onebuf_opt.wo_fdc as *mut ::core::ffi::c_void,
-        103 => return &raw mut (*win).w_onebuf_opt.wo_fen as *mut ::core::ffi::c_void,
-        105 => return &raw mut (*win).w_onebuf_opt.wo_fdi as *mut ::core::ffi::c_void,
-        106 => return &raw mut (*win).w_onebuf_opt.wo_fdl as *mut ::core::ffi::c_void,
-        109 => return &raw mut (*win).w_onebuf_opt.wo_fdm as *mut ::core::ffi::c_void,
-        110 => return &raw mut (*win).w_onebuf_opt.wo_fml as *mut ::core::ffi::c_void,
-        111 => return &raw mut (*win).w_onebuf_opt.wo_fdn as *mut ::core::ffi::c_void,
-        104 => return &raw mut (*win).w_onebuf_opt.wo_fde as *mut ::core::ffi::c_void,
-        113 => return &raw mut (*win).w_onebuf_opt.wo_fdt as *mut ::core::ffi::c_void,
-        108 => return &raw mut (*win).w_onebuf_opt.wo_fmr as *mut ::core::ffi::c_void,
-        206 => return &raw mut (*win).w_onebuf_opt.wo_nu as *mut ::core::ffi::c_void,
-        234 => return &raw mut (*win).w_onebuf_opt.wo_rnu as *mut ::core::ffi::c_void,
-        207 => return &raw mut (*win).w_onebuf_opt.wo_nuw as *mut ::core::ffi::c_void,
-        359 => return &raw mut (*win).w_onebuf_opt.wo_wfb as *mut ::core::ffi::c_void,
-        360 => return &raw mut (*win).w_onebuf_opt.wo_wfh as *mut ::core::ffi::c_void,
-        361 => return &raw mut (*win).w_onebuf_opt.wo_wfw as *mut ::core::ffi::c_void,
-        220 => return &raw mut (*win).w_onebuf_opt.wo_pvw as *mut ::core::ffi::c_void,
-        167 => return &raw mut (*win).w_onebuf_opt.wo_lhi as *mut ::core::ffi::c_void,
-        238 => return &raw mut (*win).w_onebuf_opt.wo_rl as *mut ::core::ffi::c_void,
-        239 => return &raw mut (*win).w_onebuf_opt.wo_rlc as *mut ::core::ffi::c_void,
-        243 => return &raw mut (*win).w_onebuf_opt.wo_scr as *mut ::core::ffi::c_void,
-        281 => return &raw mut (*win).w_onebuf_opt.wo_sms as *mut ::core::ffi::c_void,
-        367 => return &raw mut (*win).w_onebuf_opt.wo_wrap as *mut ::core::ffi::c_void,
-        168 => return &raw mut (*win).w_onebuf_opt.wo_lbr as *mut ::core::ffi::c_void,
-        24 => return &raw mut (*win).w_onebuf_opt.wo_bri as *mut ::core::ffi::c_void,
-        25 => return &raw mut (*win).w_onebuf_opt.wo_briopt as *mut ::core::ffi::c_void,
-        245 => return &raw mut (*win).w_onebuf_opt.wo_scb as *mut ::core::ffi::c_void,
-        62 => return &raw mut (*win).w_onebuf_opt.wo_crb as *mut ::core::ffi::c_void,
-        57 => return &raw mut (*win).w_onebuf_opt.wo_cocu as *mut ::core::ffi::c_void,
-        58 => return &raw mut (*win).w_onebuf_opt.wo_cole as *mut ::core::ffi::c_void,
-        9 => return &raw mut (*buf).b_p_ai as *mut ::core::ffi::c_void,
-        21 => return &raw mut (*buf).b_p_bin as *mut ::core::ffi::c_void,
-        22 => return &raw mut (*buf).b_p_bomb as *mut ::core::ffi::c_void,
-        27 => return &raw mut (*buf).b_p_bh as *mut ::core::ffi::c_void,
-        29 => return &raw mut (*buf).b_p_bt as *mut ::core::ffi::c_void,
-        28 => return &raw mut (*buf).b_p_bl as *mut ::core::ffi::c_void,
-        30 => return &raw mut (*buf).b_p_busy as *mut ::core::ffi::c_void,
-        35 => return &raw mut (*buf).b_p_channel as *mut ::core::ffi::c_void,
-        60 => return &raw mut (*buf).b_p_ci as *mut ::core::ffi::c_void,
-        38 => return &raw mut (*buf).b_p_cin as *mut ::core::ffi::c_void,
-        39 => return &raw mut (*buf).b_p_cink as *mut ::core::ffi::c_void,
-        40 => return &raw mut (*buf).b_p_cino as *mut ::core::ffi::c_void,
-        41 => return &raw mut (*buf).b_p_cinsd as *mut ::core::ffi::c_void,
-        42 => return &raw mut (*buf).b_p_cinw as *mut ::core::ffi::c_void,
-        48 => return &raw mut (*buf).b_p_com as *mut ::core::ffi::c_void,
-        49 => return &raw mut (*buf).b_p_cms as *mut ::core::ffi::c_void,
-        51 => return &raw mut (*buf).b_p_cpt as *mut ::core::ffi::c_void,
-        52 => return &raw mut (*buf).b_p_cfu as *mut ::core::ffi::c_void,
-        208 => return &raw mut (*buf).b_p_ofu as *mut ::core::ffi::c_void,
-        81 => return &raw mut (*buf).b_p_eof as *mut ::core::ffi::c_void,
-        82 => return &raw mut (*buf).b_p_eol as *mut ::core::ffi::c_void,
-        100 => return &raw mut (*buf).b_p_fixeol as *mut ::core::ffi::c_void,
-        90 => return &raw mut (*buf).b_p_et as *mut ::core::ffi::c_void,
-        92 => return &raw mut (*buf).b_p_fenc as *mut ::core::ffi::c_void,
-        94 => return &raw mut (*buf).b_p_ff as *mut ::core::ffi::c_void,
-        97 => return &raw mut (*buf).b_p_ft as *mut ::core::ffi::c_void,
-        116 => return &raw mut (*buf).b_p_fo as *mut ::core::ffi::c_void,
-        115 => return &raw mut (*buf).b_p_flp as *mut ::core::ffi::c_void,
-        142 => return &raw mut (*buf).b_p_iminsert as *mut ::core::ffi::c_void,
-        143 => return &raw mut (*buf).b_p_imsearch as *mut ::core::ffi::c_void,
-        150 => return &raw mut (*buf).b_p_inf as *mut ::core::ffi::c_void,
-        154 => return &raw mut (*buf).b_p_isk as *mut ::core::ffi::c_void,
-        146 => return &raw mut (*buf).b_p_inex as *mut ::core::ffi::c_void,
-        148 => return &raw mut (*buf).b_p_inde as *mut ::core::ffi::c_void,
-        149 => return &raw mut (*buf).b_p_indk as *mut ::core::ffi::c_void,
-        114 => return &raw mut (*buf).b_p_fex as *mut ::core::ffi::c_void,
-        171 => return &raw mut (*buf).b_p_lisp as *mut ::core::ffi::c_void,
-        172 => return &raw mut (*buf).b_p_lop as *mut ::core::ffi::c_void,
-        191 => return &raw mut (*buf).b_p_ml as *mut ::core::ffi::c_void,
-        181 => return &raw mut (*buf).b_p_mps as *mut ::core::ffi::c_void,
-        194 => return &raw mut (*buf).b_p_ma as *mut ::core::ffi::c_void,
-        195 => return &raw mut (*buf).b_changed as *mut ::core::ffi::c_void,
-        205 => return &raw mut (*buf).b_p_nf as *mut ::core::ffi::c_void,
-        218 => return &raw mut (*buf).b_p_pi as *mut ::core::ffi::c_void,
-        229 => return &raw mut (*buf).b_p_qe as *mut ::core::ffi::c_void,
-        230 => return &raw mut (*buf).b_p_ro as *mut ::core::ffi::c_void,
-        244 => return &raw mut (*buf).b_p_scbk as *mut ::core::ffi::c_void,
-        279 => return &raw mut (*buf).b_p_si as *mut ::core::ffi::c_void,
-        282 => return &raw mut (*buf).b_p_sts as *mut ::core::ffi::c_void,
-        296 => return &raw mut (*buf).b_p_sua as *mut ::core::ffi::c_void,
-        297 => return &raw mut (*buf).b_p_swf as *mut ::core::ffi::c_void,
-        299 => return &raw mut (*buf).b_p_smc as *mut ::core::ffi::c_void,
-        300 => return &raw mut (*buf).b_p_syn as *mut ::core::ffi::c_void,
-        284 => return &raw mut (*(*win).w_s).b_p_spc as *mut ::core::ffi::c_void,
-        285 => return &raw mut (*(*win).w_s).b_p_spf as *mut ::core::ffi::c_void,
-        286 => return &raw mut (*(*win).w_s).b_p_spl as *mut ::core::ffi::c_void,
-        287 => return &raw mut (*(*win).w_s).b_p_spo as *mut ::core::ffi::c_void,
-        266 => return &raw mut (*buf).b_p_sw as *mut ::core::ffi::c_void,
-        307 => return &raw mut (*buf).b_p_tfu as *mut ::core::ffi::c_void,
-        304 => return &raw mut (*buf).b_p_ts as *mut ::core::ffi::c_void,
-        318 => return &raw mut (*buf).b_p_tw as *mut ::core::ffi::c_void,
-        332 => return &raw mut (*buf).b_p_udf as *mut ::core::ffi::c_void,
-        368 => return &raw mut (*buf).b_p_wm as *mut ::core::ffi::c_void,
-        337 => return &raw mut (*buf).b_p_vsts as *mut ::core::ffi::c_void,
-        338 => return &raw mut (*buf).b_p_vts as *mut ::core::ffi::c_void,
-        158 => return &raw mut (*buf).b_p_keymap as *mut ::core::ffi::c_void,
-        277 => return &raw mut (*win).w_onebuf_opt.wo_scl as *mut ::core::ffi::c_void,
-        363 => return &raw mut (*win).w_onebuf_opt.wo_winhl as *mut ::core::ffi::c_void,
-        356 => return &raw mut (*win).w_onebuf_opt.wo_winbl as *mut ::core::ffi::c_void,
-        293 => return &raw mut (*win).w_onebuf_opt.wo_stc as *mut ::core::ffi::c_void,
+        3 => return &raw mut (*win).w_onebuf_opt.wo_arab as *mut c_void,
+        174 => return &raw mut (*win).w_onebuf_opt.wo_list as *mut c_void,
+        283 => return &raw mut (*win).w_onebuf_opt.wo_spell as *mut c_void,
+        63 => return &raw mut (*win).w_onebuf_opt.wo_cuc as *mut c_void,
+        64 => return &raw mut (*win).w_onebuf_opt.wo_cul as *mut c_void,
+        65 => return &raw mut (*win).w_onebuf_opt.wo_culopt as *mut c_void,
+        46 => return &raw mut (*win).w_onebuf_opt.wo_cc as *mut c_void,
+        70 => return &raw mut (*win).w_onebuf_opt.wo_diff as *mut c_void,
+        89 => return &raw mut (*win).w_onebuf_opt.wo_eiw as *mut c_void,
+        102 => return &raw mut (*win).w_onebuf_opt.wo_fdc as *mut c_void,
+        103 => return &raw mut (*win).w_onebuf_opt.wo_fen as *mut c_void,
+        105 => return &raw mut (*win).w_onebuf_opt.wo_fdi as *mut c_void,
+        106 => return &raw mut (*win).w_onebuf_opt.wo_fdl as *mut c_void,
+        109 => return &raw mut (*win).w_onebuf_opt.wo_fdm as *mut c_void,
+        110 => return &raw mut (*win).w_onebuf_opt.wo_fml as *mut c_void,
+        111 => return &raw mut (*win).w_onebuf_opt.wo_fdn as *mut c_void,
+        104 => return &raw mut (*win).w_onebuf_opt.wo_fde as *mut c_void,
+        113 => return &raw mut (*win).w_onebuf_opt.wo_fdt as *mut c_void,
+        108 => return &raw mut (*win).w_onebuf_opt.wo_fmr as *mut c_void,
+        206 => return &raw mut (*win).w_onebuf_opt.wo_nu as *mut c_void,
+        234 => return &raw mut (*win).w_onebuf_opt.wo_rnu as *mut c_void,
+        207 => return &raw mut (*win).w_onebuf_opt.wo_nuw as *mut c_void,
+        359 => return &raw mut (*win).w_onebuf_opt.wo_wfb as *mut c_void,
+        360 => return &raw mut (*win).w_onebuf_opt.wo_wfh as *mut c_void,
+        361 => return &raw mut (*win).w_onebuf_opt.wo_wfw as *mut c_void,
+        220 => return &raw mut (*win).w_onebuf_opt.wo_pvw as *mut c_void,
+        167 => return &raw mut (*win).w_onebuf_opt.wo_lhi as *mut c_void,
+        238 => return &raw mut (*win).w_onebuf_opt.wo_rl as *mut c_void,
+        239 => return &raw mut (*win).w_onebuf_opt.wo_rlc as *mut c_void,
+        243 => return &raw mut (*win).w_onebuf_opt.wo_scr as *mut c_void,
+        281 => return &raw mut (*win).w_onebuf_opt.wo_sms as *mut c_void,
+        367 => return &raw mut (*win).w_onebuf_opt.wo_wrap as *mut c_void,
+        168 => return &raw mut (*win).w_onebuf_opt.wo_lbr as *mut c_void,
+        24 => return &raw mut (*win).w_onebuf_opt.wo_bri as *mut c_void,
+        25 => return &raw mut (*win).w_onebuf_opt.wo_briopt as *mut c_void,
+        245 => return &raw mut (*win).w_onebuf_opt.wo_scb as *mut c_void,
+        62 => return &raw mut (*win).w_onebuf_opt.wo_crb as *mut c_void,
+        57 => return &raw mut (*win).w_onebuf_opt.wo_cocu as *mut c_void,
+        58 => return &raw mut (*win).w_onebuf_opt.wo_cole as *mut c_void,
+        9 => return &raw mut (*buf).b_p_ai as *mut c_void,
+        21 => return &raw mut (*buf).b_p_bin as *mut c_void,
+        22 => return &raw mut (*buf).b_p_bomb as *mut c_void,
+        27 => return &raw mut (*buf).b_p_bh as *mut c_void,
+        29 => return &raw mut (*buf).b_p_bt as *mut c_void,
+        28 => return &raw mut (*buf).b_p_bl as *mut c_void,
+        30 => return &raw mut (*buf).b_p_busy as *mut c_void,
+        35 => return &raw mut (*buf).b_p_channel as *mut c_void,
+        60 => return &raw mut (*buf).b_p_ci as *mut c_void,
+        38 => return &raw mut (*buf).b_p_cin as *mut c_void,
+        39 => return &raw mut (*buf).b_p_cink as *mut c_void,
+        40 => return &raw mut (*buf).b_p_cino as *mut c_void,
+        41 => return &raw mut (*buf).b_p_cinsd as *mut c_void,
+        42 => return &raw mut (*buf).b_p_cinw as *mut c_void,
+        48 => return &raw mut (*buf).b_p_com as *mut c_void,
+        49 => return &raw mut (*buf).b_p_cms as *mut c_void,
+        51 => return &raw mut (*buf).b_p_cpt as *mut c_void,
+        52 => return &raw mut (*buf).b_p_cfu as *mut c_void,
+        208 => return &raw mut (*buf).b_p_ofu as *mut c_void,
+        81 => return &raw mut (*buf).b_p_eof as *mut c_void,
+        82 => return &raw mut (*buf).b_p_eol as *mut c_void,
+        100 => return &raw mut (*buf).b_p_fixeol as *mut c_void,
+        90 => return &raw mut (*buf).b_p_et as *mut c_void,
+        92 => return &raw mut (*buf).b_p_fenc as *mut c_void,
+        94 => return &raw mut (*buf).b_p_ff as *mut c_void,
+        97 => return &raw mut (*buf).b_p_ft as *mut c_void,
+        116 => return &raw mut (*buf).b_p_fo as *mut c_void,
+        115 => return &raw mut (*buf).b_p_flp as *mut c_void,
+        142 => return &raw mut (*buf).b_p_iminsert as *mut c_void,
+        143 => return &raw mut (*buf).b_p_imsearch as *mut c_void,
+        150 => return &raw mut (*buf).b_p_inf as *mut c_void,
+        154 => return &raw mut (*buf).b_p_isk as *mut c_void,
+        146 => return &raw mut (*buf).b_p_inex as *mut c_void,
+        148 => return &raw mut (*buf).b_p_inde as *mut c_void,
+        149 => return &raw mut (*buf).b_p_indk as *mut c_void,
+        114 => return &raw mut (*buf).b_p_fex as *mut c_void,
+        171 => return &raw mut (*buf).b_p_lisp as *mut c_void,
+        172 => return &raw mut (*buf).b_p_lop as *mut c_void,
+        191 => return &raw mut (*buf).b_p_ml as *mut c_void,
+        181 => return &raw mut (*buf).b_p_mps as *mut c_void,
+        194 => return &raw mut (*buf).b_p_ma as *mut c_void,
+        195 => return &raw mut (*buf).b_changed as *mut c_void,
+        205 => return &raw mut (*buf).b_p_nf as *mut c_void,
+        218 => return &raw mut (*buf).b_p_pi as *mut c_void,
+        229 => return &raw mut (*buf).b_p_qe as *mut c_void,
+        230 => return &raw mut (*buf).b_p_ro as *mut c_void,
+        244 => return &raw mut (*buf).b_p_scbk as *mut c_void,
+        279 => return &raw mut (*buf).b_p_si as *mut c_void,
+        282 => return &raw mut (*buf).b_p_sts as *mut c_void,
+        296 => return &raw mut (*buf).b_p_sua as *mut c_void,
+        297 => return &raw mut (*buf).b_p_swf as *mut c_void,
+        299 => return &raw mut (*buf).b_p_smc as *mut c_void,
+        300 => return &raw mut (*buf).b_p_syn as *mut c_void,
+        284 => return &raw mut (*(*win).w_s).b_p_spc as *mut c_void,
+        285 => return &raw mut (*(*win).w_s).b_p_spf as *mut c_void,
+        286 => return &raw mut (*(*win).w_s).b_p_spl as *mut c_void,
+        287 => return &raw mut (*(*win).w_s).b_p_spo as *mut c_void,
+        266 => return &raw mut (*buf).b_p_sw as *mut c_void,
+        307 => return &raw mut (*buf).b_p_tfu as *mut c_void,
+        304 => return &raw mut (*buf).b_p_ts as *mut c_void,
+        318 => return &raw mut (*buf).b_p_tw as *mut c_void,
+        332 => return &raw mut (*buf).b_p_udf as *mut c_void,
+        368 => return &raw mut (*buf).b_p_wm as *mut c_void,
+        337 => return &raw mut (*buf).b_p_vsts as *mut c_void,
+        338 => return &raw mut (*buf).b_p_vts as *mut c_void,
+        158 => return &raw mut (*buf).b_p_keymap as *mut c_void,
+        277 => return &raw mut (*win).w_onebuf_opt.wo_scl as *mut c_void,
+        363 => return &raw mut (*win).w_onebuf_opt.wo_winhl as *mut c_void,
+        356 => return &raw mut (*win).w_onebuf_opt.wo_winbl as *mut c_void,
+        293 => return &raw mut (*win).w_onebuf_opt.wo_stc as *mut c_void,
         _ => {
-            iemsg(gettext(
-                b"E356: get_varp ERROR\0".as_ptr() as *const ::core::ffi::c_char
-            ));
+            iemsg(gettext(b"E356: get_varp ERROR\0".as_ptr() as *const c_char));
         }
     }
-    return &raw mut (*buf).b_p_wm as *mut ::core::ffi::c_void;
+    return &raw mut (*buf).b_p_wm as *mut c_void;
 }
 #[inline]
 unsafe extern "C" fn get_opt_idx(mut opt: *mut vimoption_T) -> OptIndex {
     return opt.offset_from(options.ptr() as *mut vimoption_T) as OptIndex;
 }
 #[inline]
-unsafe extern "C" fn get_varp(mut p: *mut vimoption_T) -> *mut ::core::ffi::c_void {
+unsafe extern "C" fn get_varp(mut p: *mut vimoption_T) -> *mut c_void {
     return get_varp_from(p, curbuf.get(), curwin.get());
 }
-pub unsafe extern "C" fn get_equalprg() -> *mut ::core::ffi::c_char {
-    if *(*curbuf.get()).b_p_ep as ::core::ffi::c_int == NUL {
+pub unsafe extern "C" fn get_equalprg() -> *mut c_char {
+    if *(*curbuf.get()).b_p_ep as c_int == NUL {
         return p_ep.get();
     }
     return (*curbuf.get()).b_p_ep;
 }
-pub unsafe extern "C" fn get_findfunc() -> *mut ::core::ffi::c_char {
-    if *(*curbuf.get()).b_p_ffu as ::core::ffi::c_int == NUL {
+pub unsafe extern "C" fn get_findfunc() -> *mut c_char {
+    if *(*curbuf.get()).b_p_ffu as c_int == NUL {
         return p_ffu.get();
     }
     return (*curbuf.get()).b_p_ffu;
@@ -7167,11 +5519,9 @@ pub unsafe extern "C" fn win_copy_options(mut wp_from: *mut win_T, mut wp_to: *m
     );
     didset_window_options(wp_to, true_0 != 0);
 }
-unsafe extern "C" fn copy_option_val(
-    mut val: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    if val == empty_string_option.ptr() as *mut ::core::ffi::c_char as *const ::core::ffi::c_char {
-        return empty_string_option.ptr() as *mut ::core::ffi::c_char;
+unsafe extern "C" fn copy_option_val(mut val: *const c_char) -> *mut c_char {
+    if val == empty_string_option.ptr() as *mut c_char as *const c_char {
+        return empty_string_option.ptr() as *mut c_char;
     }
     return xstrdup(val);
 }
@@ -7216,7 +5566,7 @@ pub unsafe extern "C" fn copy_winopt(mut from: *mut winopt_T, mut to: *mut winop
     (*to).wo_fdc_save = if (*from).wo_diff_saved != 0 {
         xstrdup((*from).wo_fdc_save)
     } else {
-        empty_string_option.ptr() as *mut ::core::ffi::c_char
+        empty_string_option.ptr() as *mut c_char
     };
     (*to).wo_fen = (*from).wo_fen;
     (*to).wo_fen_save = (*from).wo_fen_save;
@@ -7228,7 +5578,7 @@ pub unsafe extern "C" fn copy_winopt(mut from: *mut winopt_T, mut to: *mut winop
     (*to).wo_fdm_save = if (*from).wo_diff_saved != 0 {
         xstrdup((*from).wo_fdm_save)
     } else {
-        empty_string_option.ptr() as *mut ::core::ffi::c_char
+        empty_string_option.ptr() as *mut c_char
     };
     (*to).wo_fdn = (*from).wo_fdn;
     (*to).wo_fde = copy_option_val((*from).wo_fde);
@@ -7245,8 +5595,8 @@ pub unsafe extern "C" fn copy_winopt(mut from: *mut winopt_T, mut to: *mut winop
     (*to).wo_fde_flags = (*from).wo_fde_flags;
     (*to).wo_fdt_flags = (*from).wo_fdt_flags;
     memmove(
-        &raw mut (*to).wo_script_ctx as *mut sctx_T as *mut ::core::ffi::c_void,
-        &raw mut (*from).wo_script_ctx as *mut sctx_T as *const ::core::ffi::c_void,
+        &raw mut (*to).wo_script_ctx as *mut sctx_T as *mut c_void,
+        &raw mut (*from).wo_script_ctx as *mut sctx_T as *const c_void,
         ::core::mem::size_of::<[sctx_T; 51]>(),
     );
     check_winopt(to);
@@ -7307,19 +5657,19 @@ pub unsafe extern "C" fn clear_winopt(mut wop: *mut winopt_T) {
 }
 pub unsafe extern "C" fn didset_window_options(mut wp: *mut win_T, mut valid_cursor: bool) {
     if (*wp).w_onebuf_opt.wo_wrap != 0 {
-        (*wp).w_leftcol = 0 as ::core::ffi::c_int as colnr_T;
+        (*wp).w_leftcol = 0 as c_int as colnr_T;
     } else {
-        (*wp).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
+        (*wp).w_skipcol = 0 as c_int as colnr_T;
     }
-    check_colorcolumn(::core::ptr::null_mut::<::core::ffi::c_char>(), wp);
-    briopt_check(::core::ptr::null_mut::<::core::ffi::c_char>(), wp);
-    fill_culopt_flags(::core::ptr::null_mut::<::core::ffi::c_char>(), wp);
+    check_colorcolumn(::core::ptr::null_mut::<c_char>(), wp);
+    briopt_check(::core::ptr::null_mut::<c_char>(), wp);
+    fill_culopt_flags(::core::ptr::null_mut::<c_char>(), wp);
     set_chars_option(
         wp,
         (*wp).w_onebuf_opt.wo_fcs,
         kFillchars,
         true_0 != 0,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        ::core::ptr::null_mut::<c_char>(),
         0 as size_t,
     );
     set_chars_option(
@@ -7327,191 +5677,173 @@ pub unsafe extern "C" fn didset_window_options(mut wp: *mut win_T, mut valid_cur
         (*wp).w_onebuf_opt.wo_lcs,
         kListchars,
         true_0 != 0,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        ::core::ptr::null_mut::<c_char>(),
         0 as size_t,
     );
-    parse_winhl_opt(::core::ptr::null::<::core::ffi::c_char>(), wp);
+    parse_winhl_opt(::core::ptr::null::<c_char>(), wp);
     check_blending(wp);
     set_winbar_win(wp, false_0 != 0, valid_cursor);
-    check_signcolumn(::core::ptr::null_mut::<::core::ffi::c_char>(), wp);
+    check_signcolumn(::core::ptr::null_mut::<c_char>(), wp);
     (*wp).w_grid_alloc.blending = (*wp).w_onebuf_opt.wo_winbl > 0 as OptInt;
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core::ffi::c_int) {
+pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: c_int) {
     let mut should_copy: bool = true_0 != 0;
-    let mut save_p_isk: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut save_p_isk: *mut c_char = ::core::ptr::null_mut::<c_char>();
     let mut did_isk: bool = false_0 != 0;
     if !(*p_cpo.ptr()).is_null() {
-        if (vim_strchr(p_cpo.get(), CPO_BUFOPTGLOB).is_null()
-            || flags & BCO_ENTER as ::core::ffi::c_int == 0)
-            && ((*buf).b_p_initialized as ::core::ffi::c_int != 0
-                || flags & BCO_ENTER as ::core::ffi::c_int == 0
+        if (vim_strchr(p_cpo.get(), CPO_BUFOPTGLOB).is_null() || flags & BCO_ENTER as c_int == 0)
+            && ((*buf).b_p_initialized as c_int != 0
+                || flags & BCO_ENTER as c_int == 0
                     && !vim_strchr(p_cpo.get(), CPO_BUFOPT).is_null())
         {
             should_copy = false_0 != 0;
         }
-        if should_copy as ::core::ffi::c_int != 0 || flags & BCO_ALWAYS as ::core::ffi::c_int != 0 {
+        if should_copy as c_int != 0 || flags & BCO_ALWAYS as c_int != 0 {
             memset(
-                &raw mut (*buf).b_p_script_ctx as *mut ::core::ffi::c_void,
-                0 as ::core::ffi::c_int,
+                &raw mut (*buf).b_p_script_ctx as *mut c_void,
+                0 as c_int,
                 ::core::mem::size_of::<[sctx_T; 92]>(),
             );
-            let mut dont_do_help: bool = flags & BCO_NOHELP as ::core::ffi::c_int != 0
-                && (*buf).b_help as ::core::ffi::c_int != 0
-                || (*buf).b_p_initialized as ::core::ffi::c_int != 0;
+            let mut dont_do_help: bool = flags & BCO_NOHELP as c_int != 0
+                && (*buf).b_help as c_int != 0
+                || (*buf).b_p_initialized as c_int != 0;
             if dont_do_help {
                 save_p_isk = (*buf).b_p_isk;
-                (*buf).b_p_isk = ::core::ptr::null_mut::<::core::ffi::c_char>();
+                (*buf).b_p_isk = ::core::ptr::null_mut::<c_char>();
             }
             if !(*buf).b_p_initialized {
                 free_buf_options(buf, true_0 != 0);
                 (*buf).b_p_ro = false_0;
                 (*buf).b_p_fenc = xstrdup(p_fenc.get());
-                match *p_ffs.get() as ::core::ffi::c_int {
+                match *p_ffs.get() as c_int {
                     109 => {
-                        (*buf).b_p_ff = xstrdup(b"mac\0".as_ptr() as *const ::core::ffi::c_char);
+                        (*buf).b_p_ff = xstrdup(b"mac\0".as_ptr() as *const c_char);
                     }
                     100 => {
-                        (*buf).b_p_ff = xstrdup(b"dos\0".as_ptr() as *const ::core::ffi::c_char);
+                        (*buf).b_p_ff = xstrdup(b"dos\0".as_ptr() as *const c_char);
                     }
                     117 => {
-                        (*buf).b_p_ff = xstrdup(b"unix\0".as_ptr() as *const ::core::ffi::c_char);
+                        (*buf).b_p_ff = xstrdup(b"unix\0".as_ptr() as *const c_char);
                     }
                     _ => {
                         (*buf).b_p_ff = xstrdup(p_ff.get());
                     }
                 }
-                (*buf).b_p_bh = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-                (*buf).b_p_bt = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+                (*buf).b_p_bh = empty_string_option.ptr() as *mut c_char;
+                (*buf).b_p_bt = empty_string_option.ptr() as *mut c_char;
             } else {
                 free_buf_options(buf, false_0 != 0);
             }
             (*buf).b_p_ai = p_ai.get();
-            (*buf).b_p_script_ctx[kBufOptAutoindent as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptAutoindent as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptAutoindent as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptAutoindent as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_ai_nopaste = p_ai_nopaste.get();
             (*buf).b_p_sw = p_sw.get();
-            (*buf).b_p_script_ctx[kBufOptShiftwidth as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptShiftwidth as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptShiftwidth as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptShiftwidth as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_scbk = p_scbk.get();
-            (*buf).b_p_script_ctx[kBufOptScrollback as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptScrollback as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptScrollback as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptScrollback as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_tw = p_tw.get();
-            (*buf).b_p_script_ctx[kBufOptTextwidth as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptTextwidth as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptTextwidth as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptTextwidth as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_tw_nopaste = p_tw_nopaste.get();
             (*buf).b_p_tw_nobin = p_tw_nobin.get();
             (*buf).b_p_wm = p_wm.get();
-            (*buf).b_p_script_ctx[kBufOptWrapmargin as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptWrapmargin as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptWrapmargin as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptWrapmargin as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_wm_nopaste = p_wm_nopaste.get();
             (*buf).b_p_wm_nobin = p_wm_nobin.get();
             (*buf).b_p_bin = p_bin.get();
-            (*buf).b_p_script_ctx[kBufOptBinary as ::core::ffi::c_int as usize] = (*options.ptr())
+            (*buf).b_p_script_ctx[kBufOptBinary as c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptBinary as ::core::ffi::c_int as isize)
-                    as usize]
+                    .offset(kBufOptBinary as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_bomb = p_bomb.get();
-            (*buf).b_p_script_ctx[kBufOptBomb as ::core::ffi::c_int as usize] = (*options.ptr())
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptBomb as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptBomb as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex).offset(kBufOptBomb as c_int as isize)
+                    as usize]
                 .script_ctx;
             (*buf).b_p_et = p_et.get();
-            (*buf).b_p_script_ctx[kBufOptExpandtab as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptExpandtab as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptExpandtab as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptExpandtab as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_fixeol = p_fixeol.get();
-            (*buf).b_p_script_ctx[kBufOptFixendofline as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptFixendofline as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptFixendofline as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptFixendofline as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_et_nobin = p_et_nobin.get();
             (*buf).b_p_et_nopaste = p_et_nopaste.get();
             (*buf).b_p_ml = p_ml.get();
-            (*buf).b_p_script_ctx[kBufOptModeline as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptModeline as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptModeline as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptModeline as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_ml_nobin = p_ml_nobin.get();
             (*buf).b_p_inf = p_inf.get();
-            (*buf).b_p_script_ctx[kBufOptInfercase as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptInfercase as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptInfercase as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptInfercase as c_int as isize) as usize]
                 .script_ctx;
-            if (*cmdmod.ptr()).cmod_flags & CMOD_NOSWAPFILE as ::core::ffi::c_int != 0 {
+            if (*cmdmod.ptr()).cmod_flags & CMOD_NOSWAPFILE as c_int != 0 {
                 (*buf).b_p_swf = false_0;
             } else {
                 (*buf).b_p_swf = p_swf.get();
-                (*buf).b_p_script_ctx[kBufOptSwapfile as ::core::ffi::c_int as usize] = (*options
-                    .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptSwapfile as ::core::ffi::c_int as isize)
-                    as usize]
+                (*buf).b_p_script_ctx[kBufOptSwapfile as c_int as usize] = (*options.ptr())
+                    [*(&raw const buf_opt_idx as *const OptIndex)
+                        .offset(kBufOptSwapfile as c_int as isize) as usize]
                     .script_ctx;
             }
             (*buf).b_p_cpt = xstrdup(p_cpt.get());
-            (*buf).b_p_script_ctx[kBufOptComplete as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptComplete as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptComplete as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptComplete as c_int as isize) as usize]
                 .script_ctx;
             set_buflocal_cpt_callbacks(buf);
             (*buf).b_p_cfu = xstrdup(p_cfu.get());
-            (*buf).b_p_script_ctx[kBufOptCompletefunc as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptCompletefunc as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptCompletefunc as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCompletefunc as c_int as isize) as usize]
                 .script_ctx;
             set_buflocal_cfu_callback(buf);
             (*buf).b_p_ofu = xstrdup(p_ofu.get());
-            (*buf).b_p_script_ctx[kBufOptOmnifunc as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptOmnifunc as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptOmnifunc as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptOmnifunc as c_int as isize) as usize]
                 .script_ctx;
             set_buflocal_ofu_callback(buf);
             (*buf).b_p_tfu = xstrdup(p_tfu.get());
-            (*buf).b_p_script_ctx[kBufOptTagfunc as ::core::ffi::c_int as usize] = (*options.ptr())
+            (*buf).b_p_script_ctx[kBufOptTagfunc as c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptTagfunc as ::core::ffi::c_int as isize)
-                    as usize]
+                    .offset(kBufOptTagfunc as c_int as isize) as usize]
                 .script_ctx;
             set_buflocal_tfu_callback(buf);
             (*buf).b_p_sts = p_sts.get();
-            (*buf).b_p_script_ctx[kBufOptSofttabstop as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptSofttabstop as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptSofttabstop as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSofttabstop as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_sts_nopaste = p_sts_nopaste.get();
             (*buf).b_p_vsts = xstrdup(p_vsts.get());
-            (*buf).b_p_script_ctx[kBufOptVarsofttabstop as ::core::ffi::c_int as usize] =
-                (*options.ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptVarsofttabstop as ::core::ffi::c_int as isize)
-                    as usize]
-                    .script_ctx;
+            (*buf).b_p_script_ctx[kBufOptVarsofttabstop as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptVarsofttabstop as c_int as isize) as usize]
+                .script_ctx;
             if !(*p_vsts.ptr()).is_null()
-                && p_vsts.get() != empty_string_option.ptr() as *mut ::core::ffi::c_char
+                && p_vsts.get() != empty_string_option.ptr() as *mut c_char
             {
                 tabstop_set(p_vsts.get(), &raw mut (*buf).b_p_vsts_array);
             } else {
@@ -7520,233 +5852,202 @@ pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core
             (*buf).b_p_vsts_nopaste = if !(*p_vsts_nopaste.ptr()).is_null() {
                 xstrdup(p_vsts_nopaste.get())
             } else {
-                ::core::ptr::null_mut::<::core::ffi::c_char>()
+                ::core::ptr::null_mut::<c_char>()
             };
             (*buf).b_p_com = xstrdup(p_com.get());
-            (*buf).b_p_script_ctx[kBufOptComments as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptComments as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptComments as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptComments as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_cms = xstrdup(p_cms.get());
-            (*buf).b_p_script_ctx[kBufOptCommentstring as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptCommentstring as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptCommentstring as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCommentstring as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_fo = xstrdup(p_fo.get());
-            (*buf).b_p_script_ctx[kBufOptFormatoptions as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptFormatoptions as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptFormatoptions as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptFormatoptions as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_flp = xstrdup(p_flp.get());
-            (*buf).b_p_script_ctx[kBufOptFormatlistpat as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptFormatlistpat as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptFormatlistpat as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptFormatlistpat as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_nf = xstrdup(p_nf.get());
-            (*buf).b_p_script_ctx[kBufOptNrformats as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptNrformats as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptNrformats as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptNrformats as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_mps = xstrdup(p_mps.get());
-            (*buf).b_p_script_ctx[kBufOptMatchpairs as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptMatchpairs as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptMatchpairs as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptMatchpairs as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_si = p_si.get();
-            (*buf).b_p_script_ctx[kBufOptSmartindent as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptSmartindent as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptSmartindent as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSmartindent as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_channel = 0 as OptInt;
             (*buf).b_p_ci = p_ci.get();
-            (*buf).b_p_script_ctx[kBufOptCopyindent as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptCopyindent as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptCopyindent as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCopyindent as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_cin = p_cin.get();
-            (*buf).b_p_script_ctx[kBufOptCindent as ::core::ffi::c_int as usize] = (*options.ptr())
+            (*buf).b_p_script_ctx[kBufOptCindent as c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptCindent as ::core::ffi::c_int as isize)
-                    as usize]
+                    .offset(kBufOptCindent as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_cink = xstrdup(p_cink.get());
-            (*buf).b_p_script_ctx[kBufOptCinkeys as ::core::ffi::c_int as usize] = (*options.ptr())
+            (*buf).b_p_script_ctx[kBufOptCinkeys as c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptCinkeys as ::core::ffi::c_int as isize)
-                    as usize]
+                    .offset(kBufOptCinkeys as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_cino = xstrdup(p_cino.get());
-            (*buf).b_p_script_ctx[kBufOptCinoptions as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptCinoptions as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptCinoptions as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCinoptions as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_cinsd = xstrdup(p_cinsd.get());
-            (*buf).b_p_script_ctx[kBufOptCinscopedecls as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptCinscopedecls as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptCinscopedecls as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCinscopedecls as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_lop = xstrdup(p_lop.get());
-            (*buf).b_p_script_ctx[kBufOptLispoptions as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptLispoptions as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptLispoptions as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptLispoptions as c_int as isize) as usize]
                 .script_ctx;
-            (*buf).b_p_ft = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_ft = empty_string_option.ptr() as *mut c_char;
             (*buf).b_p_pi = p_pi.get();
-            (*buf).b_p_script_ctx[kBufOptPreserveindent as ::core::ffi::c_int as usize] =
-                (*options.ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptPreserveindent as ::core::ffi::c_int as isize)
-                    as usize]
-                    .script_ctx;
+            (*buf).b_p_script_ctx[kBufOptPreserveindent as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptPreserveindent as c_int as isize) as usize]
+                .script_ctx;
             (*buf).b_p_cinw = xstrdup(p_cinw.get());
-            (*buf).b_p_script_ctx[kBufOptCinwords as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptCinwords as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptCinwords as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptCinwords as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_lisp = p_lisp.get();
-            (*buf).b_p_script_ctx[kBufOptLisp as ::core::ffi::c_int as usize] = (*options.ptr())
-                [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptLisp as ::core::ffi::c_int as isize) as usize]
+            (*buf).b_p_script_ctx[kBufOptLisp as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex).offset(kBufOptLisp as c_int as isize)
+                    as usize]
                 .script_ctx;
-            (*buf).b_p_syn = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_syn = empty_string_option.ptr() as *mut c_char;
             (*buf).b_p_smc = p_smc.get();
-            (*buf).b_p_script_ctx[kBufOptSynmaxcol as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptSynmaxcol as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptSynmaxcol as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSynmaxcol as c_int as isize) as usize]
                 .script_ctx;
-            (*buf).b_s.b_syn_isk = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_s.b_syn_isk = empty_string_option.ptr() as *mut c_char;
             (*buf).b_s.b_p_spc = xstrdup(p_spc.get());
-            (*buf).b_p_script_ctx[kBufOptSpellcapcheck as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptSpellcapcheck as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptSpellcapcheck as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSpellcapcheck as c_int as isize) as usize]
                 .script_ctx;
             compile_cap_prog(&raw mut (*buf).b_s);
             (*buf).b_s.b_p_spf = xstrdup(p_spf.get());
-            (*buf).b_p_script_ctx[kBufOptSpellfile as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptSpellfile as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptSpellfile as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSpellfile as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_s.b_p_spl = xstrdup(p_spl.get());
-            (*buf).b_p_script_ctx[kBufOptSpelllang as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptSpelllang as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptSpelllang as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSpelllang as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_s.b_p_spo = xstrdup(p_spo.get());
-            (*buf).b_p_script_ctx[kBufOptSpelloptions as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptSpelloptions as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptSpelloptions as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSpelloptions as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_s.b_p_spo_flags = spo_flags.get();
             (*buf).b_p_inde = xstrdup(p_inde.get());
-            (*buf).b_p_script_ctx[kBufOptIndentexpr as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptIndentexpr as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptIndentexpr as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptIndentexpr as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_indk = xstrdup(p_indk.get());
-            (*buf).b_p_script_ctx[kBufOptIndentkeys as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptIndentkeys as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptIndentkeys as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptIndentkeys as c_int as isize) as usize]
                 .script_ctx;
-            (*buf).b_p_fp = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_fp = empty_string_option.ptr() as *mut c_char;
             (*buf).b_p_fex = xstrdup(p_fex.get());
-            (*buf).b_p_script_ctx[kBufOptFormatexpr as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptFormatexpr as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptFormatexpr as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptFormatexpr as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_sua = xstrdup(p_sua.get());
-            (*buf).b_p_script_ctx[kBufOptSuffixesadd as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptSuffixesadd as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptSuffixesadd as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptSuffixesadd as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_keymap = xstrdup(p_keymap.get());
-            (*buf).b_p_script_ctx[kBufOptKeymap as ::core::ffi::c_int as usize] = (*options.ptr())
+            (*buf).b_p_script_ctx[kBufOptKeymap as c_int as usize] = (*options.ptr())
                 [*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptKeymap as ::core::ffi::c_int as isize)
-                    as usize]
+                    .offset(kBufOptKeymap as c_int as isize) as usize]
                 .script_ctx;
-            (*buf).b_kmap_state =
-                ((*buf).b_kmap_state as ::core::ffi::c_int | KEYMAP_INIT) as int16_t;
+            (*buf).b_kmap_state = ((*buf).b_kmap_state as c_int | KEYMAP_INIT) as int16_t;
             (*buf).b_p_iminsert = p_iminsert.get();
-            (*buf).b_p_script_ctx[kBufOptIminsert as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptIminsert as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptIminsert as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptIminsert as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_imsearch = p_imsearch.get();
-            (*buf).b_p_script_ctx[kBufOptImsearch as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptImsearch as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptImsearch as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptImsearch as c_int as isize) as usize]
                 .script_ctx;
-            (*buf).b_p_ac = -1 as ::core::ffi::c_int;
-            (*buf).b_p_ar = -1 as ::core::ffi::c_int;
-            (*buf).b_p_fs = -1 as ::core::ffi::c_int;
+            (*buf).b_p_ac = -1 as c_int;
+            (*buf).b_p_ar = -1 as c_int;
+            (*buf).b_p_fs = -1 as c_int;
             (*buf).b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
-            (*buf).b_p_bkc = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_bkc_flags = 0 as ::core::ffi::c_uint;
-            (*buf).b_p_gefm = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_gp = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_mp = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_efm = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_ep = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_ffu = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_kp = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_path = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_tags = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_tc = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_tc_flags = 0 as ::core::ffi::c_uint;
-            (*buf).b_p_def = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_inc = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_bkc = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_bkc_flags = 0 as c_uint;
+            (*buf).b_p_gefm = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_gp = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_mp = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_efm = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_ep = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_ffu = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_kp = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_path = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_tags = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_tc = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_tc_flags = 0 as c_uint;
+            (*buf).b_p_def = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_inc = empty_string_option.ptr() as *mut c_char;
             (*buf).b_p_inex = xstrdup(p_inex.get());
-            (*buf).b_p_script_ctx[kBufOptIncludeexpr as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptIncludeexpr as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptIncludeexpr as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptIncludeexpr as c_int as isize) as usize]
                 .script_ctx;
-            (*buf).b_p_cot = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_cot_flags = 0 as ::core::ffi::c_uint;
-            (*buf).b_p_dict = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_dia = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_tsr = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_tsrfu = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_cot = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_cot_flags = 0 as c_uint;
+            (*buf).b_p_dict = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_dia = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_tsr = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_tsrfu = empty_string_option.ptr() as *mut c_char;
             (*buf).b_p_qe = xstrdup(p_qe.get());
-            (*buf).b_p_script_ctx[kBufOptQuoteescape as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptQuoteescape as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptQuoteescape as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptQuoteescape as c_int as isize) as usize]
                 .script_ctx;
             (*buf).b_p_udf = p_udf.get();
-            (*buf).b_p_script_ctx[kBufOptUndofile as ::core::ffi::c_int as usize] = (*options
-                .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                .offset(kBufOptUndofile as ::core::ffi::c_int as isize)
-                as usize]
+            (*buf).b_p_script_ctx[kBufOptUndofile as c_int as usize] = (*options.ptr())
+                [*(&raw const buf_opt_idx as *const OptIndex)
+                    .offset(kBufOptUndofile as c_int as isize) as usize]
                 .script_ctx;
-            (*buf).b_p_lw = empty_string_option.ptr() as *mut ::core::ffi::c_char;
-            (*buf).b_p_menc = empty_string_option.ptr() as *mut ::core::ffi::c_char;
+            (*buf).b_p_lw = empty_string_option.ptr() as *mut c_char;
+            (*buf).b_p_menc = empty_string_option.ptr() as *mut c_char;
             if dont_do_help {
                 (*buf).b_p_isk = save_p_isk;
                 if !(*p_vts.ptr()).is_null()
-                    && *p_vts.get() as ::core::ffi::c_int != NUL
+                    && *p_vts.get() as c_int != NUL
                     && (*buf).b_p_vts_array.is_null()
                 {
                     tabstop_set(p_vts.get(), &raw mut (*buf).b_p_vts_array);
@@ -7755,26 +6056,23 @@ pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core
                 }
             } else {
                 (*buf).b_p_isk = xstrdup(p_isk.get());
-                (*buf).b_p_script_ctx[kBufOptIskeyword as ::core::ffi::c_int as usize] = (*options
-                    .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptIskeyword as ::core::ffi::c_int as isize)
-                    as usize]
+                (*buf).b_p_script_ctx[kBufOptIskeyword as c_int as usize] = (*options.ptr())
+                    [*(&raw const buf_opt_idx as *const OptIndex)
+                        .offset(kBufOptIskeyword as c_int as isize) as usize]
                     .script_ctx;
                 did_isk = true_0 != 0;
                 (*buf).b_p_ts = p_ts.get();
-                (*buf).b_p_script_ctx[kBufOptTabstop as ::core::ffi::c_int as usize] = (*options
-                    .ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                    .offset(kBufOptTabstop as ::core::ffi::c_int as isize)
-                    as usize]
+                (*buf).b_p_script_ctx[kBufOptTabstop as c_int as usize] = (*options.ptr())
+                    [*(&raw const buf_opt_idx as *const OptIndex)
+                        .offset(kBufOptTabstop as c_int as isize) as usize]
                     .script_ctx;
                 (*buf).b_p_vts = xstrdup(p_vts.get());
-                (*buf).b_p_script_ctx[kBufOptVartabstop as ::core::ffi::c_int as usize] =
-                    (*options.ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                        .offset(kBufOptVartabstop as ::core::ffi::c_int as isize)
-                        as usize]
-                        .script_ctx;
+                (*buf).b_p_script_ctx[kBufOptVartabstop as c_int as usize] = (*options.ptr())
+                    [*(&raw const buf_opt_idx as *const OptIndex)
+                        .offset(kBufOptVartabstop as c_int as isize) as usize]
+                    .script_ctx;
                 if !(*p_vts.ptr()).is_null()
-                    && *p_vts.get() as ::core::ffi::c_int != NUL
+                    && *p_vts.get() as c_int != NUL
                     && (*buf).b_p_vts_array.is_null()
                 {
                     tabstop_set(p_vts.get(), &raw mut (*buf).b_p_vts_array);
@@ -7782,17 +6080,14 @@ pub unsafe extern "C" fn buf_copy_options(mut buf: *mut buf_T, mut flags: ::core
                     (*buf).b_p_vts_array = ::core::ptr::null_mut::<colnr_T>();
                 }
                 (*buf).b_help = false_0 != 0;
-                if *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'h' as ::core::ffi::c_int
-                {
+                if *(*buf).b_p_bt.offset(0 as c_int as isize) as c_int == 'h' as c_int {
                     clear_string_option(&raw mut (*buf).b_p_bt);
                 }
                 (*buf).b_p_ma = p_ma.get();
-                (*buf).b_p_script_ctx[kBufOptModifiable as ::core::ffi::c_int as usize] =
-                    (*options.ptr())[*(&raw const buf_opt_idx as *const OptIndex)
-                        .offset(kBufOptModifiable as ::core::ffi::c_int as isize)
-                        as usize]
-                        .script_ctx;
+                (*buf).b_p_script_ctx[kBufOptModifiable as c_int as usize] = (*options.ptr())
+                    [*(&raw const buf_opt_idx as *const OptIndex)
+                        .offset(kBufOptModifiable as c_int as isize) as usize]
+                    .script_ctx;
             }
         }
         if should_copy {
@@ -7822,177 +6117,141 @@ pub unsafe extern "C" fn set_imsearch_global(mut buf: *mut buf_T) {
     p_imsearch.set((*buf).b_p_imsearch);
 }
 static expand_option_idx: GlobalCell<OptIndex> = GlobalCell::new(kOptInvalid);
-static expand_option_start_col: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
-static expand_option_name: GlobalCell<[::core::ffi::c_char; 5]> = GlobalCell::new([
-    't' as ::core::ffi::c_char,
-    '_' as ::core::ffi::c_char,
-    NUL as ::core::ffi::c_char,
-    NUL as ::core::ffi::c_char,
-    NUL as ::core::ffi::c_char,
+static expand_option_start_col: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+static expand_option_name: GlobalCell<[c_char; 5]> = GlobalCell::new([
+    't' as c_char,
+    '_' as c_char,
+    NUL as c_char,
+    NUL as c_char,
+    NUL as c_char,
 ]);
-static expand_option_flags: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
+static expand_option_flags: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static expand_option_append: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub unsafe extern "C" fn set_context_in_set_cmd(
     mut xp: *mut expand_T,
-    mut arg: *mut ::core::ffi::c_char,
-    mut opt_flags: ::core::ffi::c_int,
+    mut arg: *mut c_char,
+    mut opt_flags: c_int,
 ) {
     expand_option_flags.set(opt_flags);
-    (*xp).xp_context = EXPAND_SETTINGS as ::core::ffi::c_int;
-    if *arg as ::core::ffi::c_int == NUL {
+    (*xp).xp_context = EXPAND_SETTINGS as c_int;
+    if *arg as c_int == NUL {
         (*xp).xp_pattern = arg;
         return;
     }
-    let argend: *mut ::core::ffi::c_char = arg.offset(strlen(arg) as isize);
-    let mut p: *mut ::core::ffi::c_char = argend.offset(-(1 as ::core::ffi::c_int as isize));
-    if *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-        && *p.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
-            != '\\' as ::core::ffi::c_int
-    {
-        (*xp).xp_pattern = p.offset(1 as ::core::ffi::c_int as isize);
+    let argend: *mut c_char = arg.offset(strlen(arg) as isize);
+    let mut p: *mut c_char = argend.offset(-(1 as c_int as isize));
+    if *p as c_int == ' ' as c_int && *p.offset(-(1 as c_int as isize)) as c_int != '\\' as c_int {
+        (*xp).xp_pattern = p.offset(1 as c_int as isize);
         return;
     }
     while p > arg {
-        let mut s: *mut ::core::ffi::c_char = p;
-        if *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-            || *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-        {
-            while s > arg
-                && *s.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
-                    == '\\' as ::core::ffi::c_int
-            {
+        let mut s: *mut c_char = p;
+        if *p as c_int == ' ' as c_int || *p as c_int == ',' as c_int {
+            while s > arg && *s.offset(-(1 as c_int as isize)) as c_int == '\\' as c_int {
                 s = s.offset(-1);
             }
         }
-        if *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-            && p.offset_from(s) & 1 as isize == 0 as isize
-        {
+        if *p as c_int == ' ' as c_int && p.offset_from(s) & 1 as isize == 0 as isize {
             p = p.offset(1);
             break;
         } else {
             p = p.offset(-1);
         }
     }
-    if strncmp(
-        p,
-        b"no\0".as_ptr() as *const ::core::ffi::c_char,
-        2 as size_t,
-    ) == 0 as ::core::ffi::c_int
-    {
-        (*xp).xp_context = EXPAND_BOOL_SETTINGS as ::core::ffi::c_int;
+    if strncmp(p, b"no\0".as_ptr() as *const c_char, 2 as size_t) == 0 as c_int {
+        (*xp).xp_context = EXPAND_BOOL_SETTINGS as c_int;
         (*xp).xp_prefix = XP_PREFIX_NO;
-        p = p.offset(2 as ::core::ffi::c_int as isize);
-    } else if strncmp(
-        p,
-        b"inv\0".as_ptr() as *const ::core::ffi::c_char,
-        3 as size_t,
-    ) == 0 as ::core::ffi::c_int
-    {
-        (*xp).xp_context = EXPAND_BOOL_SETTINGS as ::core::ffi::c_int;
+        p = p.offset(2 as c_int as isize);
+    } else if strncmp(p, b"inv\0".as_ptr() as *const c_char, 3 as size_t) == 0 as c_int {
+        (*xp).xp_context = EXPAND_BOOL_SETTINGS as c_int;
         (*xp).xp_prefix = XP_PREFIX_INV;
-        p = p.offset(3 as ::core::ffi::c_int as isize);
+        p = p.offset(3 as c_int as isize);
     }
     (*xp).xp_pattern = p;
     arg = p;
-    let mut nextchar: ::core::ffi::c_char = 0;
+    let mut nextchar: c_char = 0;
     let mut flags: uint32_t = 0 as uint32_t;
     let mut opt_idx: OptIndex = kOptAleph;
     let mut is_term_option: bool = false_0 != 0;
-    if *arg as ::core::ffi::c_int == '<' as ::core::ffi::c_int {
-        while *p as ::core::ffi::c_int != '>' as ::core::ffi::c_int {
+    if *arg as c_int == '<' as c_int {
+        while *p as c_int != '>' as c_int {
             let c2rust_fresh10 = p;
             p = p.offset(1);
-            if *c2rust_fresh10 as ::core::ffi::c_int == NUL {
+            if *c2rust_fresh10 as c_int == NUL {
                 return;
             }
         }
-        let mut key: ::core::ffi::c_int =
-            get_special_key_code(arg.offset(1 as ::core::ffi::c_int as isize));
-        if key == 0 as ::core::ffi::c_int {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+        let mut key: c_int = get_special_key_code(arg.offset(1 as c_int as isize));
+        if key == 0 as c_int {
+            (*xp).xp_context = EXPAND_NOTHING as c_int;
             return;
         }
         p = p.offset(1);
         nextchar = *p;
         is_term_option = true_0 != 0;
-        (*expand_option_name.ptr())[2 as ::core::ffi::c_int as usize] =
-            (-key & 0xff as ::core::ffi::c_int) as uint8_t as ::core::ffi::c_char;
-        (*expand_option_name.ptr())[3 as ::core::ffi::c_int as usize] =
-            (-key as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint)
-                as uint8_t as ::core::ffi::c_char;
-    } else if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == 't' as ::core::ffi::c_int
-        && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '_' as ::core::ffi::c_int
+        (*expand_option_name.ptr())[2 as c_int as usize] =
+            (-key & 0xff as c_int) as uint8_t as c_char;
+        (*expand_option_name.ptr())[3 as c_int as usize] =
+            (-key as c_uint >> 8 as c_int & 0xff as c_uint) as uint8_t as c_char;
+    } else if *p.offset(0 as c_int as isize) as c_int == 't' as c_int
+        && *p.offset(1 as c_int as isize) as c_int == '_' as c_int
     {
-        p = p.offset(2 as ::core::ffi::c_int as isize);
-        if *p as ::core::ffi::c_int != NUL {
+        p = p.offset(2 as c_int as isize);
+        if *p as c_int != NUL {
             p = p.offset(1);
         }
-        if *p as ::core::ffi::c_int == NUL {
+        if *p as c_int == NUL {
             return;
         }
         p = p.offset(1);
         nextchar = *p;
         is_term_option = true_0 != 0;
-        (*expand_option_name.ptr())[2 as ::core::ffi::c_int as usize] =
-            *p.offset(-2 as ::core::ffi::c_int as isize);
-        (*expand_option_name.ptr())[3 as ::core::ffi::c_int as usize] =
-            *p.offset(-1 as ::core::ffi::c_int as isize);
+        (*expand_option_name.ptr())[2 as c_int as usize] = *p.offset(-2 as c_int as isize);
+        (*expand_option_name.ptr())[3 as c_int as usize] = *p.offset(-1 as c_int as isize);
     } else {
-        while *p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-            && *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-            || *p as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                && *p as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-            || ascii_isdigit(*p as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-            || *p as ::core::ffi::c_int == '_' as ::core::ffi::c_int
-            || *p as ::core::ffi::c_int == '*' as ::core::ffi::c_int
+        while *p as c_uint >= 'A' as c_uint && *p as c_uint <= 'Z' as c_uint
+            || *p as c_uint >= 'a' as c_uint && *p as c_uint <= 'z' as c_uint
+            || ascii_isdigit(*p as c_int) as c_int != 0
+            || *p as c_int == '_' as c_int
+            || *p as c_int == '*' as c_int
         {
             p = p.offset(1);
         }
-        if *p as ::core::ffi::c_int == NUL {
+        if *p as c_int == NUL {
             return;
         }
         nextchar = *p;
         opt_idx = find_option_len(arg, p.offset_from(arg) as size_t);
-        if opt_idx as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int
-            || is_option_hidden(opt_idx) as ::core::ffi::c_int != 0
-        {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+        if opt_idx as c_int == kOptInvalid as c_int || is_option_hidden(opt_idx) as c_int != 0 {
+            (*xp).xp_context = EXPAND_NOTHING as c_int;
             return;
         }
         flags = (*options.ptr())[opt_idx as usize].flags;
         if option_has_type(opt_idx, kOptValTypeBoolean) {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_NOTHING as c_int;
             return;
         }
     }
     expand_option_append.set(false_0 != 0);
     let mut expand_option_subtract: bool = false_0 != 0;
-    if (nextchar as ::core::ffi::c_int == '-' as ::core::ffi::c_int
-        || nextchar as ::core::ffi::c_int == '+' as ::core::ffi::c_int
-        || nextchar as ::core::ffi::c_int == '^' as ::core::ffi::c_int)
-        && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '=' as ::core::ffi::c_int
+    if (nextchar as c_int == '-' as c_int
+        || nextchar as c_int == '+' as c_int
+        || nextchar as c_int == '^' as c_int)
+        && *p.offset(1 as c_int as isize) as c_int == '=' as c_int
     {
-        if nextchar as ::core::ffi::c_int == '-' as ::core::ffi::c_int {
+        if nextchar as c_int == '-' as c_int {
             expand_option_subtract = true_0 != 0;
         }
-        if nextchar as ::core::ffi::c_int == '+' as ::core::ffi::c_int
-            || nextchar as ::core::ffi::c_int == '^' as ::core::ffi::c_int
-        {
+        if nextchar as c_int == '+' as c_int || nextchar as c_int == '^' as c_int {
             expand_option_append.set(true_0 != 0);
         }
         p = p.offset(1);
-        nextchar = '=' as ::core::ffi::c_char;
+        nextchar = '=' as c_char;
     }
-    if nextchar as ::core::ffi::c_int != '=' as ::core::ffi::c_int
-        && nextchar as ::core::ffi::c_int != ':' as ::core::ffi::c_int
-        || (*xp).xp_context == EXPAND_BOOL_SETTINGS as ::core::ffi::c_int
+    if nextchar as c_int != '=' as c_int && nextchar as c_int != ':' as c_int
+        || (*xp).xp_context == EXPAND_BOOL_SETTINGS as c_int
     {
-        (*xp).xp_context = EXPAND_UNSUCCESSFUL as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_UNSUCCESSFUL as c_int;
         return;
     }
     if is_term_option {
@@ -8000,135 +6259,126 @@ pub unsafe extern "C" fn set_context_in_set_cmd(
     } else {
         expand_option_idx.set(opt_idx);
     }
-    (*xp).xp_pattern = p.offset(1 as ::core::ffi::c_int as isize);
-    expand_option_start_col.set(
-        p.offset(1 as ::core::ffi::c_int as isize)
-            .offset_from((*xp).xp_line) as ::core::ffi::c_int,
-    );
-    if (*options.ptr())[opt_idx as usize].var == p_syn.ptr() as *mut ::core::ffi::c_void {
-        (*xp).xp_context = EXPAND_OWNSYNTAX as ::core::ffi::c_int;
+    (*xp).xp_pattern = p.offset(1 as c_int as isize);
+    expand_option_start_col.set(p.offset(1 as c_int as isize).offset_from((*xp).xp_line) as c_int);
+    if (*options.ptr())[opt_idx as usize].var == p_syn.ptr() as *mut c_void {
+        (*xp).xp_context = EXPAND_OWNSYNTAX as c_int;
         return;
     }
-    if (*options.ptr())[opt_idx as usize].var == p_ft.ptr() as *mut ::core::ffi::c_void {
-        (*xp).xp_context = EXPAND_FILETYPE as ::core::ffi::c_int;
+    if (*options.ptr())[opt_idx as usize].var == p_ft.ptr() as *mut c_void {
+        (*xp).xp_context = EXPAND_FILETYPE as c_int;
         return;
     }
-    if (*options.ptr())[opt_idx as usize].var == p_keymap.ptr() as *mut ::core::ffi::c_void {
-        (*xp).xp_context = EXPAND_KEYMAP as ::core::ffi::c_int;
+    if (*options.ptr())[opt_idx as usize].var == p_keymap.ptr() as *mut c_void {
+        (*xp).xp_context = EXPAND_KEYMAP as c_int;
         return;
     }
     if expand_option_subtract {
-        (*xp).xp_context = EXPAND_SETTING_SUBTRACT as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_SETTING_SUBTRACT as c_int;
         return;
-    } else if expand_option_idx.get() as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int
+    } else if expand_option_idx.get() as c_int != kOptInvalid as c_int
         && (*options.ptr())[expand_option_idx.get() as usize]
             .opt_expand_cb
             .is_some()
     {
-        (*xp).xp_context = EXPAND_STRING_SETTING as ::core::ffi::c_int;
-    } else if *(*xp).xp_pattern as ::core::ffi::c_int == NUL {
-        (*xp).xp_context = EXPAND_OLD_SETTING as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_STRING_SETTING as c_int;
+    } else if *(*xp).xp_pattern as c_int == NUL {
+        (*xp).xp_context = EXPAND_OLD_SETTING as c_int;
         return;
     } else {
-        (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
+        (*xp).xp_context = EXPAND_NOTHING as c_int;
     }
-    if is_term_option as ::core::ffi::c_int != 0
-        || option_has_type(opt_idx, kOptValTypeNumber) as ::core::ffi::c_int != 0
-    {
+    if is_term_option as c_int != 0 || option_has_type(opt_idx, kOptValTypeNumber) as c_int != 0 {
         return;
     }
-    if flags & kOptFlagExpand as ::core::ffi::c_int as uint32_t != 0 {
-        p = (*options.ptr())[opt_idx as usize].var as *mut ::core::ffi::c_char;
-        if p == p_bdir.ptr() as *mut ::core::ffi::c_char
-            || p == p_dir.ptr() as *mut ::core::ffi::c_char
-            || p == p_path.ptr() as *mut ::core::ffi::c_char
-            || p == p_pp.ptr() as *mut ::core::ffi::c_char
-            || p == p_rtp.ptr() as *mut ::core::ffi::c_char
-            || p == p_cdpath.ptr() as *mut ::core::ffi::c_char
-            || p == p_vdir.ptr() as *mut ::core::ffi::c_char
+    if flags & kOptFlagExpand as c_int as uint32_t != 0 {
+        p = (*options.ptr())[opt_idx as usize].var as *mut c_char;
+        if p == p_bdir.ptr() as *mut c_char
+            || p == p_dir.ptr() as *mut c_char
+            || p == p_path.ptr() as *mut c_char
+            || p == p_pp.ptr() as *mut c_char
+            || p == p_rtp.ptr() as *mut c_char
+            || p == p_cdpath.ptr() as *mut c_char
+            || p == p_vdir.ptr() as *mut c_char
         {
-            (*xp).xp_context = EXPAND_DIRECTORIES as ::core::ffi::c_int;
-            if p == p_path.ptr() as *mut ::core::ffi::c_char
-                || p == p_cdpath.ptr() as *mut ::core::ffi::c_char
-            {
-                (*xp).xp_backslash = XP_BS_THREE as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_DIRECTORIES as c_int;
+            if p == p_path.ptr() as *mut c_char || p == p_cdpath.ptr() as *mut c_char {
+                (*xp).xp_backslash = XP_BS_THREE as c_int;
             } else {
-                (*xp).xp_backslash = XP_BS_ONE as ::core::ffi::c_int;
+                (*xp).xp_backslash = XP_BS_ONE as c_int;
             }
         } else {
-            (*xp).xp_context = EXPAND_FILES as ::core::ffi::c_int;
-            if p == p_tags.ptr() as *mut ::core::ffi::c_char {
-                (*xp).xp_backslash = XP_BS_THREE as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_FILES as c_int;
+            if p == p_tags.ptr() as *mut c_char {
+                (*xp).xp_backslash = XP_BS_THREE as c_int;
             } else {
-                (*xp).xp_backslash = XP_BS_ONE as ::core::ffi::c_int;
+                (*xp).xp_backslash = XP_BS_ONE as c_int;
             }
         }
-        if flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0 {
-            (*xp).xp_backslash |= XP_BS_COMMA as ::core::ffi::c_int;
+        if flags & kOptFlagComma as c_int as uint32_t != 0 {
+            (*xp).xp_backslash |= XP_BS_COMMA as c_int;
         }
     }
-    if flags & kOptFlagExpand as ::core::ffi::c_int as uint32_t != 0
-        || flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0
-        || flags & kOptFlagColon as ::core::ffi::c_int as uint32_t != 0
+    if flags & kOptFlagExpand as c_int as uint32_t != 0
+        || flags & kOptFlagComma as c_int as uint32_t != 0
+        || flags & kOptFlagColon as c_int as uint32_t != 0
     {
-        p = argend.offset(-(1 as ::core::ffi::c_int as isize));
+        p = argend.offset(-(1 as c_int as isize));
         while p > (*xp).xp_pattern {
-            if *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-                || *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-                || *p as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-                    && flags & kOptFlagColon as ::core::ffi::c_int as uint32_t != 0
+            if *p as c_int == ' ' as c_int
+                || *p as c_int == ',' as c_int
+                || *p as c_int == ':' as c_int && flags & kOptFlagColon as c_int as uint32_t != 0
             {
-                let mut s_0: *mut ::core::ffi::c_char = p;
+                let mut s_0: *mut c_char = p;
                 while s_0 > (*xp).xp_pattern
-                    && *s_0.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
-                        == '\\' as ::core::ffi::c_int
+                    && *s_0.offset(-(1 as c_int as isize)) as c_int == '\\' as c_int
                 {
                     s_0 = s_0.offset(-1);
                 }
-                if *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-                    && ((*xp).xp_backslash & XP_BS_THREE as ::core::ffi::c_int != 0
+                if *p as c_int == ' ' as c_int
+                    && ((*xp).xp_backslash & XP_BS_THREE as c_int != 0
                         && p.offset_from(s_0) < 3 as isize)
-                    || *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-                        && flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0
+                    || *p as c_int == ',' as c_int
+                        && flags & kOptFlagComma as c_int as uint32_t != 0
                         && p.offset_from(s_0) < 2 as isize
-                    || *p as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-                        && flags & kOptFlagColon as ::core::ffi::c_int as uint32_t != 0
+                    || *p as c_int == ':' as c_int
+                        && flags & kOptFlagColon as c_int as uint32_t != 0
                 {
-                    (*xp).xp_pattern = p.offset(1 as ::core::ffi::c_int as isize);
+                    (*xp).xp_pattern = p.offset(1 as c_int as isize);
                     break;
                 }
             }
             p = p.offset(-1);
         }
     }
-    if flags & kOptFlagFlagList as ::core::ffi::c_int as uint32_t != 0 {
+    if flags & kOptFlagFlagList as c_int as uint32_t != 0 {
         (*xp).xp_pattern = argend;
     }
-    if (*options.ptr())[opt_idx as usize].var == p_sps.ptr() as *mut ::core::ffi::c_void {
+    if (*options.ptr())[opt_idx as usize].var == p_sps.ptr() as *mut c_void {
         if strncmp(
             (*xp).xp_pattern,
-            b"file:\0".as_ptr() as *const ::core::ffi::c_char,
+            b"file:\0".as_ptr() as *const c_char,
             5 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        ) == 0 as c_int
         {
-            (*xp).xp_pattern = (*xp).xp_pattern.offset(5 as ::core::ffi::c_int as isize);
+            (*xp).xp_pattern = (*xp).xp_pattern.offset(5 as c_int as isize);
             return;
         } else if (*options.ptr())[expand_option_idx.get() as usize]
             .opt_expand_cb
             .is_some()
         {
-            (*xp).xp_context = EXPAND_STRING_SETTING as ::core::ffi::c_int;
+            (*xp).xp_context = EXPAND_STRING_SETTING as c_int;
         }
     }
 }
 unsafe extern "C" fn match_str(
-    str: *mut ::core::ffi::c_char,
+    str: *mut c_char,
     regmatch: *mut regmatch_T,
-    matches: *mut *mut ::core::ffi::c_char,
-    idx: ::core::ffi::c_int,
+    matches: *mut *mut c_char,
+    idx: c_int,
     test_only: bool,
     fuzzy: bool,
-    fuzzystr: *const ::core::ffi::c_char,
+    fuzzystr: *const c_char,
     fuzmatch: *mut fuzmatch_str_T,
 ) -> bool {
     if !fuzzy {
@@ -8139,8 +6389,8 @@ unsafe extern "C" fn match_str(
             return true_0 != 0;
         }
     } else {
-        let score: ::core::ffi::c_int = fuzzy_match_str(str, fuzzystr);
-        if score != FUZZY_SCORE_NONE as ::core::ffi::c_int {
+        let score: c_int = fuzzy_match_str(str, fuzzystr);
+        if score != FUZZY_SCORE_NONE as c_int {
             if !test_only {
                 (*fuzmatch.offset(idx as isize)).idx = idx;
                 (*fuzmatch.offset(idx as isize)).str = xstrdup(str);
@@ -8154,45 +6404,43 @@ unsafe extern "C" fn match_str(
 pub unsafe extern "C" fn ExpandSettings(
     mut xp: *mut expand_T,
     mut regmatch: *mut regmatch_T,
-    mut fuzzystr: *mut ::core::ffi::c_char,
-    mut numMatches: *mut ::core::ffi::c_int,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
+    mut fuzzystr: *mut c_char,
+    mut numMatches: *mut c_int,
+    mut matches: *mut *mut *mut c_char,
     can_fuzzy: bool,
-) -> ::core::ffi::c_int {
-    let mut num_normal: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    static names: GlobalCell<[*mut ::core::ffi::c_char; 1]> = GlobalCell::new([b"all\0".as_ptr()
-        as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char]);
-    let mut ic: ::core::ffi::c_int = (*regmatch).rm_ic as ::core::ffi::c_int;
+) -> c_int {
+    let mut num_normal: c_int = 0 as c_int;
+    let mut count: c_int = 0 as c_int;
+    static names: GlobalCell<[*mut c_char; 1]> =
+        GlobalCell::new([b"all\0".as_ptr() as *const c_char as *mut c_char]);
+    let mut ic: c_int = (*regmatch).rm_ic as c_int;
     let mut fuzmatch: *mut fuzmatch_str_T = ::core::ptr::null_mut::<fuzmatch_str_T>();
-    let fuzzy: bool = can_fuzzy as ::core::ffi::c_int != 0
-        && cmdline_fuzzy_complete(fuzzystr) as ::core::ffi::c_int != 0;
-    let mut loop_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while loop_0 <= 1 as ::core::ffi::c_int {
+    let fuzzy: bool = can_fuzzy as c_int != 0 && cmdline_fuzzy_complete(fuzzystr) as c_int != 0;
+    let mut loop_0: c_int = 0 as c_int;
+    while loop_0 <= 1 as c_int {
         (*regmatch).rm_ic = ic != 0;
-        if (*xp).xp_context != EXPAND_BOOL_SETTINGS as ::core::ffi::c_int {
-            let mut match_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+        if (*xp).xp_context != EXPAND_BOOL_SETTINGS as c_int {
+            let mut match_0: c_int = 0 as c_int;
             while match_0
-                < ::core::mem::size_of::<[*mut ::core::ffi::c_char; 1]>()
-                    .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
+                < ::core::mem::size_of::<[*mut c_char; 1]>()
+                    .wrapping_div(::core::mem::size_of::<*mut c_char>())
                     .wrapping_div(
-                        (::core::mem::size_of::<[*mut ::core::ffi::c_char; 1]>()
-                            .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                            == 0) as ::core::ffi::c_int as usize,
-                    ) as ::core::ffi::c_int
+                        (::core::mem::size_of::<[*mut c_char; 1]>()
+                            .wrapping_rem(::core::mem::size_of::<*mut c_char>())
+                            == 0) as c_int as usize,
+                    ) as c_int
             {
                 if match_str(
-                    (*names.ptr())[match_0 as usize] as *mut ::core::ffi::c_char,
+                    (*names.ptr())[match_0 as usize] as *mut c_char,
                     regmatch,
                     *matches,
                     count,
-                    loop_0 == 0 as ::core::ffi::c_int,
+                    loop_0 == 0 as c_int,
                     fuzzy,
                     fuzzystr,
                     fuzmatch,
                 ) {
-                    if loop_0 == 0 as ::core::ffi::c_int {
+                    if loop_0 == 0 as c_int {
                         num_normal += 1;
                     } else {
                         count += 1;
@@ -8201,12 +6449,12 @@ pub unsafe extern "C" fn ExpandSettings(
                 match_0 += 1;
             }
         }
-        let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let mut str: *mut c_char = ::core::ptr::null_mut::<c_char>();
         let mut opt_idx: OptIndex = kOptAleph;
-        while (opt_idx as ::core::ffi::c_int) < kOptCount {
+        while (opt_idx as c_int) < kOptCount {
             str = (*options.ptr())[opt_idx as usize].fullname;
             if !is_option_hidden(opt_idx) {
-                if !((*xp).xp_context == EXPAND_BOOL_SETTINGS as ::core::ffi::c_int
+                if !((*xp).xp_context == EXPAND_BOOL_SETTINGS as c_int
                     && !option_has_type(opt_idx, kOptValTypeBoolean))
                 {
                     if match_str(
@@ -8214,12 +6462,12 @@ pub unsafe extern "C" fn ExpandSettings(
                         regmatch,
                         *matches,
                         count,
-                        loop_0 == 0 as ::core::ffi::c_int,
+                        loop_0 == 0 as c_int,
                         fuzzy,
                         fuzzystr,
                         fuzmatch,
                     ) {
-                        if loop_0 == 0 as ::core::ffi::c_int {
+                        if loop_0 == 0 as c_int {
                             num_normal += 1;
                         } else {
                             count += 1;
@@ -8230,10 +6478,10 @@ pub unsafe extern "C" fn ExpandSettings(
                             regmatch,
                             (*options.ptr())[opt_idx as usize].shortname,
                             0 as colnr_T,
-                        ) as ::core::ffi::c_int
+                        ) as c_int
                             != 0
                     {
-                        if loop_0 == 0 as ::core::ffi::c_int {
+                        if loop_0 == 0 as c_int {
                             num_normal += 1;
                         } else {
                             let c2rust_fresh11 = count;
@@ -8247,17 +6495,16 @@ pub unsafe extern "C" fn ExpandSettings(
             }
             opt_idx += 1;
         }
-        if loop_0 == 0 as ::core::ffi::c_int {
-            if num_normal > 0 as ::core::ffi::c_int {
+        if loop_0 == 0 as c_int {
+            if num_normal > 0 as c_int {
                 *numMatches = num_normal;
             } else {
                 return OK;
             }
             if !fuzzy {
                 *matches = xmalloc(
-                    (*numMatches as size_t)
-                        .wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>()),
-                ) as *mut *mut ::core::ffi::c_char;
+                    (*numMatches as size_t).wrapping_mul(::core::mem::size_of::<*mut c_char>()),
+                ) as *mut *mut c_char;
             } else {
                 fuzmatch = xmalloc(
                     (*numMatches as size_t).wrapping_mul(::core::mem::size_of::<fuzmatch_str_T>()),
@@ -8271,46 +6518,41 @@ pub unsafe extern "C" fn ExpandSettings(
     }
     return OK;
 }
-unsafe extern "C" fn escape_option_str_cmdline(
-    mut var: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    let mut buf: *mut ::core::ffi::c_char = vim_strsave_escaped(var, escape_chars.get());
+unsafe extern "C" fn escape_option_str_cmdline(mut var: *mut c_char) -> *mut c_char {
+    let mut buf: *mut c_char = vim_strsave_escaped(var, escape_chars.get());
     return buf;
 }
 pub unsafe extern "C" fn ExpandOldSetting(
-    mut numMatches: *mut ::core::ffi::c_int,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut var: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    *numMatches = 0 as ::core::ffi::c_int;
-    *matches = xmalloc(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-        as *mut *mut ::core::ffi::c_char;
-    if expand_option_idx.get() as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
-        expand_option_idx.set(find_option(
-            expand_option_name.ptr() as *mut ::core::ffi::c_char
-        ));
+    mut numMatches: *mut c_int,
+    mut matches: *mut *mut *mut c_char,
+) -> c_int {
+    let mut var: *mut c_char = ::core::ptr::null_mut::<c_char>();
+    *numMatches = 0 as c_int;
+    *matches = xmalloc(::core::mem::size_of::<*mut c_char>()) as *mut *mut c_char;
+    if expand_option_idx.get() as c_int == kOptInvalid as c_int {
+        expand_option_idx.set(find_option(expand_option_name.ptr() as *mut c_char));
     }
-    if expand_option_idx.get() as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+    if expand_option_idx.get() as c_int != kOptInvalid as c_int {
         option_value2string(
             (options.ptr() as *mut vimoption_T).offset(expand_option_idx.get() as isize),
             expand_option_flags.get(),
         );
-        var = NameBuff.ptr() as *mut ::core::ffi::c_char;
+        var = NameBuff.ptr() as *mut c_char;
     } else {
-        var = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+        var = b"\0".as_ptr() as *const c_char as *mut c_char;
     }
-    let mut buf: *mut ::core::ffi::c_char = escape_option_str_cmdline(var);
-    *(*matches).offset(0 as ::core::ffi::c_int as isize) = buf;
-    *numMatches = 1 as ::core::ffi::c_int;
+    let mut buf: *mut c_char = escape_option_str_cmdline(var);
+    *(*matches).offset(0 as c_int as isize) = buf;
+    *numMatches = 1 as c_int;
     return OK;
 }
 pub unsafe extern "C" fn ExpandStringSetting(
     mut xp: *mut expand_T,
     mut regmatch: *mut regmatch_T,
-    mut numMatches: *mut ::core::ffi::c_int,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if expand_option_idx.get() as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int
+    mut numMatches: *mut c_int,
+    mut matches: *mut *mut *mut c_char,
+) -> c_int {
+    if expand_option_idx.get() as c_int == kOptInvalid as c_int
         || (*options.ptr())[expand_option_idx.get() as usize]
             .opt_expand_cb
             .is_none()
@@ -8321,92 +6563,86 @@ pub unsafe extern "C" fn ExpandStringSetting(
         oe_varp: get_varp_scope(
             (options.ptr() as *mut vimoption_T).offset(expand_option_idx.get() as isize),
             expand_option_flags.get(),
-        ) as *mut ::core::ffi::c_char,
+        ) as *mut c_char,
         oe_idx: expand_option_idx.get(),
-        oe_opt_value: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        oe_opt_value: ::core::ptr::null_mut::<c_char>(),
         oe_append: expand_option_append.get(),
         oe_include_orig_val: false,
         oe_regmatch: regmatch,
         oe_xp: xp,
         oe_set_arg: (*xp).xp_line.offset(expand_option_start_col.get() as isize),
     };
-    args.oe_include_orig_val =
-        !expand_option_append.get() && *args.oe_set_arg as ::core::ffi::c_int == NUL;
+    args.oe_include_orig_val = !expand_option_append.get() && *args.oe_set_arg as c_int == NUL;
     option_value2string(
         (options.ptr() as *mut vimoption_T).offset(expand_option_idx.get() as isize),
         expand_option_flags.get(),
     );
-    let mut var: *mut ::core::ffi::c_char = NameBuff.ptr() as *mut ::core::ffi::c_char;
-    let mut buf: *mut ::core::ffi::c_char = escape_option_str_cmdline(var);
+    let mut var: *mut c_char = NameBuff.ptr() as *mut c_char;
+    let mut buf: *mut c_char = escape_option_str_cmdline(var);
     args.oe_opt_value = buf;
-    let mut num_ret: ::core::ffi::c_int =
+    let mut num_ret: c_int =
         (*options.ptr())[expand_option_idx.get() as usize]
             .opt_expand_cb
             .expect("non-null function pointer")(&raw mut args, numMatches, matches);
-    xfree(buf as *mut ::core::ffi::c_void);
+    xfree(buf as *mut c_void);
     return num_ret;
 }
 pub unsafe extern "C" fn ExpandSettingSubtract(
     mut xp: *mut expand_T,
     mut regmatch: *mut regmatch_T,
-    mut numMatches: *mut ::core::ffi::c_int,
-    mut matches: *mut *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if expand_option_idx.get() as ::core::ffi::c_int == kOptInvalid as ::core::ffi::c_int {
+    mut numMatches: *mut c_int,
+    mut matches: *mut *mut *mut c_char,
+) -> c_int {
+    if expand_option_idx.get() as c_int == kOptInvalid as c_int {
         return ExpandOldSetting(numMatches, matches);
     }
-    let mut option_val: *mut ::core::ffi::c_char = *(get_option_varp_scope_from(
+    let mut option_val: *mut c_char = *(get_option_varp_scope_from(
         expand_option_idx.get(),
         expand_option_flags.get(),
         curbuf.get(),
         curwin.get(),
-    ) as *mut *mut ::core::ffi::c_char);
+    ) as *mut *mut c_char);
     let mut option_flags: uint32_t = (*options.ptr())[expand_option_idx.get() as usize].flags;
     if option_has_type(expand_option_idx.get(), kOptValTypeNumber) {
         return ExpandOldSetting(numMatches, matches);
-    } else if option_flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0 {
-        if *option_val as ::core::ffi::c_int == NUL {
+    } else if option_flags & kOptFlagComma as c_int as uint32_t != 0 {
+        if *option_val as c_int == NUL {
             return FAIL;
         }
-        let mut option_copy: *mut ::core::ffi::c_char = xstrdup(option_val);
-        let mut next_val: *mut ::core::ffi::c_char = option_copy;
+        let mut option_copy: *mut c_char = xstrdup(option_val);
+        let mut next_val: *mut c_char = option_copy;
         let mut ga: garray_T = garray_T {
             ga_len: 0,
             ga_maxlen: 0,
             ga_itemsize: 0,
             ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+            ga_data: ::core::ptr::null_mut::<c_void>(),
         };
         ga_init(
             &raw mut ga,
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-            10 as ::core::ffi::c_int,
+            ::core::mem::size_of::<*mut c_char>() as c_int,
+            10 as c_int,
         );
         loop {
-            let mut item: *mut ::core::ffi::c_char = next_val;
-            let mut comma: *mut ::core::ffi::c_char =
-                vim_strchr(next_val, ',' as ::core::ffi::c_int);
+            let mut item: *mut c_char = next_val;
+            let mut comma: *mut c_char = vim_strchr(next_val, ',' as c_int);
             while !comma.is_null()
                 && comma != next_val
-                && *comma.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
-                    == '\\' as ::core::ffi::c_int
+                && *comma.offset(-(1 as c_int as isize)) as c_int == '\\' as c_int
             {
-                comma = vim_strchr(
-                    comma.offset(1 as ::core::ffi::c_int as isize),
-                    ',' as ::core::ffi::c_int,
-                );
+                comma = vim_strchr(comma.offset(1 as c_int as isize), ',' as c_int);
             }
             if !comma.is_null() {
-                *comma = NUL as ::core::ffi::c_char;
-                next_val = comma.offset(1 as ::core::ffi::c_int as isize);
+                *comma = NUL as c_char;
+                next_val = comma.offset(1 as c_int as isize);
             } else {
-                next_val = ::core::ptr::null_mut::<::core::ffi::c_char>();
+                next_val = ::core::ptr::null_mut::<c_char>();
             }
-            if *item as ::core::ffi::c_int != NUL {
+            if *item as c_int != NUL {
                 if vim_regexec(regmatch, item, 0 as colnr_T) {
-                    let mut buf: *mut ::core::ffi::c_char = escape_option_str_cmdline(item);
-                    ga_grow(&raw mut ga, 1 as ::core::ffi::c_int);
-                    *(ga.ga_data as *mut *mut ::core::ffi::c_char).offset(ga.ga_len as isize) = buf;
+                    let mut buf: *mut c_char = escape_option_str_cmdline(item);
+                    ga_grow(&raw mut ga, 1 as c_int);
+                    *(ga.ga_data as *mut *mut c_char).offset(ga.ga_len as isize) = buf;
                     ga.ga_len += 1;
                 }
             }
@@ -8414,12 +6650,12 @@ pub unsafe extern "C" fn ExpandSettingSubtract(
                 break;
             }
         }
-        xfree(option_copy as *mut ::core::ffi::c_void);
-        *matches = ga.ga_data as *mut *mut ::core::ffi::c_char;
+        xfree(option_copy as *mut c_void);
+        *matches = ga.ga_data as *mut *mut c_char;
         *numMatches = ga.ga_len;
         return OK;
-    } else if option_flags & kOptFlagFlagList as ::core::ffi::c_int as uint32_t != 0 {
-        if *(*xp).xp_pattern as ::core::ffi::c_int != NUL {
+    } else if option_flags & kOptFlagFlagList as c_int as uint32_t != 0 {
+        if *(*xp).xp_pattern as c_int != NUL {
             return FAIL;
         }
         let mut num_flags: size_t = strlen(option_val);
@@ -8427,23 +6663,20 @@ pub unsafe extern "C" fn ExpandSettingSubtract(
             return FAIL;
         }
         *matches = xmalloc(
-            ::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                .wrapping_mul(num_flags.wrapping_add(1 as size_t)),
-        ) as *mut *mut ::core::ffi::c_char;
-        let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+            ::core::mem::size_of::<*mut c_char>().wrapping_mul(num_flags.wrapping_add(1 as size_t)),
+        ) as *mut *mut c_char;
+        let mut count: c_int = 0 as c_int;
         let c2rust_fresh12 = count;
         count = count + 1;
         let c2rust_lvalue_ptr = &raw mut *(*matches).offset(c2rust_fresh12 as isize);
-        *c2rust_lvalue_ptr = xmemdupz(option_val as *const ::core::ffi::c_void, num_flags)
-            as *mut ::core::ffi::c_char;
+        *c2rust_lvalue_ptr = xmemdupz(option_val as *const c_void, num_flags) as *mut c_char;
         if num_flags > 1 as size_t {
-            let mut flag: *mut ::core::ffi::c_char = option_val;
-            while *flag as ::core::ffi::c_int != NUL {
+            let mut flag: *mut c_char = option_val;
+            while *flag as c_int != NUL {
                 let c2rust_fresh13 = count;
                 count = count + 1;
                 let c2rust_lvalue_ptr_0 = &raw mut *(*matches).offset(c2rust_fresh13 as isize);
-                *c2rust_lvalue_ptr_0 = xmemdupz(flag as *const ::core::ffi::c_void, 1 as size_t)
-                    as *mut ::core::ffi::c_char;
+                *c2rust_lvalue_ptr_0 = xmemdupz(flag as *const c_void, 1 as size_t) as *mut c_char;
                 flag = flag.offset(1);
             }
         }
@@ -8452,20 +6685,16 @@ pub unsafe extern "C" fn ExpandSettingSubtract(
     }
     return ExpandOldSetting(numMatches, matches);
 }
-unsafe extern "C" fn option_value2string(
-    mut opt: *mut vimoption_T,
-    mut opt_flags: ::core::ffi::c_int,
-) {
-    let mut varp: *mut ::core::ffi::c_void = get_varp_scope(opt, opt_flags);
+unsafe extern "C" fn option_value2string(mut opt: *mut vimoption_T, mut opt_flags: c_int) {
+    let mut varp: *mut c_void = get_varp_scope(opt, opt_flags);
     '_c2rust_label: {
         if !varp.is_null() {
         } else {
             __assert_fail(
-                b"varp != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                6126 as ::core::ffi::c_uint,
-                b"void option_value2string(vimoption_T *, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                b"varp != NULL\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                6126 as c_uint,
+                b"void option_value2string(vimoption_T *, int)\0".as_ptr() as *const c_char,
             );
         }
     };
@@ -8473,185 +6702,146 @@ unsafe extern "C" fn option_value2string(
         let mut wc: OptInt = 0 as OptInt;
         if wc_use_keyname(varp, &raw mut wc) != 0 {
             xstrlcpy(
-                NameBuff.ptr() as *mut ::core::ffi::c_char,
-                get_special_key_name(wc as ::core::ffi::c_int, 0 as ::core::ffi::c_int),
-                ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
+                NameBuff.ptr() as *mut c_char,
+                get_special_key_name(wc as c_int, 0 as c_int),
+                ::core::mem::size_of::<[c_char; 4096]>(),
             );
         } else if wc != 0 as OptInt {
             xstrlcpy(
-                NameBuff.ptr() as *mut ::core::ffi::c_char,
-                transchar(wc as ::core::ffi::c_int),
-                ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
+                NameBuff.ptr() as *mut c_char,
+                transchar(wc as c_int),
+                ::core::mem::size_of::<[c_char; 4096]>(),
             );
         } else {
             snprintf(
-                NameBuff.ptr() as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 4096]>(),
-                b"%ld\0".as_ptr() as *const ::core::ffi::c_char,
+                NameBuff.ptr() as *mut c_char,
+                ::core::mem::size_of::<[c_char; 4096]>(),
+                b"%ld\0".as_ptr() as *const c_char,
                 *(varp as *mut OptInt),
             );
         }
     } else {
-        varp = *(varp as *mut *mut ::core::ffi::c_char) as *mut ::core::ffi::c_void;
-        if (*opt).flags & kOptFlagExpand as ::core::ffi::c_int as uint32_t != 0 {
+        varp = *(varp as *mut *mut c_char) as *mut c_void;
+        if (*opt).flags & kOptFlagExpand as c_int as uint32_t != 0 {
             home_replace(
                 ::core::ptr::null::<buf_T>(),
-                varp as *const ::core::ffi::c_char,
-                NameBuff.ptr() as *mut ::core::ffi::c_char,
+                varp as *const c_char,
+                NameBuff.ptr() as *mut c_char,
                 MAXPATHL as size_t,
                 false_0 != 0,
             );
         } else {
             xstrlcpy(
-                NameBuff.ptr() as *mut ::core::ffi::c_char,
-                varp as *const ::core::ffi::c_char,
+                NameBuff.ptr() as *mut c_char,
+                varp as *const c_char,
                 MAXPATHL as size_t,
             );
         }
     };
 }
-unsafe extern "C" fn wc_use_keyname(
-    mut varp: *const ::core::ffi::c_void,
-    mut wcp: *mut OptInt,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn wc_use_keyname(mut varp: *const c_void, mut wcp: *mut OptInt) -> c_int {
     if varp as *mut OptInt == p_wc.ptr() || varp as *mut OptInt == p_wcm.ptr() {
         *wcp = *(varp as *mut OptInt);
-        if *wcp < 0 as OptInt
-            || find_special_key_in_table(*wcp as ::core::ffi::c_int) >= 0 as ::core::ffi::c_int
-        {
+        if *wcp < 0 as OptInt || find_special_key_in_table(*wcp as c_int) >= 0 as c_int {
             return true_0;
         }
     }
     return false_0;
 }
-pub unsafe extern "C" fn shortmess(mut x: ::core::ffi::c_int) -> bool {
+pub unsafe extern "C" fn shortmess(mut x: c_int) -> bool {
     return !(*p_shm.ptr()).is_null()
         && (!vim_strchr(p_shm.get(), x).is_null()
-            || !vim_strchr(p_shm.get(), 'a' as ::core::ffi::c_int).is_null() && {
-                let mut c2rust_lvalue: [::core::ffi::c_char; 5] = [
-                    SHM_RO as ::core::ffi::c_int as ::core::ffi::c_char,
-                    SHM_MOD as ::core::ffi::c_int as ::core::ffi::c_char,
-                    SHM_LINES as ::core::ffi::c_int as ::core::ffi::c_char,
-                    SHM_WRI as ::core::ffi::c_int as ::core::ffi::c_char,
-                    0 as ::core::ffi::c_char,
+            || !vim_strchr(p_shm.get(), 'a' as c_int).is_null() && {
+                let mut c2rust_lvalue: [c_char; 5] = [
+                    SHM_RO as c_int as c_char,
+                    SHM_MOD as c_int as c_char,
+                    SHM_LINES as c_int as c_char,
+                    SHM_WRI as c_int as c_char,
+                    0 as c_char,
                 ];
-                !vim_strchr(&raw mut c2rust_lvalue as *mut ::core::ffi::c_char, x).is_null()
+                !vim_strchr(&raw mut c2rust_lvalue as *mut c_char, x).is_null()
             });
 }
-pub unsafe extern "C" fn vimrc_found(
-    mut fname: *mut ::core::ffi::c_char,
-    mut envname: *mut ::core::ffi::c_char,
-) {
+pub unsafe extern "C" fn vimrc_found(mut fname: *mut c_char, mut envname: *mut c_char) {
     if !fname.is_null() && !envname.is_null() {
-        let mut p: *mut ::core::ffi::c_char = vim_getenv(envname);
+        let mut p: *mut c_char = vim_getenv(envname);
         if p.is_null() {
             p = FullName_save(fname, false_0 != 0);
             if !p.is_null() {
-                os_setenv(envname, p, 1 as ::core::ffi::c_int);
-                xfree(p as *mut ::core::ffi::c_void);
+                os_setenv(envname, p, 1 as c_int);
+                xfree(p as *mut c_void);
             }
         } else {
-            xfree(p as *mut ::core::ffi::c_void);
+            xfree(p as *mut c_void);
         }
     }
 }
 pub unsafe extern "C" fn option_was_set(mut opt_idx: OptIndex) -> bool {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        if opt_idx as c_int != kOptInvalid as c_int {
         } else {
             __assert_fail(
-                b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                6204 as ::core::ffi::c_uint,
-                b"_Bool option_was_set(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
+                b"opt_idx != kOptInvalid\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                6204 as c_uint,
+                b"_Bool option_was_set(OptIndex)\0".as_ptr() as *const c_char,
             );
         }
     };
-    return (*options.ptr())[opt_idx as usize].flags
-        & kOptFlagWasSet as ::core::ffi::c_int as uint32_t
-        != 0;
+    return (*options.ptr())[opt_idx as usize].flags & kOptFlagWasSet as c_int as uint32_t != 0;
 }
 pub unsafe extern "C" fn reset_option_was_set(mut opt_idx: OptIndex) {
     '_c2rust_label: {
-        if opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int {
+        if opt_idx as c_int != kOptInvalid as c_int {
         } else {
             __assert_fail(
-                b"opt_idx != kOptInvalid\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/option.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                6213 as ::core::ffi::c_uint,
-                b"void reset_option_was_set(OptIndex)\0".as_ptr() as *const ::core::ffi::c_char,
+                b"opt_idx != kOptInvalid\0".as_ptr() as *const c_char,
+                b"src/nvim/option.rs\0".as_ptr() as *const c_char,
+                6213 as c_uint,
+                b"void reset_option_was_set(OptIndex)\0".as_ptr() as *const c_char,
             );
         }
     };
-    (*options.ptr())[opt_idx as usize].flags =
-        ((*options.ptr())[opt_idx as usize].flags as ::core::ffi::c_uint
-            & !(kOptFlagWasSet as ::core::ffi::c_int as ::core::ffi::c_uint)) as uint32_t;
+    (*options.ptr())[opt_idx as usize].flags = ((*options.ptr())[opt_idx as usize].flags as c_uint
+        & !(kOptFlagWasSet as c_int as c_uint))
+        as uint32_t;
 }
-pub unsafe extern "C" fn fill_culopt_flags(
-    mut val: *mut ::core::ffi::c_char,
-    mut wp: *mut win_T,
-) -> ::core::ffi::c_int {
-    let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub unsafe extern "C" fn fill_culopt_flags(mut val: *mut c_char, mut wp: *mut win_T) -> c_int {
+    let mut p: *mut c_char = ::core::ptr::null_mut::<c_char>();
     let mut culopt_flags_new: uint8_t = 0 as uint8_t;
     if val.is_null() {
         p = (*wp).w_onebuf_opt.wo_culopt;
     } else {
         p = val;
     }
-    while *p as ::core::ffi::c_int != NUL {
-        if strncmp(
-            p,
-            b"line\0".as_ptr() as *const ::core::ffi::c_char,
-            4 as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            p = p.offset(4 as ::core::ffi::c_int as isize);
-            culopt_flags_new = (culopt_flags_new as ::core::ffi::c_int
-                | kOptCuloptFlagLine as ::core::ffi::c_int)
+    while *p as c_int != NUL {
+        if strncmp(p, b"line\0".as_ptr() as *const c_char, 4 as size_t) == 0 as c_int {
+            p = p.offset(4 as c_int as isize);
+            culopt_flags_new = (culopt_flags_new as c_int | kOptCuloptFlagLine as c_int) as uint8_t;
+        } else if strncmp(p, b"both\0".as_ptr() as *const c_char, 4 as size_t) == 0 as c_int {
+            p = p.offset(4 as c_int as isize);
+            culopt_flags_new = (culopt_flags_new as c_int
+                | (kOptCuloptFlagLine as c_int | kOptCuloptFlagNumber as c_int))
                 as uint8_t;
-        } else if strncmp(
-            p,
-            b"both\0".as_ptr() as *const ::core::ffi::c_char,
-            4 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        } else if strncmp(p, b"number\0".as_ptr() as *const c_char, 6 as size_t) == 0 as c_int {
+            p = p.offset(6 as c_int as isize);
+            culopt_flags_new =
+                (culopt_flags_new as c_int | kOptCuloptFlagNumber as c_int) as uint8_t;
+        } else if strncmp(p, b"screenline\0".as_ptr() as *const c_char, 10 as size_t) == 0 as c_int
         {
-            p = p.offset(4 as ::core::ffi::c_int as isize);
-            culopt_flags_new = (culopt_flags_new as ::core::ffi::c_int
-                | (kOptCuloptFlagLine as ::core::ffi::c_int
-                    | kOptCuloptFlagNumber as ::core::ffi::c_int))
-                as uint8_t;
-        } else if strncmp(
-            p,
-            b"number\0".as_ptr() as *const ::core::ffi::c_char,
-            6 as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            p = p.offset(6 as ::core::ffi::c_int as isize);
-            culopt_flags_new = (culopt_flags_new as ::core::ffi::c_int
-                | kOptCuloptFlagNumber as ::core::ffi::c_int)
-                as uint8_t;
-        } else if strncmp(
-            p,
-            b"screenline\0".as_ptr() as *const ::core::ffi::c_char,
-            10 as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            p = p.offset(10 as ::core::ffi::c_int as isize);
-            culopt_flags_new = (culopt_flags_new as ::core::ffi::c_int
-                | kOptCuloptFlagScreenline as ::core::ffi::c_int)
-                as uint8_t;
+            p = p.offset(10 as c_int as isize);
+            culopt_flags_new =
+                (culopt_flags_new as c_int | kOptCuloptFlagScreenline as c_int) as uint8_t;
         }
-        if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int && *p as ::core::ffi::c_int != NUL
-        {
+        if *p as c_int != ',' as c_int && *p as c_int != NUL {
             return FAIL;
         }
-        if *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
+        if *p as c_int == ',' as c_int {
             p = p.offset(1);
         }
     }
-    if culopt_flags_new as ::core::ffi::c_int & kOptCuloptFlagLine as ::core::ffi::c_int != 0
-        && culopt_flags_new as ::core::ffi::c_int & kOptCuloptFlagScreenline as ::core::ffi::c_int
-            != 0
+    if culopt_flags_new as c_int & kOptCuloptFlagLine as c_int != 0
+        && culopt_flags_new as c_int & kOptCuloptFlagScreenline as c_int != 0
     {
         return FAIL;
     }
@@ -8659,7 +6849,7 @@ pub unsafe extern "C" fn fill_culopt_flags(
     return OK;
 }
 pub unsafe extern "C" fn magic_isset() -> bool {
-    match magic_overruled.get() as ::core::ffi::c_uint {
+    match magic_overruled.get() as c_uint {
         1 => return true_0 != 0,
         2 => return false_0 != 0,
         0 | _ => {}
@@ -8667,25 +6857,21 @@ pub unsafe extern "C" fn magic_isset() -> bool {
     return p_magic.get() != 0;
 }
 pub unsafe extern "C" fn option_set_callback_func(
-    mut optval: *mut ::core::ffi::c_char,
+    mut optval: *mut c_char,
     mut optcb: *mut Callback,
-) -> ::core::ffi::c_int {
-    if optval.is_null() || *optval as ::core::ffi::c_int == NUL {
+) -> c_int {
+    if optval.is_null() || *optval as c_int == NUL {
         callback_free(optcb);
         return OK;
     }
     let mut tv: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
-    if *optval as ::core::ffi::c_int == '{' as ::core::ffi::c_int
+    if *optval as c_int == '{' as c_int
         || strncmp(
             optval,
-            b"function(\0".as_ptr() as *const ::core::ffi::c_char,
+            b"function(\0".as_ptr() as *const c_char,
             9 as size_t,
-        ) == 0 as ::core::ffi::c_int
-        || strncmp(
-            optval,
-            b"funcref(\0".as_ptr() as *const ::core::ffi::c_char,
-            8 as size_t,
-        ) == 0 as ::core::ffi::c_int
+        ) == 0 as c_int
+        || strncmp(optval, b"funcref(\0".as_ptr() as *const c_char, 8 as size_t) == 0 as c_int
     {
         tv = eval_expr(optval, ::core::ptr::null_mut::<exarg_T>());
         if tv.is_null() {
@@ -8697,14 +6883,13 @@ pub unsafe extern "C" fn option_set_callback_func(
         (*tv).vval.v_string = xstrdup(optval);
     }
     let mut cb: Callback = Callback {
-        data: C2Rust_Unnamed_5 {
-            funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        data: Callback_data {
+            funcref: ::core::ptr::null_mut::<c_char>(),
         },
         type_0: kCallbackNone,
     };
     if !callback_from_typval(&raw mut cb, tv)
-        || cb.type_0 as ::core::ffi::c_uint
-            == kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
+        || cb.type_0 as c_uint == kCallbackNone as c_int as c_uint
     {
         tv_free(tv);
         return FAIL;
@@ -8714,12 +6899,9 @@ pub unsafe extern "C" fn option_set_callback_func(
     tv_free(tv);
     return OK;
 }
-unsafe extern "C" fn didset_options_sctx(
-    mut opt_flags: ::core::ffi::c_int,
-    mut buf: *mut ::core::ffi::c_int,
-) {
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while *buf.offset(i as isize) != kOptInvalid as ::core::ffi::c_int {
+unsafe extern "C" fn didset_options_sctx(mut opt_flags: c_int, mut buf: *mut c_int) {
+    let mut i: c_int = 0 as c_int;
+    while *buf.offset(i as isize) != kOptInvalid as c_int {
         set_option_sctx(
             *buf.offset(i as isize) as OptIndex,
             opt_flags,
@@ -8728,57 +6910,54 @@ unsafe extern "C" fn didset_options_sctx(
         i += 1;
     }
 }
-pub unsafe extern "C" fn can_bs(mut what: ::core::ffi::c_int) -> bool {
-    if what == BS_START && bt_prompt(curbuf.get()) as ::core::ffi::c_int != 0 {
+pub unsafe extern "C" fn can_bs(mut what: c_int) -> bool {
+    if what == BS_START && bt_prompt(curbuf.get()) as c_int != 0 {
         return false_0 != 0;
     }
-    if *p_bs.get() as ::core::ffi::c_int == '2' as ::core::ffi::c_int {
+    if *p_bs.get() as c_int == '2' as c_int {
         return what != BS_NOSTOP;
     }
     return !vim_strchr(p_bs.get(), what).is_null();
 }
-pub unsafe extern "C" fn get_bkc_flags(mut buf: *mut buf_T) -> ::core::ffi::c_uint {
+pub unsafe extern "C" fn get_bkc_flags(mut buf: *mut buf_T) -> c_uint {
     return if (*buf).b_bkc_flags != 0 {
         (*buf).b_bkc_flags
     } else {
         bkc_flags.get()
     };
 }
-pub unsafe extern "C" fn get_flp_value(mut buf: *mut buf_T) -> *mut ::core::ffi::c_char {
-    if (*buf).b_p_flp.is_null() || *(*buf).b_p_flp as ::core::ffi::c_int == NUL {
+pub unsafe extern "C" fn get_flp_value(mut buf: *mut buf_T) -> *mut c_char {
+    if (*buf).b_p_flp.is_null() || *(*buf).b_p_flp as c_int == NUL {
         return p_flp.get();
     }
     return (*buf).b_p_flp;
 }
-pub unsafe extern "C" fn get_ve_flags(mut wp: *mut win_T) -> ::core::ffi::c_uint {
+pub unsafe extern "C" fn get_ve_flags(mut wp: *mut win_T) -> c_uint {
     return (if (*wp).w_onebuf_opt.wo_ve_flags != 0 {
         (*wp).w_onebuf_opt.wo_ve_flags
     } else {
         ve_flags.get()
-    }) & !((kOptVeFlagNone as ::core::ffi::c_int | kOptVeFlagNoneU as ::core::ffi::c_int)
-        as ::core::ffi::c_uint);
+    }) & !((kOptVeFlagNone as c_int | kOptVeFlagNoneU as c_int) as c_uint);
 }
-pub unsafe extern "C" fn get_showbreak_value(win: *mut win_T) -> *mut ::core::ffi::c_char {
-    if (*win).w_onebuf_opt.wo_sbr.is_null()
-        || *(*win).w_onebuf_opt.wo_sbr as ::core::ffi::c_int == NUL
-    {
+pub unsafe extern "C" fn get_showbreak_value(win: *mut win_T) -> *mut c_char {
+    if (*win).w_onebuf_opt.wo_sbr.is_null() || *(*win).w_onebuf_opt.wo_sbr as c_int == NUL {
         return p_sbr.get();
     }
     if strcmp(
         (*win).w_onebuf_opt.wo_sbr,
-        b"NONE\0".as_ptr() as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int
+        b"NONE\0".as_ptr() as *const c_char,
+    ) == 0 as c_int
     {
-        return empty_string_option.ptr() as *mut ::core::ffi::c_char;
+        return empty_string_option.ptr() as *mut c_char;
     }
     return (*win).w_onebuf_opt.wo_sbr;
 }
-pub unsafe extern "C" fn get_fileformat(mut buf: *const buf_T) -> ::core::ffi::c_int {
-    let mut c: ::core::ffi::c_int = *(*buf).b_p_ff as ::core::ffi::c_uchar as ::core::ffi::c_int;
-    if (*buf).b_p_bin != 0 || c == 'u' as ::core::ffi::c_int {
+pub unsafe extern "C" fn get_fileformat(mut buf: *const buf_T) -> c_int {
+    let mut c: c_int = *(*buf).b_p_ff as c_uchar as c_int;
+    if (*buf).b_p_bin != 0 || c == 'u' as c_int {
         return EOL_UNIX;
     }
-    if c == 'm' as ::core::ffi::c_int {
+    if c == 'm' as c_int {
         return EOL_MAC;
     }
     return EOL_DOS;
@@ -8786,51 +6965,48 @@ pub unsafe extern "C" fn get_fileformat(mut buf: *const buf_T) -> ::core::ffi::c
 pub unsafe extern "C" fn get_fileformat_force(
     mut buf: *const buf_T,
     mut eap: *const exarg_T,
-) -> ::core::ffi::c_int {
-    let mut c: ::core::ffi::c_int = 0;
-    if !eap.is_null() && (*eap).force_ff != 0 as ::core::ffi::c_int {
+) -> c_int {
+    let mut c: c_int = 0;
+    if !eap.is_null() && (*eap).force_ff != 0 as c_int {
         c = (*eap).force_ff;
     } else {
-        if if !eap.is_null() && (*eap).force_bin != 0 as ::core::ffi::c_int {
-            ((*eap).force_bin == FORCE_BIN) as ::core::ffi::c_int
+        if if !eap.is_null() && (*eap).force_bin != 0 as c_int {
+            ((*eap).force_bin == FORCE_BIN) as c_int
         } else {
             (*buf).b_p_bin
         } != 0
         {
             return EOL_UNIX;
         }
-        c = *(*buf).b_p_ff as ::core::ffi::c_uchar as ::core::ffi::c_int;
+        c = *(*buf).b_p_ff as c_uchar as c_int;
     }
-    if c == 'u' as ::core::ffi::c_int {
+    if c == 'u' as c_int {
         return EOL_UNIX;
     }
-    if c == 'm' as ::core::ffi::c_int {
+    if c == 'm' as c_int {
         return EOL_MAC;
     }
     return EOL_DOS;
 }
-pub unsafe extern "C" fn default_fileformat() -> ::core::ffi::c_int {
-    match *p_ffs.get() as ::core::ffi::c_int {
+pub unsafe extern "C" fn default_fileformat() -> c_int {
+    match *p_ffs.get() as c_int {
         109 => return EOL_MAC,
         100 => return EOL_DOS,
         _ => {}
     }
     return EOL_UNIX;
 }
-pub unsafe extern "C" fn set_fileformat(
-    mut eol_style: ::core::ffi::c_int,
-    mut opt_flags: ::core::ffi::c_int,
-) {
-    let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+pub unsafe extern "C" fn set_fileformat(mut eol_style: c_int, mut opt_flags: c_int) {
+    let mut p: *mut c_char = ::core::ptr::null_mut::<c_char>();
     match eol_style {
         EOL_UNIX => {
-            p = b"unix\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            p = b"unix\0".as_ptr() as *const c_char as *mut c_char;
         }
         EOL_MAC => {
-            p = b"mac\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            p = b"mac\0".as_ptr() as *const c_char as *mut c_char;
         }
         EOL_DOS => {
-            p = b"dos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+            p = b"dos\0".as_ptr() as *const c_char as *mut c_char;
         }
         _ => {}
     }
@@ -8851,40 +7027,35 @@ pub unsafe extern "C" fn set_fileformat(
     redraw_tabline.set(true_0 != 0);
     need_maketitle.set(true_0 != 0);
 }
-pub unsafe extern "C" fn skip_to_option_part(
-    mut p: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    if *p as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
+pub unsafe extern "C" fn skip_to_option_part(mut p: *const c_char) -> *mut c_char {
+    if *p as c_int == ',' as c_int {
         p = p.offset(1);
     }
-    while *p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int {
+    while *p as c_int == ' ' as c_int {
         p = p.offset(1);
     }
-    return p as *mut ::core::ffi::c_char;
+    return p as *mut c_char;
 }
 pub unsafe extern "C" fn copy_option_part(
-    mut option: *mut *mut ::core::ffi::c_char,
-    mut buf: *mut ::core::ffi::c_char,
+    mut option: *mut *mut c_char,
+    mut buf: *mut c_char,
     mut maxlen: size_t,
-    mut sep_chars: *mut ::core::ffi::c_char,
+    mut sep_chars: *mut c_char,
 ) -> size_t {
     let mut len: size_t = 0 as size_t;
-    let mut p: *mut ::core::ffi::c_char = *option;
-    if *p as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
+    let mut p: *mut c_char = *option;
+    if *p as c_int == '.' as c_int {
         let c2rust_fresh7 = p;
         p = p.offset(1);
         let c2rust_fresh8 = len;
         len = len.wrapping_add(1);
         *buf.offset(c2rust_fresh8 as isize) = *c2rust_fresh7;
     }
-    while *p as ::core::ffi::c_int != NUL
-        && vim_strchr(sep_chars, *p as uint8_t as ::core::ffi::c_int).is_null()
-    {
-        if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '\\' as ::core::ffi::c_int
+    while *p as c_int != NUL && vim_strchr(sep_chars, *p as uint8_t as c_int).is_null() {
+        if *p.offset(0 as c_int as isize) as c_int == '\\' as c_int
             && !vim_strchr(
                 sep_chars,
-                *p.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int,
+                *p.offset(1 as c_int as isize) as uint8_t as c_int,
             )
             .is_null()
         {
@@ -8897,38 +7068,30 @@ pub unsafe extern "C" fn copy_option_part(
         }
         p = p.offset(1);
     }
-    *buf.offset(len as isize) = NUL as ::core::ffi::c_char;
-    if *p as ::core::ffi::c_int != NUL && *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
+    *buf.offset(len as isize) = NUL as c_char;
+    if *p as c_int != NUL && *p as c_int != ',' as c_int {
         p = p.offset(1);
     }
     p = skip_to_option_part(p);
     *option = p;
     return len;
 }
-pub unsafe extern "C" fn csh_like_shell() -> ::core::ffi::c_int {
-    return !strstr(
-        path_tail(p_sh.get()),
-        b"csh\0".as_ptr() as *const ::core::ffi::c_char,
-    )
-    .is_null() as ::core::ffi::c_int;
+pub unsafe extern "C" fn csh_like_shell() -> c_int {
+    return !strstr(path_tail(p_sh.get()), b"csh\0".as_ptr() as *const c_char).is_null() as c_int;
 }
 pub unsafe extern "C" fn fish_like_shell() -> bool {
-    return !strstr(
-        path_tail(p_sh.get()),
-        b"fish\0".as_ptr() as *const ::core::ffi::c_char,
-    )
-    .is_null();
+    return !strstr(path_tail(p_sh.get()), b"fish\0".as_ptr() as *const c_char).is_null();
 }
-pub unsafe extern "C" fn get_winbuf_options(bufopt: ::core::ffi::c_int) -> *mut dict_T {
+pub unsafe extern "C" fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
     let d: *mut dict_T = tv_dict_alloc();
     let mut opt_idx: OptIndex = kOptAleph;
-    while (opt_idx as ::core::ffi::c_int) < kOptCount {
+    while (opt_idx as c_int) < kOptCount {
         let mut opt: *mut vimoption_T =
             (options.ptr() as *mut vimoption_T).offset(opt_idx as isize);
-        if bufopt != 0 && option_has_scope(opt_idx, kOptScopeBuf) as ::core::ffi::c_int != 0
-            || bufopt == 0 && option_has_scope(opt_idx, kOptScopeWin) as ::core::ffi::c_int != 0
+        if bufopt != 0 && option_has_scope(opt_idx, kOptScopeBuf) as c_int != 0
+            || bufopt == 0 && option_has_scope(opt_idx, kOptScopeWin) as c_int != 0
         {
-            let mut varp: *mut ::core::ffi::c_void = get_varp(opt);
+            let mut varp: *mut c_void = get_varp(opt);
             if !varp.is_null() {
                 let mut opt_tv: typval_T =
                     optval_as_tv(optval_from_varp(opt_idx, varp), true_0 != 0);
@@ -8940,9 +7103,7 @@ pub unsafe extern "C" fn get_winbuf_options(bufopt: ::core::ffi::c_int) -> *mut 
     return d;
 }
 pub unsafe extern "C" fn get_scrolloff_value(mut wp: *mut win_T) -> int64_t {
-    if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
-        && !(*(*wp).w_buffer).terminal.is_null()
-    {
+    if State.get() & MODE_TERMINAL as c_int != 0 && !(*(*wp).w_buffer).terminal.is_null() {
         return 0 as int64_t;
     }
     return if (*wp).w_onebuf_opt.wo_so < 0 as OptInt {
@@ -8960,17 +7121,17 @@ pub unsafe extern "C" fn get_sidescrolloff_value(mut wp: *mut win_T) -> int64_t 
 }
 pub unsafe extern "C" fn get_vimoption(
     mut name: String_0,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut buf: *mut buf_T,
     mut win: *mut win_T,
     mut arena: *mut Arena,
     mut err: *mut Error,
 ) -> Dict {
     let mut opt_idx: OptIndex = find_option_len(name.data, name.size);
-    if !(opt_idx as ::core::ffi::c_int != kOptInvalid as ::core::ffi::c_int) {
+    if !(opt_idx as c_int != kOptInvalid as c_int) {
         api_err_invalid(
             err,
-            b"option (not found)\0".as_ptr() as *const ::core::ffi::c_char,
+            b"option (not found)\0".as_ptr() as *const c_char,
             name.data,
             0 as int64_t,
             true_0 != 0,
@@ -8992,10 +7153,10 @@ pub unsafe extern "C" fn get_vimoption(
 pub unsafe extern "C" fn get_all_vimoptions(mut arena: *mut Arena) -> Dict {
     let mut retval: Dict = arena_dict(arena, kOptCount as size_t);
     let mut opt_idx: OptIndex = kOptAleph;
-    while (opt_idx as ::core::ffi::c_int) < kOptCount {
+    while (opt_idx as c_int) < kOptCount {
         let mut opt_dict: Dict = vimoption2dict(
             (options.ptr() as *mut vimoption_T).offset(opt_idx as isize),
-            OPT_GLOBAL as ::core::ffi::c_int,
+            OPT_GLOBAL as c_int,
             curbuf.get(),
             curwin.get(),
             arena,
@@ -9006,7 +7167,7 @@ pub unsafe extern "C" fn get_all_vimoptions(mut arena: *mut Arena) -> Dict {
             key: cstr_as_string((*options.ptr())[opt_idx as usize].fullname),
             value: object {
                 type_0: kObjectTypeDict,
-                data: C2Rust_Unnamed { dict: opt_dict },
+                data: object_data { dict: opt_dict },
             },
         };
         opt_idx += 1;
@@ -9015,7 +7176,7 @@ pub unsafe extern "C" fn get_all_vimoptions(mut arena: *mut Arena) -> Dict {
 }
 unsafe extern "C" fn vimoption2dict(
     mut opt: *mut vimoption_T,
-    mut opt_flags: ::core::ffi::c_int,
+    mut opt_flags: c_int,
     mut buf: *mut buf_T,
     mut win: *mut win_T,
     mut arena: *mut Arena,
@@ -9025,10 +7186,10 @@ unsafe extern "C" fn vimoption2dict(
     let c2rust_fresh14 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh14 as isize) = key_value_pair {
-        key: cstr_as_string(b"name\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"name\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeString,
-            data: C2Rust_Unnamed {
+            data: object_data {
                 string: cstr_as_string((*opt).fullname),
             },
         },
@@ -9036,29 +7197,29 @@ unsafe extern "C" fn vimoption2dict(
     let c2rust_fresh15 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh15 as isize) = key_value_pair {
-        key: cstr_as_string(b"shortname\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"shortname\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeString,
-            data: C2Rust_Unnamed {
+            data: object_data {
                 string: cstr_as_string((*opt).shortname),
             },
         },
     };
-    let mut scope: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut scope: *const c_char = ::core::ptr::null::<c_char>();
     if option_has_scope(opt_idx, kOptScopeBuf) {
-        scope = b"buf\0".as_ptr() as *const ::core::ffi::c_char;
+        scope = b"buf\0".as_ptr() as *const c_char;
     } else if option_has_scope(opt_idx, kOptScopeWin) {
-        scope = b"win\0".as_ptr() as *const ::core::ffi::c_char;
+        scope = b"win\0".as_ptr() as *const c_char;
     } else {
-        scope = b"global\0".as_ptr() as *const ::core::ffi::c_char;
+        scope = b"global\0".as_ptr() as *const c_char;
     }
     let c2rust_fresh16 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh16 as isize) = key_value_pair {
-        key: cstr_as_string(b"scope\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"scope\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeString,
-            data: C2Rust_Unnamed {
+            data: object_data {
                 string: cstr_as_string(scope),
             },
         },
@@ -9066,10 +7227,10 @@ unsafe extern "C" fn vimoption2dict(
     let c2rust_fresh17 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh17 as isize) = key_value_pair {
-        key: cstr_as_string(b"global_local\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"global_local\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeBoolean,
-            data: C2Rust_Unnamed {
+            data: object_data {
                 boolean: option_is_global_local(opt_idx),
             },
         },
@@ -9077,33 +7238,33 @@ unsafe extern "C" fn vimoption2dict(
     let c2rust_fresh18 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh18 as isize) = key_value_pair {
-        key: cstr_as_string(b"commalist\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"commalist\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeBoolean,
-            data: C2Rust_Unnamed {
-                boolean: (*opt).flags & kOptFlagComma as ::core::ffi::c_int as uint32_t != 0,
+            data: object_data {
+                boolean: (*opt).flags & kOptFlagComma as c_int as uint32_t != 0,
             },
         },
     };
     let c2rust_fresh19 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh19 as isize) = key_value_pair {
-        key: cstr_as_string(b"flaglist\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"flaglist\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeBoolean,
-            data: C2Rust_Unnamed {
-                boolean: (*opt).flags & kOptFlagFlagList as ::core::ffi::c_int as uint32_t != 0,
+            data: object_data {
+                boolean: (*opt).flags & kOptFlagFlagList as c_int as uint32_t != 0,
             },
         },
     };
     let c2rust_fresh20 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh20 as isize) = key_value_pair {
-        key: cstr_as_string(b"was_set\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"was_set\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeBoolean,
-            data: C2Rust_Unnamed {
-                boolean: (*opt).flags & kOptFlagWasSet as ::core::ffi::c_int as uint32_t != 0,
+            data: object_data {
+                boolean: (*opt).flags & kOptFlagWasSet as c_int as uint32_t != 0,
             },
         },
     };
@@ -9113,30 +7274,28 @@ unsafe extern "C" fn vimoption2dict(
         sc_lnum: 0,
         sc_chan: 0,
     };
-    if opt_flags == OPT_GLOBAL as ::core::ffi::c_int {
+    if opt_flags == OPT_GLOBAL as c_int {
         script_ctx = (*opt).script_ctx;
     } else {
         if option_has_scope(opt_idx, kOptScopeBuf) {
-            script_ctx = (*buf).b_p_script_ctx
-                [(*opt).scope_idx[kOptScopeBuf as ::core::ffi::c_int as usize] as usize];
+            script_ctx =
+                (*buf).b_p_script_ctx[(*opt).scope_idx[kOptScopeBuf as c_int as usize] as usize];
         }
         if option_has_scope(opt_idx, kOptScopeWin) {
             script_ctx = (*win).w_onebuf_opt.wo_script_ctx
-                [(*opt).scope_idx[kOptScopeWin as ::core::ffi::c_int as usize] as usize];
+                [(*opt).scope_idx[kOptScopeWin as c_int as usize] as usize];
         }
-        if opt_flags != OPT_LOCAL as ::core::ffi::c_int
-            && script_ctx.sc_sid == 0 as ::core::ffi::c_int
-        {
+        if opt_flags != OPT_LOCAL as c_int && script_ctx.sc_sid == 0 as c_int {
             script_ctx = (*opt).script_ctx;
         }
     }
     let c2rust_fresh21 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh21 as isize) = key_value_pair {
-        key: cstr_as_string(b"last_set_sid\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"last_set_sid\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
+            data: object_data {
                 integer: script_ctx.sc_sid as Integer,
             },
         },
@@ -9144,10 +7303,10 @@ unsafe extern "C" fn vimoption2dict(
     let c2rust_fresh22 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh22 as isize) = key_value_pair {
-        key: cstr_as_string(b"last_set_linenr\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"last_set_linenr\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
+            data: object_data {
                 integer: script_ctx.sc_lnum as Integer,
             },
         },
@@ -9155,10 +7314,10 @@ unsafe extern "C" fn vimoption2dict(
     let c2rust_fresh23 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh23 as isize) = key_value_pair {
-        key: cstr_as_string(b"last_set_chan\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"last_set_chan\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
+            data: object_data {
                 integer: script_ctx.sc_chan as int64_t,
             },
         },
@@ -9166,10 +7325,10 @@ unsafe extern "C" fn vimoption2dict(
     let c2rust_fresh24 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh24 as isize) = key_value_pair {
-        key: cstr_as_string(b"type\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"type\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeString,
-            data: C2Rust_Unnamed {
+            data: object_data {
                 string: cstr_as_string(optval_type_get_name(option_get_type(get_opt_idx(opt)))),
             },
         },
@@ -9177,26 +7336,26 @@ unsafe extern "C" fn vimoption2dict(
     let c2rust_fresh25 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh25 as isize) = key_value_pair {
-        key: cstr_as_string(b"default\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"default\0".as_ptr() as *const c_char),
         value: optval_as_object((*opt).def_val),
     };
     let c2rust_fresh26 = dict.size;
     dict.size = dict.size.wrapping_add(1);
     *dict.items.offset(c2rust_fresh26 as isize) = key_value_pair {
-        key: cstr_as_string(b"allows_duplicates\0".as_ptr() as *const ::core::ffi::c_char),
+        key: cstr_as_string(b"allows_duplicates\0".as_ptr() as *const c_char),
         value: object {
             type_0: kObjectTypeBoolean,
-            data: C2Rust_Unnamed {
-                boolean: (*opt).flags & kOptFlagNoDup as ::core::ffi::c_int as uint32_t == 0,
+            data: object_data {
+                boolean: (*opt).flags & kOptFlagNoDup as c_int as uint32_t == 0,
             },
         },
     };
     return dict;
 }
-pub const INT_MIN: ::core::ffi::c_int = -INT_MAX - 1 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const PROJECT_NAME: [::core::ffi::c_char; 5] =
-    unsafe { ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b"nvim\0") };
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
+pub const INT_MIN: c_int = -INT_MAX - 1 as c_int;
+pub const INT_MAX: c_int = __INT_MAX__;
+pub const true_0: c_int = 1 as c_int;
+pub const false_0: c_int = 0 as c_int;
+pub const PROJECT_NAME: [c_char; 5] =
+    unsafe { ::core::mem::transmute::<[u8; 5], [c_char; 5]>(*b"nvim\0") };
+pub const __INT_MAX__: c_int = 2147483647 as c_int;
