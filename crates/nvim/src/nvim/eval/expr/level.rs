@@ -579,7 +579,7 @@ pub(crate) unsafe extern "C" fn eval5(
         }
         if evaluate {
             if op == '.' as c_int {
-                if eval_concat_str(rettv, &raw mut var2) == FAIL {
+                if !eval_concat_str(rettv, &raw mut var2) {
                     return FAIL;
                 }
             } else if op == '+' as c_int
@@ -591,10 +591,10 @@ pub(crate) unsafe extern "C" fn eval5(
                 && (*rettv).v_type as c_uint == VAR_LIST as c_int as c_uint
                 && var2.v_type as c_uint == VAR_LIST as c_int as c_uint
             {
-                if eval_addlist(rettv, &raw mut var2) == FAIL {
+                if !eval_addlist(rettv, &raw mut var2) {
                     return FAIL;
                 }
-            } else if eval_addsub_number(rettv, &raw mut var2, op) == FAIL {
+            } else if !eval_addsub_number(rettv, &raw mut var2, op as u8) {
                 return FAIL;
             }
             tv_clear(&raw mut var2);
@@ -632,7 +632,7 @@ pub(crate) unsafe extern "C" fn eval6(
             return FAIL;
         }
         if evaluate {
-            if eval_multdiv_number(rettv, &raw mut var2, op) == FAIL {
+            if !eval_multdiv_number(rettv, &raw mut var2, op as u8) {
                 return FAIL;
             }
         }

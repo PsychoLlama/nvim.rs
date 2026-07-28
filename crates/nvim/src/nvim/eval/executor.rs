@@ -138,7 +138,7 @@ unsafe fn tv_op_string(tv1: *mut typval_T, tv2: *const typval_T) -> c_int {
     let mut numbuf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     let s2 = tv_get_string_buf(tv2, numbuf.as_mut_ptr());
     // An owned string with room to spare is extended in place.
-    if grow_string_tv(tv1, s2) == OK {
+    if grow_string_tv(tv1, s2) {
         return OK;
     }
     let s = concat_str(tv_get_string(tv1), s2);
