@@ -7,11 +7,15 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
-Ongoing migration of the transpiled tables back onto generated code.
+Ongoing migration of the transpiled code toward safe, idiomatic Rust, and of
+the transpiled tables back onto generated code.
 Behavior-preserving: same features, formats, and RPC surface.
 
 ### Changed
 
+- Rewrote the regular-expression engines, covering every pattern the editor
+  matches: search, `:substitute`, syntax highlighting, and both
+  'regexpengine' settings.
 - Generated the API dispatch layer from the API signatures again
   (`just apigen`), covering every msgpack-RPC method, the `vim.api` Lua
   binding, and `nvim --api-info`.
