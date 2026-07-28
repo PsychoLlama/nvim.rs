@@ -3,8 +3,8 @@ use crate::src::nvim::api::private::converter::{
     object_to_vim, object_to_vim_take_luaref, vim_to_object,
 };
 use crate::src::nvim::api::private::helpers::{
-    api_clear_error, api_free_object, api_free_string, api_metadata, arena_array, cbuf_to_string,
-    cstr_as_string, dict_set_var,
+    api_clear_error, api_free_object, api_free_string, api_metadata, arena_array, cstr_as_string,
+    dict_set_var,
 };
 use crate::src::nvim::api::vim::nvim_feedkeys;
 use crate::src::nvim::ascii::ascii_isdigit;
@@ -65,7 +65,7 @@ use crate::src::nvim::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::src::nvim::eval_1::{
     add_timer_info, add_timer_info_all, callback_from_typval, clear_lval, common_job_callbacks,
     eval_expr_to_bool, eval_expr_typval, eval_expr_valid_arg, eval_has_provider, eval_option,
-    eval1, find_job, find_timer_by_nr, get_callback_depth, get_lval, list2fpos, partial_name,
+    eval1, find_job, find_timer_by_nr, get_callback_depth, get_lval, partial_name,
     prompt_get_input, save_tv_as_string, script_host_eval, timer_due_cb, timer_start, timer_stop,
     timer_stop_all, tv_to_argv,
 };
@@ -109,22 +109,21 @@ use crate::src::nvim::main::{
     autocmd_fname_full, autocmd_match, called_emsg, capture_ga, cmdline_row, cmdline_star, curbuf,
     current_sctx, curtab, curwin, did_emsg, e_api_error, e_buffer_is_not_loaded,
     e_cannot_change_readonly_variable_str, e_channotpty, e_dictkey, e_invalid_buffer_name_str,
-    e_invalid_column_number_nr, e_invalid_line_number_nr, e_invalwindow, e_invarg, e_invarg2,
-    e_invargNval, e_invargval, e_invexpr2, e_libcall, e_listarg, e_listblobarg, e_listdictarg,
-    e_number_exp, e_reduce_of_an_empty_str_with_no_initial_value, e_stdiochan2, e_toofewarg,
-    e_toomanyarg, e_trailing_arg, e_unknown_function_str, empty_string_option, emsg_noredir,
-    emsg_off, emsg_silent, firstwin, garbage_collect_at_exit, got_int, lastbuf, lines_left,
-    main_loop, mouse_row, msg_col, msg_row, msg_scroll, msg_scrolled, msg_silent, need_clr_eos,
-    on_print, p_cpo, p_ic, p_magic, p_sel, p_tgc, p_verbose, p_wic, p_ws, provider_call_nesting,
+    e_invalwindow, e_invarg, e_invarg2, e_invargNval, e_invargval, e_invexpr2, e_libcall,
+    e_listarg, e_listblobarg, e_listdictarg, e_number_exp,
+    e_reduce_of_an_empty_str_with_no_initial_value, e_stdiochan2, e_toofewarg, e_toomanyarg,
+    e_trailing_arg, e_unknown_function_str, empty_string_option, emsg_noredir, emsg_off,
+    emsg_silent, firstwin, garbage_collect_at_exit, got_int, lastbuf, lines_left, main_loop,
+    mouse_row, msg_col, msg_row, msg_scroll, msg_scrolled, msg_silent, need_clr_eos, on_print,
+    p_cpo, p_ic, p_magic, p_tgc, p_verbose, p_wic, p_ws, provider_call_nesting,
     provider_caller_scope, redir_off, reg_executing, reg_recorded, reg_recording, starting,
-    stdin_isatty, stdout_isatty, typebuf, vgetc_busy, vim_ignored, virtual_op,
-    want_garbage_collect, wild_menu_showing, windowsVersion,
+    stdin_isatty, stdout_isatty, typebuf, vgetc_busy, vim_ignored, want_garbage_collect,
+    wild_menu_showing, windowsVersion,
 };
 use crate::src::nvim::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks, setpcmark};
-use crate::src::nvim::mbyte::{mb_prevptr, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
+use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::src::nvim::memline::{
-    decl, incl, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len, ml_get_pos, ml_open, recover_names,
-    swapfile_dict,
+    decl, incl, ml_get, ml_get_buf, ml_get_len, ml_open, recover_names, swapfile_dict,
 };
 use crate::src::nvim::memory::{
     ARENA_EMPTY, alloc_block, arena_finish, arena_mem_free, free_block, strequal, strnequal,
@@ -142,10 +141,8 @@ use crate::src::nvim::msgpack_rpc::packer::{packer_string_buffer, packer_take_st
 use crate::src::nvim::msgpack_rpc::server::{
     server_address_list, server_address_new, server_start, server_stop,
 };
-use crate::src::nvim::normal::{find_decl, op_pending, unadjust_for_sel_inner};
-use crate::src::nvim::ops::{
-    block_prep, charwise_block_prep, cursor_pos_info, reset_lbr, restore_lbr,
-};
+use crate::src::nvim::normal::{find_decl, op_pending};
+use crate::src::nvim::ops::cursor_pos_info;
 use crate::src::nvim::option::set_option_value_give_err;
 use crate::src::nvim::options::kOptCpoptions;
 use crate::src::nvim::optionstr::free_string_option;
@@ -165,9 +162,8 @@ use crate::src::nvim::os::shell::shell_free_argv;
 use crate::src::nvim::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::path::{concat_fnames_realloc, vim_FullName};
-use crate::src::nvim::plines::getvvcol;
 use crate::src::nvim::popupmenu::{pum_set_event_info, pum_visible};
-use crate::src::nvim::pos::{clearpos, equalpos, lt};
+use crate::src::nvim::pos::{clearpos, equalpos};
 use crate::src::nvim::profile::{
     profile_end, profile_msg, profile_setlimit, profile_signed, profile_start, profile_sub,
 };
@@ -178,7 +174,7 @@ use crate::src::nvim::register::{
 };
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::search::searchit;
-use crate::src::nvim::state::{get_mode, get_was_safe_state, virtual_active};
+use crate::src::nvim::state::{get_mode, get_was_safe_state};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_vsnprintf_typval};
 use crate::src::nvim::syntax::{
     get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char, syntax_present,

@@ -1,575 +1,564 @@
 //! The text a Visual selection covers: `getregion()` and
 //! `getregionpos()`.
-//!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+#![deny(unsafe_op_in_unsafe_fn)]
 
-use super::*;
+use super::args::{Args, frame};
+use super::{
+    Ctrl_V, FAIL, MAXCOL, NUL, OK, OP_NOP, VAR_DICT, kListLenMayKnow, kMTBlockWise, kMTCharWise,
+    kMTLineWise,
+};
+use crate::src::nvim::api::private::helpers::cbuf_to_string;
+use crate::src::nvim::buffer::buflist_findnr;
+use crate::src::nvim::charset::getdigits_int;
+use crate::src::nvim::eval::typval::{
+    tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_dict_get_string,
+    tv_list_alloc, tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_list,
+    tv_list_append_number,
+};
+use crate::src::nvim::eval_1::list2fpos;
+use crate::src::nvim::main::{
+    curbuf, curwin, e_buffer_is_not_loaded, e_invalid_column_number_nr, e_invalid_line_number_nr,
+    e_invargNval, p_sel, virtual_op,
+};
+use crate::src::nvim::mbyte::{mb_prevptr, utfc_ptr2len};
+use crate::src::nvim::memline::{ml_get, ml_get_buf_len, ml_get_len, ml_get_pos};
+use crate::src::nvim::memory::xmalloc;
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::normal::unadjust_for_sel_inner;
+use crate::src::nvim::ops::{block_prep, charwise_block_prep, reset_lbr, restore_lbr};
+use crate::src::nvim::os::libc::{gettext, memmove, memset};
+use crate::src::nvim::plines::getvvcol;
+use crate::src::nvim::pos::{equalpos, lt};
+use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::types::{
+    EvalFuncData, MotionType, String_0, TriState, block_def, buf_T, colnr_T, linenr_T, oparg_T,
+    pos_T, typval_T, varnumber_T,
+};
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr;
 
-unsafe extern "C" fn block_def2str(mut bd: *mut block_def) -> String_0 {
-    let mut size: size_t = ((*bd).startspaces as size_t)
-        .wrapping_add((*bd).endspaces as size_t)
-        .wrapping_add((*bd).textlen as size_t);
-    let mut ret: String_0 = String_0 {
-        data: xmalloc(size.wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char,
-        size: 0,
-    };
-    memset(
-        ret.data as *mut ::core::ffi::c_void,
-        ' ' as ::core::ffi::c_int,
-        (*bd).startspaces as size_t,
-    );
-    ret.size = ret.size.wrapping_add((*bd).startspaces as size_t);
-    memmove(
-        ret.data.offset(ret.size as isize) as *mut ::core::ffi::c_void,
-        (*bd).textstart as *const ::core::ffi::c_void,
-        (*bd).textlen as size_t,
-    );
-    ret.size = ret.size.wrapping_add((*bd).textlen as size_t);
-    memset(
-        ret.data.offset(ret.size as isize) as *mut ::core::ffi::c_void,
-        ' ' as ::core::ffi::c_int,
-        (*bd).endspaces as size_t,
-    );
-    ret.size = ret.size.wrapping_add((*bd).endspaces as size_t);
-    *ret.data.offset(ret.size as isize) = NUL as ::core::ffi::c_char;
-    return ret;
+/// The zeroed position every local in this module starts from.
+const NOWHERE: pos_T = pos_T {
+    lnum: 0,
+    col: 0,
+    coladd: 0,
+};
+
+/// A cleared block description. `block_prep` and `charwise_block_prep`
+/// fill it; nothing reads it before they do.
+const NO_BLOCK: block_def = block_def {
+    startspaces: 0,
+    endspaces: 0,
+    textlen: 0,
+    textstart: ptr::null_mut(),
+    textcol: 0,
+    start_vcol: 0,
+    end_vcol: 0,
+    is_short: 0,
+    is_MAX: 0,
+    is_oneChar: 0,
+    pre_whitesp: 0,
+    pre_whitesp_c: 0,
+    end_char_vcols: 0,
+    start_char_vcols: 0,
+};
+
+/// A cleared operator argument, which only the blockwise path fills in.
+const NO_OPARG: oparg_T = oparg_T {
+    op_type: 0,
+    regname: 0,
+    motion_type: kMTCharWise,
+    motion_force: 0,
+    use_reg_one: false,
+    inclusive: false,
+    end_adjusted: false,
+    start: NOWHERE,
+    end: NOWHERE,
+    cursor_start: NOWHERE,
+    line_count: 0,
+    empty: false,
+    is_VIsual: false,
+    start_vcol: 0,
+    end_vcol: 0,
+    prev_opcount: 0,
+    prev_count0: 0,
+    excl_tr_ws: false,
+};
+
+/// What `getregionpos` resolved the arguments to.
+struct Region {
+    /// The upper-left corner, zero-based, after the swap and the
+    /// exclusivity adjustment.
+    p1: pos_T,
+    /// The lower-right corner, zero-based, extended to the end of a
+    /// multibyte character.
+    p2: pos_T,
+    /// Whether `p2`'s character is part of the selection.
+    inclusive: bool,
+    region_type: MotionType,
+    /// Only meaningful for a blockwise region.
+    oap: oparg_T,
 }
-unsafe extern "C" fn getregionpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut p1: *mut pos_T,
-    mut p2: *mut pos_T,
-    inclusive: *mut bool,
-    mut region_type: *mut MotionType,
-    mut oap: *mut oparg_T,
-) -> ::core::ffi::c_int {
-    tv_list_alloc_ret(rettv, kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
-    if tv_check_for_list_arg(argvars, 0 as ::core::ffi::c_int) == FAIL
-        || tv_check_for_list_arg(argvars, 1 as ::core::ffi::c_int) == FAIL
-        || tv_check_for_opt_dict_arg(argvars, 2 as ::core::ffi::c_int) == FAIL
-    {
-        return FAIL;
-    }
-    let mut fnum1: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    let mut fnum2: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    if list2fpos(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-        p1,
-        &raw mut fnum1,
-        ::core::ptr::null_mut::<colnr_T>(),
-        false_0 != 0,
-    ) != OK
-        || list2fpos(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            p2,
-            &raw mut fnum2,
-            ::core::ptr::null_mut::<colnr_T>(),
-            false_0 != 0,
-        ) != OK
-        || fnum1 != fnum2
-    {
-        return FAIL;
-    }
-    let mut is_select_exclusive: bool = false;
-    let mut type_0: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut default_type: [::core::ffi::c_char; 2] =
-        ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"v\0");
-    if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        is_select_exclusive = tv_dict_get_bool(
-            (*argvars.offset(2 as ::core::ffi::c_int as isize))
-                .vval
-                .v_dict,
-            b"exclusive\0".as_ptr() as *const ::core::ffi::c_char,
-            (*p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int) as ::core::ffi::c_int,
-        ) != 0;
-        type_0 = tv_dict_get_string(
-            (*argvars.offset(2 as ::core::ffi::c_int as isize))
-                .vval
-                .v_dict,
-            b"type\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0 != 0,
-        );
-        if type_0.is_null() {
-            type_0 = &raw mut default_type as *mut ::core::ffi::c_char;
+
+/// Restores `curbuf` and 'virtualedit' when the builtin returns.
+///
+/// Both entry points move the current buffer to the one the positions name
+/// so that the line accessors answer for it, and both must put it back
+/// however they leave.
+struct BufferSwap {
+    buf: *mut buf_T,
+    virtual_op: TriState,
+}
+
+impl BufferSwap {
+    /// # Safety
+    /// `curbuf` and `curwin` are live.
+    unsafe fn save() -> Self {
+        BufferSwap {
+            buf: curbuf.get(),
+            virtual_op: virtual_op.get(),
         }
-    } else {
-        is_select_exclusive = *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int;
-        type_0 = &raw mut default_type as *mut ::core::ffi::c_char;
     }
-    let mut block_width: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if *type_0.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == 'v' as ::core::ffi::c_int
-        && *type_0.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-    {
-        *region_type = kMTCharWise;
-    } else if *type_0.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        == 'V' as ::core::ffi::c_int
-        && *type_0.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-    {
-        *region_type = kMTLineWise;
-    } else if *type_0.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == Ctrl_V {
-        let mut p: *mut ::core::ffi::c_char = type_0.offset(1 as ::core::ffi::c_int as isize);
-        if *p as ::core::ffi::c_int != NUL && {
-            block_width = getdigits_int(&raw mut p, false_0 != 0, 0 as ::core::ffi::c_int);
-            block_width <= 0 as ::core::ffi::c_int || *p as ::core::ffi::c_int != NUL
-        } {
-            semsg(
-                gettext(&raw const e_invargNval as *const ::core::ffi::c_char),
-                b"type\0".as_ptr() as *const ::core::ffi::c_char,
-                type_0,
-            );
-            return FAIL;
-        }
-        *region_type = kMTBlockWise;
-    } else {
-        semsg(
-            gettext(&raw const e_invargNval as *const ::core::ffi::c_char),
-            b"type\0".as_ptr() as *const ::core::ffi::c_char,
-            type_0,
-        );
-        return FAIL;
+}
+
+impl Drop for BufferSwap {
+    fn drop(&mut self) {
+        curbuf.set(self.buf);
+        // SAFETY: `curwin` is live for the whole of a builtin call.
+        unsafe { (*curwin.get()).w_buffer = self.buf };
+        virtual_op.set(self.virtual_op);
     }
-    let mut findbuf: *mut buf_T = if fnum1 != 0 as ::core::ffi::c_int {
-        buflist_findnr(fnum1)
-    } else {
-        curbuf.get()
-    };
-    if findbuf.is_null() || (*findbuf).b_ml.ml_mfp.is_null() {
-        emsg(gettext(
-            &raw const e_buffer_is_not_loaded as *const ::core::ffi::c_char,
-        ));
-        return FAIL;
-    }
-    if (*p1).lnum < 1 as linenr_T || (*p1).lnum > (*findbuf).b_ml.ml_line_count {
-        semsg(
-            gettext(&raw const e_invalid_line_number_nr as *const ::core::ffi::c_char),
-            (*p1).lnum,
-        );
-        return FAIL;
-    }
-    if (*p1).col == MAXCOL as ::core::ffi::c_int {
-        (*p1).col = (ml_get_buf_len(findbuf, (*p1).lnum) + 1 as ::core::ffi::c_int) as colnr_T;
-    } else if (*p1).col < 1 as ::core::ffi::c_int
-        || (*p1).col > ml_get_buf_len(findbuf, (*p1).lnum) + 1 as ::core::ffi::c_int
-    {
-        semsg(
-            gettext(&raw const e_invalid_column_number_nr as *const ::core::ffi::c_char),
-            (*p1).col,
-        );
-        return FAIL;
-    }
-    if (*p2).lnum < 1 as linenr_T || (*p2).lnum > (*findbuf).b_ml.ml_line_count {
-        semsg(
-            gettext(&raw const e_invalid_line_number_nr as *const ::core::ffi::c_char),
-            (*p2).lnum,
-        );
-        return FAIL;
-    }
-    if (*p2).col == MAXCOL as ::core::ffi::c_int {
-        (*p2).col = (ml_get_buf_len(findbuf, (*p2).lnum) + 1 as ::core::ffi::c_int) as colnr_T;
-    } else if (*p2).col < 1 as ::core::ffi::c_int
-        || (*p2).col > ml_get_buf_len(findbuf, (*p2).lnum) + 1 as ::core::ffi::c_int
-    {
-        semsg(
-            gettext(&raw const e_invalid_column_number_nr as *const ::core::ffi::c_char),
-            (*p2).col,
-        );
-        return FAIL;
-    }
-    curbuf.set(findbuf);
-    (*curwin.get()).w_buffer = curbuf.get();
-    virtual_op.set(virtual_active(curwin.get()) as TriState);
-    (*p1).col -= 1;
-    (*p2).col -= 1;
-    if !lt(*p1, *p2) {
-        let mut p_0: pos_T = *p1;
-        *p1 = *p2;
-        *p2 = p_0;
-    }
-    if *region_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int {
-        if is_select_exclusive as ::core::ffi::c_int != 0 && !equalpos(*p1, *p2) {
-            *inclusive = !unadjust_for_sel_inner(p2);
-        }
-        if *inclusive as ::core::ffi::c_int != 0
-            && virtual_op.get() as u64 == 0
-            && *ml_get_pos(p2) as ::core::ffi::c_int == NUL
+}
+
+/// Resolve `getregion()`'s and `getregionpos()`'s shared arguments, leaving
+/// the current buffer pointed at the one the positions name.
+///
+/// # Safety
+/// The arguments and `rettv` are live typvals.
+unsafe fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
+    // SAFETY: the caller's obligation. `p1`/`p2` are locals the List parser
+    // fills, and every line accessor below runs against `findbuf`, which is
+    // made current before it is read from.
+    unsafe {
+        tv_list_alloc_ret(rettv, kListLenMayKnow as isize);
+        if tv_check_for_list_arg(args.ptr(0), 0) == FAIL
+            || tv_check_for_list_arg(args.ptr(0), 1) == FAIL
+            || tv_check_for_opt_dict_arg(args.ptr(0), 2) == FAIL
         {
-            *inclusive = false_0 != 0;
+            return None;
         }
-    } else if *region_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-        let mut sc1: colnr_T = 0;
-        let mut ec1: colnr_T = 0;
-        let mut sc2: colnr_T = 0;
-        let mut ec2: colnr_T = 0;
-        let lbr_saved: bool = reset_lbr();
+        let (mut p1, mut p2) = (NOWHERE, NOWHERE);
+        let (mut fnum1, mut fnum2) = (-1, -1);
+        if list2fpos(
+            args.ptr(0),
+            &raw mut p1,
+            &raw mut fnum1,
+            ptr::null_mut(),
+            false,
+        ) != OK
+            || list2fpos(
+                args.ptr(1),
+                &raw mut p2,
+                &raw mut fnum2,
+                ptr::null_mut(),
+                false,
+            ) != OK
+            || fnum1 != fnum2
+        {
+            return None;
+        }
+
+        // 'selection' decides the default exclusivity; an option dict may
+        // override it and may name the region type.
+        let opts = (args.ty(2) == VAR_DICT).then(|| args.get(2).vval.v_dict);
+        let exclusive_by_default = *p_sel.get() == b'e' as c_char;
+        let (is_select_exclusive, spec) = match opts {
+            Some(d) => (
+                tv_dict_get_bool(d, c"exclusive".as_ptr(), exclusive_by_default as c_int) != 0,
+                tv_dict_get_string(d, c"type".as_ptr(), false),
+            ),
+            None => (exclusive_by_default, ptr::null_mut()),
+        };
+        let spec: *const c_char = if spec.is_null() { c"v".as_ptr() } else { spec };
+        let (region_type, block_width) = parse_type(spec)?;
+
+        let findbuf = if fnum1 != 0 {
+            buflist_findnr(fnum1)
+        } else {
+            curbuf.get()
+        };
+        if findbuf.is_null() || (*findbuf).b_ml.ml_mfp.is_null() {
+            emsg(gettext(e_buffer_is_not_loaded.ptr() as *const c_char));
+            return None;
+        }
+        check_corner(findbuf, &mut p1)?;
+        check_corner(findbuf, &mut p2)?;
+
+        curbuf.set(findbuf);
+        (*curwin.get()).w_buffer = curbuf.get();
+        virtual_op.set(virtual_active(curwin.get()) as TriState);
+
+        // Columns are one-based on the way in and zero-based from here.
+        p1.col -= 1;
+        p2.col -= 1;
+        if !lt(p1, p2) {
+            core::mem::swap(&mut p1, &mut p2);
+        }
+
+        let mut inclusive = true;
+        let mut oap = NO_OPARG;
+        if region_type == kMTCharWise {
+            if is_select_exclusive && !equalpos(p1, p2) {
+                inclusive = !unadjust_for_sel_inner(&raw mut p2);
+            }
+            // An inclusive selection ending on the line terminator does not
+            // actually cover a character, unless 'virtualedit' is on.
+            if inclusive
+                && virtual_op.get() as u64 == 0
+                && *ml_get_pos(&raw mut p2) == NUL as c_char
+            {
+                inclusive = false;
+            }
+        } else if region_type == kMTBlockWise {
+            oap = block_oparg(p1, p2, is_select_exclusive, block_width);
+        }
+
+        // Extend the far corner over the rest of a multibyte character.
+        let l = utfc_ptr2len(ml_get_pos(&raw mut p2));
+        if l > 1 {
+            p2.col += l - 1;
+        }
+        Some(Region {
+            p1,
+            p2,
+            inclusive,
+            region_type,
+            oap,
+        })
+    }
+}
+
+/// The `type` option: "v", "V", or CTRL-V optionally followed by a width.
+///
+/// # Safety
+/// `spec` is NUL-terminated.
+unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
+    // SAFETY: the caller's obligation; `getdigits_int` only walks forward
+    // over `spec` and leaves `p` on the terminator when it consumed the
+    // whole width.
+    unsafe {
+        let bad = || {
+            semsg(
+                gettext(e_invargNval.ptr() as *const c_char),
+                c"type".as_ptr(),
+                spec,
+            );
+            None
+        };
+        match CStr::from_ptr(spec).to_bytes() {
+            b"v" => Some((kMTCharWise, 0)),
+            b"V" => Some((kMTLineWise, 0)),
+            [c, ..] if *c as c_int == Ctrl_V => {
+                let mut p = spec.add(1) as *mut c_char;
+                // A bare CTRL-V means "as wide as the corners"; a width
+                // must be a positive number and nothing else.
+                if *p != NUL as c_char {
+                    let width = getdigits_int(&raw mut p, false, 0);
+                    if width <= 0 || *p != NUL as c_char {
+                        return bad();
+                    }
+                    return Some((kMTBlockWise, width));
+                }
+                Some((kMTBlockWise, 0))
+            }
+            _ => bad(),
+        }
+    }
+}
+
+/// Validate one corner against the buffer, resolving `MAXCOL` to the end of
+/// its line.
+///
+/// # Safety
+/// `buf` is a loaded buffer.
+unsafe fn check_corner(buf: *mut buf_T, p: &mut pos_T) -> Option<()> {
+    // SAFETY: the caller's obligation; the line length is only read once
+    // the line number has been checked.
+    unsafe {
+        if p.lnum < 1 || p.lnum > (*buf).b_ml.ml_line_count {
+            semsg(
+                gettext(e_invalid_line_number_nr.ptr() as *const c_char),
+                p.lnum,
+            );
+            return None;
+        }
+        let len = ml_get_buf_len(buf, p.lnum);
+        if p.col == MAXCOL as colnr_T {
+            p.col = len + 1;
+        } else if p.col < 1 || p.col > len + 1 {
+            semsg(
+                gettext(e_invalid_column_number_nr.ptr() as *const c_char),
+                p.col,
+            );
+            return None;
+        }
+        Some(())
+    }
+}
+
+/// The operator argument a blockwise region needs, which is what
+/// `block_prep` reads per line.
+///
+/// # Safety
+/// `p1` and `p2` are positions in the current buffer.
+unsafe fn block_oparg(
+    p1: pos_T,
+    p2: pos_T,
+    is_select_exclusive: bool,
+    block_width: c_int,
+) -> oparg_T {
+    // SAFETY: the caller's obligation. 'linebreak' is turned off around
+    // the virtual-column measurements so that a wrapped line does not
+    // change where the block's edges are.
+    unsafe {
+        let (mut sc1, mut ec1, mut sc2, mut ec2) = (0, 0, 0, 0);
+        let lbr_saved = reset_lbr();
         getvvcol(
             curwin.get(),
-            p1,
+            &raw const p1 as *mut pos_T,
             &raw mut sc1,
-            ::core::ptr::null_mut::<colnr_T>(),
+            ptr::null_mut(),
             &raw mut ec1,
         );
         getvvcol(
             curwin.get(),
-            p2,
+            &raw const p2 as *mut pos_T,
             &raw mut sc2,
-            ::core::ptr::null_mut::<colnr_T>(),
+            ptr::null_mut(),
             &raw mut ec2,
         );
         restore_lbr(lbr_saved);
-        (*oap).motion_type = kMTBlockWise;
-        (*oap).inclusive = true_0 != 0;
-        (*oap).op_type = OP_NOP as ::core::ffi::c_int;
-        (*oap).start = *p1;
-        (*oap).end = *p2;
-        (*oap).start_vcol = if sc1 < sc2 { sc1 } else { sc2 };
-        if block_width > 0 as ::core::ffi::c_int {
-            (*oap).end_vcol = ((*oap).start_vcol as ::core::ffi::c_int + block_width
-                - 1 as ::core::ffi::c_int) as colnr_T;
-        } else if is_select_exclusive as ::core::ffi::c_int != 0
-            && ec1 < sc2
-            && (0 as ::core::ffi::c_int) < sc2
-            && ec2 > ec1
-        {
-            (*oap).end_vcol = (sc2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as colnr_T;
-        } else {
-            (*oap).end_vcol = if ec1 > ec2 { ec1 } else { ec2 };
+        let start_vcol = sc1.min(sc2);
+        oparg_T {
+            motion_type: kMTBlockWise,
+            inclusive: true,
+            op_type: OP_NOP as c_int,
+            start: p1,
+            end: p2,
+            start_vcol,
+            end_vcol: if block_width > 0 {
+                // An explicit width wins over where the corners landed.
+                start_vcol + block_width - 1
+            } else if is_select_exclusive && ec1 < sc2 && sc2 > 0 && ec2 > ec1 {
+                // Exclusive: the far corner's own column is not covered.
+                sc2 - 1
+            } else {
+                ec1.max(ec2)
+            },
+            ..NO_OPARG
         }
     }
-    let mut l: ::core::ffi::c_int = utfc_ptr2len(ml_get_pos(p2));
-    if l > 1 as ::core::ffi::c_int {
-        (*p2).col += l - 1 as ::core::ffi::c_int;
-    }
-    return OK;
 }
+
+/// The text a block description covers: its leading pad, its bytes, then
+/// its trailing pad. The pads are what a blockwise selection through a tab
+/// or a wide character turns into.
+///
+/// # Safety
+/// `bd` has been filled by one of the block-prep functions.
+unsafe fn block_def2str(bd: &block_def) -> String_0 {
+    // SAFETY: the caller's obligation. The allocation is exactly the three
+    // pieces plus a terminator, and each piece is written once in order.
+    unsafe {
+        let size = bd.startspaces as usize + bd.endspaces as usize + bd.textlen as usize;
+        let data = xmalloc(size + 1).cast::<c_char>();
+        memset(
+            data.cast::<c_void>(),
+            b' ' as c_int,
+            bd.startspaces as usize,
+        );
+        let mut at = bd.startspaces as usize;
+        memmove(
+            data.add(at).cast::<c_void>(),
+            bd.textstart.cast::<c_void>(),
+            bd.textlen as usize,
+        );
+        at += bd.textlen as usize;
+        memset(
+            data.add(at).cast::<c_void>(),
+            b' ' as c_int,
+            bd.endspaces as usize,
+        );
+        at += bd.endspaces as usize;
+        *data.add(at) = NUL as c_char;
+        String_0 { data, size: at }
+    }
+}
+
+/// `getregion({pos1}, {pos2} [, {opts}])` — the selected text, one String
+/// per line.
 pub unsafe extern "C" fn f_getregion(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    let save_curbuf: *mut buf_T = curbuf.get();
-    let save_virtual: TriState = virtual_op.get();
-    let mut p1: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut p2: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut inclusive: bool = true_0 != 0;
-    let mut region_type: MotionType = kMTUnknown;
-    let mut oa: oparg_T = oparg_T {
-        op_type: 0,
-        regname: 0,
-        motion_type: kMTCharWise,
-        motion_force: 0,
-        use_reg_one: false,
-        inclusive: false,
-        end_adjusted: false,
-        start: pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        },
-        end: pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        },
-        cursor_start: pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        },
-        line_count: 0,
-        empty: false,
-        is_VIsual: false,
-        start_vcol: 0,
-        end_vcol: 0,
-        prev_opcount: 0,
-        prev_count0: 0,
-        excl_tr_ws: false,
-    };
-    if getregionpos(
-        argvars,
-        rettv,
-        &raw mut p1,
-        &raw mut p2,
-        &raw mut inclusive,
-        &raw mut region_type,
-        &raw mut oa,
-    ) == FAIL
-    {
-        return;
-    }
-    let mut lnum: linenr_T = p1.lnum;
-    while lnum <= p2.lnum {
-        let mut akt: String_0 = STRING_INIT;
-        if region_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-            let mut bd: block_def = block_def {
-                startspaces: 0,
-                endspaces: 0,
-                textlen: 0,
-                textstart: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                textcol: 0,
-                start_vcol: 0,
-                end_vcol: 0,
-                is_short: 0,
-                is_MAX: 0,
-                is_oneChar: 0,
-                pre_whitesp: 0,
-                pre_whitesp_c: 0,
-                end_char_vcols: 0,
-                start_char_vcols: 0,
-            };
-            block_prep(&raw mut oa, &raw mut bd, lnum, false_0 != 0);
-            akt = block_def2str(&raw mut bd);
-        } else if region_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int
-            || p1.lnum < lnum && lnum < p2.lnum
-        {
-            akt = cbuf_to_string(ml_get(lnum), ml_get_len(lnum) as size_t);
-        } else {
-            let mut bd_0: block_def = block_def {
-                startspaces: 0,
-                endspaces: 0,
-                textlen: 0,
-                textstart: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                textcol: 0,
-                start_vcol: 0,
-                end_vcol: 0,
-                is_short: 0,
-                is_MAX: 0,
-                is_oneChar: 0,
-                pre_whitesp: 0,
-                pre_whitesp_c: 0,
-                end_char_vcols: 0,
-                start_char_vcols: 0,
-            };
-            charwise_block_prep(p1, p2, &raw mut bd_0, lnum, inclusive);
-            akt = block_def2str(&raw mut bd_0);
-        }
-        '_c2rust_label: {
-            if !akt.data.is_null() {
-            } else {
-                __assert_fail(
-                    b"akt.data != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/eval/funcs.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    2344 as ::core::ffi::c_uint,
-                    b"void f_getregion(typval_T *, typval_T *, EvalFuncData)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals; the buffer swap
+    // is undone when `_swap` drops, on every path out.
+    unsafe {
+        let _swap = BufferSwap::save();
+        let Some(r) = resolve(args, rettv) else {
+            return;
         };
-        tv_list_append_allocated_string((*rettv).vval.v_list, akt.data);
-        lnum += 1;
+        for lnum in r.p1.lnum..=r.p2.lnum {
+            let text = if r.region_type == kMTBlockWise {
+                let mut bd = NO_BLOCK;
+                block_prep(&raw const r.oap as *mut oparg_T, &raw mut bd, lnum, false);
+                block_def2str(&bd)
+            } else if r.region_type == kMTLineWise || (r.p1.lnum < lnum && lnum < r.p2.lnum) {
+                // A whole line: either the region is linewise, or this is
+                // an interior line of a charwise region.
+                cbuf_to_string(ml_get(lnum), ml_get_len(lnum) as usize)
+            } else {
+                let mut bd = NO_BLOCK;
+                charwise_block_prep(r.p1, r.p2, &raw mut bd, lnum, r.inclusive);
+                block_def2str(&bd)
+            };
+            debug_assert!(!text.data.is_null());
+            tv_list_append_allocated_string(rettv.vval.v_list, text.data);
+        }
     }
-    curbuf.set(save_curbuf);
-    (*curwin.get()).w_buffer = curbuf.get();
-    virtual_op.set(save_virtual);
 }
-unsafe extern "C" fn add_regionpos_range(mut rettv: *mut typval_T, mut p1: pos_T, mut p2: pos_T) {
-    let mut l1: *mut list_T = tv_list_alloc(2 as ptrdiff_t);
-    tv_list_append_list((*rettv).vval.v_list, l1);
-    let mut l2: *mut list_T = tv_list_alloc(4 as ptrdiff_t);
-    tv_list_append_list(l1, l2);
-    let mut l3: *mut list_T = tv_list_alloc(4 as ptrdiff_t);
-    tv_list_append_list(l1, l3);
-    tv_list_append_number(l2, (*curbuf.get()).handle as varnumber_T);
-    tv_list_append_number(l2, p1.lnum as varnumber_T);
-    tv_list_append_number(l2, p1.col as varnumber_T);
-    tv_list_append_number(l2, p1.coladd as varnumber_T);
-    tv_list_append_number(l3, (*curbuf.get()).handle as varnumber_T);
-    tv_list_append_number(l3, p2.lnum as varnumber_T);
-    tv_list_append_number(l3, p2.col as varnumber_T);
-    tv_list_append_number(l3, p2.coladd as varnumber_T);
-}
+
+/// `getregionpos({pos1}, {pos2} [, {opts}])` — the selection as a pair of
+/// positions per line.
 pub unsafe extern "C" fn f_getregionpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    let save_curbuf: *mut buf_T = curbuf.get();
-    let save_virtual: TriState = virtual_op.get();
-    let mut p1: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut p2: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut inclusive: bool = true_0 != 0;
-    let mut region_type: MotionType = kMTUnknown;
-    let mut allow_eol: bool = false_0 != 0;
-    let mut oa: oparg_T = oparg_T {
-        op_type: 0,
-        regname: 0,
-        motion_type: kMTCharWise,
-        motion_force: 0,
-        use_reg_one: false,
-        inclusive: false,
-        end_adjusted: false,
-        start: pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        },
-        end: pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        },
-        cursor_start: pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        },
-        line_count: 0,
-        empty: false,
-        is_VIsual: false,
-        start_vcol: 0,
-        end_vcol: 0,
-        prev_opcount: 0,
-        prev_count0: 0,
-        excl_tr_ws: false,
-    };
-    if getregionpos(
-        argvars,
-        rettv,
-        &raw mut p1,
-        &raw mut p2,
-        &raw mut inclusive,
-        &raw mut region_type,
-        &raw mut oa,
-    ) == FAIL
-    {
-        return;
-    }
-    if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        allow_eol = tv_dict_get_bool(
-            (*argvars.offset(2 as ::core::ffi::c_int as isize))
-                .vval
-                .v_dict,
-            b"eol\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0,
-        ) != 0;
-    }
-    let mut lnum: linenr_T = p1.lnum;
-    while lnum <= p2.lnum {
-        let mut ret_p1: pos_T = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arguments and `rettv` are live typvals; the buffer swap
+    // is undone when `_swap` drops, on every path out.
+    unsafe {
+        let _swap = BufferSwap::save();
+        let Some(r) = resolve(args, rettv) else {
+            return;
         };
-        let mut ret_p2: pos_T = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        let mut line: *mut ::core::ffi::c_char = ml_get(lnum);
-        let mut line_len: colnr_T = ml_get_len(lnum);
-        if region_type as ::core::ffi::c_int == kMTLineWise as ::core::ffi::c_int {
-            ret_p1.col = 1 as ::core::ffi::c_int as colnr_T;
-            ret_p1.coladd = 0 as ::core::ffi::c_int as colnr_T;
-            ret_p2.col = MAXCOL as ::core::ffi::c_int as colnr_T;
-            ret_p2.coladd = 0 as ::core::ffi::c_int as colnr_T;
+        // Whether a position may sit one past the end of its line.
+        let allow_eol = args.ty(2) == VAR_DICT
+            && tv_dict_get_bool(args.get(2).vval.v_dict, c"eol".as_ptr(), 0) != 0;
+
+        for lnum in r.p1.lnum..=r.p2.lnum {
+            let line = ml_get(lnum);
+            let line_len = ml_get_len(lnum);
+            let (mut ret_p1, mut ret_p2) = line_corners(&r, lnum, line);
+            clamp_corners(&mut ret_p1, &mut ret_p2, line_len, allow_eol);
+            ret_p1.lnum = lnum;
+            ret_p2.lnum = lnum;
+            add_regionpos_range(rettv, ret_p1, ret_p2);
+        }
+    }
+}
+
+/// Where the region starts and ends on one line, in one-based columns with
+/// a virtual offset.
+///
+/// # Safety
+/// `line` is line `lnum` of the current buffer and `r` describes a region
+/// covering it.
+unsafe fn line_corners(r: &Region, lnum: linenr_T, line: *mut c_char) -> (pos_T, pos_T) {
+    if r.region_type == kMTLineWise {
+        // A linewise region always covers the whole line.
+        return (
+            pos_T { col: 1, ..NOWHERE },
+            pos_T {
+                col: MAXCOL as colnr_T,
+                ..NOWHERE
+            },
+        );
+    }
+    // SAFETY: the caller's obligation; `bd.textstart` points into `line`,
+    // so `mb_prevptr` stays inside it.
+    unsafe {
+        let mut bd = NO_BLOCK;
+        if r.region_type == kMTBlockWise {
+            block_prep(&raw const r.oap as *mut oparg_T, &raw mut bd, lnum, false);
         } else {
-            let mut bd: block_def = block_def {
-                startspaces: 0,
-                endspaces: 0,
-                textlen: 0,
-                textstart: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                textcol: 0,
-                start_vcol: 0,
-                end_vcol: 0,
-                is_short: 0,
-                is_MAX: 0,
-                is_oneChar: 0,
-                pre_whitesp: 0,
-                pre_whitesp_c: 0,
-                end_char_vcols: 0,
-                start_char_vcols: 0,
-            };
-            if region_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-                block_prep(&raw mut oa, &raw mut bd, lnum, false_0 != 0);
-            } else {
-                charwise_block_prep(p1, p2, &raw mut bd, lnum, inclusive);
-            }
-            if bd.is_oneChar != 0 {
-                if region_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
-                    ret_p1.col = (mb_prevptr(line, bd.textstart).offset_from(line)
-                        as ::core::ffi::c_int
-                        + 1 as ::core::ffi::c_int) as colnr_T;
-                    ret_p1.coladd = bd.start_char_vcols - (bd.start_vcol - oa.start_vcol);
-                } else {
-                    ret_p1.col =
-                        (p1.col as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as colnr_T;
-                    ret_p1.coladd = p1.coladd;
-                }
-            } else if region_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int
-                && oa.start_vcol > bd.start_vcol
-            {
-                ret_p1.col = MAXCOL as ::core::ffi::c_int as colnr_T;
-                ret_p1.coladd = oa.start_vcol - bd.start_vcol;
-                bd.is_oneChar = true_0;
-            } else if bd.startspaces > 0 as ::core::ffi::c_int {
-                ret_p1.col = (mb_prevptr(line, bd.textstart).offset_from(line)
-                    as ::core::ffi::c_int
-                    + 1 as ::core::ffi::c_int) as colnr_T;
-                ret_p1.coladd =
-                    (bd.start_char_vcols as ::core::ffi::c_int - bd.startspaces) as colnr_T;
-            } else {
-                ret_p1.col =
-                    (bd.textcol as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as colnr_T;
-                ret_p1.coladd = 0 as ::core::ffi::c_int as colnr_T;
-            }
-            if bd.is_oneChar != 0 {
-                ret_p2.col = ret_p1.col;
-                ret_p2.coladd = (ret_p1.coladd as ::core::ffi::c_int
-                    + bd.startspaces
-                    + bd.endspaces) as colnr_T;
-            } else if bd.endspaces > 0 as ::core::ffi::c_int {
-                ret_p2.col = (bd.textcol as ::core::ffi::c_int
-                    + bd.textlen
-                    + 1 as ::core::ffi::c_int) as colnr_T;
-                ret_p2.coladd = bd.endspaces as colnr_T;
-            } else {
-                ret_p2.col = (bd.textcol as ::core::ffi::c_int + bd.textlen) as colnr_T;
-                ret_p2.coladd = 0 as ::core::ffi::c_int as colnr_T;
-            }
+            charwise_block_prep(r.p1, r.p2, &raw mut bd, lnum, r.inclusive);
         }
-        if !allow_eol && ret_p1.col > line_len {
-            ret_p1.col = 0 as ::core::ffi::c_int as colnr_T;
-            ret_p1.coladd = 0 as ::core::ffi::c_int as colnr_T;
-        } else if ret_p1.col > line_len as ::core::ffi::c_int + 1 as ::core::ffi::c_int {
-            ret_p1.col = (line_len as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as colnr_T;
-        }
-        if !allow_eol && ret_p2.col > line_len {
-            ret_p2.col = (if ret_p1.col == 0 as ::core::ffi::c_int {
-                0 as ::core::ffi::c_int
+
+        let mut p1 = NOWHERE;
+        if bd.is_oneChar != 0 {
+            if r.region_type == kMTBlockWise {
+                p1.col = mb_prevptr(line, bd.textstart).offset_from(line) as colnr_T + 1;
+                p1.coladd = bd.start_char_vcols - (bd.start_vcol - r.oap.start_vcol);
             } else {
-                line_len as ::core::ffi::c_int
-            }) as colnr_T;
-            ret_p2.coladd = 0 as ::core::ffi::c_int as colnr_T;
-        } else if ret_p2.col > line_len as ::core::ffi::c_int + 1 as ::core::ffi::c_int {
-            ret_p2.col = (line_len as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as colnr_T;
+                p1.col = r.p1.col + 1;
+                p1.coladd = r.p1.coladd;
+            }
+        } else if r.region_type == kMTBlockWise && r.oap.start_vcol > bd.start_vcol {
+            // The block starts inside a character that begins before it.
+            p1.col = MAXCOL as colnr_T;
+            p1.coladd = r.oap.start_vcol - bd.start_vcol;
+            bd.is_oneChar = 1;
+        } else if bd.startspaces > 0 {
+            p1.col = mb_prevptr(line, bd.textstart).offset_from(line) as colnr_T + 1;
+            p1.coladd = bd.start_char_vcols - bd.startspaces;
+        } else {
+            p1.col = bd.textcol + 1;
         }
-        ret_p1.lnum = lnum;
-        ret_p2.lnum = lnum;
-        add_regionpos_range(rettv, ret_p1, ret_p2);
-        lnum += 1;
+
+        let mut p2 = NOWHERE;
+        if bd.is_oneChar != 0 {
+            p2.col = p1.col;
+            p2.coladd = p1.coladd + bd.startspaces + bd.endspaces;
+        } else if bd.endspaces > 0 {
+            p2.col = bd.textcol + bd.textlen + 1;
+            p2.coladd = bd.endspaces;
+        } else {
+            p2.col = bd.textcol + bd.textlen;
+        }
+        (p1, p2)
     }
-    curbuf.set(save_curbuf);
-    (*curwin.get()).w_buffer = curbuf.get();
-    virtual_op.set(save_virtual);
+}
+
+/// Pull both corners back onto the line. Without `eol` a corner past the
+/// last byte collapses to zero — "nothing here" — rather than to the line
+/// end.
+fn clamp_corners(p1: &mut pos_T, p2: &mut pos_T, line_len: colnr_T, allow_eol: bool) {
+    if !allow_eol && p1.col > line_len {
+        p1.col = 0;
+        p1.coladd = 0;
+    } else if p1.col > line_len + 1 {
+        p1.col = line_len + 1;
+    }
+    if !allow_eol && p2.col > line_len {
+        // The end follows the start into "nothing here".
+        p2.col = if p1.col == 0 { 0 } else { line_len };
+        p2.coladd = 0;
+    } else if p2.col > line_len + 1 {
+        p2.col = line_len + 1;
+    }
+}
+
+/// Append one line's `[[bufnr, lnum, col, off], [bufnr, lnum, col, off]]`.
+///
+/// # Safety
+/// `rettv` holds the list being built and `curbuf` is the region's buffer.
+unsafe fn add_regionpos_range(rettv: &mut typval_T, p1: pos_T, p2: pos_T) {
+    // SAFETY: the caller's obligation; each list is handed to its parent
+    // immediately, so none is leaked.
+    unsafe {
+        let pair = tv_list_alloc(2);
+        tv_list_append_list(rettv.vval.v_list, pair);
+        for p in [p1, p2] {
+            let l = tv_list_alloc(4);
+            tv_list_append_list(pair, l);
+            tv_list_append_number(l, (*curbuf.get()).handle as varnumber_T);
+            tv_list_append_number(l, p.lnum as varnumber_T);
+            tv_list_append_number(l, p.col as varnumber_T);
+            tv_list_append_number(l, p.coladd as varnumber_T);
+        }
+    }
 }
