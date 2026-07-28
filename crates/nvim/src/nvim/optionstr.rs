@@ -52,6 +52,7 @@ use crate::src::nvim::option::{
     get_option_default, get_option_varp_scope_from, p_vfile, parse_winhl_opt, redraw_titles,
     set_iminsert_global, set_imsearch_global, set_option_direct, skip_to_option_part, valid_name,
 };
+use crate::src::nvim::option::{kOptFlagComma, kOptFlagNDname, kOptFlagNFname, kOptFlagOneComma};
 use crate::src::nvim::options::{
     kOptAmbiwidth, kOptBackupcopy, kOptBelloff, kOptCasemap, kOptClipboard, kOptComments,
     kOptCompleteopt, kOptDisplay, kOptFileformat, kOptFileformats, kOptFoldopen, kOptJumpoptions,
@@ -190,35 +191,6 @@ pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const kOptFlagColon: C2Rust_Unnamed_14 = 33554432;
-pub const kOptFlagFunc: C2Rust_Unnamed_14 = 16777216;
-pub const kOptFlagMLE: C2Rust_Unnamed_14 = 8388608;
-pub const kOptFlagHLOnly: C2Rust_Unnamed_14 = 4194304;
-pub const kOptFlagNDname: C2Rust_Unnamed_14 = 2097152;
-pub const kOptFlagCurswant: C2Rust_Unnamed_14 = 1048576;
-pub const kOptFlagPriMkrc: C2Rust_Unnamed_14 = 524288;
-pub const kOptFlagInsecure: C2Rust_Unnamed_14 = 262144;
-pub const kOptFlagNFname: C2Rust_Unnamed_14 = 131072;
-pub const kOptFlagNoGlob: C2Rust_Unnamed_14 = 65536;
-pub const kOptFlagGettext: C2Rust_Unnamed_14 = 32768;
-pub const kOptFlagSecure: C2Rust_Unnamed_14 = 16384;
-pub const kOptFlagFlagList: C2Rust_Unnamed_14 = 8192;
-pub const kOptFlagNoDup: C2Rust_Unnamed_14 = 4096;
-pub const kOptFlagOneComma: C2Rust_Unnamed_14 = 3072;
-pub const kOptFlagComma: C2Rust_Unnamed_14 = 1024;
-pub const kOptFlagRedrClear: C2Rust_Unnamed_14 = 896;
-pub const kOptFlagRedrAll: C2Rust_Unnamed_14 = 768;
-pub const kOptFlagRedrBuf: C2Rust_Unnamed_14 = 512;
-pub const kOptFlagRedrWin: C2Rust_Unnamed_14 = 256;
-pub const kOptFlagRedrStat: C2Rust_Unnamed_14 = 128;
-pub const kOptFlagRedrTabl: C2Rust_Unnamed_14 = 64;
-pub const kOptFlagUIOption: C2Rust_Unnamed_14 = 32;
-pub const kOptFlagNoMkrc: C2Rust_Unnamed_14 = 16;
-pub const kOptFlagWasSet: C2Rust_Unnamed_14 = 8;
-pub const kOptFlagNoDefault: C2Rust_Unnamed_14 = 4;
-pub const kOptFlagNoDefExp: C2Rust_Unnamed_14 = 2;
-pub const kOptFlagExpand: C2Rust_Unnamed_14 = 1;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;
