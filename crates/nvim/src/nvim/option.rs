@@ -7,67 +7,44 @@
 //! default — lives in the generated [`crate::src::nvim::options`] table.
 
 use crate::src::nvim::api::private::helpers::cstr_as_string;
-use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::buffer::free_buf_options;
-use crate::src::nvim::charset::{
-    buf_init_chartab, skiptowhite_esc, skipwhite, trans_characters, transchar, vim_str2nr,
-    vim_strsize,
-};
+use crate::src::nvim::ascii::ascii_isdigit;
+use crate::src::nvim::charset::{transchar, vim_strsize};
 use crate::src::nvim::cmdexpand::cmdline_fuzzy_complete;
-use crate::src::nvim::drawscreen::redraw_all_later;
-use crate::src::nvim::eval_1::last_set_msg;
-use crate::src::nvim::ex_getln::gotocmdline;
 use crate::src::nvim::ex_session::{put_eol, put_line};
 use crate::src::nvim::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
 use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::indent::{briopt_check, tabstop_set};
-use crate::src::nvim::insexpand::{
-    set_buflocal_cfu_callback, set_buflocal_cpt_callbacks, set_buflocal_ofu_callback,
-};
 use crate::src::nvim::keycodes::{
-    find_special_key, find_special_key_in_table, get_special_key_code, get_special_key_name,
+    find_special_key_in_table, get_special_key_code, get_special_key_name,
 };
 use crate::src::nvim::main::{
-    Columns, IObuff, NameBuff, cmdmod, curbuf, curwin, e_invarg, e_sandbox, e_trailing,
-    empty_string_option, escape_chars, got_int, info_message, no_wait_return, p_ai, p_bdir, p_bin,
-    p_bomb, p_cdpath, p_cfu, p_ci, p_cin, p_cink, p_cino, p_cinsd, p_cinw, p_cms, p_com, p_cpo,
-    p_cpt, p_dir, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp, p_fo, p_ft, p_iminsert,
-    p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_lisp, p_lop, p_ma, p_ml, p_mle,
-    p_mouse, p_mps, p_nf, p_ofu, p_path, p_pi, p_pp, p_qe, p_rtp, p_scbk, p_si, p_smc, p_spc,
-    p_spf, p_spl, p_spo, p_sps, p_sts, p_sua, p_sw, p_swf, p_syn, p_tags, p_tfu, p_ts, p_tw, p_udf,
-    p_vdir, p_verbose, p_vsts, p_vts, p_wc, p_wcm, p_wm, sandbox, silent_mode, spo_flags,
+    Columns, NameBuff, curbuf, curwin, empty_string_option, escape_chars, got_int, info_message,
+    p_bdir, p_cdpath, p_dir, p_ft, p_keymap, p_mouse, p_path, p_pp, p_rtp, p_sps, p_syn, p_tags,
+    p_vdir, p_wc, p_wcm, silent_mode,
 };
 use crate::src::nvim::mapping::put_escstr;
-use crate::src::nvim::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy};
 use crate::src::nvim::message::{
-    emsg, message_filtered, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts,
+    message_filtered, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts,
     msg_puts_title,
 };
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::options::*;
-use crate::src::nvim::optionstr::{
-    check_buf_options, check_signcolumn, check_string_option, clear_string_option, set_chars_option,
-};
+use crate::src::nvim::optionstr::set_chars_option;
 use crate::src::nvim::os::env::{expand_env_esc, home_replace};
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, fprintf, fputs, gettext, memmove, memset, snprintf, strcmp, strlen,
-    strncmp,
+    __assert_fail, abort, fprintf, fputs, gettext, snprintf, strcmp, strlen, strncmp,
 };
-use crate::src::nvim::spell::compile_cap_prog;
-use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
-use crate::src::nvim::tag::set_buflocal_tfu_callback;
+use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped};
 use crate::src::nvim::types::{
     CMD_index, CallbackType, CharsOption, ErrorType, FILE, HlAttrs, Object, ObjectType, OptIndex,
-    OptInt, OptScope, OptVal, OptValData, OptValType, RgbValue, String_0, Terminal, TriState,
-    VarType, VimVarIndex, auto_event, buf_T, colnr_T, exarg_T, expand_T, fuzmatch_str_T, garray_T,
-    int16_t, int32_t, optexpand_T, regmatch_T, scid_T, sctx_T, size_t, uint8_t, uint32_t, uint64_t,
-    uvarnumber_T, vimoption_T, win_T, winopt_T, xp_prefix_T,
+    OptInt, OptScope, OptVal, OptValType, RgbValue, String_0, Terminal, TriState, VarType,
+    VimVarIndex, auto_event, buf_T, colnr_T, expand_T, fuzmatch_str_T, garray_T, int16_t, int32_t,
+    optexpand_T, regmatch_T, size_t, uint8_t, uint32_t, uint64_t, vimoption_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::undo::curbufIsChanged;
-use crate::src::nvim::window::{check_colorcolumn, set_winbar_win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 // The carve of a 9,000-line transpiled module; see the child docs.
