@@ -251,7 +251,7 @@
     "crates/nvim/src/nvim/popupmenu.rs": {"lines": 3258, "unsafe": 32},
     "crates/nvim/src/nvim/profile.rs": {"unsafe": 33},
     "crates/nvim/src/nvim/quickfix.rs": {"lines": 10213, "no_mangle": 8, "unsafe": 248},
-    "crates/nvim/src/nvim/regexp.rs": {"lines": 1186},
+    "crates/nvim/src/nvim/regexp.rs": {"lines": 1184},
     "crates/nvim/src/nvim/regexp/api.rs": {"no_mangle": 6, "unsafe": 8},
     "crates/nvim/src/nvim/regexp/bt/atom.rs": {"lines": 1036, "unsafe": 1},
     "crates/nvim/src/nvim/regexp/bt/compile.rs": {"unsafe": 13},

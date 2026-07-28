@@ -1,308 +1,284 @@
-//! The public entry points: compiling a pattern with the engine `re`
-//! and the pattern itself select, and running it over a string or buffer.
+//! The public entry points: compiling a pattern and running it over a
+//! string or a buffer.
 //!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! Two things happen here that the engines below do not see. One is
+//! engine selection: `'regexpengine'` and a leading `\%#=` pick one, and
+//! when the NFA engine gives up on a pattern (`NFA_TOO_EXPENSIVE`) the
+//! pattern is recompiled for the backtracking engine and rerun. The other
+//! is the `rex` handover — a match may run a `\=` expression that starts
+//! a match of its own, so the context is saved and restored around every
+//! run rather than assumed to be free.
 
-use super::*;
+use core::ffi::{c_char, c_int};
 
+use super::{
+    AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, RE_AUTO,
+    REX_ALL, bt_regengine, nfa_regengine, nfa_regprog_T, regexp_engine, rex, rex_in_use,
+};
+use crate::src::nvim::main::{called_emsg, curbuf, p_re, p_verbose, reg_do_extmatch};
+use crate::src::nvim::memory::{xfree, xstrdup};
+use crate::src::nvim::message::{emsg, msg_puts, verbose_enter, verbose_leave};
+use crate::src::nvim::os::libc::{gettext, strncmp};
+use crate::src::nvim::types::{
+    OptInt, buf_T, colnr_T, linenr_T, proftime_T, regmatch_T, regmmatch_T, regprog_T, uint8_t,
+    win_T,
+};
+
+/// Reserve `rex` for `run`, restoring an outer match's context after. The
+/// nesting is real: `:s/…/\=…/` can evaluate an expression that searches.
+fn with_rex<R>(run: impl FnOnce() -> R) -> R {
+    let outer = rex_in_use.get();
+    let saved = outer.then(|| rex.get());
+    rex_in_use.set(true);
+    let result = run();
+    rex_in_use.set(outer);
+    if let Some(saved) = saved {
+        rex.set(saved);
+    }
+    result
+}
+
+/// Compile `expr` into a program. A leading `\%#=0`, `\%#=1` or `\%#=2`
+/// overrides 'regexpengine' for this pattern; with the automatic setting
+/// the NFA engine is tried first and a failure that reported no error
+/// falls back to the backtracking one.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_regcomp(
-    mut expr_arg: *const ::core::ffi::c_char,
-    mut re_flags: ::core::ffi::c_int,
-) -> *mut regprog_T {
-    let mut prog: *mut regprog_T = ::core::ptr::null_mut::<regprog_T>();
-    let mut expr: *const ::core::ffi::c_char = expr_arg;
-    regexp_engine.set(p_re.get() as ::core::ffi::c_int);
-    if strncmp(
-        expr,
-        b"\\%#=\0".as_ptr() as *const ::core::ffi::c_char,
-        4 as size_t,
-    ) == 0 as ::core::ffi::c_int
-    {
-        let mut newengine: ::core::ffi::c_int = *expr.offset(4 as ::core::ffi::c_int as isize)
-            as ::core::ffi::c_int
-            - '0' as ::core::ffi::c_int;
-        if newengine == AUTOMATIC_ENGINE as ::core::ffi::c_int
-            || newengine == BACKTRACKING_ENGINE as ::core::ffi::c_int
-            || newengine == NFA_ENGINE as ::core::ffi::c_int
+pub unsafe extern "C" fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regprog_T {
+    let mut expr = expr_arg;
+    regexp_engine.set(p_re.get() as c_int);
+    if strncmp(expr, c"\\%#=".as_ptr(), 4) == 0 {
+        let chosen = *expr.offset(4) as c_int - '0' as c_int;
+        if chosen == AUTOMATIC_ENGINE as c_int
+            || chosen == BACKTRACKING_ENGINE as c_int
+            || chosen == NFA_ENGINE as c_int
         {
-            regexp_engine.set(
-                *expr.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    - '0' as ::core::ffi::c_int,
-            );
-            expr = expr.offset(5 as ::core::ffi::c_int as isize);
+            regexp_engine.set(chosen);
+            expr = expr.offset(5);
         } else {
-            emsg(
-                gettext(
-                    b"E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used \0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                ),
-            );
-            regexp_engine.set(AUTOMATIC_ENGINE as ::core::ffi::c_int);
+            emsg(gettext(
+                c"E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used "
+                    .as_ptr(),
+            ));
+            regexp_engine.set(AUTOMATIC_ENGINE as c_int);
         }
     }
-    (*rex.ptr()).reg_buf = curbuf.get();
-    let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
-    if regexp_engine.get() != BACKTRACKING_ENGINE as ::core::ffi::c_int {
-        prog = (*nfa_regengine.ptr())
+    // The pattern can name a buffer-local thing (`\k`, say) while it is
+    // being compiled, so point `rex` at a buffer.
+    rex.with_mut(|r| r.reg_buf = curbuf.get());
+
+    let called_emsg_before = called_emsg.get();
+    let mut prog = if regexp_engine.get() != BACKTRACKING_ENGINE as c_int {
+        let auto = if regexp_engine.get() == AUTOMATIC_ENGINE as c_int {
+            RE_AUTO
+        } else {
+            0
+        };
+        (*nfa_regengine.ptr())
             .regcomp
-            .expect("non-null function pointer")(
-            expr as *mut uint8_t,
-            re_flags
-                + (if regexp_engine.get() == AUTOMATIC_ENGINE as ::core::ffi::c_int {
-                    RE_AUTO
-                } else {
-                    0 as ::core::ffi::c_int
-                }),
-        );
+            .expect("non-null function pointer")(expr as *mut uint8_t, re_flags + auto)
     } else {
+        (*bt_regengine.ptr())
+            .regcomp
+            .expect("non-null function pointer")(expr as *mut uint8_t, re_flags)
+    };
+    // Only retry when the NFA engine declined quietly: an error means the
+    // pattern is bad, not merely too much for that engine.
+    if prog.is_null()
+        && regexp_engine.get() == AUTOMATIC_ENGINE as c_int
+        && called_emsg.get() == called_emsg_before
+    {
+        regexp_engine.set(BACKTRACKING_ENGINE as c_int);
+        if p_verbose.get() > 0 as OptInt {
+            verbose_enter();
+            msg_puts(gettext(
+                c"Switching to backtracking RE engine for pattern: ".as_ptr(),
+            ));
+            msg_puts(expr);
+            verbose_leave();
+        }
         prog = (*bt_regengine.ptr())
             .regcomp
             .expect("non-null function pointer")(expr as *mut uint8_t, re_flags);
     }
-    if prog.is_null() {
-        if regexp_engine.get() == AUTOMATIC_ENGINE as ::core::ffi::c_int
-            && called_emsg.get() == called_emsg_before
-        {
-            regexp_engine.set(BACKTRACKING_ENGINE as ::core::ffi::c_int);
-            report_re_switch(expr);
-            prog = (*bt_regengine.ptr())
-                .regcomp
-                .expect("non-null function pointer")(
-                expr as *mut uint8_t, re_flags
-            );
-        }
-    }
     if !prog.is_null() {
-        (*prog).re_engine = regexp_engine.get() as ::core::ffi::c_uint;
-        (*prog).re_flags = re_flags as ::core::ffi::c_uint;
+        (*prog).re_engine = regexp_engine.get() as u32;
+        (*prog).re_flags = re_flags as u32;
     }
-    return prog;
+    prog
 }
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn vim_regfree(mut prog: *mut regprog_T) {
+pub unsafe extern "C" fn vim_regfree(prog: *mut regprog_T) {
     if !prog.is_null() {
         (*(*prog).engine)
             .regfree
             .expect("non-null function pointer")(prog);
     }
 }
-pub(crate) unsafe extern "C" fn report_re_switch(mut pat: *const ::core::ffi::c_char) {
+
+/// Recompile the NFA program `prog` for the backtracking engine, which is
+/// what a `NFA_TOO_EXPENSIVE` result asks for. The pattern text is copied
+/// out first because compiling frees the program that holds it.
+unsafe fn recompile_backtracking(prog: *mut regprog_T, extmatch: bool) -> *mut regprog_T {
+    let re_flags = (*prog).re_flags as c_int;
+    let pat = xstrdup((*(prog as *mut nfa_regprog_T)).pattern);
+    let save_p_re = p_re.get();
+    p_re.set(BACKTRACKING_ENGINE as c_int as OptInt);
     if p_verbose.get() > 0 as OptInt {
         verbose_enter();
         msg_puts(gettext(
-            b"Switching to backtracking RE engine for pattern: \0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"Switching to backtracking RE engine for pattern: ".as_ptr(),
         ));
         msg_puts(pat);
         verbose_leave();
     }
+    if extmatch {
+        // A buffer match may be a syntax match, whose `\z(` groups have
+        // to survive the recompile.
+        reg_do_extmatch.set(REX_ALL);
+    }
+    let new = vim_regcomp(pat, re_flags);
+    if extmatch {
+        reg_do_extmatch.set(0);
+    }
+    xfree(pat.cast());
+    p_re.set(save_p_re);
+    new
 }
-pub(crate) unsafe extern "C" fn vim_regexec_string(
-    mut rmp: *mut regmatch_T,
-    mut line: *const ::core::ffi::c_char,
-    mut col: colnr_T,
-    mut nl: bool,
+
+/// Run `rmp`'s program over the single line `line`, starting at `col`.
+/// `nl` allows a `$` to match at the end of the string.
+unsafe extern "C" fn vim_regexec_string(
+    rmp: *mut regmatch_T,
+    line: *const c_char,
+    col: colnr_T,
+    nl: bool,
 ) -> bool {
-    let mut rex_save: regexec_T = regexec_T {
-        reg_match: ::core::ptr::null_mut::<regmatch_T>(),
-        reg_mmatch: ::core::ptr::null_mut::<regmmatch_T>(),
-        reg_startp: ::core::ptr::null_mut::<*mut uint8_t>(),
-        reg_endp: ::core::ptr::null_mut::<*mut uint8_t>(),
-        reg_startpos: ::core::ptr::null_mut::<lpos_T>(),
-        reg_endpos: ::core::ptr::null_mut::<lpos_T>(),
-        reg_win: ::core::ptr::null_mut::<win_T>(),
-        reg_buf: ::core::ptr::null_mut::<buf_T>(),
-        reg_firstlnum: 0,
-        reg_maxline: 0,
-        reg_line_lbr: false,
-        lnum: 0,
-        line: ::core::ptr::null_mut::<uint8_t>(),
-        input: ::core::ptr::null_mut::<uint8_t>(),
-        need_clear_subexpr: 0,
-        need_clear_zsubexpr: 0,
-        reg_ic: false,
-        reg_icombine: false,
-        reg_nobreak: false,
-        reg_maxcol: 0,
-        nfa_has_zend: 0,
-        nfa_has_backref: 0,
-        nfa_nsubexpr: 0,
-        nfa_listid: 0,
-        nfa_alt_listid: 0,
-        nfa_has_zsubexpr: 0,
-    };
-    let mut rex_in_use_save: bool = rex_in_use.get();
+    // A program cannot match against itself: `\=` calling back into the
+    // same pattern would reuse the program's own state.
     if (*(*rmp).regprog).re_in_use {
         emsg(gettext(E_RECURSIVE.as_ptr()));
-        return false_0 != 0;
+        return false;
     }
-    (*(*rmp).regprog).re_in_use = true_0 != 0;
-    if rex_in_use.get() {
-        rex_save = rex.get();
-    }
-    rex_in_use.set(true_0 != 0);
-    (*rex.ptr()).reg_startp = ::core::ptr::null_mut::<*mut uint8_t>();
-    (*rex.ptr()).reg_endp = ::core::ptr::null_mut::<*mut uint8_t>();
-    (*rex.ptr()).reg_startpos = ::core::ptr::null_mut::<lpos_T>();
-    (*rex.ptr()).reg_endpos = ::core::ptr::null_mut::<lpos_T>();
-    let mut result: ::core::ffi::c_int =
-        (*(*(*rmp).regprog).engine)
-            .regexec_nl
-            .expect("non-null function pointer")(rmp, line as *mut uint8_t, col, nl);
-    (*(*rmp).regprog).re_in_use = false_0 != 0;
-    if (*(*rmp).regprog).re_engine == AUTOMATIC_ENGINE as ::core::ffi::c_int as ::core::ffi::c_uint
-        && result == NFA_TOO_EXPENSIVE as ::core::ffi::c_int
-    {
-        let mut save_p_re: ::core::ffi::c_int = p_re.get() as ::core::ffi::c_int;
-        let mut re_flags: ::core::ffi::c_int = (*(*rmp).regprog).re_flags as ::core::ffi::c_int;
-        let mut pat: *mut ::core::ffi::c_char =
-            xstrdup((*((*rmp).regprog as *mut nfa_regprog_T)).pattern);
-        p_re.set(BACKTRACKING_ENGINE as ::core::ffi::c_int as OptInt);
-        vim_regfree((*rmp).regprog);
-        report_re_switch(pat);
-        (*rmp).regprog = vim_regcomp(pat, re_flags);
-        if !(*rmp).regprog.is_null() {
-            (*(*rmp).regprog).re_in_use = true_0 != 0;
-            result = (*(*(*rmp).regprog).engine)
+    let result = with_rex(|| {
+        (*(*rmp).regprog).re_in_use = true;
+        // A string match has no position slots, only pointer ones.
+        rex.with_mut(|r| {
+            r.reg_startp = core::ptr::null_mut();
+            r.reg_endp = core::ptr::null_mut();
+            r.reg_startpos = core::ptr::null_mut();
+            r.reg_endpos = core::ptr::null_mut();
+        });
+        let exec = |rmp: *mut regmatch_T| {
+            (*(*(*rmp).regprog).engine)
                 .regexec_nl
-                .expect("non-null function pointer")(
-                rmp, line as *mut uint8_t, col, nl
-            );
-            (*(*rmp).regprog).re_in_use = false_0 != 0;
+                .expect("non-null function pointer")(rmp, line as *mut uint8_t, col, nl)
+        };
+        let mut result = exec(rmp);
+        (*(*rmp).regprog).re_in_use = false;
+        if (*(*rmp).regprog).re_engine == AUTOMATIC_ENGINE as c_int as u32
+            && result == NFA_TOO_EXPENSIVE as c_int
+        {
+            let prev = (*rmp).regprog;
+            (*rmp).regprog = recompile_backtracking(prev, false);
+            vim_regfree(prev);
+            if !(*rmp).regprog.is_null() {
+                (*(*rmp).regprog).re_in_use = true;
+                result = exec(rmp);
+                (*(*rmp).regprog).re_in_use = false;
+            }
         }
-        xfree(pat as *mut ::core::ffi::c_void);
-        p_re.set(save_p_re as OptInt);
-    }
-    rex_in_use.set(rex_in_use_save);
-    if rex_in_use.get() {
-        rex.set(rex_save);
-    }
-    return result > 0 as ::core::ffi::c_int;
+        result
+    });
+    result > 0
 }
+
+/// [`vim_regexec`] against a program the caller owns by pointer, so that
+/// the fall back to the backtracking engine can replace it.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regexec_prog(
-    mut prog: *mut *mut regprog_T,
-    mut ignore_case: bool,
-    mut line: *const ::core::ffi::c_char,
-    mut col: colnr_T,
+    prog: *mut *mut regprog_T,
+    ignore_case: bool,
+    line: *const c_char,
+    col: colnr_T,
 ) -> bool {
-    let mut regmatch_0: regmatch_T = regmatch_T {
+    let mut regmatch = regmatch_T {
         regprog: *prog,
-        startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-        endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
+        startp: [core::ptr::null_mut(); 10],
+        endp: [core::ptr::null_mut(); 10],
         rm_matchcol: 0,
         rm_ic: ignore_case,
     };
-    let mut r: bool = vim_regexec_string(&raw mut regmatch_0, line, col, false_0 != 0);
-    *prog = regmatch_0.regprog;
-    return r;
+    let matched = vim_regexec_string(&raw mut regmatch, line, col, false);
+    *prog = regmatch.regprog;
+    matched
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regexec(
-    mut rmp: *mut regmatch_T,
-    mut line: *const ::core::ffi::c_char,
-    mut col: colnr_T,
+    rmp: *mut regmatch_T,
+    line: *const c_char,
+    col: colnr_T,
 ) -> bool {
-    return vim_regexec_string(rmp, line, col, false_0 != 0);
+    vim_regexec_string(rmp, line, col, false)
 }
+
+/// [`vim_regexec`] with `$` allowed to match at the end of the string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regexec_nl(
-    mut rmp: *mut regmatch_T,
-    mut line: *const ::core::ffi::c_char,
-    mut col: colnr_T,
+    rmp: *mut regmatch_T,
+    line: *const c_char,
+    col: colnr_T,
 ) -> bool {
-    return vim_regexec_string(rmp, line, col, true_0 != 0);
+    vim_regexec_string(rmp, line, col, true)
 }
+
+/// Run `rmp`'s program over `buf` starting at line `lnum`, column `col`.
+/// Returns the number of lines the match spans plus one, or 0 for no
+/// match; `tm`/`timed_out` bound how long the NFA engine may spend.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vim_regexec_multi(
-    mut rmp: *mut regmmatch_T,
-    mut win: *mut win_T,
-    mut buf: *mut buf_T,
-    mut lnum: linenr_T,
-    mut col: colnr_T,
-    mut tm: *mut proftime_T,
-    mut timed_out: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut rex_save: regexec_T = regexec_T {
-        reg_match: ::core::ptr::null_mut::<regmatch_T>(),
-        reg_mmatch: ::core::ptr::null_mut::<regmmatch_T>(),
-        reg_startp: ::core::ptr::null_mut::<*mut uint8_t>(),
-        reg_endp: ::core::ptr::null_mut::<*mut uint8_t>(),
-        reg_startpos: ::core::ptr::null_mut::<lpos_T>(),
-        reg_endpos: ::core::ptr::null_mut::<lpos_T>(),
-        reg_win: ::core::ptr::null_mut::<win_T>(),
-        reg_buf: ::core::ptr::null_mut::<buf_T>(),
-        reg_firstlnum: 0,
-        reg_maxline: 0,
-        reg_line_lbr: false,
-        lnum: 0,
-        line: ::core::ptr::null_mut::<uint8_t>(),
-        input: ::core::ptr::null_mut::<uint8_t>(),
-        need_clear_subexpr: 0,
-        need_clear_zsubexpr: 0,
-        reg_ic: false,
-        reg_icombine: false,
-        reg_nobreak: false,
-        reg_maxcol: 0,
-        nfa_has_zend: 0,
-        nfa_has_backref: 0,
-        nfa_nsubexpr: 0,
-        nfa_listid: 0,
-        nfa_alt_listid: 0,
-        nfa_has_zsubexpr: 0,
-    };
-    let mut rex_in_use_save: bool = rex_in_use.get();
+    rmp: *mut regmmatch_T,
+    win: *mut win_T,
+    buf: *mut buf_T,
+    lnum: linenr_T,
+    col: colnr_T,
+    tm: *mut proftime_T,
+    timed_out: *mut c_int,
+) -> c_int {
     if (*(*rmp).regprog).re_in_use {
         emsg(gettext(E_RECURSIVE.as_ptr()));
-        return false_0;
+        return 0;
     }
-    (*(*rmp).regprog).re_in_use = true_0 != 0;
-    if rex_in_use.get() {
-        rex_save = rex.get();
-    }
-    rex_in_use.set(true_0 != 0);
-    let mut result: ::core::ffi::c_int =
-        (*(*(*rmp).regprog).engine)
-            .regexec_multi
-            .expect("non-null function pointer")(rmp, win, buf, lnum, col, tm, timed_out);
-    (*(*rmp).regprog).re_in_use = false_0 != 0;
-    if (*(*rmp).regprog).re_engine == AUTOMATIC_ENGINE as ::core::ffi::c_int as ::core::ffi::c_uint
-        && result == NFA_TOO_EXPENSIVE as ::core::ffi::c_int
-    {
-        let mut save_p_re: ::core::ffi::c_int = p_re.get() as ::core::ffi::c_int;
-        let mut re_flags: ::core::ffi::c_int = (*(*rmp).regprog).re_flags as ::core::ffi::c_int;
-        let mut pat: *mut ::core::ffi::c_char =
-            xstrdup((*((*rmp).regprog as *mut nfa_regprog_T)).pattern);
-        p_re.set(BACKTRACKING_ENGINE as ::core::ffi::c_int as OptInt);
-        let mut prev_prog: *mut regprog_T = (*rmp).regprog;
-        report_re_switch(pat);
-        reg_do_extmatch.set(REX_ALL);
-        (*rmp).regprog = vim_regcomp(pat, re_flags);
-        reg_do_extmatch.set(0 as ::core::ffi::c_int);
-        if (*rmp).regprog.is_null() {
-            (*rmp).regprog = prev_prog;
-        } else {
-            vim_regfree(prev_prog);
-            (*(*rmp).regprog).re_in_use = true_0 != 0;
-            result = (*(*(*rmp).regprog).engine)
+    let result = with_rex(|| {
+        (*(*rmp).regprog).re_in_use = true;
+        let exec = |rmp: *mut regmmatch_T| {
+            (*(*(*rmp).regprog).engine)
                 .regexec_multi
                 .expect("non-null function pointer")(
                 rmp, win, buf, lnum, col, tm, timed_out
-            );
-            (*(*rmp).regprog).re_in_use = false_0 != 0;
+            )
+        };
+        let mut result = exec(rmp);
+        (*(*rmp).regprog).re_in_use = false;
+        if (*(*rmp).regprog).re_engine == AUTOMATIC_ENGINE as c_int as u32
+            && result == NFA_TOO_EXPENSIVE as c_int
+        {
+            let prev = (*rmp).regprog;
+            let new = recompile_backtracking(prev, true);
+            // Unlike the string case, a failed recompile keeps the old
+            // program rather than leaving the caller without one.
+            if new.is_null() {
+                (*rmp).regprog = prev;
+            } else {
+                (*rmp).regprog = new;
+                vim_regfree(prev);
+                (*(*rmp).regprog).re_in_use = true;
+                result = exec(rmp);
+                (*(*rmp).regprog).re_in_use = false;
+            }
         }
-        xfree(pat as *mut ::core::ffi::c_void);
-        p_re.set(save_p_re as OptInt);
-    }
-    rex_in_use.set(rex_in_use_save);
-    if rex_in_use.get() {
-        rex.set(rex_save);
-    }
-    return if result <= 0 as ::core::ffi::c_int {
-        0 as ::core::ffi::c_int
-    } else {
         result
-    };
+    });
+    result.max(0)
 }
