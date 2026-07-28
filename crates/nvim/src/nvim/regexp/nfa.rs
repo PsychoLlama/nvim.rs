@@ -9,10 +9,13 @@
 #[allow(unused_imports)]
 use super::*;
 
+mod assertions;
 mod atom;
 mod build;
+mod classes;
 mod collection;
 mod compile;
+mod composing;
 mod cursor;
 mod equi_class;
 mod escape;
@@ -22,6 +25,7 @@ mod matcher;
 mod parse;
 mod postfix;
 mod run;
+mod step;
 mod sub;
 
 pub(crate) use self::build::*;

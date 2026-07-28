@@ -1,5 +1,3 @@
-use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::charset::{vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordp_buf};
 use crate::src::nvim::eval::typval::{
     tv_clear, tv_get_string_buf_chk, tv_list_alloc, tv_list_append_string, tv_list_init_static10,
 };
@@ -8,21 +6,16 @@ use crate::src::nvim::eval::userfunc::call_func;
 use crate::src::nvim::eval_1::{eval_to_string, partial_name};
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::main::{curbuf, curwin};
+use crate::src::nvim::main::curbuf;
 use crate::src::nvim::main::{
     e_null, e_re_damg, e_resulting_text_too_long, got_int, p_mmp, re_extmatch_out,
 };
-use crate::src::nvim::mark::mark_get;
 use crate::src::nvim::mbyte::{
-    mb_get_class_tab, mb_tolower, utf_char2bytes, utf_char2len, utf_fold, utf_iscomposing_legacy,
-    utf_ptr2char, utf_ptr2len, utfc_ptr2len,
+    mb_tolower, utf_char2bytes, utf_char2len, utf_fold, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xrealloc, xstrdup};
 use crate::src::nvim::message::{emsg, iemsg};
-use crate::src::nvim::os::libc::{
-    __assert_fail, gettext, memmove, memset, strcpy, strlen, strncmp, strncpy,
-};
-use crate::src::nvim::plines::win_linetabsize;
+use crate::src::nvim::os::libc::{gettext, memmove, memset, strcpy, strlen, strncmp, strncpy};
 use crate::src::nvim::profile::profile_passed_limit;
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 pub use crate::src::nvim::types::{
