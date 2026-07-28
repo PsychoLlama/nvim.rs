@@ -1,504 +1,334 @@
-//! How far a simple item can repeat from here.
+//! How many times a `SIMPLE` item matches from here.
 //!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! The matcher uses this for `STAR`, `PLUS` and `BRACE_SIMPLE`: an item that
+//! matches exactly one character and cannot backtrack into itself can be run
+//! as a counted loop instead of as a chain of program nodes.
+//!
+//! Every opcode with an `ADD_NL` variant sits `ADD_NL` above its plain form,
+//! so the `FIRST_NL..=LAST_NL` band is exactly the set of `\_x` nodes — the
+//! ones allowed to count a line break as one of their matches.
 
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub(crate) unsafe extern "C" fn regrepeat(
-    mut p: *mut uint8_t,
-    mut maxcount: int64_t,
-) -> ::core::ffi::c_int {
-    let mut count: int64_t = 0 as int64_t;
-    let mut opnd: *mut uint8_t = ::core::ptr::null_mut::<uint8_t>();
-    let mut mask: ::core::ffi::c_int = 0;
-    let mut testval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut scan: *mut uint8_t = (*rex.ptr()).input;
-    opnd = p.offset(3 as ::core::ffi::c_int as isize);
-    's_965: {
-        '_do_class: {
-            'c_98954: {
-                'c_99840: {
-                    'c_100039: {
-                        'c_100236: {
-                            match *p as ::core::ffi::c_int {
-                                ANY | 50 => {
-                                    while count < maxcount {
-                                        while *scan as ::core::ffi::c_int != NUL && count < maxcount
-                                        {
-                                            count += 1;
-                                            scan = scan.offset(utfc_ptr2len(
-                                                scan as *mut ::core::ffi::c_char,
-                                            )
-                                                as isize);
-                                        }
-                                        if !(*rex.ptr()).reg_match.is_null()
-                                            || !(*p as ::core::ffi::c_int >= FIRST_NL
-                                                && *p as ::core::ffi::c_int <= LAST_NL)
-                                            || (*rex.ptr()).lnum > (*rex.ptr()).reg_maxline
-                                            || (*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                                            || count == maxcount
-                                        {
-                                            break;
-                                        }
-                                        count += 1;
-                                        reg_nextline();
-                                        scan = (*rex.ptr()).input;
-                                        if got_int.get() {
-                                            break;
-                                        }
-                                    }
-                                    break 's_965;
-                                }
-                                IDENT | 53 => {
-                                    testval = 1 as ::core::ffi::c_int;
-                                }
-                                SIDENT | 54 => {}
-                                KWORD | 55 => {
-                                    testval = 1 as ::core::ffi::c_int;
-                                    break 'c_100236;
-                                }
-                                SKWORD | 56 => {
-                                    break 'c_100236;
-                                }
-                                FNAME | 57 => {
-                                    testval = 1 as ::core::ffi::c_int;
-                                    break 'c_100039;
-                                }
-                                SFNAME | 58 => {
-                                    break 'c_100039;
-                                }
-                                PRINT | 59 => {
-                                    testval = 1 as ::core::ffi::c_int;
-                                    break 'c_99840;
-                                }
-                                SPRINT | 60 => {
-                                    break 'c_99840;
-                                }
-                                WHITE | 61 => {
-                                    mask = RI_WHITE;
-                                    testval = mask;
-                                    break '_do_class;
-                                }
-                                NWHITE | 62 => {
-                                    mask = RI_WHITE;
-                                    break '_do_class;
-                                }
-                                DIGIT | 63 => {
-                                    mask = RI_DIGIT;
-                                    testval = mask;
-                                    break '_do_class;
-                                }
-                                NDIGIT | 64 => {
-                                    mask = RI_DIGIT;
-                                    break '_do_class;
-                                }
-                                HEX | 65 => {
-                                    mask = RI_HEX;
-                                    testval = mask;
-                                    break '_do_class;
-                                }
-                                NHEX | 66 => {
-                                    mask = RI_HEX;
-                                    break '_do_class;
-                                }
-                                OCTAL | 67 => {
-                                    mask = RI_OCTAL;
-                                    testval = mask;
-                                    break '_do_class;
-                                }
-                                NOCTAL | 68 => {
-                                    mask = RI_OCTAL;
-                                    break '_do_class;
-                                }
-                                WORD | 69 => {
-                                    mask = RI_WORD;
-                                    testval = mask;
-                                    break '_do_class;
-                                }
-                                NWORD | 70 => {
-                                    mask = RI_WORD;
-                                    break '_do_class;
-                                }
-                                HEAD | 71 => {
-                                    mask = RI_HEAD;
-                                    testval = mask;
-                                    break '_do_class;
-                                }
-                                NHEAD | 72 => {
-                                    mask = RI_HEAD;
-                                    break '_do_class;
-                                }
-                                ALPHA | 73 => {
-                                    mask = RI_ALPHA;
-                                    testval = mask;
-                                    break '_do_class;
-                                }
-                                NALPHA | 74 => {
-                                    mask = RI_ALPHA;
-                                    break '_do_class;
-                                }
-                                LOWER | 75 => {
-                                    mask = RI_LOWER;
-                                    testval = mask;
-                                    break '_do_class;
-                                }
-                                NLOWER | 76 => {
-                                    mask = RI_LOWER;
-                                    break '_do_class;
-                                }
-                                UPPER | 77 => {
-                                    mask = RI_UPPER;
-                                    testval = mask;
-                                    break '_do_class;
-                                }
-                                NUPPER | 78 => {
-                                    mask = RI_UPPER;
-                                    break '_do_class;
-                                }
-                                EXACTLY => {
-                                    let mut cu: ::core::ffi::c_int = 0;
-                                    let mut cl: ::core::ffi::c_int = 0;
-                                    if (*rex.ptr()).reg_ic {
-                                        cu = mb_toupper(*opnd as ::core::ffi::c_int);
-                                        cl = mb_tolower(*opnd as ::core::ffi::c_int);
-                                        while count < maxcount
-                                            && (*scan as ::core::ffi::c_int == cu
-                                                || *scan as ::core::ffi::c_int == cl)
-                                        {
-                                            count += 1;
-                                            scan = scan.offset(1);
-                                        }
-                                    } else {
-                                        cu = *opnd as ::core::ffi::c_int;
-                                        while count < maxcount && *scan as ::core::ffi::c_int == cu
-                                        {
-                                            count += 1;
-                                            scan = scan.offset(1);
-                                        }
-                                    }
-                                    break 's_965;
-                                }
-                                MULTIBYTECODE => {
-                                    let mut i: ::core::ffi::c_int = 0;
-                                    let mut len: ::core::ffi::c_int = 0;
-                                    let mut cf: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                    len = utfc_ptr2len(opnd as *mut ::core::ffi::c_char);
-                                    if len > 1 as ::core::ffi::c_int {
-                                        if (*rex.ptr()).reg_ic {
-                                            cf = utf_fold(utf_ptr2char(
-                                                opnd as *mut ::core::ffi::c_char,
-                                            ));
-                                        }
-                                        while count < maxcount
-                                            && utfc_ptr2len(scan as *mut ::core::ffi::c_char) >= len
-                                        {
-                                            i = 0 as ::core::ffi::c_int;
-                                            while i < len {
-                                                if *opnd.offset(i as isize) as ::core::ffi::c_int
-                                                    != *scan.offset(i as isize)
-                                                        as ::core::ffi::c_int
-                                                {
-                                                    break;
-                                                }
-                                                i += 1;
-                                            }
-                                            if i < len
-                                                && (!(*rex.ptr()).reg_ic
-                                                    || utf_fold(utf_ptr2char(
-                                                        scan as *mut ::core::ffi::c_char,
-                                                    )) != cf)
-                                            {
-                                                break;
-                                            }
-                                            scan = scan.offset(len as isize);
-                                            count += 1;
-                                        }
-                                    }
-                                    break 's_965;
-                                }
-                                ANYOF | 51 => {
-                                    testval = 1 as ::core::ffi::c_int;
-                                    break 'c_98954;
-                                }
-                                ANYBUT | 52 => {
-                                    break 'c_98954;
-                                }
-                                NEWL => {
-                                    while count < maxcount
-                                        && (*scan as ::core::ffi::c_int == NUL
-                                            && (*rex.ptr()).lnum <= (*rex.ptr()).reg_maxline
-                                            && !(*rex.ptr()).reg_line_lbr
-                                            && (*rex.ptr()).reg_match.is_null()
-                                            || *scan as ::core::ffi::c_int
-                                                == '\n' as ::core::ffi::c_int
-                                                && (*rex.ptr()).reg_line_lbr as ::core::ffi::c_int
-                                                    != 0)
-                                    {
-                                        count += 1;
-                                        if (*rex.ptr()).reg_line_lbr {
-                                            (*rex.ptr()).input =
-                                                (*rex.ptr()).input.offset(utfc_ptr2len(
-                                                    (*rex.ptr()).input as *mut ::core::ffi::c_char,
-                                                )
-                                                    as isize);
-                                        } else {
-                                            reg_nextline();
-                                        }
-                                        scan = (*rex.ptr()).input;
-                                        if got_int.get() {
-                                            break;
-                                        }
-                                    }
-                                    break 's_965;
-                                }
-                                _ => {
-                                    iemsg(gettext(
-                                        &raw const e_re_corr as *const ::core::ffi::c_char,
-                                    ));
-                                    break 's_965;
-                                }
-                            }
-                            while count < maxcount {
-                                if vim_isIDc(utf_ptr2char(scan as *mut ::core::ffi::c_char))
-                                    as ::core::ffi::c_int
-                                    != 0
-                                    && (testval != 0 || !ascii_isdigit(*scan as ::core::ffi::c_int))
-                                {
-                                    scan = scan
-                                        .offset(
-                                            utfc_ptr2len(scan as *mut ::core::ffi::c_char) as isize
-                                        );
-                                } else if *scan as ::core::ffi::c_int == NUL {
-                                    if !(*rex.ptr()).reg_match.is_null()
-                                        || !(*p as ::core::ffi::c_int >= FIRST_NL
-                                            && *p as ::core::ffi::c_int <= LAST_NL)
-                                        || (*rex.ptr()).lnum > (*rex.ptr()).reg_maxline
-                                        || (*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                                    {
-                                        break;
-                                    }
-                                    reg_nextline();
-                                    scan = (*rex.ptr()).input;
-                                    if got_int.get() {
-                                        break;
-                                    }
-                                } else {
-                                    if !((*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                                        && *scan as ::core::ffi::c_int
-                                            == '\n' as ::core::ffi::c_int
-                                        && (*p as ::core::ffi::c_int >= FIRST_NL
-                                            && *p as ::core::ffi::c_int <= LAST_NL))
-                                    {
-                                        break;
-                                    }
-                                    scan = scan.offset(1);
-                                }
-                                count += 1;
-                            }
-                            break 's_965;
+use core::ffi::{c_char, c_int};
+
+use crate::src::nvim::ascii::ascii_isdigit;
+use crate::src::nvim::charset::{vim_isIDc, vim_isfilec, vim_isprintc, vim_iswordp_buf};
+use crate::src::nvim::main::{e_re_corr, got_int};
+use crate::src::nvim::mbyte::{mb_tolower, mb_toupper, utf_fold, utf_ptr2char, utfc_ptr2len};
+use crate::src::nvim::message::iemsg;
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::regexp::{
+    ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, DIGIT, EXACTLY, FIRST_NL, FNAME, HEAD, HEX, IDENT, KWORD,
+    LAST_NL, LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOCTAL, NUL, NUPPER,
+    NWHITE, NWORD, OCTAL, PRINT, RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL,
+    RI_UPPER, RI_WHITE, RI_WORD, SFNAME, SIDENT, SKWORD, SPRINT, UPPER, WHITE, WORD, cstrchr,
+    reg_nextline, rex,
+};
+use crate::src::nvim::types::{int64_t, uint8_t};
+
+/// What stepping onto the next line produced.
+enum Line {
+    /// The line break counts as one match; here is the new cursor.
+    Crossed(*mut uint8_t),
+    /// The user interrupted while fetching the line.
+    Interrupted(*mut uint8_t),
+    /// This node does not cross line breaks, or there is no next line.
+    End,
+}
+
+/// How many times the item at `p` matches starting at `rex.input`, capped at
+/// `maxcount`. Leaves `rex.input` just past the last match.
+pub(crate) fn regrepeat(p: *mut uint8_t, maxcount: int64_t) -> c_int {
+    // SAFETY: `p` is a node in the compiled program, so its opcode byte and
+    // the operand three bytes in are readable; `scan` walks the current line,
+    // which is NUL-terminated, and every advance below is by the length of
+    // the character it just accepted.
+    unsafe {
+        let op = *p as c_int;
+        let opnd = p.add(3);
+        let mut scan = (*rex.ptr()).input;
+        let mut count: int64_t = 0;
+
+        // Only a `\_x` node counts a line break, and only in a multi-line
+        // match where the line break is not already part of the text.
+        let crosses_lines = (FIRST_NL..=LAST_NL).contains(&op);
+        let next_line = || {
+            if !(*rex.ptr()).reg_match.is_null()
+                || !crosses_lines
+                || (*rex.ptr()).lnum > (*rex.ptr()).reg_maxline
+                || (*rex.ptr()).reg_line_lbr
+            {
+                return Line::End;
+            }
+            reg_nextline();
+            if got_int.get() {
+                Line::Interrupted((*rex.ptr()).input)
+            } else {
+                Line::Crossed((*rex.ptr()).input)
+            }
+        };
+        // With 'reg_line_lbr' the text holds real newline bytes rather than
+        // line breaks, so a `\_x` matches the byte itself.
+        let literal_newline = |scan: *mut uint8_t| {
+            (*rex.ptr()).reg_line_lbr && *scan as c_int == '\n' as c_int && crosses_lines
+        };
+
+        // Advance over one character of the class, cross a line break, or
+        // stop. Shared by every class-shaped opcode below; `accept` sees the
+        // cursor and says whether the character there belongs.
+        macro_rules! count_class {
+            ($nul_first:expr, $accept:expr) => {
+                'walk: while count < maxcount {
+                    let at_nul = *scan as c_int == NUL;
+                    if at_nul && $nul_first {
+                        match next_line() {
+                            Line::Crossed(next) => scan = next,
+                            Line::Interrupted(_) => break 'walk,
+                            Line::End => break 'walk,
                         }
-                        while count < maxcount {
-                            if vim_iswordp_buf(
-                                scan as *mut ::core::ffi::c_char,
-                                (*rex.ptr()).reg_buf,
-                            ) as ::core::ffi::c_int
-                                != 0
-                                && (testval != 0 || !ascii_isdigit(*scan as ::core::ffi::c_int))
-                            {
-                                scan =
-                                    scan.offset(
-                                        utfc_ptr2len(scan as *mut ::core::ffi::c_char) as isize
-                                    );
-                            } else if *scan as ::core::ffi::c_int == NUL {
-                                if !(*rex.ptr()).reg_match.is_null()
-                                    || !(*p as ::core::ffi::c_int >= FIRST_NL
-                                        && *p as ::core::ffi::c_int <= LAST_NL)
-                                    || (*rex.ptr()).lnum > (*rex.ptr()).reg_maxline
-                                    || (*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                                {
-                                    break;
-                                }
-                                reg_nextline();
-                                scan = (*rex.ptr()).input;
-                                if got_int.get() {
-                                    break;
-                                }
-                            } else {
-                                if !((*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                                    && *scan as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-                                    && (*p as ::core::ffi::c_int >= FIRST_NL
-                                        && *p as ::core::ffi::c_int <= LAST_NL))
-                                {
-                                    break;
-                                }
-                                scan = scan.offset(1);
-                            }
-                            count += 1;
+                    } else if $accept(scan) {
+                        scan = scan.add(utfc_ptr2len(scan.cast()) as usize);
+                    } else if at_nul {
+                        match next_line() {
+                            Line::Crossed(next) => scan = next,
+                            Line::Interrupted(_) => break 'walk,
+                            Line::End => break 'walk,
                         }
-                        break 's_965;
-                    }
-                    while count < maxcount {
-                        if vim_isfilec(utf_ptr2char(scan as *mut ::core::ffi::c_char))
-                            as ::core::ffi::c_int
-                            != 0
-                            && (testval != 0 || !ascii_isdigit(*scan as ::core::ffi::c_int))
-                        {
-                            scan = scan
-                                .offset(utfc_ptr2len(scan as *mut ::core::ffi::c_char) as isize);
-                        } else if *scan as ::core::ffi::c_int == NUL {
-                            if !(*rex.ptr()).reg_match.is_null()
-                                || !(*p as ::core::ffi::c_int >= FIRST_NL
-                                    && *p as ::core::ffi::c_int <= LAST_NL)
-                                || (*rex.ptr()).lnum > (*rex.ptr()).reg_maxline
-                                || (*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                            {
-                                break;
-                            }
-                            reg_nextline();
-                            scan = (*rex.ptr()).input;
-                            if got_int.get() {
-                                break;
-                            }
-                        } else {
-                            if !((*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                                && *scan as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-                                && (*p as ::core::ffi::c_int >= FIRST_NL
-                                    && *p as ::core::ffi::c_int <= LAST_NL))
-                            {
-                                break;
-                            }
-                            scan = scan.offset(1);
-                        }
-                        count += 1;
-                    }
-                    break 's_965;
-                }
-                while count < maxcount {
-                    if *scan as ::core::ffi::c_int == NUL {
-                        if !(*rex.ptr()).reg_match.is_null()
-                            || !(*p as ::core::ffi::c_int >= FIRST_NL
-                                && *p as ::core::ffi::c_int <= LAST_NL)
-                            || (*rex.ptr()).lnum > (*rex.ptr()).reg_maxline
-                            || (*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                        {
-                            break;
-                        }
-                        reg_nextline();
-                        scan = (*rex.ptr()).input;
-                        if got_int.get() {
-                            break;
-                        }
-                    } else if vim_isprintc(utf_ptr2char(scan as *mut ::core::ffi::c_char))
-                        as ::core::ffi::c_int
-                        == 1 as ::core::ffi::c_int
-                        && (testval != 0 || !ascii_isdigit(*scan as ::core::ffi::c_int))
-                    {
-                        scan = scan.offset(utfc_ptr2len(scan as *mut ::core::ffi::c_char) as isize);
+                    } else if literal_newline(scan) {
+                        scan = scan.add(1);
                     } else {
-                        if !((*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                            && *scan as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-                            && (*p as ::core::ffi::c_int >= FIRST_NL
-                                && *p as ::core::ffi::c_int <= LAST_NL))
-                        {
-                            break;
-                        }
-                        scan = scan.offset(1);
+                        break 'walk;
                     }
                     count += 1;
                 }
-                break 's_965;
-            }
-            while count < maxcount {
-                let mut len_0: ::core::ffi::c_int = 0;
-                if *scan as ::core::ffi::c_int == NUL {
-                    if !(*rex.ptr()).reg_match.is_null()
-                        || !(*p as ::core::ffi::c_int >= FIRST_NL
-                            && *p as ::core::ffi::c_int <= LAST_NL)
-                        || (*rex.ptr()).lnum > (*rex.ptr()).reg_maxline
-                        || (*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                    {
-                        break;
+            };
+        }
+
+        // Upstream's `testval`: this is the positive form of a pair. For
+        // `\i`/`\I` and friends that means digits are members after all; for
+        // `[]` it means a hit rather than a miss is what continues the count.
+        let positive = matches!(
+            op - if crosses_lines { ADD_NL } else { 0 },
+            IDENT | KWORD | FNAME | PRINT | ANYOF
+        );
+
+        match op {
+            // `.` and `\_.`: every character, and for `\_.` every line.
+            _ if is(op, ANY) => {
+                'any: while count < maxcount {
+                    while *scan as c_int != NUL && count < maxcount {
+                        count += 1;
+                        scan = scan.add(utfc_ptr2len(scan.cast()) as usize);
                     }
-                    reg_nextline();
+                    if count == maxcount {
+                        break 'any;
+                    }
+                    // Unlike the class walks below, the line break is counted
+                    // before the interrupt check.
+                    match next_line() {
+                        Line::Crossed(next) => {
+                            count += 1;
+                            scan = next;
+                        }
+                        Line::Interrupted(_) => {
+                            count += 1;
+                            break 'any;
+                        }
+                        Line::End => break 'any,
+                    }
+                }
+            }
+
+            // `\i`/`\I`: 'isident' characters.
+            _ if is(op, IDENT) || is(op, SIDENT) => count_class!(false, |scan: *mut uint8_t| {
+                vim_isIDc(utf_ptr2char(scan.cast())) && (positive || !ascii_isdigit(*scan as c_int))
+            }),
+
+            // `\k`/`\K`: 'iskeyword' characters, which are buffer-local.
+            _ if is(op, KWORD) || is(op, SKWORD) => count_class!(false, |scan: *mut uint8_t| {
+                vim_iswordp_buf(scan.cast(), (*rex.ptr()).reg_buf)
+                    && (positive || !ascii_isdigit(*scan as c_int))
+            }),
+
+            // `\f`/`\F`: 'isfname' characters.
+            _ if is(op, FNAME) || is(op, SFNAME) => count_class!(false, |scan: *mut uint8_t| {
+                vim_isfilec(utf_ptr2char(scan.cast()))
+                    && (positive || !ascii_isdigit(*scan as c_int))
+            }),
+
+            // `\p`/`\P`: printable characters. This one tests for the end of
+            // the line before the class, where the three above do it after.
+            _ if is(op, PRINT) || is(op, SPRINT) => count_class!(true, |scan: *mut uint8_t| {
+                vim_isprintc(utf_ptr2char(scan.cast()))
+                    && (positive || !ascii_isdigit(*scan as c_int))
+            }),
+
+            // A literal character. Case folding here is byte-wise: an
+            // `EXACTLY` that a multi can repeat is single-byte by
+            // construction (`use_multibytecode` sends the rest to
+            // `MULTIBYTECODE`).
+            EXACTLY => {
+                if (*rex.ptr()).reg_ic {
+                    let upper = mb_toupper(*opnd as c_int);
+                    let lower = mb_tolower(*opnd as c_int);
+                    while count < maxcount && (*scan as c_int == upper || *scan as c_int == lower) {
+                        count += 1;
+                        scan = scan.add(1);
+                    }
+                } else {
+                    let want = *opnd as c_int;
+                    while count < maxcount && *scan as c_int == want {
+                        count += 1;
+                        scan = scan.add(1);
+                    }
+                }
+            }
+
+            // One multibyte character, compared as bytes first and by case
+            // fold only if the bytes differ.
+            MULTIBYTECODE => {
+                let len = utfc_ptr2len(opnd.cast());
+                if len > 1 {
+                    let folded = if (*rex.ptr()).reg_ic {
+                        utf_fold(utf_ptr2char(opnd.cast()))
+                    } else {
+                        0
+                    };
+                    while count < maxcount && utfc_ptr2len(scan.cast()) >= len {
+                        let same = (0..len).all(|i| *opnd.add(i as usize) == *scan.add(i as usize));
+                        if !same
+                            && (!(*rex.ptr()).reg_ic
+                                || utf_fold(utf_ptr2char(scan.cast())) != folded)
+                        {
+                            break;
+                        }
+                        scan = scan.add(len as usize);
+                        count += 1;
+                    }
+                }
+            }
+
+            // A `[]` collection.
+            _ if is(op, ANYOF) || is(op, ANYBUT) => {
+                let wanted = c_int::from(positive);
+                'coll: while count < maxcount {
+                    if *scan as c_int == NUL {
+                        match next_line() {
+                            Line::Crossed(next) => scan = next,
+                            Line::Interrupted(_) | Line::End => break 'coll,
+                        }
+                    } else if literal_newline(scan) {
+                        scan = scan.add(1);
+                    } else {
+                        let len = utfc_ptr2len(scan.cast());
+                        let c = if len > 1 {
+                            utf_ptr2char(scan.cast())
+                        } else {
+                            *scan as c_int
+                        };
+                        if c_int::from(cstrchr(opnd.cast(), c).is_null()) == wanted {
+                            break 'coll;
+                        }
+                        scan = scan.add(if len > 1 { len as usize } else { 1 });
+                    }
+                    count += 1;
+                }
+            }
+
+            // A line break as an atom of its own.
+            NEWL => {
+                while count < maxcount
+                    && ((*scan as c_int == NUL
+                        && (*rex.ptr()).lnum <= (*rex.ptr()).reg_maxline
+                        && !(*rex.ptr()).reg_line_lbr
+                        && (*rex.ptr()).reg_match.is_null())
+                        || (*scan as c_int == '\n' as c_int && (*rex.ptr()).reg_line_lbr))
+                {
+                    count += 1;
+                    if (*rex.ptr()).reg_line_lbr {
+                        (*rex.ptr()).input = (*rex.ptr())
+                            .input
+                            .add(utfc_ptr2len((*rex.ptr()).input.cast()) as usize);
+                    } else {
+                        reg_nextline();
+                    }
                     scan = (*rex.ptr()).input;
                     if got_int.get() {
                         break;
                     }
-                } else if (*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                    && *scan as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-                    && (*p as ::core::ffi::c_int >= FIRST_NL && *p as ::core::ffi::c_int <= LAST_NL)
-                {
-                    scan = scan.offset(1);
-                } else {
-                    len_0 = utfc_ptr2len(scan as *mut ::core::ffi::c_char);
-                    if len_0 > 1 as ::core::ffi::c_int {
-                        if cstrchr(
-                            opnd as *mut ::core::ffi::c_char,
-                            utf_ptr2char(scan as *mut ::core::ffi::c_char),
-                        )
-                        .is_null() as ::core::ffi::c_int
-                            == testval
-                        {
-                            break;
+                }
+            }
+
+            // Everything else is one of the `RI_*` byte classes.
+            _ => {
+                let Some((mask, positive)) = byte_class(op) else {
+                    iemsg(gettext(&raw const e_re_corr as *const c_char));
+                    (*rex.ptr()).input = scan;
+                    return count as c_int;
+                };
+                let testval = if positive { mask } else { 0 };
+                'bytes: while count < maxcount {
+                    if *scan as c_int == NUL {
+                        match next_line() {
+                            Line::Crossed(next) => scan = next,
+                            Line::Interrupted(_) | Line::End => break 'bytes,
                         }
-                        scan = scan.offset(len_0 as isize);
                     } else {
-                        if cstrchr(
-                            opnd as *mut ::core::ffi::c_char,
-                            *scan as ::core::ffi::c_int,
-                        )
-                        .is_null() as ::core::ffi::c_int
-                            == testval
-                        {
-                            break;
+                        let len = utfc_ptr2len(scan.cast());
+                        if len > 1 {
+                            // A multibyte character is in none of these
+                            // classes, so only the negative form takes it.
+                            if positive {
+                                break 'bytes;
+                            }
+                            scan = scan.add(len as usize);
+                        } else if RI_FLAGS[*scan as usize] as c_int & mask == testval {
+                            scan = scan.add(1);
+                        } else if literal_newline(scan) {
+                            scan = scan.add(1);
+                        } else {
+                            break 'bytes;
                         }
-                        scan = scan.offset(1);
                     }
-                }
-                count += 1;
-            }
-            break 's_965;
-        }
-        while count < maxcount {
-            let mut l: ::core::ffi::c_int = 0;
-            if *scan as ::core::ffi::c_int == NUL {
-                if !(*rex.ptr()).reg_match.is_null()
-                    || !(*p as ::core::ffi::c_int >= FIRST_NL
-                        && *p as ::core::ffi::c_int <= LAST_NL)
-                    || (*rex.ptr()).lnum > (*rex.ptr()).reg_maxline
-                    || (*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                {
-                    break;
-                }
-                reg_nextline();
-                scan = (*rex.ptr()).input;
-                if got_int.get() {
-                    break;
-                }
-            } else {
-                l = utfc_ptr2len(scan as *mut ::core::ffi::c_char);
-                if l > 1 as ::core::ffi::c_int {
-                    if testval != 0 as ::core::ffi::c_int {
-                        break;
-                    }
-                    scan = scan.offset(l as isize);
-                } else if RI_FLAGS[*scan as usize] as ::core::ffi::c_int & mask == testval {
-                    scan = scan.offset(1);
-                } else {
-                    if !((*rex.ptr()).reg_line_lbr as ::core::ffi::c_int != 0
-                        && *scan as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-                        && (*p as ::core::ffi::c_int >= FIRST_NL
-                            && *p as ::core::ffi::c_int <= LAST_NL))
-                    {
-                        break;
-                    }
-                    scan = scan.offset(1);
+                    count += 1;
                 }
             }
-            count += 1;
         }
+
+        (*rex.ptr()).input = scan;
+        count as c_int
     }
-    (*rex.ptr()).input = scan;
-    return count as ::core::ffi::c_int;
+}
+
+/// Is `op` `base` or its `\_` twin?
+fn is(op: c_int, base: c_int) -> bool {
+    op == base || op == base + ADD_NL
+}
+
+/// The `RI_*` mask an opcode tests against, and whether it wants a hit or a
+/// miss.
+fn byte_class(op: c_int) -> Option<(c_int, bool)> {
+    let (mask, positive) = match op - if op > NUPPER { ADD_NL } else { 0 } {
+        WHITE => (RI_WHITE, true),
+        NWHITE => (RI_WHITE, false),
+        DIGIT => (RI_DIGIT, true),
+        NDIGIT => (RI_DIGIT, false),
+        HEX => (RI_HEX, true),
+        NHEX => (RI_HEX, false),
+        OCTAL => (RI_OCTAL, true),
+        NOCTAL => (RI_OCTAL, false),
+        WORD => (RI_WORD, true),
+        NWORD => (RI_WORD, false),
+        HEAD => (RI_HEAD, true),
+        NHEAD => (RI_HEAD, false),
+        ALPHA => (RI_ALPHA, true),
+        NALPHA => (RI_ALPHA, false),
+        LOWER => (RI_LOWER, true),
+        NLOWER => (RI_LOWER, false),
+        UPPER => (RI_UPPER, true),
+        NUPPER => (RI_UPPER, false),
+        _ => return None,
+    };
+    Some((mask, positive))
 }

@@ -1,7 +1,7 @@
 {
   "internal_exports": 122,
   "files_without_forbid_unsafe": 338,
-  "files_without_deny_unsafe_op": 278,
+  "files_without_deny_unsafe_op": 277,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
