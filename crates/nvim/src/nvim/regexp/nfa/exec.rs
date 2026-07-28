@@ -249,14 +249,14 @@ pub(crate) unsafe extern "C" fn nfa_regexec_both(
             (*rex.ptr()).need_clear_zsubexpr = false_0;
         }
         if (*prog).regstart != NUL {
-            if skip_to_start((*prog).regstart, &raw mut col) == FAIL {
+            if skip_to_start((*prog).regstart, &mut col) == FAIL {
                 return 0 as ::core::ffi::c_int;
             }
             if !(*prog).match_text.is_null()
                 && *(*prog).match_text as ::core::ffi::c_int != NUL
                 && !(*rex.ptr()).reg_icombine
             {
-                retval = find_match_text(&raw mut col, (*prog).regstart, (*prog).match_text);
+                retval = find_match_text(&mut col, (*prog).regstart, (*prog).match_text);
                 if (*rex.ptr()).reg_match.is_null() {
                     (*(*rex.ptr()).reg_mmatch).rmm_matchcol = col;
                 } else {

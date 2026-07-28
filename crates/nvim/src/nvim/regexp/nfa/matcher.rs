@@ -25,8 +25,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
     let mut listidx: ::core::ffi::c_int = 0;
     let mut thislist: *mut nfa_list_T = ::core::ptr::null_mut::<nfa_list_T>();
     let mut nextlist: *mut nfa_list_T = ::core::ptr::null_mut::<nfa_list_T>();
-    let mut listids: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
-    let mut listids_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    let mut listids: Vec<::core::ffi::c_int> = Vec::new();
     let mut add_state: *mut nfa_state_T = ::core::ptr::null_mut::<nfa_state_T>();
     let mut add_here: bool = false;
     let mut add_count: ::core::ffi::c_int = 0;
@@ -38,7 +37,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
     if got_int.get() {
         return false_0;
     }
-    if nfa_did_time_out() != 0 {
+    if nfa_did_time_out() {
         return false_0;
     }
     nfa_match.set(false_0);
@@ -125,7 +124,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                 nfa_time_count.get() == 20 as ::core::ffi::c_int
                             } {
                                 nfa_time_count.set(0 as ::core::ffi::c_int);
-                                if nfa_did_time_out() != 0 {
+                                if nfa_did_time_out() {
                                     break;
                                 }
                             }
@@ -214,8 +213,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                             prog,
                                             submatch,
                                             m,
-                                            &raw mut listids,
-                                            &raw mut listids_len,
+                                            &mut listids,
                                         );
                                         if result == NFA_TOO_EXPENSIVE as ::core::ffi::c_int {
                                             nfa_match.set(result);
@@ -354,8 +352,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                             prog,
                                             submatch,
                                             m,
-                                            &raw mut listids,
-                                            &raw mut listids_len,
+                                            &mut listids,
                                         );
                                         if result == NFA_TOO_EXPENSIVE as ::core::ffi::c_int {
                                             nfa_match.set(result);
@@ -1077,15 +1074,14 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                         subidx = (*(*t).state).c
                                             - NFA_BACKREF1 as ::core::ffi::c_int
                                             + 1 as ::core::ffi::c_int;
-                                        result = match_backref(
-                                            &raw mut (*t).subs.norm,
-                                            subidx,
-                                            &raw mut bytelen_0,
-                                        );
+                                        result =
+                                            match_backref(&(*t).subs.norm, subidx, &mut bytelen_0)
+                                                as ::core::ffi::c_int;
                                     } else {
                                         subidx = (*(*t).state).c - NFA_ZREF1 as ::core::ffi::c_int
                                             + 1 as ::core::ffi::c_int;
-                                        result = match_zref(subidx, &raw mut bytelen_0);
+                                        result = match_zref(subidx, &mut bytelen_0)
+                                            as ::core::ffi::c_int;
                                     }
                                     if result != 0 {
                                         if bytelen_0 == 0 as ::core::ffi::c_int {
@@ -1432,8 +1428,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                                 prog,
                                                 submatch,
                                                 m,
-                                                &raw mut listids,
-                                                &raw mut listids_len,
+                                                &mut listids,
                                             );
                                             (*pim_0).result = if result != 0 {
                                                 NFA_PIM_MATCH
@@ -1565,7 +1560,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                                             (*rex.ptr()).input.offset_from((*rex.ptr()).line)
                                                 as colnr_T
                                                 + clen as colnr_T;
-                                        if skip_to_start((*prog).regstart, &raw mut col_1) == FAIL {
+                                        if skip_to_start((*prog).regstart, &mut col_1) == FAIL {
                                             break '_theend;
                                         }
                                         (*rex.ptr()).input = (*rex.ptr())
@@ -1650,7 +1645,7 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
                         continue;
                     }
                     nfa_time_count.set(0 as ::core::ffi::c_int);
-                    if nfa_did_time_out() != 0 {
+                    if nfa_did_time_out() {
                         break '_theend;
                     }
                 }
@@ -1659,6 +1654,5 @@ pub(crate) unsafe extern "C" fn nfa_regmatch(
     }
     xfree(list[0 as ::core::ffi::c_int as usize].t as *mut ::core::ffi::c_void);
     xfree(list[1 as ::core::ffi::c_int as usize].t as *mut ::core::ffi::c_void);
-    xfree(listids as *mut ::core::ffi::c_void);
     return nfa_match.get();
 }
