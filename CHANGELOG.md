@@ -16,6 +16,11 @@ and this project adheres to [CalVer](https://calver.org/).
   retiring all 27k lines of `api/private/dispatch.rs`, 18k of
   `lua/api_wrappers.rs` and 32k of frozen metadata bytes in
   `api/private/helpers.rs`.
+- The option table — every option's name, type, scopes, flags, default and
+  callbacks, plus the name lookup and the arrays of valid values — is
+  generated from `options.lua` again (`just apigen`) instead of carried as
+  transpiled data, taking 19k lines out of `option.rs` and leaving the
+  `:set`/`did_set` logic behind on a table that can no longer drift.
 
 ## [2026.07.27-dd16441f3f]
 
