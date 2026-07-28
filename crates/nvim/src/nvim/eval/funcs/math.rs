@@ -3,8 +3,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
+use super::uv_random;
+use super::wrappers::tv_get_float_chk;
 use super::{VAR_FLOAT, VAR_LIST, VAR_NUMBER, VARNUMBER_MAX};
-use super::{tv_get_float_chk, uv_random};
 use crate::semsg;
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::eval::typval::{

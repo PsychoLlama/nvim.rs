@@ -3,10 +3,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
+use super::wrappers::non_zero_arg;
 use super::{
     CONV_NONE, FAIL, FORWARD, GA_EMPTY_INIT_VALUE, HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR,
     NSUBEXP, NUL, RE_MAGIC, RE_STRING, SMT_ALL, VAR_BLOB, VAR_LIST, VAR_STRING, VSE_NONE,
-    kListLenMayKnow, non_zero_arg,
+    kListLenMayKnow,
 };
 use crate::semsg;
 use crate::src::nvim::cursor::get_cursor_pos_ptr;

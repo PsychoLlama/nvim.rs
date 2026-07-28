@@ -3,9 +3,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
+use super::wrappers::non_zero_arg;
 use super::{
     MENU_ALL_MODES, MODE_CMDLINE, NUL, VAR_STRING, VV_SHELL_ERROR, kErrorTypeNone, kFalse,
-    kListLenMayKnow, kNone, kObjectTypeBoolean, kRetNilBool, kTrue, non_zero_arg, true_0,
+    kListLenMayKnow, kNone, kObjectTypeBoolean, kRetNilBool, kTrue, true_0,
 };
 use crate::src::nvim::api::private::converter::object_to_vim;
 use crate::src::nvim::api::private::helpers::api_metadata;

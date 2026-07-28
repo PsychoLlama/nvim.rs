@@ -2,16 +2,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
-use super::{
-    FAIL, MAXPATHL, NUL, OK, find_tabwin, find_win_by_nr_or_id, kListLenMayKnow, kListLenUnknown,
-    tv_get_buf,
-};
+use super::{FAIL, MAXPATHL, NUL, OK, kListLenMayKnow, kListLenUnknown, tv_get_buf};
 use crate::src::nvim::eval::typval::{
     tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc,
     tv_dict_alloc_ret, tv_get_number, tv_get_string, tv_get_string_chk, tv_list_alloc,
     tv_list_alloc_ret, tv_list_append_dict, tv_list_append_list, tv_list_append_number,
     tv_list_append_string,
 };
+use crate::src::nvim::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::src::nvim::main::{curbuf, curwin, emsg_off, vim_ignored};
 use crate::src::nvim::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks};
 use crate::src::nvim::memory::{xfree, xmalloc};
