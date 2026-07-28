@@ -18,7 +18,6 @@ use crate::src::nvim::channel::{
 use crate::src::nvim::channel::{channel_proc, channel_pty};
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::cmdexpand::cmdline_pum_active;
-use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::edit::buf_prompt_text;
 use crate::src::nvim::eval::buffer::find_buffer;
 use crate::src::nvim::eval::typval::{
@@ -44,9 +43,8 @@ use crate::src::nvim::eval::vars::{
 };
 use crate::src::nvim::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::src::nvim::eval_1::{
-    common_job_callbacks, eval_expr_to_bool, eval_expr_valid_arg, eval_has_provider, eval_option,
-    eval1, find_job, get_callback_depth, partial_name, prompt_get_input, save_tv_as_string,
-    script_host_eval, tv_to_argv,
+    common_job_callbacks, eval_has_provider, eval_option, eval1, find_job, get_callback_depth,
+    partial_name, prompt_get_input, save_tv_as_string, script_host_eval, tv_to_argv,
 };
 use crate::src::nvim::event::libuv::{uv_kill, uv_strerror};
 use crate::src::nvim::event::r#loop::loop_on_put;
@@ -83,12 +81,11 @@ use crate::src::nvim::main::{
     e_unknown_function_str, empty_string_option, emsg_noredir, emsg_off, emsg_silent, firstwin,
     garbage_collect_at_exit, got_int, lastbuf, lines_left, main_loop, mouse_row, msg_col, msg_row,
     msg_scroll, msg_scrolled, msg_silent, need_clr_eos, on_print, p_cpo, p_magic, p_tgc, p_verbose,
-    p_ws, provider_call_nesting, provider_caller_scope, redir_off, starting, stdin_isatty,
-    stdout_isatty, typebuf, vgetc_busy, want_garbage_collect, wild_menu_showing, windowsVersion,
+    provider_call_nesting, provider_caller_scope, redir_off, starting, stdin_isatty, stdout_isatty,
+    typebuf, vgetc_busy, want_garbage_collect, wild_menu_showing, windowsVersion,
 };
-use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len};
-use crate::src::nvim::memline::{decl, incl, ml_get, ml_get_len, ml_open};
+use crate::src::nvim::memline::{ml_get, ml_get_len, ml_open};
 use crate::src::nvim::memory::{
     ARENA_EMPTY, arena_finish, arena_mem_free, strnequal, xcalloc, xfree, xmalloc, xmemdup, xstrdup,
 };
@@ -103,18 +100,15 @@ use crate::src::nvim::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
 use crate::src::nvim::msgpack_rpc::server::{
     server_address_list, server_address_new, server_start, server_stop,
 };
-use crate::src::nvim::normal::{find_decl, op_pending};
+use crate::src::nvim::normal::op_pending;
 use crate::src::nvim::ops::cursor_pos_info;
-use crate::src::nvim::option::set_option_value_give_err;
-use crate::src::nvim::options::kOptCpoptions;
-use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::src::nvim::os::env::{
     expand_env_save, home_replace, os_env_exists, os_get_hostname, os_get_pid, os_getenv,
 };
 use crate::src::nvim::os::fs::os_isdir;
 use crate::src::nvim::os::libc::{
-    __assert_fail, atoi, gettext, memcpy, memset, snprintf, strcasecmp, strcmp, strcpy, strlen,
+    __assert_fail, atoi, gettext, memcpy, memset, snprintf, strcasecmp, strcmp, strlen,
     strncasecmp, strncmp, strtoul,
 };
 use crate::src::nvim::os::pty_proc_unix::pty_proc_resize;
@@ -122,10 +116,7 @@ use crate::src::nvim::os::shell::shell_free_argv;
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::path::vim_FullName;
 use crate::src::nvim::popupmenu::{pum_set_event_info, pum_visible};
-use crate::src::nvim::pos::{clearpos, equalpos};
-use crate::src::nvim::profile::profile_setlimit;
 use crate::src::nvim::runtime::exestack;
-use crate::src::nvim::search::searchit;
 use crate::src::nvim::state::{get_mode, get_was_safe_state};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::syntax::{
@@ -1420,9 +1411,6 @@ pub const kCtxRegs: C2Rust_Unnamed_45 = 1;
 pub type C2Rust_Unnamed_46 = ::core::ffi::c_uint;
 pub const BASE_LAST: C2Rust_Unnamed_46 = 255;
 pub const BASE_NONE: C2Rust_Unnamed_46 = 0;
-pub const RE_SEARCH: C2Rust_Unnamed_64 = 0;
-pub const SEARCH_KEEP: C2Rust_Unnamed_63 = 1024;
-pub const SEARCH_START: C2Rust_Unnamed_63 = 256;
 pub const HL_CONCEAL: C2Rust_Unnamed_65 = 131072;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
@@ -1565,8 +1553,6 @@ pub const STAR_REGISTER: C2Rust_Unnamed_60 = 37;
 pub const DELETION_REGISTER: C2Rust_Unnamed_60 = 36;
 pub const kGRegList: GRegFlags = 4;
 pub const kGRegExprSrc: GRegFlags = 2;
-pub const SEARCH_COL: C2Rust_Unnamed_63 = 4096;
-pub const SEARCH_END: C2Rust_Unnamed_63 = 64;
 pub const MENU_ALL_MODES: C2Rust_Unnamed_58 = 127;
 pub const CONV_NONE: C2Rust_Unnamed_53 = 0;
 pub const GLV_READ_ONLY: C2Rust_Unnamed_67 = 16;
@@ -1689,20 +1675,6 @@ pub const OP_LSHIFT: C2Rust_Unnamed_62 = 4;
 pub const OP_CHANGE: C2Rust_Unnamed_62 = 3;
 pub const OP_YANK: C2Rust_Unnamed_62 = 2;
 pub const OP_DELETE: C2Rust_Unnamed_62 = 1;
-pub type C2Rust_Unnamed_63 = ::core::ffi::c_uint;
-pub const SEARCH_PEEK: C2Rust_Unnamed_63 = 2048;
-pub const SEARCH_MARK: C2Rust_Unnamed_63 = 512;
-pub const SEARCH_NOOF: C2Rust_Unnamed_63 = 128;
-pub const SEARCH_HIS: C2Rust_Unnamed_63 = 32;
-pub const SEARCH_OPT: C2Rust_Unnamed_63 = 16;
-pub const SEARCH_NFMSG: C2Rust_Unnamed_63 = 8;
-pub const SEARCH_MSG: C2Rust_Unnamed_63 = 12;
-pub const SEARCH_ECHO: C2Rust_Unnamed_63 = 2;
-pub const SEARCH_REV: C2Rust_Unnamed_63 = 1;
-pub type C2Rust_Unnamed_64 = ::core::ffi::c_uint;
-pub const RE_LAST: C2Rust_Unnamed_64 = 2;
-pub const RE_BOTH: C2Rust_Unnamed_64 = 2;
-pub const RE_SUBST: C2Rust_Unnamed_64 = 1;
 pub type C2Rust_Unnamed_65 = ::core::ffi::c_uint;
 pub const HL_INCLUDED_TOPLEVEL: C2Rust_Unnamed_65 = 524288;
 pub const HL_CONCEALENDS: C2Rust_Unnamed_65 = 262144;

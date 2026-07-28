@@ -1,667 +1,724 @@
-//! Searching the buffer: `search()`, `searchpair()` and their shared
-//! machinery.
+//! Searching the buffer: `search()`, `searchpos()`, `searchpair()`,
+//! `searchpairpos()` and `searchdecl()`.
 //!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+//! The three real entry points are [`search_cmn`], [`searchpair_cmn`] and
+//! [`do_searchpair`]; the `f_*` bodies are thin. Every one of them lets the
+//! flag parser write 'wrapscan' and puts the caller's value back on the way
+//! out, which [`SavedWrapScan`] does here instead of the C's `goto theend`.
+#![deny(unsafe_op_in_unsafe_fn)]
 
-use super::*;
+use super::args::{Args, frame};
+use super::{FAIL, NUL, VAR_UNKNOWN, false_0, true_0};
+use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::cursor::check_cursor;
+use crate::src::nvim::eval::typval::{
+    tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_list_alloc_ret,
+    tv_list_append_number,
+};
+use crate::src::nvim::eval_1::{eval_expr_to_bool, eval_expr_valid_arg};
+use crate::src::nvim::main::{curbuf, curwin, e_invarg2, empty_string_option, p_cpo, p_ws};
+use crate::src::nvim::mark::setpcmark;
+use crate::src::nvim::memline::{decl, incl};
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::normal::find_decl;
+use crate::src::nvim::option::{kOptValTypeString, set_option_value_give_err};
+use crate::src::nvim::options::kOptCpoptions;
+use crate::src::nvim::optionstr::free_string_option;
+use crate::src::nvim::os::libc::{gettext, strlen};
+use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::profile::profile_setlimit;
+use crate::src::nvim::search::{
+    BACKWARD, FORWARD, RE_SEARCH, SEARCH_COL, SEARCH_END, SEARCH_KEEP, SEARCH_START, searchit,
+};
+use crate::src::nvim::types::{
+    Direction, EvalFuncData, OptVal, OptValData, int64_t, linenr_T, pos_T, searchit_arg_T,
+    typval_T, varnumber_T,
+};
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
-pub const SP_NOMOVE: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const SP_REPEAT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const SP_RETCOUNT: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const SP_SETPCMARK: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
-pub const SP_START: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
-pub const SP_SUBPAT: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
-pub const SP_END: ::core::ffi::c_int = 0x40 as ::core::ffi::c_int;
-pub const SP_COLUMN: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
-unsafe extern "C" fn get_search_arg(
-    mut varp: *mut typval_T,
-    mut flagsp: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut dir: ::core::ffi::c_int = FORWARD as ::core::ffi::c_int;
-    if (*varp).v_type as ::core::ffi::c_uint
-        == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        return FORWARD as ::core::ffi::c_int;
+/// The size of a `tv_get_string_buf_chk` scratch buffer. `NUMBUFLEN` in the
+/// C: enough for the decimal spelling of any Number.
+const NUMBUFLEN: usize = 65;
+
+/// Accept a match at the cursor's own position ('c').
+const SP_START: c_int = 0x10;
+/// Leave the cursor at the end of the match ('e').
+const SP_END: c_int = 0x40;
+/// Answer with the number of matches rather than a line ('m').
+const SP_RETCOUNT: c_int = 0x04;
+/// Do not move the cursor ('n').
+const SP_NOMOVE: c_int = 0x01;
+/// Answer with the number of the sub-pattern that matched ('p').
+const SP_SUBPAT: c_int = 0x20;
+/// Keep searching for the outer pair ('r').
+const SP_REPEAT: c_int = 0x02;
+/// Set the previous-context mark before moving ('s').
+const SP_SETPCMARK: c_int = 0x08;
+/// Start at the cursor's column rather than at the start of the line ('z').
+const SP_COLUMN: c_int = 0x80;
+
+/// The flag letters that contribute a bit. `b`, `w` and `W` are handled
+/// separately: they steer the direction and 'wrapscan' instead.
+const FLAG_BITS: [(u8, c_int); 8] = [
+    (b'c', SP_START),
+    (b'e', SP_END),
+    (b'm', SP_RETCOUNT),
+    (b'n', SP_NOMOVE),
+    (b'p', SP_SUBPAT),
+    (b'r', SP_REPEAT),
+    (b's', SP_SETPCMARK),
+    (b'z', SP_COLUMN),
+];
+
+/// A search entry point's saved 'wrapscan'.
+///
+/// The flag parser writes the option directly (that is what `w` and `W`
+/// mean) and every caller restores it, including on the error paths the C
+/// reaches with `goto theend`.
+struct SavedWrapScan(c_int);
+
+impl SavedWrapScan {
+    fn new() -> Self {
+        SavedWrapScan(p_ws.get())
     }
-    let mut nbuf: [::core::ffi::c_char; 65] = [0; 65];
-    let mut flags: *const ::core::ffi::c_char =
-        tv_get_string_buf_chk(varp, &raw mut nbuf as *mut ::core::ffi::c_char);
-    if flags.is_null() {
-        return 0 as ::core::ffi::c_int;
+}
+
+impl Drop for SavedWrapScan {
+    fn drop(&mut self) {
+        p_ws.set(self.0);
     }
-    let mut mask: ::core::ffi::c_int = 0;
-    while *flags as ::core::ffi::c_int != NUL {
-        match *flags as ::core::ffi::c_int {
-            98 => {
-                dir = BACKWARD as ::core::ffi::c_int;
-            }
-            119 => {
-                p_ws.set(true_0);
-            }
-            87 => {
-                p_ws.set(false_0);
-            }
-            _ => {
-                mask = 0 as ::core::ffi::c_int;
-                if !flagsp.is_null() {
-                    match *flags as ::core::ffi::c_int {
-                        99 => {
-                            mask = SP_START;
-                        }
-                        101 => {
-                            mask = SP_END;
-                        }
-                        109 => {
-                            mask = SP_RETCOUNT;
-                        }
-                        110 => {
-                            mask = SP_NOMOVE;
-                        }
-                        112 => {
-                            mask = SP_SUBPAT;
-                        }
-                        114 => {
-                            mask = SP_REPEAT;
-                        }
-                        115 => {
-                            mask = SP_SETPCMARK;
-                        }
-                        122 => {
-                            mask = SP_COLUMN;
-                        }
-                        _ => {}
+}
+
+/// Parse a `{flags}` argument.
+///
+/// Returns [`FORWARD`], [`BACKWARD`], or 0 for an error already reported.
+/// Sets the bits it recognises in `flags`, and may write 'wrapscan'.
+///
+/// # Safety
+/// `varp` is a live typval.
+unsafe fn search_direction(varp: *mut typval_T, flags: &mut c_int) -> c_int {
+    let mut dir = FORWARD as c_int;
+    // SAFETY: the caller's obligation; `nbuf` outlives the string
+    // `tv_get_string_buf_chk` may park in it.
+    unsafe {
+        if (*varp).v_type == VAR_UNKNOWN {
+            return FORWARD as c_int;
+        }
+        let mut nbuf = [0 as c_char; NUMBUFLEN];
+        let mut p = tv_get_string_buf_chk(varp, nbuf.as_mut_ptr());
+        if p.is_null() {
+            // Type error; the message is already out.
+            return 0;
+        }
+        while *p as c_int != NUL {
+            match *p as u8 {
+                b'b' => dir = BACKWARD as c_int,
+                b'w' => p_ws.set(true_0),
+                b'W' => p_ws.set(false_0),
+                letter => match FLAG_BITS.iter().find(|&&(l, _)| l == letter) {
+                    Some(&(_, mask)) => *flags |= mask,
+                    None => {
+                        // The message quotes the rest of the flag string
+                        // from the offending letter on, not just the
+                        // letter, and those are arbitrary user bytes.
+                        semsg(gettext(e_invarg2.ptr() as *const c_char), p);
+                        dir = 0;
                     }
+                },
+            }
+            if dir == 0 {
+                break;
+            }
+            p = p.add(1);
+        }
+        dir
+    }
+}
+
+/// Shared by `search()` and `searchpos()`.
+///
+/// Answers the matched line (or the sub-pattern number under `p`), 0 for no
+/// match, and writes the one-based match position through `match_pos`.
+///
+/// # Safety
+/// `args` is a live call frame.
+unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_int) -> c_int {
+    let _wrapscan = SavedWrapScan::new();
+    let mut lnum_stop: linenr_T = 0;
+    let mut time_limit: int64_t = 0;
+    let mut options = SEARCH_KEEP as c_int;
+    let mut use_skip = false;
+
+    // SAFETY: the frame's arguments and the current window are live for the
+    // whole call; `pos`/`firstpos`/`tm` are locals handed to `searchit` by
+    // pointer and outlive it.
+    unsafe {
+        let pat = tv_get_string(args.ptr(0));
+        // May set 'wrapscan'.
+        let dir = search_direction(args.ptr(1), flagsp);
+        if dir == 0 {
+            return 0;
+        }
+        let flags = *flagsp;
+        if flags & SP_START != 0 {
+            options |= SEARCH_START as c_int;
+        }
+        if flags & SP_END != 0 {
+            options |= SEARCH_END as c_int;
+        }
+        if flags & SP_COLUMN != 0 {
+            options |= SEARCH_COL as c_int;
+        }
+
+        // The optional {stopline}, {timeout} and {skip} arguments. Each is
+        // only read when the one before it was supplied, so a {skip} passed
+        // without a {flags} is silently ignored.
+        if args.has(1) && args.has(2) {
+            lnum_stop = tv_get_number_chk(args.ptr(2), ptr::null_mut()) as linenr_T;
+            if lnum_stop < 0 {
+                return 0;
+            }
+            if args.has(3) {
+                time_limit = tv_get_number_chk(args.ptr(3), ptr::null_mut()) as int64_t;
+                if time_limit < 0 {
+                    return 0;
                 }
-                if mask == 0 as ::core::ffi::c_int {
-                    semsg(
-                        gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                        flags,
-                    );
-                    dir = 0 as ::core::ffi::c_int;
-                } else {
-                    *flagsp |= mask;
-                }
+                use_skip = eval_expr_valid_arg(args.ptr(4));
             }
         }
-        if dir == 0 as ::core::ffi::c_int {
-            break;
-        }
-        flags = flags.offset(1);
-    }
-    return dir;
-}
-unsafe extern "C" fn search_cmn(
-    mut argvars: *mut typval_T,
-    mut match_pos: *mut pos_T,
-    mut flagsp: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut flags: ::core::ffi::c_int = 0;
-    let mut tm: proftime_T = 0;
-    let mut save_cursor: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut pos: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut firstpos: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut sia: searchit_arg_T = searchit_arg_T {
-        sa_stop_lnum: 0,
-        sa_tm: ::core::ptr::null_mut::<proftime_T>(),
-        sa_timed_out: 0,
-        sa_wrapped: 0,
-    };
-    let mut patlen: size_t = 0;
-    let mut subpatnum: ::core::ffi::c_int = 0;
-    let mut save_p_ws: bool = p_ws.get() != 0;
-    let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut lnum_stop: linenr_T = 0 as linenr_T;
-    let mut time_limit: int64_t = 0 as int64_t;
-    let mut options: ::core::ffi::c_int = SEARCH_KEEP as ::core::ffi::c_int;
-    let mut use_skip: bool = false_0 != 0;
-    let pat: *const ::core::ffi::c_char =
-        tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
-    let mut dir: ::core::ffi::c_int =
-        get_search_arg(argvars.offset(1 as ::core::ffi::c_int as isize), flagsp);
-    '_theend: {
-        if dir != 0 as ::core::ffi::c_int {
-            flags = *flagsp;
-            if flags & SP_START != 0 {
-                options |= SEARCH_START as ::core::ffi::c_int;
-            }
-            if flags & SP_END != 0 {
-                options |= SEARCH_END as ::core::ffi::c_int;
-            }
-            if flags & SP_COLUMN != 0 {
-                options |= SEARCH_COL as ::core::ffi::c_int;
-            }
-            if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                    != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                lnum_stop = tv_get_number_chk(
-                    argvars.offset(2 as ::core::ffi::c_int as isize),
-                    ::core::ptr::null_mut::<bool>(),
-                ) as linenr_T;
-                if lnum_stop < 0 as linenr_T {
-                    break '_theend;
-                } else if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type
-                    as ::core::ffi::c_uint
-                    != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    time_limit = tv_get_number_chk(
-                        argvars.offset(3 as ::core::ffi::c_int as isize),
-                        ::core::ptr::null_mut::<bool>(),
-                    ) as int64_t;
-                    if time_limit < 0 as int64_t {
-                        break '_theend;
-                    } else {
-                        use_skip =
-                            eval_expr_valid_arg(argvars.offset(4 as ::core::ffi::c_int as isize));
-                    }
-                }
-            }
-            tm = profile_setlimit(time_limit);
-            if flags & (SP_REPEAT | SP_RETCOUNT) != 0 as ::core::ffi::c_int
-                || flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0
-            {
-                semsg(
-                    gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                    tv_get_string(argvars.offset(1 as ::core::ffi::c_int as isize)),
-                );
-            } else {
-                save_cursor = pos_T {
-                    lnum: 0,
-                    col: 0,
-                    coladd: 0,
-                };
-                save_cursor = (*curwin.get()).w_cursor;
-                pos = save_cursor;
-                firstpos = pos_T {
-                    lnum: 0 as linenr_T,
-                    col: 0,
-                    coladd: 0,
-                };
-                sia = searchit_arg_T {
-                    sa_stop_lnum: lnum_stop,
-                    sa_tm: &raw mut tm,
-                    sa_timed_out: 0,
-                    sa_wrapped: 0,
-                };
-                patlen = strlen(pat);
-                subpatnum = 0;
-                loop {
-                    subpatnum = searchit(
-                        curwin.get(),
-                        curbuf.get(),
-                        &raw mut pos,
-                        ::core::ptr::null_mut::<pos_T>(),
-                        dir as Direction,
-                        pat as *mut ::core::ffi::c_char,
-                        patlen,
-                        1 as ::core::ffi::c_int,
-                        options,
-                        RE_SEARCH as ::core::ffi::c_int,
-                        &raw mut sia,
-                    );
-                    if firstpos.lnum != 0 as linenr_T
-                        && equalpos(pos, firstpos) as ::core::ffi::c_int != 0
-                    {
-                        subpatnum = FAIL;
-                    }
-                    if subpatnum == FAIL || !use_skip {
-                        break;
-                    }
-                    if firstpos.lnum == 0 as linenr_T {
-                        firstpos = pos;
-                    }
-                    let save_pos: pos_T = (*curwin.get()).w_cursor;
-                    (*curwin.get()).w_cursor = pos;
-                    let mut err: bool = false_0 != 0;
-                    let do_skip: bool = eval_expr_to_bool(
-                        argvars.offset(4 as ::core::ffi::c_int as isize),
-                        &raw mut err,
-                    );
-                    (*curwin.get()).w_cursor = save_pos;
-                    if err {
-                        subpatnum = FAIL;
-                        break;
-                    } else {
-                        if !do_skip {
-                            break;
-                        }
-                        options &= !(SEARCH_START as ::core::ffi::c_int);
-                    }
-                }
-                if subpatnum != FAIL {
-                    if flags & SP_SUBPAT != 0 {
-                        retval = subpatnum;
-                    } else {
-                        retval = pos.lnum as ::core::ffi::c_int;
-                    }
-                    if flags & SP_SETPCMARK != 0 {
-                        setpcmark();
-                    }
-                    (*curwin.get()).w_cursor = pos;
-                    if !match_pos.is_null() {
-                        (*match_pos).lnum = pos.lnum;
-                        (*match_pos).col =
-                            (pos.col as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as colnr_T;
-                    }
-                    check_cursor(curwin.get());
-                }
-                if flags & SP_NOMOVE != 0 {
-                    (*curwin.get()).w_cursor = save_cursor;
-                } else {
-                    (*curwin.get()).w_set_curswant = true_0;
-                }
-            }
-        }
-    }
-    p_ws.set(save_p_ws as ::core::ffi::c_int);
-    return retval;
-}
-pub unsafe extern "C" fn f_search(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    (*rettv).vval.v_number =
-        search_cmn(argvars, ::core::ptr::null_mut::<pos_T>(), &raw mut flags) as varnumber_T;
-}
-pub unsafe extern "C" fn f_searchdecl(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    let mut locally: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    let mut thisblock: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut error: bool = false_0 != 0;
-    (*rettv).vval.v_number = 1 as varnumber_T;
-    let name: *const ::core::ffi::c_char =
-        tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
-    if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        locally = (tv_get_number_chk(
-            argvars.offset(1 as ::core::ffi::c_int as isize),
-            &raw mut error,
-        ) == 0 as varnumber_T) as ::core::ffi::c_int;
-        if !error
-            && (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
+        let mut tm = profile_setlimit(time_limit);
+
+        // `m` and `r` belong to searchpair(); `n` and `s` contradict each
+        // other.
+        if flags & (SP_REPEAT | SP_RETCOUNT) != 0
+            || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
         {
-            thisblock = (tv_get_number_chk(
-                argvars.offset(2 as ::core::ffi::c_int as isize),
-                &raw mut error,
-            ) != 0 as varnumber_T) as ::core::ffi::c_int;
-        }
-    }
-    if !error && !name.is_null() {
-        (*rettv).vval.v_number = (find_decl(
-            name as *mut ::core::ffi::c_char,
-            strlen(name),
-            locally != 0,
-            thisblock != 0,
-            SEARCH_KEEP as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int
-            == FAIL) as ::core::ffi::c_int as varnumber_T;
-    }
-}
-unsafe extern "C" fn searchpair_cmn(
-    mut argvars: *mut typval_T,
-    mut match_pos: *mut pos_T,
-) -> ::core::ffi::c_int {
-    let mut dir: ::core::ffi::c_int = 0;
-    let mut skip: *const typval_T = ::core::ptr::null::<typval_T>();
-    let mut save_p_ws: bool = p_ws.get() != 0;
-    let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut lnum_stop: linenr_T = 0 as linenr_T;
-    let mut time_limit: int64_t = 0 as int64_t;
-    let mut nbuf1: [::core::ffi::c_char; 65] = [0; 65];
-    let mut nbuf2: [::core::ffi::c_char; 65] = [0; 65];
-    let mut spat: *const ::core::ffi::c_char =
-        tv_get_string_chk(argvars.offset(0 as ::core::ffi::c_int as isize));
-    let mut mpat: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-        argvars.offset(1 as ::core::ffi::c_int as isize),
-        &raw mut nbuf1 as *mut ::core::ffi::c_char,
-    );
-    let mut epat: *const ::core::ffi::c_char = tv_get_string_buf_chk(
-        argvars.offset(2 as ::core::ffi::c_int as isize),
-        &raw mut nbuf2 as *mut ::core::ffi::c_char,
-    );
-    '_theend: {
-        if !(spat.is_null() || mpat.is_null() || epat.is_null()) {
-            dir = get_search_arg(
-                argvars.offset(3 as ::core::ffi::c_int as isize),
-                &raw mut flags,
+            semsg(
+                gettext(e_invarg2.ptr() as *const c_char),
+                tv_get_string(args.ptr(1)),
             );
-            if dir != 0 as ::core::ffi::c_int {
-                if flags & (SP_END | SP_SUBPAT) != 0 as ::core::ffi::c_int
-                    || flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0
-                {
-                    semsg(
-                        gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                        tv_get_string(argvars.offset(3 as ::core::ffi::c_int as isize)),
-                    );
-                } else {
-                    if flags & SP_REPEAT != 0 {
-                        p_ws.set(false_0);
-                    }
-                    skip = ::core::ptr::null::<typval_T>();
-                    if (*argvars.offset(3 as ::core::ffi::c_int as isize)).v_type
-                        as ::core::ffi::c_uint
-                        == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                        || (*argvars.offset(4 as ::core::ffi::c_int as isize)).v_type
-                            as ::core::ffi::c_uint
-                            == VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        skip = ::core::ptr::null::<typval_T>();
-                    } else {
-                        skip = argvars.offset(4 as ::core::ffi::c_int as isize);
-                        if (*argvars.offset(5 as ::core::ffi::c_int as isize)).v_type
-                            as ::core::ffi::c_uint
-                            != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            lnum_stop = tv_get_number_chk(
-                                argvars.offset(5 as ::core::ffi::c_int as isize),
-                                ::core::ptr::null_mut::<bool>(),
-                            ) as linenr_T;
-                            if lnum_stop < 0 as linenr_T {
-                                semsg(
-                                    gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                                    tv_get_string(argvars.offset(5 as ::core::ffi::c_int as isize)),
-                                );
-                                break '_theend;
-                            } else if (*argvars.offset(6 as ::core::ffi::c_int as isize)).v_type
-                                as ::core::ffi::c_uint
-                                != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                time_limit = tv_get_number_chk(
-                                    argvars.offset(6 as ::core::ffi::c_int as isize),
-                                    ::core::ptr::null_mut::<bool>(),
-                                ) as int64_t;
-                                if time_limit < 0 as int64_t {
-                                    semsg(
-                                        gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                                        tv_get_string(
-                                            argvars.offset(6 as ::core::ffi::c_int as isize),
-                                        ),
-                                    );
-                                    break '_theend;
-                                }
-                            }
-                        }
-                    }
-                    retval = do_searchpair(
-                        spat, mpat, epat, dir, skip, flags, match_pos, lnum_stop, time_limit,
-                    );
-                }
-            }
+            return 0;
         }
-    }
-    p_ws.set(save_p_ws as ::core::ffi::c_int);
-    return retval;
-}
-pub unsafe extern "C" fn f_searchpair(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    (*rettv).vval.v_number =
-        searchpair_cmn(argvars, ::core::ptr::null_mut::<pos_T>()) as varnumber_T;
-}
-pub unsafe extern "C" fn f_searchpairpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    let mut match_pos: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut lnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    tv_list_alloc_ret(rettv, 2 as ptrdiff_t);
-    if searchpair_cmn(argvars, &raw mut match_pos) > 0 as ::core::ffi::c_int {
-        lnum = match_pos.lnum as ::core::ffi::c_int;
-        col = match_pos.col as ::core::ffi::c_int;
-    }
-    tv_list_append_number((*rettv).vval.v_list, lnum as varnumber_T);
-    tv_list_append_number((*rettv).vval.v_list, col as varnumber_T);
-}
-pub unsafe extern "C" fn do_searchpair(
-    mut spat: *const ::core::ffi::c_char,
-    mut mpat: *const ::core::ffi::c_char,
-    mut epat: *const ::core::ffi::c_char,
-    mut dir: ::core::ffi::c_int,
-    mut skip: *const typval_T,
-    mut flags: ::core::ffi::c_int,
-    mut match_pos: *mut pos_T,
-    mut lnum_stop: linenr_T,
-    mut time_limit: int64_t,
-) -> ::core::ffi::c_int {
-    let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut nest: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    let mut use_skip: bool = false_0 != 0;
-    let mut options: ::core::ffi::c_int = SEARCH_KEEP as ::core::ffi::c_int;
-    let mut save_cpo: *mut ::core::ffi::c_char = p_cpo.get();
-    p_cpo.set(empty_string_option.ptr() as *mut ::core::ffi::c_char);
-    let mut tm: proftime_T = profile_setlimit(time_limit);
-    let spatlen: size_t = strlen(spat);
-    let epatlen: size_t = strlen(epat);
-    let pat2size: size_t = spatlen.wrapping_add(epatlen).wrapping_add(17 as size_t);
-    let mut pat2: *mut ::core::ffi::c_char = xmalloc(pat2size) as *mut ::core::ffi::c_char;
-    let pat3size: size_t = spatlen
-        .wrapping_add(strlen(mpat))
-        .wrapping_add(epatlen)
-        .wrapping_add(25 as size_t);
-    let mut pat3: *mut ::core::ffi::c_char = xmalloc(pat3size) as *mut ::core::ffi::c_char;
-    let mut pat2len: ::core::ffi::c_int = snprintf(
-        pat2,
-        pat2size,
-        b"\\m\\(%s\\m\\)\\|\\(%s\\m\\)\0".as_ptr() as *const ::core::ffi::c_char,
-        spat,
-        epat,
-    );
-    let mut pat3len: ::core::ffi::c_int = 0;
-    if *mpat as ::core::ffi::c_int == NUL {
-        strcpy(pat3, pat2);
-        pat3len = pat2len;
-    } else {
-        pat3len = snprintf(
-            pat3,
-            pat3size,
-            b"\\m\\(%s\\m\\)\\|\\(%s\\m\\)\\|\\(%s\\m\\)\0".as_ptr() as *const ::core::ffi::c_char,
-            spat,
-            epat,
-            mpat,
-        );
-    }
-    if flags & SP_START != 0 {
-        options |= SEARCH_START as ::core::ffi::c_int;
-    }
-    if !skip.is_null() {
-        use_skip = eval_expr_valid_arg(skip);
-    }
-    let mut save_cursor: pos_T = (*curwin.get()).w_cursor;
-    let mut pos: pos_T = (*curwin.get()).w_cursor;
-    let mut firstpos: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    clearpos(&mut firstpos);
-    let mut foundpos: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    clearpos(&mut foundpos);
-    let mut pat: *mut ::core::ffi::c_char = pat3;
-    '_c2rust_label: {
-        if pat3len >= 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"pat3len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/eval/funcs.rs\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                6178 as ::core::ffi::c_uint,
-                b"int do_searchpair(const char *, const char *, const char *, int, const typval_T *, int, pos_T *, linenr_T, int64_t)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut patlen: size_t = pat3len as size_t;
-    loop {
-        let mut sia: searchit_arg_T = searchit_arg_T {
+
+        let save_cursor = (*curwin.get()).w_cursor;
+        let mut pos = save_cursor;
+        let mut firstpos = pos_T {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        };
+        let mut sia = searchit_arg_T {
             sa_stop_lnum: lnum_stop,
             sa_tm: &raw mut tm,
             sa_timed_out: 0,
             sa_wrapped: 0,
         };
-        let mut n: ::core::ffi::c_int = searchit(
-            curwin.get(),
-            curbuf.get(),
-            &raw mut pos,
-            ::core::ptr::null_mut::<pos_T>(),
-            dir as Direction,
-            pat,
-            patlen,
-            1 as ::core::ffi::c_int,
-            options,
-            RE_SEARCH as ::core::ffi::c_int,
-            &raw mut sia,
-        );
-        if n == FAIL
-            || firstpos.lnum != 0 as linenr_T && equalpos(pos, firstpos) as ::core::ffi::c_int != 0
-        {
-            break;
-        }
-        if firstpos.lnum == 0 as linenr_T {
-            firstpos = pos;
-        }
-        if equalpos(pos, foundpos) {
-            if dir == BACKWARD as ::core::ffi::c_int {
-                decl(&raw mut pos);
-            } else {
-                incl(&raw mut pos);
+        let patlen = strlen(pat);
+
+        // Repeat until {skip} answers false.
+        let mut subpatnum;
+        loop {
+            subpatnum = searchit(
+                curwin.get(),
+                curbuf.get(),
+                &raw mut pos,
+                ptr::null_mut(),
+                dir as Direction,
+                pat as *mut c_char,
+                patlen,
+                1,
+                options,
+                RE_SEARCH as c_int,
+                &raw mut sia,
+            );
+            // Coming back to the first match means every match was skipped.
+            if firstpos.lnum != 0 && equalpos(pos, firstpos) {
+                subpatnum = FAIL;
             }
-        }
-        foundpos = pos;
-        options &= !(SEARCH_START as ::core::ffi::c_int);
-        if use_skip {
-            let mut save_pos: pos_T = (*curwin.get()).w_cursor;
+            if subpatnum == FAIL || !use_skip {
+                break;
+            }
+            if firstpos.lnum == 0 {
+                firstpos = pos;
+            }
+
+            // {skip} is evaluated with the cursor on the match.
+            let save_pos = (*curwin.get()).w_cursor;
             (*curwin.get()).w_cursor = pos;
-            let mut err: bool = false_0 != 0;
-            let r: bool = eval_expr_to_bool(skip, &raw mut err);
+            let mut err = false;
+            let do_skip = eval_expr_to_bool(args.ptr(4), &raw mut err);
             (*curwin.get()).w_cursor = save_pos;
             if err {
-                (*curwin.get()).w_cursor = save_cursor;
-                retval = -1 as ::core::ffi::c_int;
+                subpatnum = FAIL;
                 break;
-            } else if r {
-                continue;
             }
-        }
-        if dir == BACKWARD as ::core::ffi::c_int && n == 3 as ::core::ffi::c_int
-            || dir == FORWARD as ::core::ffi::c_int && n == 2 as ::core::ffi::c_int
-        {
-            nest += 1;
-            pat = pat2;
-        } else {
-            nest -= 1;
-            if nest == 1 as ::core::ffi::c_int {
-                pat = pat3;
+            if !do_skip {
+                break;
             }
+            // Clear the start flag so that the next round moves on.
+            options &= !(SEARCH_START as c_int);
         }
-        if nest != 0 as ::core::ffi::c_int {
-            continue;
+
+        let mut retval = 0;
+        if subpatnum != FAIL {
+            retval = if flags & SP_SUBPAT != 0 {
+                subpatnum
+            } else {
+                pos.lnum as c_int
+            };
+            if flags & SP_SETPCMARK != 0 {
+                setpcmark();
+            }
+            (*curwin.get()).w_cursor = pos;
+            if let Some(match_pos) = match_pos {
+                match_pos.lnum = pos.lnum;
+                match_pos.col = pos.col + 1;
+            }
+            // A `/$` match leaves the cursor past the end of the line.
+            check_cursor(curwin.get());
         }
-        if flags & SP_RETCOUNT != 0 {
-            retval += 1;
+
+        if flags & SP_NOMOVE != 0 {
+            (*curwin.get()).w_cursor = save_cursor;
         } else {
-            retval = pos.lnum as ::core::ffi::c_int;
+            (*curwin.get()).w_set_curswant = true_0;
         }
-        if flags & SP_SETPCMARK != 0 {
-            setpcmark();
-        }
-        (*curwin.get()).w_cursor = pos;
-        if flags & SP_REPEAT == 0 {
-            break;
-        }
-        nest = 1 as ::core::ffi::c_int;
+        retval
     }
-    if !match_pos.is_null() {
-        (*match_pos).lnum = (*curwin.get()).w_cursor.lnum;
-        (*match_pos).col = ((*curwin.get()).w_cursor.col as ::core::ffi::c_int
-            + 1 as ::core::ffi::c_int) as colnr_T;
-    }
-    if flags & SP_NOMOVE != 0 || retval == 0 as ::core::ffi::c_int {
-        (*curwin.get()).w_cursor = save_cursor;
-    }
-    xfree(pat2 as *mut ::core::ffi::c_void);
-    xfree(pat3 as *mut ::core::ffi::c_void);
-    if p_cpo.get() == empty_string_option.ptr() as *mut ::core::ffi::c_char {
-        p_cpo.set(save_cpo);
-    } else {
-        if *p_cpo.get() as ::core::ffi::c_int == NUL {
-            set_option_value_give_err(
-                kOptCpoptions,
-                OptVal {
-                    type_0: kOptValTypeString,
-                    data: OptValData {
-                        string: cstr_as_string(save_cpo),
-                    },
-                },
-                0 as ::core::ffi::c_int,
-            );
-        }
-        free_string_option(save_cpo);
-    }
-    return retval;
 }
-pub unsafe extern "C" fn f_searchpos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+
+/// `search({pattern} [, {flags} [, {stopline} [, {timeout} [, {skip}]]]])`
+pub unsafe extern "C" fn f_search(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    let mut match_pos: pos_T = pos_T {
+    let (args, rettv) = frame!(argvars, rettv);
+    let mut flags = 0;
+    // SAFETY: the frame is live.
+    rettv.vval.v_number = unsafe { search_cmn(args, None, &mut flags) } as varnumber_T;
+}
+
+/// `searchpos()` — as `search()`, but answering `[lnum, col]`, plus the
+/// sub-pattern number under the `p` flag.
+pub unsafe extern "C" fn f_searchpos(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    let mut match_pos = pos_T {
         lnum: 0,
         col: 0,
         coladd: 0,
     };
-    let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let n: ::core::ffi::c_int = search_cmn(argvars, &raw mut match_pos, &raw mut flags);
-    tv_list_alloc_ret(
-        rettv,
-        (2 as ::core::ffi::c_int + (flags & SP_SUBPAT != 0) as ::core::ffi::c_int) as ptrdiff_t,
-    );
-    let lnum: ::core::ffi::c_int = if n > 0 as ::core::ffi::c_int {
-        match_pos.lnum as ::core::ffi::c_int
-    } else {
-        0 as ::core::ffi::c_int
-    };
-    let col: ::core::ffi::c_int = if n > 0 as ::core::ffi::c_int {
-        match_pos.col as ::core::ffi::c_int
-    } else {
-        0 as ::core::ffi::c_int
-    };
-    tv_list_append_number((*rettv).vval.v_list, lnum as varnumber_T);
-    tv_list_append_number((*rettv).vval.v_list, col as varnumber_T);
-    if flags & SP_SUBPAT != 0 {
-        tv_list_append_number((*rettv).vval.v_list, n as varnumber_T);
+    let mut flags = 0;
+    // SAFETY: the frame is live and `rettv` is the cleared return value.
+    unsafe {
+        let n = search_cmn(args, Some(&mut match_pos), &mut flags);
+        let list = tv_list_alloc_ret(rettv, 2 + (flags & SP_SUBPAT != 0) as isize);
+        let (lnum, col) = if n > 0 {
+            (match_pos.lnum as c_int, match_pos.col as c_int)
+        } else {
+            (0, 0)
+        };
+        tv_list_append_number(list, lnum as varnumber_T);
+        tv_list_append_number(list, col as varnumber_T);
+        if flags & SP_SUBPAT != 0 {
+            tv_list_append_number(list, n as varnumber_T);
+        }
     }
+}
+
+/// `searchdecl({name} [, {global} [, {thisblock}]])` — 0 when the
+/// declaration was found, 1 otherwise.
+pub unsafe extern "C" fn f_searchdecl(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    let mut locally = true;
+    let mut thisblock = false;
+    let mut error = false;
+    // Default: FAIL.
+    rettv.vval.v_number = 1;
+
+    // SAFETY: the frame's arguments are live typvals and `name` is the
+    // string one of them owns, which outlives the `find_decl` call.
+    unsafe {
+        let name = tv_get_string_chk(args.ptr(0));
+        if args.has(1) {
+            locally = tv_get_number_chk(args.ptr(1), &raw mut error) == 0;
+            if !error && args.has(2) {
+                thisblock = tv_get_number_chk(args.ptr(2), &raw mut error) != 0;
+            }
+        }
+        if !error && !name.is_null() {
+            let found = find_decl(
+                name as *mut c_char,
+                strlen(name),
+                locally,
+                thisblock,
+                SEARCH_KEEP as c_int,
+            );
+            rettv.vval.v_number = (found as c_int == FAIL) as varnumber_T;
+        }
+    }
+}
+
+/// Shared by `searchpair()` and `searchpairpos()`: parse the arguments and
+/// hand them to [`do_searchpair`].
+///
+/// # Safety
+/// `args` is a live call frame.
+unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
+    let _wrapscan = SavedWrapScan::new();
+    let mut flags = 0;
+    let mut lnum_stop: linenr_T = 0;
+    let mut time_limit: int64_t = 0;
+
+    // SAFETY: the frame's arguments are live typvals; the two scratch
+    // buffers outlive the strings `tv_get_string_buf_chk` may park in them,
+    // and the three patterns outlive the `do_searchpair` call.
+    unsafe {
+        let mut nbuf1 = [0 as c_char; NUMBUFLEN];
+        let mut nbuf2 = [0 as c_char; NUMBUFLEN];
+        let spat = tv_get_string_chk(args.ptr(0));
+        let mpat = tv_get_string_buf_chk(args.ptr(1), nbuf1.as_mut_ptr());
+        let epat = tv_get_string_buf_chk(args.ptr(2), nbuf2.as_mut_ptr());
+        if spat.is_null() || mpat.is_null() || epat.is_null() {
+            // Type error, already reported.
+            return 0;
+        }
+
+        // May set 'wrapscan'.
+        let dir = search_direction(args.ptr(3), &mut flags);
+        if dir == 0 {
+            return 0;
+        }
+
+        // `e` and `p` belong to search(); `n` and `s` contradict each other.
+        if flags & (SP_END | SP_SUBPAT) != 0
+            || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
+        {
+            semsg(
+                gettext(e_invarg2.ptr() as *const c_char),
+                tv_get_string(args.ptr(3)),
+            );
+            return 0;
+        }
+
+        // `r` implies `W`; without it the repeat would wrap forever.
+        if flags & SP_REPEAT != 0 {
+            p_ws.set(false_0);
+        }
+
+        // The optional {skip}, {stopline} and {timeout}. As in search(),
+        // each is only read when the one before it was supplied.
+        let skip = if !args.has(3) || !args.has(4) {
+            ptr::null()
+        } else {
+            // The type is checked later, when the expression is evaluated.
+            if args.has(5) {
+                lnum_stop = tv_get_number_chk(args.ptr(5), ptr::null_mut()) as linenr_T;
+                if lnum_stop < 0 {
+                    semsg(
+                        gettext(e_invarg2.ptr() as *const c_char),
+                        tv_get_string(args.ptr(5)),
+                    );
+                    return 0;
+                }
+                if args.has(6) {
+                    time_limit = tv_get_number_chk(args.ptr(6), ptr::null_mut()) as int64_t;
+                    if time_limit < 0 {
+                        semsg(
+                            gettext(e_invarg2.ptr() as *const c_char),
+                            tv_get_string(args.ptr(6)),
+                        );
+                        return 0;
+                    }
+                }
+            }
+            args.ptr(4) as *const typval_T
+        };
+
+        do_searchpair(
+            spat,
+            mpat,
+            epat,
+            dir,
+            skip,
+            flags,
+            match_pos.map_or(ptr::null_mut(), |p| p as *mut pos_T),
+            lnum_stop,
+            time_limit,
+        )
+    }
+}
+
+/// `searchpair({start}, {middle}, {end} [, {flags} [, {skip} [, {stopline}
+/// [, {timeout}]]]])`
+pub unsafe extern "C" fn f_searchpair(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the frame is live.
+    rettv.vval.v_number = unsafe { searchpair_cmn(args, None) } as varnumber_T;
+}
+
+/// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
+pub unsafe extern "C" fn f_searchpairpos(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, rettv) = frame!(argvars, rettv);
+    let mut match_pos = pos_T {
+        lnum: 0,
+        col: 0,
+        coladd: 0,
+    };
+    let (mut lnum, mut col) = (0, 0);
+    // SAFETY: the frame is live and `rettv` is the cleared return value.
+    unsafe {
+        let list = tv_list_alloc_ret(rettv, 2);
+        if searchpair_cmn(args, Some(&mut match_pos)) > 0 {
+            lnum = match_pos.lnum as c_int;
+            col = match_pos.col as c_int;
+        }
+        tv_list_append_number(list, lnum as varnumber_T);
+        tv_list_append_number(list, col as varnumber_T);
+    }
+}
+
+/// The alternation `do_searchpair` hands to `searchit`, NUL-terminated.
+///
+/// Each pattern becomes its own `\(…\)` group with `\m` forced on around
+/// it, so that neither a caller's 'magic' setting nor one pattern's magic
+/// escapes can change what the next one means. The group a match landed in
+/// is what `searchit`'s answer names, and that is how the walk below tells
+/// a start from an end from a middle.
+fn alternation(pats: &[&[u8]]) -> Vec<c_char> {
+    let mut out: Vec<u8> = Vec::new();
+    for (i, pat) in pats.iter().enumerate() {
+        out.extend_from_slice(if i == 0 { b"\\m\\(" } else { b"\\|\\(" });
+        out.extend_from_slice(pat);
+        out.extend_from_slice(b"\\m\\)");
+    }
+    out.push(0);
+    out.into_iter().map(|b| b as c_char).collect()
+}
+
+/// 'cpoptions' emptied for the duration of a pair search, so that a `cpo-l`
+/// setting cannot change what the patterns mean.
+///
+/// Restoring is not a plain assignment: the {skip} expression is arbitrary
+/// vimscript and may have set the option itself. If it left our own empty
+/// string in place nothing happened and the saved value goes straight back;
+/// if it left some *other* empty string the option was set and restored
+/// behind our back, and the saved value has to go through the option
+/// machinery so that everything watching 'cpoptions' hears about it.
+struct EmptyCpo(*mut c_char);
+
+impl EmptyCpo {
+    fn new() -> Self {
+        let saved = p_cpo.get();
+        p_cpo.set(empty_string_option.ptr() as *mut c_char);
+        EmptyCpo(saved)
+    }
+}
+
+impl Drop for EmptyCpo {
+    fn drop(&mut self) {
+        if p_cpo.get() == empty_string_option.ptr() as *mut c_char {
+            p_cpo.set(self.0);
+            return;
+        }
+        // SAFETY: `self.0` is the string the option owned on entry and is
+        // still live; `set_option_value_give_err` copies it and
+        // `free_string_option` then releases our claim on it.
+        unsafe {
+            if *p_cpo.get() == 0 {
+                set_option_value_give_err(
+                    kOptCpoptions,
+                    OptVal {
+                        type_0: kOptValTypeString,
+                        data: OptValData {
+                            string: cstr_as_string(self.0),
+                        },
+                    },
+                    0,
+                );
+            }
+            free_string_option(self.0);
+        }
+    }
+}
+
+/// Search for a start/middle/end triple, honouring nesting.
+///
+/// Also used by the `it`/`at` text objects, which pass a null `skip` and no
+/// flags. Answers the matched line, the match count under `m`, 0 for no
+/// match, or -1 when evaluating `skip` failed.
+///
+/// # Safety
+/// `spat`, `mpat` and `epat` are non-null C strings; `skip` is null or a
+/// live typval; `match_pos` is null or writable.
+pub unsafe extern "C" fn do_searchpair(
+    spat: *const c_char,
+    mpat: *const c_char,
+    epat: *const c_char,
+    dir: c_int,
+    skip: *const typval_T,
+    flags: c_int,
+    match_pos: *mut pos_T,
+    lnum_stop: linenr_T,
+    time_limit: int64_t,
+) -> c_int {
+    let _cpo = EmptyCpo::new();
+    let mut retval = 0;
+    let mut nest = 1;
+    let mut options = SEARCH_KEEP as c_int;
+
+    // SAFETY: the caller's obligation on the three patterns and `skip`; the
+    // current window is live for the whole call, and `pos`/`tm`/the two
+    // pattern buffers are locals that outlive every `searchit` call.
+    unsafe {
+        let mut tm = profile_setlimit(time_limit);
+
+        // Without a middle pattern the nested search is the same as the
+        // outer one.
+        let outer = alternation(&[
+            core::slice::from_raw_parts(spat as *const u8, strlen(spat)),
+            core::slice::from_raw_parts(epat as *const u8, strlen(epat)),
+        ]);
+        let full = if *mpat == 0 {
+            outer.clone()
+        } else {
+            alternation(&[
+                core::slice::from_raw_parts(spat as *const u8, strlen(spat)),
+                core::slice::from_raw_parts(epat as *const u8, strlen(epat)),
+                core::slice::from_raw_parts(mpat as *const u8, strlen(mpat)),
+            ])
+        };
+
+        if flags & SP_START != 0 {
+            options |= SEARCH_START as c_int;
+        }
+        let use_skip = !skip.is_null() && eval_expr_valid_arg(skip);
+
+        let save_cursor = (*curwin.get()).w_cursor;
+        let mut pos = save_cursor;
+        let mut firstpos = pos_T {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        };
+        let mut foundpos = firstpos;
+
+        // Start on the full alternation; drop the middle pattern while
+        // nested, since a middle only counts at the outermost level.
+        let mut pat = &full;
+        loop {
+            let mut sia = searchit_arg_T {
+                sa_stop_lnum: lnum_stop,
+                sa_tm: &raw mut tm,
+                sa_timed_out: 0,
+                sa_wrapped: 0,
+            };
+            let n = searchit(
+                curwin.get(),
+                curbuf.get(),
+                &raw mut pos,
+                ptr::null_mut(),
+                dir as Direction,
+                pat.as_ptr() as *mut c_char,
+                pat.len() - 1,
+                1,
+                options,
+                RE_SEARCH as c_int,
+                &raw mut sia,
+            );
+            // No match, or back at the first one: the walk is done.
+            if n == FAIL || (firstpos.lnum != 0 && equalpos(pos, firstpos)) {
+                break;
+            }
+            if firstpos.lnum == 0 {
+                firstpos = pos;
+            }
+            // Landing on the same spot twice means a zero-width match; step
+            // over it so that the walk makes progress.
+            if equalpos(pos, foundpos) {
+                if dir == BACKWARD as c_int {
+                    decl(&raw mut pos);
+                } else {
+                    incl(&raw mut pos);
+                }
+            }
+            foundpos = pos;
+
+            // Clear the start flag so that the next round moves on.
+            options &= !(SEARCH_START as c_int);
+
+            if use_skip {
+                let save_pos = (*curwin.get()).w_cursor;
+                (*curwin.get()).w_cursor = pos;
+                let mut err = false;
+                let skipped = eval_expr_to_bool(skip, &raw mut err);
+                (*curwin.get()).w_cursor = save_pos;
+                if err {
+                    (*curwin.get()).w_cursor = save_cursor;
+                    retval = -1;
+                    break;
+                }
+                if skipped {
+                    continue;
+                }
+            }
+
+            // Group 2 is the end pattern and group 3 the middle one, so
+            // searching backwards a middle opens a level and searching
+            // forwards an end does.
+            if (dir == BACKWARD as c_int && n == 3) || (dir == FORWARD as c_int && n == 2) {
+                nest += 1;
+                pat = &outer;
+            } else {
+                nest -= 1;
+                if nest == 1 {
+                    pat = &full;
+                }
+            }
+            if nest != 0 {
+                continue;
+            }
+
+            // Back at the outermost level: this is a result.
+            if flags & SP_RETCOUNT != 0 {
+                retval += 1;
+            } else {
+                retval = pos.lnum as c_int;
+            }
+            if flags & SP_SETPCMARK != 0 {
+                setpcmark();
+            }
+            (*curwin.get()).w_cursor = pos;
+            if flags & SP_REPEAT == 0 {
+                break;
+            }
+            nest = 1;
+        }
+
+        if !match_pos.is_null() {
+            (*match_pos).lnum = (*curwin.get()).w_cursor.lnum;
+            (*match_pos).col = (*curwin.get()).w_cursor.col + 1;
+        }
+        if flags & SP_NOMOVE != 0 || retval == 0 {
+            (*curwin.get()).w_cursor = save_cursor;
+        }
+    }
+    retval
 }
