@@ -3,8 +3,7 @@ use crate::src::nvim::api::win_config::parse_winborder;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::check_ei;
 use crate::src::nvim::charset::{
-    buf_init_chartab, char2cells, check_isopt, getdigits_int, hexhex2nr, init_chartab, ptr2cells,
-    transchar_byte,
+    buf_init_chartab, check_isopt, getdigits_int, init_chartab, ptr2cells, transchar_byte,
 };
 use crate::src::nvim::cursor::coladvance;
 use crate::src::nvim::cursor_shape::parse_shape_opt;
@@ -22,24 +21,22 @@ use crate::src::nvim::fold::{
     newFoldLevel,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::grid::{schar_from_char, schar_from_str};
 use crate::src::nvim::highlight_group::init_highlight;
 use crate::src::nvim::indent::{briopt_check, tabstop_set};
 use crate::src::nvim::indent_c::parse_cino;
 use crate::src::nvim::insexpand::set_cpt_callbacks;
 use crate::src::nvim::main::{
-    VIsual_active, bkc_flags, breakat_flags, cia_flags, cmdpreview, cot_flags, curtab, curwin,
-    didset_vim, didset_vimruntime, e_invalid_format_string_single_percent_s, e_invarg,
-    e_leadtab_requires_tab, e_modifiable, e_unsupportedoption, first_tabpage, firstbuf, firstwin,
-    km_startsel, km_stopsel, p_bex, p_bg, p_bkc, p_breakat, p_bs, p_cia, p_cot, p_enc, p_fcs,
-    p_fenc, p_hlg, p_isk, p_km, p_lcs, p_mousescroll, p_mousescroll_hor, p_mousescroll_vert, p_pm,
-    p_pumborder, p_ruf, p_shada, p_tc, p_ve, p_winborder, ru_wid, secure, spo_flags, ssop_flags,
-    stl_syntax, tc_flags, ve_flags,
+    VIsual_active, bkc_flags, breakat_flags, cia_flags, cmdpreview, cot_flags, curwin, didset_vim,
+    didset_vimruntime, e_invalid_format_string_single_percent_s, e_invarg, e_modifiable,
+    e_unsupportedoption, firstbuf, km_startsel, km_stopsel, p_bex, p_bg, p_bkc, p_breakat, p_bs,
+    p_cia, p_cot, p_enc, p_fenc, p_hlg, p_isk, p_km, p_mousescroll, p_mousescroll_hor,
+    p_mousescroll_vert, p_pm, p_pumborder, p_ruf, p_shada, p_tc, p_ve, p_winborder, ru_wid, secure,
+    spo_flags, ssop_flags, stl_syntax, tc_flags, ve_flags,
 };
 use crate::src::nvim::mark::free_fmark;
-use crate::src::nvim::mbyte::{enc_canonize, utf_ptr2char, utfc_ptr2len, utfc_ptr2schar};
+use crate::src::nvim::mbyte::{enc_canonize, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memline::ml_setflags;
-use crate::src::nvim::memory::{strequal, xfree, xmalloc, xstrdup};
+use crate::src::nvim::memory::{strequal, xfree, xstrdup};
 use crate::src::nvim::message::{
     messagesopt_changed, msg_grid_validate, verbose_open, verbose_stop,
 };
@@ -55,7 +52,7 @@ use crate::src::nvim::options::{
     opt_bt_values, opt_cot_values, opt_spo_values, opt_ssop_values, opt_tc_values, opt_ve_values,
 };
 use crate::src::nvim::os::env::vim_unsetenv_ext;
-use crate::src::nvim::os::libc::{gettext, memcmp, memset, strcmp, strlen, strncmp, strstr};
+use crate::src::nvim::os::libc::{gettext, memcmp, memset, strcmp, strlen, strstr};
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::shada::get_shada_parameter;
 use crate::src::nvim::spell::{
@@ -67,9 +64,8 @@ use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
     AdditionalData, AlignTextPos, CharsOption, Error, ErrorType, FloatAnchor, FloatRelative,
     OptInt, OptVal, OptValData, OptValType, String_0, Terminal, VirtText, VirtTextChunk, WinConfig,
-    WinSplit, WinStyle, buf_T, colnr_T, expand_T, fcs_chars_T, fmark_T, fmarkv_T, int64_t,
-    lcs_chars_T, linenr_T, lpos_T, optset_T, pos_T, regmatch_T, schar_T, size_t, tabpage_T,
-    uint8_t, win_T,
+    WinSplit, WinStyle, buf_T, colnr_T, fcs_chars_T, fmark_T, fmarkv_T, lcs_chars_T, linenr_T,
+    lpos_T, optset_T, pos_T, regmatch_T, schar_T, size_t, uint8_t, win_T,
 };
 use crate::src::nvim::window::{check_colorcolumn, global_stl_height};
 use crate::src::nvim::winfloat::win_config_float;
@@ -180,14 +176,6 @@ pub const OPT_LOCAL: C2Rust_Unnamed_21 = 2;
 pub const OPT_GLOBAL: C2Rust_Unnamed_21 = 1;
 pub const kListchars: CharsOption = 1;
 pub const kFillchars: CharsOption = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct chars_tab {
-    pub cp: *mut schar_T,
-    pub name: String_0,
-    pub def: *const c_char,
-    pub fallback: *const c_char,
-}
 pub const LSIZE: C2Rust_Unnamed_22 = 512;
 pub type C2Rust_Unnamed_22 = c_uint;
 pub const __ASSERT_FUNCTION: [c_char; 74] = unsafe {
@@ -302,17 +290,6 @@ static fcs_chars: GlobalCell<fcs_chars_T> = GlobalCell::new(fcs_chars_T {
     trunc: 0,
     truncrl: 0,
 });
-static fcs_tab: GlobalCell<[chars_tab; 21]> = GlobalCell::new(
-    [chars_tab {
-        cp: ::core::ptr::null_mut::<schar_T>(),
-        name: String_0 {
-            data: ::core::ptr::null_mut::<c_char>(),
-            size: 0,
-        },
-        def: ::core::ptr::null::<c_char>(),
-        fallback: ::core::ptr::null::<c_char>(),
-    }; 21],
-);
 static lcs_chars: GlobalCell<lcs_chars_T> = GlobalCell::new(lcs_chars_T {
     eol: 0,
     ext: 0,
@@ -331,326 +308,7 @@ static lcs_chars: GlobalCell<lcs_chars_T> = GlobalCell::new(lcs_chars_T {
     leadmultispace: ::core::ptr::null_mut::<schar_T>(),
     conceal: 0,
 });
-static lcs_tab: GlobalCell<[chars_tab; 12]> = GlobalCell::new(
-    [chars_tab {
-        cp: ::core::ptr::null_mut::<schar_T>(),
-        name: String_0 {
-            data: ::core::ptr::null_mut::<c_char>(),
-            size: 0,
-        },
-        def: ::core::ptr::null::<c_char>(),
-        fallback: ::core::ptr::null::<c_char>(),
-    }; 12],
-);
 pub const true_0: c_int = 1 as c_int;
 pub const false_0: c_int = 0 as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;
 pub const __INT_MAX__: c_int = 2147483647 as c_int;
-unsafe extern "C" fn c2rust_run_static_initializers() {
-    fcs_tab.set([
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).stl,
-            name: String_0 {
-                data: b"stl\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 4]>().wrapping_sub(1 as size_t),
-            },
-            def: b" \0".as_ptr() as *const c_char,
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).stlnc,
-            name: String_0 {
-                data: b"stlnc\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 6]>().wrapping_sub(1 as size_t),
-            },
-            def: b" \0".as_ptr() as *const c_char,
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).wbr,
-            name: String_0 {
-                data: b"wbr\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 4]>().wrapping_sub(1 as size_t),
-            },
-            def: b" \0".as_ptr() as *const c_char,
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).horiz,
-            name: String_0 {
-                data: b"horiz\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 6]>().wrapping_sub(1 as size_t),
-            },
-            def: b"\xE2\x94\x80\0".as_ptr() as *const c_char,
-            fallback: b"-\0".as_ptr() as *const c_char,
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).horizup,
-            name: String_0 {
-                data: b"horizup\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 8]>().wrapping_sub(1 as size_t),
-            },
-            def: b"\xE2\x94\xB4\0".as_ptr() as *const c_char,
-            fallback: b"-\0".as_ptr() as *const c_char,
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).horizdown,
-            name: String_0 {
-                data: b"horizdown\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 10]>().wrapping_sub(1 as size_t),
-            },
-            def: b"\xE2\x94\xAC\0".as_ptr() as *const c_char,
-            fallback: b"-\0".as_ptr() as *const c_char,
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).vert,
-            name: String_0 {
-                data: b"vert\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 5]>().wrapping_sub(1 as size_t),
-            },
-            def: b"\xE2\x94\x82\0".as_ptr() as *const c_char,
-            fallback: b"|\0".as_ptr() as *const c_char,
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).vertleft,
-            name: String_0 {
-                data: b"vertleft\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 9]>().wrapping_sub(1 as size_t),
-            },
-            def: b"\xE2\x94\xA4\0".as_ptr() as *const c_char,
-            fallback: b"|\0".as_ptr() as *const c_char,
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).vertright,
-            name: String_0 {
-                data: b"vertright\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 10]>().wrapping_sub(1 as size_t),
-            },
-            def: b"\xE2\x94\x9C\0".as_ptr() as *const c_char,
-            fallback: b"|\0".as_ptr() as *const c_char,
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).verthoriz,
-            name: String_0 {
-                data: b"verthoriz\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 10]>().wrapping_sub(1 as size_t),
-            },
-            def: b"\xE2\x94\xBC\0".as_ptr() as *const c_char,
-            fallback: b"+\0".as_ptr() as *const c_char,
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).fold,
-            name: String_0 {
-                data: b"fold\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 5]>().wrapping_sub(1 as size_t),
-            },
-            def: b"\xC2\xB7\0".as_ptr() as *const c_char,
-            fallback: b"-\0".as_ptr() as *const c_char,
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).foldopen,
-            name: String_0 {
-                data: b"foldopen\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 9]>().wrapping_sub(1 as size_t),
-            },
-            def: b"-\0".as_ptr() as *const c_char,
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).foldclosed,
-            name: String_0 {
-                data: b"foldclose\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 10]>().wrapping_sub(1 as size_t),
-            },
-            def: b"+\0".as_ptr() as *const c_char,
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).foldsep,
-            name: String_0 {
-                data: b"foldsep\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 8]>().wrapping_sub(1 as size_t),
-            },
-            def: b"\xE2\x94\x82\0".as_ptr() as *const c_char,
-            fallback: b"|\0".as_ptr() as *const c_char,
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).foldinner,
-            name: String_0 {
-                data: b"foldinner\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 10]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).diff,
-            name: String_0 {
-                data: b"diff\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 5]>().wrapping_sub(1 as size_t),
-            },
-            def: b"-\0".as_ptr() as *const c_char,
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).msgsep,
-            name: String_0 {
-                data: b"msgsep\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 7]>().wrapping_sub(1 as size_t),
-            },
-            def: b" \0".as_ptr() as *const c_char,
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).eob,
-            name: String_0 {
-                data: b"eob\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 4]>().wrapping_sub(1 as size_t),
-            },
-            def: b"~\0".as_ptr() as *const c_char,
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).lastline,
-            name: String_0 {
-                data: b"lastline\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 9]>().wrapping_sub(1 as size_t),
-            },
-            def: b"@\0".as_ptr() as *const c_char,
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).trunc,
-            name: String_0 {
-                data: b"trunc\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 6]>().wrapping_sub(1 as size_t),
-            },
-            def: b">\0".as_ptr() as *const c_char,
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*fcs_chars.ptr()).truncrl,
-            name: String_0 {
-                data: b"truncrl\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 8]>().wrapping_sub(1 as size_t),
-            },
-            def: b"<\0".as_ptr() as *const c_char,
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-    ]);
-    lcs_tab.set([
-        chars_tab {
-            cp: &raw mut (*lcs_chars.ptr()).eol,
-            name: String_0 {
-                data: b"eol\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 4]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*lcs_chars.ptr()).ext,
-            name: String_0 {
-                data: b"extends\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 8]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*lcs_chars.ptr()).nbsp,
-            name: String_0 {
-                data: b"nbsp\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 5]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*lcs_chars.ptr()).prec,
-            name: String_0 {
-                data: b"precedes\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 9]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*lcs_chars.ptr()).space,
-            name: String_0 {
-                data: b"space\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 6]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*lcs_chars.ptr()).tab2,
-            name: String_0 {
-                data: b"tab\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 4]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*lcs_chars.ptr()).leadtab2,
-            name: String_0 {
-                data: b"leadtab\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 8]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*lcs_chars.ptr()).lead,
-            name: String_0 {
-                data: b"lead\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 5]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*lcs_chars.ptr()).trail,
-            name: String_0 {
-                data: b"trail\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 6]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: &raw mut (*lcs_chars.ptr()).conceal,
-            name: String_0 {
-                data: b"conceal\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 8]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: ::core::ptr::null_mut::<schar_T>(),
-            name: String_0 {
-                data: b"multispace\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 11]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-        chars_tab {
-            cp: ::core::ptr::null_mut::<schar_T>(),
-            name: String_0 {
-                data: b"leadmultispace\0".as_ptr() as *const c_char as *mut c_char,
-                size: ::core::mem::size_of::<[c_char; 15]>().wrapping_sub(1 as size_t),
-            },
-            def: ::core::ptr::null::<c_char>(),
-            fallback: ::core::ptr::null::<c_char>(),
-        },
-    ]);
-}
-#[used]
-#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
-#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
-#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
-static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];
