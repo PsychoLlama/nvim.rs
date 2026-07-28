@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::Path;
 
-use crate::lua::{Table, Value, read_local_table};
+use crate::lua::{Table, Value, read_table};
 use crate::{Emitted, chunked, rustfmt};
 
 /// The preprocessor symbols the transpiled tree was compiled with, as far as
@@ -253,7 +253,7 @@ fn default_value(o: &Table, full_name: &str) -> Result<Default, String> {
 }
 
 fn parse_options(source: &str) -> Result<Vec<Opt>, String> {
-    let root = read_local_table(source, "options")?;
+    let root = read_table("options.lua", source, "local options")?;
     let metas = root
         .table("options")
         .ok_or("options.lua: `options.options` is not a table")?;
@@ -372,13 +372,23 @@ fn parse_options(source: &str) -> Result<Vec<Opt>, String> {
 /// Where each name the table references is declared, so the generated module
 /// can import it. A renamed callback becomes a generation error instead of a
 /// table that silently points somewhere else.
-struct Symbols(BTreeMap<String, String>);
+/// Where in the crate each `pub` item a generated table can name is defined.
+pub struct Symbols(BTreeMap<String, Vec<String>>);
 
 impl Symbols {
-    /// Scan the crate for `pub` items the option table can name. `skip` is
+    /// Scan the crate for `pub` items a generated table can name. `skip` is
     /// the generated directory itself, whose own definitions must not win.
-    fn collect(root: &Path, skip: &Path) -> Result<Symbols, String> {
+    ///
+    /// `prefer` breaks ties: c2rust copied the enum constants into every
+    /// module that included the header, so a name can have dozens of
+    /// definitions and only one of them is the canonical home. A name defined
+    /// more than once with no preferred home is left ambiguous and reported
+    /// by [`Symbols::path`] when something asks for it, rather than resolved
+    /// by whichever module the directory walk happened to reach first.
+    pub fn collect(root: &Path, skip: &Path, prefer: &[&str]) -> Result<Symbols, String> {
         let mut out: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        let mut private: BTreeSet<String> = BTreeSet::new();
+        let mut files: Vec<(String, String)> = Vec::new();
         let mut stack = vec![root.join("src")];
         while let Some(dir) = stack.pop() {
             let entries = std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -397,49 +407,95 @@ impl Symbols {
                 let text = std::fs::read_to_string(&path)
                     .map_err(|e| format!("{}: {e}", path.display()))?;
                 for line in text.lines() {
-                    let Some(name) = declared(line) else { continue };
+                    // A module a file declares without `pub` is invisible
+                    // from outside; its `pub` items are only reachable
+                    // through whatever the parent re-exports.
+                    if let Some(child) = line
+                        .strip_prefix("mod ")
+                        .and_then(|rest| rest.strip_suffix(';'))
+                    {
+                        private.insert(format!("{module}::{child}"));
+                    }
+                }
+                files.push((module, text));
+            }
+        }
+        for (module, text) in &files {
+            // Hoist out of any private module: the parent is where a `pub
+            // use` puts the name, and if it does not, the import the caller
+            // writes will not compile, which is the intended failure.
+            let module = match private
+                .iter()
+                .find(|p| module == *p || module.starts_with(&format!("{p}::")))
+            {
+                Some(p) => p.rsplit_once("::").unwrap().0.to_string(),
+                None => module.clone(),
+            };
+            let mut in_extern = false;
+            for line in text.lines() {
+                if let Some(name) = declared(line, in_extern) {
                     out.entry(name.to_string())
                         .or_default()
                         .insert(module.clone());
+                }
+                // A c2rust `unsafe extern "C" { .. }` block opens and
+                // closes at column 0; its `pub fn` declarations are how
+                // libm and the C deps enter the crate.
+                if line == "unsafe extern \"C\" {" {
+                    in_extern = true;
+                } else if line == "}" {
+                    in_extern = false;
                 }
             }
         }
         Ok(Symbols(
             out.into_iter()
                 .map(|(name, modules)| {
-                    // c2rust copied the enum constants into every module that
-                    // included the header; option.rs is where the option
-                    // table's own constants belong.
-                    let option = "crate::src::nvim::option".to_string();
-                    let module = if modules.len() > 1 && modules.contains(&option) {
-                        option
-                    } else {
-                        modules.into_iter().next().unwrap()
+                    let winner = prefer.iter().find(|p| modules.contains(**p));
+                    let modules = match (modules.len(), winner) {
+                        (1, _) => modules.into_iter().collect(),
+                        (_, Some(p)) => vec![(*p).to_string()],
+                        (_, None) => modules.into_iter().collect(),
                     };
-                    (name, module)
+                    (name, modules)
                 })
                 .collect(),
         ))
     }
 
-    fn path(&self, name: &str) -> Result<&str, String> {
-        self.0
-            .get(name)
-            .map(String::as_str)
-            .ok_or_else(|| format!("no `pub` item named `{name}` in the crate"))
+    pub fn path(&self, name: &str) -> Result<&str, String> {
+        match self.0.get(name).map(Vec::as_slice) {
+            Some([one]) => Ok(one),
+            Some(many) => Err(format!(
+                "`{name}` is defined in {} modules ({}); name the canonical one",
+                many.len(),
+                many.join(", ")
+            )),
+            None => Err(format!("no `pub` item named `{name}` in the crate")),
+        }
     }
 }
 
-/// The name a `pub` item on this line declares, if it is one the table can
-/// reference.
-fn declared(line: &str) -> Option<&str> {
-    let rest = line.strip_prefix("pub ")?;
-    for prefix in [
-        "unsafe extern \"C\" fn ",
-        "extern \"C\" fn ",
-        "static ",
-        "const ",
-    ] {
+/// The name a `pub` item on this line declares, if it is one a table can
+/// reference. `in_extern` allows the indented `pub fn` declarations of a
+/// c2rust `unsafe extern "C"` block, which is where `cos` and friends live.
+fn declared(line: &str, in_extern: bool) -> Option<&str> {
+    let rest = if in_extern {
+        line.trim_start().strip_prefix("pub ")?
+    } else {
+        line.strip_prefix("pub ")?
+    };
+    let prefixes: &[&str] = if in_extern {
+        &["fn "]
+    } else {
+        &[
+            "unsafe extern \"C\" fn ",
+            "extern \"C\" fn ",
+            "static ",
+            "const ",
+        ]
+    };
+    for prefix in prefixes {
         if let Some(rest) = rest.strip_prefix(prefix) {
             let name = rest
                 .split(|c: char| !c.is_alphanumeric() && c != '_')
@@ -450,7 +506,7 @@ fn declared(line: &str) -> Option<&str> {
     None
 }
 
-fn module_path(root: &Path, path: &Path) -> String {
+pub fn module_path(root: &Path, path: &Path) -> String {
     let rel = path
         .strip_prefix(root.join("src"))
         .unwrap()
@@ -466,6 +522,17 @@ fn module_path(root: &Path, path: &Path) -> String {
     // to `eval_1`.
     if parts == ["nvim", "eval"] {
         parts = vec!["nvim".into(), "eval_1".into()];
+    }
+    // `loop.rs`, `match.rs`, `move.rs`: lib.rs spells those as raw
+    // identifiers, and so must anything importing from them.
+    for part in &mut parts {
+        if [
+            "loop", "match", "move", "type", "ref", "box", "in", "fn", "mod",
+        ]
+        .contains(&part.as_str())
+        {
+            *part = format!("r#{part}");
+        }
     }
     format!("crate::src::{}", parts.join("::"))
 }
@@ -908,7 +975,9 @@ pub fn generate(
     let source =
         std::fs::read_to_string(lua_path).map_err(|e| format!("{}: {e}", lua_path.display()))?;
     let opts = parse_options(&source)?;
-    let symbols = Symbols::collect(root, out_dir)?;
+    // c2rust copied the option-index constants into every module that
+    // included the generated header; `option.rs` is their canonical home.
+    let symbols = Symbols::collect(root, out_dir, &["crate::src::nvim::option"])?;
 
     // Each section is formatted as one batch so the chunker counts the lines
     // the file will actually have.

@@ -2,17 +2,18 @@
 # Regenerate the API dispatch layer from the Rust API signatures.
 #
 # tools/apigen parses crates/nvim/src/nvim/api/*.rs plus the attribute spec
-# (tools/apigen/functions.txt) and writes four module directories — the
-# msgpack-RPC wrappers, the dispatch tables, the `vim.api` Lua binding and the
-# option table — plus the packed api-info metadata. Each directory is a root
+# (tools/apigen/functions.txt) and writes five module directories — the
+# msgpack-RPC wrappers, the dispatch tables, the `vim.api` Lua binding, the
+# option table and the Vimscript builtin table — plus the packed api-info
+# metadata. Each directory is a root
 # holding the shared support code and one child per API source file. Unlike
 # the unit-test cdefs, the output is committed: it is ordinary crate source
 # that has to compile, be formatted and be measured by the ratchet like
 # everything else.
 #
-# The option table's input is not Rust: it is the vendored
-# crates/nvim/src/nvim/options.lua, the same metadata upstream fed to
-# src/gen/gen_options.lua.
+# Two of them read metadata rather than Rust: the vendored
+# crates/nvim/src/nvim/options.lua and crates/nvim/src/nvim/eval.lua, the same
+# files upstream fed to src/gen/gen_options.lua and src/gen/gen_eval.lua.
 #
 # `--check` regenerates in memory and fails if the committed file differs, so
 # a signature change that nobody re-generated for is a CI failure rather than
@@ -35,6 +36,8 @@ cargo build --release --quiet --manifest-path "$root/tools/apigen/Cargo.toml"
   --lua-dir "$root/crates/nvim/src/nvim/lua/api_wrappers" \
   --options-lua "$root/crates/nvim/src/nvim/options.lua" \
   --options-dir "$root/crates/nvim/src/nvim/options" \
+  --eval-lua "$root/crates/nvim/src/nvim/eval.lua" \
+  --eval-dir "$root/crates/nvim/src/nvim/eval/funcs/table" \
   --metadata-file "$root/crates/nvim/src/nvim/api/private/metadata.rs" \
   --rustfmt-config "$root/rustfmt.toml" \
   "$@"

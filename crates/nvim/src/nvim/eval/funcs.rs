@@ -2,13 +2,11 @@ use crate::src::mpack::object::mpack_parser_init;
 use crate::src::nvim::api::private::converter::{
     object_to_vim, object_to_vim_take_luaref, vim_to_object,
 };
-use crate::src::nvim::api::private::dispatch::method_handlers;
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_object, api_free_string, api_metadata, arena_array, cbuf_to_string,
     cstr_as_string, dict_set_var,
 };
 use crate::src::nvim::api::vim::nvim_feedkeys;
-use crate::src::nvim::arglist::{f_argc, f_argidx, f_arglistid, f_argv};
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{apply_autocmds, au_exists, autocmd_supported};
 use crate::src::nvim::buffer::{
@@ -21,48 +19,22 @@ use crate::src::nvim::channel::{
 };
 use crate::src::nvim::channel::{channel_proc, channel_pty};
 use crate::src::nvim::charset::{getdigits_int, skipwhite};
-use crate::src::nvim::cmdexpand::{
-    ExpandCleanup, ExpandInit, ExpandOne, cmdline_pum_active, f_cmdcomplete_info, f_getcompletion,
-    f_getcompletiontype,
-};
-use crate::src::nvim::cmdhist::{f_histadd, f_histdel, f_histget, f_histnr};
+use crate::src::nvim::cmdexpand::{ExpandCleanup, ExpandInit, ExpandOne, cmdline_pum_active};
 use crate::src::nvim::context::{
     ctx_free, ctx_from_dict, ctx_get, ctx_restore, ctx_save, ctx_size, ctx_to_dict, kCtxAll,
 };
 use crate::src::nvim::cursor::{check_cursor, get_cursor_pos_ptr};
-use crate::src::nvim::diff::{f_diff_filler, f_diff_hlID};
-use crate::src::nvim::digraph::{
-    f_digraph_get, f_digraph_getlist, f_digraph_set, f_digraph_setlist,
-};
 use crate::src::nvim::edit::buf_prompt_text;
-use crate::src::nvim::eval::buffer::{
-    f_append, f_appendbufline, f_bufadd, f_bufexists, f_buflisted, f_bufload, f_bufloaded,
-    f_bufname, f_bufnr, f_bufwinid, f_bufwinnr, f_deletebufline, f_getbufinfo, f_getbufline,
-    f_getbufoneline, f_getline, f_prompt_appendbuf, f_prompt_setcallback, f_prompt_setinterrupt,
-    f_prompt_setprompt, f_setbufline, f_setline, find_buffer,
-};
+use crate::src::nvim::eval::buffer::find_buffer;
 use crate::src::nvim::eval::decode::{
     json_decode_string, mpack_parse_typval, typval_parser_error_free, unpack_typval,
 };
-use crate::src::nvim::eval::deprecated::{f_last_buffer_nr, f_rpcstart, f_rpcstop, f_termopen};
 use crate::src::nvim::eval::encode::{
     encode_init_lrstate, encode_list_write, encode_read_from_list, encode_tv2echo, encode_tv2json,
     encode_vim_list_to_buf, encode_vim_to_msgpack,
 };
-use crate::src::nvim::eval::fs::{
-    f_browse, f_browsedir, f_chdir, f_delete, f_executable, f_exepath, f_filecopy, f_filereadable,
-    f_filewritable, f_finddir, f_findfile, f_fnamemodify, f_getcwd, f_getfperm, f_getfsize,
-    f_getftime, f_getftype, f_glob, f_glob2regpat, f_globpath, f_haslocaldir, f_isabsolutepath,
-    f_isdirectory, f_mkdir, f_pathshorten, f_readblob, f_readdir, f_readfile, f_rename, f_resolve,
-    f_simplify, f_tempname, f_writefile,
-};
-use crate::src::nvim::eval::list::{
-    f_add, f_count, f_extend, f_extendnew, f_filter, f_foreach, f_insert, f_map, f_mapnew,
-    f_remove, f_reverse,
-};
 use crate::src::nvim::eval::typval::{
-    callback_free, f_blob2list, f_has_key, f_items, f_join, f_keys, f_list2blob, f_list2str,
-    f_sort, f_uniq, f_values, tv_blob_alloc_ret, tv_blob_set_range, tv_check_for_buffer_arg,
+    callback_free, tv_blob_alloc_ret, tv_blob_set_range, tv_check_for_buffer_arg,
     tv_check_for_dict_arg, tv_check_for_list_arg, tv_check_for_list_or_blob_arg,
     tv_check_for_lnum_arg, tv_check_for_nonempty_string_arg, tv_check_for_nonnull_dict_arg,
     tv_check_for_number_arg, tv_check_for_opt_bool_arg, tv_check_for_opt_dict_arg,
@@ -91,26 +63,17 @@ use crate::src::nvim::eval::userfunc::{
     translated_function_exists,
 };
 use crate::src::nvim::eval::vars::{
-    cat_prefix_varname, f_getbufvar, f_gettabvar, f_gettabwinvar, f_getwinvar, f_setbufvar,
-    f_settabvar, f_settabwinvar, f_setwinvar, find_var, get_user_var_name, get_vim_var_nr,
-    get_vim_var_str, get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr,
-    set_vim_var_type, var_exists,
+    cat_prefix_varname, find_var, get_user_var_name, get_vim_var_nr, get_vim_var_str,
+    get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type, var_exists,
 };
-use crate::src::nvim::eval::window::{
-    f_getcmdwintype, f_gettabinfo, f_getwininfo, f_getwinpos, f_getwinposx, f_getwinposy,
-    f_tabpagenr, f_tabpagewinnr, f_win_execute, f_win_findbuf, f_win_getid, f_win_gettype,
-    f_win_gotoid, f_win_id2tabwin, f_win_id2win, f_win_move_separator, f_win_move_statusline,
-    f_win_screenpos, f_win_splitmove, f_winbufnr, f_wincol, f_winheight, f_winlayout, f_winline,
-    f_winnr, f_winrestcmd, f_winrestview, f_winsaveview, f_winwidth, find_tabwin,
-    find_win_by_nr_or_id, win_id2wp_tp,
-};
+use crate::src::nvim::eval::window::{find_tabwin, find_win_by_nr_or_id, win_id2wp_tp};
 use crate::src::nvim::eval_1::{
     add_timer_info, add_timer_info_all, buf_byteidx_to_charidx, buf_charidx_to_byteidx,
     callback_from_typval, clear_lval, common_job_callbacks, do_string_sub, eval_expr_to_bool,
-    eval_expr_typval, eval_expr_valid_arg, eval_has_provider, eval_option, eval1, f_slice,
-    f_system, f_systemlist, find_job, find_timer_by_nr, get_callback_depth, get_copyID, get_lval,
-    list2fpos, partial_name, prompt_get_input, save_tv_as_string, script_host_eval, string2float,
-    timer_due_cb, timer_start, timer_stop, timer_stop_all, tv_to_argv, var_item_copy, var2fpos,
+    eval_expr_typval, eval_expr_valid_arg, eval_has_provider, eval_option, eval1, find_job,
+    find_timer_by_nr, get_callback_depth, get_copyID, get_lval, list2fpos, partial_name,
+    prompt_get_input, save_tv_as_string, script_host_eval, string2float, timer_due_cb, timer_start,
+    timer_stop, timer_stop_all, tv_to_argv, var_item_copy, var2fpos,
 };
 use crate::src::nvim::event::libuv::{uv_kill, uv_strerror};
 use crate::src::nvim::event::r#loop::{loop_on_put, process_events_until};
@@ -124,22 +87,15 @@ use crate::src::nvim::event::time::{
 };
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_docmd::{
-    cmd_exists, do_cmdline, do_cmdline_cmd, eval_vars, expand_filename, f_fullcommand,
+    cmd_exists, do_cmdline, do_cmdline_cmd, eval_vars, expand_filename,
 };
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::ex_getln::{
-    f_getcmdcomplpat, f_getcmdcompltype, f_getcmdline, f_getcmdpos, f_getcmdprompt,
-    f_getcmdscreenpos, f_getcmdtype, f_setcmdline, f_setcmdpos, f_wildtrigger, get_user_input,
-    text_locked, text_locked_msg, vim_strsave_fnameescape,
+    get_user_input, text_locked, text_locked_msg, vim_strsave_fnameescape,
 };
-use crate::src::nvim::fold::{
-    f_foldclosed, f_foldclosedend, f_foldlevel, f_foldtext, f_foldtextresult,
-};
-use crate::src::nvim::fuzzy::{f_matchfuzzy, f_matchfuzzypos};
 use crate::src::nvim::garray::{ga_append, ga_append_via_ptr, ga_clear, ga_grow, ga_init};
 use crate::src::nvim::getchar::{
-    f_getchar, f_getcharmod, f_getcharstr, restore_typeahead, save_typeahead, stuff_empty,
-    using_script, vgetc,
+    restore_typeahead, save_typeahead, stuff_empty, using_script, vgetc,
 };
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint};
@@ -148,12 +104,9 @@ use crate::src::nvim::highlight_group::{
     get_highlight_name_ext, highlight_color, highlight_exists, highlight_has_attr,
     syn_get_final_id, syn_name2id,
 };
-use crate::src::nvim::indent::{f_indent, f_lispindent, get_sw_value, get_sw_value_col};
-use crate::src::nvim::indent_c::f_cindent;
+use crate::src::nvim::indent::{get_sw_value, get_sw_value_col};
 use crate::src::nvim::input::prompt_for_input;
-use crate::src::nvim::insexpand::{
-    f_complete, f_complete_add, f_complete_check, f_complete_info, f_preinserted, ins_compl_active,
-};
+use crate::src::nvim::insexpand::ins_compl_active;
 use crate::src::nvim::keycodes::vim_strsave_escape_ks;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::{
@@ -177,18 +130,12 @@ use crate::src::nvim::main::{
     reg_recording, skip_update_topline, starting, stdin_isatty, stdout_isatty, typebuf, vgetc_busy,
     vim_ignored, virtual_op, want_garbage_collect, wild_menu_showing, windowsVersion,
 };
-use crate::src::nvim::mapping::{f_hasmapto, f_maparg, f_mapcheck, f_maplist, f_mapset};
 use crate::src::nvim::mark::{
     cleanup_jumplist, get_buf_local_marks, get_global_marks, setmark_pos, setpcmark,
 };
-use crate::src::nvim::r#match::{
-    f_clearmatches, f_getmatches, f_matchadd, f_matchaddpos, f_matcharg, f_matchdelete,
-    f_setmatches,
-};
 use crate::src::nvim::mbyte::{
-    convert_setup, enc_locale, f_charclass, f_getcellwidths, f_iconv, f_setcellwidths,
-    mb_adjust_cursor, mb_prevptr, string_convert, utf_char2bytes, utf_ptr2char, utf_ptr2len,
-    utfc_ptr2len,
+    convert_setup, enc_locale, mb_adjust_cursor, mb_prevptr, string_convert, utf_char2bytes,
+    utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::src::nvim::memline::{
     decl, incl, ml_find_line_or_offset, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len, ml_get_pos,
@@ -198,13 +145,12 @@ use crate::src::nvim::memory::{
     ARENA_EMPTY, alloc_block, arena_finish, arena_mem_free, free_block, strequal, strnequal,
     xcalloc, xfree, xmalloc, xmallocz, xmemdup, xmemdupz, xstrdup,
 };
-use crate::src::nvim::menu::{f_menu_info, get_menu_cmd_modes, menu_get};
+use crate::src::nvim::menu::{get_menu_cmd_modes, menu_get};
 use crate::src::nvim::message::{
     do_dialog, emsg, internal_error, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts,
     msg_scroll_flush, msg_start, semsg, semsg_multiline, str2special_save, verb_msg,
 };
-use crate::src::nvim::mouse::f_getmousepos;
-use crate::src::nvim::r#move::{f_screenpos, f_virtcol2col, update_curswant, win_col_off};
+use crate::src::nvim::r#move::{update_curswant, win_col_off};
 use crate::src::nvim::msgpack_rpc::channel::get_client_info;
 use crate::src::nvim::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
 use crate::src::nvim::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
@@ -226,10 +172,9 @@ use crate::src::nvim::os::env::{
 };
 use crate::src::nvim::os::fs::{os_isdir, os_setperm};
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, acos, asin, atan, atan2, atoi, ceil, cos, cosh, exp, fabs, floor, fmod,
-    gettext, log, log10, memcmp, memcpy, memmove, memset, mktime, pow, round, sin, sinh, snprintf,
-    sqrt, strcasecmp, strchr, strcmp, strcpy, strftime, strlen, strncasecmp, strncmp, strtoul, tan,
-    tanh, time, trunc,
+    __assert_fail, abort, atan2, atoi, fabs, fmod, gettext, memcpy, memmove, memset, mktime, pow,
+    snprintf, strcasecmp, strchr, strcmp, strcpy, strftime, strlen, strncasecmp, strncmp, strtoul,
+    time,
 };
 use crate::src::nvim::os::pty_proc_unix::pty_proc_resize;
 use crate::src::nvim::os::shell::shell_free_argv;
@@ -242,44 +187,29 @@ use crate::src::nvim::pos::{clearpos, equalpos, lt};
 use crate::src::nvim::profile::{
     profile_end, profile_msg, profile_setlimit, profile_signed, profile_start, profile_sub,
 };
-use crate::src::nvim::quickfix::{f_getloclist, f_getqflist, f_setloclist, f_setqflist};
 use crate::src::nvim::regexp::{reg_submatch, reg_submatch_list};
 use crate::src::nvim::register::get_register_name;
 use crate::src::nvim::register::{
     format_reg_type, get_reg_contents, get_reg_type, get_unname_register, get_yank_register,
     op_reg_set_previous, write_reg_contents_ex, write_reg_contents_lst,
 };
-use crate::src::nvim::runtime::{exestack, f_getscriptinfo, f_getstacktrace};
+use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::search::{
-    f_searchcount, last_csearch, last_csearch_forward, last_csearch_until, searchit,
-    set_csearch_direction, set_csearch_until, set_last_csearch,
+    last_csearch, last_csearch_forward, last_csearch_until, searchit, set_csearch_direction,
+    set_csearch_until, set_last_csearch,
 };
 use crate::src::nvim::sha256::hex_digest;
-use crate::src::nvim::sign::{
-    f_sign_define, f_sign_getdefined, f_sign_getplaced, f_sign_jump, f_sign_place,
-    f_sign_placelist, f_sign_undefine, f_sign_unplace, f_sign_unplacelist,
-};
 use crate::src::nvim::spell::{eval_soundfold, parse_spelllang, spell_check, spell_move_to};
 use crate::src::nvim::spellsuggest::spell_suggest_list;
 use crate::src::nvim::state::{get_mode, get_was_safe_state, virtual_active};
 use crate::src::nvim::strings::{
-    f_byteidx, f_byteidxcomp, f_charidx, f_str2list, f_str2nr, f_strcharlen, f_strcharpart,
-    f_strchars, f_strdisplaywidth, f_strgetchar, f_stridx, f_string, f_strlen, f_strpart,
-    f_strridx, f_strtrans, f_strutf16len, f_strwidth, f_tolower, f_toupper, f_tr, f_trim,
-    f_utf16idx, vim_snprintf, vim_strchr, vim_strsave_escaped, vim_strsave_shellescape,
-    vim_vsnprintf_typval,
+    vim_snprintf, vim_strchr, vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval,
 };
 use crate::src::nvim::syntax::{
     get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char, syntax_present,
 };
 use crate::src::nvim::tag::{get_tagfname, get_tags, get_tagstack, set_tagstack, tagname_free};
 use crate::src::nvim::terminal::{terminal_buf, terminal_open, terminal_running};
-use crate::src::nvim::testing::{
-    f_assert_beeps, f_assert_equal, f_assert_equalfile, f_assert_exception, f_assert_fails,
-    f_assert_false, f_assert_inrange, f_assert_match, f_assert_nobeep, f_assert_notequal,
-    f_assert_notmatch, f_assert_report, f_assert_true, f_test_garbagecollect_now,
-    f_test_write_list_log,
-};
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gid_t, __gnuc_va_list, __pthread_internal_list, __pthread_list_t,
     __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __uid_t, __va_list_tag, AdditionalData,
@@ -353,11 +283,14 @@ use crate::src::nvim::ui::{
     ui_rgb_attached,
 };
 use crate::src::nvim::ui_compositor::ui_comp_get_grid_at_coord;
-use crate::src::nvim::undo::{f_undofile, f_undotree};
 use crate::src::nvim::version::{has_nvim_version, has_vim_patch};
 use crate::src::nvim::window::find_tabpage;
 use core::ffi::CStr;
 use std::ffi::CString;
+
+mod table;
+
+use self::table::{BUILTINS, builtin_index};
 unsafe extern "C" {
     fn uv_random(
         loop_0: *mut uv_loop_t,
@@ -1956,7 +1889,7 @@ pub unsafe extern "C" fn get_function_name(
         }
     }
     (*intidx.ptr()) += 1;
-    let key: *const ::core::ffi::c_char = (*functions.ptr())[intidx.get() as usize].name;
+    let key: *const ::core::ffi::c_char = (*BUILTINS.ptr())[intidx.get() as usize].name;
     if key.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
@@ -1967,7 +1900,7 @@ pub unsafe extern "C" fn get_function_name(
         key_len,
     );
     (*IObuff.ptr())[key_len as usize] = '(' as ::core::ffi::c_char;
-    if (*functions.ptr())[intidx.get() as usize].max_argc as ::core::ffi::c_int
+    if (*BUILTINS.ptr())[intidx.get() as usize].max_argc as ::core::ffi::c_int
         == 0 as ::core::ffi::c_int
     {
         (*IObuff.ptr())[key_len.wrapping_add(1 as size_t) as usize] = ')' as ::core::ffi::c_char;
@@ -1994,16 +1927,23 @@ pub unsafe extern "C" fn get_expr_name(
     (*intidx.ptr()) += 1;
     return get_user_var_name(xp, intidx.get());
 }
+/// The table row for the builtin `name` spells, or null if there is none.
 pub unsafe extern "C" fn find_internal_func(
     name: *const ::core::ffi::c_char,
 ) -> *const EvalFuncDef {
-    let mut len: size_t = strlen(name);
-    let mut index: ::core::ffi::c_int = find_internal_func_hash(name, len);
-    return if index >= 0 as ::core::ffi::c_int {
-        ((functions.ptr() as *const _) as *const EvalFuncDef).offset(index as isize)
+    let len = strlen(name);
+    // SAFETY: `name` is a NUL-terminated string, so its first `len` bytes are
+    // readable. `from_raw_parts` refuses a null pointer even for an empty
+    // slice, and an empty name is not a builtin anyway.
+    let key = if len == 0 {
+        &[][..]
     } else {
-        ::core::ptr::null::<EvalFuncDef>()
+        ::core::slice::from_raw_parts(name.cast::<u8>(), len)
     };
+    match builtin_index(key) {
+        Some(row) => BUILTINS.ptr().cast::<EvalFuncDef>().add(row),
+        None => ::core::ptr::null::<EvalFuncDef>(),
+    }
 }
 pub unsafe extern "C" fn check_internal_func(
     fdef: *const EvalFuncDef,
@@ -2126,7 +2066,7 @@ unsafe extern "C" fn non_zero_arg(mut argvars: *mut typval_T) -> bool {
                 .v_string as ::core::ffi::c_int
                 != NUL;
 }
-unsafe extern "C" fn float_op_wrapper(
+pub unsafe extern "C" fn float_op_wrapper(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
@@ -2139,7 +2079,7 @@ unsafe extern "C" fn float_op_wrapper(
         (*rettv).vval.v_float = 0.0f64 as float_T;
     };
 }
-unsafe extern "C" fn api_wrapper(
+pub unsafe extern "C" fn api_wrapper(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
@@ -2190,7 +2130,7 @@ unsafe extern "C" fn api_wrapper(
     arena_mem_free(arena_finish(&raw mut arena));
     api_clear_error(&raw mut err);
 }
-unsafe extern "C" fn f_abs(
+pub unsafe extern "C" fn f_abs(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2222,7 +2162,7 @@ unsafe extern "C" fn f_abs(
         }
     };
 }
-unsafe extern "C" fn f_and(
+pub unsafe extern "C" fn f_and(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2235,14 +2175,14 @@ unsafe extern "C" fn f_and(
         ::core::ptr::null_mut::<bool>(),
     );
 }
-unsafe extern "C" fn f_api_info(
+pub unsafe extern "C" fn f_api_info(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     object_to_vim(api_metadata(), rettv, ::core::ptr::null_mut::<Error>());
 }
-unsafe extern "C" fn f_atan2(
+pub unsafe extern "C" fn f_atan2(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2326,7 +2266,7 @@ pub unsafe extern "C" fn get_buf_arg(mut arg: *mut typval_T) -> *mut buf_T {
     }
     return buf;
 }
-unsafe extern "C" fn f_byte2line(
+pub unsafe extern "C" fn f_byte2line(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2342,7 +2282,7 @@ unsafe extern "C" fn f_byte2line(
                 as varnumber_T;
     };
 }
-unsafe extern "C" fn f_call(
+pub unsafe extern "C" fn f_call(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2430,14 +2370,14 @@ unsafe extern "C" fn f_call(
     }
     xfree(tofree as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn f_changenr(
+pub unsafe extern "C" fn f_changenr(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = (*curbuf.get()).b_u_seq_cur as varnumber_T;
 }
-unsafe extern "C" fn f_chanclose(
+pub unsafe extern "C" fn f_chanclose(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2491,7 +2431,7 @@ unsafe extern "C" fn f_chanclose(
         emsg(error);
     }
 }
-unsafe extern "C" fn f_chansend(
+pub unsafe extern "C" fn f_chansend(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2543,7 +2483,7 @@ unsafe extern "C" fn f_chansend(
         emsg(error);
     }
 }
-unsafe extern "C" fn f_char2nr(
+pub unsafe extern "C" fn f_char2nr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2621,7 +2561,7 @@ unsafe extern "C" fn get_col(
     }
     (*rettv).vval.v_number = col as varnumber_T;
 }
-unsafe extern "C" fn f_charcol(
+pub unsafe extern "C" fn f_charcol(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2646,14 +2586,14 @@ pub unsafe extern "C" fn get_optional_window(
     }
     return win;
 }
-unsafe extern "C" fn f_col(
+pub unsafe extern "C" fn f_col(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     get_col(argvars, rettv, false_0 != 0);
 }
-unsafe extern "C" fn f_confirm(
+pub unsafe extern "C" fn f_confirm(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2740,7 +2680,7 @@ unsafe extern "C" fn f_confirm(
         ) as varnumber_T;
     }
 }
-unsafe extern "C" fn f_copy(
+pub unsafe extern "C" fn f_copy(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2753,7 +2693,7 @@ unsafe extern "C" fn f_copy(
         0 as ::core::ffi::c_int,
     );
 }
-unsafe extern "C" fn f_ctxget(
+pub unsafe extern "C" fn f_ctxget(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2800,7 +2740,7 @@ unsafe extern "C" fn f_ctxget(
     arena_mem_free(arena_finish(&raw mut arena));
     api_clear_error(&raw mut err);
 }
-unsafe extern "C" fn f_ctxpop(
+pub unsafe extern "C" fn f_ctxpop(
     mut _argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2811,7 +2751,7 @@ unsafe extern "C" fn f_ctxpop(
         ));
     }
 }
-unsafe extern "C" fn f_ctxpush(
+pub unsafe extern "C" fn f_ctxpush(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2877,7 +2817,7 @@ unsafe extern "C" fn f_ctxpush(
     }
     ctx_save(::core::ptr::null_mut::<Context>(), types);
 }
-unsafe extern "C" fn f_ctxset(
+pub unsafe extern "C" fn f_ctxset(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -2944,7 +2884,7 @@ unsafe extern "C" fn f_ctxset(
     api_clear_error(&raw mut err);
     did_emsg.set(save_did_emsg);
 }
-unsafe extern "C" fn f_ctxsize(
+pub unsafe extern "C" fn f_ctxsize(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3047,14 +2987,14 @@ unsafe extern "C" fn set_cursorpos(
     (*curwin.get()).w_set_curswant = set_curswant as ::core::ffi::c_int;
     (*rettv).vval.v_number = 0 as varnumber_T;
 }
-unsafe extern "C" fn f_cursor(
+pub unsafe extern "C" fn f_cursor(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     set_cursorpos(argvars, rettv, false_0 != 0);
 }
-unsafe extern "C" fn f_debugbreak(
+pub unsafe extern "C" fn f_debugbreak(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3068,7 +3008,7 @@ unsafe extern "C" fn f_debugbreak(
     }
     uv_kill(pid, SIGINT);
 }
-unsafe extern "C" fn f_deepcopy(
+pub unsafe extern "C" fn f_deepcopy(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3097,7 +3037,7 @@ unsafe extern "C" fn f_deepcopy(
         },
     );
 }
-unsafe extern "C" fn f_dictwatcheradd(
+pub unsafe extern "C" fn f_dictwatcheradd(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3170,7 +3110,7 @@ unsafe extern "C" fn f_dictwatcheradd(
         callback,
     );
 }
-unsafe extern "C" fn f_dictwatcherdel(
+pub unsafe extern "C" fn f_dictwatcherdel(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3230,14 +3170,14 @@ unsafe extern "C" fn f_dictwatcherdel(
     }
     callback_free(&raw mut callback);
 }
-unsafe extern "C" fn f_did_filetype(
+pub unsafe extern "C" fn f_did_filetype(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = (*curbuf.get()).b_did_filetype as varnumber_T;
 }
-unsafe extern "C" fn f_empty(
+pub unsafe extern "C" fn f_empty(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3317,7 +3257,7 @@ unsafe extern "C" fn f_empty(
     }
     (*rettv).vval.v_number = n as varnumber_T;
 }
-unsafe extern "C" fn f_environ(
+pub unsafe extern "C" fn f_environ(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3387,7 +3327,7 @@ unsafe extern "C" fn f_environ(
     }
     os_free_fullenv(env);
 }
-unsafe extern "C" fn f_escape(
+pub unsafe extern "C" fn f_escape(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3402,7 +3342,7 @@ unsafe extern "C" fn f_escape(
     );
     (*rettv).v_type = VAR_STRING;
 }
-unsafe extern "C" fn f_getenv(
+pub unsafe extern "C" fn f_getenv(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3418,7 +3358,7 @@ unsafe extern "C" fn f_getenv(
     (*rettv).vval.v_string = p;
     (*rettv).v_type = VAR_STRING;
 }
-unsafe extern "C" fn f_eval(
+pub unsafe extern "C" fn f_eval(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3452,7 +3392,7 @@ unsafe extern "C" fn f_eval(
         );
     }
 }
-unsafe extern "C" fn f_eventhandler(
+pub unsafe extern "C" fn f_eventhandler(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3588,14 +3528,14 @@ pub unsafe extern "C" fn execute_common(
     (*rettv).vval.v_string = (*capture_ga.get()).ga_data as *mut ::core::ffi::c_char;
     capture_ga.set(save_capture_ga);
 }
-unsafe extern "C" fn f_execute(
+pub unsafe extern "C" fn f_execute(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     execute_common(argvars, rettv, 0 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn f_exists(
+pub unsafe extern "C" fn f_exists(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3649,7 +3589,7 @@ unsafe extern "C" fn f_exists(
     }
     (*rettv).vval.v_number = n as varnumber_T;
 }
-unsafe extern "C" fn f_expand(
+pub unsafe extern "C" fn f_expand(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3791,7 +3731,7 @@ unsafe extern "C" fn f_expand(
         }
     };
 }
-unsafe extern "C" fn f_menu_get(
+pub unsafe extern "C" fn f_menu_get(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3816,7 +3756,7 @@ unsafe extern "C" fn f_menu_get(
         (*rettv).vval.v_list,
     );
 }
-unsafe extern "C" fn f_expandcmd(
+pub unsafe extern "C" fn f_expandcmd(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3961,21 +3901,21 @@ unsafe extern "C" fn flatten_common(
         maxdepth as int64_t,
     );
 }
-unsafe extern "C" fn f_flatten(
+pub unsafe extern "C" fn f_flatten(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     flatten_common(argvars, rettv, false_0 != 0);
 }
-unsafe extern "C" fn f_flattennew(
+pub unsafe extern "C" fn f_flattennew(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     flatten_common(argvars, rettv, true_0 != 0);
 }
-unsafe extern "C" fn f_feedkeys(
+pub unsafe extern "C" fn f_feedkeys(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -3997,7 +3937,7 @@ unsafe extern "C" fn f_feedkeys(
     }
     nvim_feedkeys(cstr_as_string(keys), cstr_as_string(flags), true_0 != 0);
 }
-unsafe extern "C" fn f_float2nr(
+pub unsafe extern "C" fn f_float2nr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -4014,7 +3954,7 @@ unsafe extern "C" fn f_float2nr(
         (*rettv).vval.v_number = f as varnumber_T;
     };
 }
-unsafe extern "C" fn f_fmod(
+pub unsafe extern "C" fn f_fmod(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -4035,7 +3975,7 @@ unsafe extern "C" fn f_fmod(
         (*rettv).vval.v_float = 0.0f64 as float_T;
     };
 }
-unsafe extern "C" fn f_fnameescape(
+pub unsafe extern "C" fn f_fnameescape(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -4046,7 +3986,7 @@ unsafe extern "C" fn f_fnameescape(
     );
     (*rettv).v_type = VAR_STRING;
 }
-unsafe extern "C" fn f_foreground(
+pub unsafe extern "C" fn f_foreground(
     mut _argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -4270,21 +4210,21 @@ unsafe extern "C" fn common_function(
     }
     xfree(trans_name as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn f_funcref(
+pub unsafe extern "C" fn f_funcref(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     common_function(argvars, rettv, true_0 != 0);
 }
-unsafe extern "C" fn f_function(
+pub unsafe extern "C" fn f_function(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     common_function(argvars, rettv, false_0 != 0);
 }
-unsafe extern "C" fn f_garbagecollect(
+pub unsafe extern "C" fn f_garbagecollect(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -4297,7 +4237,7 @@ unsafe extern "C" fn f_garbagecollect(
         garbage_collect_at_exit.set(true_0 != 0);
     }
 }
-unsafe extern "C" fn f_get(
+pub unsafe extern "C" fn f_get(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -4528,7 +4468,7 @@ unsafe extern "C" fn f_get(
         tv_copy(tv, rettv);
     };
 }
-unsafe extern "C" fn f_getchangelist(
+pub unsafe extern "C" fn f_getchangelist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -4702,14 +4642,14 @@ unsafe extern "C" fn getpos_both(
         }
     }
 }
-unsafe extern "C" fn f_getcharpos(
+pub unsafe extern "C" fn f_getcharpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     getpos_both(argvars, rettv, false_0 != 0, true_0 != 0);
 }
-unsafe extern "C" fn f_getcharsearch(
+pub unsafe extern "C" fn f_getcharsearch(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -4735,7 +4675,7 @@ unsafe extern "C" fn f_getcharsearch(
         last_csearch_until() as varnumber_T,
     );
 }
-unsafe extern "C" fn f_getfontname(
+pub unsafe extern "C" fn f_getfontname(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -4743,7 +4683,7 @@ unsafe extern "C" fn f_getfontname(
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-unsafe extern "C" fn f_getjumplist(
+pub unsafe extern "C" fn f_getjumplist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -4801,7 +4741,7 @@ unsafe extern "C" fn f_getjumplist(
         i += 1;
     }
 }
-unsafe extern "C" fn f_getmarklist(
+pub unsafe extern "C" fn f_getmarklist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -4819,28 +4759,28 @@ unsafe extern "C" fn f_getmarklist(
     }
     get_buf_local_marks(buf, (*rettv).vval.v_list);
 }
-unsafe extern "C" fn f_getpid(
+pub unsafe extern "C" fn f_getpid(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = os_get_pid() as varnumber_T;
 }
-unsafe extern "C" fn f_getcurpos(
+pub unsafe extern "C" fn f_getcurpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     getpos_both(argvars, rettv, true_0 != 0, false_0 != 0);
 }
-unsafe extern "C" fn f_getcursorcharpos(
+pub unsafe extern "C" fn f_getcursorcharpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     getpos_both(argvars, rettv, true_0 != 0, true_0 != 0);
 }
-unsafe extern "C" fn f_getpos(
+pub unsafe extern "C" fn f_getpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -5086,7 +5026,7 @@ unsafe extern "C" fn getregionpos(
     }
     return OK;
 }
-unsafe extern "C" fn f_getregion(
+pub unsafe extern "C" fn f_getregion(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -5230,7 +5170,7 @@ unsafe extern "C" fn add_regionpos_range(mut rettv: *mut typval_T, mut p1: pos_T
     tv_list_append_number(l3, p2.col as varnumber_T);
     tv_list_append_number(l3, p2.coladd as varnumber_T);
 }
-unsafe extern "C" fn f_getregionpos(
+pub unsafe extern "C" fn f_getregionpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -5432,7 +5372,7 @@ unsafe extern "C" fn getreg_get_regname(mut argvars: *mut typval_T) -> ::core::f
         *strregname as uint8_t as ::core::ffi::c_int
     };
 }
-unsafe extern "C" fn f_getreg(
+pub unsafe extern "C" fn f_getreg(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -5492,7 +5432,7 @@ unsafe extern "C" fn f_getreg(
         ) as *mut ::core::ffi::c_char;
     };
 }
-unsafe extern "C" fn f_getregtype(
+pub unsafe extern "C" fn f_getregtype(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -5520,7 +5460,7 @@ unsafe extern "C" fn f_getregtype(
     );
     (*rettv).vval.v_string = xstrdup(&raw mut buf as *mut ::core::ffi::c_char);
 }
-unsafe extern "C" fn f_gettagstack(
+pub unsafe extern "C" fn f_gettagstack(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -5558,7 +5498,7 @@ unsafe extern "C" fn dummy_timer_close_cb(
 ) {
     xfree(tw as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn f_wait(
+pub unsafe extern "C" fn f_wait(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -5667,7 +5607,7 @@ unsafe extern "C" fn f_wait(
         ),
     );
 }
-unsafe extern "C" fn f_gettext(
+pub unsafe extern "C" fn f_gettext(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -5682,7 +5622,7 @@ unsafe extern "C" fn f_gettext(
             .v_string,
     ));
 }
-unsafe extern "C" fn f_has(
+pub unsafe extern "C" fn f_has(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -5994,7 +5934,7 @@ unsafe extern "C" fn has_wsl() -> bool {
     }
     return has_wsl_0.get() as ::core::ffi::c_int == kTrue as ::core::ffi::c_int;
 }
-unsafe extern "C" fn f_hlID(
+pub unsafe extern "C" fn f_hlID(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6003,7 +5943,7 @@ unsafe extern "C" fn f_hlID(
         argvars.offset(0 as ::core::ffi::c_int as isize),
     )) as varnumber_T;
 }
-unsafe extern "C" fn f_hlexists(
+pub unsafe extern "C" fn f_hlexists(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6012,7 +5952,7 @@ unsafe extern "C" fn f_hlexists(
         argvars.offset(0 as ::core::ffi::c_int as isize),
     )) as varnumber_T;
 }
-unsafe extern "C" fn f_hostname(
+pub unsafe extern "C" fn f_hostname(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6022,7 +5962,7 @@ unsafe extern "C" fn f_hostname(
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = xstrdup(&raw mut hostname as *mut ::core::ffi::c_char);
 }
-unsafe extern "C" fn f_index(
+pub unsafe extern "C" fn f_index(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6264,7 +6204,7 @@ unsafe extern "C" fn indexof_list(
     }
     return -1 as varnumber_T;
 }
-unsafe extern "C" fn f_indexof(
+pub unsafe extern "C" fn f_indexof(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6345,21 +6285,21 @@ unsafe extern "C" fn f_indexof(
     (*did_emsg.ptr()) |= save_did_emsg;
 }
 static inputsecret_flag: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-unsafe extern "C" fn f_input(
+pub unsafe extern "C" fn f_input(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     get_user_input(argvars, rettv, false_0 != 0, inputsecret_flag.get());
 }
-unsafe extern "C" fn f_inputdialog(
+pub unsafe extern "C" fn f_inputdialog(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     get_user_input(argvars, rettv, true_0 != 0, inputsecret_flag.get());
 }
-unsafe extern "C" fn f_inputlist(
+pub unsafe extern "C" fn f_inputlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6412,7 +6352,7 @@ static ga_userinput: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_growsize: 4 as ::core::ffi::c_int,
     ga_data: NULL_0,
 });
-unsafe extern "C" fn f_inputrestore(
+pub unsafe extern "C" fn f_inputrestore(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6431,7 +6371,7 @@ unsafe extern "C" fn f_inputrestore(
         (*rettv).vval.v_number = 1 as varnumber_T;
     }
 }
-unsafe extern "C" fn f_inputsave(
+pub unsafe extern "C" fn f_inputsave(
     mut _argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6440,7 +6380,7 @@ unsafe extern "C" fn f_inputsave(
         ga_append_via_ptr(ga_userinput.ptr(), ::core::mem::size_of::<tasave_T>()) as *mut tasave_T;
     save_typeahead(p);
 }
-unsafe extern "C" fn f_inputsecret(
+pub unsafe extern "C" fn f_inputsecret(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut fptr: EvalFuncData,
@@ -6451,14 +6391,14 @@ unsafe extern "C" fn f_inputsecret(
     (*cmdline_star.ptr()) -= 1;
     inputsecret_flag.set(false_0 != 0);
 }
-unsafe extern "C" fn f_interrupt(
+pub unsafe extern "C" fn f_interrupt(
     mut _argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     got_int.set(true_0 != 0);
 }
-unsafe extern "C" fn f_invert(
+pub unsafe extern "C" fn f_invert(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6468,7 +6408,7 @@ unsafe extern "C" fn f_invert(
         ::core::ptr::null_mut::<bool>(),
     );
 }
-unsafe extern "C" fn f_islocked(
+pub unsafe extern "C" fn f_islocked(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6540,7 +6480,7 @@ unsafe extern "C" fn f_islocked(
     }
     clear_lval(&raw mut lv);
 }
-unsafe extern "C" fn f_isinf(
+pub unsafe extern "C" fn f_isinf(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6563,7 +6503,7 @@ unsafe extern "C" fn f_isinf(
         }) as varnumber_T;
     }
 }
-unsafe extern "C" fn f_isnan(
+pub unsafe extern "C" fn f_isnan(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6576,7 +6516,7 @@ unsafe extern "C" fn f_isnan(
             .v_float as ::core::ffi::c_double)
             .is_nan()) as ::core::ffi::c_int as varnumber_T;
 }
-unsafe extern "C" fn f_id(
+pub unsafe extern "C" fn f_id(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6599,7 +6539,7 @@ unsafe extern "C" fn f_id(
         argvars,
     );
 }
-unsafe extern "C" fn f_jobpid(
+pub unsafe extern "C" fn f_jobpid(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -6627,7 +6567,7 @@ unsafe extern "C" fn f_jobpid(
     let mut proc: *mut Proc = channel_proc(data);
     (*rettv).vval.v_number = (*proc).pid as varnumber_T;
 }
-unsafe extern "C" fn f_jobresize(
+pub unsafe extern "C" fn f_jobresize(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -7292,7 +7232,7 @@ pub unsafe extern "C" fn f_jobstop(
         emsg(error);
     }
 }
-unsafe extern "C" fn f_jobwait(
+pub unsafe extern "C" fn f_jobwait(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -7437,7 +7377,7 @@ unsafe extern "C" fn f_jobwait(
     (*rettv).v_type = VAR_LIST;
     (*rettv).vval.v_list = rv;
 }
-unsafe extern "C" fn f_json_decode(
+pub unsafe extern "C" fn f_json_decode(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -7513,7 +7453,7 @@ unsafe extern "C" fn f_json_decode(
     };
     xfree(tofree as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn f_json_encode(
+pub unsafe extern "C" fn f_json_encode(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -7524,7 +7464,7 @@ unsafe extern "C" fn f_json_encode(
         ::core::ptr::null_mut::<size_t>(),
     );
 }
-unsafe extern "C" fn f_keytrans(
+pub unsafe extern "C" fn f_keytrans(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -7546,7 +7486,7 @@ unsafe extern "C" fn f_keytrans(
     (*rettv).vval.v_string = str2special_save(escaped, true_0 != 0, true_0 != 0);
     xfree(escaped as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn f_len(
+pub unsafe extern "C" fn f_len(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -7640,21 +7580,21 @@ unsafe extern "C" fn libcall_common(
         Some(LibcallResult::Int(n)) => (*rettv).vval.v_number = n as varnumber_T,
     }
 }
-unsafe extern "C" fn f_libcall(
+pub unsafe extern "C" fn f_libcall(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     libcall_common(argvars, rettv, VAR_STRING as ::core::ffi::c_int);
 }
-unsafe extern "C" fn f_libcallnr(
+pub unsafe extern "C" fn f_libcallnr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     libcall_common(argvars, rettv, VAR_NUMBER as ::core::ffi::c_int);
 }
-unsafe extern "C" fn f_line(
+pub unsafe extern "C" fn f_line(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -7699,7 +7639,7 @@ unsafe extern "C" fn f_line(
     }
     (*rettv).vval.v_number = lnum as varnumber_T;
 }
-unsafe extern "C" fn f_line2byte(
+pub unsafe extern "C" fn f_line2byte(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -7719,14 +7659,14 @@ unsafe extern "C" fn f_line2byte(
         (*rettv).vval.v_number += 1;
     }
 }
-unsafe extern "C" fn f_localtime(
+pub unsafe extern "C" fn f_localtime(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = time(::core::ptr::null_mut::<time_t>()) as varnumber_T;
 }
-unsafe extern "C" fn f_luaeval(
+pub unsafe extern "C" fn f_luaeval(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8101,7 +8041,7 @@ unsafe extern "C" fn get_matches_in_str(
         }
     }
 }
-unsafe extern "C" fn f_matchbufline(
+pub unsafe extern "C" fn f_matchbufline(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8223,35 +8163,35 @@ unsafe extern "C" fn f_matchbufline(
     }
     p_cpo.set(save_cpo);
 }
-unsafe extern "C" fn f_match(
+pub unsafe extern "C" fn f_match(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     find_some_match(argvars, rettv, kSomeMatch);
 }
-unsafe extern "C" fn f_matchend(
+pub unsafe extern "C" fn f_matchend(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     find_some_match(argvars, rettv, kSomeMatchEnd);
 }
-unsafe extern "C" fn f_matchlist(
+pub unsafe extern "C" fn f_matchlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     find_some_match(argvars, rettv, kSomeMatchList);
 }
-unsafe extern "C" fn f_matchstr(
+pub unsafe extern "C" fn f_matchstr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     find_some_match(argvars, rettv, kSomeMatchStr);
 }
-unsafe extern "C" fn f_matchstrlist(
+pub unsafe extern "C" fn f_matchstrlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8346,7 +8286,7 @@ unsafe extern "C" fn f_matchstrlist(
     }
     p_cpo.set(save_cpo);
 }
-unsafe extern "C" fn f_matchstrpos(
+pub unsafe extern "C" fn f_matchstrpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8431,21 +8371,21 @@ unsafe extern "C" fn max_min(tv: *const typval_T, rettv: *mut typval_T, domax: b
     }
     (*rettv).vval.v_number = n;
 }
-unsafe extern "C" fn f_max(
+pub unsafe extern "C" fn f_max(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     max_min(argvars, rettv, true_0 != 0);
 }
-unsafe extern "C" fn f_min(
+pub unsafe extern "C" fn f_min(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     max_min(argvars, rettv, false_0 != 0);
 }
-unsafe extern "C" fn f_mode(
+pub unsafe extern "C" fn f_mode(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8467,7 +8407,7 @@ unsafe extern "C" fn may_add_state_char(
         ga_append(gap, c);
     }
 }
-unsafe extern "C" fn f_state(
+pub unsafe extern "C" fn f_state(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8519,7 +8459,7 @@ unsafe extern "C" fn f_state(
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char;
 }
-unsafe extern "C" fn f_msgpackdump(
+pub unsafe extern "C" fn f_msgpackdump(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8740,7 +8680,7 @@ unsafe extern "C" fn msgpackparse_unpack_blob(blob: *const blob_T, ret_list: *mu
         tv_list_append_owned_tv(ret_list, tv);
     }
 }
-unsafe extern "C" fn f_msgpackparse(
+pub unsafe extern "C" fn f_msgpackparse(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8776,7 +8716,7 @@ unsafe extern "C" fn f_msgpackparse(
         );
     };
 }
-unsafe extern "C" fn f_nextnonblank(
+pub unsafe extern "C" fn f_nextnonblank(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8796,7 +8736,7 @@ unsafe extern "C" fn f_nextnonblank(
     }
     (*rettv).vval.v_number = lnum as varnumber_T;
 }
-unsafe extern "C" fn f_nr2char(
+pub unsafe extern "C" fn f_nr2char(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8844,7 +8784,7 @@ unsafe extern "C" fn f_nr2char(
         len as size_t,
     ) as *mut ::core::ffi::c_char;
 }
-unsafe extern "C" fn f_or(
+pub unsafe extern "C" fn f_or(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8857,7 +8797,7 @@ unsafe extern "C" fn f_or(
         ::core::ptr::null_mut::<bool>(),
     );
 }
-unsafe extern "C" fn f_pow(
+pub unsafe extern "C" fn f_pow(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8878,7 +8818,7 @@ unsafe extern "C" fn f_pow(
         (*rettv).vval.v_float = 0.0f64 as float_T;
     };
 }
-unsafe extern "C" fn f_prevnonblank(
+pub unsafe extern "C" fn f_prevnonblank(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8893,7 +8833,7 @@ unsafe extern "C" fn f_prevnonblank(
     }
     (*rettv).vval.v_number = lnum as varnumber_T;
 }
-unsafe extern "C" fn f_printf(
+pub unsafe extern "C" fn f_printf(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8928,7 +8868,7 @@ unsafe extern "C" fn f_printf(
     }
     (*did_emsg.ptr()) |= saved_did_emsg;
 }
-unsafe extern "C" fn f_prompt_getprompt(
+pub unsafe extern "C" fn f_prompt_getprompt(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8944,7 +8884,7 @@ unsafe extern "C" fn f_prompt_getprompt(
     }
     (*rettv).vval.v_string = xstrdup(buf_prompt_text(buf));
 }
-unsafe extern "C" fn f_prompt_getinput(
+pub unsafe extern "C" fn f_prompt_getinput(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8960,7 +8900,7 @@ unsafe extern "C" fn f_prompt_getinput(
     }
     (*rettv).vval.v_string = prompt_get_input(buf);
 }
-unsafe extern "C" fn f_pum_getpos(
+pub unsafe extern "C" fn f_pum_getpos(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8968,7 +8908,7 @@ unsafe extern "C" fn f_pum_getpos(
     tv_dict_alloc_ret(rettv);
     pum_set_event_info((*rettv).vval.v_dict);
 }
-unsafe extern "C" fn f_pumvisible(
+pub unsafe extern "C" fn f_pumvisible(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -8977,7 +8917,7 @@ unsafe extern "C" fn f_pumvisible(
         (*rettv).vval.v_number = 1 as varnumber_T;
     }
 }
-unsafe extern "C" fn f_py3eval(
+pub unsafe extern "C" fn f_py3eval(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -9032,7 +8972,7 @@ unsafe extern "C" fn shuffle_xoshiro128starstar(
     *w = *w << 11 as ::core::ffi::c_int | *w >> 32 as ::core::ffi::c_int - 11 as ::core::ffi::c_int;
     return result;
 }
-unsafe extern "C" fn f_rand(
+pub unsafe extern "C" fn f_rand(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -9142,7 +9082,7 @@ unsafe extern "C" fn f_rand(
     (*rettv).v_type = VAR_NUMBER;
     (*rettv).vval.v_number = result as varnumber_T;
 }
-unsafe extern "C" fn f_srand(
+pub unsafe extern "C" fn f_srand(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -9168,7 +9108,7 @@ unsafe extern "C" fn f_srand(
     tv_list_append_number((*rettv).vval.v_list, splitmix32(&raw mut x) as varnumber_T);
     tv_list_append_number((*rettv).vval.v_list, splitmix32(&raw mut x) as varnumber_T);
 }
-unsafe extern "C" fn f_perleval(
+pub unsafe extern "C" fn f_perleval(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -9179,7 +9119,7 @@ unsafe extern "C" fn f_perleval(
         rettv,
     );
 }
-unsafe extern "C" fn f_rubyeval(
+pub unsafe extern "C" fn f_rubyeval(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -9190,7 +9130,7 @@ unsafe extern "C" fn f_rubyeval(
         rettv,
     );
 }
-unsafe extern "C" fn f_range(
+pub unsafe extern "C" fn f_range(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -9256,7 +9196,7 @@ unsafe extern "C" fn f_range(
         i += stride;
     }
 }
-unsafe extern "C" fn f_getreginfo(
+pub unsafe extern "C" fn f_getreginfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -9343,21 +9283,21 @@ unsafe extern "C" fn return_register(mut regname: ::core::ffi::c_int, mut rettv:
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = xstrdup(&raw mut buf as *mut ::core::ffi::c_char);
 }
-unsafe extern "C" fn f_reg_executing(
+pub unsafe extern "C" fn f_reg_executing(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     return_register(reg_executing.get(), rettv);
 }
-unsafe extern "C" fn f_reg_recording(
+pub unsafe extern "C" fn f_reg_recording(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     return_register(reg_recording.get(), rettv);
 }
-unsafe extern "C" fn f_reg_recorded(
+pub unsafe extern "C" fn f_reg_recorded(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -9390,7 +9330,7 @@ unsafe extern "C" fn list2proftime(
     *tm = u.prof;
     return OK;
 }
-unsafe extern "C" fn f_reltime(
+pub unsafe extern "C" fn f_reltime(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -9431,7 +9371,7 @@ unsafe extern "C" fn f_reltime(
     tv_list_append_number((*rettv).vval.v_list, u.split.high as varnumber_T);
     tv_list_append_number((*rettv).vval.v_list, u.split.low as varnumber_T);
 }
-unsafe extern "C" fn f_reltimestr(
+pub unsafe extern "C" fn f_reltimestr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -9447,7 +9387,7 @@ unsafe extern "C" fn f_reltimestr(
         (*rettv).vval.v_string = xstrdup(profile_msg(tm));
     }
 }
-unsafe extern "C" fn f_repeat(
+pub unsafe extern "C" fn f_repeat(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -9763,7 +9703,7 @@ unsafe extern "C" fn reduce_blob(
         i += 1;
     }
 }
-unsafe extern "C" fn f_reduce(
+pub unsafe extern "C" fn f_reduce(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10092,7 +10032,7 @@ unsafe extern "C" fn search_cmn(
     p_ws.set(save_p_ws as ::core::ffi::c_int);
     return retval;
 }
-unsafe extern "C" fn f_rpcnotify(
+pub unsafe extern "C" fn f_rpcnotify(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10158,7 +10098,7 @@ unsafe extern "C" fn f_rpcnotify(
     }
     (*rettv).vval.v_number = 1 as varnumber_T;
 }
-unsafe extern "C" fn f_rpcrequest(
+pub unsafe extern "C" fn f_rpcrequest(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10304,7 +10244,7 @@ unsafe extern "C" fn screenchar_adjust(
     *row -= (**grid).comp_row;
     *col -= (**grid).comp_col;
 }
-unsafe extern "C" fn f_screenattr(
+pub unsafe extern "C" fn f_screenattr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10335,7 +10275,7 @@ unsafe extern "C" fn f_screenattr(
     }
     (*rettv).vval.v_number = c as varnumber_T;
 }
-unsafe extern "C" fn f_screenchar(
+pub unsafe extern "C" fn f_screenchar(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10367,7 +10307,7 @@ unsafe extern "C" fn f_screenchar(
         ))
     }) as varnumber_T;
 }
-unsafe extern "C" fn f_screenchars(
+pub unsafe extern "C" fn f_screenchars(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10415,21 +10355,21 @@ unsafe extern "C" fn f_screenchars(
         }
     }
 }
-unsafe extern "C" fn f_screencol(
+pub unsafe extern "C" fn f_screencol(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = (ui_current_col() + 1 as ::core::ffi::c_int) as varnumber_T;
 }
-unsafe extern "C" fn f_screenrow(
+pub unsafe extern "C" fn f_screenrow(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     (*rettv).vval.v_number = (ui_current_row() + 1 as ::core::ffi::c_int) as varnumber_T;
 }
-unsafe extern "C" fn f_screenstring(
+pub unsafe extern "C" fn f_screenstring(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10467,7 +10407,7 @@ unsafe extern "C" fn f_screenstring(
     );
     (*rettv).vval.v_string = xstrdup(&raw mut buf as *mut ::core::ffi::c_char);
 }
-unsafe extern "C" fn f_search(
+pub unsafe extern "C" fn f_search(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10476,7 +10416,7 @@ unsafe extern "C" fn f_search(
     (*rettv).vval.v_number =
         search_cmn(argvars, ::core::ptr::null_mut::<pos_T>(), &raw mut flags) as varnumber_T;
 }
-unsafe extern "C" fn f_searchdecl(
+pub unsafe extern "C" fn f_searchdecl(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10611,7 +10551,7 @@ unsafe extern "C" fn searchpair_cmn(
     p_ws.set(save_p_ws as ::core::ffi::c_int);
     return retval;
 }
-unsafe extern "C" fn f_searchpair(
+pub unsafe extern "C" fn f_searchpair(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10619,7 +10559,7 @@ unsafe extern "C" fn f_searchpair(
     (*rettv).vval.v_number =
         searchpair_cmn(argvars, ::core::ptr::null_mut::<pos_T>()) as varnumber_T;
 }
-unsafe extern "C" fn f_searchpairpos(
+pub unsafe extern "C" fn f_searchpairpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10830,7 +10770,7 @@ pub unsafe extern "C" fn do_searchpair(
     }
     return retval;
 }
-unsafe extern "C" fn f_searchpos(
+pub unsafe extern "C" fn f_searchpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10862,7 +10802,7 @@ unsafe extern "C" fn f_searchpos(
         tv_list_append_number((*rettv).vval.v_list, n as varnumber_T);
     }
 }
-unsafe extern "C" fn f_serverlist(
+pub unsafe extern "C" fn f_serverlist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -10964,7 +10904,7 @@ unsafe extern "C" fn f_serverlist(
     xfree(addrs as *mut ::core::ffi::c_void);
     arena_mem_free(arena_finish(&raw mut arena));
 }
-unsafe extern "C" fn f_serverstart(
+pub unsafe extern "C" fn f_serverstart(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11012,7 +10952,7 @@ unsafe extern "C" fn f_serverstart(
     }
     xfree(addrs as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn f_serverstop(
+pub unsafe extern "C" fn f_serverstop(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11109,14 +11049,14 @@ unsafe extern "C" fn set_position(
         emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
     };
 }
-unsafe extern "C" fn f_setcharpos(
+pub unsafe extern "C" fn f_setcharpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     set_position(argvars, rettv, true_0 != 0);
 }
-unsafe extern "C" fn f_setcharsearch(
+pub unsafe extern "C" fn f_setcharsearch(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11162,14 +11102,14 @@ unsafe extern "C" fn f_setcharsearch(
         set_csearch_until((tv_get_number(&raw mut (*di).di_tv) != 0) as ::core::ffi::c_int);
     }
 }
-unsafe extern "C" fn f_setcursorcharpos(
+pub unsafe extern "C" fn f_setcursorcharpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     set_cursorpos(argvars, rettv, true_0 != 0);
 }
-unsafe extern "C" fn f_setenv(
+pub unsafe extern "C" fn f_setenv(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11201,7 +11141,7 @@ unsafe extern "C" fn f_setenv(
         );
     };
 }
-unsafe extern "C" fn f_setfperm(
+pub unsafe extern "C" fn f_setfperm(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11239,7 +11179,7 @@ unsafe extern "C" fn f_setfperm(
     }
     (*rettv).vval.v_number = (os_setperm(fname, mode) == OK) as ::core::ffi::c_int as varnumber_T;
 }
-unsafe extern "C" fn f_setpos(
+pub unsafe extern "C" fn f_setpos(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11274,7 +11214,7 @@ unsafe extern "C" fn get_yank_type(
     *pp = stropt;
     return OK;
 }
-unsafe extern "C" fn f_setreg(
+pub unsafe extern "C" fn f_setreg(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11489,7 +11429,7 @@ unsafe extern "C" fn f_setreg(
         op_reg_set_previous(regname);
     }
 }
-unsafe extern "C" fn f_settagstack(
+pub unsafe extern "C" fn f_settagstack(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11538,7 +11478,7 @@ unsafe extern "C" fn f_settagstack(
         (*rettv).vval.v_number = 0 as varnumber_T;
     }
 }
-unsafe extern "C" fn f_sha256(
+pub unsafe extern "C" fn f_sha256(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11567,7 +11507,7 @@ unsafe extern "C" fn f_sha256(
     (*rettv).vval.v_string = xmemdupz(hash.as_ptr() as *const ::core::ffi::c_void, hash.len())
         as *mut ::core::ffi::c_char;
 }
-unsafe extern "C" fn f_shellescape(
+pub unsafe extern "C" fn f_shellescape(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11580,7 +11520,7 @@ unsafe extern "C" fn f_shellescape(
     );
     (*rettv).v_type = VAR_STRING;
 }
-unsafe extern "C" fn f_shiftwidth(
+pub unsafe extern "C" fn f_shiftwidth(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11599,7 +11539,7 @@ unsafe extern "C" fn f_shiftwidth(
     }
     (*rettv).vval.v_number = get_sw_value(curbuf.get()) as varnumber_T;
 }
-unsafe extern "C" fn f_sockconnect(
+pub unsafe extern "C" fn f_sockconnect(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11702,7 +11642,7 @@ unsafe extern "C" fn f_sockconnect(
     (*rettv).vval.v_number = id as varnumber_T;
     (*rettv).v_type = VAR_NUMBER;
 }
-unsafe extern "C" fn f_stdioopen(
+pub unsafe extern "C" fn f_stdioopen(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11766,7 +11706,7 @@ unsafe extern "C" fn f_stdioopen(
     (*rettv).vval.v_number = id as varnumber_T;
     (*rettv).v_type = VAR_NUMBER;
 }
-unsafe extern "C" fn f_reltimefloat(
+pub unsafe extern "C" fn f_reltimefloat(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11783,7 +11723,7 @@ unsafe extern "C" fn f_reltimefloat(
             (profile_signed(tm) as ::core::ffi::c_double / 1000000000.0f64) as float_T;
     }
 }
-unsafe extern "C" fn f_soundfold(
+pub unsafe extern "C" fn f_soundfold(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11793,7 +11733,7 @@ unsafe extern "C" fn f_soundfold(
         tv_get_string(argvars.offset(0 as ::core::ffi::c_int as isize));
     (*rettv).vval.v_string = eval_soundfold(s);
 }
-unsafe extern "C" fn f_spellbadword(
+pub unsafe extern "C" fn f_spellbadword(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11908,7 +11848,7 @@ unsafe extern "C" fn f_spellbadword(
         }
     };
 }
-unsafe extern "C" fn f_spellsuggest(
+pub unsafe extern "C" fn f_spellsuggest(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -11973,7 +11913,7 @@ unsafe extern "C" fn f_spellsuggest(
     ga_clear(&raw mut ga);
     (*curwin.get()).w_onebuf_opt.wo_spell = wo_spell_save;
 }
-unsafe extern "C" fn f_split(
+pub unsafe extern "C" fn f_split(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12126,7 +12066,7 @@ unsafe extern "C" fn get_xdg_var_list(xdg: XDGVarType, mut rettv: *mut typval_T)
     }
     xfree(dirs as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn f_stdpath(
+pub unsafe extern "C" fn f_stdpath(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12163,7 +12103,7 @@ unsafe extern "C" fn f_stdpath(
         );
     };
 }
-unsafe extern "C" fn f_str2float(
+pub unsafe extern "C" fn f_str2float(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12183,7 +12123,7 @@ unsafe extern "C" fn f_str2float(
     }
     (*rettv).v_type = VAR_FLOAT;
 }
-unsafe extern "C" fn f_strftime(
+pub unsafe extern "C" fn f_strftime(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12249,7 +12189,7 @@ unsafe extern "C" fn f_strftime(
     );
     xfree(enc as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn f_strptime(
+pub unsafe extern "C" fn f_strptime(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12299,7 +12239,7 @@ unsafe extern "C" fn f_strptime(
     );
     xfree(enc as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn f_submatch(
+pub unsafe extern "C" fn f_submatch(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12339,7 +12279,7 @@ unsafe extern "C" fn f_submatch(
         (*rettv).vval.v_list = reg_submatch_list(no);
     };
 }
-unsafe extern "C" fn f_substitute(
+pub unsafe extern "C" fn f_substitute(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12382,7 +12322,7 @@ unsafe extern "C" fn f_substitute(
         );
     };
 }
-unsafe extern "C" fn f_swapfilelist(
+pub unsafe extern "C" fn f_swapfilelist(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12396,7 +12336,7 @@ unsafe extern "C" fn f_swapfilelist(
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
     );
 }
-unsafe extern "C" fn f_swapinfo(
+pub unsafe extern "C" fn f_swapinfo(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12404,7 +12344,7 @@ unsafe extern "C" fn f_swapinfo(
     tv_dict_alloc_ret(rettv);
     swapfile_dict(tv_get_string(argvars), (*rettv).vval.v_dict);
 }
-unsafe extern "C" fn f_swapname(
+pub unsafe extern "C" fn f_swapname(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12417,7 +12357,7 @@ unsafe extern "C" fn f_swapname(
         (*rettv).vval.v_string = xstrdup((*(*buf).b_ml.ml_mfp).mf_fname);
     };
 }
-unsafe extern "C" fn f_synID(
+pub unsafe extern "C" fn f_synID(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12448,7 +12388,7 @@ unsafe extern "C" fn f_synID(
     }
     (*rettv).vval.v_number = id as varnumber_T;
 }
-unsafe extern "C" fn f_synIDattr(
+pub unsafe extern "C" fn f_synIDattr(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12682,7 +12622,7 @@ unsafe extern "C" fn f_synIDattr(
         xstrdup(p)
     };
 }
-unsafe extern "C" fn f_synIDtrans(
+pub unsafe extern "C" fn f_synIDtrans(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12696,7 +12636,7 @@ unsafe extern "C" fn f_synIDtrans(
     }
     (*rettv).vval.v_number = id as varnumber_T;
 }
-unsafe extern "C" fn f_synconcealed(
+pub unsafe extern "C" fn f_synconcealed(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12757,7 +12697,7 @@ unsafe extern "C" fn f_synconcealed(
     );
     tv_list_append_number((*rettv).vval.v_list, matchid as varnumber_T);
 }
-unsafe extern "C" fn f_synstack(
+pub unsafe extern "C" fn f_synstack(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12793,7 +12733,7 @@ unsafe extern "C" fn f_synstack(
         }
     }
 }
-unsafe extern "C" fn f_tabpagebuflist(
+pub unsafe extern "C" fn f_tabpagebuflist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12826,7 +12766,7 @@ unsafe extern "C" fn f_tabpagebuflist(
         }
     }
 }
-unsafe extern "C" fn f_tagfiles(
+pub unsafe extern "C" fn f_tagfiles(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12849,7 +12789,7 @@ unsafe extern "C" fn f_tagfiles(
     tagname_free(&raw mut tn);
     xfree(fname as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn f_taglist(
+pub unsafe extern "C" fn f_taglist(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12872,7 +12812,7 @@ unsafe extern "C" fn f_taglist(
         fname as *mut ::core::ffi::c_char,
     );
 }
-unsafe extern "C" fn f_timer_info(
+pub unsafe extern "C" fn f_timer_info(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12894,7 +12834,7 @@ unsafe extern "C" fn f_timer_info(
         add_timer_info_all(rettv);
     };
 }
-unsafe extern "C" fn f_timer_pause(
+pub unsafe extern "C" fn f_timer_pause(
     mut argvars: *mut typval_T,
     mut _unused: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12930,7 +12870,7 @@ unsafe extern "C" fn f_timer_pause(
         (*timer).paused = paused != 0;
     }
 }
-unsafe extern "C" fn f_timer_start(
+pub unsafe extern "C" fn f_timer_start(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12980,7 +12920,7 @@ unsafe extern "C" fn f_timer_start(
         &raw mut callback,
     ) as varnumber_T;
 }
-unsafe extern "C" fn f_timer_stop(
+pub unsafe extern "C" fn f_timer_stop(
     mut argvars: *mut typval_T,
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -12996,14 +12936,14 @@ unsafe extern "C" fn f_timer_stop(
     }
     timer_stop(timer);
 }
-unsafe extern "C" fn f_timer_stopall(
+pub unsafe extern "C" fn f_timer_stopall(
     mut _argvars: *mut typval_T,
     mut _unused: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
     timer_stop_all();
 }
-unsafe extern "C" fn f_type(
+pub unsafe extern "C" fn f_type(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -13044,7 +12984,7 @@ unsafe extern "C" fn f_type(
     }
     (*rettv).vval.v_number = n as varnumber_T;
 }
-unsafe extern "C" fn f_virtcol(
+pub unsafe extern "C" fn f_virtcol(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -13113,7 +13053,7 @@ unsafe extern "C" fn f_virtcol(
         (*rettv).vval.v_number = vcol_end as varnumber_T;
     };
 }
-unsafe extern "C" fn f_visualmode(
+pub unsafe extern "C" fn f_visualmode(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -13128,7 +13068,7 @@ unsafe extern "C" fn f_visualmode(
         (*curbuf.get()).b_visual_mode_eval = NUL;
     }
 }
-unsafe extern "C" fn f_wildmenumode(
+pub unsafe extern "C" fn f_wildmenumode(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -13140,7 +13080,7 @@ unsafe extern "C" fn f_wildmenumode(
         (*rettv).vval.v_number = 1 as varnumber_T;
     }
 }
-unsafe extern "C" fn f_windowsversion(
+pub unsafe extern "C" fn f_windowsversion(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -13148,7 +13088,7 @@ unsafe extern "C" fn f_windowsversion(
     (*rettv).v_type = VAR_STRING;
     (*rettv).vval.v_string = xstrdup(windowsVersion.ptr() as *mut ::core::ffi::c_char);
 }
-unsafe extern "C" fn f_wordcount(
+pub unsafe extern "C" fn f_wordcount(
     mut _argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -13156,7 +13096,7 @@ unsafe extern "C" fn f_wordcount(
     tv_dict_alloc_ret(rettv);
     cursor_pos_info((*rettv).vval.v_dict);
 }
-unsafe extern "C" fn f_xor(
+pub unsafe extern "C" fn f_xor(
     mut argvars: *mut typval_T,
     mut rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
@@ -13191,1278 +13131,6 @@ unsafe extern "C" fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const FNE_CHECK_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
-static functions: GlobalCell<[EvalFuncDef; 644]> = GlobalCell::new(
-    [EvalFuncDef {
-        name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        min_argc: 0,
-        max_argc: 0,
-        base_arg: 0,
-        fast: false,
-        func: None,
-        data: EvalFuncData { float_func: None },
-    }; 644],
-);
-pub unsafe extern "C" fn find_internal_func_hash(
-    mut str: *const ::core::ffi::c_char,
-    mut len: size_t,
-) -> ::core::ffi::c_int {
-    let mut low: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut high: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    match len {
-        2 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            105 => {
-                low = 0 as ::core::ffi::c_int;
-                high = 1 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 1 as ::core::ffi::c_int;
-                high = 2 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 2 as ::core::ffi::c_int;
-                high = 3 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        3 => match *str.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            97 => {
-                low = 3 as ::core::ffi::c_int;
-                high = 6 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 6 as ::core::ffi::c_int;
-                high = 8 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 8 as ::core::ffi::c_int;
-                high = 9 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 9 as ::core::ffi::c_int;
-                high = 10 as ::core::ffi::c_int;
-            }
-            104 => {
-                low = 10 as ::core::ffi::c_int;
-                high = 11 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 11 as ::core::ffi::c_int;
-                high = 13 as ::core::ffi::c_int;
-            }
-            109 => {
-                low = 13 as ::core::ffi::c_int;
-                high = 16 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 16 as ::core::ffi::c_int;
-                high = 17 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 17 as ::core::ffi::c_int;
-                high = 18 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 18 as ::core::ffi::c_int;
-                high = 19 as ::core::ffi::c_int;
-            }
-            120 => {
-                low = 19 as ::core::ffi::c_int;
-                high = 20 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        4 => match *str.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            68 => {
-                low = 20 as ::core::ffi::c_int;
-                high = 21 as ::core::ffi::c_int;
-            }
-            98 => {
-                low = 21 as ::core::ffi::c_int;
-                high = 22 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 22 as ::core::ffi::c_int;
-                high = 23 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 23 as ::core::ffi::c_int;
-                high = 25 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 25 as ::core::ffi::c_int;
-                high = 28 as ::core::ffi::c_int;
-            }
-            104 => {
-                low = 28 as ::core::ffi::c_int;
-                high = 31 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 31 as ::core::ffi::c_int;
-                high = 34 as ::core::ffi::c_int;
-            }
-            109 => {
-                low = 34 as ::core::ffi::c_int;
-                high = 35 as ::core::ffi::c_int;
-            }
-            110 => {
-                low = 35 as ::core::ffi::c_int;
-                high = 38 as ::core::ffi::c_int;
-            }
-            113 => {
-                low = 38 as ::core::ffi::c_int;
-                high = 39 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 39 as ::core::ffi::c_int;
-                high = 41 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 41 as ::core::ffi::c_int;
-                high = 44 as ::core::ffi::c_int;
-            }
-            118 => {
-                low = 44 as ::core::ffi::c_int;
-                high = 45 as ::core::ffi::c_int;
-            }
-            121 => {
-                low = 45 as ::core::ffi::c_int;
-                high = 46 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        5 => match *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            97 => {
-                low = 46 as ::core::ffi::c_int;
-                high = 48 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 48 as ::core::ffi::c_int;
-                high = 49 as ::core::ffi::c_int;
-            }
-            104 => {
-                low = 49 as ::core::ffi::c_int;
-                high = 50 as ::core::ffi::c_int;
-            }
-            105 => {
-                low = 50 as ::core::ffi::c_int;
-                high = 51 as ::core::ffi::c_int;
-            }
-            107 => {
-                low = 51 as ::core::ffi::c_int;
-                high = 52 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 52 as ::core::ffi::c_int;
-                high = 54 as ::core::ffi::c_int;
-            }
-            109 => {
-                low = 54 as ::core::ffi::c_int;
-                high = 55 as ::core::ffi::c_int;
-            }
-            110 => {
-                low = 55 as ::core::ffi::c_int;
-                high = 57 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 57 as ::core::ffi::c_int;
-                high = 60 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 60 as ::core::ffi::c_int;
-                high = 61 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 61 as ::core::ffi::c_int;
-                high = 63 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 63 as ::core::ffi::c_int;
-                high = 65 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 65 as ::core::ffi::c_int;
-                high = 68 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 68 as ::core::ffi::c_int;
-                high = 69 as ::core::ffi::c_int;
-            }
-            121 => {
-                low = 69 as ::core::ffi::c_int;
-                high = 70 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        6 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            54 => {
-                low = 70 as ::core::ffi::c_int;
-                high = 71 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 71 as ::core::ffi::c_int;
-                high = 78 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 78 as ::core::ffi::c_int;
-                high = 84 as ::core::ffi::c_int;
-            }
-            102 => {
-                low = 84 as ::core::ffi::c_int;
-                high = 85 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 85 as ::core::ffi::c_int;
-                high = 89 as ::core::ffi::c_int;
-            }
-            104 => {
-                low = 89 as ::core::ffi::c_int;
-                high = 90 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 90 as ::core::ffi::c_int;
-                high = 92 as ::core::ffi::c_int;
-            }
-            109 => {
-                low = 92 as ::core::ffi::c_int;
-                high = 93 as ::core::ffi::c_int;
-            }
-            110 => {
-                low = 93 as ::core::ffi::c_int;
-                high = 94 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 94 as ::core::ffi::c_int;
-                high = 95 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 95 as ::core::ffi::c_int;
-                high = 99 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 99 as ::core::ffi::c_int;
-                high = 103 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 103 as ::core::ffi::c_int;
-                high = 110 as ::core::ffi::c_int;
-            }
-            118 => {
-                low = 110 as ::core::ffi::c_int;
-                high = 112 as ::core::ffi::c_int;
-            }
-            119 => {
-                low = 112 as ::core::ffi::c_int;
-                high = 113 as ::core::ffi::c_int;
-            }
-            120 => {
-                low = 113 as ::core::ffi::c_int;
-                high = 115 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        7 => match *str.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            50 => {
-                low = 115 as ::core::ffi::c_int;
-                high = 116 as ::core::ffi::c_int;
-            }
-            51 => {
-                low = 116 as ::core::ffi::c_int;
-                high = 117 as ::core::ffi::c_int;
-            }
-            97 => {
-                low = 117 as ::core::ffi::c_int;
-                high = 123 as ::core::ffi::c_int;
-            }
-            98 => {
-                low = 123 as ::core::ffi::c_int;
-                high = 127 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 127 as ::core::ffi::c_int;
-                high = 128 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 128 as ::core::ffi::c_int;
-                high = 130 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 130 as ::core::ffi::c_int;
-                high = 132 as ::core::ffi::c_int;
-            }
-            102 => {
-                low = 132 as ::core::ffi::c_int;
-                high = 134 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 134 as ::core::ffi::c_int;
-                high = 135 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 135 as ::core::ffi::c_int;
-                high = 137 as ::core::ffi::c_int;
-            }
-            110 => {
-                low = 137 as ::core::ffi::c_int;
-                high = 142 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 142 as ::core::ffi::c_int;
-                high = 143 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 143 as ::core::ffi::c_int;
-                high = 147 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 147 as ::core::ffi::c_int;
-                high = 152 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 152 as ::core::ffi::c_int;
-                high = 157 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 157 as ::core::ffi::c_int;
-                high = 158 as ::core::ffi::c_int;
-            }
-            118 => {
-                low = 158 as ::core::ffi::c_int;
-                high = 160 as ::core::ffi::c_int;
-            }
-            120 => {
-                low = 160 as ::core::ffi::c_int;
-                high = 163 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        8 => match *str.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            49 => {
-                low = 163 as ::core::ffi::c_int;
-                high = 164 as ::core::ffi::c_int;
-            }
-            50 => {
-                low = 164 as ::core::ffi::c_int;
-                high = 165 as ::core::ffi::c_int;
-            }
-            95 => {
-                low = 165 as ::core::ffi::c_int;
-                high = 166 as ::core::ffi::c_int;
-            }
-            97 => {
-                low = 166 as ::core::ffi::c_int;
-                high = 167 as ::core::ffi::c_int;
-            }
-            98 => {
-                low = 167 as ::core::ffi::c_int;
-                high = 169 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 169 as ::core::ffi::c_int;
-                high = 177 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 177 as ::core::ffi::c_int;
-                high = 182 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 182 as ::core::ffi::c_int;
-                high = 183 as ::core::ffi::c_int;
-            }
-            102 => {
-                low = 183 as ::core::ffi::c_int;
-                high = 190 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 190 as ::core::ffi::c_int;
-                high = 191 as ::core::ffi::c_int;
-            }
-            109 => {
-                low = 191 as ::core::ffi::c_int;
-                high = 197 as ::core::ffi::c_int;
-            }
-            110 => {
-                low = 197 as ::core::ffi::c_int;
-                high = 199 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 199 as ::core::ffi::c_int;
-                high = 202 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 202 as ::core::ffi::c_int;
-                high = 209 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 209 as ::core::ffi::c_int;
-                high = 212 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 212 as ::core::ffi::c_int;
-                high = 216 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 216 as ::core::ffi::c_int;
-                high = 217 as ::core::ffi::c_int;
-            }
-            119 => {
-                low = 217 as ::core::ffi::c_int;
-                high = 221 as ::core::ffi::c_int;
-            }
-            120 => {
-                low = 221 as ::core::ffi::c_int;
-                high = 222 as ::core::ffi::c_int;
-            }
-            121 => {
-                low = 222 as ::core::ffi::c_int;
-                high = 223 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        9 => match *str.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            50 => {
-                low = 223 as ::core::ffi::c_int;
-                high = 227 as ::core::ffi::c_int;
-            }
-            68 => {
-                low = 227 as ::core::ffi::c_int;
-                high = 228 as ::core::ffi::c_int;
-            }
-            95 => {
-                low = 228 as ::core::ffi::c_int;
-                high = 234 as ::core::ffi::c_int;
-            }
-            97 => {
-                low = 234 as ::core::ffi::c_int;
-                high = 239 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 239 as ::core::ffi::c_int;
-                high = 243 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 243 as ::core::ffi::c_int;
-                high = 244 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 244 as ::core::ffi::c_int;
-                high = 251 as ::core::ffi::c_int;
-            }
-            102 => {
-                low = 251 as ::core::ffi::c_int;
-                high = 254 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 254 as ::core::ffi::c_int;
-                high = 255 as ::core::ffi::c_int;
-            }
-            104 => {
-                low = 255 as ::core::ffi::c_int;
-                high = 256 as ::core::ffi::c_int;
-            }
-            105 => {
-                low = 256 as ::core::ffi::c_int;
-                high = 261 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 261 as ::core::ffi::c_int;
-                high = 263 as ::core::ffi::c_int;
-            }
-            109 => {
-                low = 263 as ::core::ffi::c_int;
-                high = 265 as ::core::ffi::c_int;
-            }
-            110 => {
-                low = 265 as ::core::ffi::c_int;
-                high = 267 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 267 as ::core::ffi::c_int;
-                high = 270 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 270 as ::core::ffi::c_int;
-                high = 271 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 271 as ::core::ffi::c_int;
-                high = 272 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 272 as ::core::ffi::c_int;
-                high = 274 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 274 as ::core::ffi::c_int;
-                high = 277 as ::core::ffi::c_int;
-            }
-            120 => {
-                low = 277 as ::core::ffi::c_int;
-                high = 278 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        10 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            95 => {
-                low = 278 as ::core::ffi::c_int;
-                high = 280 as ::core::ffi::c_int;
-            }
-            97 => {
-                low = 280 as ::core::ffi::c_int;
-                high = 285 as ::core::ffi::c_int;
-            }
-            98 => {
-                low = 285 as ::core::ffi::c_int;
-                high = 287 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 287 as ::core::ffi::c_int;
-                high = 289 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 289 as ::core::ffi::c_int;
-                high = 293 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 293 as ::core::ffi::c_int;
-                high = 296 as ::core::ffi::c_int;
-            }
-            102 => {
-                low = 296 as ::core::ffi::c_int;
-                high = 300 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 300 as ::core::ffi::c_int;
-                high = 302 as ::core::ffi::c_int;
-            }
-            104 => {
-                low = 302 as ::core::ffi::c_int;
-                high = 304 as ::core::ffi::c_int;
-            }
-            105 => {
-                low = 304 as ::core::ffi::c_int;
-                high = 306 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 306 as ::core::ffi::c_int;
-                high = 308 as ::core::ffi::c_int;
-            }
-            109 => {
-                low = 308 as ::core::ffi::c_int;
-                high = 310 as ::core::ffi::c_int;
-            }
-            110 => {
-                low = 310 as ::core::ffi::c_int;
-                high = 316 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 316 as ::core::ffi::c_int;
-                high = 317 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 317 as ::core::ffi::c_int;
-                high = 319 as ::core::ffi::c_int;
-            }
-            113 => {
-                low = 319 as ::core::ffi::c_int;
-                high = 320 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 320 as ::core::ffi::c_int;
-                high = 323 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 323 as ::core::ffi::c_int;
-                high = 325 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 325 as ::core::ffi::c_int;
-                high = 330 as ::core::ffi::c_int;
-            }
-            119 => {
-                low = 330 as ::core::ffi::c_int;
-                high = 331 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        11 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            95 => {
-                low = 331 as ::core::ffi::c_int;
-                high = 334 as ::core::ffi::c_int;
-            }
-            97 => {
-                low = 334 as ::core::ffi::c_int;
-                high = 336 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 336 as ::core::ffi::c_int;
-                high = 338 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 338 as ::core::ffi::c_int;
-                high = 343 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 343 as ::core::ffi::c_int;
-                high = 348 as ::core::ffi::c_int;
-            }
-            102 => {
-                low = 348 as ::core::ffi::c_int;
-                high = 350 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 350 as ::core::ffi::c_int;
-                high = 353 as ::core::ffi::c_int;
-            }
-            104 => {
-                low = 353 as ::core::ffi::c_int;
-                high = 355 as ::core::ffi::c_int;
-            }
-            105 => {
-                low = 355 as ::core::ffi::c_int;
-                high = 357 as ::core::ffi::c_int;
-            }
-            109 => {
-                low = 357 as ::core::ffi::c_int;
-                high = 359 as ::core::ffi::c_int;
-            }
-            110 => {
-                low = 359 as ::core::ffi::c_int;
-                high = 362 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 362 as ::core::ffi::c_int;
-                high = 365 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 365 as ::core::ffi::c_int;
-                high = 367 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 367 as ::core::ffi::c_int;
-                high = 372 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 372 as ::core::ffi::c_int;
-                high = 377 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 377 as ::core::ffi::c_int;
-                high = 378 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 378 as ::core::ffi::c_int;
-                high = 379 as ::core::ffi::c_int;
-            }
-            118 => {
-                low = 379 as ::core::ffi::c_int;
-                high = 380 as ::core::ffi::c_int;
-            }
-            120 => {
-                low = 380 as ::core::ffi::c_int;
-                high = 381 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        12 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            95 => {
-                low = 381 as ::core::ffi::c_int;
-                high = 385 as ::core::ffi::c_int;
-            }
-            98 => {
-                low = 385 as ::core::ffi::c_int;
-                high = 389 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 389 as ::core::ffi::c_int;
-                high = 391 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 391 as ::core::ffi::c_int;
-                high = 393 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 393 as ::core::ffi::c_int;
-                high = 397 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 397 as ::core::ffi::c_int;
-                high = 400 as ::core::ffi::c_int;
-            }
-            104 => {
-                low = 400 as ::core::ffi::c_int;
-                high = 401 as ::core::ffi::c_int;
-            }
-            105 => {
-                low = 401 as ::core::ffi::c_int;
-                high = 403 as ::core::ffi::c_int;
-            }
-            109 => {
-                low = 403 as ::core::ffi::c_int;
-                high = 405 as ::core::ffi::c_int;
-            }
-            110 => {
-                low = 405 as ::core::ffi::c_int;
-                high = 407 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 407 as ::core::ffi::c_int;
-                high = 409 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 409 as ::core::ffi::c_int;
-                high = 411 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 411 as ::core::ffi::c_int;
-                high = 414 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 414 as ::core::ffi::c_int;
-                high = 419 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 419 as ::core::ffi::c_int;
-                high = 421 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        13 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            95 => {
-                low = 421 as ::core::ffi::c_int;
-                high = 423 as ::core::ffi::c_int;
-            }
-            97 => {
-                low = 423 as ::core::ffi::c_int;
-                high = 427 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 427 as ::core::ffi::c_int;
-                high = 428 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 428 as ::core::ffi::c_int;
-                high = 432 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 432 as ::core::ffi::c_int;
-                high = 435 as ::core::ffi::c_int;
-            }
-            102 => {
-                low = 435 as ::core::ffi::c_int;
-                high = 438 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 438 as ::core::ffi::c_int;
-                high = 442 as ::core::ffi::c_int;
-            }
-            104 => {
-                low = 442 as ::core::ffi::c_int;
-                high = 443 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 443 as ::core::ffi::c_int;
-                high = 447 as ::core::ffi::c_int;
-            }
-            109 => {
-                low = 447 as ::core::ffi::c_int;
-                high = 448 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 448 as ::core::ffi::c_int;
-                high = 449 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 449 as ::core::ffi::c_int;
-                high = 450 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 450 as ::core::ffi::c_int;
-                high = 454 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 454 as ::core::ffi::c_int;
-                high = 456 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 456 as ::core::ffi::c_int;
-                high = 458 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 458 as ::core::ffi::c_int;
-                high = 459 as ::core::ffi::c_int;
-            }
-            119 => {
-                low = 459 as ::core::ffi::c_int;
-                high = 460 as ::core::ffi::c_int;
-            }
-            120 => {
-                low = 460 as ::core::ffi::c_int;
-                high = 461 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        14 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            95 => {
-                low = 461 as ::core::ffi::c_int;
-                high = 463 as ::core::ffi::c_int;
-            }
-            97 => {
-                low = 463 as ::core::ffi::c_int;
-                high = 465 as ::core::ffi::c_int;
-            }
-            98 => {
-                low = 465 as ::core::ffi::c_int;
-                high = 466 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 466 as ::core::ffi::c_int;
-                high = 467 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 467 as ::core::ffi::c_int;
-                high = 470 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 470 as ::core::ffi::c_int;
-                high = 474 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 474 as ::core::ffi::c_int;
-                high = 476 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 476 as ::core::ffi::c_int;
-                high = 479 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 479 as ::core::ffi::c_int;
-                high = 481 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 481 as ::core::ffi::c_int;
-                high = 482 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 482 as ::core::ffi::c_int;
-                high = 483 as ::core::ffi::c_int;
-            }
-            119 => {
-                low = 483 as ::core::ffi::c_int;
-                high = 485 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        15 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            95 => {
-                low = 485 as ::core::ffi::c_int;
-                high = 486 as ::core::ffi::c_int;
-            }
-            98 => {
-                low = 486 as ::core::ffi::c_int;
-                high = 488 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 488 as ::core::ffi::c_int;
-                high = 489 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 489 as ::core::ffi::c_int;
-                high = 492 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 492 as ::core::ffi::c_int;
-                high = 495 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 495 as ::core::ffi::c_int;
-                high = 496 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 496 as ::core::ffi::c_int;
-                high = 498 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 498 as ::core::ffi::c_int;
-                high = 501 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 501 as ::core::ffi::c_int;
-                high = 504 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        16 => match *str.offset(9 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            95 => {
-                low = 504 as ::core::ffi::c_int;
-                high = 505 as ::core::ffi::c_int;
-            }
-            97 => {
-                low = 505 as ::core::ffi::c_int;
-                high = 507 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 507 as ::core::ffi::c_int;
-                high = 511 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 511 as ::core::ffi::c_int;
-                high = 513 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 513 as ::core::ffi::c_int;
-                high = 514 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 514 as ::core::ffi::c_int;
-                high = 517 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 517 as ::core::ffi::c_int;
-                high = 518 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 518 as ::core::ffi::c_int;
-                high = 521 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 521 as ::core::ffi::c_int;
-                high = 525 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 525 as ::core::ffi::c_int;
-                high = 526 as ::core::ffi::c_int;
-            }
-            119 => {
-                low = 526 as ::core::ffi::c_int;
-                high = 527 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        17 => match *str.offset(9 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            95 => {
-                low = 527 as ::core::ffi::c_int;
-                high = 531 as ::core::ffi::c_int;
-            }
-            97 => {
-                low = 531 as ::core::ffi::c_int;
-                high = 532 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 532 as ::core::ffi::c_int;
-                high = 533 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 533 as ::core::ffi::c_int;
-                high = 534 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 534 as ::core::ffi::c_int;
-                high = 537 as ::core::ffi::c_int;
-            }
-            104 => {
-                low = 537 as ::core::ffi::c_int;
-                high = 538 as ::core::ffi::c_int;
-            }
-            105 => {
-                low = 538 as ::core::ffi::c_int;
-                high = 540 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 540 as ::core::ffi::c_int;
-                high = 543 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 543 as ::core::ffi::c_int;
-                high = 544 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        18 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            95 => {
-                low = 544 as ::core::ffi::c_int;
-                high = 546 as ::core::ffi::c_int;
-            }
-            98 => {
-                low = 546 as ::core::ffi::c_int;
-                high = 549 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 549 as ::core::ffi::c_int;
-                high = 550 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 550 as ::core::ffi::c_int;
-                high = 551 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 551 as ::core::ffi::c_int;
-                high = 553 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 553 as ::core::ffi::c_int;
-                high = 554 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 554 as ::core::ffi::c_int;
-                high = 555 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 555 as ::core::ffi::c_int;
-                high = 556 as ::core::ffi::c_int;
-            }
-            119 => {
-                low = 556 as ::core::ffi::c_int;
-                high = 559 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        19 => match *str.offset(14 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            95 => {
-                low = 559 as ::core::ffi::c_int;
-                high = 561 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 561 as ::core::ffi::c_int;
-                high = 562 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 562 as ::core::ffi::c_int;
-                high = 567 as ::core::ffi::c_int;
-            }
-            102 => {
-                low = 567 as ::core::ffi::c_int;
-                high = 568 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 568 as ::core::ffi::c_int;
-                high = 569 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 569 as ::core::ffi::c_int;
-                high = 572 as ::core::ffi::c_int;
-            }
-            112 => {
-                low = 572 as ::core::ffi::c_int;
-                high = 577 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 577 as ::core::ffi::c_int;
-                high = 578 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 578 as ::core::ffi::c_int;
-                high = 579 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 579 as ::core::ffi::c_int;
-                high = 581 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 581 as ::core::ffi::c_int;
-                high = 586 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        20 => match *str.offset(17 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            97 => {
-                low = 586 as ::core::ffi::c_int;
-                high = 589 as ::core::ffi::c_int;
-            }
-            98 => {
-                low = 589 as ::core::ffi::c_int;
-                high = 591 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 591 as ::core::ffi::c_int;
-                high = 592 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 592 as ::core::ffi::c_int;
-                high = 593 as ::core::ffi::c_int;
-            }
-            105 => {
-                low = 593 as ::core::ffi::c_int;
-                high = 594 as ::core::ffi::c_int;
-            }
-            110 => {
-                low = 594 as ::core::ffi::c_int;
-                high = 595 as ::core::ffi::c_int;
-            }
-            118 => {
-                low = 595 as ::core::ffi::c_int;
-                high = 598 as ::core::ffi::c_int;
-            }
-            119 => {
-                low = 598 as ::core::ffi::c_int;
-                high = 602 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        21 => match *str.offset(9 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            97 => {
-                low = 602 as ::core::ffi::c_int;
-                high = 603 as ::core::ffi::c_int;
-            }
-            99 => {
-                low = 603 as ::core::ffi::c_int;
-                high = 606 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 606 as ::core::ffi::c_int;
-                high = 607 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 607 as ::core::ffi::c_int;
-                high = 610 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 610 as ::core::ffi::c_int;
-                high = 613 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 613 as ::core::ffi::c_int;
-                high = 614 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 614 as ::core::ffi::c_int;
-                high = 616 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 616 as ::core::ffi::c_int;
-                high = 617 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        22 => match *str.offset(10 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            99 => {
-                low = 617 as ::core::ffi::c_int;
-                high = 618 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 618 as ::core::ffi::c_int;
-                high = 619 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 619 as ::core::ffi::c_int;
-                high = 620 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 620 as ::core::ffi::c_int;
-                high = 621 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 621 as ::core::ffi::c_int;
-                high = 622 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 622 as ::core::ffi::c_int;
-                high = 623 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 623 as ::core::ffi::c_int;
-                high = 624 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        23 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            99 => {
-                low = 624 as ::core::ffi::c_int;
-                high = 625 as ::core::ffi::c_int;
-            }
-            103 => {
-                low = 625 as ::core::ffi::c_int;
-                high = 626 as ::core::ffi::c_int;
-            }
-            108 => {
-                low = 626 as ::core::ffi::c_int;
-                high = 627 as ::core::ffi::c_int;
-            }
-            116 => {
-                low = 627 as ::core::ffi::c_int;
-                high = 628 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        24 => match *str.offset(13 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            99 => {
-                low = 628 as ::core::ffi::c_int;
-                high = 629 as ::core::ffi::c_int;
-            }
-            101 => {
-                low = 629 as ::core::ffi::c_int;
-                high = 631 as ::core::ffi::c_int;
-            }
-            111 => {
-                low = 631 as ::core::ffi::c_int;
-                high = 632 as ::core::ffi::c_int;
-            }
-            114 => {
-                low = 632 as ::core::ffi::c_int;
-                high = 634 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 634 as ::core::ffi::c_int;
-                high = 635 as ::core::ffi::c_int;
-            }
-            117 => {
-                low = 635 as ::core::ffi::c_int;
-                high = 636 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        25 => match *str.offset(9 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            97 => {
-                low = 636 as ::core::ffi::c_int;
-                high = 637 as ::core::ffi::c_int;
-            }
-            100 => {
-                low = 637 as ::core::ffi::c_int;
-                high = 638 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 638 as ::core::ffi::c_int;
-                high = 639 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        26 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            98 => {
-                low = 639 as ::core::ffi::c_int;
-                high = 640 as ::core::ffi::c_int;
-            }
-            115 => {
-                low = 640 as ::core::ffi::c_int;
-                high = 641 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        28 => match *str.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int {
-            95 => {
-                low = 641 as ::core::ffi::c_int;
-                high = 642 as ::core::ffi::c_int;
-            }
-            98 => {
-                low = 642 as ::core::ffi::c_int;
-                high = 643 as ::core::ffi::c_int;
-            }
-            _ => {}
-        },
-        _ => {}
-    }
-    let mut i: ::core::ffi::c_int = low;
-    while i < high {
-        if memcmp(
-            str as *const ::core::ffi::c_void,
-            (*functions.ptr())[i as usize].name as *const ::core::ffi::c_void,
-            len,
-        ) == 0
-        {
-            return i;
-        }
-        i += 1;
-    }
-    return -1 as ::core::ffi::c_int;
-}
 pub const DBL_EPSILON: ::core::ffi::c_double = __DBL_EPSILON__;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const SIGINT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -14473,8553 +13141,3 @@ pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const RE_STRING: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const __DBL_EPSILON__: ::core::ffi::c_double = 2.2204460492503131e-16f64;
-unsafe extern "C" fn c2rust_run_static_initializers() {
-    functions.set([
-        EvalFuncDef {
-            name: b"id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_id as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"or\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_or as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"tr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_tr as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"abs\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_abs as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"add\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_add as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"and\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_and as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"col\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_col as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"cos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    cos as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"exp\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    exp as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"get\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_get as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"has\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_has as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"len\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_len as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"log\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    log as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"map\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_map as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"max\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_max as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"min\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_min as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"pow\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_pow as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"sin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    sin as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"tan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    tan as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"xor\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_xor as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"hlID\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_hlID as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"glob\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_glob as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"argc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_argc as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"fmod\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_fmod as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"rand\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_rand as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_line as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"mode\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_mode as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"type\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_type as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"cosh\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    cosh as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"sinh\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    sinh as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"tanh\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    tanh as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"call\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_call as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"ceil\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    ceil as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"eval\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_eval as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"trim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_trim as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"asin\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    asin as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"atan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    atan as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"join\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_join as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"uniq\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_uniq as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"acos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    acos as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"keys\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_keys as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"sort\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sort as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"sqrt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    sqrt as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"wait\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_wait as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"argv\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_argv as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"copy\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_copy as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"match\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_match as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"range\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_range as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"iconv\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_iconv as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"chdir\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_chdir as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"winnr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_winnr as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"mkdir\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_mkdir as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"floor\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    floor as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"slice\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_slice as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"empty\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_empty as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"index\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_index as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"input\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_input as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"count\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_count as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"log10\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    log10 as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"round\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    round as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"split\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_split as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"srand\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_srand as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"trunc\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                float_op_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                float_func: Some(
-                    trunc as unsafe extern "C" fn(::core::ffi::c_double) -> ::core::ffi::c_double,
-                ),
-            },
-        },
-        EvalFuncDef {
-            name: b"isinf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_isinf as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"isnan\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_isnan as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"atan2\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_atan2 as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"items\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_items as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"state\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_state as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"bufnr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_bufnr as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"synID\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_synID as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"sha256\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sha256 as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"append\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_append as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"bufadd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_bufadd as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"expand\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_expand as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"extend\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_extend as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcwd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcwd as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getpid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_getpid as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"jobpid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_jobpid as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"browse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_browse as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"delete\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_delete as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"escape\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_escape as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"reduce\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_reduce as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"remove\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_remove as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"rename\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_rename as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"printf\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: MAX_FUNC_ARGS as ::core::ffi::c_int as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_printf as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getreg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getreg as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"maparg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_maparg as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setreg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setreg as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"string\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_string as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"search\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_search as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"pyeval\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_py3eval as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"wincol\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_wincol as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"system\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_system as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strlen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_strlen as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"ctxpop\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_ctxpop as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"cursor\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_cursor as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"filter\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_filter as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"histnr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_histnr as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"str2nr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_str2nr as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"exists\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_exists as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getpos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getpos as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setpos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setpos as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"values\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_values as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"ctxget\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_ctxget as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"ctxset\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_ctxset as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"indent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_indent as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"insert\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_insert as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"invert\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_invert as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"mapset\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_mapset as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"repeat\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_repeat as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getenv\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getenv as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setenv\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setenv as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"mapnew\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_mapnew as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"argidx\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_argidx as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"stridx\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_stridx as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nr2char\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_nr2char as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"py3eval\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_py3eval as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"char2nr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_char2nr as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"charcol\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_charcol as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"charidx\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_charidx as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"flatten\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_flatten as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"luaeval\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_luaeval as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"readdir\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_readdir as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"jobsend\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_chansend
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"jobstop\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_jobstop as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"jobwait\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_jobwait as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"libcall\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 3 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_libcall as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"rpcstop\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_rpcstop as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"indexof\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_indexof as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"stdpath\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_stdpath as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"execute\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_execute as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"exepath\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_exepath as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"bufload\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_bufload as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"bufname\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_bufname as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"taglist\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_taglist as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"reltime\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_reltime as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"tolower\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_tolower as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"cindent\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_cindent as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"confirm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_confirm as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"finddir\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_finddir as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"funcref\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_funcref as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"winline\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_winline as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"maplist\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_maplist as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"foreach\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_foreach as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strpart\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_strpart as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strridx\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_strridx as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"virtcol\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_virtcol as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"has_key\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_has_key as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"histadd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_histadd as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"histdel\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_histdel as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"histget\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_histget as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"resolve\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_resolve as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"byteidx\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_byteidx as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getchar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getchar as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getline\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getline as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"gettext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_gettext as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setline\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setline as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"toupper\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_toupper as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"environ\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_environ as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"reverse\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_reverse as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"ctxpush\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_ctxpush as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"ctxsize\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_ctxsize as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"pyxeval\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_py3eval as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"utf16idx\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_utf16idx
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"str2list\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_str2list
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"api_info\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_api_info
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"float2nr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_float2nr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"globpath\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_globpath
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"winbufnr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_winbufnr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"function\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_function
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"jobclose\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_chanclose
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"mapcheck\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_mapcheck
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matchadd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matchadd
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matcharg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matcharg
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matchend\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matchend
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matchstr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matchstr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strchars\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_strchars
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"feedkeys\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_feedkeys
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"findfile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_findfile
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"foldtext\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_foldtext
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"readblob\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_readblob
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"readfile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_readfile
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"filecopy\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_filecopy
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getfperm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_getfperm
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getfsize\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_getfsize
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getftime\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_getftime
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getftype\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_getftype
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setfperm\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setfperm
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strftime\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_strftime
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"tagfiles\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_tagfiles
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"perleval\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_perleval
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"hasmapto\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_hasmapto
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim__id\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(1 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_cmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(2 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_put\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(3 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"submatch\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_submatch
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"termopen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_termopen
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"changenr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_changenr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"chansend\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_chansend
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"islocked\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_islocked
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"undofile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_undofile
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"undotree\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_undotree
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"complete\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_complete
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"deepcopy\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_deepcopy
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"simplify\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_simplify
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strptime\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_strptime
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"swapinfo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_swapinfo
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"swapname\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_swapname
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"tempname\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_tempname
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"jobstart\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_jobstart
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"rpcstart\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_rpcstart
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"synstack\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_synstack
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"hostname\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_hostname
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"keytrans\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_keytrans
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"list2str\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_list2str
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strtrans\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_strtrans
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"menu_get\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_menu_get
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"bufwinid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_bufwinid
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"bufwinnr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_bufwinnr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strwidth\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_strwidth
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"winwidth\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_winwidth
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"hlexists\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_hlexists
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"rubyeval\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_rubyeval
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"blob2list\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_blob2list
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"byte2line\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_byte2line
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"line2byte\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_line2byte
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"list2blob\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_list2blob
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"synIDattr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_synIDattr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"diff_hlID\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_diff_hlID
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"menu_info\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_menu_info
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_echo\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(7 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_eval\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(9 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_exec\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(10 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"sign_jump\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sign_jump
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"gettabvar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_gettabvar
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"libcallnr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 3 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_libcallnr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"settabvar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 3 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_settabvar
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"tabpagenr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_tabpagenr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"winlayout\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_winlayout
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"chanclose\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_chanclose
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"charclass\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_charclass
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"searchpos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_searchpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"wordcount\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_wordcount
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"soundfold\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_soundfold
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getregion\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getregion
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"jobresize\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_jobresize
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"screencol\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_screencol
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"screenpos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_screenpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"screenrow\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_screenrow
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"winheight\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_winheight
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"writefile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_writefile
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getqflist\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getqflist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setqflist\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setqflist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"str2float\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_str2float
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"win_getid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_win_getid
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matchlist\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matchlist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"arglistid\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_arglistid
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"buflisted\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_buflisted
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getwinpos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getwinpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getwinvar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getwinvar
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setwinvar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 3 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setwinvar
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"foldlevel\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_foldlevel
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"localtime\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_localtime
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcmdpos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcmdpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setcmdpos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setcmdpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"expandcmd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_expandcmd
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"extendnew\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_extendnew
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"bufloaded\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_bufloaded
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"rpcnotify\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: MAX_FUNC_ARGS as ::core::ffi::c_int as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_rpcnotify
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"stdioopen\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_stdioopen
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"interrupt\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_interrupt
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"browsedir\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_browsedir
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"inputlist\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_inputlist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"inputsave\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_inputsave
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getbufvar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getbufvar
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcurpos\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcurpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setbufvar\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 3 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setbufvar
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"bufexists\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_bufexists
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"timer_info\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_timer_info
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"timer_stop\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_timer_stop
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcharmod\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcharmod
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcharpos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcharpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcharstr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcharstr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setcharpos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setcharpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strcharlen\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_strcharlen
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"debugbreak\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_debugbreak
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"gettabinfo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_gettabinfo
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getloclist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getloclist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setloclist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setloclist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcmdline\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcmdline
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcmdtype\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcmdtype
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setcmdline\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setcmdline
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"win_id2win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_win_id2win
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"flattennew\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_flattennew
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_exec2\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(11 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"pum_getpos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_pum_getpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getbufinfo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getbufinfo
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getbufline\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getbufline
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matchfuzzy\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matchfuzzy
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setbufline\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 3 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setbufline
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getreginfo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getreginfo
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getregtype\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getregtype
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"searchdecl\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_searchdecl
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"searchpair\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 7 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_searchpair
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_input\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(12 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"substitute\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_substitute
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"foldclosed\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_foldclosed
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"visualmode\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_visualmode
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"reltimestr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_reltimestr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"systemlist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_systemlist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getwininfo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getwininfo
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getwinposx\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getwinposx
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getwinposy\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getwinposy
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"lispindent\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_lispindent
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"screenattr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_screenattr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"screenchar\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_screenchar
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"win_gotoid\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_win_gotoid
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_paste\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(13 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"sign_place\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sign_place
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"rpcrequest\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: MAX_FUNC_ARGS as ::core::ffi::c_int as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_rpcrequest
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"foreground\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_foreground
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"serverlist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_serverlist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"serverstop\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_serverstop
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"pumvisible\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_pumvisible
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"winrestcmd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_winrestcmd
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"executable\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_executable
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getmatches\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getmatches
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setmatches\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setmatches
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strgetchar\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_strgetchar
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"synIDtrans\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_synIDtrans
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"shiftwidth\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_shiftwidth
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim__stats\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(19 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"timer_pause\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_timer_pause
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"timer_start\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_timer_start
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matchaddpos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matchaddpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strcharpart\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_strcharpart
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"haslocaldir\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_haslocaldir
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"msgpackdump\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_msgpackdump
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"byteidxcomp\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_byteidxcomp
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"inputdialog\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_inputdialog
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"json_decode\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_json_decode
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matchdelete\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matchdelete
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"sign_define\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sign_define
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"fnameescape\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_fnameescape
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"isdirectory\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_isdirectory
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"json_encode\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_json_encode
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"shellescape\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_shellescape
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"win_gettype\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_win_gettype
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"diff_filler\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_diff_filler
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"strutf16len\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_strutf16len
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"gettagstack\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_gettagstack
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_hl\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(14 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"settagstack\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_settagstack
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"pathshorten\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_pathshorten
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"searchcount\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_searchcount
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"highlightID\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_hlID as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"win_findbuf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_win_findbuf
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"fnamemodify\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_fnamemodify
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getjumplist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getjumplist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getfontname\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getfontname
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_notify\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(18 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"screenchars\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_screenchars
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"fullcommand\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_fullcommand
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"sockconnect\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sockconnect
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"virtcol2col\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_virtcol2col
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"digraph_get\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_digraph_get
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"digraph_set\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_digraph_set
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"buffer_name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_bufname as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getmarklist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getmarklist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"glob2regpat\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_glob2regpat
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"serverstart\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_serverstart
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"wildtrigger\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_wildtrigger
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"inputsecret\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_inputsecret
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matchstrpos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matchstrpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_hl\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(15 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"preinserted\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_preinserted
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"winrestview\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_winrestview
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"assert_true\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_true
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getmousepos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getmousepos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"winsaveview\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_winsaveview
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"win_execute\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_win_execute
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim__ns_get\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(29 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim__ns_set\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(30 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim__redraw\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(25 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim__unpack\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(28 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"gettabwinvar\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_gettabwinvar
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matchbufline\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matchbufline
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"settabwinvar\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 4 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_settabwinvar
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"spellbadword\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_spellbadword
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"msgpackparse\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_msgpackparse
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_command\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(27 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"getcmdprompt\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcmdprompt
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_del_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(26 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"complete_add\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_complete_add
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"filereadable\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_filereadable
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"reg_recorded\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_reg_recorded
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"wildmenumode\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_wildmenumode
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getregionpos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getregionpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(31 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"tabpagewinnr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_tabpagewinnr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"eventhandler\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_eventhandler
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"did_filetype\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_did_filetype
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"swapfilelist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_swapfilelist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"clearmatches\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_clearmatches
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"reltimefloat\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_reltimefloat
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"screenstring\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_screenstring
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"synconcealed\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_synconcealed
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nextnonblank\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_nextnonblank
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"prevnonblank\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_prevnonblank
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"filewritable\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_filewritable
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"inputrestore\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_inputrestore
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matchstrlist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matchstrlist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(32 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"spellsuggest\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_spellsuggest
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"assert_beeps\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_beeps
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"assert_equal\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_equal
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"assert_fails\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_fails
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"assert_false\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_false
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"assert_match\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_match
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_ui_send\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(22 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"sign_unplace\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sign_unplace
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim__id_dict\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(37 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"timer_stopall\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_timer_stopall
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getchangelist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getchangelist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcharsearch\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcharsearch
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getstacktrace\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getstacktrace
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"setcharsearch\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setcharsearch
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"win_screenpos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_win_screenpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"appendbufline\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 3 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_appendbufline
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcmdwintype\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcmdwintype
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_del_mark\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(41 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"win_id2tabwin\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_win_id2tabwin
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"complete_info\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_complete_info
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"deletebufline\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_deletebufline
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"reg_recording\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_reg_recording
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getbufoneline\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getbufoneline
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"matchfuzzypos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_matchfuzzypos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_feedkeys\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(40 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_mark\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(42 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_mode\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(43 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_proc\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(44 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_vvar\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(50 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"searchpairpos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 7 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_searchpairpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"foldclosedend\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_foldclosedend
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcellwidths\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcellwidths
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_list_uis\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(35 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"setcellwidths\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setcellwidths
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcompletion\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcompletion
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_open_win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(36 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"win_splitmove\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_win_splitmove
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"buffer_exists\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_bufexists
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"buffer_number\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_bufnr as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"file_readable\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_filereadable
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getscriptinfo\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getscriptinfo
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_vvar\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(51 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_strwidth\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(39 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"assert_nobeep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_nobeep
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"assert_report\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_report
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"sign_undefine\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sign_undefine
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_hide\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(38 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"reg_executing\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_reg_executing
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim__id_array\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(52 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim__id_float\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(53 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"dictwatcheradd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_dictwatcheradd
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"dictwatcherdel\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_dictwatcherdel
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"last_buffer_nr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_last_buffer_nr
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcmdcomplpat\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcmdcomplpat
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"complete_check\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_complete_check
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"foldtextresult\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_foldtextresult
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_err_write\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(55 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"garbagecollect\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_garbagecollect
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_hl_ns\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(58 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"sign_getplaced\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sign_getplaced
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"tabpagebuflist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_tabpagebuflist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_list_bufs\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(59 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_list_wins\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(60 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"isabsolutepath\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_isabsolutepath
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_open_term\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(61 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_out_write\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(62 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_parse_cmd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(63 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"sign_placelist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sign_placelist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_hl_ns\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(67 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"assert_inrange\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: 3 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_inrange
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_close\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(71 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"windowsversion\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: true_0 != 0,
-            func: Some(
-                f_windowsversion
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim__buf_stats\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(98 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_attach\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(82 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_delete\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(83 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_create_buf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(81 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"getcmdcompltype\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcmdcompltype
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcmdscreenpos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcmdscreenpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_del_keymap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(90 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_keymap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(94 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_option\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(95 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"sign_getdefined\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sign_getdefined
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_list_chans\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(93 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"digraph_getlist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_digraph_getlist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"digraph_setlist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_digraph_setlist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_keymap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(96 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_option\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(97 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"strdisplaywidth\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_strdisplaywidth
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"assert_notequal\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_notequal
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"assert_notmatch\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_notmatch
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"prompt_getinput\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_prompt_getinput
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"highlight_exists\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_hlexists
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_del_autocmd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(105 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"sign_unplacelist\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_sign_unplacelist
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"assert_exception\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_exception
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"getcursorcharpos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcursorcharpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_context\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(106 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"setcursorcharpos\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_setcursorcharpos
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_del_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(121 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_del_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(108 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim__screenshot\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(118 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(122 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_get_buf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(109 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_get_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(110 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"prompt_appendbuf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 2 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_prompt_appendbuf
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_set_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(123 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_set_buf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(111 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_set_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(112 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"cmdcomplete_info\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_cmdcomplete_info
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_input_mouse\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 6 as uint8_t,
-            max_argc: 6 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(113 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"prompt_getprompt\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_prompt_getprompt
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"prompt_setprompt\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_prompt_setprompt
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"assert_equalfile\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_assert_equalfile
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_err_writeln\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(116 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim__get_lib_dir\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(134 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim__get_runtime\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(143 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_load_context\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(137 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_open_tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(131 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_autocmds\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(150 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_commands\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(153 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_del_mark\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(126 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_mark\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(127 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(128 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_text\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 6 as uint8_t,
-            max_argc: 6 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(135 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_hl_by_id\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(125 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_is_valid\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(147 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_is_valid\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(148 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_set_mark\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 5 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(129 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_set_name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(130 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_set_text\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 6 as uint8_t,
-            max_argc: 6 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(136 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"getcompletiontype\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_getcompletiontype
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim__complete_set\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(169 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim__inspect_cell\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(170 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_lines\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(165 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_is_loaded\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(167 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_set_lines\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 5 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(172 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_call_function\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(157 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_exec_autocmds\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(158 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_chan_info\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(160 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_color_map\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(161 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_list_tabpages\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(159 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"win_move_separator\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_win_move_separator
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"prompt_setcallback\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_prompt_setcallback
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_get_width\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(166 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_set_hl_ns\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(173 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_set_width\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(174 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_hl_by_name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(177 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_hl_ns_fast\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(178 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_line_count\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(179 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_del_keymap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(180 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_keymap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(181 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_set_keymap\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 5 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(182 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_get_height\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(183 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_set_height\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(184 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_offset\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(185 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_create_augroup\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(186 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_clear_autocmds\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(189 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_get_config\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(190 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_set_config\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(191 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_option\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(192 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_set_option\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(193 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_namespaces\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(194 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_get_option\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(195 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_set_option\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(196 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"prompt_setinterrupt\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_prompt_setinterrupt
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"win_move_statusline\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: 1 as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_win_move_statusline
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_create_autocmd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(197 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"test_write_list_log\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_test_write_list_log
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_number\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(198 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_command_output\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(199 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_get_cursor\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(200 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_get_number\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(201 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_set_cursor\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(202 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_del_extmark\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(203 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_set_extmark\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 5 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(204 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_get_tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(205 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_current_buf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(206 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_current_buf\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(207 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_current_dir\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(208 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_text_height\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(210 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_eval_statusline\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(211 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_option_info\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(215 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_tabpage_del_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(218 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_tabpage_get_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(219 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_tabpage_set_var\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(220 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_current_win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(221 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_current_win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(222 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_tabpage_get_win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(223 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_tabpage_set_win\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(224 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_tabpage_is_valid\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(242 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_del_current_line\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(230 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_current_line\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(233 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_current_line\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(240 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_parse_expression\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(237 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_commands\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(227 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_extmarks\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 5 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(228 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_win_get_position\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(243 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_option_info2\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(234 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_option_value\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(235 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_option_value\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(241 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_runtime_file\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(236 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim__runtime_inspect\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(226 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_create_namespace\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(229 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_del_user_command\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(231 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_replace_termcodes\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(253 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_add_highlight\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 6 as uint8_t,
-            max_argc: 6 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(250 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_tabpage_list_wins\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(254 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_hl_id_by_name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(258 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_color_by_name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(257 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_proc_children\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(252 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_del_augroup_by_id\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(244 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_call_dict_function\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(259 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"test_garbagecollect_now\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                f_test_garbagecollect_now
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData { null: NULL_0 },
-        },
-        EvalFuncDef {
-            name: b"nvim_list_runtime_paths\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(262 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_tabpage_get_number\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(263 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_changedtick\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(265 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_current_tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(266 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_set_current_tabpage\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(267 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_del_augroup_by_name\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 1 as uint8_t,
-            max_argc: 1 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(268 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_clear_highlight\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(269 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_clear_namespace\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(270 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_create_user_command\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(271 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim__buf_debug_extmarks\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 3 as uint8_t,
-            max_argc: 3 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(272 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_get_all_options_info\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(273 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_del_user_command\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 2 as uint8_t,
-            max_argc: 2 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(274 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_set_virtual_text\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 5 as uint8_t,
-            max_argc: 5 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(275 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_get_extmark_by_id\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(276 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_select_popupmenu_item\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(277 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim__invalidate_glyph_cache\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(278 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: b"nvim_buf_create_user_command\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            min_argc: 4 as uint8_t,
-            max_argc: 4 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: Some(
-                api_wrapper
-                    as unsafe extern "C" fn(*mut typval_T, *mut typval_T, EvalFuncData) -> (),
-            ),
-            data: EvalFuncData {
-                api_handler: (&raw const method_handlers as *const MsgpackRpcRequestHandler)
-                    .offset(279 as ::core::ffi::c_int as isize),
-            },
-        },
-        EvalFuncDef {
-            name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            min_argc: 0 as uint8_t,
-            max_argc: 0 as uint8_t,
-            base_arg: BASE_NONE as ::core::ffi::c_int as uint8_t,
-            fast: false_0 != 0,
-            func: None,
-            data: EvalFuncData { null: NULL_0 },
-        },
-    ]);
-}
-#[used]
-#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
-#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
-#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
-static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];

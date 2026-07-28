@@ -1,18 +1,18 @@
-//! A reader for the subset of Lua that `options.lua` is written in.
+//! A reader for the subset of Lua that the vendored metadata is written in.
 //!
-//! `crates/nvim/src/nvim/options.lua` is data, not a program: one nested
-//! table constructor of literals, plus two helper calls (`N_` for the short
-//! descriptions and `macros` for defaults that a C macro supplies). Upstream
-//! fed it to a real Lua interpreter; doing the same here would make
-//! regenerating the option table depend on a *built* nvim, which is the one
-//! thing a bootstrap step must not need — and `just apigen --check` has to
-//! run whether or not the tree currently compiles.
+//! `crates/nvim/src/nvim/options.lua` and `crates/nvim/src/nvim/eval.lua` are
+//! data, not programs: one nested table constructor of literals, plus a
+//! handful of helper calls (`N_` for the short descriptions, `macros` for
+//! defaults that a C macro supplies). Upstream fed them to a real Lua
+//! interpreter; doing the same here would make regenerating the tables depend
+//! on a *built* nvim, which is the one thing a bootstrap step must not need —
+//! and `just apigen --check` has to run whether or not the tree compiles.
 //!
-//! So the file is read directly. The grammar accepted is deliberately tiny:
+//! So the files are read directly. The grammar accepted is deliberately tiny:
 //! literals, table constructors, and calls left unevaluated as
 //! [`Value::Call`]. Anything else — an operator, a method call, a closure in
 //! the data — is a parse error rather than a silent misreading, which is
-//! what keeps this honest as `options.lua` follows upstream.
+//! what keeps this honest as the metadata follows upstream.
 
 use std::collections::BTreeMap;
 
@@ -113,6 +113,8 @@ enum Tok {
 }
 
 struct Lexer<'a> {
+    /// The file name diagnostics quote.
+    file: &'a str,
     src: &'a [u8],
     pos: usize,
     line: usize,
@@ -120,7 +122,7 @@ struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     fn err(&self, what: &str) -> String {
-        format!("options.lua:{}: {what}", self.line)
+        format!("{}:{}: {what}", self.file, self.line)
     }
 
     fn bump(&mut self) -> u8 {
@@ -279,15 +281,16 @@ impl<'a> Lexer<'a> {
     }
 }
 
-struct Parser {
+struct Parser<'a> {
+    file: &'a str,
     toks: Vec<(Tok, usize)>,
     pos: usize,
 }
 
-impl Parser {
+impl Parser<'_> {
     fn err(&self, what: &str) -> String {
         let line = self.toks.get(self.pos).map_or(0, |t| t.1);
-        format!("options.lua:{line}: {what}")
+        format!("{}:{line}: {what}", self.file)
     }
 
     fn peek(&self) -> Option<&Tok> {
@@ -396,12 +399,11 @@ impl Parser {
     }
 }
 
-/// Read `local <name> = { ... }` out of a Lua source file.
-///
-/// The file is tokenized whole (so long strings and comments cannot be
-/// mistaken for data) and only the named table is parsed.
-pub fn read_local_table(source: &str, name: &str) -> Result<Table, String> {
+/// Tokenize a whole file, so that long strings and comments cannot be
+/// mistaken for data wherever the wanted table happens to sit.
+fn lex(file: &str, source: &str) -> Result<Vec<(Tok, usize)>, String> {
     let mut lexer = Lexer {
+        file,
         src: source.as_bytes(),
         pos: 0,
         line: 1,
@@ -410,17 +412,23 @@ pub fn read_local_table(source: &str, name: &str) -> Result<Table, String> {
     while let Some(tok) = lexer.next()? {
         toks.push((tok, lexer.line));
     }
-    let want = [
-        Tok::Name("local".into()),
-        Tok::Name(name.into()),
-        Tok::Punct('='),
-        Tok::Punct('{'),
-    ];
+    Ok(toks)
+}
+
+/// Read the table a Lua source file assigns to `binding` — `local options`
+/// in `options.lua`, `M.funcs` in `eval.lua`. The binding is spelled as Lua
+/// and lexed with the same rules as the file, so a dotted name works.
+pub fn read_table(file: &str, source: &str, binding: &str) -> Result<Table, String> {
+    let toks = lex(file, source)?;
+    let mut want: Vec<Tok> = lex(file, binding)?.into_iter().map(|(t, _)| t).collect();
+    want.push(Tok::Punct('='));
+    want.push(Tok::Punct('{'));
     let start = toks
         .windows(want.len())
         .position(|w| w.iter().map(|t| &t.0).eq(want.iter()))
-        .ok_or_else(|| format!("options.lua: no `local {name} = {{`"))?;
+        .ok_or_else(|| format!("{file}: no `{binding} = {{`"))?;
     let mut parser = Parser {
+        file,
         toks,
         pos: start + want.len(),
     };

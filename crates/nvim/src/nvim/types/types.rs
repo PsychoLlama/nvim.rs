@@ -11,10 +11,12 @@ pub struct AdditionalData {
     pub nbytes: uint32_t,
     pub data: [::core::ffi::c_char; 0],
 }
+/// A libm operation on one Float, as `float_op_wrapper` calls it.
+pub type FloatFunc = Option<unsafe extern "C" fn(float_T) -> float_T>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union EvalFuncData {
-    pub float_func: Option<unsafe extern "C" fn(float_T) -> float_T>,
+    pub float_func: FloatFunc,
     pub api_handler: *const MsgpackRpcRequestHandler,
     pub null: *mut ::core::ffi::c_void,
 }

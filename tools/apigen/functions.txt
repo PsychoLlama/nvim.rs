@@ -1,7 +1,8 @@
 # Every method the API exposes, over msgpack-RPC or to Lua or both.
 # tools/apigen generates the RPC wrapper, the handler table, the `vim.api` Lua
-# binding and the api-info metadata from these entries; everything else about
-# a wrapper is read off the Rust signature in crates/nvim/src/nvim/api/.
+# binding, the `nvim_*()` half of the Vimscript builtin table and the api-info
+# metadata from these entries; everything else about a wrapper is read off the
+# Rust signature in crates/nvim/src/nvim/api/.
 #
 #   <name> [flag ...] [key=value ...]
 #
@@ -19,6 +20,10 @@
 #   remote_only            RPC clients only: the method gets no Lua binding
 #   lua_only               Lua only: the method gets no RPC wrapper and no
 #                          row in the handler table
+#
+# The two are not quite exclusive. Either one alone also suppresses the
+# Vimscript binding; one method (nvim_chan_send) carries both, which cancels
+# for the RPC and Lua surfaces and leaves it with no builtin.
 #
 # Keys:
 #
@@ -221,7 +226,7 @@ nvim_get_current_win since=1
 nvim_set_current_win textlock since=1
 nvim_create_buf since=6
 nvim_open_term textlock_allow_cmdwin since=7
-nvim_chan_send since=7
+nvim_chan_send remote_only lua_only since=7
 nvim_list_tabpages ret=ArrayOf(Tabpage) since=1
 nvim_get_current_tabpage since=1
 nvim_set_current_tabpage textlock since=1

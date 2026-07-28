@@ -55,6 +55,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod eval_funcs;
 mod lua;
 mod options;
 
@@ -193,9 +194,9 @@ struct Spec {
     /// A hand-written handler elsewhere in the crate, named by its full path.
     /// Mutually exclusive with `alias`; either means no wrapper is generated.
     handler: Option<String>,
-    /// RPC clients only: the method gets no Lua binding.
+    /// Upstream's `FUNC_API_REMOTE_ONLY`.
     remote_only: bool,
-    /// Lua only: the method gets no RPC wrapper and no handler-table row.
+    /// Upstream's `FUNC_API_LUA_ONLY`.
     lua_only: bool,
     /// The API level the method appeared at, or -1 for the internal `nvim__*`
     /// ones. Required on every `nvim_`-prefixed entry: the metadata publishes
@@ -215,19 +216,34 @@ struct Spec {
 impl Spec {
     /// Whether this entry gets an RPC wrapper of its own.
     fn is_wrapper(&self) -> bool {
-        self.alias.is_none() && self.handler.is_none() && !self.lua_only
+        self.alias.is_none() && self.handler.is_none() && self.is_method()
     }
 
     /// Whether this entry is one of the methods the RPC dispatcher answers
-    /// to, and so takes a row in the handler table.
+    /// to, and so takes a row in the handler table. Upstream's `f.remote`.
     fn is_method(&self) -> bool {
-        !self.lua_only
+        self.remote_only || !self.lua_only
     }
 
-    /// Whether this entry gets a `vim.api.<name>` Lua binding. A deprecated
-    /// spelling does not: upstream exposed the old names over RPC only.
+    /// Whether this entry gets a `vim.api.<name>` Lua binding — upstream's
+    /// `f.lua`. A deprecated spelling does not: upstream exposed the old
+    /// names over RPC only.
     fn has_lua_binding(&self) -> bool {
-        self.alias.is_none() && self.handler.is_none() && !self.remote_only
+        self.alias.is_none() && self.handler.is_none() && (self.lua_only || !self.remote_only)
+    }
+
+    /// Whether this entry also answers to its own name in Vimscript, called
+    /// through its row of the handler table — upstream's `f.eval`. Both
+    /// `remote_only` and `lua_only` suppress it, so a method spelled with
+    /// *both* (`nvim_chan_send`) has an RPC wrapper and a Lua binding but no
+    /// Vimscript one. Only the `nvim_`-prefixed names qualify: the legacy
+    /// spellings were never given a builtin.
+    fn has_eval_binding(&self) -> bool {
+        self.name.starts_with("nvim_")
+            && self.alias.is_none()
+            && self.handler.is_none()
+            && !self.remote_only
+            && !self.lua_only
     }
 
     /// Whether the Lua binding converts this method's result the pre-0.11 way
@@ -683,9 +699,6 @@ fn parse_spec(path: &Path) -> Result<Vec<Spec>, String> {
             return Err(at(
                 "an alias inherits fast/ret_alloc from what it aliases".into()
             ));
-        }
-        if spec.remote_only && spec.lua_only {
-            return Err(at("remote_only and lua_only are exclusive".into()));
         }
         if spec.lua_only && (spec.alias.is_some() || spec.handler.is_some()) {
             return Err(at(
@@ -1716,79 +1729,38 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
     out.push('\n');
 }
 
-/// Cross-check the handler table's layout against the row numbers
-/// `eval/funcs.rs` has baked in.
+/// The handler table's layout: the dispatched methods, and the order their
+/// rows sit in.
 ///
-/// The builtin `nvim_*()` Vimscript functions do not look their handler up by
-/// name: each `EvalFuncDef` stores `&method_handlers[N]` outright. That makes
-/// the table's order part of the crate's meaning rather than an internal
-/// detail of this generator, and a silent renumbering would bind every one of
-/// those builtins to the wrong API function. So it is an error here, not a
-/// mystery at runtime.
-fn check_eval_indices(root: &Path, order: &BTreeMap<&str, usize>) -> Result<(), String> {
-    let path = root.join("src/nvim/eval/funcs.rs");
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    // Each entry reads `name: b"nvim_foo\0"…` and, further down the same
-    // struct literal, `api_handler: (&raw const method_handlers …).offset(N …)`.
-    let mut name = None;
-    let mut binding = false;
-    let mut checked = 0;
-    for line in text.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("name: b\"") {
-            name = rest.split_once("\\0").map(|(n, _)| n.to_string());
-        }
-        if line.starts_with("api_handler: (&raw const method_handlers") {
-            binding = true;
-            continue;
-        }
-        if !binding {
-            continue;
-        }
-        binding = false;
-        let rest = line.strip_prefix(".offset(").ok_or_else(|| {
-            format!("eval/funcs.rs: an api_handler binding lacks an .offset(): {line}")
-        })?;
-        let name = name
-            .take()
-            .ok_or_else(|| "eval/funcs.rs: an api_handler binding has no name".to_string())?;
-        let row = rest
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .parse::<usize>()
-            .map_err(|_| format!("eval/funcs.rs: unreadable handler row in `{line}`"))?;
-        let want = order
-            .get(name.as_str())
-            .ok_or_else(|| format!("eval/funcs.rs binds {name}, which is not an RPC method"))?;
-        if *want != row {
-            return Err(format!(
-                "eval/funcs.rs binds {name} to handler row {row}, but it is now row {want}; \
-                 the table order changed and those bindings have to follow"
-            ));
-        }
-        checked += 1;
-    }
-    if checked == 0 {
-        return Err("eval/funcs.rs bound no handlers; the cross-check has gone blind".into());
-    }
-    Ok(())
-}
-
-/// The handler table and the lookup that indexes it.
-///
-/// The layout is `table_order` over the method names *sorted*, not over the
+/// The order is `table_order` over the method names *sorted*, not over the
 /// spec file's arrangement. Upstream fed its own header-declaration order in;
 /// sorting reproduces the same table (checked against the frozen one) while
 /// making the result independent of how `functions.txt` is grouped.
-fn emit_handlers<'a>(out: &mut String, specs: &'a [Spec]) -> BTreeMap<&'a str, usize> {
-    let by_name: BTreeMap<&str, &Spec> = specs.iter().map(|s| (s.name.as_str(), s)).collect();
+fn handler_layout(specs: &[Spec]) -> (Vec<&Spec>, Vec<usize>) {
     // A lua_only method is not dispatched, so it takes no row.
     let mut sorted: Vec<&Spec> = specs.iter().filter(|s| s.is_method()).collect();
     sorted.sort_by(|a, b| a.name.cmp(&b.name));
     let names: Vec<String> = sorted.iter().map(|s| s.name.clone()).collect();
     let order = table_order(&names);
-    let specs: Vec<&Spec> = sorted;
+    (sorted, order)
+}
+
+/// Which row of the handler table each method sits in. The builtin-function
+/// table bakes these numbers into its `nvim_*()` bindings, so both generators
+/// read the layout from here and the two cannot drift.
+fn handler_rows(specs: &[Spec]) -> BTreeMap<&str, usize> {
+    let (specs, order) = handler_layout(specs);
+    order
+        .iter()
+        .enumerate()
+        .map(|(row, &i)| (specs[i].name.as_str(), row))
+        .collect()
+}
+
+/// The handler table and the lookup that indexes it.
+fn emit_handlers(out: &mut String, specs: &[Spec]) {
+    let by_name: BTreeMap<&str, &Spec> = specs.iter().map(|s| (s.name.as_str(), s)).collect();
+    let (specs, order) = handler_layout(specs);
 
     writeln!(
         out,
@@ -1832,11 +1804,6 @@ fn emit_handlers<'a>(out: &mut String, specs: &'a [Spec]) -> BTreeMap<&'a str, u
     writeln!(out, "    }})").unwrap();
     writeln!(out, "}}").unwrap();
     out.push('\n');
-    order
-        .iter()
-        .enumerate()
-        .map(|(row, &i)| (specs[i].name.as_str(), row))
-        .collect()
 }
 
 /// Cut formatted top-level items apart on the blank lines between them. The
@@ -1860,7 +1827,6 @@ fn split_paragraphs(text: &str) -> Vec<String> {
 /// The dispatch tables module: the keyset tables and their lookups, the
 /// handler table and its lookup.
 fn generate_tables(
-    root: &Path,
     keysets: &[Keyset],
     specs: &[Spec],
     config: &Path,
@@ -1876,7 +1842,7 @@ fn generate_tables(
         sections.push(("keysets", chunk));
     }
     let mut all = String::new();
-    check_eval_indices(root, &emit_handlers(&mut all, specs))?;
+    emit_handlers(&mut all, specs);
     for chunk in chunked(&rustfmt(config, &all)?) {
         sections.push(("handlers", chunk));
     }
@@ -3399,6 +3365,8 @@ fn run() -> Result<(), String> {
     let mut lua_dir = None;
     let mut options_lua = None;
     let mut options_dir = None;
+    let mut eval_lua = None;
+    let mut eval_dir = None;
     let mut metadata_file = None;
     let mut config = None;
     let mut check = false;
@@ -3414,6 +3382,8 @@ fn run() -> Result<(), String> {
             "--lua-dir" => lua_dir = Some(PathBuf::from(value()?)),
             "--options-lua" => options_lua = Some(PathBuf::from(value()?)),
             "--options-dir" => options_dir = Some(PathBuf::from(value()?)),
+            "--eval-lua" => eval_lua = Some(PathBuf::from(value()?)),
+            "--eval-dir" => eval_dir = Some(PathBuf::from(value()?)),
             "--metadata-file" => metadata_file = Some(PathBuf::from(value()?)),
             "--rustfmt-config" => config = Some(PathBuf::from(value()?)),
             "--check" => check = true,
@@ -3428,6 +3398,8 @@ fn run() -> Result<(), String> {
     let lua_dir = lua_dir.ok_or("--lua-dir is required")?;
     let options_lua = options_lua.ok_or("--options-lua is required")?;
     let options_dir = options_dir.ok_or("--options-dir is required")?;
+    let eval_lua = eval_lua.ok_or("--eval-lua is required")?;
+    let eval_dir = eval_dir.ok_or("--eval-dir is required")?;
     let metadata_file = metadata_file.ok_or("--metadata-file is required")?;
     let config = config.ok_or("--rustfmt-config is required")?;
 
@@ -3445,7 +3417,7 @@ fn run() -> Result<(), String> {
         ),
         (
             tables_dir,
-            generate_tables(&root, &keysets, &specs, &config)?,
+            generate_tables(&keysets, &specs, &config)?,
             "tables",
         ),
         (lua_dir, generate_lua(&api, &specs, &config)?, "Lua binding"),
@@ -3453,6 +3425,11 @@ fn run() -> Result<(), String> {
             options_dir.clone(),
             options::generate(&root, &options_lua, &options_dir, &config)?,
             "option table",
+        ),
+        (
+            eval_dir.clone(),
+            eval_funcs::generate(&root, &api, &specs, &eval_lua, &eval_dir, &config)?,
+            "builtin table",
         ),
     ];
 
@@ -3537,12 +3514,13 @@ fn run() -> Result<(), String> {
 
     if wrote {
         eprintln!(
-            "apigen: {} wrappers, {} handlers, {} keysets, {} Lua bindings, {} published methods",
+            "apigen: {} wrappers, {} handlers, {} keysets, {} Lua bindings, {} published methods, {} eval bindings",
             specs.iter().filter(|s| s.is_wrapper()).count(),
             specs.iter().filter(|s| s.is_method()).count(),
             keysets.len(),
             specs.iter().filter(|s| s.has_lua_binding()).count(),
             specs.iter().filter(|s| s.in_metadata()).count(),
+            specs.iter().filter(|s| s.has_eval_binding()).count(),
         );
     }
     Ok(())

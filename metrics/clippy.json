@@ -48,7 +48,7 @@
     "crates/nvim/src/nvim/eval/deprecated.rs": 3,
     "crates/nvim/src/nvim/eval/encode.rs": 438,
     "crates/nvim/src/nvim/eval/fs.rs": 104,
-    "crates/nvim/src/nvim/eval/funcs.rs": 1062,
+    "crates/nvim/src/nvim/eval/funcs.rs": 419,
     "crates/nvim/src/nvim/eval/list.rs": 33,
     "crates/nvim/src/nvim/eval/typval.rs": 182,
     "crates/nvim/src/nvim/eval/userfunc.rs": 158,

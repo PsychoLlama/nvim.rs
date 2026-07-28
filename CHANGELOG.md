@@ -21,6 +21,10 @@ and this project adheres to [CalVer](https://calver.org/).
   generated from `options.lua` again (`just apigen`) instead of carried as
   transpiled data, taking 19k lines out of `option.rs` and leaving the
   `:set`/`did_set` logic behind on a table that can no longer drift.
+- The Vimscript builtin-function table is generated from `eval.lua` and the
+  API spec again (`just apigen`), taking 10k lines out of `eval/funcs.rs`;
+  the 177 `nvim_*()` builtins now derive their handler-table rows from the
+  same layout the handler table is built from instead of storing them.
 
 ## [2026.07.27-dd16441f3f]
 
