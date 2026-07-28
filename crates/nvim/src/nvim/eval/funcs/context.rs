@@ -1,206 +1,211 @@
 //! The editor context stack: the `ctx*()` family.
-//!
-//! Moved out of the parent module as it stood after transpilation;
-//! the bodies are unchanged.
+#![deny(unsafe_op_in_unsafe_fn)]
 
-use super::*;
+use super::args::frame;
+use super::{
+    CONTEXT_INIT, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kCtxBufs, kCtxFuncs,
+    kCtxGVars, kCtxJumps, kCtxRegs, kCtxSFuncs, kErrorTypeNone, kObjectTypeDict,
+};
+use crate::semsg;
+use crate::src::nvim::api::private::converter::{object_to_vim, vim_to_object};
+use crate::src::nvim::api::private::helpers::api_clear_error;
+use crate::src::nvim::context::{
+    ctx_free, ctx_from_dict, ctx_get, ctx_restore, ctx_save, ctx_size, ctx_to_dict, kCtxAll,
+};
+use crate::src::nvim::eval::typval::tv_list_first;
+use crate::src::nvim::main::did_emsg;
+use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::types::{
+    Context, Error, EvalFuncData, object, object_data, typval_T, varnumber_T,
+};
+use core::ffi::{CStr, c_int};
+use core::ptr;
 
-pub unsafe extern "C" fn f_ctxget(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    let mut index: size_t = 0 as size_t;
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        index = (*argvars.offset(0 as ::core::ffi::c_int as isize))
-            .vval
-            .v_number as size_t;
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        semsg(
-            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-            b"expected nothing or a Number as an argument\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        return;
-    }
-    let mut ctx: *mut Context = ctx_get(index);
-    if ctx.is_null() {
-        semsg(
-            gettext(&raw const e_invargNval as *const ::core::ffi::c_char),
-            b"index\0".as_ptr() as *const ::core::ffi::c_char,
-            b"out of bounds\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        return;
-    }
-    let mut arena: Arena = ARENA_EMPTY;
-    let mut ctx_dict: Dict = ctx_to_dict(ctx, &raw mut arena);
-    let mut err: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
-    object_to_vim(
-        object {
-            type_0: kObjectTypeDict,
-            data: C2Rust_Unnamed_16 { dict: ctx_dict },
-        },
-        rettv,
-        &raw mut err,
-    );
-    arena_mem_free(arena_finish(&raw mut arena));
-    api_clear_error(&raw mut err);
-}
-pub unsafe extern "C" fn f_ctxpop(
-    mut _argvars: *mut typval_T,
-    mut _rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    if !ctx_restore(::core::ptr::null_mut::<Context>(), kCtxAll.get()) {
-        emsg(gettext(
-            b"Context stack is empty\0".as_ptr() as *const ::core::ffi::c_char
-        ));
-    }
-}
-pub unsafe extern "C" fn f_ctxpush(
-    mut argvars: *mut typval_T,
-    mut _rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    let mut types: ::core::ffi::c_int = kCtxAll.get();
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        types = 0 as ::core::ffi::c_int;
-        let l_: *mut list_T = (*argvars.offset(0 as ::core::ffi::c_int as isize))
-            .vval
-            .v_list;
-        if !l_.is_null() {
-            let mut li: *mut listitem_T = (*l_).lv_first;
-            while !li.is_null() {
-                let mut tv_li: *mut typval_T = &raw mut (*li).li_tv;
-                if (*tv_li).v_type as ::core::ffi::c_uint
-                    == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    if strequal(
-                        (*tv_li).vval.v_string,
-                        b"regs\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) {
-                        types |= kCtxRegs as ::core::ffi::c_int;
-                    } else if strequal(
-                        (*tv_li).vval.v_string,
-                        b"jumps\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) {
-                        types |= kCtxJumps as ::core::ffi::c_int;
-                    } else if strequal(
-                        (*tv_li).vval.v_string,
-                        b"bufs\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) {
-                        types |= kCtxBufs as ::core::ffi::c_int;
-                    } else if strequal(
-                        (*tv_li).vval.v_string,
-                        b"gvars\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) {
-                        types |= kCtxGVars as ::core::ffi::c_int;
-                    } else if strequal(
-                        (*tv_li).vval.v_string,
-                        b"sfuncs\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) {
-                        types |= kCtxSFuncs as ::core::ffi::c_int;
-                    } else if strequal(
-                        (*tv_li).vval.v_string,
-                        b"funcs\0".as_ptr() as *const ::core::ffi::c_char,
-                    ) {
-                        types |= kCtxFuncs as ::core::ffi::c_int;
-                    }
-                }
-                li = (*li).li_next;
-            }
-        }
-    } else if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        semsg(
-            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-            b"expected nothing or a List as an argument\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        return;
-    }
-    ctx_save(::core::ptr::null_mut::<Context>(), types);
-}
-pub unsafe extern "C" fn f_ctxset(
-    mut argvars: *mut typval_T,
-    mut _rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        semsg(
-            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-            b"expected dictionary as first argument\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        return;
-    }
-    let mut index: size_t = 0 as size_t;
-    if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        index = (*argvars.offset(1 as ::core::ffi::c_int as isize))
-            .vval
-            .v_number as size_t;
-    } else if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        semsg(
-            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-            b"expected nothing or a Number as second argument\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        );
-        return;
-    }
-    let mut ctx: *mut Context = ctx_get(index);
-    if ctx.is_null() {
-        semsg(
-            gettext(&raw const e_invargNval as *const ::core::ffi::c_char),
-            b"index\0".as_ptr() as *const ::core::ffi::c_char,
-            b"out of bounds\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        return;
-    }
-    let save_did_emsg: ::core::ffi::c_int = did_emsg.get();
-    did_emsg.set(false_0);
-    let mut arena: Arena = ARENA_EMPTY;
-    let mut dict: Dict = vim_to_object(
-        argvars.offset(0 as ::core::ffi::c_int as isize),
-        &raw mut arena,
-        true_0 != 0,
-    )
-    .data
-    .dict;
-    let mut tmp: Context = CONTEXT_INIT;
-    let mut err: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
-    ctx_from_dict(dict, &raw mut tmp, &raw mut err);
-    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        semsg(b"%s\0".as_ptr() as *const ::core::ffi::c_char, err.msg);
-        ctx_free(&raw mut tmp);
+/// A cleared API error, the shape every `api_*` out-parameter starts in.
+const NO_ERROR: Error = Error {
+    type_0: kErrorTypeNone,
+    msg: ptr::null_mut(),
+};
+
+/// The `{index}` argument the `ctxget`/`ctxset` pair share: absent means 0,
+/// a Number is taken as-is, anything else is rejected with `what`.
+///
+/// # Safety
+/// `tv` is a live typval from the call frame.
+unsafe fn context_index(tv: *const typval_T, what: &str) -> Option<usize> {
+    // SAFETY: the caller's obligation.
+    let tv = unsafe { &*tv };
+    if tv.v_type == VAR_NUMBER {
+        // SAFETY: the tag says the union holds a Number.
+        Some(unsafe { tv.vval.v_number } as usize)
+    } else if tv.v_type == VAR_UNKNOWN {
+        Some(0)
     } else {
-        ctx_free(ctx);
-        *ctx = tmp;
+        semsg!("E475: Invalid argument: {what}");
+        None
     }
-    arena_mem_free(arena_finish(&raw mut arena));
-    api_clear_error(&raw mut err);
-    did_emsg.set(save_did_emsg);
 }
-pub unsafe extern "C" fn f_ctxsize(
-    mut _argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+
+/// Resolve a context by index, reporting the out-of-bounds message.
+///
+/// # Safety
+/// Reads the context stack, which is only touched from the main thread.
+unsafe fn context_at(index: usize) -> Option<*mut Context> {
+    // SAFETY: the caller's obligation.
+    let ctx = unsafe { ctx_get(index) };
+    if ctx.is_null() {
+        semsg!("E475: Invalid value for argument index: out of bounds");
+        return None;
+    }
+    Some(ctx)
+}
+
+/// `ctxget([{index}])` — the context at `index` as a Dictionary.
+pub unsafe extern "C" fn f_ctxget(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    (*rettv).v_type = VAR_NUMBER;
-    (*rettv).vval.v_number = ctx_size() as varnumber_T;
+    let (args, rettv) = frame!(argvars, rettv);
+    // SAFETY: the arena and the error are owned here and freed on the way
+    // out; `object_to_vim` copies what it keeps out of the arena's dict.
+    unsafe {
+        let Some(index) = context_index(args.ptr(0), "expected nothing or a Number as an argument")
+        else {
+            return;
+        };
+        let Some(ctx) = context_at(index) else {
+            return;
+        };
+        let mut arena = ARENA_EMPTY;
+        let ctx_dict = ctx_to_dict(ctx, &raw mut arena);
+        let mut err = NO_ERROR;
+        object_to_vim(
+            object {
+                type_0: kObjectTypeDict,
+                data: object_data { dict: ctx_dict },
+            },
+            rettv,
+            &raw mut err,
+        );
+        arena_mem_free(arena_finish(&raw mut arena));
+        api_clear_error(&raw mut err);
+    }
+}
+
+/// `ctxpop()` — restore and drop the context on top of the stack.
+pub unsafe extern "C" fn f_ctxpop(
+    _argvars: *mut typval_T,
+    _rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    // SAFETY: restores from the context stack; main thread only.
+    if !unsafe { ctx_restore(ptr::null_mut(), kCtxAll.get()) } {
+        semsg!("Context stack is empty");
+    }
+}
+
+/// `ctxpush([{types}])` — push a context holding the named parts of the
+/// editor state, or all of them when no list is given.
+pub unsafe extern "C" fn f_ctxpush(
+    argvars: *mut typval_T,
+    _rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, _rettv) = frame!(argvars, _rettv);
+    // SAFETY: walks the argument list, whose items live for the call.
+    unsafe {
+        let types = match args.ty(0) {
+            VAR_LIST => {
+                let mut types: c_int = 0;
+                let mut li = tv_list_first(args.get(0).vval.v_list);
+                while !li.is_null() {
+                    let tv = &(*li).li_tv;
+                    // An unrecognised name is silently ignored, as is a
+                    // non-String item.
+                    // A null `v_string` is the empty string, which matches
+                    // no name; `strequal` answered the same for it.
+                    if tv.v_type == VAR_STRING && !tv.vval.v_string.is_null() {
+                        types |= match CStr::from_ptr(tv.vval.v_string).to_bytes() {
+                            b"regs" => kCtxRegs as c_int,
+                            b"jumps" => kCtxJumps as c_int,
+                            b"bufs" => kCtxBufs as c_int,
+                            b"gvars" => kCtxGVars as c_int,
+                            b"sfuncs" => kCtxSFuncs as c_int,
+                            b"funcs" => kCtxFuncs as c_int,
+                            _ => 0,
+                        };
+                    }
+                    li = (*li).li_next;
+                }
+                types
+            }
+            VAR_UNKNOWN => kCtxAll.get(),
+            _ => {
+                semsg!("E475: Invalid argument: expected nothing or a List as an argument");
+                return;
+            }
+        };
+        ctx_save(ptr::null_mut(), types);
+    }
+}
+
+/// `ctxset({context} [, {index}])` — replace the context at `index`.
+pub unsafe extern "C" fn f_ctxset(
+    argvars: *mut typval_T,
+    _rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (args, _rettv) = frame!(argvars, _rettv);
+    // SAFETY: the arena, the error and the scratch context are owned here;
+    // `tmp` is either installed in place of `ctx` or freed.
+    unsafe {
+        if args.ty(0) != VAR_DICT {
+            semsg!("E475: Invalid argument: expected dictionary as first argument");
+            return;
+        }
+        let Some(index) = context_index(
+            args.ptr(1),
+            "expected nothing or a Number as second argument",
+        ) else {
+            return;
+        };
+        let Some(ctx) = context_at(index) else {
+            return;
+        };
+        // `vim_to_object` reports conversion problems through `did_emsg`;
+        // the caller's flag is restored whatever happens here.
+        let save_did_emsg = did_emsg.get();
+        did_emsg.set(0);
+        let mut arena = ARENA_EMPTY;
+        let dict = vim_to_object(args.ptr(0), &raw mut arena, true).data.dict;
+        let mut tmp = CONTEXT_INIT;
+        let mut err = NO_ERROR;
+        ctx_from_dict(dict, &raw mut tmp, &raw mut err);
+        if err.type_0 != kErrorTypeNone {
+            // The message is whatever the API layer produced, so it keeps
+            // the variadic call rather than assuming UTF-8.
+            semsg(c"%s".as_ptr(), err.msg);
+            ctx_free(&raw mut tmp);
+        } else {
+            ctx_free(ctx);
+            *ctx = tmp;
+        }
+        arena_mem_free(arena_finish(&raw mut arena));
+        api_clear_error(&raw mut err);
+        did_emsg.set(save_did_emsg);
+    }
+}
+
+/// `ctxsize()` — how many contexts are on the stack.
+pub unsafe extern "C" fn f_ctxsize(
+    _argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    let (_args, rettv) = frame!(_argvars, rettv);
+    rettv.v_type = VAR_NUMBER;
+    // SAFETY: reads the context stack's length; main thread only.
+    rettv.vval.v_number = unsafe { ctx_size() } as varnumber_T;
 }
