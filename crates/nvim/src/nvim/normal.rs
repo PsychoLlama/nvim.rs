@@ -176,7 +176,7 @@ pub(crate) use self::dispatch::*;
 mod showcmd;
 pub(crate) use self::showcmd::*;
 mod visual;
-pub use self::visual::*;
+pub(crate) use self::visual::*;
 mod ident;
 pub use self::ident::*;
 mod motion;
