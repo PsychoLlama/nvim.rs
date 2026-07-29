@@ -60,35 +60,34 @@ unsafe extern "C" {
     ) -> c_int;
     fn qf_jump(qi: *mut qf_info_T, dir: c_int, errornr: c_int, forceit: c_int);
 }
-pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
-pub const kCallbackNone: CallbackType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub const MAXLNUM: c_uint = 2147483647;
-pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const HLF_NONE: hlf_T = 0;
+pub(crate) const kErrorTypeNone: ErrorType = -1;
+pub(crate) const kObjectTypeDict: ObjectType = 6;
+pub(crate) const kObjectTypeArray: ObjectType = 5;
+pub(crate) const kObjectTypeString: ObjectType = 4;
+pub(crate) const kObjectTypeInteger: ObjectType = 2;
+pub(crate) const kObjectTypeBoolean: ObjectType = 1;
+pub(crate) const kTrue: TriState = 1;
+pub(crate) const kFalse: TriState = 0;
+pub(crate) const kNone: TriState = -1;
+pub(crate) const kCallbackNone: CallbackType = 0;
+pub(crate) const VAR_FIXED: VarLockStatus = 2;
+pub(crate) const VAR_NUMBER: VarType = 1;
+pub(crate) const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
+pub(crate) const MAXLNUM: c_uint = 2147483647;
+pub(crate) const kListLenMayKnow: ListLenSpecials = -3;
+pub(crate) const HLF_NONE: hlf_T = 0;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;
 pub const OPTION_MAGIC_ON: optmagic_T = 1;
-pub const OPTION_MAGIC_NOT_SET: optmagic_T = 0;
-pub const kOptValTypeString: OptValType = 2;
-pub const kOptValTypeNumber: OptValType = 1;
-pub const kOptValTypeBoolean: OptValType = 0;
-pub const EVENT_VIMLEAVEPRE: auto_event = 134;
-pub const EVENT_VIMLEAVE: auto_event = 133;
-pub const EVENT_VIMENTER: auto_event = 132;
-pub const EVENT_BUFWINLEAVE: auto_event = 17;
-pub const EVENT_BUFUNLOAD: auto_event = 15;
-pub const EVENT_BUFENTER: auto_event = 3;
+pub(crate) const OPTION_MAGIC_NOT_SET: optmagic_T = 0;
+pub(crate) const kOptValTypeString: OptValType = 2;
+pub(crate) const kOptValTypeNumber: OptValType = 1;
+pub(crate) const kOptValTypeBoolean: OptValType = 0;
+pub(crate) const EVENT_VIMLEAVEPRE: auto_event = 134;
+pub(crate) const EVENT_VIMLEAVE: auto_event = 133;
+pub(crate) const EVENT_VIMENTER: auto_event = 132;
+pub(crate) const EVENT_BUFWINLEAVE: auto_event = 17;
+pub(crate) const EVENT_BUFUNLOAD: auto_event = 15;
+pub(crate) const EVENT_BUFENTER: auto_event = 3;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct AucmdWinVec {
@@ -96,7 +95,7 @@ pub struct AucmdWinVec {
     pub capacity: size_t,
     pub items: *mut aucmdwin_T,
 }
-pub const BLN_LISTED: bln_values = 2;
+pub(crate) const BLN_LISTED: bln_values = 2;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct DecorSignHighlightVec {
@@ -111,30 +110,30 @@ pub struct WinExtmarkVec {
     pub capacity: size_t,
     pub items: *mut WinExtmark,
 }
-pub const UPD_NOT_VALID: c_uint = 40;
-pub const UPD_VALID: c_uint = 10;
-pub const VV_EXITREASON: VimVarIndex = 105;
-pub const VV_STARTTIME: VimVarIndex = 104;
-pub const VV_VIM_DID_INIT: VimVarIndex = 94;
-pub const VV_EXITING: VimVarIndex = 91;
-pub const VV_ARGF: VimVarIndex = 88;
-pub const VV_VIM_DID_ENTER: VimVarIndex = 75;
-pub const VV_PROGPATH: VimVarIndex = 60;
-pub const VV_OLDFILES: VimVarIndex = 58;
-pub const VV_SWAPCOMMAND: VimVarIndex = 49;
-pub const VV_PROGNAME: VimVarIndex = 27;
-pub const kXDGConfigDirs: XDGVarType = 5;
-pub const EVAL_EVALUATE: c_uint = 1;
-pub const ECMD_HIDE: c_uint = 1;
-pub const ECMD_LASTL: c_int = 0;
-pub const READ_STDIN: c_uint = 4;
-pub const READ_NEW: c_uint = 1;
-pub const ETYPE_ENV: etype_T = 7;
-pub const ETYPE_ARGS: etype_T = 6;
-pub const ETYPE_TOP: etype_T = 0;
-pub const MODE_NORMAL: c_uint = 1;
-pub const KE_NOP: key_extra = 97;
-pub const kRetObject: LuaRetMode = 0;
+pub(crate) const UPD_NOT_VALID: c_uint = 40;
+pub(crate) const UPD_VALID: c_uint = 10;
+pub(crate) const VV_EXITREASON: VimVarIndex = 105;
+pub(crate) const VV_STARTTIME: VimVarIndex = 104;
+pub(crate) const VV_VIM_DID_INIT: VimVarIndex = 94;
+pub(crate) const VV_EXITING: VimVarIndex = 91;
+pub(crate) const VV_ARGF: VimVarIndex = 88;
+pub(crate) const VV_VIM_DID_ENTER: VimVarIndex = 75;
+pub(crate) const VV_PROGPATH: VimVarIndex = 60;
+pub(crate) const VV_OLDFILES: VimVarIndex = 58;
+pub(crate) const VV_SWAPCOMMAND: VimVarIndex = 49;
+pub(crate) const VV_PROGNAME: VimVarIndex = 27;
+pub(crate) const kXDGConfigDirs: XDGVarType = 5;
+pub(crate) const EVAL_EVALUATE: c_uint = 1;
+pub(crate) const ECMD_HIDE: c_uint = 1;
+pub(crate) const ECMD_LASTL: c_int = 0;
+pub(crate) const READ_STDIN: c_uint = 4;
+pub(crate) const READ_NEW: c_uint = 1;
+pub(crate) const ETYPE_ENV: etype_T = 7;
+pub(crate) const ETYPE_ARGS: etype_T = 6;
+pub(crate) const ETYPE_TOP: etype_T = 0;
+pub(crate) const MODE_NORMAL: c_uint = 1;
+pub(crate) const KE_NOP: key_extra = 97;
+pub(crate) const kRetObject: LuaRetMode = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct mparm_T {
@@ -166,17 +165,17 @@ pub struct mparm_T {
     pub scriptout_append: bool,
     pub had_stdin_file: bool,
 }
-pub const EDIT_QF: c_uint = 4;
-pub const WIN_TABS: c_uint = 3;
-pub const WIN_VER: c_uint = 2;
-pub const WIN_HOR: c_uint = 1;
-pub const EDIT_STDIN: c_uint = 2;
-pub const kEqualFiles: file_comparison = 1;
-pub const DOSO_VIMRC: c_uint = 1;
-pub const DOSO_NONE: c_uint = 0;
-pub const EDIT_FILE: c_uint = 1;
-pub const EDIT_TAG: c_uint = 3;
-pub const EDIT_NONE: c_uint = 0;
+pub(crate) const EDIT_QF: c_uint = 4;
+pub(crate) const WIN_TABS: c_uint = 3;
+pub(crate) const WIN_VER: c_uint = 2;
+pub(crate) const WIN_HOR: c_uint = 1;
+pub(crate) const EDIT_STDIN: c_uint = 2;
+pub(crate) const kEqualFiles: file_comparison = 1;
+pub(crate) const DOSO_VIMRC: c_uint = 1;
+pub(crate) const DOSO_NONE: c_uint = 0;
+pub(crate) const EDIT_FILE: c_uint = 1;
+pub(crate) const EDIT_TAG: c_uint = 3;
+pub(crate) const EDIT_NONE: c_uint = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct PumWant {
@@ -185,33 +184,33 @@ pub struct PumWant {
     pub insert: bool,
     pub finish: bool,
 }
-pub const NULL_0: *mut c_void = ::core::ptr::null_mut::<c_void>();
+pub(crate) const NULL_0: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub static arena_alloc_count: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-pub const STDIN_FILENO: c_int = 0 as c_int;
-pub const STDOUT_FILENO: c_int = 1 as c_int;
-pub const STDERR_FILENO: c_int = 2 as c_int;
-pub const DEFAULT_MAXPATHL: c_int = 4096 as c_int;
-pub const MAXPATHL: c_int = DEFAULT_MAXPATHL;
-pub const KV_INITIAL_VALUE: Array = Array {
+pub(crate) const STDIN_FILENO: c_int = 0 as c_int;
+pub(crate) const STDOUT_FILENO: c_int = 1 as c_int;
+pub(crate) const STDERR_FILENO: c_int = 2 as c_int;
+pub(crate) const DEFAULT_MAXPATHL: c_int = 4096 as c_int;
+pub(crate) const MAXPATHL: c_int = DEFAULT_MAXPATHL;
+pub(crate) const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
+pub(crate) const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
+pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_len: 0 as c_int,
     ga_maxlen: 0 as c_int,
     ga_itemsize: 0 as c_int,
     ga_growsize: 1 as c_int,
     ga_data: NULL_0,
 };
-pub const LOGLVL_DBG: c_int = 1 as c_int;
-pub const LOGLVL_INF: c_int = 2 as c_int;
+pub(crate) const LOGLVL_DBG: c_int = 1 as c_int;
+pub(crate) const LOGLVL_INF: c_int = 2 as c_int;
 pub static g_min_log_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub const SESSION_FILE: [c_char; 12] =
+pub(crate) const SESSION_FILE: [c_char; 12] =
     unsafe { ::core::mem::transmute::<[u8; 12], [c_char; 12]>(*b"Session.vim\0") };
-pub const OK: c_int = 1 as c_int;
-pub const FAIL: c_int = 0 as c_int;
+pub(crate) const OK: c_int = 1 as c_int;
+pub(crate) const FAIL: c_int = 0 as c_int;
 pub static namespace_ids: GlobalCell<Map_String_int> = GlobalCell::new(Map_String_int {
     set: Set_String {
         h: MapHash {
@@ -297,8 +296,8 @@ pub static ui_ext_names: GlobalCell<[*const c_char; 10]> = GlobalCell::new([
     b"ext_termcolors\0".as_ptr() as *const c_char,
     b"_debug_float\0".as_ptr() as *const c_char,
 ]);
-pub const NUL: c_int = '\0' as c_int;
-pub const PATHSEP: c_int = '/' as c_int;
+pub(crate) const NUL: c_int = '\0' as c_int;
+pub(crate) const PATHSEP: c_int = '/' as c_int;
 pub static last_cursormoved_win: GlobalCell<*mut win_T> =
     GlobalCell::new(::core::ptr::null_mut::<win_T>());
 pub static last_cursormoved: GlobalCell<pos_T> = GlobalCell::new(pos_T {
@@ -1110,7 +1109,7 @@ pub static e_invalid_format_string_single_percent_s: GlobalCell<[c_char; 55]> =
 pub static e_cannot_read_from_str_2: GlobalCell<[c_char; 28]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 28], [c_char; 28]>(*b"E282: Cannot read from \"%s\"\0")
 });
-pub static e_conflicting_configs: GlobalCell<[c_char; 38]> = GlobalCell::new(unsafe {
+pub(crate) static e_conflicting_configs: GlobalCell<[c_char; 38]> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 38], [c_char; 38]>(
         *b"E5422: Conflicting configs: \"%s\" \"%s\"\0",
     )
@@ -1174,17 +1173,17 @@ pub static kTVCstring: GlobalCell<size_t> = GlobalCell::new(18446744073709551614
 pub static disable_fold_update: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 #[unsafe(no_mangle)]
 pub static test_disable_char_avail: GlobalCell<bool> = GlobalCell::new(false);
-pub const IOSIZE: c_int = 1024 as c_int + 1 as c_int;
-pub const SYS_VIMRC_FILE: [c_char; 17] =
+pub(crate) const IOSIZE: c_int = 1024 as c_int + 1 as c_int;
+pub(crate) const SYS_VIMRC_FILE: [c_char; 17] =
     unsafe { ::core::mem::transmute::<[u8; 17], [c_char; 17]>(*b"$VIM/sysinit.vim\0") };
-pub const VIMRC_FILE: [c_char; 8] =
+pub(crate) const VIMRC_FILE: [c_char; 8] =
     unsafe { ::core::mem::transmute::<[u8; 8], [c_char; 8]>(*b".nvimrc\0") };
 pub static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {
     fsync: 0 as int64_t,
     redraw: 0 as int64_t,
     log_skip: 0 as int16_t,
 });
-pub const NO_BUFFERS: c_int = 1 as c_int;
+pub(crate) const NO_BUFFERS: c_int = 1 as c_int;
 pub static Rows: GlobalCell<c_int> = GlobalCell::new(24 as c_int);
 pub static Columns: GlobalCell<c_int> = GlobalCell::new(80 as c_int);
 pub static mod_mask: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -1271,9 +1270,9 @@ pub static caught_stack: GlobalCell<*mut except_T> =
 pub static may_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
 pub static want_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
 pub static garbage_collect_at_exit: GlobalCell<bool> = GlobalCell::new(false);
-pub const SID_CMDARG: c_int = -2 as c_int;
-pub const SID_CARG: c_int = -3 as c_int;
-pub const SID_ENV: c_int = -4 as c_int;
+pub(crate) const SID_CMDARG: c_int = -2 as c_int;
+pub(crate) const SID_CARG: c_int = -3 as c_int;
+pub(crate) const SID_ENV: c_int = -4 as c_int;
 pub static current_sctx: GlobalCell<sctx_T> = GlobalCell::new(sctx_T {
     sc_sid: 0 as scid_T,
     sc_seq: 0 as c_int,
@@ -1482,9 +1481,9 @@ pub static emsg_silent: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static emsg_noredir: GlobalCell<bool> = GlobalCell::new(false);
 pub static cmd_silent: GlobalCell<bool> = GlobalCell::new(false);
 pub static in_assert_fails: GlobalCell<bool> = GlobalCell::new(false);
-pub const SEA_NONE: c_int = 0 as c_int;
-pub const SEA_DIALOG: c_int = 1 as c_int;
-pub const SEA_QUIT: c_int = 2 as c_int;
+pub(crate) const SEA_NONE: c_int = 0 as c_int;
+pub(crate) const SEA_DIALOG: c_int = 1 as c_int;
+pub(crate) const SEA_QUIT: c_int = 2 as c_int;
 pub static swap_exists_action: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static swap_exists_did_quit: GlobalCell<bool> = GlobalCell::new(false);
 pub static IObuff: GlobalCell<[c_char; 1025]> = GlobalCell::new([0; 1025]);
@@ -2074,7 +2073,7 @@ pub static ns_hl_active: GlobalCell<NS> = GlobalCell::new(0 as NS);
 pub static hl_attr_active: GlobalCell<*mut c_int> =
     GlobalCell::new((highlight_attr.as_raw() as *const _) as *mut c_int);
 pub static curbuf_splice_pending: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub const LUA_GLOBALSINDEX: c_int = -10002 as c_int;
+pub(crate) const LUA_GLOBALSINDEX: c_int = -10002 as c_int;
 pub static nlua_global_refs: GlobalCell<*mut nlua_ref_state_t> =
     GlobalCell::new(::core::ptr::null_mut::<nlua_ref_state_t>());
 pub static nlua_disable_preload: SharedCell<bool> = SharedCell::new(false);
@@ -2395,7 +2394,7 @@ static err_extra_cmd: GlobalCell<*const c_char> = GlobalCell::new(
         as *const c_char,
 );
 pub static tslua_query_parse_count: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
-pub const MAX_ARG_CMDS: c_int = 10 as c_int;
+pub(crate) const MAX_ARG_CMDS: c_int = 10 as c_int;
 pub static namedfm: GlobalCell<[xfmark_T; 36]> = GlobalCell::new(
     [xfmark_T {
         fmark: fmark_T {
@@ -2479,11 +2478,9 @@ pub static float_anchor_str: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
     b"SW\0".as_ptr() as *const c_char,
     b"SE\0".as_ptr() as *const c_char,
 ]);
-pub const true_0: c_int = 1 as c_int;
-pub const false_0: c_int = 0 as c_int;
-pub const WRITEBIN: [c_char; 3] =
+pub(crate) const WRITEBIN: [c_char; 3] =
     unsafe { ::core::mem::transmute::<[u8; 3], [c_char; 3]>(*b"wb\0") };
-pub const APPENDBIN: [c_char; 3] =
+pub(crate) const APPENDBIN: [c_char; 3] =
     unsafe { ::core::mem::transmute::<[u8; 3], [c_char; 3]>(*b"ab\0") };
 unsafe extern "C" fn c2rust_run_static_initializers() {
     kTVCstring.set((18446744073709551615 as size_t).wrapping_sub(1 as size_t));

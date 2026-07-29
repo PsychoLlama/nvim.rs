@@ -29,6 +29,9 @@ Behavior-preserving: same features, formats, and RPC surface.
   insert and command-line mode: motions, operators, counts and registers,
   Visual and Select mode, the `g`, `z`, `[` and `]` commands, scrolling and
   folding, marks and jumps, and the tag and identifier lookups.
+- Rewrote the startup, covering command-line argument parsing, the order the
+  editor initialises in, where the config is read from, `--embed`,
+  `--headless`, `-l` and `--remote`, and every path out of the process.
 - Generated the API dispatch layer from the API signatures again
   (`just apigen`), covering every msgpack-RPC method, the `vim.api` Lua
   binding, and `nvim --api-info`.

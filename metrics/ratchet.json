@@ -217,7 +217,7 @@
     "crates/nvim/src/nvim/lua/stdlib.rs": {"lines": 1303, "unsafe": 42, "variadic": 1},
     "crates/nvim/src/nvim/lua/treesitter.rs": {"lines": 3140, "unsafe": 192},
     "crates/nvim/src/nvim/lua/xdiff.rs": {"unsafe": 13},
-    "crates/nvim/src/nvim/main.rs": {"lines": 2495, "no_mangle": 28, "unsafe": 199},
+    "crates/nvim/src/nvim/main.rs": {"lines": 2492, "no_mangle": 28, "unsafe": 199},
     "crates/nvim/src/nvim/main/args.rs": {"unsafe": 48},
     "crates/nvim/src/nvim/main/buffers.rs": {"unsafe": 19},
     "crates/nvim/src/nvim/main/config.rs": {"unsafe": 18},
