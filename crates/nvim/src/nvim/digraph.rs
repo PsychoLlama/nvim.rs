@@ -188,7 +188,7 @@ pub fn get_digraph(cmdline: bool) -> c_int {
         }
     } else {
         // SAFETY: same as above.
-        unsafe { add_to_showcmd(c) };
+        add_to_showcmd(c);
     }
     no_mapping.set(no_mapping.get() + 1);
     allow_keys.set(allow_keys.get() + 1);

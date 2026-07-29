@@ -175,7 +175,7 @@ pub use self::state::*;
 mod dispatch;
 pub use self::dispatch::*;
 mod showcmd;
-pub use self::showcmd::*;
+pub(crate) use self::showcmd::*;
 mod visual;
 pub use self::visual::*;
 mod ident;

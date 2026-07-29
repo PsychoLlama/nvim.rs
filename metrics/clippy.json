@@ -108,7 +108,6 @@
     "crates/nvim/src/nvim/normal/operator.rs": 6,
     "crates/nvim/src/nvim/normal/scroll.rs": 11,
     "crates/nvim/src/nvim/normal/search.rs": 2,
-    "crates/nvim/src/nvim/normal/showcmd.rs": 11,
     "crates/nvim/src/nvim/normal/state.rs": 1,
     "crates/nvim/src/nvim/normal/visual.rs": 8,
     "crates/nvim/src/nvim/ops.rs": 75,
