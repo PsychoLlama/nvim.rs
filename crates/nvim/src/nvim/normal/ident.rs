@@ -60,7 +60,7 @@ pub(crate) unsafe fn find_is_eval_item(
 /// The identifier or string under the cursor. Answers its length and, through
 /// `text`, a pointer into the buffer line; `offset` receives how far into it
 /// the cursor was.
-pub unsafe extern "C" fn find_ident_under_cursor(
+pub unsafe fn find_ident_under_cursor(
     text: *mut *mut c_char,
     find_type: c_int,
     offset: *mut c_int,
@@ -93,7 +93,7 @@ pub unsafe extern "C" fn find_ident_under_cursor(
 /// second, which `FIND_STRING` asks for and which `FIND_IDENT` alone skips,
 /// accepts anything that is not white space. Each pass scans forward from the
 /// position for a character it will take, then backs up to that run's start.
-pub unsafe extern "C" fn find_ident_at_pos(
+pub unsafe fn find_ident_at_pos(
     wp: *mut win_T,
     lnum: linenr_T,
     mut startcol: colnr_T,
@@ -210,7 +210,7 @@ pub unsafe extern "C" fn find_ident_at_pos(
 
 /// `gd` and `gD`: jump to the local or global declaration of the identifier
 /// under the cursor.
-pub(crate) unsafe extern "C" fn nv_gd(oap: *mut oparg_T, nchar: c_int, thisblock: c_int) {
+pub(crate) unsafe fn nv_gd(oap: *mut oparg_T, nchar: c_int, thisblock: c_int) {
     // SAFETY: `oap` is the caller's live operator.
     unsafe {
         let mut word: *mut c_char = ptr::null_mut();
@@ -284,7 +284,7 @@ pub(crate) unsafe fn is_ident(line: *const c_char, offset: c_int) -> bool {
 ///
 /// `locally` limits the search to the current `{}` block (`gd`); `thisblock`
 /// further refuses a match whose block closes before the cursor.
-pub unsafe extern "C" fn find_decl(
+pub unsafe fn find_decl(
     word: *mut c_char,
     len: size_t,
     locally: bool,
@@ -432,7 +432,7 @@ pub unsafe extern "C" fn find_decl(
 
 /// Run one of the identifier commands from outside the command loop, with a
 /// command argument built for the occasion. `CTRL-W ]` and friends use this.
-pub unsafe extern "C" fn do_nv_ident(c1: c_int, c2: c_int) {
+pub unsafe fn do_nv_ident(c1: c_int, c2: c_int) {
     // SAFETY: both structures are plain data and are filled before use.
     unsafe {
         let mut oa: oparg_T = core::mem::zeroed();
@@ -618,7 +618,7 @@ unsafe fn append_escaped(
 
 /// `*`, `#`, `K`, `]`, `CTRL-]` and their `g` forms: look up the identifier
 /// under the cursor.
-pub(crate) unsafe extern "C" fn nv_ident(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         // The `g` forms carry the real command in `nchar`.
@@ -817,7 +817,7 @@ pub(crate) unsafe extern "C" fn nv_ident(cap: *mut cmdarg_T) {
 }
 
 /// `CTRL-T`: back up the tag stack.
-pub(crate) unsafe extern "C" fn nv_tagpop(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_tagpop(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if !checkclearopq((*cap).oap) {
@@ -833,7 +833,7 @@ pub(crate) unsafe extern "C" fn nv_tagpop(cap: *mut cmdarg_T) {
 }
 
 /// `gf`, `gF` and `[f`: edit the file named under the cursor.
-pub(crate) unsafe extern "C" fn nv_gotofile(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if check_text_or_curbuf_locked((*cap).oap) || !check_can_set_curbuf_disabled() {

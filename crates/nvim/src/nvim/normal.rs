@@ -331,7 +331,12 @@ pub struct nv_cmd {
     pub cmd_flags: uint16_t,
     pub cmd_arg: int16_t,
 }
-pub type nv_func_T = Option<unsafe extern "C" fn(*mut cmdarg_T) -> ()>;
+/// What a row of [`nv_cmds`] runs.
+///
+/// Nothing outside this crate reaches the table or its handlers -- neither the
+/// ABI ledger nor the unit-test cdefs name any of them -- so the handlers are
+/// ordinary Rust functions rather than `extern "C"` ones.
+pub type nv_func_T = Option<unsafe fn(*mut cmdarg_T)>;
 pub const OP_NOP: C2Rust_Unnamed_40 = 0;
 pub const OP_YANK: C2Rust_Unnamed_40 = 2;
 pub const OP_RSHIFT: C2Rust_Unnamed_40 = 5;

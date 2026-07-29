@@ -16,23 +16,23 @@ const K_IGNORE: c_int = -(253 + ((KE_IGNORE as c_int) << 8));
 
 /// A key the command loop must swallow without doing anything: it marks the
 /// command busy so nothing else acts on it.
-pub(crate) unsafe extern "C" fn nv_ignore(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_ignore(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe { (*cap).retval |= CA_COMMAND_BUSY as c_int };
 }
 
 /// A key with no effect at all -- unlike [`nv_ignore`], the command still
 /// counts as having run.
-pub(crate) unsafe extern "C" fn nv_nop(_cap: *mut cmdarg_T) {}
+pub(crate) unsafe fn nv_nop(_cap: *mut cmdarg_T) {}
 
 /// A key that is not a command: beep and drop whatever was pending.
-pub(crate) unsafe extern "C" fn nv_error(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_error(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe { clearopbeep((*cap).oap) };
 }
 
 /// `<Help>`: open the help window.
-pub(crate) unsafe extern "C" fn nv_help(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_help(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if !checkclearopq((*cap).oap) {
@@ -43,7 +43,7 @@ pub(crate) unsafe extern "C" fn nv_help(cap: *mut cmdarg_T) {
 
 /// `:`, and the two synthetic keys that carry a command or a Lua callback in
 /// from a mapping.
-pub(crate) unsafe extern "C" fn nv_colon(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let is_cmdkey = (*cap).cmdchar == K_COMMAND;
@@ -110,7 +110,7 @@ pub(crate) unsafe extern "C" fn nv_colon(cap: *mut cmdarg_T) {
 
 /// `CTRL-G`: report the file's position -- or toggle between Visual and
 /// Select mode when a selection is up.
-pub(crate) unsafe extern "C" fn nv_ctrlg(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_ctrlg(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if VIsual_active.get() {
@@ -124,7 +124,7 @@ pub(crate) unsafe extern "C" fn nv_ctrlg(cap: *mut cmdarg_T) {
 }
 
 /// `CTRL-H`: one character left -- or delete the selection in Select mode.
-pub(crate) unsafe extern "C" fn nv_ctrlh(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_ctrlh(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if VIsual_active.get() && VIsual_select.get() {
@@ -138,7 +138,7 @@ pub(crate) unsafe extern "C" fn nv_ctrlh(cap: *mut cmdarg_T) {
 
 /// `CTRL-L`: throw the screen away and redraw it, and let syntax highlighting
 /// that timed out try again.
-pub(crate) unsafe extern "C" fn nv_clear(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_clear(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if checkclearop((*cap).oap) {
@@ -158,7 +158,7 @@ pub(crate) unsafe extern "C" fn nv_clear(cap: *mut cmdarg_T) {
 
 /// `CTRL-O`: jump back in the jump list -- or leave Select mode for one
 /// command.
-pub(crate) unsafe extern "C" fn nv_ctrlo(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_ctrlo(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if VIsual_active.get() && VIsual_select.get() {
@@ -177,7 +177,7 @@ pub(crate) unsafe extern "C" fn nv_ctrlo(cap: *mut cmdarg_T) {
 }
 
 /// `CTRL-^`: edit the alternate file.
-pub(crate) unsafe extern "C" fn nv_hat(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_hat(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if !checkclearopq((*cap).oap) {
@@ -193,7 +193,7 @@ pub(crate) unsafe extern "C" fn nv_hat(cap: *mut cmdarg_T) {
 
 /// `CTRL-W`: a window command. `CTRL-W :` is `:` with the window prefix
 /// dropped.
-pub(crate) unsafe extern "C" fn nv_window(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_window(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if (*cap).nchar == ':' as c_int {
@@ -208,7 +208,7 @@ pub(crate) unsafe extern "C" fn nv_window(cap: *mut cmdarg_T) {
 
 /// `CTRL-Z`: suspend, through `:stop` so that 'autowrite' and the autocommands
 /// happen.
-pub(crate) unsafe extern "C" fn nv_suspend(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_suspend(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         clearop((*cap).oap);
@@ -221,7 +221,7 @@ pub(crate) unsafe extern "C" fn nv_suspend(cap: *mut cmdarg_T) {
 
 /// `CTRL-\`: only `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` exist, and both mean
 /// "back to Normal mode".
-pub(crate) unsafe extern "C" fn nv_normal(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_normal(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if (*cap).nchar != Ctrl_N && (*cap).nchar != Ctrl_G {
@@ -245,7 +245,7 @@ pub(crate) unsafe extern "C" fn nv_normal(cap: *mut cmdarg_T) {
 
 /// `<Esc>` and `CTRL-C`. The table's argument says which: `CTRL-C` is the one
 /// that offers the "how do I quit" hint.
-pub(crate) unsafe extern "C" fn nv_esc(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         // Nothing was pending, so the key had no work to do and is worth a
@@ -295,14 +295,14 @@ pub(crate) unsafe extern "C" fn nv_esc(cap: *mut cmdarg_T) {
 }
 
 /// The key the terminal sends to repeat a bracketed paste.
-pub(crate) unsafe extern "C" fn nv_paste(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_paste(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe { paste_repeat((*cap).count1) };
 }
 
 /// The synthetic key that stands for "the event loop has work": run it, then
 /// tell the command loop whether a mode was waiting to be restarted.
-pub(crate) unsafe extern "C" fn nv_event(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_event(cap: *mut cmdarg_T) {
     // An event's callback is not a safe point for a collection: it may be
     // holding values the marker cannot see.
     may_garbage_collect.set(false);

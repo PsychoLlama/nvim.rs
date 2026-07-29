@@ -4954,7 +4954,7 @@ pub unsafe extern "C" fn diff_infold(mut wp: *mut win_T, mut lnum: linenr_T) -> 
     }
     return true_0 != 0;
 }
-pub unsafe extern "C" fn nv_diffgetput(mut put: bool, mut count: size_t) {
+pub unsafe fn nv_diffgetput(mut put: bool, mut count: size_t) {
     if bt_prompt(curbuf.get()) {
         vim_beep(kOptBoFlagOperator as ::core::ffi::c_int as ::core::ffi::c_uint);
         return;

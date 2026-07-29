@@ -25,7 +25,7 @@ enum Place {
 /// `z<n><CR>` sets the window height and is finished here. `z<n>l` and its
 /// three friends multiply the command's own count by this one and hand the
 /// key back to the caller through `nchar_arg`; everything else is an error.
-pub(crate) unsafe extern "C" fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -> bool {
+pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -> bool {
     // SAFETY: `cap` is the caller's live command argument and `nchar_arg`
     // points at the caller's own second character.
     unsafe {
@@ -74,7 +74,7 @@ pub(crate) unsafe extern "C" fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *m
 ///
 /// Answers `FAIL` when there was no word to act on, which stops `nv_zet`
 /// running its tail.
-pub(crate) unsafe extern "C" fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> c_int {
+pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> c_int {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         // `zu` is the undo prefix: `zug` takes back what `zg` added.
@@ -383,7 +383,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
 
 /// `z`, whose second character says what part of the view or of the folding
 /// it is about.
-pub(crate) unsafe extern "C" fn nv_zet(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let win = curwin.get();

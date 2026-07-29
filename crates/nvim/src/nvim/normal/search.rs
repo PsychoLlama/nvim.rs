@@ -27,7 +27,7 @@ fn current_match_is_distinct() -> bool {
 }
 
 /// `/` and `?`: read a pattern from the command line and search for it.
-pub(crate) unsafe extern "C" fn nv_search(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_search(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let oap = (*cap).oap;
@@ -64,7 +64,7 @@ pub(crate) unsafe extern "C" fn nv_search(cap: *mut cmdarg_T) {
 }
 
 /// `n` and `N`: search again for the last pattern.
-pub(crate) unsafe extern "C" fn nv_next(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_next(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let old = (*curwin.get()).w_cursor;
@@ -161,7 +161,7 @@ pub(crate) unsafe fn normal_search(
 }
 
 /// `m`: set a mark.
-pub(crate) unsafe extern "C" fn nv_mark(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_mark(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if checkclearop((*cap).oap) {
@@ -230,7 +230,7 @@ unsafe fn may_open_fold(cap: *mut cmdarg_T, moved: bool, old_key_typed: bool) {
 }
 
 /// `'` and `` ` ``, and their `g` forms.
-pub(crate) unsafe extern "C" fn nv_gomark(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_gomark(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         // A mark used as an operator's motion must not restore the view.
@@ -271,7 +271,7 @@ pub(crate) unsafe extern "C" fn nv_gomark(cap: *mut cmdarg_T) {
 
 /// `CTRL-O`, `CTRL-I` and `g;`/`g,`: step along the jump list or the change
 /// list.
-pub(crate) unsafe extern "C" fn nv_pcmark(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_pcmark(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let mut flags = view_flag();

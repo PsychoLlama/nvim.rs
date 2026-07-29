@@ -41,7 +41,7 @@ const POUND_BYTE: u8 = 0xa3;
 /// line rather than of the buffer line.
 ///
 /// Also called from `move.rs` for a mouse click landing left of the text.
-pub unsafe extern "C" fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
+pub unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let win = curwin.get();
@@ -98,7 +98,7 @@ pub unsafe extern "C" fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
 }
 
 /// `g_`: the last non-blank of the line, `count1 - 1` lines down.
-pub(crate) unsafe extern "C" fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let win = curwin.get();
@@ -125,7 +125,7 @@ pub(crate) unsafe extern "C" fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
 }
 
 /// `g$` and `g<End>`: the end of the *screen* line.
-pub(crate) unsafe extern "C" fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let win = curwin.get();
@@ -189,7 +189,7 @@ pub(crate) unsafe extern "C" fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
 
 /// `gi`: insert where insert mode was left, even if the line has since got
 /// shorter.
-pub(crate) unsafe extern "C" fn nv_gi_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_gi_cmd(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let win = curwin.get();
@@ -276,7 +276,7 @@ unsafe fn nv_g_key(cap: *mut cmdarg_T, nchar: c_int) -> bool {
 }
 
 /// `g`, whose second character says what the command is.
-pub(crate) unsafe extern "C" fn nv_g_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let oap = (*cap).oap;

@@ -274,7 +274,7 @@ unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
 }
 
 /// `[` and `]`, whose second character says what kind of jump this is.
-pub(crate) unsafe extern "C" fn nv_brackets(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;

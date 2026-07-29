@@ -2046,7 +2046,7 @@ unsafe extern "C" fn do_mousescroll_horiz(mut leftcol: colnr_T) -> bool {
     }
     return set_leftcol(leftcol);
 }
-pub unsafe extern "C" fn nv_mousescroll(mut cap: *mut cmdarg_T) {
+pub unsafe fn nv_mousescroll(mut cap: *mut cmdarg_T) {
     let old_curwin: *mut win_T = curwin.get();
     if mouse_row.get() >= 0 as ::core::ffi::c_int && mouse_col.get() >= 0 as ::core::ffi::c_int {
         let mut grid: ::core::ffi::c_int = mouse_grid.get();
@@ -2068,7 +2068,7 @@ pub unsafe extern "C" fn nv_mousescroll(mut cap: *mut cmdarg_T) {
     curwin.set(old_curwin);
     curbuf.set((*curwin.get()).w_buffer);
 }
-pub unsafe extern "C" fn nv_mouse(mut cap: *mut cmdarg_T) {
+pub unsafe fn nv_mouse(mut cap: *mut cmdarg_T) {
     do_mouse(
         (*cap).oap,
         (*cap).cmdchar,

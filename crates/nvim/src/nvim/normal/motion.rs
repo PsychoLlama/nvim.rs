@@ -15,7 +15,7 @@ use super::*;
 /// long wrapped line and a short one keep the same apparent column. A closed
 /// fold counts as one screen line however tall its text is, so the walk steps
 /// over it rather than through it.
-pub unsafe extern "C" fn nv_screengo(
+pub unsafe fn nv_screengo(
     oap: *mut oparg_T,
     dir: c_int,
     mut dist: c_int,
@@ -159,7 +159,7 @@ pub unsafe extern "C" fn nv_screengo(
 }
 
 /// `H`, `M` and `L`: to the top, middle or bottom line of the window.
-pub(crate) unsafe extern "C" fn nv_scroll(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let win = curwin.get();
@@ -254,7 +254,7 @@ pub(crate) unsafe extern "C" fn nv_scroll(cap: *mut cmdarg_T) {
 }
 
 /// `l`, `<Space>` and `<Right>`.
-pub(crate) unsafe extern "C" fn nv_right(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let win = curwin.get();
@@ -339,7 +339,7 @@ pub(crate) unsafe extern "C" fn nv_right(cap: *mut cmdarg_T) {
 }
 
 /// `h`, `<BS>`, CTRL-H and `<Left>`.
-pub(crate) unsafe extern "C" fn nv_left(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let win = curwin.get();
@@ -405,7 +405,7 @@ pub(crate) unsafe extern "C" fn nv_left(cap: *mut cmdarg_T) {
 }
 
 /// `k`, `CTRL-P`, `-` and `<Up>`. Shifted, it is a page up.
-pub(crate) unsafe extern "C" fn nv_up(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if mod_mask.get() & MOD_MASK_SHIFT != 0 {
@@ -428,7 +428,7 @@ pub(crate) unsafe extern "C" fn nv_up(cap: *mut cmdarg_T) {
 }
 
 /// `j`, `CTRL-N`, `+`, `<CR>` and `<Down>`. Shifted, it is a page down.
-pub(crate) unsafe extern "C" fn nv_down(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if mod_mask.get() & MOD_MASK_SHIFT != 0 {
@@ -470,7 +470,7 @@ pub(crate) unsafe extern "C" fn nv_down(cap: *mut cmdarg_T) {
 
 /// `<End>`: the end of the line -- of the last line with CTRL, which is what
 /// the argument says.
-pub(crate) unsafe extern "C" fn nv_end(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_end(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if (*cap).arg != 0 || mod_mask.get() & MOD_MASK_CTRL != 0 {
@@ -484,7 +484,7 @@ pub(crate) unsafe extern "C" fn nv_end(cap: *mut cmdarg_T) {
 }
 
 /// `$`: the end of the line, `count1 - 1` lines down.
-pub(crate) unsafe extern "C" fn nv_dollar(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_dollar(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;
@@ -506,7 +506,7 @@ pub(crate) unsafe extern "C" fn nv_dollar(cap: *mut cmdarg_T) {
 }
 
 /// `f`, `F`, `t`, `T`, `;` and `,`: search this line for a character.
-pub(crate) unsafe extern "C" fn nv_csearch(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         // An exclusive Select-mode selection was widened by one when it was
@@ -558,7 +558,7 @@ pub(crate) unsafe extern "C" fn nv_csearch(cap: *mut cmdarg_T) {
 
 /// `%`: to the matching bracket, or with a count to that percentage of the
 /// file.
-pub(crate) unsafe extern "C" fn nv_percent(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_percent(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let win = curwin.get();
@@ -602,7 +602,7 @@ pub(crate) unsafe extern "C" fn nv_percent(cap: *mut cmdarg_T) {
 }
 
 /// `(` and `)`: back and forward a sentence.
-pub(crate) unsafe extern "C" fn nv_brace(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_brace(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;
@@ -620,7 +620,7 @@ pub(crate) unsafe extern "C" fn nv_brace(cap: *mut cmdarg_T) {
 }
 
 /// `{` and `}`: back and forward a paragraph.
-pub(crate) unsafe extern "C" fn nv_findpar(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_findpar(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;
@@ -643,7 +643,7 @@ pub(crate) unsafe extern "C" fn nv_findpar(cap: *mut cmdarg_T) {
 }
 
 /// `<Home>`: the first column -- the first line with CTRL.
-pub(crate) unsafe extern "C" fn nv_home(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_home(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if mod_mask.get() & MOD_MASK_CTRL != 0 {
@@ -658,7 +658,7 @@ pub(crate) unsafe extern "C" fn nv_home(cap: *mut cmdarg_T) {
 }
 
 /// `|`: to a screen column.
-pub(crate) unsafe extern "C" fn nv_pipe(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_pipe(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;
@@ -676,7 +676,7 @@ pub(crate) unsafe extern "C" fn nv_pipe(cap: *mut cmdarg_T) {
 }
 
 /// `b` and `B`: back a word.
-pub(crate) unsafe extern "C" fn nv_bck_word(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_bck_word(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;
@@ -691,7 +691,7 @@ pub(crate) unsafe extern "C" fn nv_bck_word(cap: *mut cmdarg_T) {
 }
 
 /// `w`, `W`, `e` and `E`: forward a word, or to a word's end.
-pub(crate) unsafe extern "C" fn nv_wordcmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let startpos = (*curwin.get()).w_cursor;
@@ -737,7 +737,7 @@ pub(crate) unsafe extern "C" fn nv_wordcmd(cap: *mut cmdarg_T) {
 
 /// Pull the cursor back off the line's terminator, which is not a position an
 /// operator may include -- and say the operator now covers the last character.
-pub(crate) unsafe extern "C" fn adjust_cursor(oap: *mut oparg_T) {
+pub(crate) unsafe fn adjust_cursor(oap: *mut oparg_T) {
     // SAFETY: `oap` is the caller's live operator.
     unsafe {
         if (*curwin.get()).w_cursor.col > 0
@@ -755,7 +755,7 @@ pub(crate) unsafe extern "C" fn adjust_cursor(oap: *mut oparg_T) {
 
 /// `0` and `^`: the first column, or the first non-blank, which is what the
 /// argument says.
-pub(crate) unsafe extern "C" fn nv_beginline(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_beginline(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;
@@ -767,7 +767,7 @@ pub(crate) unsafe extern "C" fn nv_beginline(cap: *mut cmdarg_T) {
 }
 
 /// `gg` and `G`: to the first or last line, or to the count'th.
-pub(crate) unsafe extern "C" fn nv_goto(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_goto(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let last = (*curbuf.get()).b_ml.ml_line_count;

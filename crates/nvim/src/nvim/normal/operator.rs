@@ -39,7 +39,7 @@ unsafe fn replay(cap: *mut cmdarg_T, regname: c_int) {
 }
 
 /// `@@`: replay whatever `@` last played.
-pub(crate) unsafe extern "C" fn nv_regreplay(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_regreplay(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if checkclearop((*cap).oap) {
@@ -50,7 +50,7 @@ pub(crate) unsafe extern "C" fn nv_regreplay(cap: *mut cmdarg_T) {
 }
 
 /// `@`: replay a named register.
-pub(crate) unsafe extern "C" fn nv_at(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_at(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if checkclearop((*cap).oap) {
@@ -66,7 +66,7 @@ pub(crate) unsafe extern "C" fn nv_at(cap: *mut cmdarg_T) {
 
 /// `u`: undo, or the `gu` operator when one is already pending or a Visual
 /// selection is up.
-pub(crate) unsafe extern "C" fn nv_undo(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_undo(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if (*(*cap).oap).op_type == OP_LOWER as c_int || VIsual_active.get() {
@@ -78,7 +78,7 @@ pub(crate) unsafe extern "C" fn nv_undo(cap: *mut cmdarg_T) {
 }
 
 /// `u` proper.
-pub(crate) unsafe extern "C" fn nv_kundo(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_kundo(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if checkclearopq((*cap).oap) {
@@ -90,7 +90,7 @@ pub(crate) unsafe extern "C" fn nv_kundo(cap: *mut cmdarg_T) {
 }
 
 /// `U`: undo the whole line, or the `gU` operator.
-pub(crate) unsafe extern "C" fn nv_Undo(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_Undo(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if (*(*cap).oap).op_type == OP_UPPER as c_int || VIsual_active.get() {
@@ -106,7 +106,7 @@ pub(crate) unsafe extern "C" fn nv_Undo(cap: *mut cmdarg_T) {
 }
 
 /// `"`: name the register the next command works on.
-pub(crate) unsafe extern "C" fn nv_regname(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_regname(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if checkclearop((*cap).oap) {
@@ -128,7 +128,7 @@ pub(crate) unsafe extern "C" fn nv_regname(cap: *mut cmdarg_T) {
 }
 
 /// `.`: repeat the last change.
-pub(crate) unsafe extern "C" fn nv_dot(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_dot(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if checkclearopq((*cap).oap) {
@@ -145,7 +145,7 @@ pub(crate) unsafe extern "C" fn nv_dot(cap: *mut cmdarg_T) {
 
 /// `CTRL-R`: redo -- or, in Select mode, the register the replacement text
 /// should go to.
-pub(crate) unsafe extern "C" fn nv_redo_or_register(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_redo_or_register(cap: *mut cmdarg_T) {
     if VIsual_select.get() && VIsual_active.get() {
         // SAFETY: reads one key with mappings suppressed.
         unsafe {
@@ -173,7 +173,7 @@ pub(crate) unsafe extern "C" fn nv_redo_or_register(cap: *mut cmdarg_T) {
 
 /// Start an operator, or apply the pending one to whole lines when it is the
 /// same one again (`dd`, `yy`, `gugu`).
-pub(crate) unsafe extern "C" fn nv_operator(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_operator(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         let op_type = get_op_type((*cap).cmdchar, (*cap).nchar);
@@ -215,7 +215,7 @@ pub(crate) fn set_op_var(optype: c_int) {
 }
 
 /// The linewise form of an operator: `count1` lines from this one.
-pub(crate) unsafe extern "C" fn nv_lineop(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_lineop(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         (*(*cap).oap).motion_type = kMTLineWise;
@@ -239,7 +239,7 @@ pub(crate) unsafe extern "C" fn nv_lineop(cap: *mut cmdarg_T) {
 
 /// `q`: start or stop a recording -- or open the command-line window, or the
 /// `gq` operator when that is what is pending.
-pub(crate) unsafe extern "C" fn nv_record(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_record(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if (*(*cap).oap).op_type == OP_FORMAT as c_int {

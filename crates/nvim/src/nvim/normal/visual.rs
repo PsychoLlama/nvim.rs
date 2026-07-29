@@ -306,7 +306,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
 ///
 /// Kept `extern "C"`: this is an `nv_cmds` row's handler, and `nv_func_T` is
 /// still a C function pointer.
-pub(crate) unsafe extern "C" fn nv_visual(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     unsafe {
         if (*cap).cmdchar == Ctrl_Q {
@@ -537,7 +537,7 @@ pub(crate) unsafe fn unadjust_for_sel_inner(pp: *mut pos_T) -> bool {
 }
 
 /// `gh`, `gH`, `g CTRL-H`: Select mode, either fresh or from a reselection.
-pub(crate) unsafe extern "C" fn nv_select(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_select(cap: *mut cmdarg_T) {
     if VIsual_active.get() {
         VIsual_select.set(true);
         VIsual_select_reg.set(0);
