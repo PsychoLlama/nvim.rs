@@ -172,7 +172,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_ulong, c_ushort, c_void};
 mod state;
 pub(crate) use self::state::*;
 mod dispatch;
-pub use self::dispatch::*;
+pub(crate) use self::dispatch::*;
 mod showcmd;
 pub(crate) use self::showcmd::*;
 mod visual;
