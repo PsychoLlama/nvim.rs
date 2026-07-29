@@ -5,7 +5,51 @@
 
 use core::ptr;
 
-use super::*;
+use crate::src::nvim::ascii::ascii_isdigit;
+use crate::src::nvim::buffer::{bt_prompt, buf_get_changedtick};
+use crate::src::nvim::change::{
+    changed_lines, del_chars, deleted_lines, ins_char, ins_char_bytes, open_line,
+};
+use crate::src::nvim::cursor::{
+    check_cursor, coladvance, coladvance_force, gchar_cursor, get_cursor_pos_len,
+    get_cursor_pos_ptr, getviscol, inc_cursor,
+};
+use crate::src::nvim::diff::nv_diffgetput;
+use crate::src::nvim::drawscreen::win_cursorline_standout;
+use crate::src::nvim::edit::{
+    beginline, edit, get_literal, ins_copychar, prompt_curpos_editable, set_last_insert,
+};
+use crate::src::nvim::fold::{foldUpdateAfterInsert, hasFolding};
+use crate::src::nvim::getchar::{AppendCharToRedobuff, AppendToRedobuff};
+use crate::src::nvim::getchar::{stuff_empty, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff};
+use crate::src::nvim::main::{
+    State, VIsual_active, VIsual_mode, cb_flags, curbuf, curwin, e_modifiable, got_int, msg_silent,
+    p_sel, p_sta, p_to, p_ww, restart_edit,
+};
+use crate::src::nvim::mbyte::{mb_adjust_cursor, mb_charlen};
+use crate::src::nvim::memline::{inc, ml_delete_flags, ml_get};
+use crate::src::nvim::memory::xfree;
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::normal::{
+    BACKWARD, BL_WHITE, CA_COMMAND_BUSY, CAR, Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, DEL, ESC,
+    FO_OPEN_COMS, FORWARD, K_DEL, K_INS, KE_KDEL, KE_KINS, MAXCOL, ML_DEL_MESSAGE, ML_EMPTY,
+    MODE_INSERT, MODE_REPLACE, NL, NUL, OP_DELETE, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_TILDE,
+    OPENLINE_DO_COM, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
+    PUT_LINE_SPLIT, REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VALID_CROW, VIsual_mode_orig,
+    checkclearop, checkclearopq, clearop, clearopbeep, false_0, nv_object, nv_operator, prep_redo,
+    prep_redo_cmd, true_0, v_swap_corners, v_visop,
+};
+use crate::src::nvim::ops::{do_join, do_pending_operator, op_addsub, swapchar};
+use crate::src::nvim::option::get_ve_flags;
+use crate::src::nvim::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptVeFlagAll};
+use crate::src::nvim::os::libc::{gettext, strlen};
+use crate::src::nvim::register::{copy_register, do_put, free_register};
+use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::textformat::{auto_format, has_format_option};
+use crate::src::nvim::types::{cmdarg_T, colnr_T, linenr_T, size_t, yankreg_T};
+use crate::src::nvim::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// The keypad's own `<Del>` and `<Insert>`, which mean the same as the main
 /// keyboard's.

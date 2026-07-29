@@ -13,7 +13,58 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::*;
+use crate::src::nvim::charset::vim_isprintc;
+use crate::src::nvim::digraph::get_digraph;
+use crate::src::nvim::drawscreen::showmode;
+use crate::src::nvim::edit::edit;
+use crate::src::nvim::eval::vars::{set_reg_var, set_vcount};
+use crate::src::nvim::ex_docmd::do_sleep;
+use crate::src::nvim::fold::foldOpenCursor;
+use crate::src::nvim::getchar::{
+    beep_flush, gotchars_ignore, ins_char_typebuf, plain_vgetc, readbuf1_empty, stuff_empty,
+    typebuf_maplen, ungetchars, vpeekc, vungetc,
+};
+use crate::src::nvim::keycodes::simplify_key;
+use crate::src::nvim::main::{
+    KeyStuffed, KeyTyped, State, VIsual_active, VIsual_select, VIsual_select_reg, allow_keys,
+    clear_cmdline, curbuf, curwin, did_cursorhold, fdo_flags, finish_op, km_startsel,
+    langmap_mapchar, mod_mask, mode_displayed, motion_force, msg_col, msg_didout, msg_nowait,
+    no_mapping, no_u_sync, no_zero_mapping, opcount, p_cpo, p_langmap, p_lrm, p_tm, p_ttm,
+    restart_VIsual_select, restart_edit, vgetc_busy, vgetc_char, vgetc_mod_mask,
+};
+use crate::src::nvim::mapping::langmap_adjust_mb;
+use crate::src::nvim::mark::checkpcmark;
+use crate::src::nvim::mbyte::{
+    mb_check_adjust_col, utf_char2bytes, utf_char2len, utf_iscomposing, utf8len_tab,
+};
+use crate::src::nvim::memory::xfree;
+use crate::src::nvim::normal::{
+    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CPO_DIGRAPH, Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, ESC,
+    GRAPHEME_STATE_INIT, K_DEL, K_DOWN, K_END, K_HOME, K_KENTER, K_LEFT, K_RIGHT, K_S_LEFT,
+    K_S_RIGHT, K_UP, K_ZERO, KE_C_LEFT, KE_C_RIGHT, KE_EVENT, KE_IGNORE, KE_KDEL, KE_MOUSEMOVE,
+    MOD_MASK_SHIFT, MODE_LANGMAP, MODE_LREPLACE, MODE_NORMAL, MODE_NORMAL_BUSY, MODE_REPLACE,
+    MODE_SELECT, NL, NUL, NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS,
+    NormalState, OP_COLON, OP_NOP, add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd,
+    del_from_showcmd, do_check_scrollbind, normal_handle_special_visual_command,
+    normal_need_additional_char, normal_need_redraw_mode_message, normal_redraw_mode_message,
+    nv_cmd_idx, nv_cmds, nv_max_linear, set_vcount_ca, start_selection,
+};
+use crate::src::nvim::ops::{do_pending_operator, get_op_type};
+use crate::src::nvim::os::libc::qsort;
+use crate::src::nvim::register::get_default_register_name;
+use crate::src::nvim::state::{get_real_state, may_trigger_modechanged};
+use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::types::{
+    GraphemeState, OptInt, VimState, cmdarg_T, int16_t, int64_t, oparg_T,
+};
+use crate::src::nvim::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
+use core::ffi::{c_char, c_int, c_uint, c_void};
+
+use crate::src::nvim::getchar::{
+    AppendCharToRedobuff, AppendNumberToRedobuff, AppendToRedobuff, ResetRedobuff,
+};
+use crate::src::nvim::r#move::{do_check_cursorbind, validate_cursor};
+use crate::src::nvim::normal::{K_S_END, K_S_HOME};
 
 /// `find_command` returns a row index that has to fit an `int16_t`.
 const _: () = assert!(NV_CMDS_SIZE <= i16::MAX as usize);

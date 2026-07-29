@@ -7,7 +7,25 @@
 
 use core::ptr;
 
-use super::*;
+use crate::src::nvim::cursor::set_leftcol;
+use crate::src::nvim::diff::diff_set_topline;
+use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::main::{
+    VIsual_active, VIsual_select, curbuf, curwin, did_syncbind, firstwin, mod_mask, p_sbo,
+};
+use crate::src::nvim::normal::{
+    BACKWARD, Ctrl_D, FORWARD, MOD_MASK_CTRL, UPD_VALID, checkclearop, checkclearopq, clearopbeep,
+    false_0,
+};
+use crate::src::nvim::plines::plines_m_win_fill;
+use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::types::{Direction, buf_T, cmdarg_T, colnr_T, linenr_T, win_T};
+use crate::src::nvim::window::goto_tabpage;
+use core::ffi::c_int;
+
+use crate::src::nvim::r#move::{cursor_correct, pagescroll, scroll_redraw, scrolldown, scrollup};
 
 mod zet;
 pub(crate) use self::zet::*;

@@ -10,7 +10,41 @@
 
 use core::ptr;
 
-use super::*;
+use crate::src::nvim::cursor::{
+    adjust_cursor_col, check_cursor, coladvance, gchar_cursor, get_cursor_line_len,
+    get_cursor_line_ptr, inc_cursor,
+};
+use crate::src::nvim::drawscreen::{conceal_check_cursor_line, redraw_curbuf_later, showmode};
+use crate::src::nvim::fold::foldAdjustVisual;
+use crate::src::nvim::getchar::{beep_flush, stuff_empty, typebuf_typed};
+use crate::src::nvim::main::{
+    VIsual, VIsual_active, VIsual_mode, VIsual_reselect, VIsual_select, VIsual_select_exclu_adj,
+    VIsual_select_reg, curbuf, curwin, finish_op, motion_force, mouse_dragging, msg_silent, p_sel,
+    p_slm, p_smd, redraw_cmdline, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
+};
+use crate::src::nvim::mark::mark_mb_adjustpos;
+use crate::src::nvim::mbyte::utfc_ptr2len;
+use crate::src::nvim::memline::{ml_get_len, ml_get_pos};
+use crate::src::nvim::mouse::setmouse;
+use crate::src::nvim::normal::{
+    CA_NO_ADJ_OP_END, Ctrl_Q, Ctrl_V, MAXCOL, NUL, OP_NOP, TAB, UPD_INVERTED, UPD_VALID,
+    VIsual_mode_orig, clearopbeep, false_0, may_clear_cmdline, nv_down, nv_g_cmd, nv_operator,
+    nv_right, true_0,
+};
+use crate::src::nvim::ops::adjust_cursor_eol;
+use crate::src::nvim::option::get_ve_flags;
+use crate::src::nvim::options::kOptVeFlagBlock;
+use crate::src::nvim::plines::{getvcol, getvcols};
+use crate::src::nvim::pos::{equalpos, lt};
+use crate::src::nvim::state::{may_trigger_modechanged, virtual_active};
+use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::textobject::{
+    current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
+};
+use crate::src::nvim::types::{cmdarg_T, colnr_T, linenr_T, pos_T, size_t};
+use core::ffi::{c_char, c_int, c_uint};
+
+use crate::src::nvim::r#move::{update_curswant_force, update_topline, validate_virtcol};
 
 /// Whether 'selection' is "exclusive": the character under the far end of the
 /// selection is not part of it.

@@ -15,7 +15,58 @@
 
 use core::ptr;
 
-use super::*;
+use crate::src::nvim::autocmd::{apply_autocmds, has_event};
+use crate::src::nvim::buffer::{buf_get_changedtick, fileinfo};
+use crate::src::nvim::diff::ex_diffupdate;
+use crate::src::nvim::drawscreen::{
+    redraw_curbuf_later, redraw_statuslines, setcursor, show_cursor_info_later, showmode,
+    update_screen,
+};
+use crate::src::nvim::eval::vars::set_vcount;
+use crate::src::nvim::ex_docmd::do_exmode;
+use crate::src::nvim::ex_eval::discard_current_exception;
+use crate::src::nvim::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
+use crate::src::nvim::fileio::check_timestamps;
+use crate::src::nvim::fold::{foldAdjustVisual, foldCheckClose, foldOpenCursor, hasAnyFolding};
+use crate::src::nvim::getchar::{
+    char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typebuf_maplen, typebuf_typed, vgetc,
+};
+use crate::src::nvim::main::{
+    KeyTyped, State, VIsual_active, clear_cmdline, cmdwin_result, curbuf, curtab, curwin,
+    did_check_timestamps, did_emsg, did_throw, did_wait_return, diff_need_scrollbind, do_redraw,
+    emsg_on_display, emsg_silent, ex_normal_busy, exmode_active, fdo_flags, finish_op, global_busy,
+    got_int, in_assert_fails, keep_msg, keep_msg_hl_id, km_startsel, km_stopsel, last_cursormoved,
+    last_cursormoved_win, may_garbage_collect, mod_mask, msg_didany, msg_didout, msg_hist_off,
+    msg_nowait, msg_scroll, msg_silent, must_redraw, need_check_timestamps, need_fileinfo,
+    need_wait_return, opcount, p_smd, quit_more, redraw_cmdline, redraw_mode, reg_executing,
+    reg_recording, restart_edit, skip_redraw, time_fd,
+};
+use crate::src::nvim::memory::{xfree, xstrdup};
+use crate::src::nvim::message::{may_clear_sb_text, msg, msg_delay, wait_return};
+use crate::src::nvim::normal::{
+    CA_COMMAND_BUSY, EVENT_BUFMODIFIEDSET, EVENT_CURSORMOVED, EVENT_TEXTCHANGED, MOD_MASK_SHIFT,
+    MODE_INSERT, MODE_NORMAL, MODE_NORMAL_BUSY, NUL, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS,
+    NV_STS, NormalState, OP_NOP, SHM_FILEINFO, UPD_INVERTED, check_scrollbind, clearop,
+    clearopbeep, current_oap, end_visual_mode, false_0, find_command, normal_execute, nv_cmds,
+    true_0, unshift_special,
+};
+use crate::src::nvim::option::shortmess;
+use crate::src::nvim::options::kOptFdoFlagAll;
+use crate::src::nvim::os::libc::time;
+use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::profile::{time_finish, time_msg};
+use crate::src::nvim::state::{
+    may_trigger_modechanged, may_trigger_safestate, state_enter, state_no_longer_safe,
+};
+use crate::src::nvim::terminal::terminal_check_refresh;
+use crate::src::nvim::types::{VimState, cmdarg_T, int64_t, oparg_T};
+use crate::src::nvim::ui::{ui_cursor_shape, ui_flush};
+use crate::src::nvim::window::{
+    may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized,
+};
+use core::ffi::{c_int, c_uint, c_void};
+
+use crate::src::nvim::r#move::{update_curswant, update_topline, validate_cursor};
 
 /// A zeroed state with its two callbacks installed.
 ///

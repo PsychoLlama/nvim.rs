@@ -1,172 +1,24 @@
-use crate::src::nvim::api::private::helpers::cstr_as_string;
-use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
-use crate::src::nvim::autocmd::{apply_autocmds, has_event};
-use crate::src::nvim::buffer::buf_get_changedtick;
-use crate::src::nvim::buffer::{bt_prompt, bt_quickfix, buf_hide, buflist_getfile, fileinfo};
-use crate::src::nvim::change::{
-    changed_lines, del_chars, deleted_lines, get_leader_len, ins_char, ins_char_bytes, open_line,
-};
-use crate::src::nvim::charset::{skipwhite, transchar, vim_isprintc, vim_iswordp, vim_strsize};
-use crate::src::nvim::cmdhist::{add_to_history, init_history};
-use crate::src::nvim::cursor::{
-    adjust_cursor_col, check_cursor, check_cursor_col, check_cursor_lnum, coladvance,
-    coladvance_force, dec_cursor, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr,
-    get_cursor_pos_len, get_cursor_pos_ptr, getviscol, inc_cursor, set_leftcol,
-};
-use crate::src::nvim::decoration::{decor_conceal_line, win_lines_concealed};
-use crate::src::nvim::diff::{diff_move_to, diff_set_topline, ex_diffupdate, nv_diffgetput};
-use crate::src::nvim::digraph::get_digraph;
-use crate::src::nvim::drawscreen::{
-    conceal_check_cursor_line, redraw_curbuf_later, redraw_later, redraw_statuslines, setcursor,
-    show_cursor_info_later, showmode, update_screen, win_cursorline_standout,
-};
-use crate::src::nvim::edit::{
-    beginline, cursor_down, cursor_down_inner, cursor_up, cursor_up_inner, edit, get_literal,
-    ins_copychar, oneleft, oneright, prompt_curpos_editable, set_last_insert,
-};
-use crate::src::nvim::eval::prompt_invoke_callback;
-use crate::src::nvim::eval::vars::{set_reg_var, set_vcount, set_vim_var_string};
-use crate::src::nvim::ex_cmds::{do_ascii, do_ecmd};
-use crate::src::nvim::ex_cmds2::autowrite;
-use crate::src::nvim::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exmode, do_sleep};
-use crate::src::nvim::ex_eval::discard_current_exception;
-use crate::src::nvim::ex_getln::{
-    compute_cmdrow, curbuf_locked, getcmdline, getexline, text_locked, text_locked_msg,
-    vim_strsave_fnameescape,
-};
-use crate::src::nvim::file_search::grab_file_name;
-use crate::src::nvim::fileio::check_timestamps;
-use crate::src::nvim::fold::{
-    clearFolding, closeFold, closeFoldRecurse, deleteFold, foldAdjustVisual, foldCheckClose,
-    foldManualAllowed, foldMoveTo, foldOpenCursor, foldUpdateAfterInsert, foldmethodIsDiff,
-    foldmethodIsManual, foldmethodIsMarker, getDeepestNesting, hasAnyFolding, hasFolding,
-    newFoldLevel, openFold, openFoldRecurse,
-};
-use crate::src::nvim::getchar::{
-    AppendCharToRedobuff, AppendNumberToRedobuff, AppendToRedobuff, ResetRedobuff, beep_flush,
-    char_avail, getcmdkeycmd, gotchars_ignore, ins_char_typebuf, map_execute_lua, paste_repeat,
-    plain_vgetc, readbuf1_empty, safe_vgetc, start_redo, stuff_empty, stuffReadbuff,
-    stuffcharReadbuff, stuffnumReadbuff, typebuf_maplen, typebuf_typed, ungetchars, vgetc, vpeekc,
-    vungetc,
-};
+//! Normal mode: the state loop, the command table, and the vocabulary the
+//! thirteen command families share.
+//!
+//! The families are the modules below, grouped by what a command *does* to the
+//! editor rather than by which key runs it -- which is the seam
+//! [`nv_cmds`] already draws, because every row of it names a handler.
+//!
+//! What is left in this file is the table, the two structures it is made of,
+//! and the constants at least one family imports by name. Nothing here is
+//! code.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::grid::{grid_line_flush, grid_line_puts, grid_line_start};
-use crate::src::nvim::help::ex_help;
-use crate::src::nvim::highlight::win_hl_attr;
-use crate::src::nvim::keycodes::simplify_key;
-use crate::src::nvim::main::{
-    KeyStuffed, KeyTyped, Rows, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
-    VIsual_select, VIsual_select_exclu_adj, VIsual_select_reg, allow_keys, arrow_used, cb_flags,
-    clear_cmdline, cmdwin_result, cmdwin_type, curbuf, curtab, curwin, did_check_timestamps,
-    did_cursorhold, did_emsg, did_syncbind, did_throw, did_wait_return, diff_need_scrollbind,
-    do_redraw, e_modifiable, e_noident, empty_string_option, emsg_off, emsg_on_display,
-    emsg_silent, ex_normal_busy, exmode_active, fdo_flags, finish_op, firstwin, g_tag_at_cursor,
-    global_busy, got_int, hl_attr_active, in_assert_fails, ins_at_eol, jop_flags, keep_msg,
-    keep_msg_hl_id, km_startsel, km_stopsel, langmap_mapchar, last_cursormoved,
-    last_cursormoved_win, may_garbage_collect, mod_mask, mode_displayed, motion_force,
-    mouse_dragging, msg_col, msg_didany, msg_didout, msg_grid_adj, msg_hist_off, msg_nowait,
-    msg_scroll, msg_silent, must_redraw, need_check_timestamps, need_fileinfo, need_wait_return,
-    no_hlsearch, no_mapping, no_smartcase, no_u_sync, no_zero_mapping, opcount, p_ch, p_cpo, p_hls,
-    p_kp, p_langmap, p_lrm, p_sbo, p_sbr, p_sc, p_scs, p_sel, p_slm, p_sloc, p_smd, p_sta, p_tm,
-    p_to, p_ttm, p_ws, p_ww, quit_more, redraw_cmdline, redraw_mode, redraw_tabline, reg_executing,
-    reg_recorded, reg_recording, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
-    restart_VIsual_select, restart_edit, sc_col, showcmd_buf, skip_redraw, time_fd,
-    typebuf_was_empty, vgetc_busy, vgetc_char, vgetc_mod_mask,
-};
-use crate::src::nvim::mapping::{add_map, langmap_adjust_mb};
-use crate::src::nvim::mark::{
-    checkpcmark, get_changelist, get_jumplist, getnextmark, mark_get, mark_mb_adjustpos,
-    mark_move_to, pos_to_mark, setmark, setpcmark,
-};
-use crate::src::nvim::mbyte::{
-    mb_adjust_cursor, mb_charlen, mb_check_adjust_col, mb_get_class, mb_prevptr, show_utf8,
-    utf_char2bytes, utf_char2len, utf_find_illegal, utf_head_off, utf_iscomposing, utf_ptr2cells,
-    utf_ptr2char, utf8len_tab, utfc_ptr2len,
-};
-use crate::src::nvim::memline::{
-    goto_byte, inc, ml_delete_flags, ml_get, ml_get_buf, ml_get_len, ml_get_pos,
-};
-use crate::src::nvim::memory::{strequal, xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
-use crate::src::nvim::message::{
-    emsg, may_clear_sb_text, messaging, msg, msg_delay, msg_ext_set_trigger, msg_grid_validate,
-    show_sb_text, wait_return,
-};
-use crate::src::nvim::mouse::{do_mouse, nv_mouse, nv_mousescroll, setmouse};
-use crate::src::nvim::r#move::{
-    adjust_skipcol, changed_window_setting, cursor_correct, do_check_cursorbind, pagescroll,
-    scroll_cursor_bot, scroll_cursor_halfway, scroll_cursor_top, scroll_redraw, scrolldown,
-    scrollup, sms_marker_overlap, update_curswant, update_curswant_force, update_topline,
-    validate_botline_win, validate_cheight, validate_cursor, validate_virtcol, win_col_off,
-    win_col_off2,
-};
-use crate::src::nvim::ops::{
-    adjust_cursor_eol, clear_oparg, cursor_pos_info, do_join, do_pending_operator,
-    get_extra_op_char, get_op_char, get_op_type, op_addsub, op_is_change, swapchar,
-};
-use crate::src::nvim::option::{
-    get_showbreak_value, get_sidescrolloff_value, get_ve_flags, magic_isset, shortmess,
-};
-use crate::src::nvim::options::{
-    kOptBoFlagEsc, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptFdoFlagAll, kOptFdoFlagBlock,
-    kOptFdoFlagHor, kOptFdoFlagJump, kOptFdoFlagMark, kOptFdoFlagPercent, kOptFdoFlagSearch,
-    kOptJopFlagView, kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagOnemore,
-};
-use crate::src::nvim::os::input::line_breakcheck;
-use crate::src::nvim::os::libc::{
-    __ctype_b_loc, gettext, memmove, qsort, snprintf, strcat, strcmp, strcpy, strlen, time,
-};
-use crate::src::nvim::plines::{
-    getvcol, getvcols, getvvcol, linetabsize, plines_m_win_fill, plines_win, win_get_fill,
-};
-use crate::src::nvim::pos::{clearpos, equalpos, lt};
-use crate::src::nvim::profile::{time_finish, time_msg};
-use crate::src::nvim::quickfix::qf_view_result;
-use crate::src::nvim::register::{
-    copy_register, do_execreg, do_put, do_record, free_register, get_default_register_name,
-    get_expr_register, valid_yank_reg,
-};
-use crate::src::nvim::search::{
-    current_search, do_search, find_pattern_in_path, findmatch, findmatchlimit, reset_search_dir,
-    searchc, searchit,
-};
-use crate::src::nvim::spell::spell_move_to;
-use crate::src::nvim::spellfile::spell_add_word;
-use crate::src::nvim::spellsuggest::spell_suggest;
-use crate::src::nvim::state::{
-    get_real_state, may_trigger_modechanged, may_trigger_safestate, state_enter,
-    state_handle_k_event, state_no_longer_safe, virtual_active,
-};
-use crate::src::nvim::statusline::{draw_tabline, win_redr_status};
-use crate::src::nvim::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
-use crate::src::nvim::syntax::syn_stack_free_all;
-use crate::src::nvim::tag::do_tag;
-use crate::src::nvim::terminal::terminal_check_refresh;
-use crate::src::nvim::textformat::{auto_format, has_format_option};
-use crate::src::nvim::textobject::{
-    bck_word, bckend_word, current_block, current_par, current_quote, current_sent,
-    current_tagblock, current_word, end_word, findpar, findsent, fwd_word,
-};
+use crate::src::nvim::mouse::{nv_mouse, nv_mousescroll};
 use crate::src::nvim::types::{
-    Array, Direction, GraphemeState, Integer, MarkGet, MarkMove, MarkMoveRes, MotionType, Object,
-    ObjectType, OptInt, SpellAddType, UIExtension, VimState, VimVarIndex, auto_event, buf_T,
-    cmdarg_T, colnr_T, fmark_T, getf_values, hlf_T, int16_t, int64_t, key_extra, linenr_T, object,
-    object_data as C2Rust_Unnamed_0, oparg_T, pos_T, searchit_arg_T, size_t, smt_T, uint8_t,
-    uint16_t, win_T, yankreg_T,
+    Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, Object, ObjectType, SpellAddType,
+    UIExtension, VimState, VimVarIndex, auto_event, cmdarg_T, getf_values, hlf_T, int16_t,
+    key_extra, oparg_T, pos_T, size_t, smt_T, uint16_t,
 };
-use crate::src::nvim::ui::{
-    ui_call_msg_showcmd, ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush, ui_has,
-    vim_beep,
-};
-use crate::src::nvim::undo::{
-    anyBufIsChanged, curbufIsChanged, u_clearline, u_redo, u_save, u_save_cursor, u_savesub,
-    u_undo, u_undoline, undo_time,
-};
-use crate::src::nvim::window::{
-    check_can_set_curbuf_disabled, do_window, goto_tabpage, goto_tabpage_lastused,
-    may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized, set_fraction,
-    win_setheight,
-};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 mod state;
 pub(crate) use self::state::*;
@@ -194,17 +46,14 @@ mod gcmd;
 pub use self::gcmd::*;
 mod misc;
 pub(crate) use self::misc::*;
-pub type C2Rust_Unnamed = c_uint;
-pub const _ISlower: C2Rust_Unnamed = 512;
-pub const _ISupper: C2Rust_Unnamed = 256;
+pub const _ISlower: c_uint = 512;
+pub const _ISupper: c_uint = 256;
 pub const kObjectTypeArray: ObjectType = 5;
 pub const kObjectTypeString: ObjectType = 4;
 pub const kObjectTypeInteger: ObjectType = 2;
 pub const kObjectTypeNil: ObjectType = 0;
-pub type C2Rust_Unnamed_14 = c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_14 = 2147483647;
-pub type C2Rust_Unnamed_15 = c_uint;
-pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
+pub const MAXLNUM: c_uint = 2147483647;
+pub const MAXCOL: c_uint = 2147483647;
 pub const HLF_MSG: hlf_T = 63;
 pub const HLF_LC: hlf_T = 9;
 pub const HLF_L: hlf_T = 8;
@@ -227,42 +76,32 @@ pub const EVENT_CURSORMOVED: auto_event = 39;
 pub const EVENT_BUFMODIFIEDSET: auto_event = 8;
 pub const GETF_ALT: getf_values = 2;
 pub const GETF_SETMARK: getf_values = 1;
-pub type C2Rust_Unnamed_17 = c_uint;
-pub const OPENLINE_DO_COM: C2Rust_Unnamed_17 = 2;
-pub type C2Rust_Unnamed_23 = c_uint;
-pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_23 = 83;
-pub const SHM_FILEINFO: C2Rust_Unnamed_23 = 70;
-pub type C2Rust_Unnamed_24 = c_int;
-pub const HIST_SEARCH: C2Rust_Unnamed_24 = 1;
-pub type C2Rust_Unnamed_25 = c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_25 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_25 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_25 = 35;
-pub const UPD_INVERTED: C2Rust_Unnamed_25 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_25 = 10;
-pub type C2Rust_Unnamed_26 = c_uint;
-pub const BL_FIX: C2Rust_Unnamed_26 = 4;
-pub const BL_SOL: C2Rust_Unnamed_26 = 2;
-pub const BL_WHITE: C2Rust_Unnamed_26 = 1;
+pub const OPENLINE_DO_COM: c_uint = 2;
+pub const SHM_SEARCHCOUNT: c_uint = 83;
+pub const SHM_FILEINFO: c_uint = 70;
+pub const HIST_SEARCH: c_int = 1;
+pub const UPD_CLEAR: c_uint = 50;
+pub const UPD_NOT_VALID: c_uint = 40;
+pub const UPD_SOME_VALID: c_uint = 35;
+pub const UPD_INVERTED: c_uint = 20;
+pub const UPD_VALID: c_uint = 10;
+pub const BL_FIX: c_uint = 4;
+pub const BL_SOL: c_uint = 2;
+pub const BL_WHITE: c_uint = 1;
 pub const VV_OP: VimVarIndex = 55;
 pub const kUIMessages: UIExtension = 4;
-pub type C2Rust_Unnamed_27 = c_uint;
-pub const ECMD_HIDE: C2Rust_Unnamed_27 = 1;
-pub type C2Rust_Unnamed_28 = c_int;
-pub const ECMD_LAST: C2Rust_Unnamed_28 = -1;
-pub type C2Rust_Unnamed_29 = c_uint;
-pub const DOCMD_KEEPLINE: C2Rust_Unnamed_29 = 32;
-pub type C2Rust_Unnamed_30 = c_uint;
-pub const VSE_NONE: C2Rust_Unnamed_30 = 0;
-pub type C2Rust_Unnamed_31 = c_uint;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_31 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_31 = 288;
-pub const MODE_REPLACE: C2Rust_Unnamed_31 = 272;
-pub const MODE_TERMINAL: C2Rust_Unnamed_31 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_31 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_31 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_31 = 16;
-pub const MODE_NORMAL: C2Rust_Unnamed_31 = 1;
+pub const ECMD_HIDE: c_uint = 1;
+pub const ECMD_LAST: c_int = -1;
+pub const DOCMD_KEEPLINE: c_uint = 32;
+pub const VSE_NONE: c_uint = 0;
+pub const MODE_NORMAL_BUSY: c_uint = 4097;
+pub const MODE_LREPLACE: c_uint = 288;
+pub const MODE_REPLACE: c_uint = 272;
+pub const MODE_TERMINAL: c_uint = 128;
+pub const MODE_SELECT: c_uint = 64;
+pub const MODE_LANGMAP: c_uint = 32;
+pub const MODE_INSERT: c_uint = 16;
+pub const MODE_NORMAL: c_uint = 1;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_LUA: key_extra = 103;
 pub const KE_EVENT: key_extra = 102;
@@ -300,32 +139,25 @@ pub const KE_LEFTDRAG: key_extra = 45;
 pub const KE_LEFTMOUSE: key_extra = 44;
 pub const KE_S_DOWN: key_extra = 5;
 pub const KE_S_UP: key_extra = 4;
-pub type C2Rust_Unnamed_32 = c_uint;
-pub const ML_DEL_MESSAGE: C2Rust_Unnamed_32 = 1;
+pub const ML_DEL_MESSAGE: c_uint = 1;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
-pub type C2Rust_Unnamed_33 = c_uint;
-pub const CA_NO_ADJ_OP_END: C2Rust_Unnamed_33 = 2;
-pub const CA_COMMAND_BUSY: C2Rust_Unnamed_33 = 1;
-pub type C2Rust_Unnamed_34 = c_int;
-pub const REPLACE_NL_NCHAR: C2Rust_Unnamed_34 = -2;
-pub const REPLACE_CR_NCHAR: C2Rust_Unnamed_34 = -1;
-pub type C2Rust_Unnamed_35 = c_uint;
-pub const SHOWCMD_COLS: C2Rust_Unnamed_35 = 10;
-pub type C2Rust_Unnamed_36 = c_uint;
-pub const SHOWCMD_BUFLEN: C2Rust_Unnamed_36 = 41;
-pub type C2Rust_Unnamed_37 = c_int;
-pub const MSCR_RIGHT: C2Rust_Unnamed_37 = -2;
-pub const MSCR_LEFT: C2Rust_Unnamed_37 = -1;
-pub const MSCR_UP: C2Rust_Unnamed_37 = 1;
-pub const MSCR_DOWN: C2Rust_Unnamed_37 = 0;
-pub type C2Rust_Unnamed_38 = c_uint;
-pub const FIND_EVAL: C2Rust_Unnamed_38 = 4;
-pub const FIND_STRING: C2Rust_Unnamed_38 = 2;
-pub const FIND_IDENT: C2Rust_Unnamed_38 = 1;
+pub const CA_NO_ADJ_OP_END: c_uint = 2;
+pub const CA_COMMAND_BUSY: c_uint = 1;
+pub const REPLACE_NL_NCHAR: c_int = -2;
+pub const REPLACE_CR_NCHAR: c_int = -1;
+pub const SHOWCMD_COLS: c_uint = 10;
+pub(crate) const SHOWCMD_BUFLEN: c_uint = 41;
+pub const MSCR_RIGHT: c_int = -2;
+pub const MSCR_LEFT: c_int = -1;
+pub const MSCR_UP: c_int = 1;
+pub const MSCR_DOWN: c_int = 0;
+pub const FIND_EVAL: c_uint = 4;
+pub const FIND_STRING: c_uint = 2;
+pub const FIND_IDENT: c_uint = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct nv_cmd {
+pub(crate) struct nv_cmd {
     pub cmd_char: c_int,
     pub cmd_func: nv_func_T,
     pub cmd_flags: uint16_t,
@@ -336,50 +168,50 @@ pub struct nv_cmd {
 /// Nothing outside this crate reaches the table or its handlers -- neither the
 /// ABI ledger nor the unit-test cdefs name any of them -- so the handlers are
 /// ordinary Rust functions rather than `extern "C"` ones.
-pub type nv_func_T = Option<unsafe fn(*mut cmdarg_T)>;
-pub const OP_NOP: C2Rust_Unnamed_40 = 0;
-pub const OP_YANK: C2Rust_Unnamed_40 = 2;
-pub const OP_RSHIFT: C2Rust_Unnamed_40 = 5;
-pub const OP_LSHIFT: C2Rust_Unnamed_40 = 4;
-pub const OP_DELETE: C2Rust_Unnamed_40 = 1;
-pub const PUT_LINE_FORWARD: C2Rust_Unnamed_39 = 32;
-pub const PUT_LINE_SPLIT: C2Rust_Unnamed_39 = 16;
-pub const PUT_LINE: C2Rust_Unnamed_39 = 8;
-pub const PUT_BLOCK_INNER: C2Rust_Unnamed_39 = 64;
-pub const PUT_CURSEND: C2Rust_Unnamed_39 = 2;
-pub const PUT_FIXINDENT: C2Rust_Unnamed_39 = 1;
-pub const SEARCH_START: C2Rust_Unnamed_43 = 256;
-pub const FM_FORWARD: C2Rust_Unnamed_44 = 2;
-pub const RE_LAST: C2Rust_Unnamed_45 = 2;
-pub const SEARCH_MSG: C2Rust_Unnamed_43 = 12;
-pub const SEARCH_ECHO: C2Rust_Unnamed_43 = 2;
-pub const SEARCH_OPT: C2Rust_Unnamed_43 = 16;
-pub const OP_CHANGE: C2Rust_Unnamed_40 = 3;
-pub const OP_NR_SUB: C2Rust_Unnamed_40 = 29;
-pub const OP_NR_ADD: C2Rust_Unnamed_40 = 28;
-pub const OP_TILDE: C2Rust_Unnamed_40 = 7;
+pub(crate) type nv_func_T = Option<unsafe fn(*mut cmdarg_T)>;
+pub const OP_NOP: c_uint = 0;
+pub const OP_YANK: c_uint = 2;
+pub const OP_RSHIFT: c_uint = 5;
+pub const OP_LSHIFT: c_uint = 4;
+pub const OP_DELETE: c_uint = 1;
+pub const PUT_LINE_FORWARD: c_uint = 32;
+pub const PUT_LINE_SPLIT: c_uint = 16;
+pub const PUT_LINE: c_uint = 8;
+pub const PUT_BLOCK_INNER: c_uint = 64;
+pub const PUT_CURSEND: c_uint = 2;
+pub const PUT_FIXINDENT: c_uint = 1;
+pub const SEARCH_START: c_uint = 256;
+pub const FM_FORWARD: c_uint = 2;
+pub const RE_LAST: c_uint = 2;
+pub const SEARCH_MSG: c_uint = 12;
+pub const SEARCH_ECHO: c_uint = 2;
+pub const SEARCH_OPT: c_uint = 16;
+pub const OP_CHANGE: c_uint = 3;
+pub const OP_NR_SUB: c_uint = 29;
+pub const OP_NR_ADD: c_uint = 28;
+pub const OP_TILDE: c_uint = 7;
 pub const SPELL_ADD_BAD: SpellAddType = 1;
 pub const SPELL_ADD_GOOD: SpellAddType = 0;
 pub const SMT_RARE: smt_T = 2;
 pub const SMT_BAD: smt_T = 1;
 pub const SMT_ALL: smt_T = 0;
-pub const OP_FOLD: C2Rust_Unnamed_40 = 19;
-pub const OP_LOWER: C2Rust_Unnamed_40 = 12;
-pub const OP_FORMAT: C2Rust_Unnamed_40 = 9;
-pub const SEARCH_MARK: C2Rust_Unnamed_43 = 512;
-pub const FM_BACKWARD: C2Rust_Unnamed_44 = 1;
-pub const ACTION_GOTO: C2Rust_Unnamed_42 = 2;
-pub const ACTION_SHOW: C2Rust_Unnamed_42 = 1;
-pub const ACTION_SHOW_ALL: C2Rust_Unnamed_42 = 4;
-pub const FIND_ANY: C2Rust_Unnamed_41 = 1;
-pub const FIND_DEFINE: C2Rust_Unnamed_41 = 2;
-pub const OP_UPPER: C2Rust_Unnamed_40 = 11;
-pub const SEARCH_REV: C2Rust_Unnamed_43 = 1;
-pub const OP_ROT13: C2Rust_Unnamed_40 = 15;
-pub const DT_POP: C2Rust_Unnamed_46 = 2;
+pub const OP_FOLD: c_uint = 19;
+pub const OP_LOWER: c_uint = 12;
+pub const OP_FORMAT: c_uint = 9;
+pub const SEARCH_MARK: c_uint = 512;
+pub const FM_BACKWARD: c_uint = 1;
+pub const ACTION_GOTO: c_uint = 2;
+pub const ACTION_SHOW: c_uint = 1;
+pub const ACTION_SHOW_ALL: c_uint = 4;
+pub const FIND_ANY: c_uint = 1;
+pub const FIND_DEFINE: c_uint = 2;
+pub const OP_UPPER: c_uint = 11;
+pub const SEARCH_REV: c_uint = 1;
+pub const OP_ROT13: c_uint = 15;
+pub const DT_POP: c_uint = 2;
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct NormalState {
+pub(crate) struct NormalState {
     pub state: VimState,
     pub command_finished: bool,
     pub ctrl_w: bool,
@@ -398,15 +230,7 @@ pub struct NormalState {
     pub old_col: c_int,
     pub old_pos: pos_T,
 }
-pub const OP_COLON: C2Rust_Unnamed_40 = 10;
-pub type C2Rust_Unnamed_39 = c_uint;
-pub type C2Rust_Unnamed_40 = c_uint;
-pub type C2Rust_Unnamed_41 = c_uint;
-pub type C2Rust_Unnamed_42 = c_uint;
-pub type C2Rust_Unnamed_43 = c_uint;
-pub type C2Rust_Unnamed_44 = c_uint;
-pub type C2Rust_Unnamed_45 = c_uint;
-pub type C2Rust_Unnamed_46 = c_uint;
+pub const OP_COLON: c_uint = 10;
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
@@ -423,7 +247,7 @@ pub const NL: c_int = '\n' as c_int;
 pub const CAR: c_int = '\r' as c_int;
 pub const ESC: c_int = '\u{1b}' as c_int;
 pub const DEL: c_int = 0x7f as c_int;
-pub const POUND: c_int = 0xa3 as c_int;
+pub(crate) const POUND: c_int = 0xa3 as c_int;
 pub const Ctrl_A: c_int = 1 as c_int;
 pub const Ctrl_B: c_int = 2 as c_int;
 pub const Ctrl_C: c_int = 3 as c_int;
@@ -452,9 +276,9 @@ pub const Ctrl_BSL: c_int = 28 as c_int;
 pub const Ctrl_RSB: c_int = 29 as c_int;
 pub const Ctrl_HAT: c_int = 30 as c_int;
 pub const Ctrl__: c_int = 31 as c_int;
-pub const FO_OPEN_COMS: c_int = 'o' as c_int;
-pub const CPO_DIGRAPH: c_int = 'D' as c_int;
-pub const CPO_CHANGEW: c_int = '_' as c_int;
+pub(crate) const FO_OPEN_COMS: c_int = 'o' as c_int;
+pub(crate) const CPO_DIGRAPH: c_int = 'D' as c_int;
+pub(crate) const CPO_CHANGEW: c_int = '_' as c_int;
 pub const VALID_WCOL: c_int = 0x2 as c_int;
 pub const VALID_CROW: c_int = 0x10 as c_int;
 pub const B_IMODE_LMAP: c_int = 1 as c_int;
@@ -490,16 +314,16 @@ pub const GRAPHEME_STATE_INIT: c_int = 0 as c_int;
 static VIsual_mode_orig: GlobalCell<c_int> = GlobalCell::new(NUL);
 const e_changelist_is_empty: &CStr = c"E664: Changelist is empty";
 const e_cmdline_window_already_open: &CStr = c"E1292: Command-line window is already open";
-pub const NV_NCH: c_int = 0x1 as c_int;
-pub const NV_NCH_NOP: c_int = 0x2 as c_int | NV_NCH;
-pub const NV_NCH_ALW: c_int = 0x4 as c_int | NV_NCH;
-pub const NV_LANG: c_int = 0x8 as c_int;
-pub const NV_SS: c_int = 0x10 as c_int;
-pub const NV_SSS: c_int = 0x20 as c_int;
-pub const NV_STS: c_int = 0x40 as c_int;
-pub const NV_RL: c_int = 0x80 as c_int;
-pub const NV_KEEPREG: c_int = 0x100 as c_int;
-pub const NV_NCW: c_int = 0x200 as c_int;
+pub(crate) const NV_NCH: c_int = 0x1 as c_int;
+pub(crate) const NV_NCH_NOP: c_int = 0x2 as c_int | NV_NCH;
+pub(crate) const NV_NCH_ALW: c_int = 0x4 as c_int | NV_NCH;
+pub(crate) const NV_LANG: c_int = 0x8 as c_int;
+pub(crate) const NV_SS: c_int = 0x10 as c_int;
+pub(crate) const NV_SSS: c_int = 0x20 as c_int;
+pub(crate) const NV_STS: c_int = 0x40 as c_int;
+pub(crate) const NV_RL: c_int = 0x80 as c_int;
+pub(crate) const NV_KEEPREG: c_int = 0x100 as c_int;
+pub(crate) const NV_NCW: c_int = 0x200 as c_int;
 /// One row of [`nv_cmds`].
 ///
 /// The flags and the argument are written as the `c_int` constants that name
@@ -924,7 +748,7 @@ static nv_cmds: GlobalCell<[nv_cmd; 188]> = GlobalCell::new([
         0,
     ),
 ]);
-pub const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[nv_cmd; 188]>()
+pub(crate) const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[nv_cmd; 188]>()
     .wrapping_div(::core::mem::size_of::<nv_cmd>())
     .wrapping_div(
         (::core::mem::size_of::<[nv_cmd; 188]>().wrapping_rem(::core::mem::size_of::<nv_cmd>())

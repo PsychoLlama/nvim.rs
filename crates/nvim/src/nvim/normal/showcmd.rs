@@ -10,7 +10,39 @@
 
 use core::ptr;
 
-use super::*;
+use crate::src::nvim::api::private::helpers::cstr_as_string;
+use crate::src::nvim::charset::{transchar, vim_isprintc};
+use crate::src::nvim::cursor::get_cursor_pos_ptr;
+use crate::src::nvim::drawscreen::setcursor;
+use crate::src::nvim::fold::hasFolding;
+use crate::src::nvim::getchar::char_avail;
+use crate::src::nvim::grid::{grid_line_flush, grid_line_puts, grid_line_start};
+use crate::src::nvim::main::{
+    Rows, VIsual, VIsual_active, VIsual_mode, curwin, empty_string_option, ex_normal_busy,
+    hl_attr_active, msg_grid_adj, msg_silent, p_ch, p_sbr, p_sc, p_sel, p_sloc, redraw_tabline,
+    sc_col, showcmd_buf,
+};
+use crate::src::nvim::mbyte::{utf_char2bytes, utfc_ptr2len};
+use crate::src::nvim::memline::ml_get_pos;
+use crate::src::nvim::message::msg_grid_validate;
+use crate::src::nvim::normal::{
+    ARRAY_DICT_INIT, Ctrl_V, HLF_MSG, KE_EVENT, KE_IGNORE, KE_LEFTDRAG, KE_LEFTMOUSE,
+    KE_LEFTRELEASE, KE_MIDDLEDRAG, KE_MIDDLEMOUSE, KE_MIDDLERELEASE, KE_MOUSEDOWN, KE_MOUSELEFT,
+    KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE,
+    KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE, KE_X2DRAG, KE_X2MOUSE, KE_X2RELEASE, NUL, SHOWCMD_BUFLEN,
+    SHOWCMD_COLS, kObjectTypeArray, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    kUIMessages, old_showcmd_buf, showcmd_is_clear, showcmd_visual,
+};
+use crate::src::nvim::os::libc::{memmove, snprintf, strcat, strcpy, strlen};
+use crate::src::nvim::plines::getvcols;
+use crate::src::nvim::pos::lt;
+use crate::src::nvim::statusline::{draw_tabline, win_redr_status};
+use crate::src::nvim::types::object;
+use crate::src::nvim::types::{Array, Integer, Object, OptInt, colnr_T, int64_t, linenr_T, size_t};
+use crate::src::nvim::ui::{ui_call_msg_showcmd, ui_has};
+use core::ffi::{c_char, c_int, c_void};
+
+use crate::src::nvim::types::object_data;
 
 /// The buffer holds a NUL-terminated C string; this is its length.
 #[inline(always)]
@@ -377,7 +409,7 @@ fn show_through_ui(clear: bool) {
             *chunk.items.add(0) = integer_object(0);
             *chunk.items.add(1) = object {
                 type_0: kObjectTypeString,
-                data: C2Rust_Unnamed_0 {
+                data: object_data {
                     string: cstr_as_string(showcmd_buf.ptr().cast::<c_char>()),
                 },
             };
@@ -385,7 +417,7 @@ fn show_through_ui(clear: bool) {
             chunk.size = 3;
             *content.items.add(0) = object {
                 type_0: kObjectTypeArray,
-                data: C2Rust_Unnamed_0 { array: chunk },
+                data: object_data { array: chunk },
             };
             content.size = 1;
         }
@@ -397,13 +429,13 @@ fn show_through_ui(clear: bool) {
 /// A nil `Object`, which is what both arrays start out full of.
 const NIL: Object = Object {
     type_0: kObjectTypeNil,
-    data: C2Rust_Unnamed_0 { boolean: false },
+    data: object_data { boolean: false },
 };
 
 fn integer_object(n: Integer) -> Object {
     object {
         type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed_0 { integer: n },
+        data: object_data { integer: n },
     }
 }
 

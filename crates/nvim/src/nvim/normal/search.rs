@@ -9,7 +9,31 @@
 
 use core::ptr;
 
-use super::*;
+use crate::src::nvim::cursor::check_cursor;
+use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::ex_getln::getcmdline;
+use crate::src::nvim::fold::foldOpenCursor;
+use crate::src::nvim::highlight::win_hl_attr;
+use crate::src::nvim::main::{
+    KeyTyped, curbuf, curwin, fdo_flags, jop_flags, mod_mask, no_hlsearch, p_hls,
+};
+use crate::src::nvim::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::normal::{
+    HLF_L, HLF_LC, KMarkNoContext, MOD_MASK_CTRL, OP_NOP, OP_ROT13, SEARCH_ECHO, SEARCH_MARK,
+    SEARCH_MSG, SEARCH_OPT, TAB, UPD_SOME_VALID, checkclearop, checkclearopq, clearop, clearopbeep,
+    e_changelist_is_empty, false_0, kMTCharWise, kMTLineWise, kMarkAll, kMarkBeginLine,
+    kMarkChangedCursor, kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed,
+    kMarkMoveSuccess, kMarkSetView, kMarkSwitchedBuf, nv_operator, true_0,
+};
+use crate::src::nvim::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
+use crate::src::nvim::os::libc::{gettext, strlen};
+use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::search::do_search;
+use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::types::{MarkMove, MarkMoveRes, cmdarg_T, fmark_T, searchit_arg_T, size_t};
+use crate::src::nvim::window::goto_tabpage_lastused;
+use core::ffi::{c_char, c_int, c_uint};
 
 /// Whether the highlight of the previous match has to be redrawn.
 ///

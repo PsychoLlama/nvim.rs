@@ -5,7 +5,37 @@
 
 use core::ptr;
 
-use super::*;
+use crate::src::nvim::buffer::{buflist_getfile, fileinfo};
+use crate::src::nvim::cursor::check_cursor_col;
+use crate::src::nvim::drawscreen::{redraw_curbuf_later, redraw_later, showmode};
+use crate::src::nvim::ex_docmd::{do_cmdline, do_cmdline_cmd};
+use crate::src::nvim::ex_getln::{compute_cmdrow, getexline};
+use crate::src::nvim::getchar::{
+    getcmdkeycmd, map_execute_lua, paste_repeat, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff,
+};
+use crate::src::nvim::help::ex_help;
+use crate::src::nvim::main::{
+    KeyTyped, VIsual_active, VIsual_select, clear_cmdline, cmdwin_result, cmdwin_type, curbuf,
+    curwin, did_emsg, ex_normal_busy, finish_op, firstwin, got_int, may_garbage_collect,
+    mode_displayed, redraw_mode, restart_VIsual_select, restart_edit, typebuf_was_empty,
+};
+use crate::src::nvim::memline::ml_get_len;
+use crate::src::nvim::message::{msg, msg_ext_set_trigger};
+use crate::src::nvim::normal::{
+    CA_COMMAND_BUSY, Ctrl_C, Ctrl_G, Ctrl_N, DOCMD_KEEPLINE, GETF_ALT, GETF_SETMARK, KE_COMMAND,
+    KE_IGNORE, KE_LUA, NUL, NULL, OP_NOP, UPD_CLEAR, UPD_INVERTED, checkclearop, checkclearopq,
+    clearop, clearopbeep, end_visual_mode, false_0, kMTCharWise, nv_left, nv_operator, nv_pcmark,
+    true_0, v_visop,
+};
+use crate::src::nvim::options::kOptBoFlagEsc;
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::state::{may_trigger_modechanged, state_handle_k_event};
+use crate::src::nvim::syntax::syn_stack_free_all;
+use crate::src::nvim::types::{cmdarg_T, linenr_T};
+use crate::src::nvim::ui::vim_beep;
+use crate::src::nvim::undo::anyBufIsChanged;
+use crate::src::nvim::window::do_window;
+use core::ffi::{c_char, c_int, c_uint, c_void};
 
 /// The key a `<Cmd>` mapping arrives as.
 const K_COMMAND: c_int = -(253 + ((KE_COMMAND as c_int) << 8));

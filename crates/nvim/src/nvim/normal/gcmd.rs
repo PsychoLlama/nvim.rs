@@ -4,7 +4,44 @@
 
 use core::ptr;
 
-use super::*;
+use crate::src::nvim::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
+use crate::src::nvim::cursor::{
+    check_cursor_lnum, coladvance, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr,
+    get_cursor_pos_ptr,
+};
+use crate::src::nvim::edit::{beginline, cursor_down, cursor_up, oneleft, oneright};
+use crate::src::nvim::ex_cmds::do_ascii;
+use crate::src::nvim::ex_docmd::{do_cmdline_cmd, do_exmode, do_sleep};
+use crate::src::nvim::fold::hasAnyFolding;
+use crate::src::nvim::main::{VIsual_active, VIsual_reselect, curbuf, curwin, mod_mask};
+use crate::src::nvim::mbyte::{show_utf8, utf_find_illegal, utf_ptr2cells};
+use crate::src::nvim::memline::goto_byte;
+use crate::src::nvim::message::show_sb_text;
+use crate::src::nvim::mouse::do_mouse;
+use crate::src::nvim::normal::{
+    BACKWARD, Ctrl_H, FORWARD, K_END, K_KEND, KE_IGNORE, KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE,
+    KE_MIDDLEDRAG, KE_MIDDLEMOUSE, KE_MIDDLERELEASE, KE_MOUSEMOVE, KE_RIGHTDRAG, KE_RIGHTMOUSE,
+    KE_RIGHTRELEASE, KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE, KE_X2DRAG, KE_X2MOUSE, KE_X2RELEASE,
+    MAXCOL, MOD_MASK_CTRL, NUL, OK, OP_NOP, VALID_WCOL, adjust_for_sel, check_text_locked,
+    checkclearop, checkclearopq, clearopbeep, false_0, invoke_edit, kMTCharWise, kMTLineWise,
+    nv_Replace, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto, nv_gotofile, nv_gv_cmd, nv_ident,
+    nv_join, nv_operator, nv_pcmark, nv_put, nv_screengo, nv_visual, nv_vreplace, true_0,
+};
+use crate::src::nvim::ops::cursor_pos_info;
+use crate::src::nvim::plines::{getvvcol, linetabsize};
+use crate::src::nvim::search::current_search;
+use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::textobject::bckend_word;
+use crate::src::nvim::types::{cmdarg_T, colnr_T, int64_t, linenr_T};
+use crate::src::nvim::undo::undo_time;
+use crate::src::nvim::window::{goto_tabpage, goto_tabpage_lastused};
+use core::ffi::c_int;
+
+use crate::src::nvim::r#move::{
+    adjust_skipcol, sms_marker_overlap, update_curswant_force, validate_cheight, validate_virtcol,
+    win_col_off, win_col_off2,
+};
+use crate::src::nvim::normal::{K_BS, K_DOWN, K_HOME, K_KHOME, K_UP};
 
 /// The mouse keys `g` accepts, which it re-sends as their CTRL-modified form.
 const K_LEFTMOUSE: c_int = -(253 + ((KE_LEFTMOUSE as c_int) << 8));

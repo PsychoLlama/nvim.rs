@@ -5,7 +5,50 @@
 
 use core::ptr;
 
-use super::*;
+use crate::src::nvim::buffer::buf_hide;
+use crate::src::nvim::change::get_leader_len;
+use crate::src::nvim::charset::{skipwhite, vim_iswordp};
+use crate::src::nvim::cmdhist::{add_to_history, init_history};
+use crate::src::nvim::cursor::{check_cursor_lnum, get_cursor_line_ptr};
+use crate::src::nvim::edit::beginline;
+use crate::src::nvim::ex_cmds::do_ecmd;
+use crate::src::nvim::ex_cmds2::autowrite;
+use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::ex_getln::vim_strsave_fnameescape;
+use crate::src::nvim::file_search::grab_file_name;
+use crate::src::nvim::fold::foldOpenCursor;
+use crate::src::nvim::main::{
+    KeyTyped, VIsual_active, clear_cmdline, curbuf, curwin, e_noident, fdo_flags, g_tag_at_cursor,
+    msg_silent, no_smartcase, p_kp, p_scs, p_ws, restart_edit,
+};
+use crate::src::nvim::mapping::add_map;
+use crate::src::nvim::mark::setpcmark;
+use crate::src::nvim::mbyte::{mb_get_class, mb_prevptr, utf_head_off, utfc_ptr2len};
+use crate::src::nvim::memline::ml_get_buf;
+use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc};
+use crate::src::nvim::message::{emsg, messaging};
+use crate::src::nvim::normal::{
+    BACKWARD, BL_FIX, BL_SOL, Ctrl_RSB, DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT,
+    FIND_STRING, FM_FORWARD, FORWARD, HIST_SEARCH, MODE_TERMINAL, NUL, OK, OP_NOP, POUND, RE_LAST,
+    SEARCH_START, SHM_SEARCHCOUNT, VSE_NONE, check_text_or_curbuf_locked, checkclearopq, clearop,
+    clearopbeep, false_0, get_visual_text, normal_search, true_0,
+};
+use crate::src::nvim::ops::clear_oparg;
+use crate::src::nvim::option::{magic_isset, shortmess};
+use crate::src::nvim::options::kOptFdoFlagSearch;
+use crate::src::nvim::os::libc::{gettext, snprintf, strcmp, strcpy, strlen};
+use crate::src::nvim::pos::clearpos;
+use crate::src::nvim::search::{findmatchlimit, reset_search_dir, searchit};
+use crate::src::nvim::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
+use crate::src::nvim::tag::do_tag;
+use crate::src::nvim::textobject::findpar;
+use crate::src::nvim::types::pos_T;
+use crate::src::nvim::types::{
+    cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, size_t, uint8_t, win_T,
+};
+use crate::src::nvim::undo::curbufIsChanged;
+use crate::src::nvim::window::check_can_set_curbuf_disabled;
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// The character classes `mb_get_class` answers with that this file cares
 /// about: 0 is white space, 1 is punctuation, 2 and up are the word classes

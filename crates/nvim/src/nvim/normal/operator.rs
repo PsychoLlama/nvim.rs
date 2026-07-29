@@ -10,7 +10,27 @@
 
 use core::ptr;
 
-use super::*;
+use crate::src::nvim::buffer::bt_prompt;
+use crate::src::nvim::edit::{beginline, cursor_down, prompt_curpos_editable};
+use crate::src::nvim::eval::vars::{set_reg_var, set_vim_var_string};
+use crate::src::nvim::getchar::{plain_vgetc, start_redo, stuffcharReadbuff};
+use crate::src::nvim::main::{
+    VIsual_active, VIsual_select, VIsual_select_reg, arrow_used, cmdwin_type, curbuf, curwin,
+    got_int, no_mapping, reg_executing, reg_recorded, restart_edit,
+};
+use crate::src::nvim::message::emsg;
+use crate::src::nvim::normal::{
+    BL_FIX, BL_SOL, BL_WHITE, Ctrl_V, FAIL, KE_CMDWIN, NUL, OP_DELETE, OP_FORMAT, OP_LOWER,
+    OP_LSHIFT, OP_NOP, OP_RSHIFT, OP_UPPER, OP_YANK, VV_OP, checkclearop, checkclearopq,
+    clearopbeep, e_cmdline_window_already_open, false_0, kMTLineWise, langmap_adjust, true_0,
+};
+use crate::src::nvim::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
+use crate::src::nvim::os::input::line_breakcheck;
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::register::{do_execreg, do_record, get_expr_register, valid_yank_reg};
+use crate::src::nvim::types::cmdarg_T;
+use crate::src::nvim::undo::{u_redo, u_undo, u_undoline};
+use core::ffi::{c_char, c_int};
 
 /// Re-run this command as the two-character `g<nchar>` operator instead.
 unsafe fn as_g_operator(cap: *mut cmdarg_T, nchar: u8) {
