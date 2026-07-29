@@ -55,7 +55,7 @@
     "crates/nvim/src/nvim/eval/funcs.rs": 2,
     "crates/nvim/src/nvim/eval/funcs/regexp.rs": 2,
     "crates/nvim/src/nvim/eval/list.rs": 33,
-    "crates/nvim/src/nvim/eval/lval.rs": 15,
+    "crates/nvim/src/nvim/eval/lval.rs": 1,
     "crates/nvim/src/nvim/eval/name.rs": 1,
     "crates/nvim/src/nvim/eval/pos.rs": 1,
     "crates/nvim/src/nvim/eval/provider.rs": 34,
