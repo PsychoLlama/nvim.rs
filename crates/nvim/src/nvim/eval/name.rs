@@ -1,317 +1,421 @@
 //! Scanning a variable, function or option name out of an expression.
+//!
+//! Three character classes decide where a name ends and they are not the
+//! same: `eval_isnamec1` is what may *start* one, `eval_isnamec` what may
+//! continue it (which includes `:` and `#`), and `eval_isdictc` what a
+//! `.key` may contain (which includes neither).
 
-#[allow(unused_imports)]
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub unsafe extern "C" fn get_env_len(mut arg: *mut *const c_char) -> c_int {
-    let mut p: *const c_char = ::core::ptr::null::<c_char>();
-    p = *arg;
-    while vim_isIDc(*p as uint8_t as c_int) {
-        p = p.offset(1);
+use core::ffi::{c_char, c_int, c_void};
+
+use crate::src::nvim::ascii::ascii_isdigit;
+use crate::src::nvim::charset::{skipwhite, vim_isIDc};
+use crate::src::nvim::eval::userfunc::eval_fname_script;
+use crate::src::nvim::eval::vars::get_vim_var_partial;
+use crate::src::nvim::eval::{
+    AUTOLOAD_CHAR, FNE_CHECK_START, FNE_INCL_BR, K_SPECIAL, KE_SNR, KS_EXTRA, NUL, OPT_GLOBAL,
+    OPT_LOCAL, VAR_PARTIAL, VV_LUA, eval_to_string, namespace_char,
+};
+use crate::src::nvim::main::e_invexpr2;
+use crate::src::nvim::mbyte::utfc_ptr2len;
+use crate::src::nvim::memory::{xfree, xmalloc};
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::option::find_option_end;
+use crate::src::nvim::os::libc::{gettext, strlen};
+use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
+use crate::src::nvim::types::OptIndex;
+use crate::src::nvim::types::{partial_T, size_t, typval_T, uint8_t};
+
+/// The length of the environment-variable name at the cursor, which is
+/// left after it. Zero when there is none.
+///
+/// # Safety
+/// `arg` must point at a cursor into a NUL-terminated string.
+pub unsafe fn get_env_len(arg: *mut *const c_char) -> c_int {
+    unsafe {
+        let mut p = *arg;
+        while vim_isIDc(*p as uint8_t as c_int) {
+            p = p.add(1);
+        }
+        if p == *arg {
+            return 0;
+        }
+        let len = p.offset_from(*arg) as c_int;
+        *arg = p;
+        len
     }
-    if p == *arg {
-        return 0 as c_int;
-    }
-    let mut len: c_int = p.offset_from(*arg) as c_int;
-    *arg = p;
-    return len;
 }
 
-pub unsafe extern "C" fn get_id_len(arg: *mut *const c_char) -> c_int {
-    let mut len: c_int = 0;
-    let mut p: *const c_char = ::core::ptr::null::<c_char>();
-    p = *arg;
-    while eval_isnamec(*p as c_int) {
-        if *p as c_int == ':' as c_int {
-            len = p.offset_from(*arg) as c_int;
-            if len > 1 as c_int
-                || len == 1 as c_int
-                    && vim_strchr(namespace_char.get(), **arg as uint8_t as c_int).is_null()
-            {
-                break;
+/// The length of the plain identifier at the cursor, which is left on the
+/// first non-blank after it. Zero when there is none.
+///
+/// A `:` is part of the name only as a leading namespace letter; anywhere
+/// else it ends it.
+///
+/// # Safety
+/// As `get_env_len`.
+pub unsafe fn get_id_len(arg: *mut *const c_char) -> c_int {
+    unsafe {
+        let mut p = *arg;
+        while eval_isnamec(*p as c_int) {
+            if *p == b':' as c_char {
+                let len = p.offset_from(*arg) as c_int;
+                if len > 1
+                    || (len == 1
+                        && vim_strchr(namespace_char.get(), **arg as uint8_t as c_int).is_null())
+                {
+                    break;
+                }
             }
+            p = p.add(1);
         }
-        p = p.offset(1);
-    }
-    if p == *arg {
-        return 0 as c_int;
-    }
-    len = p.offset_from(*arg) as c_int;
-    *arg = skipwhite(p);
-    return len;
-}
-
-pub unsafe extern "C" fn get_name_len(
-    arg: *mut *const c_char,
-    mut alias: *mut *mut c_char,
-    mut evaluate: bool,
-    mut verbose: bool,
-) -> c_int {
-    *alias = ::core::ptr::null_mut::<c_char>();
-    if *(*arg).offset(0 as c_int as isize) as c_int == K_SPECIAL as c_char as c_int
-        && *(*arg).offset(1 as c_int as isize) as c_int == KS_EXTRA as c_char as c_int
-        && *(*arg).offset(2 as c_int as isize) as c_int == KE_SNR as c_int as c_char as c_int
-    {
-        *arg = (*arg).offset(3 as c_int as isize);
-        return get_id_len(arg) + 3 as c_int;
-    }
-    let mut len: c_int = eval_fname_script(*arg);
-    if len > 0 as c_int {
-        *arg = (*arg).offset(len as isize);
-    }
-    let mut expr_start: *mut c_char = ::core::ptr::null_mut::<c_char>();
-    let mut expr_end: *mut c_char = ::core::ptr::null_mut::<c_char>();
-    let mut p: *const c_char = find_name_end(
-        *arg,
-        &raw mut expr_start as *mut *const c_char,
-        &raw mut expr_end as *mut *const c_char,
-        if len > 0 as c_int {
-            0 as c_int
-        } else {
-            FNE_CHECK_START
-        },
-    );
-    if !expr_start.is_null() {
-        if !evaluate {
-            len += p.offset_from(*arg) as c_int;
-            *arg = skipwhite(p);
-            return len;
+        if p == *arg {
+            return 0;
         }
-        let mut temp_string: *mut c_char = make_expanded_name(
-            (*arg).offset(-(len as isize)),
-            expr_start,
-            expr_end,
-            p as *mut c_char,
-        );
-        if temp_string.is_null() {
-            return -1 as c_int;
-        }
-        *alias = temp_string;
+        let len = p.offset_from(*arg) as c_int;
         *arg = skipwhite(p);
-        return strlen(temp_string) as c_int;
+        len
     }
-    len += get_id_len(arg);
-    if len == 0 as c_int && verbose as c_int != 0 && **arg as c_int != NUL {
-        semsg(gettext(&raw const e_invexpr2 as *const c_char), *arg);
-    }
-    return len;
 }
 
-pub unsafe extern "C" fn find_name_end(
-    mut arg: *const c_char,
-    mut expr_start: *mut *const c_char,
-    mut expr_end: *mut *const c_char,
-    mut flags: c_int,
-) -> *const c_char {
-    if !expr_start.is_null() {
-        *expr_start = ::core::ptr::null::<c_char>();
-        *expr_end = ::core::ptr::null::<c_char>();
-    }
-    if flags & FNE_CHECK_START != 0
-        && !eval_isnamec1(*arg as c_int)
-        && *arg as c_int != '{' as c_int
-    {
-        return arg;
-    }
-    let mut mb_nest: c_int = 0 as c_int;
-    let mut br_nest: c_int = 0 as c_int;
-    let mut len: c_int = 0;
-    let mut p: *const c_char = ::core::ptr::null::<c_char>();
-    p = arg;
-    while *p as c_int != NUL
-        && (eval_isnamec(*p as c_int) as c_int != 0
-            || *p as c_int == '{' as c_int
-            || flags & FNE_INCL_BR != 0
-                && (*p as c_int == '[' as c_int
-                    || *p as c_int == '.' as c_int
-                        && eval_isdictc(*p.offset(1 as c_int as isize) as c_int) as c_int != 0)
-            || mb_nest != 0 as c_int
-            || br_nest != 0 as c_int)
-    {
-        if *p as c_int == '\'' as c_int {
-            p = p.offset(1 as c_int as isize);
-            while *p as c_int != NUL && *p as c_int != '\'' as c_int {
-                p = p.offset(utfc_ptr2len(p as *mut c_char) as isize);
-            }
-            if *p as c_int == NUL {
-                break;
-            }
-        } else if *p as c_int == '"' as c_int {
-            p = p.offset(1 as c_int as isize);
-            while *p as c_int != NUL && *p as c_int != '"' as c_int {
-                if *p as c_int == '\\' as c_int && *p.offset(1 as c_int as isize) as c_int != NUL {
-                    p = p.offset(1);
-                }
-                p = p.offset(utfc_ptr2len(p as *mut c_char) as isize);
-            }
-            if *p as c_int == NUL {
-                break;
-            }
-        } else if br_nest == 0 as c_int && mb_nest == 0 as c_int && *p as c_int == ':' as c_int {
-            len = p.offset_from(arg) as c_int;
-            if len > 1 as c_int && *p.offset(-1 as c_int as isize) as c_int != '}' as c_int
-                || len == 1 as c_int
-                    && vim_strchr(namespace_char.get(), *arg as uint8_t as c_int).is_null()
-            {
-                break;
-            }
-        }
-        if mb_nest == 0 as c_int {
-            if *p as c_int == '[' as c_int {
-                br_nest += 1;
-            } else if *p as c_int == ']' as c_int {
-                br_nest -= 1;
-            }
-        }
-        if br_nest == 0 as c_int {
-            if *p as c_int == '{' as c_int {
-                mb_nest += 1;
-                if !expr_start.is_null() && (*expr_start).is_null() {
-                    *expr_start = p;
-                }
-            } else if *p as c_int == '}' as c_int {
-                mb_nest -= 1;
-                if !expr_start.is_null() && mb_nest == 0 as c_int && (*expr_end).is_null() {
-                    *expr_end = p;
-                }
-            }
-        }
-        p = p.offset(utfc_ptr2len(p as *mut c_char) as isize);
-    }
-    return p;
-}
+/// The length of the name at the cursor, expanding a `{...}` in it.
+///
+/// When the name held curly braces and `evaluate` is set, `alias` comes
+/// back owning the expanded spelling and the answer is *its* length rather
+/// than the source text's. -1 means the expansion failed.
+///
+/// # Safety
+/// As `get_env_len`; `alias` must be valid.
+pub unsafe fn get_name_len(
+    arg: *mut *const c_char,
+    alias: *mut *mut c_char,
+    evaluate: bool,
+    verbose: bool,
+) -> c_int {
+    unsafe {
+        *alias = core::ptr::null_mut();
 
-pub(crate) unsafe extern "C" fn make_expanded_name(
-    mut in_start: *const c_char,
-    mut expr_start: *mut c_char,
-    mut expr_end: *mut c_char,
-    mut in_end: *mut c_char,
-) -> *mut c_char {
-    if expr_end.is_null() || in_end.is_null() {
-        return ::core::ptr::null_mut::<c_char>();
-    }
-    let mut retval: *mut c_char = ::core::ptr::null_mut::<c_char>();
-    *expr_start = NUL as c_char;
-    *expr_end = NUL as c_char;
-    let mut c1: c_char = *in_end;
-    *in_end = NUL as c_char;
-    let mut temp_result: *mut c_char = eval_to_string(
-        expr_start.offset(1 as c_int as isize),
-        false_0 != 0,
-        false_0 != 0,
-    );
-    if !temp_result.is_null() {
-        let mut retvalsize: size_t = (expr_start.offset_from(in_start) as size_t)
-            .wrapping_add(strlen(temp_result))
-            .wrapping_add(in_end.offset_from(expr_end) as size_t)
-            .wrapping_add(1 as size_t);
-        retval = xmalloc(retvalsize) as *mut c_char;
-        vim_snprintf(
-            retval,
-            retvalsize,
-            b"%s%s%s\0".as_ptr() as *const c_char,
-            in_start,
-            temp_result,
-            expr_end.offset(1 as c_int as isize),
+        // A `<SNR>` prefix arrives as the three-byte key encoding.
+        if *(*arg).add(0) == K_SPECIAL as c_char
+            && *(*arg).add(1) == KS_EXTRA as c_char
+            && *(*arg).add(2) == KE_SNR as c_char
+        {
+            *arg = (*arg).add(3);
+            return get_id_len(arg) + 3;
+        }
+
+        // `s:` and `<SID>` are a prefix on top of the name proper.
+        let mut len = eval_fname_script(*arg);
+        if len > 0 {
+            *arg = (*arg).offset(len as isize);
+        }
+
+        let mut expr_start: *mut c_char = core::ptr::null_mut();
+        let mut expr_end: *mut c_char = core::ptr::null_mut();
+        let p = find_name_end(
+            *arg,
+            (&raw mut expr_start).cast::<*const c_char>(),
+            (&raw mut expr_end).cast::<*const c_char>(),
+            if len > 0 { 0 } else { FNE_CHECK_START },
         );
-    }
-    xfree(temp_result as *mut c_void);
-    *in_end = c1;
-    *expr_start = '{' as c_char;
-    *expr_end = '}' as c_char;
-    if !retval.is_null() {
-        temp_result = find_name_end(
-            retval,
-            &raw mut expr_start as *mut *const c_char,
-            &raw mut expr_end as *mut *const c_char,
-            0 as c_int,
-        ) as *mut c_char;
+
         if !expr_start.is_null() {
-            temp_result = make_expanded_name(retval, expr_start, expr_end, temp_result);
-            xfree(retval as *mut c_void);
-            retval = temp_result;
+            if !evaluate {
+                len += p.offset_from(*arg) as c_int;
+                *arg = skipwhite(p);
+                return len;
+            }
+            // The prefix is part of the name being expanded, so the start
+            // is stepped back over it.
+            let temp_string = make_expanded_name(
+                (*arg).offset(-(len as isize)),
+                expr_start,
+                expr_end,
+                p as *mut c_char,
+            );
+            if temp_string.is_null() {
+                return -1;
+            }
+            *alias = temp_string;
+            *arg = skipwhite(p);
+            return strlen(temp_string) as c_int;
+        }
+
+        len += get_id_len(arg);
+        if len == 0 && verbose && **arg as c_int != NUL {
+            semsg(gettext(e_invexpr2.ptr().cast()), *arg);
+        }
+        len
+    }
+}
+
+/// The end of the name starting at `arg`, stepping over `{...}` and, with
+/// `FNE_INCL_BR`, over `[...]` and `.key` subscripts too. `expr_start` and
+/// `expr_end` come back on the outermost pair of curly braces, when there
+/// was one.
+///
+/// # Safety
+/// `arg` must be NUL-terminated; the two out-parameters both null or both
+/// valid.
+pub unsafe fn find_name_end(
+    arg: *const c_char,
+    expr_start: *mut *const c_char,
+    expr_end: *mut *const c_char,
+    flags: c_int,
+) -> *const c_char {
+    unsafe {
+        if !expr_start.is_null() {
+            *expr_start = core::ptr::null();
+            *expr_end = core::ptr::null();
+        }
+        if flags & FNE_CHECK_START != 0 && !eval_isnamec1(*arg as c_int) && *arg != b'{' as c_char {
+            return arg;
+        }
+
+        let mut mb_nest = 0;
+        let mut br_nest = 0;
+        let mut p = arg;
+        while *p as c_int != NUL
+            && (eval_isnamec(*p as c_int)
+                || *p == b'{' as c_char
+                || (flags & FNE_INCL_BR != 0
+                    && (*p == b'[' as c_char
+                        || (*p == b'.' as c_char && eval_isdictc(*p.add(1) as c_int))))
+                || mb_nest != 0
+                || br_nest != 0)
+        {
+            if *p == b'\'' as c_char {
+                // A literal string inside `[...]`.
+                p = p.add(1);
+                while *p as c_int != NUL && *p != b'\'' as c_char {
+                    p = p.offset(utfc_ptr2len(p as *mut c_char) as isize);
+                }
+                if *p as c_int == NUL {
+                    break;
+                }
+            } else if *p == b'"' as c_char {
+                // A double-quoted string, whose escapes must be stepped over.
+                p = p.add(1);
+                while *p as c_int != NUL && *p != b'"' as c_char {
+                    if *p == b'\\' as c_char && *p.add(1) as c_int != NUL {
+                        p = p.add(1);
+                    }
+                    p = p.offset(utfc_ptr2len(p as *mut c_char) as isize);
+                }
+                if *p as c_int == NUL {
+                    break;
+                }
+            } else if br_nest == 0 && mb_nest == 0 && *p == b':' as c_char {
+                // A `:` ends the name unless it is the namespace one — or
+                // unless a `}` came just before it, which is a curly-braces
+                // name that produced the scope letter itself.
+                let len = p.offset_from(arg) as c_int;
+                if (len > 1 && *p.offset(-1) != b'}' as c_char)
+                    || (len == 1
+                        && vim_strchr(namespace_char.get(), *arg as uint8_t as c_int).is_null())
+                {
+                    break;
+                }
+            }
+
+            if mb_nest == 0 {
+                if *p == b'[' as c_char {
+                    br_nest += 1;
+                } else if *p == b']' as c_char {
+                    br_nest -= 1;
+                }
+            }
+            if br_nest == 0 {
+                if *p == b'{' as c_char {
+                    mb_nest += 1;
+                    if !expr_start.is_null() && (*expr_start).is_null() {
+                        *expr_start = p;
+                    }
+                } else if *p == b'}' as c_char {
+                    mb_nest -= 1;
+                    if !expr_start.is_null() && mb_nest == 0 && (*expr_end).is_null() {
+                        *expr_end = p;
+                    }
+                }
+            }
+            p = p.offset(utfc_ptr2len(p as *mut c_char) as isize);
+        }
+        p
+    }
+}
+
+/// Expand the `{expr}` between `expr_start` and `expr_end` and answer the
+/// whole name with it substituted in, or null when the expression failed.
+/// The result is re-scanned, so nested curly braces expand too.
+///
+/// # Safety
+/// All four pointers must be into one writable, NUL-terminated string;
+/// `expr_start`/`expr_end` on the braces and `in_end` at the name's end.
+pub(crate) unsafe fn make_expanded_name(
+    in_start: *const c_char,
+    expr_start: *mut c_char,
+    expr_end: *mut c_char,
+    in_end: *mut c_char,
+) -> *mut c_char {
+    unsafe {
+        if expr_end.is_null() || in_end.is_null() {
+            return core::ptr::null_mut();
+        }
+
+        // The three pieces are cut apart in place — the braces and the end
+        // become terminators — and put back before returning.
+        *expr_start = NUL as c_char;
+        *expr_end = NUL as c_char;
+        let c1 = *in_end;
+        *in_end = NUL as c_char;
+
+        let mut retval: *mut c_char = core::ptr::null_mut();
+        let temp_result = eval_to_string(expr_start.add(1), false, false);
+        if !temp_result.is_null() {
+            let retvalsize = expr_start.offset_from(in_start) as size_t
+                + strlen(temp_result)
+                + in_end.offset_from(expr_end) as size_t
+                + 1;
+            retval = xmalloc(retvalsize) as *mut c_char;
+            vim_snprintf(
+                retval,
+                retvalsize,
+                c"%s%s%s".as_ptr(),
+                in_start,
+                temp_result,
+                expr_end.add(1),
+            );
+        }
+        xfree(temp_result as *mut c_void);
+
+        *in_end = c1;
+        *expr_start = b'{' as c_char;
+        *expr_end = b'}' as c_char;
+
+        if !retval.is_null() {
+            // The expansion may itself hold curly braces.
+            let mut inner_start: *mut c_char = core::ptr::null_mut();
+            let mut inner_end: *mut c_char = core::ptr::null_mut();
+            let name_end = find_name_end(
+                retval,
+                (&raw mut inner_start).cast::<*const c_char>(),
+                (&raw mut inner_end).cast::<*const c_char>(),
+                0,
+            ) as *mut c_char;
+            if !inner_start.is_null() {
+                let expanded = make_expanded_name(retval, inner_start, inner_end, name_end);
+                xfree(retval as *mut c_void);
+                retval = expanded;
+            }
+        }
+        retval
+    }
+}
+
+/// An ASCII letter, tested on the code point rather than on a byte: the
+/// callers pass a `c_char` widened to `c_int`, so a multibyte lead byte
+/// arrives negative and must not match.
+#[inline(always)]
+fn is_alpha(c: c_int) -> bool {
+    (c >= b'A' as c_int && c <= b'Z' as c_int) || (c >= b'a' as c_int && c <= b'z' as c_int)
+}
+
+/// May this character be part of a variable name?
+pub fn eval_isnamec(c: c_int) -> bool {
+    is_alpha(c)
+        || ascii_isdigit(c)
+        || c == b'_' as c_int
+        || c == b':' as c_int
+        || c == AUTOLOAD_CHAR
+}
+
+/// May this character *start* a variable name?
+pub fn eval_isnamec1(c: c_int) -> bool {
+    is_alpha(c) || c == b'_' as c_int
+}
+
+/// May this character be part of a `.key` subscript? Unlike a variable
+/// name, no `:` and no `#`.
+pub fn eval_isdictc(c: c_int) -> bool {
+    is_alpha(c) || ascii_isdigit(c) || c == b'_' as c_int
+}
+
+/// Is this partial the one `v:lua` stands for?
+///
+/// # Safety
+/// `partial` must be null or valid.
+pub unsafe fn is_luafunc(partial: *mut partial_T) -> bool {
+    unsafe { partial == get_vim_var_partial(VV_LUA) }
+}
+
+/// Is this typval `v:lua`?
+///
+/// # Safety
+/// `tv` must be valid.
+pub(crate) unsafe fn tv_is_luafunc(tv: *mut typval_T) -> bool {
+    unsafe { (*tv).v_type == VAR_PARTIAL && is_luafunc((*tv).vval.v_partial) }
+}
+
+/// The end of a `v:lua.` function name, which may hold `.`, `-` and `'`
+/// as well as the usual name characters.
+///
+/// # Safety
+/// `p` must be NUL-terminated.
+pub unsafe fn skip_luafunc_name(p: *const c_char) -> *const c_char {
+    unsafe {
+        let mut p = p;
+        loop {
+            let b = *p as u8;
+            if !(b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'\'')) {
+                return p;
+            }
+            p = p.add(1);
         }
     }
-    return retval;
 }
 
-pub unsafe extern "C" fn eval_isnamec(mut c: c_int) -> bool {
-    return c as c_uint >= 'A' as c_uint && c as c_uint <= 'Z' as c_uint
-        || c as c_uint >= 'a' as c_uint && c as c_uint <= 'z' as c_uint
-        || ascii_isdigit(c) as c_int != 0
-        || c == '_' as c_int
-        || c == ':' as c_int
-        || c == AUTOLOAD_CHAR;
-}
-
-pub unsafe extern "C" fn eval_isnamec1(mut c: c_int) -> bool {
-    return c as c_uint >= 'A' as c_uint && c as c_uint <= 'Z' as c_uint
-        || c as c_uint >= 'a' as c_uint && c as c_uint <= 'z' as c_uint
-        || c == '_' as c_int;
-}
-
-pub unsafe extern "C" fn eval_isdictc(mut c: c_int) -> bool {
-    return c as c_uint >= 'A' as c_uint && c as c_uint <= 'Z' as c_uint
-        || c as c_uint >= 'a' as c_uint && c as c_uint <= 'z' as c_uint
-        || ascii_isdigit(c) as c_int != 0
-        || c == '_' as c_int;
-}
-
-pub unsafe extern "C" fn is_luafunc(mut partial: *mut partial_T) -> bool {
-    return partial == get_vim_var_partial(VV_LUA);
-}
-
-pub(crate) unsafe extern "C" fn tv_is_luafunc(mut tv: *mut typval_T) -> bool {
-    return (*tv).v_type as c_uint == VAR_PARTIAL as c_int as c_uint
-        && is_luafunc((*tv).vval.v_partial) as c_int != 0;
-}
-
-pub unsafe extern "C" fn skip_luafunc_name(mut p: *const c_char) -> *const c_char {
-    while *p as c_uint >= 'A' as c_uint && *p as c_uint <= 'Z' as c_uint
-        || *p as c_uint >= 'a' as c_uint && *p as c_uint <= 'z' as c_uint
-        || ascii_isdigit(*p as c_int) as c_int != 0
-        || *p as c_int == '_' as c_int
-        || *p as c_int == '-' as c_int
-        || *p as c_int == '.' as c_int
-        || *p as c_int == '\'' as c_int
-    {
-        p = p.offset(1);
+/// The length of the `v:lua.` function name at `str`, or zero when what
+/// follows it is not the expected terminator.
+///
+/// # Safety
+/// `str` must be NUL-terminated.
+pub unsafe fn check_luafunc_name(str: *const c_char, paren: bool) -> c_int {
+    unsafe {
+        let p = skip_luafunc_name(str);
+        let want = if paren { b'(' as c_char } else { NUL as c_char };
+        if *p != want {
+            return 0;
+        }
+        p.offset_from(str) as c_int
     }
-    return p;
 }
 
-pub unsafe extern "C" fn check_luafunc_name(str: *const c_char, paren: bool) -> c_int {
-    let p: *const c_char = skip_luafunc_name(str);
-    if *p as c_int
-        != (if paren as c_int != 0 {
-            '(' as c_int
-        } else {
-            NUL
-        })
-    {
-        return 0 as c_int;
-    }
-    return p.offset_from(str) as c_int;
-}
-
-pub unsafe extern "C" fn find_option_var_end(
+/// The end of the option name at the cursor, with `opt_idxp` and
+/// `opt_flags` describing which option and which scope. The cursor is left
+/// after any `g:`/`l:` prefix, but only when a name was found.
+///
+/// # Safety
+/// `arg` must point at a cursor on the `&` or `+`; the out-parameters
+/// valid.
+pub unsafe fn find_option_var_end(
     arg: *mut *const c_char,
     opt_idxp: *mut OptIndex,
     opt_flags: *mut c_int,
 ) -> *const c_char {
-    let mut p: *const c_char = *arg;
-    p = p.offset(1);
-    if *p as c_int == 'g' as c_int && *p.offset(1 as c_int as isize) as c_int == ':' as c_int {
-        *opt_flags = OPT_GLOBAL as c_int;
-        p = p.offset(2 as c_int as isize);
-    } else if *p as c_int == 'l' as c_int && *p.offset(1 as c_int as isize) as c_int == ':' as c_int
-    {
-        *opt_flags = OPT_LOCAL as c_int;
-        p = p.offset(2 as c_int as isize);
-    } else {
-        *opt_flags = 0 as c_int;
+    unsafe {
+        let mut p = (*arg).add(1);
+        if *p == b'g' as c_char && *p.add(1) == b':' as c_char {
+            *opt_flags = OPT_GLOBAL as c_int;
+            p = p.add(2);
+        } else if *p == b'l' as c_char && *p.add(1) == b':' as c_char {
+            *opt_flags = OPT_LOCAL as c_int;
+            p = p.add(2);
+        } else {
+            *opt_flags = 0;
+        }
+        let end = find_option_end(p, opt_idxp);
+        *arg = if end.is_null() { *arg } else { p };
+        end
     }
-    let mut end: *const c_char = find_option_end(p, opt_idxp);
-    *arg = if end.is_null() { *arg } else { p };
-    return end;
 }
