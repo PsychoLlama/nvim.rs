@@ -28,17 +28,17 @@ use crate::src::nvim::eval::gc::{gc_first_dict, gc_first_list};
 use crate::src::nvim::eval::typval::{
     callback_free, callback_put, tv_blob_alloc, tv_blob_alloc_ret, tv_blob_check_index,
     tv_blob_check_range, tv_blob_copy, tv_blob_set_append, tv_blob_set_range,
-    tv_blob_slice_or_index, tv_blob_unref, tv_check_lock, tv_check_num, tv_check_str, tv_clear,
-    tv_copy, tv_dict_add, tv_dict_add_nr, tv_dict_alloc, tv_dict_copy, tv_dict_find, tv_dict_free,
+    tv_blob_slice_or_index, tv_blob_unref, tv_check_lock, tv_check_str, tv_clear, tv_copy,
+    tv_dict_add, tv_dict_add_nr, tv_dict_alloc, tv_dict_copy, tv_dict_find, tv_dict_free,
     tv_dict_free_contents, tv_dict_free_dict, tv_dict_get_callback, tv_dict_get_number,
     tv_dict_item_alloc, tv_dict_item_free, tv_dict_unref, tv_dict_watcher_notify,
-    tv_dict_wrong_func_name, tv_empty_string, tv_get_number, tv_get_number_chk, tv_get_string,
+    tv_dict_wrong_func_name, tv_get_number, tv_get_number_chk, tv_get_string,
     tv_get_string_buf_chk, tv_get_string_chk, tv_in_free_unref_items, tv_list_alloc,
     tv_list_alloc_ret, tv_list_append_dict, tv_list_append_owned_tv, tv_list_append_string,
     tv_list_assign_range, tv_list_check_range_index_one, tv_list_check_range_index_two,
     tv_list_copy, tv_list_find, tv_list_find_nr, tv_list_free, tv_list_free_contents,
     tv_list_free_list, tv_list_join, tv_list_slice_or_index, tv_list_unref, tv_list_watch_add,
-    tv_list_watch_remove, tv2bool, value_check_lock,
+    tv_list_watch_remove, value_check_lock,
 };
 use crate::src::nvim::eval::typval::{
     tv_blob_get, tv_blob_len, tv_blob_set_ret, tv_dict_is_watched, tv_dict_set_ret,
@@ -46,14 +46,13 @@ use crate::src::nvim::eval::typval::{
     tv_list_len, tv_list_ref, tv_list_set_lock, tv_list_set_ret,
 };
 use crate::src::nvim::eval::userfunc::{
-    call_func, call_simple_func, call_simple_luafunc, deref_func_name, eval_fname_script,
-    find_func, free_unref_funccal, func_init, func_ptr_unref, func_ref, func_unref,
-    get_current_funccal, get_func_tv, get_funccal_args_ht, get_lambda_tv, get_scriptlocal_funcname,
-    make_partial, restore_funccal, save_funccal, set_ref_in_call_stack, set_ref_in_func,
-    set_ref_in_func_args, set_ref_in_functions, set_ref_in_previous_funccal,
+    call_func, eval_fname_script, find_func, free_unref_funccal, func_init, func_ptr_unref,
+    func_ref, func_unref, get_current_funccal, get_func_tv, get_funccal_args_ht, get_lambda_tv,
+    get_scriptlocal_funcname, make_partial, restore_funccal, save_funccal, set_ref_in_call_stack,
+    set_ref_in_func, set_ref_in_func_args, set_ref_in_functions, set_ref_in_previous_funccal,
 };
 use crate::src::nvim::eval::vars::{
-    check_vars, eval_one_expr_in_str, eval_variable, evalvars_init, ex_let_vars, find_var,
+    eval_one_expr_in_str, eval_variable, evalvars_init, ex_let_vars, find_var,
     garbage_collect_globvars, garbage_collect_scriptvars, garbage_collect_vimvars,
     get_vim_var_dict, get_vim_var_partial, get_vimvar_dict, optval_as_tv, set_var, set_var_const,
     set_vim_var_list, set_vim_var_nr, skip_var_list, valid_varname, var_check_lock, var_check_ro,
@@ -121,8 +120,8 @@ use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::env::{expand_env_save, vim_getenv};
 use crate::src::nvim::os::fs::os_can_exe;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, atol, gettext, memcmp, memcpy, memmove, memset, snprintf,
-    strcmp, strcpy, strlen, strncasecmp, strncmp, strpbrk, strstr, strtod, toupper,
+    __assert_fail, abort, atol, gettext, memcmp, memcpy, memmove, memset, snprintf, strcmp, strcpy,
+    strlen, strncasecmp, strpbrk, strtod, toupper,
 };
 use crate::src::nvim::os::shell::{
     os_system, shell_argv_to_str, shell_build_argv, shell_free_argv,
@@ -130,7 +129,7 @@ use crate::src::nvim::os::shell::{
 use crate::src::nvim::profile::{prof_child_enter, prof_child_exit};
 use crate::src::nvim::quickfix::set_ref_in_quickfix;
 use crate::src::nvim::regexp::{vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
-use crate::src::nvim::register::{get_reg_contents, op_global_reg_iter};
+use crate::src::nvim::register::op_global_reg_iter;
 use crate::src::nvim::runtime::{
     exestack, get_scriptname, script_autoload, script_is_lua, sourcing_a_script,
 };
@@ -152,7 +151,7 @@ use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::undo::u_clearallandblockfree;
-use core::ffi::{c_char, c_int, c_long, c_uint, c_ulong, c_ushort, c_void};
+use core::ffi::{c_char, c_int, c_long, c_uint, c_ulong, c_void};
 
 mod entry;
 pub use self::entry::*;
