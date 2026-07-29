@@ -53,7 +53,6 @@
     "crates/nvim/src/nvim/eval/expr/call.rs": 5,
     "crates/nvim/src/nvim/eval/expr/complete.rs": 3,
     "crates/nvim/src/nvim/eval/expr/index.rs": 1,
-    "crates/nvim/src/nvim/eval/expr/literal.rs": 15,
     "crates/nvim/src/nvim/eval/forloop.rs": 2,
     "crates/nvim/src/nvim/eval/fs.rs": 104,
     "crates/nvim/src/nvim/eval/funcs.rs": 2,

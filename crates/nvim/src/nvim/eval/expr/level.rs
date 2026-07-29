@@ -721,7 +721,7 @@ pub(crate) unsafe fn eval7(
                 ret = if matches!(*(*arg).add(1) as u8, b'"' | b'\'') {
                     eval_interp_string(arg, rettv, evaluate)
                 } else {
-                    eval_env_var(arg, rettv, evaluate as c_int)
+                    eval_env_var(arg, rettv, evaluate)
                 };
             }
             b'@' => {
