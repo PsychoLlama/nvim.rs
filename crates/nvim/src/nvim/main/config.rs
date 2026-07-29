@@ -1,107 +1,162 @@
-//! Sourcing the configuration: the system vimrc, the user's, the
-//! `exrc` in the working directory, and the `--cmd`/`-c` commands around them.
+//! Sourcing the configuration: the system vimrc, the user's, the `exrc` in
+//! the working directory, and the `--cmd`/`-c` commands around them.
 //!
 //! `-u NONE` and `--clean` are decided here, and so is the order the four
-//! sources run in.
+//! sources run in: `--cmd` commands, then the system vimrc, then the user's,
+//! then `exrc`, and the `-c` commands last of all -- after the first file has
+//! been loaded, which is why they are not in this module.
 
-#[allow(unused_imports)]
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub(crate) unsafe extern "C" fn exe_pre_commands(mut parmp: *mut mparm_T) {
-    let mut cmds: *mut *mut c_char = &raw mut (*parmp).pre_commands as *mut *mut c_char;
-    let mut cnt: c_int = (*parmp).n_pre_commands;
-    if cnt <= 0 as c_int {
-        return;
-    }
-    (*curwin.get()).w_cursor.lnum = 0 as c_int as linenr_T;
-    estack_push(
-        ETYPE_ARGS,
-        gettext(b"pre-vimrc command line\0".as_ptr() as *const c_char),
-        0 as linenr_T,
-    );
-    (*current_sctx.ptr()).sc_sid = SID_CMDARG as scid_T;
-    let mut i: c_int = 0 as c_int;
-    while i < cnt {
-        do_cmdline_cmd(*cmds.offset(i as isize));
-        i += 1;
-    }
-    estack_pop();
-    (*current_sctx.ptr()).sc_sid = 0 as c_int as scid_T;
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"--cmd commands\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-}
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn exe_commands(mut parmp: *mut mparm_T) {
-    msg_scroll.set(true_0);
-    if (*parmp).tagname.is_null() && (*curwin.get()).w_cursor.lnum <= 1 as linenr_T {
-        (*curwin.get()).w_cursor.lnum = 0 as c_int as linenr_T;
-    }
-    estack_push(
-        ETYPE_ARGS,
-        b"command line\0".as_ptr() as *const c_char as *mut c_char,
-        0 as linenr_T,
-    );
-    (*current_sctx.ptr()).sc_sid = SID_CARG as scid_T;
-    (*current_sctx.ptr()).sc_seq = 0 as c_int;
-    let mut i: c_int = 0 as c_int;
-    while i < (*parmp).n_commands {
-        do_cmdline_cmd((*parmp).commands[i as usize]);
-        if (*parmp).cmds_tofree[i as usize] != 0 {
-            xfree((*parmp).commands[i as usize] as *mut c_void);
+use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::lua::executor::{get_global_lstate, nlua_pcall};
+use crate::src::nvim::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
+use crate::src::nvim::main::args::execute_env;
+use crate::src::nvim::main::{
+    DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, FAIL, LUA_GLOBALSINDEX, OK, PATHSEP, SID_CARG,
+    SID_CMDARG, SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, curwin, e_cannot_read_from_str_2,
+    e_conflicting_configs, exmode_active, kEqualFiles, kXDGConfigDirs, mparm_T, msg_scroll, p_exrc,
+    silent_mode, time_msg_at,
+};
+use crate::src::nvim::memory::{strequal, xfree, xmalloc};
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::os::env::vim_env_iter;
+use crate::src::nvim::os::fs::os_path_exists;
+use crate::src::nvim::os::libc::{__assert_fail, fprintf, gettext, memcpy, stderr, strlen};
+use crate::src::nvim::os::stdpaths::get_appname;
+use crate::src::nvim::os::stdpaths::{stdpaths_get_xdg_var, stdpaths_user_conf_subpath};
+use crate::src::nvim::path::path_full_compare;
+use crate::src::nvim::quickfix::qf_jump;
+use crate::src::nvim::runtime::{do_source, estack_pop, estack_push};
+use crate::src::nvim::types::{lua_State, qf_info_T, scid_T, size_t};
+
+/// Run the `--cmd` commands, which come before any config.
+pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
+    // SAFETY: `parmp` is the caller's live parameter block; the commands it
+    // holds point into argv.
+    unsafe {
+        let count = (*parmp).n_pre_commands;
+        if count <= 0 {
+            return;
         }
-        i += 1;
-    }
-    estack_pop();
-    (*current_sctx.ptr()).sc_sid = 0 as c_int as scid_T;
-    if (*curwin.get()).w_cursor.lnum == 0 as linenr_T {
-        (*curwin.get()).w_cursor.lnum = 1 as c_int as linenr_T;
-    }
-    if !exmode_active.get() {
-        msg_scroll.set(false_0);
-    }
-    if (*parmp).edit_type == EDIT_QF as c_int {
-        qf_jump(
-            ::core::ptr::null_mut::<qf_info_T>(),
-            0 as c_int,
-            0 as c_int,
-            false_0,
-        );
-    }
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"executing command arguments\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
+        let cmds = &raw mut (*parmp).pre_commands as *mut *mut c_char;
+
+        // Line 0 says "no line yet", so that a `--cmd` that moves the cursor
+        // is not immediately overridden by the first file's position.
+        (*curwin.get()).w_cursor.lnum = 0;
+        estack_push(ETYPE_ARGS, gettext(c"pre-vimrc command line".as_ptr()), 0);
+        (*current_sctx.ptr()).sc_sid = SID_CMDARG as scid_T;
+        for i in 0..count {
+            do_cmdline_cmd(*cmds.offset(i as isize));
+        }
+        estack_pop();
+        (*current_sctx.ptr()).sc_sid = 0;
+
+        time_msg_at(c"--cmd commands");
     }
 }
 
-pub(crate) unsafe extern "C" fn do_system_initialization() {
-    let config_dirs: *mut c_char = stdpaths_get_xdg_var(kXDGConfigDirs);
-    if !config_dirs.is_null() {
-        let mut iter: *const c_void = ::core::ptr::null::<c_void>();
-        let mut appname: *const c_char = get_appname(false_0 != 0);
-        let mut appname_len: size_t = strlen(appname);
-        let sysinit_suffix: [c_char; 13] = [
-            PATHSEP as c_char,
-            's' as c_char,
-            'y' as c_char,
-            's' as c_char,
-            'i' as c_char,
-            'n' as c_char,
-            'i' as c_char,
-            't' as c_char,
-            '.' as c_char,
-            'v' as c_char,
-            'i' as c_char,
-            'm' as c_char,
-            NUL as c_char,
-        ];
+/// Run the `-c` and `+cmd` commands, which come after the config and the
+/// first file.
+pub(crate) unsafe fn exe_commands(parmp: *mut mparm_T) {
+    // SAFETY: `parmp` is the caller's live parameter block.
+    unsafe {
+        msg_scroll.set(1);
+        if (*parmp).tagname.is_null() && (*curwin.get()).w_cursor.lnum <= 1 {
+            // As in `exe_pre_commands`: let the commands decide the line.
+            (*curwin.get()).w_cursor.lnum = 0;
+        }
+
+        // NB: not translated, unlike the pre-vimrc one above.
+        estack_push(ETYPE_ARGS, c"command line".as_ptr() as *mut c_char, 0);
+        (*current_sctx.ptr()).sc_sid = SID_CARG as scid_T;
+        (*current_sctx.ptr()).sc_seq = 0;
+        for i in 0..(*parmp).n_commands {
+            do_cmdline_cmd((*parmp).commands[i as usize]);
+            if (*parmp).cmds_tofree[i as usize] != 0 {
+                xfree((*parmp).commands[i as usize] as *mut c_void);
+            }
+        }
+        estack_pop();
+        (*current_sctx.ptr()).sc_sid = 0;
+
+        if (*curwin.get()).w_cursor.lnum == 0 {
+            (*curwin.get()).w_cursor.lnum = 1;
+        }
+        if !exmode_active.get() {
+            msg_scroll.set(0);
+        }
+        if (*parmp).edit_type == EDIT_QF as c_int {
+            // `-q`: the commands may have changed the quickfix list.
+            qf_jump(ptr::null_mut::<qf_info_T>(), 0, 0, 0);
+        }
+
+        time_msg_at(c"executing command arguments");
+    }
+}
+
+/// `<dir>/<appname><suffix>`, freshly allocated.
+///
+/// `suffix` carries its own leading separator (`/sysinit.vim`), and the NUL
+/// comes with it.
+///
+/// `dedup_sep` is the system path's rule and *not* the user path's: an
+/// `$XDG_CONFIG_DIRS` entry that already ends in a separator would otherwise
+/// produce a doubled one. Upstream only does this on the system side, so
+/// this does too.
+unsafe fn config_subpath(
+    dir: *const c_char,
+    dir_len: size_t,
+    appname: *const c_char,
+    appname_len: size_t,
+    suffix: &CStr,
+    dedup_sep: bool,
+) -> *mut c_char {
+    let tail = suffix.to_bytes_with_nul();
+    // SAFETY: `dir[0..dir_len]` and `appname[0..appname_len]` are readable,
+    // and the allocation below is large enough for the worst case (a `dir`
+    // that does not end in a separator).
+    unsafe {
+        let path = xmalloc(dir_len + 1 + appname_len + tail.len()) as *mut c_char;
+        memcpy(path as *mut c_void, dir as *const c_void, dir_len);
+        let mut at = dir_len;
+        if !dedup_sep || *path.add(at - 1) as c_int != PATHSEP {
+            *path.add(at) = PATHSEP as c_char;
+            at += 1;
+        }
+        memcpy(
+            path.add(at) as *mut c_void,
+            appname as *const c_void,
+            appname_len,
+        );
+        at += appname_len;
+        memcpy(
+            path.add(at) as *mut c_void,
+            tail.as_ptr() as *const c_void,
+            tail.len(),
+        );
+        path
+    }
+}
+
+/// Walk `$XDG_CONFIG_DIRS`, calling `visit` with each entry.
+///
+/// `visit` answers `true` to stop the walk. Answers whether it did.
+unsafe fn for_each_config_dir(mut visit: impl FnMut(*const c_char, size_t) -> bool) -> bool {
+    // SAFETY: `stdpaths_get_xdg_var` hands over an owned string, and
+    // `vim_env_iter` hands back slices of it.
+    unsafe {
+        let config_dirs = stdpaths_get_xdg_var(kXDGConfigDirs);
+        if config_dirs.is_null() {
+            return false;
+        }
+        let mut iter: *const c_void = ptr::null();
+        let mut stopped = false;
         loop {
-            let mut dir: *const c_char = ::core::ptr::null::<c_char>();
+            let mut dir: *const c_char = ptr::null();
             let mut dir_len: size_t = 0;
             iter = vim_env_iter(
                 ':' as c_char,
@@ -110,302 +165,193 @@ pub(crate) unsafe extern "C" fn do_system_initialization() {
                 &raw mut dir,
                 &raw mut dir_len,
             );
-            if dir.is_null() || dir_len == 0 as size_t {
+            if dir.is_null() || dir_len == 0 {
                 break;
             }
-            let mut path_len: size_t = dir_len
-                .wrapping_add(1 as size_t)
-                .wrapping_add(appname_len)
-                .wrapping_add(::core::mem::size_of::<[c_char; 13]>());
-            let mut vimrc: *mut c_char = xmalloc(path_len) as *mut c_char;
-            memcpy(vimrc as *mut c_void, dir as *const c_void, dir_len);
-            if *vimrc.offset(dir_len.wrapping_sub(1 as size_t) as isize) as c_int != PATHSEP {
-                *vimrc.offset(dir_len as isize) = PATHSEP as c_char;
-                dir_len = dir_len.wrapping_add(1 as size_t);
+            if visit(dir, dir_len) {
+                stopped = true;
+                break;
             }
-            memcpy(
-                vimrc.offset(dir_len as isize) as *mut c_void,
-                appname as *const c_void,
-                appname_len,
-            );
-            memcpy(
-                vimrc.offset(dir_len as isize).offset(appname_len as isize) as *mut c_void,
-                &raw const sysinit_suffix as *const c_char as *const c_void,
-                ::core::mem::size_of::<[c_char; 13]>(),
-            );
-            if do_source(
-                vimrc,
-                false_0 != 0,
-                DOSO_NONE as c_int,
-                ::core::ptr::null_mut::<c_int>(),
-            ) != FAIL
-            {
-                xfree(vimrc as *mut c_void);
-                xfree(config_dirs as *mut c_void);
-                return;
+            if iter.is_null() {
+                break;
             }
+        }
+        xfree(config_dirs as *mut c_void);
+        stopped
+    }
+}
+
+/// Source the system-wide vimrc: the first `<config dir>/<appname>/sysinit.vim`
+/// that exists, or the compiled-in path if none do.
+pub(crate) unsafe fn do_system_initialization() {
+    // SAFETY: sources at most one file; `get_appname` hands over a borrowed
+    // string that outlives the walk.
+    unsafe {
+        let appname = get_appname(false);
+        let appname_len = strlen(appname);
+        let sourced = for_each_config_dir(|dir, dir_len| {
+            let vimrc = config_subpath(dir, dir_len, appname, appname_len, c"/sysinit.vim", true);
+            let ok = do_source(vimrc, false, DOSO_NONE as c_int, ptr::null_mut()) != FAIL;
             xfree(vimrc as *mut c_void);
-            if iter.is_null() {
-                break;
-            }
+            ok
+        });
+        if sourced {
+            return;
         }
-        xfree(config_dirs as *mut c_void);
-    }
-    do_source(
-        SYS_VIMRC_FILE.as_ptr() as *mut c_char,
-        false_0 != 0,
-        DOSO_NONE as c_int,
-        ::core::ptr::null_mut::<c_int>(),
-    );
-}
-
-pub(crate) unsafe extern "C" fn do_user_initialization() -> bool {
-    let mut do_exrc: bool = p_exrc.get() != 0;
-    if execute_env(b"VIMINIT\0".as_ptr() as *const c_char as *mut c_char) == OK {
-        do_exrc = p_exrc.get() != 0;
-        return do_exrc;
-    }
-    let mut init_lua_path: *mut c_char =
-        stdpaths_user_conf_subpath(b"init.lua\0".as_ptr() as *const c_char);
-    let mut user_vimrc: *mut c_char =
-        stdpaths_user_conf_subpath(b"init.vim\0".as_ptr() as *const c_char);
-    if os_path_exists(init_lua_path) as c_int != 0
-        && do_source(
-            init_lua_path,
-            true_0 != 0,
-            DOSO_VIMRC as c_int,
-            ::core::ptr::null_mut::<c_int>(),
-        ) != 0
-    {
-        if os_path_exists(user_vimrc) {
-            semsg(
-                (e_conflicting_configs.ptr() as *const _) as *const c_char,
-                init_lua_path,
-                user_vimrc,
-            );
-        }
-        xfree(user_vimrc as *mut c_void);
-        xfree(init_lua_path as *mut c_void);
-        do_exrc = p_exrc.get() != 0;
-        return do_exrc;
-    }
-    xfree(init_lua_path as *mut c_void);
-    if do_source(
-        user_vimrc,
-        true_0 != 0,
-        DOSO_VIMRC as c_int,
-        ::core::ptr::null_mut::<c_int>(),
-    ) != FAIL
-    {
-        do_exrc = p_exrc.get() != 0;
-        if do_exrc {
-            do_exrc = path_full_compare(
-                VIMRC_FILE.as_ptr() as *mut c_char,
-                user_vimrc,
-                false_0 != 0,
-                true_0 != 0,
-            ) as c_uint
-                != kEqualFiles as c_int as c_uint;
-        }
-        xfree(user_vimrc as *mut c_void);
-        return do_exrc;
-    }
-    xfree(user_vimrc as *mut c_void);
-    let config_dirs: *mut c_char = stdpaths_get_xdg_var(kXDGConfigDirs);
-    if !config_dirs.is_null() {
-        let mut appname: *const c_char = get_appname(false_0 != 0);
-        let mut appname_len: size_t = strlen(appname);
-        let mut iter: *const c_void = ::core::ptr::null::<c_void>();
-        loop {
-            let mut dir: *const c_char = ::core::ptr::null::<c_char>();
-            let mut dir_len: size_t = 0;
-            iter = vim_env_iter(
-                ':' as c_char,
-                config_dirs,
-                iter,
-                &raw mut dir,
-                &raw mut dir_len,
-            );
-            if dir.is_null() || dir_len == 0 as size_t {
-                break;
-            }
-            let init_lua_suffix: [c_char; 10] = [
-                PATHSEP as c_char,
-                'i' as c_char,
-                'n' as c_char,
-                'i' as c_char,
-                't' as c_char,
-                '.' as c_char,
-                'l' as c_char,
-                'u' as c_char,
-                'a' as c_char,
-                NUL as c_char,
-            ];
-            let mut init_lua_len: size_t = dir_len
-                .wrapping_add(1 as size_t)
-                .wrapping_add(appname_len)
-                .wrapping_add(::core::mem::size_of::<[c_char; 10]>());
-            let mut init_lua: *mut c_char = xmalloc(init_lua_len) as *mut c_char;
-            memcpy(init_lua as *mut c_void, dir as *const c_void, dir_len);
-            *init_lua.offset(dir_len as isize) = PATHSEP as c_char;
-            memcpy(
-                init_lua
-                    .offset(dir_len as isize)
-                    .offset(1 as c_int as isize) as *mut c_void,
-                appname as *const c_void,
-                appname_len,
-            );
-            memcpy(
-                init_lua
-                    .offset(dir_len as isize)
-                    .offset(1 as c_int as isize)
-                    .offset(appname_len as isize) as *mut c_void,
-                &raw const init_lua_suffix as *const c_char as *const c_void,
-                ::core::mem::size_of::<[c_char; 10]>(),
-            );
-            let init_vim_suffix: [c_char; 10] = [
-                PATHSEP as c_char,
-                'i' as c_char,
-                'n' as c_char,
-                'i' as c_char,
-                't' as c_char,
-                '.' as c_char,
-                'v' as c_char,
-                'i' as c_char,
-                'm' as c_char,
-                NUL as c_char,
-            ];
-            let mut init_vim_len: size_t = dir_len
-                .wrapping_add(1 as size_t)
-                .wrapping_add(appname_len)
-                .wrapping_add(::core::mem::size_of::<[c_char; 10]>());
-            let mut init_vim: *mut c_char = xmalloc(init_vim_len) as *mut c_char;
-            memcpy(init_vim as *mut c_void, dir as *const c_void, dir_len);
-            *init_vim.offset(dir_len as isize) = PATHSEP as c_char;
-            memcpy(
-                init_vim
-                    .offset(dir_len as isize)
-                    .offset(1 as c_int as isize) as *mut c_void,
-                appname as *const c_void,
-                appname_len,
-            );
-            memcpy(
-                init_vim
-                    .offset(dir_len as isize)
-                    .offset(1 as c_int as isize)
-                    .offset(appname_len as isize) as *mut c_void,
-                &raw const init_vim_suffix as *const c_char as *const c_void,
-                ::core::mem::size_of::<[c_char; 10]>(),
-            );
-            if os_path_exists(init_lua) as c_int != 0
-                && do_source(
-                    init_lua,
-                    true_0 != 0,
-                    DOSO_VIMRC as c_int,
-                    ::core::ptr::null_mut::<c_int>(),
-                ) != 0
-            {
-                if os_path_exists(init_vim) {
-                    semsg(
-                        (e_conflicting_configs.ptr() as *const _) as *const c_char,
-                        init_lua,
-                        init_vim,
-                    );
-                }
-                xfree(init_vim as *mut c_void);
-                xfree(init_lua as *mut c_void);
-                xfree(config_dirs as *mut c_void);
-                do_exrc = p_exrc.get() != 0;
-                return do_exrc;
-            }
-            xfree(init_lua as *mut c_void);
-            if do_source(
-                init_vim,
-                true_0 != 0,
-                DOSO_VIMRC as c_int,
-                ::core::ptr::null_mut::<c_int>(),
-            ) != FAIL
-            {
-                do_exrc = p_exrc.get() != 0;
-                if do_exrc {
-                    do_exrc = path_full_compare(
-                        VIMRC_FILE.as_ptr() as *mut c_char,
-                        init_vim,
-                        false_0 != 0,
-                        true_0 != 0,
-                    ) as c_uint
-                        != kEqualFiles as c_int as c_uint;
-                }
-                xfree(init_vim as *mut c_void);
-                xfree(config_dirs as *mut c_void);
-                return do_exrc;
-            }
-            xfree(init_vim as *mut c_void);
-            if iter.is_null() {
-                break;
-            }
-        }
-        xfree(config_dirs as *mut c_void);
-    }
-    if execute_env(b"EXINIT\0".as_ptr() as *const c_char as *mut c_char) == OK {
-        do_exrc = p_exrc.get() != 0;
-        return do_exrc;
-    }
-    return do_exrc;
-}
-
-pub(crate) unsafe extern "C" fn do_exrc_initialization() {
-    let L: *mut lua_State = get_global_lstate();
-    '_c2rust_label: {
-        if !L.is_null() {
-        } else {
-            __assert_fail(
-                b"L\0".as_ptr() as *const c_char,
-                b"src/nvim/main.rs\0".as_ptr() as *const c_char,
-                2207 as c_uint,
-                b"void do_exrc_initialization(void)\0".as_ptr() as *const c_char,
-            );
-        }
-    };
-    lua_getfield(L, LUA_GLOBALSINDEX, b"require\0".as_ptr() as *const c_char);
-    lua_pushstring(L, b"vim._core.exrc\0".as_ptr() as *const c_char);
-    if nlua_pcall(L, 1 as c_int, 0 as c_int) != 0 {
-        fprintf(
-            stderr,
-            b"%s\n\0".as_ptr() as *const c_char,
-            lua_tolstring(L, -1 as c_int, ::core::ptr::null_mut::<size_t>()),
+        do_source(
+            SYS_VIMRC_FILE.as_ptr() as *mut c_char,
+            false,
+            DOSO_NONE as c_int,
+            ptr::null_mut(),
         );
     }
 }
 
-pub(crate) unsafe extern "C" fn source_startup_scripts(parmp: *const mparm_T) {
-    if !(*parmp).use_vimrc.is_null() {
-        if !(strequal((*parmp).use_vimrc, b"NONE\0".as_ptr() as *const c_char) as c_int != 0
-            || strequal((*parmp).use_vimrc, b"NORC\0".as_ptr() as *const c_char) as c_int != 0)
+/// Try `init.lua` and then `init.vim` in one directory.
+///
+/// Answers `Some(do_exrc)` when one of them was sourced, and `None` when
+/// neither was: `do_exrc` is off when the file that was sourced *is* the
+/// `exrc` the working directory would offer, so it is not read twice.
+unsafe fn source_init_pair(
+    init_lua: *mut c_char,
+    init_vim: *mut c_char,
+    check_exrc_is_same: bool,
+) -> Option<bool> {
+    // SAFETY: both paths are owned NUL-terminated strings; freeing them is
+    // the caller's job.
+    unsafe {
+        if os_path_exists(init_lua)
+            && do_source(init_lua, true, DOSO_VIMRC as c_int, ptr::null_mut()) != 0
         {
-            if do_source(
-                (*parmp).use_vimrc,
-                false_0 != 0,
-                DOSO_NONE as c_int,
-                ::core::ptr::null_mut::<c_int>(),
-            ) != OK
+            // Both present: the Lua one won, and the user should know.
+            if os_path_exists(init_vim) {
+                semsg(
+                    (e_conflicting_configs.ptr() as *const _) as *const c_char,
+                    init_lua,
+                    init_vim,
+                );
+            }
+            return Some(p_exrc.get() != 0);
+        }
+        if do_source(init_vim, true, DOSO_VIMRC as c_int, ptr::null_mut()) != FAIL {
+            let mut do_exrc = p_exrc.get() != 0;
+            if do_exrc && check_exrc_is_same {
+                do_exrc =
+                    path_full_compare(VIMRC_FILE.as_ptr() as *mut c_char, init_vim, false, true)
+                        != kEqualFiles;
+            }
+            return Some(do_exrc);
+        }
+        None
+    }
+}
+
+/// Source the user's config, and say whether the working directory's `exrc`
+/// should be read afterwards.
+///
+/// The sources are tried in order and the first that works wins: `$VIMINIT`,
+/// `$XDG_CONFIG_HOME/<appname>/init.{lua,vim}`, then the same pair under each
+/// `$XDG_CONFIG_DIRS` entry, then `$EXINIT`.
+pub(crate) unsafe fn do_user_initialization() -> bool {
+    // SAFETY: sources at most one config; every path built here is freed on
+    // every way out.
+    unsafe {
+        // Read before anything is sourced: the fall-through at the bottom
+        // answers with *this*, not with what a half-sourced config left
+        // behind.
+        let do_exrc = p_exrc.get() != 0;
+
+        if execute_env(c"VIMINIT".as_ptr() as *mut c_char) == OK {
+            return p_exrc.get() != 0;
+        }
+
+        let init_lua_path = stdpaths_user_conf_subpath(c"init.lua".as_ptr());
+        let user_vimrc = stdpaths_user_conf_subpath(c"init.vim".as_ptr());
+        let home = source_init_pair(init_lua_path, user_vimrc, true);
+        xfree(init_lua_path as *mut c_void);
+        xfree(user_vimrc as *mut c_void);
+        if let Some(do_exrc) = home {
+            return do_exrc;
+        }
+
+        let appname = get_appname(false);
+        let appname_len = strlen(appname);
+        let mut from_dirs: Option<bool> = None;
+        for_each_config_dir(|dir, dir_len| {
+            let init_lua = config_subpath(dir, dir_len, appname, appname_len, c"/init.lua", false);
+            let init_vim = config_subpath(dir, dir_len, appname, appname_len, c"/init.vim", false);
+            from_dirs = source_init_pair(init_lua, init_vim, true);
+            xfree(init_lua as *mut c_void);
+            xfree(init_vim as *mut c_void);
+            from_dirs.is_some()
+        });
+        if let Some(do_exrc) = from_dirs {
+            return do_exrc;
+        }
+
+        if execute_env(c"EXINIT".as_ptr() as *mut c_char) == OK {
+            return p_exrc.get() != 0;
+        }
+        do_exrc
+    }
+}
+
+/// Read the working directory's `exrc`, which is Lua's job.
+pub(crate) unsafe fn do_exrc_initialization() {
+    // SAFETY: the Lua state exists by now -- `nlua_init` ran in `main_0`.
+    unsafe {
+        let lstate: *mut lua_State = get_global_lstate();
+        if lstate.is_null() {
+            __assert_fail(
+                c"L".as_ptr(),
+                c"src/nvim/main.rs".as_ptr(),
+                2207,
+                c"void do_exrc_initialization(void)".as_ptr(),
+            );
+        }
+        lua_getfield(lstate, LUA_GLOBALSINDEX, c"require".as_ptr());
+        lua_pushstring(lstate, c"vim._core.exrc".as_ptr());
+        if nlua_pcall(lstate, 1, 0) != 0 {
+            fprintf(
+                stderr,
+                c"%s\n".as_ptr(),
+                lua_tolstring(lstate, -1, ptr::null_mut::<size_t>()),
+            );
+        }
+    }
+}
+
+/// The whole config phase: either the one file `-u` named, or the four
+/// standard sources.
+///
+/// `-u NONE` and `-u NORC` name no file at all and source nothing; silent
+/// (batch) mode skips the standard sources too.
+pub(crate) unsafe fn source_startup_scripts(parmp: *const mparm_T) {
+    // SAFETY: `parmp` is the caller's live parameter block.
+    unsafe {
+        if !(*parmp).use_vimrc.is_null() {
+            let named_none = strequal((*parmp).use_vimrc, c"NONE".as_ptr())
+                || strequal((*parmp).use_vimrc, c"NORC".as_ptr());
+            if !named_none
+                && do_source(
+                    (*parmp).use_vimrc,
+                    false,
+                    DOSO_NONE as c_int,
+                    ptr::null_mut(),
+                ) != OK
             {
                 semsg(
                     gettext((e_cannot_read_from_str_2.ptr() as *const _) as *const c_char),
                     (*parmp).use_vimrc,
                 );
             }
+        } else if !silent_mode.get() {
+            do_system_initialization();
+            if do_user_initialization() {
+                do_exrc_initialization();
+            }
         }
-    } else if !silent_mode.get() {
-        do_system_initialization();
-        if do_user_initialization() {
-            do_exrc_initialization();
-        }
-    }
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"sourcing vimrc file(s)\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
+
+        time_msg_at(c"sourcing vimrc file(s)");
     }
 }

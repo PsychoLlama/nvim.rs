@@ -87,8 +87,6 @@
     "crates/nvim/src/nvim/lua/xdiff.rs": 16,
     "crates/nvim/src/nvim/main.rs": 107,
     "crates/nvim/src/nvim/main/args.rs": 38,
-    "crates/nvim/src/nvim/main/buffers.rs": 14,
-    "crates/nvim/src/nvim/main/config.rs": 27,
     "crates/nvim/src/nvim/main/entry.rs": 42,
     "crates/nvim/src/nvim/main/remote.rs": 3,
     "crates/nvim/src/nvim/map_glyph_cache.rs": 1,
