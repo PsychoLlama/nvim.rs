@@ -1,355 +1,410 @@
-//! `system()` and `systemlist()`: the argument vector and the captured output.
+//! `system()` and `systemlist()`: the argument vector and the captured
+//! output.
+//!
+//! Both directions swap NUL and newline. A shell's stdin is a byte stream
+//! with no way to carry a NUL, so `save_tv_as_string` writes a newline for
+//! every NUL a List item held and vice versa; `get_system_output_as_rettv`
+//! undoes it on the way back. That is why the two halves look asymmetric:
+//! one builds a buffer, the other rewrites one in place.
 
-#[allow(unused_imports)]
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub unsafe extern "C" fn tv_to_argv(
-    mut cmd_tv: *mut typval_T,
-    mut cmd: *mut *const c_char,
-    mut executable: *mut bool,
+use core::ffi::{c_char, c_int, c_void};
+use core::mem::size_of;
+use core::ptr::{null, null_mut};
+
+use crate::src::nvim::buffer::buflist_findnr;
+use crate::src::nvim::eval::encode::encode_list_write;
+use crate::src::nvim::eval::typval::{
+    tv_get_number, tv_get_string, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret,
+    tv_list_first, tv_list_len, tv_list_ref,
+};
+use crate::src::nvim::eval::vars::set_vim_var_nr;
+use crate::src::nvim::eval::{
+    NL, NUL, PROF_YES, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VV_SHELL_ERROR,
+    kListLenMayKnow,
+};
+use crate::src::nvim::ex_cmds::check_secure;
+use crate::src::nvim::main::{
+    do_profiling, e_invarg, e_invarg2, e_invargNval, e_nobufnr, p_verbose,
+};
+use crate::src::nvim::memline::ml_get_buf;
+use crate::src::nvim::memory::{memchrsub, xcalloc, xfree, xmalloc, xmemdupz, xstrdup};
+use crate::src::nvim::message::{
+    emsg, msg_puts, semsg, smsg, verbose_enter_scroll, verbose_leave_scroll,
+};
+use crate::src::nvim::os::fs::os_can_exe;
+use crate::src::nvim::os::libc::{gettext, snprintf, strlen};
+use crate::src::nvim::os::shell::{
+    os_system, shell_argv_to_str, shell_build_argv, shell_free_argv,
+};
+use crate::src::nvim::profile::{prof_child_enter, prof_child_exit};
+use crate::src::nvim::types::{
+    EvalFuncData, OptInt, buf_T, list_T, listitem_T, proftime_T, ptrdiff_t, size_t, typval_T,
+    varnumber_T,
+};
+
+/// The scratch a "not executable" complaint is rendered into. `MAXPATHL`
+/// in the C.
+const MAXPATHL: usize = 1025;
+
+/// Build a `NULL`-terminated argument vector out of a String (through the
+/// shell) or a List (directly). `cmd`, when given, comes back naming the
+/// executable; `executable` is cleared when the first item is not one.
+///
+/// # Safety
+/// `cmd_tv` must be valid; `cmd` and `executable` null or valid.
+pub unsafe fn tv_to_argv(
+    cmd_tv: *mut typval_T,
+    cmd: *mut *const c_char,
+    executable: *mut bool,
 ) -> *mut *mut c_char {
-    if (*cmd_tv).v_type as c_uint == VAR_STRING as c_int as c_uint {
-        let mut cmd_str: *const c_char = tv_get_string(cmd_tv);
-        if !cmd.is_null() {
-            *cmd = cmd_str;
-        }
-        return shell_build_argv(cmd_str, ::core::ptr::null::<c_char>());
-    }
-    if (*cmd_tv).v_type as c_uint != VAR_LIST as c_int as c_uint {
-        semsg(
-            gettext(&raw const e_invarg2 as *const c_char),
-            b"expected String or List\0".as_ptr() as *const c_char,
-        );
-        return ::core::ptr::null_mut::<*mut c_char>();
-    }
-    let mut argl: *mut list_T = (*cmd_tv).vval.v_list;
-    let mut argc: c_int = tv_list_len(argl);
-    if argc == 0 {
-        emsg(gettext(&raw const e_invarg as *const c_char));
-        return ::core::ptr::null_mut::<*mut c_char>();
-    }
-    let mut arg0: *const c_char = tv_get_string_chk(&raw mut (*tv_list_first(argl)).li_tv);
-    let mut exe_resolved: *mut c_char = ::core::ptr::null_mut::<c_char>();
-    if arg0.is_null() || !os_can_exe(arg0, &raw mut exe_resolved, true_0 != 0) {
-        if !arg0.is_null() && !executable.is_null() {
-            let mut buf: [c_char; 1025] = [0; 1025];
-            snprintf(
-                &raw mut buf as *mut c_char,
-                ::core::mem::size_of::<[c_char; 1025]>(),
-                b"'%s' is not executable\0".as_ptr() as *const c_char,
-                arg0,
-            );
-            semsg(
-                gettext(&raw const e_invargNval as *const c_char),
-                b"cmd\0".as_ptr() as *const c_char,
-                &raw mut buf as *mut c_char,
-            );
-            *executable = false_0 != 0;
-        }
-        return ::core::ptr::null_mut::<*mut c_char>();
-    }
-    if !cmd.is_null() {
-        *cmd = exe_resolved;
-    }
-    let mut i: c_int = 0 as c_int;
-    let mut argv: *mut *mut c_char = xcalloc(
-        (argc as size_t).wrapping_add(1 as size_t),
-        ::core::mem::size_of::<*mut c_char>(),
-    ) as *mut *mut c_char;
-    let l_: *const list_T = argl;
-    if !l_.is_null() {
-        let mut arg: *const listitem_T = (*l_).lv_first;
-        while !arg.is_null() {
-            let mut a: *const c_char = tv_get_string_chk(&raw const (*arg).li_tv);
-            if a.is_null() {
-                shell_free_argv(argv);
-                xfree(exe_resolved as *mut c_void);
-                return ::core::ptr::null_mut::<*mut c_char>();
+    unsafe {
+        if (*cmd_tv).v_type == VAR_STRING {
+            let cmd_str = tv_get_string(cmd_tv);
+            if !cmd.is_null() {
+                *cmd = cmd_str;
             }
-            let c2rust_fresh11 = i;
-            i = i + 1;
-            let c2rust_lvalue_ptr = &raw mut *argv.offset(c2rust_fresh11 as isize);
-            *c2rust_lvalue_ptr = xstrdup(a);
-            arg = (*arg).li_next;
+            return shell_build_argv(cmd_str, null::<c_char>());
         }
+        if (*cmd_tv).v_type != VAR_LIST {
+            semsg(
+                gettext(e_invarg2.ptr().cast()),
+                c"expected String or List".as_ptr(),
+            );
+            return null_mut();
+        }
+
+        let argl: *mut list_T = (*cmd_tv).vval.v_list;
+        let argc = tv_list_len(argl);
+        if argc == 0 {
+            emsg(gettext(e_invarg.ptr().cast()));
+            return null_mut();
+        }
+
+        // The first item has to resolve to something runnable, and the
+        // resolved path is what actually goes in slot 0.
+        let arg0 = tv_get_string_chk(&raw mut (*tv_list_first(argl)).li_tv);
+        let mut exe_resolved: *mut c_char = null_mut();
+        if arg0.is_null() || !os_can_exe(arg0, &raw mut exe_resolved, true) {
+            if !arg0.is_null() && !executable.is_null() {
+                let mut buf: [c_char; MAXPATHL] = [0; MAXPATHL];
+                snprintf(
+                    buf.as_mut_ptr(),
+                    size_of::<[c_char; MAXPATHL]>(),
+                    c"'%s' is not executable".as_ptr(),
+                    arg0,
+                );
+                semsg(
+                    gettext(e_invargNval.ptr().cast()),
+                    c"cmd".as_ptr(),
+                    buf.as_mut_ptr(),
+                );
+                *executable = false;
+            }
+            return null_mut();
+        }
+        if !cmd.is_null() {
+            *cmd = exe_resolved;
+        }
+
+        let argv = xcalloc(argc as size_t + 1, size_of::<*mut c_char>()) as *mut *mut c_char;
+        let mut i = 0;
+        if !argl.is_null() {
+            let mut arg: *const listitem_T = (*argl).lv_first;
+            while !arg.is_null() {
+                let a = tv_get_string_chk(&raw const (*arg).li_tv);
+                if a.is_null() {
+                    shell_free_argv(argv);
+                    xfree(exe_resolved as *mut c_void);
+                    return null_mut();
+                }
+                *argv.offset(i) = xstrdup(a);
+                i += 1;
+                arg = (*arg).li_next;
+            }
+        }
+        // Slot 0 holds the item's own spelling; swap in the resolved path.
+        xfree(*argv as *mut c_void);
+        *argv = exe_resolved;
+        argv
     }
-    xfree(*argv.offset(0 as c_int as isize) as *mut c_void);
-    *argv.offset(0 as c_int as isize) = exe_resolved;
-    return argv;
 }
 
-pub(crate) unsafe extern "C" fn string_to_list(
-    mut str: *const c_char,
+/// Split captured output into a List of lines, undoing the NUL/newline
+/// swap on the way.
+///
+/// # Safety
+/// `str` must hold `len` readable bytes.
+pub(crate) unsafe fn string_to_list(
+    str: *const c_char,
     mut len: size_t,
     keepempty: bool,
 ) -> *mut list_T {
-    if !keepempty && *str.offset(len.wrapping_sub(1 as size_t) as isize) as c_int == NL {
-        len = len.wrapping_sub(1);
+    unsafe {
+        // A trailing newline does not start an empty last line unless the
+        // caller asked to keep one.
+        if !keepempty && *str.add(len as usize - 1) as c_int == NL {
+            len -= 1;
+        }
+        let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+        encode_list_write(list as *mut c_void, str, len);
+        list
     }
-    let list: *mut list_T = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
-    encode_list_write(list as *mut c_void, str, len);
-    return list;
 }
 
-pub(crate) unsafe extern "C" fn get_system_output_as_rettv(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut retlist: bool,
+/// The shared body of `system()` and `systemlist()`.
+///
+/// # Safety
+/// `argvars` must hold the builtin's arguments; `rettv` must be valid.
+pub(crate) unsafe fn get_system_output_as_rettv(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    retlist: bool,
 ) {
-    let mut wait_time: proftime_T = 0;
-    let mut profiling: bool = do_profiling.get() == PROF_YES;
-    (*rettv).v_type = VAR_STRING;
-    (*rettv).vval.v_string = ::core::ptr::null_mut::<c_char>();
-    if check_secure() {
-        return;
-    }
-    let mut input_len: ptrdiff_t = 0;
-    let mut input: *mut c_char = save_tv_as_string(
-        argvars.offset(1 as c_int as isize),
-        &raw mut input_len,
-        false_0 != 0,
-        false_0 != 0,
-    );
-    if input_len < 0 as ptrdiff_t {
-        '_c2rust_label: {
-            if input.is_null() {
-            } else {
-                __assert_fail(
-                    b"input == NULL\0".as_ptr() as *const c_char,
-                    b"src/nvim/eval.rs\0".as_ptr() as *const c_char,
-                    4731 as c_uint,
-                    b"void get_system_output_as_rettv(typval_T *, typval_T *, _Bool)\0".as_ptr()
-                        as *const c_char,
-                );
+    unsafe {
+        let profiling = do_profiling.get() == PROF_YES;
+        (*rettv).v_type = VAR_STRING;
+        (*rettv).vval.v_string = null_mut();
+        if check_secure() {
+            return;
+        }
+
+        let mut input_len: ptrdiff_t = 0;
+        let input = save_tv_as_string(argvars.add(1), &raw mut input_len, false, false);
+        if input_len < 0 {
+            debug_assert!(input.is_null());
+            return;
+        }
+
+        let mut executable = true;
+        let argv = tv_to_argv(argvars, null_mut(), &raw mut executable);
+        if argv.is_null() {
+            // A command that does not exist reports -1 rather than a shell
+            // exit status.
+            if !executable {
+                set_vim_var_nr(VV_SHELL_ERROR, -1);
             }
-        };
-        return;
-    }
-    let mut executable: bool = true_0 != 0;
-    let mut argv: *mut *mut c_char = tv_to_argv(
-        argvars.offset(0 as c_int as isize),
-        ::core::ptr::null_mut::<*const c_char>(),
-        &raw mut executable,
-    );
-    if argv.is_null() {
-        if !executable {
-            set_vim_var_nr(VV_SHELL_ERROR, -1 as varnumber_T);
+            xfree(input as *mut c_void);
+            return;
+        }
+
+        if p_verbose.get() > 3 as OptInt {
+            let cmdstr = shell_argv_to_str(argv);
+            verbose_enter_scroll();
+            smsg(0, gettext(c"Executing command: \"%s\"".as_ptr()), cmdstr);
+            msg_puts(c"\n\n".as_ptr());
+            verbose_leave_scroll();
+            xfree(cmdstr as *mut c_void);
+        }
+
+        let mut wait_time: proftime_T = 0;
+        if profiling {
+            wait_time = prof_child_enter();
+        }
+        let mut nread: size_t = 0;
+        let mut res: *mut c_char = null_mut();
+        let status = os_system(
+            argv,
+            input,
+            input_len as size_t,
+            &raw mut res,
+            &raw mut nread,
+        );
+        if profiling {
+            prof_child_exit(wait_time);
         }
         xfree(input as *mut c_void);
-        return;
-    }
-    if p_verbose.get() > 3 as OptInt {
-        let mut cmdstr: *mut c_char = shell_argv_to_str(argv);
-        verbose_enter_scroll();
-        smsg(
-            0 as c_int,
-            gettext(b"Executing command: \"%s\"\0".as_ptr() as *const c_char),
-            cmdstr,
-        );
-        msg_puts(b"\n\n\0".as_ptr() as *const c_char);
-        verbose_leave_scroll();
-        xfree(cmdstr as *mut c_void);
-    }
-    if profiling {
-        wait_time = prof_child_enter();
-    }
-    let mut nread: size_t = 0 as size_t;
-    let mut res: *mut c_char = ::core::ptr::null_mut::<c_char>();
-    let mut status: c_int = os_system(
-        argv,
-        input,
-        input_len as size_t,
-        &raw mut res,
-        &raw mut nread,
-    );
-    if profiling {
-        prof_child_exit(wait_time);
-    }
-    xfree(input as *mut c_void);
-    set_vim_var_nr(VV_SHELL_ERROR, status as varnumber_T);
-    if res.is_null() {
+        set_vim_var_nr(VV_SHELL_ERROR, status as varnumber_T);
+
+        if res.is_null() {
+            if retlist {
+                tv_list_alloc_ret(rettv, 0 as ptrdiff_t);
+            } else {
+                (*rettv).vval.v_string = xstrdup(c"".as_ptr());
+            }
+            return;
+        }
+
         if retlist {
-            tv_list_alloc_ret(rettv, 0 as ptrdiff_t);
+            // The `keepempty` argument is the third, so it is only read
+            // when the second was given too.
+            let mut keepempty = 0;
+            if (*argvars.add(1)).v_type != VAR_UNKNOWN && (*argvars.add(2)).v_type != VAR_UNKNOWN {
+                keepempty = tv_get_number(argvars.add(2)) as c_int;
+            }
+            (*rettv).vval.v_list = string_to_list(res, nread, keepempty != 0);
+            tv_list_ref((*rettv).vval.v_list);
+            (*rettv).v_type = VAR_LIST;
+            xfree(res as *mut c_void);
         } else {
-            (*rettv).vval.v_string = xstrdup(b"\0".as_ptr() as *const c_char);
+            // Undo the swap in place; the buffer is handed over as it is.
+            memchrsub(res as *mut c_void, NUL as c_char, 1 as c_char, nread);
+            (*rettv).vval.v_string = res;
         }
-        return;
     }
-    if retlist {
-        let mut keepempty: c_int = 0 as c_int;
-        if (*argvars.offset(1 as c_int as isize)).v_type as c_uint != VAR_UNKNOWN as c_int as c_uint
-            && (*argvars.offset(2 as c_int as isize)).v_type as c_uint
-                != VAR_UNKNOWN as c_int as c_uint
-        {
-            keepempty = tv_get_number(argvars.offset(2 as c_int as isize)) as c_int;
-        }
-        (*rettv).vval.v_list = string_to_list(res, nread, keepempty != 0);
-        tv_list_ref((*rettv).vval.v_list);
-        (*rettv).v_type = VAR_LIST;
-        xfree(res as *mut c_void);
-    } else {
-        memchrsub(res as *mut c_void, NUL as c_char, 1 as c_char, nread);
-        (*rettv).vval.v_string = res;
-    };
 }
 
+/// `system()`
+///
+/// # Safety
+/// Called through the builtin table.
 pub unsafe extern "C" fn f_system(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    get_system_output_as_rettv(argvars, rettv, false_0 != 0);
+    unsafe { get_system_output_as_rettv(argvars, rettv, false) }
 }
 
+/// `systemlist()`
+///
+/// # Safety
+/// Called through the builtin table.
 pub unsafe extern "C" fn f_systemlist(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
 ) {
-    get_system_output_as_rettv(argvars, rettv, true_0 != 0);
+    unsafe { get_system_output_as_rettv(argvars, rettv, true) }
 }
 
-pub unsafe extern "C" fn save_tv_as_string(
-    mut tv: *mut typval_T,
+/// Render a typval as the byte stream a child process's stdin wants: a
+/// String as it is, a Number as that buffer's whole text, a List one item
+/// per line. `len` comes back -1 for a coercion that failed.
+///
+/// Newlines in the text become NULs and the line separators are newlines,
+/// which is the convention the reading half undoes.
+///
+/// # Safety
+/// `tv` and `len` must be valid.
+pub unsafe fn save_tv_as_string(
+    tv: *mut typval_T,
     len: *mut ptrdiff_t,
-    mut endnl: bool,
-    mut crlf: bool,
+    endnl: bool,
+    crlf: bool,
 ) -> *mut c_char {
-    *len = 0 as ptrdiff_t;
-    if (*tv).v_type as c_uint == VAR_UNKNOWN as c_int as c_uint {
-        return ::core::ptr::null_mut::<c_char>();
-    }
-    if (*tv).v_type as c_uint != VAR_LIST as c_int as c_uint
-        && (*tv).v_type as c_uint != VAR_NUMBER as c_int as c_uint
-    {
-        let mut ret: *const c_char = tv_get_string_chk(tv);
-        if !ret.is_null() {
+    unsafe {
+        *len = 0;
+        if (*tv).v_type == VAR_UNKNOWN {
+            return null_mut();
+        }
+        if (*tv).v_type != VAR_LIST && (*tv).v_type != VAR_NUMBER {
+            let ret = tv_get_string_chk(tv);
+            if ret.is_null() {
+                *len = -1;
+                return null_mut();
+            }
             *len = strlen(ret) as ptrdiff_t;
             return xmemdupz(ret as *const c_void, *len as size_t) as *mut c_char;
-        } else {
-            *len = -1 as ptrdiff_t;
-            return ::core::ptr::null_mut::<c_char>();
         }
+        if (*tv).v_type == VAR_NUMBER {
+            return buffer_as_string(tv, len);
+        }
+        list_as_string((*tv).vval.v_list, len, endnl, crlf)
     }
-    if (*tv).v_type as c_uint == VAR_NUMBER as c_int as c_uint {
-        let mut buf: *mut buf_T = buflist_findnr((*tv).vval.v_number as c_int);
-        if !buf.is_null() {
-            let mut lnum: linenr_T = 1 as linenr_T;
-            while lnum <= (*buf).b_ml.ml_line_count {
-                let mut p: *mut c_char = ml_get_buf(buf, lnum);
-                while *p as c_int != NUL {
-                    *len += 1 as ptrdiff_t;
-                    p = p.offset(1);
-                }
-                *len += 1 as ptrdiff_t;
-                lnum += 1;
-            }
-        } else {
-            semsg(
-                gettext(&raw const e_nobufnr as *const c_char),
-                (*tv).vval.v_number,
-            );
-            *len = -1 as ptrdiff_t;
-            return ::core::ptr::null_mut::<c_char>();
+}
+
+/// A Number names a buffer; its whole text is the input.
+///
+/// # Safety
+/// `tv` must be a `VAR_NUMBER`; `len` valid.
+unsafe fn buffer_as_string(tv: *mut typval_T, len: *mut ptrdiff_t) -> *mut c_char {
+    unsafe {
+        let buf: *mut buf_T = buflist_findnr((*tv).vval.v_number as c_int);
+        if buf.is_null() {
+            semsg(gettext(e_nobufnr.ptr().cast()), (*tv).vval.v_number);
+            *len = -1;
+            return null_mut();
         }
-        if *len == 0 as ptrdiff_t {
-            return ::core::ptr::null_mut::<c_char>();
+
+        // Measure first: every line's bytes plus its terminator. The walk
+        // is `strlen` on purpose — upstream counts bytes up to the NUL,
+        // not whatever the memline records as the line's length.
+        for lnum in 1..=(*buf).b_ml.ml_line_count {
+            *len += strlen(ml_get_buf(buf, lnum)) as ptrdiff_t + 1;
         }
-        let mut ret_0: *mut c_char =
-            xmalloc((*len as size_t).wrapping_add(1 as size_t)) as *mut c_char;
-        let mut end: *mut c_char = ret_0;
-        let mut lnum_0: linenr_T = 1 as linenr_T;
-        while lnum_0 <= (*buf).b_ml.ml_line_count {
-            let mut p_0: *mut c_char = ml_get_buf(buf, lnum_0);
-            while *p_0 as c_int != NUL {
-                let c2rust_fresh12 = end;
-                end = end.offset(1);
-                *c2rust_fresh12 = (if *p_0 as c_int == '\n' as c_int {
-                    NUL
+        if *len == 0 {
+            return null_mut();
+        }
+
+        let ret = xmalloc(*len as size_t + 1) as *mut c_char;
+        let mut end = ret;
+        for lnum in 1..=(*buf).b_ml.ml_line_count {
+            let mut p = ml_get_buf(buf, lnum);
+            while *p as c_int != NUL {
+                *end = if *p == b'\n' as c_char {
+                    NUL as c_char
                 } else {
-                    *p_0 as c_int
-                }) as c_char;
-                p_0 = p_0.offset(1);
+                    *p
+                };
+                end = end.add(1);
+                p = p.add(1);
             }
-            let c2rust_fresh13 = end;
-            end = end.offset(1);
-            *c2rust_fresh13 = '\n' as c_char;
-            lnum_0 += 1;
+            *end = b'\n' as c_char;
+            end = end.add(1);
         }
         *end = NUL as c_char;
-        *len = end.offset_from(ret_0) as ptrdiff_t;
-        return ret_0;
+        *len = end.offset_from(ret) as ptrdiff_t;
+        ret
     }
-    '_c2rust_label: {
-        if (*tv).v_type as c_uint == VAR_LIST as c_int as c_uint {
-        } else {
-            __assert_fail(
-                b"tv->v_type == VAR_LIST\0".as_ptr() as *const c_char,
-                b"src/nvim/eval.rs\0".as_ptr() as *const c_char,
-                5197 as c_uint,
-                b"char *save_tv_as_string(typval_T *, ptrdiff_t *const, _Bool, _Bool)\0".as_ptr()
-                    as *const c_char,
-            );
-        }
-    };
-    let mut list: *mut list_T = (*tv).vval.v_list;
-    let l_: *const list_T = list;
-    if !l_.is_null() {
-        let mut li: *const listitem_T = (*l_).lv_first;
-        while !li.is_null() {
-            *len += strlen(tv_get_string(&raw const (*li).li_tv)) as ptrdiff_t
-                + (if crlf as c_int != 0 {
-                    2 as c_int
-                } else {
-                    1 as c_int
-                }) as ptrdiff_t;
-            li = (*li).li_next;
-        }
-    }
-    if *len == 0 as ptrdiff_t {
-        return ::core::ptr::null_mut::<c_char>();
-    }
-    let mut ret_1: *mut c_char = xmalloc((*len as size_t).wrapping_add(
-        (if endnl as c_int != 0 {
-            if crlf as c_int != 0 {
-                2 as c_int
-            } else {
-                1 as c_int
+}
+
+/// A List is one line per item.
+///
+/// # Safety
+/// `list` must be null or valid; `len` valid.
+unsafe fn list_as_string(
+    list: *mut list_T,
+    len: *mut ptrdiff_t,
+    endnl: bool,
+    crlf: bool,
+) -> *mut c_char {
+    unsafe {
+        let sep = if crlf { 2 } else { 1 };
+
+        // Measure first, charging every item a separator.
+        if !list.is_null() {
+            let mut li: *const listitem_T = (*list).lv_first;
+            while !li.is_null() {
+                *len += strlen(tv_get_string(&raw const (*li).li_tv)) as ptrdiff_t + sep;
+                li = (*li).li_next;
             }
-        } else {
-            0 as c_int
-        }) as size_t,
-    )) as *mut c_char;
-    let mut end_0: *mut c_char = ret_1;
-    let l__0: *const list_T = list;
-    if !l__0.is_null() {
-        let mut li_0: *const listitem_T = (*l__0).lv_first;
-        while !li_0.is_null() {
-            let mut s: *const c_char = tv_get_string(&raw const (*li_0).li_tv);
-            while *s as c_int != '\0' as c_int {
-                let c2rust_fresh14 = end_0;
-                end_0 = end_0.offset(1);
-                *c2rust_fresh14 = (if *s as c_int == '\n' as c_int {
-                    '\0' as c_int
-                } else {
-                    *s as c_int
-                }) as c_char;
-                s = s.offset(1);
-            }
-            if endnl as c_int != 0 || !(*li_0).li_next.is_null() {
-                if crlf {
-                    let c2rust_fresh15 = end_0;
-                    end_0 = end_0.offset(1);
-                    *c2rust_fresh15 = '\r' as c_char;
+        }
+        if *len == 0 {
+            return null_mut();
+        }
+
+        // The last item's separator is only written when `endnl`, so the
+        // measured length already covers the terminator when it is not.
+        let ret = xmalloc((*len + if endnl { sep } else { 0 }) as size_t) as *mut c_char;
+        let mut end = ret;
+        if !list.is_null() {
+            let mut li: *const listitem_T = (*list).lv_first;
+            while !li.is_null() {
+                let mut s = tv_get_string(&raw const (*li).li_tv);
+                while *s as c_int != NUL {
+                    *end = if *s == b'\n' as c_char {
+                        NUL as c_char
+                    } else {
+                        *s
+                    };
+                    end = end.add(1);
+                    s = s.add(1);
                 }
-                let c2rust_fresh16 = end_0;
-                end_0 = end_0.offset(1);
-                *c2rust_fresh16 = '\n' as c_char;
+                if endnl || !(*li).li_next.is_null() {
+                    if crlf {
+                        *end = b'\r' as c_char;
+                        end = end.add(1);
+                    }
+                    *end = b'\n' as c_char;
+                    end = end.add(1);
+                }
+                li = (*li).li_next;
             }
-            li_0 = (*li_0).li_next;
         }
+        *end = NUL as c_char;
+        *len = end.offset_from(ret) as ptrdiff_t;
+        ret
     }
-    *end_0 = NUL as c_char;
-    *len = end_0.offset_from(ret_1) as ptrdiff_t;
-    return ret_1;
 }

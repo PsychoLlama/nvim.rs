@@ -11,80 +11,48 @@ pub mod typval;
 pub mod userfunc;
 pub mod vars;
 pub mod window;
-use crate::src::nvim::buffer::{bt_prompt, buflist_findnr};
-use crate::src::nvim::change::appended_lines_mark;
-use crate::src::nvim::channel::callback_reader_free;
-use crate::src::nvim::channel::channel_proc;
-use crate::src::nvim::channel::find_channel;
-use crate::src::nvim::eval::encode::encode_list_write;
 use crate::src::nvim::eval::gc::{gc_first_dict, gc_first_list};
 use crate::src::nvim::eval::typval::{
-    callback_free, tv_blob_copy, tv_clear, tv_copy, tv_dict_copy, tv_dict_free_contents,
-    tv_dict_free_dict, tv_dict_get_callback, tv_dict_get_number, tv_get_number, tv_get_string,
-    tv_get_string_chk, tv_in_free_unref_items, tv_list_alloc, tv_list_alloc_ret,
-    tv_list_append_string, tv_list_copy, tv_list_free_contents, tv_list_free_list, tv_list_unref,
+    tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
+    tv_in_free_unref_items, tv_list_copy, tv_list_free_contents, tv_list_free_list,
 };
-use crate::src::nvim::eval::typval::{
-    tv_dict_watcher_node_data, tv_list_copyid, tv_list_first, tv_list_len, tv_list_ref,
-};
+use crate::src::nvim::eval::typval::{tv_dict_watcher_node_data, tv_list_copyid, tv_list_ref};
 use crate::src::nvim::eval::userfunc::{
-    call_func, find_func, free_unref_funccal, get_current_funccal, restore_funccal, save_funccal,
-    set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args, set_ref_in_functions,
-    set_ref_in_previous_funccal,
+    free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
+    set_ref_in_functions, set_ref_in_previous_funccal,
 };
 use crate::src::nvim::eval::vars::{
-    eval_variable, garbage_collect_globvars, garbage_collect_scriptvars, garbage_collect_vimvars,
-    set_vim_var_nr,
+    garbage_collect_globvars, garbage_collect_scriptvars, garbage_collect_vimvars,
 };
-use crate::src::nvim::event::proc::proc_is_stopped;
-use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_docmd::set_ref_in_findfunc;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::insexpand::{set_ref_in_cpt_callbacks, set_ref_in_insexpand_funcs};
-use crate::src::nvim::lua::executor::nlua_is_deferred_safe;
 use crate::src::nvim::main::aucmd_win_vec;
 use crate::src::nvim::main::{
-    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, channels, curbuf,
-    current_sctx, curtab, curwin, do_profiling, e_fast_api_disabled, e_invalblob, e_invarg,
-    e_invarg2, e_invargNval, e_invchan, e_invchanjob, e_nobufnr, first_tabpage, firstbuf, firstwin,
-    garbage_collect_at_exit, got_int, may_garbage_collect, p_lpl, p_verbose, provider_call_nesting,
-    provider_caller_scope, want_garbage_collect,
+    channels, curtab, e_invalblob, first_tabpage, firstbuf, firstwin, garbage_collect_at_exit,
+    may_garbage_collect, p_verbose, want_garbage_collect,
 };
 use crate::src::nvim::mark::mark_global_iter;
 use crate::src::nvim::mbyte::string_convert;
-use crate::src::nvim::memline::{ml_append, ml_get_buf};
-use crate::src::nvim::memory::{
-    memchrsub, strchrsub, strequal, xcalloc, xfree, xmalloc, xmemdupz, xrealloc, xstrdup,
-};
-use crate::src::nvim::message::{
-    emsg, internal_error, msg_puts, semsg, smsg, verb_msg, verbose_enter_scroll,
-    verbose_leave_scroll,
-};
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup};
+use crate::src::nvim::message::{emsg, internal_error, verb_msg};
 use crate::src::nvim::ops::set_ref_in_opfunc;
-use crate::src::nvim::os::fs::os_can_exe;
-use crate::src::nvim::os::libc::{__assert_fail, gettext, snprintf, strlen};
-use crate::src::nvim::os::shell::{
-    os_system, shell_argv_to_str, shell_build_argv, shell_free_argv,
-};
-use crate::src::nvim::profile::{prof_child_enter, prof_child_exit};
+use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::quickfix::set_ref_in_quickfix;
 use crate::src::nvim::register::op_global_reg_iter;
-use crate::src::nvim::runtime::{exestack, script_autoload};
-use crate::src::nvim::strings::concat_str;
+use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::tag::set_ref_in_tagfunc;
 use crate::src::nvim::types::{
-    AdditionalData, Array, BoolVarValue, CMD_index, Callback, CallbackReader, CallbackType,
-    Channel, ChannelStreamType, DictWatcher, EvalFuncData, GRegFlags, ListLenSpecials, LuaRetMode,
-    Map_uint64_t_ptr_t, MapHash, MarkGet, MotionType, Object, ObjectType, OptInt, OptValType,
-    QUEUE, ScopeType, Set_uint64_t, String_0, UIExtension, VarLockStatus, VarType, VimVarIndex,
-    blob_T, buf_T, caller_scope, colnr_T, dict_T, dictitem_T, estack_T, exprtype_T, fmark_T,
-    fmarkv_T, funccal_entry_T, funcexe_T, hashitem_T, hashtab_T, ht_stack_S, ht_stack_T, key_extra,
-    linenr_T, list_T, list_stack_S, list_stack_T, listitem_T, listwatch_T, partial_T, pos_T,
-    proftime_T, ptr_t, ptrdiff_t, size_t, ssize_t, tabpage_T, timer_T, typval_T, typval_vval_union,
-    ufunc_T, uint32_t, uint64_t, var_flavour_T, varnumber_T, vimconv_T, win_T, xfmark_T, yankreg_T,
+    AdditionalData, Array, BoolVarValue, CMD_index, CallbackType, Channel, ChannelStreamType,
+    DictWatcher, GRegFlags, ListLenSpecials, LuaRetMode, Map_uint64_t_ptr_t, MapHash, MarkGet,
+    MotionType, Object, ObjectType, OptInt, OptValType, QUEUE, ScopeType, Set_uint64_t, String_0,
+    UIExtension, VarLockStatus, VarType, VimVarIndex, blob_T, buf_T, dict_T, dictitem_T,
+    exprtype_T, fmark_T, fmarkv_T, funcexe_T, hashitem_T, hashtab_T, ht_stack_S, ht_stack_T,
+    key_extra, linenr_T, list_T, list_stack_S, list_stack_T, listitem_T, listwatch_T, partial_T,
+    pos_T, ptr_t, size_t, tabpage_T, timer_T, typval_T, typval_vval_union, ufunc_T, uint32_t,
+    uint64_t, var_flavour_T, vimconv_T, win_T, xfmark_T, yankreg_T,
 };
-use crate::src::nvim::undo::u_clearallandblockfree;
 use core::ffi::{c_char, c_int, c_long, c_uint, c_ulong, c_void};
 
 mod entry;
