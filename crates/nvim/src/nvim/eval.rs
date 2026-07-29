@@ -27,17 +27,16 @@ use crate::src::nvim::eval::executor::eexe_mod_op;
 use crate::src::nvim::eval::gc::{gc_first_dict, gc_first_list};
 use crate::src::nvim::eval::typval::{
     callback_free, callback_put, tv_blob_alloc, tv_blob_alloc_ret, tv_blob_check_index,
-    tv_blob_check_range, tv_blob_copy, tv_blob_set_append, tv_blob_set_range,
-    tv_blob_slice_or_index, tv_blob_unref, tv_check_lock, tv_check_str, tv_clear, tv_copy,
-    tv_dict_add, tv_dict_add_nr, tv_dict_alloc, tv_dict_copy, tv_dict_find, tv_dict_free_contents,
-    tv_dict_free_dict, tv_dict_get_callback, tv_dict_get_number, tv_dict_item_alloc, tv_dict_unref,
-    tv_dict_watcher_notify, tv_dict_wrong_func_name, tv_get_number, tv_get_number_chk,
-    tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_in_free_unref_items, tv_list_alloc,
+    tv_blob_check_range, tv_blob_copy, tv_blob_set_append, tv_blob_set_range, tv_blob_unref,
+    tv_check_lock, tv_check_str, tv_clear, tv_copy, tv_dict_add, tv_dict_add_nr, tv_dict_alloc,
+    tv_dict_copy, tv_dict_find, tv_dict_free_contents, tv_dict_free_dict, tv_dict_get_callback,
+    tv_dict_get_number, tv_dict_item_alloc, tv_dict_unref, tv_dict_watcher_notify,
+    tv_dict_wrong_func_name, tv_get_number, tv_get_number_chk, tv_get_string,
+    tv_get_string_buf_chk, tv_get_string_chk, tv_in_free_unref_items, tv_list_alloc,
     tv_list_alloc_ret, tv_list_append_dict, tv_list_append_string, tv_list_assign_range,
     tv_list_check_range_index_one, tv_list_check_range_index_two, tv_list_copy, tv_list_find,
-    tv_list_find_nr, tv_list_free_contents, tv_list_free_list, tv_list_join,
-    tv_list_slice_or_index, tv_list_unref, tv_list_watch_add, tv_list_watch_remove,
-    value_check_lock,
+    tv_list_find_nr, tv_list_free_contents, tv_list_free_list, tv_list_join, tv_list_unref,
+    tv_list_watch_add, tv_list_watch_remove, value_check_lock,
 };
 use crate::src::nvim::eval::typval::{
     tv_blob_get, tv_blob_len, tv_blob_set_ret, tv_dict_is_watched, tv_dict_watcher_node_data,
@@ -47,7 +46,7 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::eval::userfunc::{
     call_func, eval_fname_script, find_func, free_unref_funccal, func_init, func_ptr_unref,
     func_ref, func_unref, get_current_funccal, get_func_tv, get_funccal_args_ht, get_lambda_tv,
-    get_scriptlocal_funcname, make_partial, restore_funccal, save_funccal, set_ref_in_call_stack,
+    get_scriptlocal_funcname, restore_funccal, save_funccal, set_ref_in_call_stack,
     set_ref_in_func, set_ref_in_func_args, set_ref_in_functions, set_ref_in_previous_funccal,
 };
 use crate::src::nvim::eval::vars::{
@@ -82,14 +81,14 @@ use crate::src::nvim::main::aucmd_win_vec;
 use crate::src::nvim::main::{
     EVALARG_EVALUATE, VIsual, VIsual_active, autocmd_bufnr, autocmd_fname, autocmd_fname_full,
     autocmd_match, called_emsg, channels, curbuf, current_sctx, curtab, curwin, did_emsg,
-    did_throw, do_profiling, e_cannot_mod, e_command_too_recursive, e_dictkey, e_dictkey_len,
-    e_fast_api_disabled, e_illvar, e_invalblob, e_invalid_value_for_blob_nr, e_invarg, e_invarg2,
-    e_invargNval, e_invchan, e_invchanjob, e_invexpr2, e_letwrong, e_missingparen, e_nobufnr,
-    e_not_callable_type_str, e_stray_closing_curly_str, e_trailing_arg, e_using_float_as_string,
-    emsg_off, emsg_severe, emsg_skip, first_tabpage, firstbuf, firstwin, force_abort,
-    garbage_collect_at_exit, got_int, line_msg, main_loop, may_garbage_collect, msg_didout,
-    msg_ext_skip_verbose, need_clr_eos, p_lpl, p_mfd, p_verbose, provider_call_nesting,
-    provider_caller_scope, sandbox, textlock, want_garbage_collect,
+    did_throw, do_profiling, e_cannot_mod, e_command_too_recursive, e_dictkey, e_fast_api_disabled,
+    e_illvar, e_invalblob, e_invalid_value_for_blob_nr, e_invarg, e_invarg2, e_invargNval,
+    e_invchan, e_invchanjob, e_invexpr2, e_letwrong, e_missingparen, e_nobufnr,
+    e_not_callable_type_str, e_stray_closing_curly_str, e_trailing_arg, emsg_off, emsg_severe,
+    emsg_skip, first_tabpage, firstbuf, firstwin, force_abort, garbage_collect_at_exit, got_int,
+    line_msg, main_loop, may_garbage_collect, msg_didout, msg_ext_skip_verbose, need_clr_eos,
+    p_lpl, p_mfd, p_verbose, provider_call_nesting, provider_caller_scope, sandbox, textlock,
+    want_garbage_collect,
 };
 use crate::src::nvim::map::{map_del_uint64_t_ptr_t, map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::src::nvim::mark::{mark_get, mark_global_iter};
