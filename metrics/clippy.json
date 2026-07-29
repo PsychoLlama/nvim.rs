@@ -43,7 +43,7 @@
     "crates/nvim/src/nvim/drawscreen.rs": 44,
     "crates/nvim/src/nvim/edit.rs": 33,
     "crates/nvim/src/nvim/eval.rs": 4,
-    "crates/nvim/src/nvim/eval/collect.rs": 5,
+    "crates/nvim/src/nvim/eval/collect.rs": 2,
     "crates/nvim/src/nvim/eval/decode.rs": 103,
     "crates/nvim/src/nvim/eval/deprecated.rs": 3,
     "crates/nvim/src/nvim/eval/encode.rs": 438,

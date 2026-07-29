@@ -11,47 +11,14 @@ pub mod typval;
 pub mod userfunc;
 pub mod vars;
 pub mod window;
-use crate::src::nvim::eval::gc::{gc_first_dict, gc_first_list};
-use crate::src::nvim::eval::typval::{
-    tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
-    tv_in_free_unref_items, tv_list_copy, tv_list_free_contents, tv_list_free_list,
-};
-use crate::src::nvim::eval::typval::{tv_dict_watcher_node_data, tv_list_copyid, tv_list_ref};
-use crate::src::nvim::eval::userfunc::{
-    free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
-    set_ref_in_functions, set_ref_in_previous_funccal,
-};
-use crate::src::nvim::eval::vars::{
-    garbage_collect_globvars, garbage_collect_scriptvars, garbage_collect_vimvars,
-};
-use crate::src::nvim::ex_docmd::set_ref_in_findfunc;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::hashtab::hash_removed;
-use crate::src::nvim::insexpand::{set_ref_in_cpt_callbacks, set_ref_in_insexpand_funcs};
-use crate::src::nvim::main::aucmd_win_vec;
-use crate::src::nvim::main::{
-    channels, curtab, e_invalblob, first_tabpage, firstbuf, firstwin, garbage_collect_at_exit,
-    may_garbage_collect, p_verbose, want_garbage_collect,
-};
-use crate::src::nvim::mark::mark_global_iter;
-use crate::src::nvim::mbyte::string_convert;
-use crate::src::nvim::memory::{xfree, xmalloc, xrealloc, xstrdup};
-use crate::src::nvim::message::{emsg, internal_error, verb_msg};
-use crate::src::nvim::ops::set_ref_in_opfunc;
-use crate::src::nvim::os::libc::gettext;
-use crate::src::nvim::quickfix::set_ref_in_quickfix;
-use crate::src::nvim::register::op_global_reg_iter;
-use crate::src::nvim::runtime::exestack;
-use crate::src::nvim::tag::set_ref_in_tagfunc;
+use crate::src::nvim::main::e_invalblob;
 use crate::src::nvim::types::{
-    AdditionalData, Array, BoolVarValue, CMD_index, CallbackType, Channel, ChannelStreamType,
-    DictWatcher, GRegFlags, ListLenSpecials, LuaRetMode, Map_uint64_t_ptr_t, MapHash, MarkGet,
-    MotionType, Object, ObjectType, OptInt, OptValType, QUEUE, ScopeType, Set_uint64_t, String_0,
-    UIExtension, VarLockStatus, VarType, VimVarIndex, blob_T, buf_T, dict_T, dictitem_T,
-    exprtype_T, fmark_T, fmarkv_T, funcexe_T, hashitem_T, hashtab_T, ht_stack_S, ht_stack_T,
-    key_extra, linenr_T, list_T, list_stack_S, list_stack_T, listitem_T, listwatch_T, partial_T,
-    pos_T, ptr_t, size_t, tabpage_T, timer_T, typval_T, typval_vval_union, ufunc_T, uint32_t,
-    uint64_t, var_flavour_T, vimconv_T, win_T, xfmark_T, yankreg_T,
+    Array, BoolVarValue, CMD_index, CallbackType, ChannelStreamType, GRegFlags, ListLenSpecials,
+    LuaRetMode, Map_uint64_t_ptr_t, MapHash, MarkGet, MotionType, Object, ObjectType, OptValType,
+    ScopeType, Set_uint64_t, UIExtension, VarLockStatus, VarType, VimVarIndex, blob_T, dict_T,
+    exprtype_T, funcexe_T, key_extra, linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t,
+    typval_T, uint32_t, uint64_t, var_flavour_T,
 };
 use core::ffi::{c_char, c_int, c_long, c_uint, c_ulong, c_void};
 
