@@ -1,245 +1,267 @@
-//! Selecting an operator, a register or a recording, and replaying
-//! them.
+//! Selecting an operator, a register or a recording, and replaying them.
+//!
+//! Several of these are two commands sharing a key: `u` is undo at the top
+//! level but the `gu` operator once one is pending or a selection is up, and
+//! `q` is a recording unless the pending operator is `gq`. The redirection is
+//! always the same shape -- rewrite `cap` as the `g` form and call
+//! [`nv_operator`].
 
-#[allow(unused_imports)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ptr;
+
 use super::*;
 
-pub(crate) unsafe extern "C" fn nv_regreplay(mut cap: *mut cmdarg_T) {
-    if checkclearop((*cap).oap) {
-        return;
+/// Re-run this command as the two-character `g<nchar>` operator instead.
+unsafe fn as_g_operator(cap: *mut cmdarg_T, nchar: u8) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        (*cap).cmdchar = 'g' as c_int;
+        (*cap).nchar = nchar as c_int;
+        nv_operator(cap);
     }
-    loop {
-        let c2rust_fresh11 = (*cap).count1;
-        (*cap).count1 = (*cap).count1 - 1;
-        if !(c2rust_fresh11 != 0 && !got_int.get()) {
-            break;
-        }
-        if do_execreg(reg_recorded.get(), false_0, false_0, false_0) == false_0 {
-            clearopbeep((*cap).oap);
-            break;
-        } else {
+}
+
+/// Play a register back `count1` times, stopping at the first failure or
+/// interrupt.
+unsafe fn replay(cap: *mut cmdarg_T, regname: c_int) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        while (*cap).count1 != 0 && !got_int.get() {
+            (*cap).count1 -= 1;
+            if do_execreg(regname, false_0, false_0, false_0) == false_0 {
+                clearopbeep((*cap).oap);
+                break;
+            }
             line_breakcheck();
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn nv_undo(mut cap: *mut cmdarg_T) {
-    if (*(*cap).oap).op_type == OP_LOWER as c_int || VIsual_active.get() as c_int != 0 {
-        (*cap).cmdchar = 'g' as c_int;
-        (*cap).nchar = 'u' as c_int;
-        nv_operator(cap);
-    } else {
-        nv_kundo(cap);
-    };
-}
-
-pub(crate) unsafe extern "C" fn nv_kundo(mut cap: *mut cmdarg_T) {
-    if checkclearopq((*cap).oap) {
-        return;
-    }
-    u_undo((*cap).count1);
-    (*curwin.get()).w_set_curswant = true_0;
-}
-
-pub(crate) unsafe extern "C" fn nv_regname(mut cap: *mut cmdarg_T) {
-    if checkclearop((*cap).oap) {
-        return;
-    }
-    if (*cap).nchar == '=' as c_int {
-        (*cap).nchar = get_expr_register();
-    }
-    if (*cap).nchar != NUL && valid_yank_reg((*cap).nchar, false_0 != 0) as c_int != 0 {
-        (*(*cap).oap).regname = (*cap).nchar;
-        (*cap).opcount = (*cap).count0;
-        set_reg_var((*(*cap).oap).regname);
-    } else {
-        clearopbeep((*cap).oap);
-    };
-}
-
-pub(crate) unsafe extern "C" fn nv_dot(mut cap: *mut cmdarg_T) {
-    if checkclearopq((*cap).oap) {
-        return;
-    }
-    if start_redo(
-        (*cap).count0,
-        restart_edit.get() != 0 as c_int && !arrow_used.get(),
-    ) == false_0
-    {
-        clearopbeep((*cap).oap);
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_redo_or_register(mut cap: *mut cmdarg_T) {
-    if VIsual_select.get() as c_int != 0 && VIsual_active.get() as c_int != 0 {
-        (*no_mapping.ptr()) += 1;
-        let mut reg: c_int = plain_vgetc();
-        if *p_langmap.get() as c_int != 0
-            && true
-            && (p_lrm.get() != 0
-                || (if vgetc_busy.get() != 0 {
-                    (typebuf_maplen() == 0 as c_int) as c_int
-                } else {
-                    KeyTyped.get() as c_int
-                }) != 0)
-            && KeyStuffed.get() == 0
-            && reg >= 0 as c_int
-        {
-            if reg < 256 as c_int {
-                reg = (*langmap_mapchar.ptr())[reg as usize] as c_int;
-            } else {
-                reg = langmap_adjust_mb(reg);
-            }
+/// `@@`: replay whatever `@` last played.
+pub(crate) unsafe extern "C" fn nv_regreplay(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if checkclearop((*cap).oap) {
+            return;
         }
-        (*no_mapping.ptr()) -= 1;
-        if reg == '"' as c_int {
-            reg = 0 as c_int;
+        replay(cap, reg_recorded.get());
+    }
+}
+
+/// `@`: replay a named register.
+pub(crate) unsafe extern "C" fn nv_at(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if checkclearop((*cap).oap) {
+            return;
         }
-        VIsual_select_reg.set(if valid_yank_reg(reg, true_0 != 0) as c_int != 0 {
-            reg
+        // `@=` prompts for an expression; a cancelled prompt does nothing.
+        if (*cap).nchar == '=' as c_int && get_expr_register() == NUL {
+            return;
+        }
+        replay(cap, (*cap).nchar);
+    }
+}
+
+/// `u`: undo, or the `gu` operator when one is already pending or a Visual
+/// selection is up.
+pub(crate) unsafe extern "C" fn nv_undo(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if (*(*cap).oap).op_type == OP_LOWER as c_int || VIsual_active.get() {
+            as_g_operator(cap, b'u');
         } else {
-            0 as c_int
-        });
-        return;
-    }
-    if checkclearopq((*cap).oap) {
-        return;
-    }
-    u_redo((*cap).count1);
-    (*curwin.get()).w_set_curswant = true_0;
-}
-
-pub(crate) unsafe extern "C" fn nv_Undo(mut cap: *mut cmdarg_T) {
-    if (*(*cap).oap).op_type == OP_UPPER as c_int || VIsual_active.get() as c_int != 0 {
-        (*cap).cmdchar = 'g' as c_int;
-        (*cap).nchar = 'U' as c_int;
-        nv_operator(cap);
-        return;
-    }
-    if checkclearopq((*cap).oap) {
-        return;
-    }
-    u_undoline();
-    (*curwin.get()).w_set_curswant = true_0;
-}
-
-pub(crate) unsafe extern "C" fn nv_operator(mut cap: *mut cmdarg_T) {
-    let mut op_type: c_int = get_op_type((*cap).cmdchar, (*cap).nchar);
-    if bt_prompt(curbuf.get()) as c_int != 0
-        && op_is_change(op_type) != 0
-        && !prompt_curpos_editable()
-    {
-        clearopbeep((*cap).oap);
-        return;
-    }
-    if op_type == (*(*cap).oap).op_type {
-        nv_lineop(cap);
-    } else if !checkclearop((*cap).oap) {
-        (*(*cap).oap).start = (*curwin.get()).w_cursor;
-        (*(*cap).oap).op_type = op_type;
-        set_op_var(op_type);
+            nv_kundo(cap);
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn set_op_var(mut optype: c_int) {
+/// `u` proper.
+pub(crate) unsafe extern "C" fn nv_kundo(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if checkclearopq((*cap).oap) {
+            return;
+        }
+        u_undo((*cap).count1);
+        (*curwin.get()).w_set_curswant = true_0;
+    }
+}
+
+/// `U`: undo the whole line, or the `gU` operator.
+pub(crate) unsafe extern "C" fn nv_Undo(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if (*(*cap).oap).op_type == OP_UPPER as c_int || VIsual_active.get() {
+            as_g_operator(cap, b'U');
+            return;
+        }
+        if checkclearopq((*cap).oap) {
+            return;
+        }
+        u_undoline();
+        (*curwin.get()).w_set_curswant = true_0;
+    }
+}
+
+/// `"`: name the register the next command works on.
+pub(crate) unsafe extern "C" fn nv_regname(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if checkclearop((*cap).oap) {
+            return;
+        }
+        // `"=` prompts for the expression register's contents up front.
+        if (*cap).nchar == '=' as c_int {
+            (*cap).nchar = get_expr_register();
+        }
+        if (*cap).nchar != NUL && valid_yank_reg((*cap).nchar, false) {
+            (*(*cap).oap).regname = (*cap).nchar;
+            // The count so far belongs to the command, not to the `"`.
+            (*cap).opcount = (*cap).count0;
+            set_reg_var((*(*cap).oap).regname);
+        } else {
+            clearopbeep((*cap).oap);
+        }
+    }
+}
+
+/// `.`: repeat the last change.
+pub(crate) unsafe extern "C" fn nv_dot(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if checkclearopq((*cap).oap) {
+            return;
+        }
+        // The insert half is only replayed when insert mode was left by a
+        // command rather than by an arrow key, which ends the change.
+        let repeat_insert = restart_edit.get() != 0 && !arrow_used.get();
+        if start_redo((*cap).count0, repeat_insert) == false_0 {
+            clearopbeep((*cap).oap);
+        }
+    }
+}
+
+/// `CTRL-R`: redo -- or, in Select mode, the register the replacement text
+/// should go to.
+pub(crate) unsafe extern "C" fn nv_redo_or_register(cap: *mut cmdarg_T) {
+    if VIsual_select.get() && VIsual_active.get() {
+        // SAFETY: reads one key with mappings suppressed.
+        unsafe {
+            (*no_mapping.ptr()) += 1;
+            let mut reg = plain_vgetc();
+            langmap_adjust(&mut reg, true);
+            (*no_mapping.ptr()) -= 1;
+            // `"` names the unnamed register, which is spelled 0 here.
+            if reg == '"' as c_int {
+                reg = 0;
+            }
+            VIsual_select_reg.set(if valid_yank_reg(reg, true) { reg } else { 0 });
+        }
+        return;
+    }
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if checkclearopq((*cap).oap) {
+            return;
+        }
+        u_redo((*cap).count1);
+        (*curwin.get()).w_set_curswant = true_0;
+    }
+}
+
+/// Start an operator, or apply the pending one to whole lines when it is the
+/// same one again (`dd`, `yy`, `gugu`).
+pub(crate) unsafe extern "C" fn nv_operator(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        let op_type = get_op_type((*cap).cmdchar, (*cap).nchar);
+        // A prompt buffer only lets its own last line be changed.
+        if bt_prompt(curbuf.get()) && op_is_change(op_type) != 0 && !prompt_curpos_editable() {
+            clearopbeep((*cap).oap);
+            return;
+        }
+        if op_type == (*(*cap).oap).op_type {
+            nv_lineop(cap);
+        } else if !checkclearop((*cap).oap) {
+            (*(*cap).oap).start = (*curwin.get()).w_cursor;
+            (*(*cap).oap).op_type = op_type;
+            set_op_var(op_type);
+        }
+    }
+}
+
+/// Publish the pending operator as `v:operator`.
+pub(crate) fn set_op_var(optype: c_int) {
     if optype == OP_NOP as c_int {
-        set_vim_var_string(VV_OP, ::core::ptr::null::<c_char>(), 0 as ptrdiff_t);
-    } else {
-        let mut opchars: [c_char; 3] = [0; 3];
-        let mut opchar0: c_int = get_op_char(optype);
-        '_c2rust_label: {
-            if opchar0 >= 0 as c_int && opchar0 <= 127 as c_int * 2 as c_int + 1 as c_int {
-            } else {
-                __assert_fail(
-                    b"opchar0 >= 0 && opchar0 <= UCHAR_MAX\0".as_ptr() as *const c_char,
-                    b"src/nvim/normal.rs\0".as_ptr() as *const c_char,
-                    5876 as c_uint,
-                    b"void set_op_var(int)\0".as_ptr() as *const c_char,
-                );
-            }
-        };
-        opchars[0 as c_int as usize] = opchar0 as c_char;
-        let mut opchar1: c_int = get_extra_op_char(optype);
-        '_c2rust_label_0: {
-            if opchar1 >= 0 as c_int && opchar1 <= 127 as c_int * 2 as c_int + 1 as c_int {
-            } else {
-                __assert_fail(
-                    b"opchar1 >= 0 && opchar1 <= UCHAR_MAX\0".as_ptr() as *const c_char,
-                    b"src/nvim/normal.rs\0".as_ptr() as *const c_char,
-                    5880 as c_uint,
-                    b"void set_op_var(int)\0".as_ptr() as *const c_char,
-                );
-            }
-        };
-        opchars[1 as c_int as usize] = opchar1 as c_char;
-        opchars[2 as c_int as usize] = NUL as c_char;
-        set_vim_var_string(VV_OP, &raw mut opchars as *mut c_char, 2 as ptrdiff_t);
-    };
-}
-
-pub(crate) unsafe extern "C" fn nv_lineop(mut cap: *mut cmdarg_T) {
-    (*(*cap).oap).motion_type = kMTLineWise;
-    if cursor_down(
-        (*cap).count1 - 1 as c_int,
-        (*(*cap).oap).op_type == OP_NOP as c_int,
-    ) == false_0
-    {
-        clearopbeep((*cap).oap);
-    } else if (*(*cap).oap).op_type == OP_DELETE as c_int
-        && (*(*cap).oap).motion_force != 'v' as c_int
-        && (*(*cap).oap).motion_force != Ctrl_V
-        || (*(*cap).oap).op_type == OP_LSHIFT as c_int
-        || (*(*cap).oap).op_type == OP_RSHIFT as c_int
-    {
-        beginline(BL_SOL as c_int | BL_FIX as c_int);
-    } else if (*(*cap).oap).op_type != OP_YANK as c_int {
-        beginline(BL_WHITE as c_int | BL_FIX as c_int);
+        // SAFETY: a null string with length 0 clears the variable.
+        unsafe { set_vim_var_string(VV_OP, ptr::null(), 0) };
+        return;
+    }
+    // Always two bytes and a terminator: a one-character operator has NUL as
+    // its second, and the length handed over is 2 either way.
+    let mut opchars: [c_char; 3] = [0; 3];
+    // SAFETY: both answers are single bytes of an operator's spelling.
+    unsafe {
+        let opchar0 = get_op_char(optype);
+        debug_assert!((0..=255).contains(&opchar0));
+        opchars[0] = opchar0 as c_char;
+        let opchar1 = get_extra_op_char(optype);
+        debug_assert!((0..=255).contains(&opchar1));
+        opchars[1] = opchar1 as c_char;
+        set_vim_var_string(VV_OP, opchars.as_mut_ptr(), 2);
     }
 }
 
-pub(crate) unsafe extern "C" fn nv_record(mut cap: *mut cmdarg_T) {
-    if (*(*cap).oap).op_type == OP_FORMAT as c_int {
-        (*cap).cmdchar = 'g' as c_int;
-        (*cap).nchar = 'q' as c_int;
-        nv_operator(cap);
-        return;
+/// The linewise form of an operator: `count1` lines from this one.
+pub(crate) unsafe extern "C" fn nv_lineop(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        (*(*cap).oap).motion_type = kMTLineWise;
+        let oap = (*cap).oap;
+        if cursor_down((*cap).count1 - 1, (*oap).op_type == OP_NOP as c_int) == false_0 {
+            clearopbeep(oap);
+        } else if ((*oap).op_type == OP_DELETE as c_int
+            && (*oap).motion_force != 'v' as c_int
+            && (*oap).motion_force != Ctrl_V)
+            || (*oap).op_type == OP_LSHIFT as c_int
+            || (*oap).op_type == OP_RSHIFT as c_int
+        {
+            // A delete or a shift leaves the cursor at the start of the line,
+            // on the first non-blank only if 'startofline' says so.
+            beginline(BL_SOL as c_int | BL_FIX as c_int);
+        } else if (*oap).op_type != OP_YANK as c_int {
+            beginline(BL_WHITE as c_int | BL_FIX as c_int);
+        }
     }
-    if checkclearop((*cap).oap) {
-        return;
-    }
-    if (*cap).nchar == ':' as c_int || (*cap).nchar == '/' as c_int || (*cap).nchar == '?' as c_int
-    {
-        if cmdwin_type.get() != 0 as c_int {
-            emsg(gettext(e_cmdline_window_already_open.as_ptr()));
+}
+
+/// `q`: start or stop a recording -- or open the command-line window, or the
+/// `gq` operator when that is what is pending.
+pub(crate) unsafe extern "C" fn nv_record(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if (*(*cap).oap).op_type == OP_FORMAT as c_int {
+            as_g_operator(cap, b'q');
             return;
         }
-        stuffcharReadbuff((*cap).nchar);
-        stuffcharReadbuff(-(253 as c_int + ((KE_CMDWIN as c_int) << 8 as c_int)));
-    } else if reg_executing.get() == 0 as c_int && do_record((*cap).nchar) == FAIL {
-        clearopbeep((*cap).oap);
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_at(mut cap: *mut cmdarg_T) {
-    if checkclearop((*cap).oap) {
-        return;
-    }
-    if (*cap).nchar == '=' as c_int {
-        if get_expr_register() == NUL {
+        if checkclearop((*cap).oap) {
             return;
         }
-    }
-    loop {
-        let c2rust_fresh13 = (*cap).count1;
-        (*cap).count1 = (*cap).count1 - 1;
-        if !(c2rust_fresh13 != 0 && !got_int.get()) {
-            break;
-        }
-        if do_execreg((*cap).nchar, false_0, false_0, false_0) == false_0 {
+        // `q:`, `q/` and `q?` open the command-line window instead.
+        if (*cap).nchar == ':' as c_int
+            || (*cap).nchar == '/' as c_int
+            || (*cap).nchar == '?' as c_int
+        {
+            if cmdwin_type.get() != 0 {
+                emsg(gettext(e_cmdline_window_already_open.as_ptr()));
+                return;
+            }
+            stuffcharReadbuff((*cap).nchar);
+            stuffcharReadbuff(-(253 + ((KE_CMDWIN as c_int) << 8)));
+        } else if reg_executing.get() == 0 && do_record((*cap).nchar) == FAIL {
             clearopbeep((*cap).oap);
-            break;
-        } else {
-            line_breakcheck();
         }
     }
 }

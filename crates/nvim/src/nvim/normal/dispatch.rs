@@ -126,7 +126,7 @@ fn langmap_wanted(condition: bool) -> bool {
 /// Translate one key through 'langmap', if this key and this moment call for
 /// it.
 #[inline(always)]
-fn langmap_adjust(c: &mut c_int, condition: bool) {
+pub(crate) fn langmap_adjust(c: &mut c_int, condition: bool) {
     if *c >= 0 && langmap_wanted(condition) {
         // SAFETY: `langmap_mapchar` is 256 entries and `*c` is below that.
         *c = unsafe {

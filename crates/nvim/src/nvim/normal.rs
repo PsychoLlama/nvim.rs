@@ -151,8 +151,8 @@ use crate::src::nvim::types::{
     Array, Direction, GraphemeState, Integer, MarkGet, MarkMove, MarkMoveRes, MotionType, Object,
     ObjectType, OptInt, SpellAddType, UIExtension, VimState, VimVarIndex, auto_event, buf_T,
     cmdarg_T, colnr_T, dict_T, exarg_T, fmark_T, getf_values, hlf_T, int16_t, int64_t, key_extra,
-    linenr_T, object, object_data as C2Rust_Unnamed_0, oparg_T, pos_T, proftime_T, ptrdiff_t,
-    searchit_arg_T, size_t, smt_T, uint8_t, uint16_t, win_T, yankreg_T,
+    linenr_T, object, object_data as C2Rust_Unnamed_0, oparg_T, pos_T, searchit_arg_T, size_t,
+    smt_T, uint8_t, uint16_t, win_T, yankreg_T,
 };
 use crate::src::nvim::ui::{
     ui_call_msg_showcmd, ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush, ui_has,
