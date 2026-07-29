@@ -265,7 +265,7 @@ pub unsafe fn typval_compare(
             let s2 = tv_get_string_buf(typ2, buf2.as_mut_ptr());
             if op == EXPR_MATCH || op == EXPR_NOMATCH {
                 // The pattern is the right-hand side and the subject the left.
-                varnumber_T::from((pattern_match(s2, s1, ic) != 0) == (op == EXPR_MATCH))
+                varnumber_T::from(pattern_match(s2, s1, ic) == (op == EXPR_MATCH))
             } else {
                 from_ordering(op, mb_strcmp_ic(ic, s1, s2))
             }

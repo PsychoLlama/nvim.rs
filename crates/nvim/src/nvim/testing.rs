@@ -841,7 +841,6 @@ unsafe extern "C" fn assert_match_common(
         && pattern_match(pat, text, false_0 != 0)
             != (atype as ::core::ffi::c_uint
                 == ASSERT_MATCH as ::core::ffi::c_int as ::core::ffi::c_uint)
-                as ::core::ffi::c_int
     {
         let mut ga: garray_T = garray_T {
             ga_len: 0,
@@ -1326,7 +1325,7 @@ pub unsafe extern "C" fn f_assert_fails(
                     expected = tv_get_string_buf_chk(tv, &raw mut buf as *mut ::core::ffi::c_char);
                     if expected.is_null() {
                         break '_theend;
-                    } else if pattern_match(expected, actual, false_0 != 0) == 0 {
+                    } else if !pattern_match(expected, actual, false_0 != 0) {
                         error_found = true_0 != 0;
                         expected_str = expected;
                     } else if tv_list_len(list) == 2 as ::core::ffi::c_int {
@@ -1337,7 +1336,7 @@ pub unsafe extern "C" fn f_assert_fails(
                             tv_get_string_buf_chk(tv, &raw mut buf as *mut ::core::ffi::c_char);
                         if expected.is_null() {
                             break '_theend;
-                        } else if pattern_match(expected, actual, false_0 != 0) == 0 {
+                        } else if !pattern_match(expected, actual, false_0 != 0) {
                             error_found = true_0 != 0;
                             expected_str = expected;
                         }
@@ -1389,13 +1388,13 @@ pub unsafe extern "C" fn f_assert_fails(
                             .vval
                             .v_string
                             .is_null()
-                            && pattern_match(
+                            && !pattern_match(
                                 (*argvars.offset(4 as ::core::ffi::c_int as isize))
                                     .vval
                                     .v_string,
                                 emsg_assert_fails_context.get(),
                                 false_0 != 0,
-                            ) == 0
+                            )
                         {
                             error_found = true_0 != 0;
                             error_found_index = 4 as ::core::ffi::c_int;
