@@ -35,6 +35,22 @@ mod remote;
 mod usage;
 pub use self::exit::*;
 
+/// A C string literal as the fixed-size `c_char` array a global holds.
+///
+/// c2rust spells every `static char foo[] = "…"` as a `transmute` from the
+/// byte string, which is one `unsafe` block per message and 194 of them in
+/// this file alone. Copying the bytes is const-evaluable, needs no `unsafe`,
+/// and unlike `transmute` it works with a const generic length.
+pub(crate) const fn c_bytes<const N: usize>(bytes: &[u8; N]) -> [c_char; N] {
+    let mut out = [0 as c_char; N];
+    let mut i = 0;
+    while i < N {
+        out[i] = bytes[i] as c_char;
+        i += 1;
+    }
+    out
+}
+
 /// Record a startup-timing message, if `--startuptime` asked for one.
 ///
 /// The C spells this as the `TIME_MSG` macro; it appears two dozen times
@@ -207,8 +223,7 @@ pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 pub(crate) const LOGLVL_DBG: c_int = 1 as c_int;
 pub(crate) const LOGLVL_INF: c_int = 2 as c_int;
 pub static g_min_log_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) const SESSION_FILE: [c_char; 12] =
-    unsafe { ::core::mem::transmute::<[u8; 12], [c_char; 12]>(*b"Session.vim\0") };
+pub(crate) const SESSION_FILE: [c_char; 12] = c_bytes(b"Session.vim\0");
 pub(crate) const OK: c_int = 1 as c_int;
 pub(crate) const FAIL: c_int = 0 as c_int;
 pub static namespace_ids: GlobalCell<Map_String_int> = GlobalCell::new(Map_String_int {
@@ -452,679 +467,390 @@ pub static screen_search_hl: GlobalCell<match_T> = GlobalCell::new(match_T {
     tm: 0,
 });
 pub static search_hl_has_cursor_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-pub static e_api_spawn_failed: GlobalCell<[c_char; 30]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 30], [c_char; 30]>(*b"E903: Could not spawn API job\0")
-});
-pub static e_argreq: GlobalCell<[c_char; 24]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 24], [c_char; 24]>(*b"E471: Argument required\0")
-});
-pub static e_backslash: GlobalCell<[c_char; 39]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 39], [c_char; 39]>(*b"E10: \\ should be followed by /, ? or &\0")
-});
-pub static e_cmdwin: GlobalCell<[c_char; 65]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 65], [c_char; 65]>(
-        *b"E11: Invalid in command-line window; <CR> executes, CTRL-C quits\0",
-    )
-});
-pub static e_curdir: GlobalCell<[c_char; 69]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 69], [c_char; 69]>(
-        *b"E12: Command not allowed in secure mode in current dir or tag search\0",
-    )
-});
-pub static e_invalid_buffer_name_str: GlobalCell<[c_char; 30]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 30], [c_char; 30]>(*b"E158: Invalid buffer name: %s\0")
-});
-pub static e_command_too_recursive: GlobalCell<[c_char; 28]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 28], [c_char; 28]>(*b"E169: Command too recursive\0")
-});
-pub static e_buffer_is_not_loaded: GlobalCell<[c_char; 27]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 27], [c_char; 27]>(*b"E681: Buffer is not loaded\0")
-});
-pub static e_endif: GlobalCell<[c_char; 21]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 21], [c_char; 21]>(*b"E171: Missing :endif\0")
-});
-pub static e_endtry: GlobalCell<[c_char; 22]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 22], [c_char; 22]>(*b"E600: Missing :endtry\0")
-});
-pub static e_endwhile: GlobalCell<[c_char; 24]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 24], [c_char; 24]>(*b"E170: Missing :endwhile\0")
-});
-pub static e_endfor: GlobalCell<[c_char; 22]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 22], [c_char; 22]>(*b"E170: Missing :endfor\0")
-});
-pub static e_while: GlobalCell<[c_char; 31]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 31], [c_char; 31]>(*b"E588: :endwhile without :while\0")
-});
-pub static e_for: GlobalCell<[c_char; 27]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 27], [c_char; 27]>(*b"E588: :endfor without :for\0")
-});
-pub static e_exists: GlobalCell<[c_char; 37]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 37], [c_char; 37]>(*b"E13: File exists (add ! to override)\0")
-});
-pub static e_failed: GlobalCell<[c_char; 21]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 21], [c_char; 21]>(*b"E472: Command failed\0")
-});
-pub static e_intern2: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E685: Internal error: %s\0")
-});
-pub static e_interr: GlobalCell<[c_char; 12]> =
-    GlobalCell::new(unsafe { ::core::mem::transmute::<[u8; 12], [c_char; 12]>(*b"Interrupted\0") });
-pub static e_invarg: GlobalCell<[c_char; 23]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 23], [c_char; 23]>(*b"E474: Invalid argument\0")
-});
-pub static e_invarg2: GlobalCell<[c_char; 27]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 27], [c_char; 27]>(*b"E475: Invalid argument: %s\0")
-});
-pub static e_invargval: GlobalCell<[c_char; 36]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 36], [c_char; 36]>(*b"E475: Invalid value for argument %s\0")
-});
-pub static e_invargNval: GlobalCell<[c_char; 40]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 40], [c_char; 40]>(*b"E475: Invalid value for argument %s: %s\0")
-});
-pub static e_duparg2: GlobalCell<[c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [c_char; 29]>(*b"E983: Duplicate argument: %s\0")
-});
-pub static e_invexpr2: GlobalCell<[c_char; 30]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 30], [c_char; 30]>(*b"E15: Invalid expression: \"%s\"\0")
-});
-pub static e_invrange: GlobalCell<[c_char; 19]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 19], [c_char; 19]>(*b"E16: Invalid range\0")
-});
-pub static e_invcmd: GlobalCell<[c_char; 22]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 22], [c_char; 22]>(*b"E476: Invalid command\0")
-});
-pub static e_isadir2: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E17: \"%s\" is a directory\0")
-});
-pub static e_no_spell: GlobalCell<[c_char; 37]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 37], [c_char; 37]>(*b"E756: Spell checking is not possible\0")
-});
-pub static e_invchan: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E900: Invalid channel id\0")
-});
-pub static e_invchanjob: GlobalCell<[c_char; 36]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 36], [c_char; 36]>(*b"E900: Invalid channel id: not a job\0")
-});
-pub static e_jobspawn: GlobalCell<[c_char; 40]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 40], [c_char; 40]>(
-        *b"E903: Process failed to start: %s: \"%s\"\0",
-    )
-});
-pub static e_channotpty: GlobalCell<[c_char; 27]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 27], [c_char; 27]>(*b"E904: channel is not a pty\0")
-});
-pub static e_stdiochan2: GlobalCell<[c_char; 38]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 38], [c_char; 38]>(*b"E905: Couldn't open stdio channel: %s\0")
-});
-pub static e_invstream: GlobalCell<[c_char; 33]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 33], [c_char; 33]>(*b"E906: invalid stream for channel\0")
-});
-pub static e_invstreamrpc: GlobalCell<[c_char; 48]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 48], [c_char; 48]>(
-        *b"E906: invalid stream for rpc channel, use 'rpc'\0",
-    )
-});
-pub static e_streamkey: GlobalCell<[c_char; 68]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 68], [c_char; 68]>(
-        *b"E5210: dict key '%s' already set for buffered stream in channel %lu\0",
-    )
-});
-pub static e_libcall: GlobalCell<[c_char; 37]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 37], [c_char; 37]>(*b"E364: Library call failed for \"%s()\"\0")
-});
-pub static e_fsync: GlobalCell<[c_char; 23]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 23], [c_char; 23]>(*b"E667: Fsync failed: %s\0")
-});
-pub static e_mkdir: GlobalCell<[c_char; 37]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 37], [c_char; 37]>(*b"E739: Cannot create directory %s: %s\0")
-});
-pub static e_markinval: GlobalCell<[c_char; 34]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 34], [c_char; 34]>(*b"E19: Mark has invalid line number\0")
-});
-pub static e_marknotset: GlobalCell<[c_char; 18]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 18], [c_char; 18]>(*b"E20: Mark not set\0")
-});
-pub static e_modifiable: GlobalCell<[c_char; 46]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 46], [c_char; 46]>(
-        *b"E21: Cannot make changes, 'modifiable' is off\0",
-    )
-});
-pub static e_nesting: GlobalCell<[c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [c_char; 29]>(*b"E22: Scripts nested too deep\0")
-});
-pub static e_noalt: GlobalCell<[c_char; 23]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 23], [c_char; 23]>(*b"E23: No alternate file\0")
-});
-pub static e_noabbr: GlobalCell<[c_char; 26]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 26], [c_char; 26]>(*b"E24: No such abbreviation\0")
-});
-pub static e_nobang: GlobalCell<[c_char; 19]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 19], [c_char; 19]>(*b"E477: No ! allowed\0")
-});
-pub static e_nogroup: GlobalCell<[c_char; 38]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 38], [c_char; 38]>(*b"E28: No such highlight group name: %s\0")
-});
-pub static e_noinstext: GlobalCell<[c_char; 26]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 26], [c_char; 26]>(*b"E29: No inserted text yet\0")
-});
-pub static e_nolastcmd: GlobalCell<[c_char; 30]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 30], [c_char; 30]>(*b"E30: No previous command line\0")
-});
-pub static e_nomap: GlobalCell<[c_char; 21]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 21], [c_char; 21]>(*b"E31: No such mapping\0")
-});
-pub static e_noident: GlobalCell<[c_char; 33]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 33], [c_char; 33]>(*b"E349: No identifier under cursor\0")
-});
-pub static e_nomatch: GlobalCell<[c_char; 15]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 15], [c_char; 15]>(*b"E479: No match\0")
-});
-pub static e_nomatch2: GlobalCell<[c_char; 19]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 19], [c_char; 19]>(*b"E480: No match: %s\0")
-});
-pub static e_noname: GlobalCell<[c_char; 18]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 18], [c_char; 18]>(*b"E32: No file name\0")
-});
-pub static e_nopresub: GlobalCell<[c_char; 47]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 47], [c_char; 47]>(
-        *b"E33: No previous substitute regular expression\0",
-    )
-});
-pub static e_noprev: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E34: No previous command\0")
-});
-pub static e_noprevre: GlobalCell<[c_char; 36]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 36], [c_char; 36]>(*b"E35: No previous regular expression\0")
-});
-pub static e_norange: GlobalCell<[c_char; 23]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 23], [c_char; 23]>(*b"E481: No range allowed\0")
-});
-pub static e_noroom: GlobalCell<[c_char; 21]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 21], [c_char; 21]>(*b"E36: Not enough room\0")
-});
-pub static e_notmp: GlobalCell<[c_char; 31]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 31], [c_char; 31]>(*b"E483: Can't get temp file name\0")
-});
-pub static e_notopen: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E484: Can't open file %s\0")
-});
-pub static e_notopen_2: GlobalCell<[c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [c_char; 29]>(*b"E484: Can't open file %s: %s\0")
-});
-pub static e_cant_read_file_str: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E485: Can't read file %s\0")
-});
-pub static e_null: GlobalCell<[c_char; 19]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 19], [c_char; 19]>(*b"E38: Null argument\0")
-});
-pub static e_number_exp: GlobalCell<[c_char; 21]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 21], [c_char; 21]>(*b"E39: Number expected\0")
-});
-pub static e_openerrf: GlobalCell<[c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [c_char; 29]>(*b"E40: Can't open errorfile %s\0")
-});
-pub static e_outofmem: GlobalCell<[c_char; 20]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 20], [c_char; 20]>(*b"E41: Out of memory!\0")
-});
-pub static e_patnotf: GlobalCell<[c_char; 18]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 18], [c_char; 18]>(*b"Pattern not found\0")
-});
-pub static e_patnotf2: GlobalCell<[c_char; 28]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 28], [c_char; 28]>(*b"E486: Pattern not found: %s\0")
-});
-pub static e_positive: GlobalCell<[c_char; 32]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 32], [c_char; 32]>(*b"E487: Argument must be positive\0")
-});
-pub static e_prev_dir: GlobalCell<[c_char; 43]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 43], [c_char; 43]>(
-        *b"E459: Cannot go back to previous directory\0",
-    )
-});
-pub static e_no_errors: GlobalCell<[c_char; 15]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 15], [c_char; 15]>(*b"E42: No Errors\0")
-});
-pub static e_loclist: GlobalCell<[c_char; 23]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 23], [c_char; 23]>(*b"E776: No location list\0")
-});
-pub static e_re_damg: GlobalCell<[c_char; 26]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 26], [c_char; 26]>(*b"E43: Damaged match string\0")
-});
-pub static e_re_corr: GlobalCell<[c_char; 30]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 30], [c_char; 30]>(*b"E44: Corrupted regexp program\0")
-});
-pub static e_readonly: GlobalCell<[c_char; 50]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 50], [c_char; 50]>(
-        *b"E45: 'readonly' option is set (add ! to override)\0",
-    )
-});
-pub static e_letwrong: GlobalCell<[c_char; 34]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 34], [c_char; 34]>(*b"E734: Wrong variable type for %s=\0")
-});
-pub static e_illvar: GlobalCell<[c_char; 32]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 32], [c_char; 32]>(*b"E461: Illegal variable name: %s\0")
-});
-pub static e_cannot_mod: GlobalCell<[c_char; 38]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 38], [c_char; 38]>(*b"E995: Cannot modify existing variable\0")
-});
+pub static e_api_spawn_failed: GlobalCell<[c_char; 30]> =
+    GlobalCell::new(c_bytes(b"E903: Could not spawn API job\0"));
+pub static e_argreq: GlobalCell<[c_char; 24]> =
+    GlobalCell::new(c_bytes(b"E471: Argument required\0"));
+pub static e_backslash: GlobalCell<[c_char; 39]> =
+    GlobalCell::new(c_bytes(b"E10: \\ should be followed by /, ? or &\0"));
+pub static e_cmdwin: GlobalCell<[c_char; 65]> = GlobalCell::new(c_bytes(
+    b"E11: Invalid in command-line window; <CR> executes, CTRL-C quits\0",
+));
+pub static e_curdir: GlobalCell<[c_char; 69]> = GlobalCell::new(c_bytes(
+    b"E12: Command not allowed in secure mode in current dir or tag search\0",
+));
+pub static e_invalid_buffer_name_str: GlobalCell<[c_char; 30]> =
+    GlobalCell::new(c_bytes(b"E158: Invalid buffer name: %s\0"));
+pub static e_command_too_recursive: GlobalCell<[c_char; 28]> =
+    GlobalCell::new(c_bytes(b"E169: Command too recursive\0"));
+pub static e_buffer_is_not_loaded: GlobalCell<[c_char; 27]> =
+    GlobalCell::new(c_bytes(b"E681: Buffer is not loaded\0"));
+pub static e_endif: GlobalCell<[c_char; 21]> = GlobalCell::new(c_bytes(b"E171: Missing :endif\0"));
+pub static e_endtry: GlobalCell<[c_char; 22]> =
+    GlobalCell::new(c_bytes(b"E600: Missing :endtry\0"));
+pub static e_endwhile: GlobalCell<[c_char; 24]> =
+    GlobalCell::new(c_bytes(b"E170: Missing :endwhile\0"));
+pub static e_endfor: GlobalCell<[c_char; 22]> =
+    GlobalCell::new(c_bytes(b"E170: Missing :endfor\0"));
+pub static e_while: GlobalCell<[c_char; 31]> =
+    GlobalCell::new(c_bytes(b"E588: :endwhile without :while\0"));
+pub static e_for: GlobalCell<[c_char; 27]> =
+    GlobalCell::new(c_bytes(b"E588: :endfor without :for\0"));
+pub static e_exists: GlobalCell<[c_char; 37]> =
+    GlobalCell::new(c_bytes(b"E13: File exists (add ! to override)\0"));
+pub static e_failed: GlobalCell<[c_char; 21]> = GlobalCell::new(c_bytes(b"E472: Command failed\0"));
+pub static e_intern2: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E685: Internal error: %s\0"));
+pub static e_interr: GlobalCell<[c_char; 12]> = GlobalCell::new(c_bytes(b"Interrupted\0"));
+pub static e_invarg: GlobalCell<[c_char; 23]> =
+    GlobalCell::new(c_bytes(b"E474: Invalid argument\0"));
+pub static e_invarg2: GlobalCell<[c_char; 27]> =
+    GlobalCell::new(c_bytes(b"E475: Invalid argument: %s\0"));
+pub static e_invargval: GlobalCell<[c_char; 36]> =
+    GlobalCell::new(c_bytes(b"E475: Invalid value for argument %s\0"));
+pub static e_invargNval: GlobalCell<[c_char; 40]> =
+    GlobalCell::new(c_bytes(b"E475: Invalid value for argument %s: %s\0"));
+pub static e_duparg2: GlobalCell<[c_char; 29]> =
+    GlobalCell::new(c_bytes(b"E983: Duplicate argument: %s\0"));
+pub static e_invexpr2: GlobalCell<[c_char; 30]> =
+    GlobalCell::new(c_bytes(b"E15: Invalid expression: \"%s\"\0"));
+pub static e_invrange: GlobalCell<[c_char; 19]> = GlobalCell::new(c_bytes(b"E16: Invalid range\0"));
+pub static e_invcmd: GlobalCell<[c_char; 22]> =
+    GlobalCell::new(c_bytes(b"E476: Invalid command\0"));
+pub static e_isadir2: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E17: \"%s\" is a directory\0"));
+pub static e_no_spell: GlobalCell<[c_char; 37]> =
+    GlobalCell::new(c_bytes(b"E756: Spell checking is not possible\0"));
+pub static e_invchan: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E900: Invalid channel id\0"));
+pub static e_invchanjob: GlobalCell<[c_char; 36]> =
+    GlobalCell::new(c_bytes(b"E900: Invalid channel id: not a job\0"));
+pub static e_jobspawn: GlobalCell<[c_char; 40]> =
+    GlobalCell::new(c_bytes(b"E903: Process failed to start: %s: \"%s\"\0"));
+pub static e_channotpty: GlobalCell<[c_char; 27]> =
+    GlobalCell::new(c_bytes(b"E904: channel is not a pty\0"));
+pub static e_stdiochan2: GlobalCell<[c_char; 38]> =
+    GlobalCell::new(c_bytes(b"E905: Couldn't open stdio channel: %s\0"));
+pub static e_invstream: GlobalCell<[c_char; 33]> =
+    GlobalCell::new(c_bytes(b"E906: invalid stream for channel\0"));
+pub static e_invstreamrpc: GlobalCell<[c_char; 48]> = GlobalCell::new(c_bytes(
+    b"E906: invalid stream for rpc channel, use 'rpc'\0",
+));
+pub static e_streamkey: GlobalCell<[c_char; 68]> = GlobalCell::new(c_bytes(
+    b"E5210: dict key '%s' already set for buffered stream in channel %lu\0",
+));
+pub static e_libcall: GlobalCell<[c_char; 37]> =
+    GlobalCell::new(c_bytes(b"E364: Library call failed for \"%s()\"\0"));
+pub static e_fsync: GlobalCell<[c_char; 23]> =
+    GlobalCell::new(c_bytes(b"E667: Fsync failed: %s\0"));
+pub static e_mkdir: GlobalCell<[c_char; 37]> =
+    GlobalCell::new(c_bytes(b"E739: Cannot create directory %s: %s\0"));
+pub static e_markinval: GlobalCell<[c_char; 34]> =
+    GlobalCell::new(c_bytes(b"E19: Mark has invalid line number\0"));
+pub static e_marknotset: GlobalCell<[c_char; 18]> =
+    GlobalCell::new(c_bytes(b"E20: Mark not set\0"));
+pub static e_modifiable: GlobalCell<[c_char; 46]> =
+    GlobalCell::new(c_bytes(b"E21: Cannot make changes, 'modifiable' is off\0"));
+pub static e_nesting: GlobalCell<[c_char; 29]> =
+    GlobalCell::new(c_bytes(b"E22: Scripts nested too deep\0"));
+pub static e_noalt: GlobalCell<[c_char; 23]> =
+    GlobalCell::new(c_bytes(b"E23: No alternate file\0"));
+pub static e_noabbr: GlobalCell<[c_char; 26]> =
+    GlobalCell::new(c_bytes(b"E24: No such abbreviation\0"));
+pub static e_nobang: GlobalCell<[c_char; 19]> = GlobalCell::new(c_bytes(b"E477: No ! allowed\0"));
+pub static e_nogroup: GlobalCell<[c_char; 38]> =
+    GlobalCell::new(c_bytes(b"E28: No such highlight group name: %s\0"));
+pub static e_noinstext: GlobalCell<[c_char; 26]> =
+    GlobalCell::new(c_bytes(b"E29: No inserted text yet\0"));
+pub static e_nolastcmd: GlobalCell<[c_char; 30]> =
+    GlobalCell::new(c_bytes(b"E30: No previous command line\0"));
+pub static e_nomap: GlobalCell<[c_char; 21]> = GlobalCell::new(c_bytes(b"E31: No such mapping\0"));
+pub static e_noident: GlobalCell<[c_char; 33]> =
+    GlobalCell::new(c_bytes(b"E349: No identifier under cursor\0"));
+pub static e_nomatch: GlobalCell<[c_char; 15]> = GlobalCell::new(c_bytes(b"E479: No match\0"));
+pub static e_nomatch2: GlobalCell<[c_char; 19]> = GlobalCell::new(c_bytes(b"E480: No match: %s\0"));
+pub static e_noname: GlobalCell<[c_char; 18]> = GlobalCell::new(c_bytes(b"E32: No file name\0"));
+pub static e_nopresub: GlobalCell<[c_char; 47]> =
+    GlobalCell::new(c_bytes(b"E33: No previous substitute regular expression\0"));
+pub static e_noprev: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E34: No previous command\0"));
+pub static e_noprevre: GlobalCell<[c_char; 36]> =
+    GlobalCell::new(c_bytes(b"E35: No previous regular expression\0"));
+pub static e_norange: GlobalCell<[c_char; 23]> =
+    GlobalCell::new(c_bytes(b"E481: No range allowed\0"));
+pub static e_noroom: GlobalCell<[c_char; 21]> = GlobalCell::new(c_bytes(b"E36: Not enough room\0"));
+pub static e_notmp: GlobalCell<[c_char; 31]> =
+    GlobalCell::new(c_bytes(b"E483: Can't get temp file name\0"));
+pub static e_notopen: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E484: Can't open file %s\0"));
+pub static e_notopen_2: GlobalCell<[c_char; 29]> =
+    GlobalCell::new(c_bytes(b"E484: Can't open file %s: %s\0"));
+pub static e_cant_read_file_str: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E485: Can't read file %s\0"));
+pub static e_null: GlobalCell<[c_char; 19]> = GlobalCell::new(c_bytes(b"E38: Null argument\0"));
+pub static e_number_exp: GlobalCell<[c_char; 21]> =
+    GlobalCell::new(c_bytes(b"E39: Number expected\0"));
+pub static e_openerrf: GlobalCell<[c_char; 29]> =
+    GlobalCell::new(c_bytes(b"E40: Can't open errorfile %s\0"));
+pub static e_outofmem: GlobalCell<[c_char; 20]> =
+    GlobalCell::new(c_bytes(b"E41: Out of memory!\0"));
+pub static e_patnotf: GlobalCell<[c_char; 18]> = GlobalCell::new(c_bytes(b"Pattern not found\0"));
+pub static e_patnotf2: GlobalCell<[c_char; 28]> =
+    GlobalCell::new(c_bytes(b"E486: Pattern not found: %s\0"));
+pub static e_positive: GlobalCell<[c_char; 32]> =
+    GlobalCell::new(c_bytes(b"E487: Argument must be positive\0"));
+pub static e_prev_dir: GlobalCell<[c_char; 43]> =
+    GlobalCell::new(c_bytes(b"E459: Cannot go back to previous directory\0"));
+pub static e_no_errors: GlobalCell<[c_char; 15]> = GlobalCell::new(c_bytes(b"E42: No Errors\0"));
+pub static e_loclist: GlobalCell<[c_char; 23]> =
+    GlobalCell::new(c_bytes(b"E776: No location list\0"));
+pub static e_re_damg: GlobalCell<[c_char; 26]> =
+    GlobalCell::new(c_bytes(b"E43: Damaged match string\0"));
+pub static e_re_corr: GlobalCell<[c_char; 30]> =
+    GlobalCell::new(c_bytes(b"E44: Corrupted regexp program\0"));
+pub static e_readonly: GlobalCell<[c_char; 50]> = GlobalCell::new(c_bytes(
+    b"E45: 'readonly' option is set (add ! to override)\0",
+));
+pub static e_letwrong: GlobalCell<[c_char; 34]> =
+    GlobalCell::new(c_bytes(b"E734: Wrong variable type for %s=\0"));
+pub static e_illvar: GlobalCell<[c_char; 32]> =
+    GlobalCell::new(c_bytes(b"E461: Illegal variable name: %s\0"));
+pub static e_cannot_mod: GlobalCell<[c_char; 38]> =
+    GlobalCell::new(c_bytes(b"E995: Cannot modify existing variable\0"));
 pub static e_cannot_change_readonly_variable_str: GlobalCell<[c_char; 45]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 45], [c_char; 45]>(
-            *b"E46: Cannot change read-only variable \"%.*s\"\0",
-        )
-    });
-pub static e_dictreq: GlobalCell<[c_char; 26]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 26], [c_char; 26]>(*b"E715: Dictionary required\0")
-});
-pub static e_blobidx: GlobalCell<[c_char; 35]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 35], [c_char; 35]>(*b"E979: Blob index out of range: %ld\0")
-});
-pub static e_invalblob: GlobalCell<[c_char; 33]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 33], [c_char; 33]>(*b"E978: Invalid operation for Blob\0")
-});
-pub static e_toomanyarg: GlobalCell<[c_char; 42]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 42], [c_char; 42]>(
-        *b"E118: Too many arguments for function: %s\0",
-    )
-});
-pub static e_toofewarg: GlobalCell<[c_char; 44]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 44], [c_char; 44]>(
-        *b"E119: Not enough arguments for function: %s\0",
-    )
-});
-pub static e_dictkey: GlobalCell<[c_char; 42]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 42], [c_char; 42]>(
-        *b"E716: Key not present in Dictionary: \"%s\"\0",
-    )
-});
-pub static e_dictkey_len: GlobalCell<[c_char; 44]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 44], [c_char; 44]>(
-        *b"E716: Key not present in Dictionary: \"%.*s\"\0",
-    )
-});
-pub static e_listreq: GlobalCell<[c_char; 20]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 20], [c_char; 20]>(*b"E714: List required\0")
-});
-pub static e_listblobreq: GlobalCell<[c_char; 28]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 28], [c_char; 28]>(*b"E897: List or Blob required\0")
-});
-pub static e_listblobarg: GlobalCell<[c_char; 44]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 44], [c_char; 44]>(
-        *b"E899: Argument of %s must be a List or Blob\0",
-    )
-});
-pub static e_listdictarg: GlobalCell<[c_char; 50]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 50], [c_char; 50]>(
-        *b"E712: Argument of %s must be a List or Dictionary\0",
-    )
-});
-pub static e_listdictblobarg: GlobalCell<[c_char; 56]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 56], [c_char; 56]>(
-        *b"E896: Argument of %s must be a List, Dictionary or Blob\0",
-    )
-});
-pub static e_readerrf: GlobalCell<[c_char; 35]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 35], [c_char; 35]>(*b"E47: Error while reading errorfile\0")
-});
-pub static e_sandbox: GlobalCell<[c_char; 28]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 28], [c_char; 28]>(*b"E48: Not allowed in sandbox\0")
-});
-pub static e_secure: GlobalCell<[c_char; 23]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 23], [c_char; 23]>(*b"E523: Not allowed here\0")
-});
-pub static e_textlock: GlobalCell<[c_char; 50]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 50], [c_char; 50]>(
-        *b"E565: Not allowed to change text or change window\0",
-    )
-});
-pub static e_screenmode: GlobalCell<[c_char; 40]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 40], [c_char; 40]>(*b"E359: Screen mode setting not supported\0")
-});
-pub static e_scroll: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E49: Invalid scroll size\0")
-});
-pub static e_shellempty: GlobalCell<[c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [c_char; 29]>(*b"E91: 'shell' option is empty\0")
-});
-pub static e_swapclose: GlobalCell<[c_char; 30]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 30], [c_char; 30]>(*b"E72: Close error on swap file\0")
-});
-pub static e_toocompl: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E74: Command too complex\0")
-});
-pub static e_longname: GlobalCell<[c_char; 19]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 19], [c_char; 19]>(*b"E75: Name too long\0")
-});
-pub static e_toomany: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E77: Too many file names\0")
-});
-pub static e_trailing: GlobalCell<[c_char; 26]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 26], [c_char; 26]>(*b"E488: Trailing characters\0")
-});
-pub static e_trailing_arg: GlobalCell<[c_char; 30]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 30], [c_char; 30]>(*b"E488: Trailing characters: %s\0")
-});
-pub static e_umark: GlobalCell<[c_char; 18]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 18], [c_char; 18]>(*b"E78: Unknown mark\0")
-});
-pub static e_wildexpand: GlobalCell<[c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [c_char; 29]>(*b"E79: Cannot expand wildcards\0")
-});
-pub static e_winheight: GlobalCell<[c_char; 56]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 56], [c_char; 56]>(
-        *b"E591: 'winheight' cannot be smaller than 'winminheight'\0",
-    )
-});
-pub static e_winwidth: GlobalCell<[c_char; 54]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 54], [c_char; 54]>(
-        *b"E592: 'winwidth' cannot be smaller than 'winminwidth'\0",
-    )
-});
-pub static e_write: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E80: Error while writing\0")
-});
-pub static e_zerocount: GlobalCell<[c_char; 30]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 30], [c_char; 30]>(*b"E939: Positive count required\0")
-});
-pub static e_usingsid: GlobalCell<[c_char; 41]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 41], [c_char; 41]>(*b"E81: Using <SID> not in a script context\0")
-});
-pub static e_missingparen: GlobalCell<[c_char; 30]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 30], [c_char; 30]>(*b"E107: Missing parentheses: %s\0")
-});
-pub static e_empty_buffer: GlobalCell<[c_char; 19]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 19], [c_char; 19]>(*b"E749: Empty buffer\0")
-});
-pub static e_nobufnr: GlobalCell<[c_char; 31]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 31], [c_char; 31]>(*b"E86: Buffer %ld does not exist\0")
-});
-pub static e_no_write_since_last_change: GlobalCell<[c_char; 32]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 32], [c_char; 32]>(*b"E37: No write since last change\0")
-});
+    GlobalCell::new(c_bytes(b"E46: Cannot change read-only variable \"%.*s\"\0"));
+pub static e_dictreq: GlobalCell<[c_char; 26]> =
+    GlobalCell::new(c_bytes(b"E715: Dictionary required\0"));
+pub static e_blobidx: GlobalCell<[c_char; 35]> =
+    GlobalCell::new(c_bytes(b"E979: Blob index out of range: %ld\0"));
+pub static e_invalblob: GlobalCell<[c_char; 33]> =
+    GlobalCell::new(c_bytes(b"E978: Invalid operation for Blob\0"));
+pub static e_toomanyarg: GlobalCell<[c_char; 42]> =
+    GlobalCell::new(c_bytes(b"E118: Too many arguments for function: %s\0"));
+pub static e_toofewarg: GlobalCell<[c_char; 44]> =
+    GlobalCell::new(c_bytes(b"E119: Not enough arguments for function: %s\0"));
+pub static e_dictkey: GlobalCell<[c_char; 42]> =
+    GlobalCell::new(c_bytes(b"E716: Key not present in Dictionary: \"%s\"\0"));
+pub static e_dictkey_len: GlobalCell<[c_char; 44]> =
+    GlobalCell::new(c_bytes(b"E716: Key not present in Dictionary: \"%.*s\"\0"));
+pub static e_listreq: GlobalCell<[c_char; 20]> = GlobalCell::new(c_bytes(b"E714: List required\0"));
+pub static e_listblobreq: GlobalCell<[c_char; 28]> =
+    GlobalCell::new(c_bytes(b"E897: List or Blob required\0"));
+pub static e_listblobarg: GlobalCell<[c_char; 44]> =
+    GlobalCell::new(c_bytes(b"E899: Argument of %s must be a List or Blob\0"));
+pub static e_listdictarg: GlobalCell<[c_char; 50]> = GlobalCell::new(c_bytes(
+    b"E712: Argument of %s must be a List or Dictionary\0",
+));
+pub static e_listdictblobarg: GlobalCell<[c_char; 56]> = GlobalCell::new(c_bytes(
+    b"E896: Argument of %s must be a List, Dictionary or Blob\0",
+));
+pub static e_readerrf: GlobalCell<[c_char; 35]> =
+    GlobalCell::new(c_bytes(b"E47: Error while reading errorfile\0"));
+pub static e_sandbox: GlobalCell<[c_char; 28]> =
+    GlobalCell::new(c_bytes(b"E48: Not allowed in sandbox\0"));
+pub static e_secure: GlobalCell<[c_char; 23]> =
+    GlobalCell::new(c_bytes(b"E523: Not allowed here\0"));
+pub static e_textlock: GlobalCell<[c_char; 50]> = GlobalCell::new(c_bytes(
+    b"E565: Not allowed to change text or change window\0",
+));
+pub static e_screenmode: GlobalCell<[c_char; 40]> =
+    GlobalCell::new(c_bytes(b"E359: Screen mode setting not supported\0"));
+pub static e_scroll: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E49: Invalid scroll size\0"));
+pub static e_shellempty: GlobalCell<[c_char; 29]> =
+    GlobalCell::new(c_bytes(b"E91: 'shell' option is empty\0"));
+pub static e_swapclose: GlobalCell<[c_char; 30]> =
+    GlobalCell::new(c_bytes(b"E72: Close error on swap file\0"));
+pub static e_toocompl: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E74: Command too complex\0"));
+pub static e_longname: GlobalCell<[c_char; 19]> = GlobalCell::new(c_bytes(b"E75: Name too long\0"));
+pub static e_toomany: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E77: Too many file names\0"));
+pub static e_trailing: GlobalCell<[c_char; 26]> =
+    GlobalCell::new(c_bytes(b"E488: Trailing characters\0"));
+pub static e_trailing_arg: GlobalCell<[c_char; 30]> =
+    GlobalCell::new(c_bytes(b"E488: Trailing characters: %s\0"));
+pub static e_umark: GlobalCell<[c_char; 18]> = GlobalCell::new(c_bytes(b"E78: Unknown mark\0"));
+pub static e_wildexpand: GlobalCell<[c_char; 29]> =
+    GlobalCell::new(c_bytes(b"E79: Cannot expand wildcards\0"));
+pub static e_winheight: GlobalCell<[c_char; 56]> = GlobalCell::new(c_bytes(
+    b"E591: 'winheight' cannot be smaller than 'winminheight'\0",
+));
+pub static e_winwidth: GlobalCell<[c_char; 54]> = GlobalCell::new(c_bytes(
+    b"E592: 'winwidth' cannot be smaller than 'winminwidth'\0",
+));
+pub static e_write: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E80: Error while writing\0"));
+pub static e_zerocount: GlobalCell<[c_char; 30]> =
+    GlobalCell::new(c_bytes(b"E939: Positive count required\0"));
+pub static e_usingsid: GlobalCell<[c_char; 41]> =
+    GlobalCell::new(c_bytes(b"E81: Using <SID> not in a script context\0"));
+pub static e_missingparen: GlobalCell<[c_char; 30]> =
+    GlobalCell::new(c_bytes(b"E107: Missing parentheses: %s\0"));
+pub static e_empty_buffer: GlobalCell<[c_char; 19]> =
+    GlobalCell::new(c_bytes(b"E749: Empty buffer\0"));
+pub static e_nobufnr: GlobalCell<[c_char; 31]> =
+    GlobalCell::new(c_bytes(b"E86: Buffer %ld does not exist\0"));
+pub static e_no_write_since_last_change: GlobalCell<[c_char; 32]> =
+    GlobalCell::new(c_bytes(b"E37: No write since last change\0"));
 pub static e_no_write_since_last_change_add_bang_to_override: GlobalCell<[c_char; 52]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 52], [c_char; 52]>(
-            *b"E37: No write since last change (add ! to override)\0",
-        )
-    });
+    GlobalCell::new(c_bytes(
+        b"E37: No write since last change (add ! to override)\0",
+    ));
 pub static e_no_write_since_last_change_for_buffer_nr_add_bang_to_override: GlobalCell<
     [c_char; 66],
-> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 66], [c_char; 66]>(
-        *b"E89: No write since last change for buffer %d (add ! to override)\0",
-    )
-});
-pub static e_buffer_nr_not_found: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E92: Buffer %d not found\0")
-});
-pub static e_unknown_function_str: GlobalCell<[c_char; 27]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 27], [c_char; 27]>(*b"E117: Unknown function: %s\0")
-});
-pub static e_str_not_inside_function: GlobalCell<[c_char; 31]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 31], [c_char; 31]>(*b"E193: %s not inside a function\0")
-});
-pub static e_job_still_running: GlobalCell<[c_char; 24]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 24], [c_char; 24]>(*b"E948: Job still running\0")
-});
+> = GlobalCell::new(c_bytes(
+    b"E89: No write since last change for buffer %d (add ! to override)\0",
+));
+pub static e_buffer_nr_not_found: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E92: Buffer %d not found\0"));
+pub static e_unknown_function_str: GlobalCell<[c_char; 27]> =
+    GlobalCell::new(c_bytes(b"E117: Unknown function: %s\0"));
+pub static e_str_not_inside_function: GlobalCell<[c_char; 31]> =
+    GlobalCell::new(c_bytes(b"E193: %s not inside a function\0"));
+pub static e_job_still_running: GlobalCell<[c_char; 24]> =
+    GlobalCell::new(c_bytes(b"E948: Job still running\0"));
 pub static e_job_still_running_add_bang_to_end_the_job: GlobalCell<[c_char; 47]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 47], [c_char; 47]>(
-            *b"E948: Job still running (add ! to end the job)\0",
-        )
-    });
-pub static e_invalpat: GlobalCell<[c_char; 42]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 42], [c_char; 42]>(
-        *b"E682: Invalid search pattern or delimiter\0",
-    )
-});
-pub static e_bufloaded: GlobalCell<[c_char; 39]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 39], [c_char; 39]>(*b"E139: File is loaded in another buffer\0")
-});
-pub static e_notset: GlobalCell<[c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [c_char; 29]>(*b"E764: Option '%s' is not set\0")
-});
-pub static e_dirnotf: GlobalCell<[c_char; 40]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 40], [c_char; 40]>(
-        *b"E919: Directory not found in '%s': \"%s\"\0",
-    )
-});
-pub static e_au_recursive: GlobalCell<[c_char; 44]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 44], [c_char; 44]>(
-        *b"E952: Autocommand caused recursive behavior\0",
-    )
-});
-pub static e_menu_only_exists_in_another_mode: GlobalCell<[c_char; 39]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 39], [c_char; 39]>(*b"E328: Menu only exists in another mode\0")
-});
-pub static e_autocmd_close: GlobalCell<[c_char; 34]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 34], [c_char; 34]>(*b"E813: Cannot close autocmd window\0")
-});
-pub static e_list_index_out_of_range_nr: GlobalCell<[c_char; 35]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 35], [c_char; 35]>(*b"E684: List index out of range: %ld\0")
-});
-pub static e_listarg: GlobalCell<[c_char; 36]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 36], [c_char; 36]>(*b"E686: Argument of %s must be a List\0")
-});
-pub static e_unsupportedoption: GlobalCell<[c_char; 27]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 27], [c_char; 27]>(*b"E519: Option not supported\0")
-});
-pub static e_fnametoolong: GlobalCell<[c_char; 24]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 24], [c_char; 24]>(*b"E856: Filename too long\0")
-});
-pub static e_using_float_as_string: GlobalCell<[c_char; 32]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 32], [c_char; 32]>(*b"E806: Using a Float as a String\0")
-});
-pub static e_cannot_edit_other_buf: GlobalCell<[c_char; 45]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 45], [c_char; 45]>(
-        *b"E788: Not allowed to edit another buffer now\0",
-    )
-});
-pub static e_using_number_as_bool_nr: GlobalCell<[c_char; 36]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 36], [c_char; 36]>(*b"E1023: Using a Number as a Bool: %d\0")
-});
-pub static e_not_callable_type_str: GlobalCell<[c_char; 31]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 31], [c_char; 31]>(*b"E1085: Not a callable type: %s\0")
-});
-pub static e_auabort: GlobalCell<[c_char; 43]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 43], [c_char; 43]>(
-        *b"E855: Autocommands caused command to abort\0",
-    )
-});
-pub static e_api_error: GlobalCell<[c_char; 20]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 20], [c_char; 20]>(*b"E5555: API call: %s\0")
-});
-pub static e_fast_api_disabled: GlobalCell<[c_char; 53]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 53], [c_char; 53]>(
-        *b"E5560: %s must not be called in a fast event context\0",
-    )
-});
-pub static e_floatonly: GlobalCell<[c_char; 62]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 62], [c_char; 62]>(
-        *b"E5601: Cannot close window, only floating window would remain\0",
-    )
-});
-pub static e_floatexchange: GlobalCell<[c_char; 39]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 39], [c_char; 39]>(*b"E5602: Cannot exchange or rotate float\0")
-});
+    GlobalCell::new(c_bytes(b"E948: Job still running (add ! to end the job)\0"));
+pub static e_invalpat: GlobalCell<[c_char; 42]> =
+    GlobalCell::new(c_bytes(b"E682: Invalid search pattern or delimiter\0"));
+pub static e_bufloaded: GlobalCell<[c_char; 39]> =
+    GlobalCell::new(c_bytes(b"E139: File is loaded in another buffer\0"));
+pub static e_notset: GlobalCell<[c_char; 29]> =
+    GlobalCell::new(c_bytes(b"E764: Option '%s' is not set\0"));
+pub static e_dirnotf: GlobalCell<[c_char; 40]> =
+    GlobalCell::new(c_bytes(b"E919: Directory not found in '%s': \"%s\"\0"));
+pub static e_au_recursive: GlobalCell<[c_char; 44]> =
+    GlobalCell::new(c_bytes(b"E952: Autocommand caused recursive behavior\0"));
+pub static e_menu_only_exists_in_another_mode: GlobalCell<[c_char; 39]> =
+    GlobalCell::new(c_bytes(b"E328: Menu only exists in another mode\0"));
+pub static e_autocmd_close: GlobalCell<[c_char; 34]> =
+    GlobalCell::new(c_bytes(b"E813: Cannot close autocmd window\0"));
+pub static e_list_index_out_of_range_nr: GlobalCell<[c_char; 35]> =
+    GlobalCell::new(c_bytes(b"E684: List index out of range: %ld\0"));
+pub static e_listarg: GlobalCell<[c_char; 36]> =
+    GlobalCell::new(c_bytes(b"E686: Argument of %s must be a List\0"));
+pub static e_unsupportedoption: GlobalCell<[c_char; 27]> =
+    GlobalCell::new(c_bytes(b"E519: Option not supported\0"));
+pub static e_fnametoolong: GlobalCell<[c_char; 24]> =
+    GlobalCell::new(c_bytes(b"E856: Filename too long\0"));
+pub static e_using_float_as_string: GlobalCell<[c_char; 32]> =
+    GlobalCell::new(c_bytes(b"E806: Using a Float as a String\0"));
+pub static e_cannot_edit_other_buf: GlobalCell<[c_char; 45]> =
+    GlobalCell::new(c_bytes(b"E788: Not allowed to edit another buffer now\0"));
+pub static e_using_number_as_bool_nr: GlobalCell<[c_char; 36]> =
+    GlobalCell::new(c_bytes(b"E1023: Using a Number as a Bool: %d\0"));
+pub static e_not_callable_type_str: GlobalCell<[c_char; 31]> =
+    GlobalCell::new(c_bytes(b"E1085: Not a callable type: %s\0"));
+pub static e_auabort: GlobalCell<[c_char; 43]> =
+    GlobalCell::new(c_bytes(b"E855: Autocommands caused command to abort\0"));
+pub static e_api_error: GlobalCell<[c_char; 20]> =
+    GlobalCell::new(c_bytes(b"E5555: API call: %s\0"));
+pub static e_fast_api_disabled: GlobalCell<[c_char; 53]> = GlobalCell::new(c_bytes(
+    b"E5560: %s must not be called in a fast event context\0",
+));
+pub static e_floatonly: GlobalCell<[c_char; 62]> = GlobalCell::new(c_bytes(
+    b"E5601: Cannot close window, only floating window would remain\0",
+));
+pub static e_floatexchange: GlobalCell<[c_char; 39]> =
+    GlobalCell::new(c_bytes(b"E5602: Cannot exchange or rotate float\0"));
 pub static e_cant_find_directory_str_in_cdpath: GlobalCell<[c_char; 42]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 42], [c_char; 42]>(
-            *b"E344: Can't find directory \"%s\" in cdpath\0",
-        )
-    });
-pub static e_cant_find_file_str_in_path: GlobalCell<[c_char; 35]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 35], [c_char; 35]>(*b"E345: Can't find file \"%s\" in path\0")
-});
+    GlobalCell::new(c_bytes(b"E344: Can't find directory \"%s\" in cdpath\0"));
+pub static e_cant_find_file_str_in_path: GlobalCell<[c_char; 35]> =
+    GlobalCell::new(c_bytes(b"E345: Can't find file \"%s\" in path\0"));
 pub static e_no_more_directory_str_found_in_cdpath: GlobalCell<[c_char; 45]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 45], [c_char; 45]>(
-            *b"E346: No more directory \"%s\" found in cdpath\0",
-        )
-    });
-pub static e_no_more_file_str_found_in_path: GlobalCell<[c_char; 38]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 38], [c_char; 38]>(*b"E347: No more file \"%s\" found in path\0")
-});
-pub static e_value_is_locked: GlobalCell<[c_char; 22]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 22], [c_char; 22]>(*b"E741: Value is locked\0")
-});
-pub static e_value_is_locked_str: GlobalCell<[c_char; 28]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 28], [c_char; 28]>(*b"E741: Value is locked: %.*s\0")
-});
-pub static e_cannot_change_value: GlobalCell<[c_char; 26]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 26], [c_char; 26]>(*b"E742: Cannot change value\0")
-});
-pub static e_cannot_change_value_of_str: GlobalCell<[c_char; 34]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 34], [c_char; 34]>(*b"E742: Cannot change value of %.*s\0")
-});
-pub static e_cannot_set_variable_in_sandbox_str: GlobalCell<[c_char; 49]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 49], [c_char; 49]>(
-            *b"E794: Cannot set variable in the sandbox: \"%.*s\"\0",
-        )
-    });
-pub static e_cannot_delete_variable_str: GlobalCell<[c_char; 34]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 34], [c_char; 34]>(*b"E795: Cannot delete variable %.*s\0")
-});
-pub static e_invalwindow: GlobalCell<[c_char; 28]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 28], [c_char; 28]>(*b"E957: Invalid window number\0")
-});
-pub static e_problem_creating_internal_diff: GlobalCell<[c_char; 41]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 41], [c_char; 41]>(*b"E960: Problem creating the internal diff\0")
-});
-pub static e_cannot_define_autocommands_for_all_events: GlobalCell<[c_char; 49]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 49], [c_char; 49]>(
-            *b"E1155: Cannot define autocommands for ALL events\0",
-        )
-    });
-pub static e_cannot_change_arglist_recursively: GlobalCell<[c_char; 51]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 51], [c_char; 51]>(
-            *b"E1156: Cannot change the argument list recursively\0",
-        )
-    });
-pub static e_resulting_text_too_long: GlobalCell<[c_char; 31]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 31], [c_char; 31]>(*b"E1240: Resulting text too long\0")
-});
-pub static e_line_number_out_of_range: GlobalCell<[c_char; 32]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 32], [c_char; 32]>(*b"E1247: Line number out of range\0")
-});
+    GlobalCell::new(c_bytes(b"E346: No more directory \"%s\" found in cdpath\0"));
+pub static e_no_more_file_str_found_in_path: GlobalCell<[c_char; 38]> =
+    GlobalCell::new(c_bytes(b"E347: No more file \"%s\" found in path\0"));
+pub static e_value_is_locked: GlobalCell<[c_char; 22]> =
+    GlobalCell::new(c_bytes(b"E741: Value is locked\0"));
+pub static e_value_is_locked_str: GlobalCell<[c_char; 28]> =
+    GlobalCell::new(c_bytes(b"E741: Value is locked: %.*s\0"));
+pub static e_cannot_change_value: GlobalCell<[c_char; 26]> =
+    GlobalCell::new(c_bytes(b"E742: Cannot change value\0"));
+pub static e_cannot_change_value_of_str: GlobalCell<[c_char; 34]> =
+    GlobalCell::new(c_bytes(b"E742: Cannot change value of %.*s\0"));
+pub static e_cannot_set_variable_in_sandbox_str: GlobalCell<[c_char; 49]> = GlobalCell::new(
+    c_bytes(b"E794: Cannot set variable in the sandbox: \"%.*s\"\0"),
+);
+pub static e_cannot_delete_variable_str: GlobalCell<[c_char; 34]> =
+    GlobalCell::new(c_bytes(b"E795: Cannot delete variable %.*s\0"));
+pub static e_invalwindow: GlobalCell<[c_char; 28]> =
+    GlobalCell::new(c_bytes(b"E957: Invalid window number\0"));
+pub static e_problem_creating_internal_diff: GlobalCell<[c_char; 41]> =
+    GlobalCell::new(c_bytes(b"E960: Problem creating the internal diff\0"));
+pub static e_cannot_define_autocommands_for_all_events: GlobalCell<[c_char; 49]> = GlobalCell::new(
+    c_bytes(b"E1155: Cannot define autocommands for ALL events\0"),
+);
+pub static e_cannot_change_arglist_recursively: GlobalCell<[c_char; 51]> = GlobalCell::new(
+    c_bytes(b"E1156: Cannot change the argument list recursively\0"),
+);
+pub static e_resulting_text_too_long: GlobalCell<[c_char; 31]> =
+    GlobalCell::new(c_bytes(b"E1240: Resulting text too long\0"));
+pub static e_line_number_out_of_range: GlobalCell<[c_char; 32]> =
+    GlobalCell::new(c_bytes(b"E1247: Line number out of range\0"));
 pub static e_highlight_group_name_invalid_char: GlobalCell<[c_char; 39]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 39], [c_char; 39]>(
-            *b"E5248: Invalid character in group name\0",
-        )
-    });
-pub static e_highlight_group_name_too_long: GlobalCell<[c_char; 37]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 37], [c_char; 37]>(*b"E1249: Highlight group name too long\0")
-});
-pub static e_string_required: GlobalCell<[c_char; 22]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 22], [c_char; 22]>(*b"E928: String required\0")
-});
-pub static e_invalid_column_number_nr: GlobalCell<[c_char; 33]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 33], [c_char; 33]>(*b"E964: Invalid column number: %ld\0")
-});
-pub static e_invalid_line_number_nr: GlobalCell<[c_char; 31]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 31], [c_char; 31]>(*b"E966: Invalid line number: %ld\0")
-});
+    GlobalCell::new(c_bytes(b"E5248: Invalid character in group name\0"));
+pub static e_highlight_group_name_too_long: GlobalCell<[c_char; 37]> =
+    GlobalCell::new(c_bytes(b"E1249: Highlight group name too long\0"));
+pub static e_string_required: GlobalCell<[c_char; 22]> =
+    GlobalCell::new(c_bytes(b"E928: String required\0"));
+pub static e_invalid_column_number_nr: GlobalCell<[c_char; 33]> =
+    GlobalCell::new(c_bytes(b"E964: Invalid column number: %ld\0"));
+pub static e_invalid_line_number_nr: GlobalCell<[c_char; 31]> =
+    GlobalCell::new(c_bytes(b"E966: Invalid line number: %ld\0"));
 pub static e_reduce_of_an_empty_str_with_no_initial_value: GlobalCell<[c_char; 50]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 50], [c_char; 50]>(
-            *b"E998: Reduce of an empty %s with no initial value\0",
-        )
-    });
-pub static e_invalid_value_for_blob_nr: GlobalCell<[c_char; 36]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 36], [c_char; 36]>(*b"E1239: Invalid value for blob: 0xlX\0")
-});
-pub static e_stray_closing_curly_str: GlobalCell<[c_char; 44]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 44], [c_char; 44]>(
-        *b"E1278: Stray '}' without a matching '{': %s\0",
-    )
-});
-pub static e_missing_close_curly_str: GlobalCell<[c_char; 23]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 23], [c_char; 23]>(*b"E1279: Missing '}': %s\0")
-});
+    GlobalCell::new(c_bytes(
+        b"E998: Reduce of an empty %s with no initial value\0",
+    ));
+pub static e_invalid_value_for_blob_nr: GlobalCell<[c_char; 36]> =
+    GlobalCell::new(c_bytes(b"E1239: Invalid value for blob: 0xlX\0"));
+pub static e_stray_closing_curly_str: GlobalCell<[c_char; 44]> =
+    GlobalCell::new(c_bytes(b"E1278: Stray '}' without a matching '{': %s\0"));
+pub static e_missing_close_curly_str: GlobalCell<[c_char; 23]> =
+    GlobalCell::new(c_bytes(b"E1279: Missing '}': %s\0"));
 pub static e_cannot_change_menus_while_listing: GlobalCell<[c_char; 41]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 41], [c_char; 41]>(
-            *b"E1310: Cannot change menus while listing\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1310: Cannot change menus while listing\0"));
 pub static e_not_allowed_to_change_window_layout_in_this_autocmd: GlobalCell<[c_char; 63]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 63], [c_char; 63]>(
-            *b"E1312: Not allowed to change the window layout in this autocmd\0",
-        )
-    });
-pub static e_val_too_large_len: GlobalCell<[c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [c_char; 29]>(*b"E1510: Value too large: %.*s\0")
-});
-pub static e_undobang_cannot_redo_or_move_branch: GlobalCell<[c_char; 68]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 68], [c_char; 68]>(
-            *b"E5767: Cannot use :undo! to redo or move to a different undo branch\0",
-        )
-    });
-pub static e_winfixbuf_cannot_go_to_buffer: GlobalCell<[c_char; 52]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 52], [c_char; 52]>(
-        *b"E1513: Cannot switch buffer. 'winfixbuf' is enabled\0",
-    )
-});
+    GlobalCell::new(c_bytes(
+        b"E1312: Not allowed to change the window layout in this autocmd\0",
+    ));
+pub static e_val_too_large_len: GlobalCell<[c_char; 29]> =
+    GlobalCell::new(c_bytes(b"E1510: Value too large: %.*s\0"));
+pub static e_undobang_cannot_redo_or_move_branch: GlobalCell<[c_char; 68]> = GlobalCell::new(
+    c_bytes(b"E5767: Cannot use :undo! to redo or move to a different undo branch\0"),
+);
+pub static e_winfixbuf_cannot_go_to_buffer: GlobalCell<[c_char; 52]> = GlobalCell::new(c_bytes(
+    b"E1513: Cannot switch buffer. 'winfixbuf' is enabled\0",
+));
 pub static e_invalid_return_type_from_findfunc: GlobalCell<[c_char; 45]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 45], [c_char; 45]>(
-            *b"E1514: 'findfunc' did not return a List type\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1514: 'findfunc' did not return a List type\0"));
 pub static e_cannot_switch_to_a_closing_buffer: GlobalCell<[c_char; 41]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 41], [c_char; 41]>(
-            *b"E1546: Cannot switch to a closing buffer\0",
-        )
-    });
+    GlobalCell::new(c_bytes(b"E1546: Cannot switch to a closing buffer\0"));
 pub static e_cannot_have_more_than_nr_diff_anchors: GlobalCell<[c_char; 45]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 45], [c_char; 45]>(
-            *b"E1549: Cannot have more than %d diff anchors\0",
-        )
-    });
-pub static e_failed_to_find_all_diff_anchors: GlobalCell<[c_char; 39]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 39], [c_char; 39]>(*b"E1550: Failed to find all diff anchors\0")
-});
-pub static e_diff_anchors_with_hidden_windows: GlobalCell<[c_char; 60]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 60], [c_char; 60]>(
-        *b"E1562: Diff anchors cannot be used with hidden diff windows\0",
-    )
-});
-pub static e_leadtab_requires_tab: GlobalCell<[c_char; 66]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 66], [c_char; 66]>(
-        *b"E1572: 'listchars' field \"leadtab\" requires \"tab\" to be specified\0",
-    )
-});
-pub static e_invalid_format_string_single_percent_s: GlobalCell<[c_char; 55]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 55], [c_char; 55]>(
-            *b"E1577: Invalid format string, only one \"%s\" is allowed\0",
-        )
-    });
-pub static e_cannot_read_from_str_2: GlobalCell<[c_char; 28]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 28], [c_char; 28]>(*b"E282: Cannot read from \"%s\"\0")
-});
-pub(crate) static e_conflicting_configs: GlobalCell<[c_char; 38]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 38], [c_char; 38]>(
-        *b"E5422: Conflicting configs: \"%s\" \"%s\"\0",
-    )
-});
-pub static e_unknown_option2: GlobalCell<[c_char; 25]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 25], [c_char; 25]>(*b"E355: Unknown option: %s\0")
-});
-pub static top_bot_msg: GlobalCell<[c_char; 37]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 37], [c_char; 37]>(*b"search hit TOP, continuing at BOTTOM\0")
-});
-pub static bot_top_msg: GlobalCell<[c_char; 37]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 37], [c_char; 37]>(*b"search hit BOTTOM, continuing at TOP\0")
-});
-pub static line_msg: GlobalCell<[c_char; 7]> =
-    GlobalCell::new(unsafe { ::core::mem::transmute::<[u8; 7], [c_char; 7]>(*b" line \0") });
+    GlobalCell::new(c_bytes(b"E1549: Cannot have more than %d diff anchors\0"));
+pub static e_failed_to_find_all_diff_anchors: GlobalCell<[c_char; 39]> =
+    GlobalCell::new(c_bytes(b"E1550: Failed to find all diff anchors\0"));
+pub static e_diff_anchors_with_hidden_windows: GlobalCell<[c_char; 60]> = GlobalCell::new(c_bytes(
+    b"E1562: Diff anchors cannot be used with hidden diff windows\0",
+));
+pub static e_leadtab_requires_tab: GlobalCell<[c_char; 66]> = GlobalCell::new(c_bytes(
+    b"E1572: 'listchars' field \"leadtab\" requires \"tab\" to be specified\0",
+));
+pub static e_invalid_format_string_single_percent_s: GlobalCell<[c_char; 55]> = GlobalCell::new(
+    c_bytes(b"E1577: Invalid format string, only one \"%s\" is allowed\0"),
+);
+pub static e_cannot_read_from_str_2: GlobalCell<[c_char; 28]> =
+    GlobalCell::new(c_bytes(b"E282: Cannot read from \"%s\"\0"));
+pub(crate) static e_conflicting_configs: GlobalCell<[c_char; 38]> =
+    GlobalCell::new(c_bytes(b"E5422: Conflicting configs: \"%s\" \"%s\"\0"));
+pub static e_unknown_option2: GlobalCell<[c_char; 25]> =
+    GlobalCell::new(c_bytes(b"E355: Unknown option: %s\0"));
+pub static top_bot_msg: GlobalCell<[c_char; 37]> =
+    GlobalCell::new(c_bytes(b"search hit TOP, continuing at BOTTOM\0"));
+pub static bot_top_msg: GlobalCell<[c_char; 37]> =
+    GlobalCell::new(c_bytes(b"search hit BOTTOM, continuing at TOP\0"));
+pub static line_msg: GlobalCell<[c_char; 7]> = GlobalCell::new(c_bytes(b" line \0"));
 pub static EVALARG_EVALUATE: GlobalCell<evalarg_T> = GlobalCell::new(evalarg_T {
     eval_flags: EVAL_EVALUATE as c_int,
     eval_getline: None,
@@ -1174,10 +900,8 @@ pub static disable_fold_update: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 #[unsafe(no_mangle)]
 pub static test_disable_char_avail: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const IOSIZE: c_int = 1024 as c_int + 1 as c_int;
-pub(crate) const SYS_VIMRC_FILE: [c_char; 17] =
-    unsafe { ::core::mem::transmute::<[u8; 17], [c_char; 17]>(*b"$VIM/sysinit.vim\0") };
-pub(crate) const VIMRC_FILE: [c_char; 8] =
-    unsafe { ::core::mem::transmute::<[u8; 8], [c_char; 8]>(*b".nvimrc\0") };
+pub(crate) const SYS_VIMRC_FILE: [c_char; 17] = c_bytes(b"$VIM/sysinit.vim\0");
+pub(crate) const VIMRC_FILE: [c_char; 8] = c_bytes(b".nvimrc\0");
 pub static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {
     fsync: 0 as int64_t,
     redraw: 0 as int64_t,
@@ -1532,8 +1256,7 @@ pub static did_swapwrite_msg: GlobalCell<bool> = GlobalCell::new(false);
 pub static global_busy: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static listcmd_busy: GlobalCell<bool> = GlobalCell::new(false);
 pub static need_start_insertmode: GlobalCell<bool> = GlobalCell::new(false);
-pub static last_mode: GlobalCell<[c_char; 4]> =
-    GlobalCell::new(unsafe { ::core::mem::transmute::<[u8; 4], [c_char; 4]>(*b"n\0\0\0") });
+pub static last_mode: GlobalCell<[c_char; 4]> = GlobalCell::new(c_bytes(b"n\0\0\0"));
 pub static last_cmdline: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static repeat_cmdline: GlobalCell<*mut c_char> =
@@ -1572,9 +1295,8 @@ pub static cmdwin_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::nul
 pub static cmdwin_old_curwin: GlobalCell<*mut win_T> =
     GlobalCell::new(::core::ptr::null_mut::<win_T>());
 pub static cmdline_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-pub static no_lines_msg: GlobalCell<[c_char; 23]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 23], [c_char; 23]>(*b"--No lines in buffer--\0")
-});
+pub static no_lines_msg: GlobalCell<[c_char; 23]> =
+    GlobalCell::new(c_bytes(b"--No lines in buffer--\0"));
 pub static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
 pub static sub_nlines: GlobalCell<linenr_T> = GlobalCell::new(0);
 pub static wim_flags: GlobalCell<[uint8_t; 4]> = GlobalCell::new([0; 4]);
@@ -1630,8 +1352,7 @@ pub static linebuf_vcol: GlobalCell<*mut colnr_T> =
     GlobalCell::new(::core::ptr::null_mut::<colnr_T>());
 pub static linebuf_scratch: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub static empty_string_option: GlobalCell<[c_char; 1]> =
-    GlobalCell::new(unsafe { ::core::mem::transmute::<[u8; 1], [c_char; 1]>(*b"\0") });
+pub static empty_string_option: GlobalCell<[c_char; 1]> = GlobalCell::new(c_bytes(b"\0"));
 pub static p_ambw: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static p_acd: GlobalCell<c_int> = GlobalCell::new(0);
 pub static p_ai: GlobalCell<c_int> = GlobalCell::new(0);
@@ -2478,10 +2199,8 @@ pub static float_anchor_str: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
     b"SW\0".as_ptr() as *const c_char,
     b"SE\0".as_ptr() as *const c_char,
 ]);
-pub(crate) const WRITEBIN: [c_char; 3] =
-    unsafe { ::core::mem::transmute::<[u8; 3], [c_char; 3]>(*b"wb\0") };
-pub(crate) const APPENDBIN: [c_char; 3] =
-    unsafe { ::core::mem::transmute::<[u8; 3], [c_char; 3]>(*b"ab\0") };
+pub(crate) const WRITEBIN: [c_char; 3] = c_bytes(b"wb\0");
+pub(crate) const APPENDBIN: [c_char; 3] = c_bytes(b"ab\0");
 unsafe extern "C" fn c2rust_run_static_initializers() {
     kTVCstring.set((18446744073709551615 as size_t).wrapping_sub(1 as size_t));
 }
