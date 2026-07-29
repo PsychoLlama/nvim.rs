@@ -1,8 +1,7 @@
 //! The expression grammar, one module per kind of operand or
 //! operator.
 
-#[allow(unused_imports)]
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
 mod level;
 pub use self::level::*;
