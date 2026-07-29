@@ -21,6 +21,10 @@ Behavior-preserving: same features, formats, and RPC surface.
   own values.
 - Rewrote the Vimscript builtin functions, covering every builtin the editor
   answers to and how one is dispatched, from `abs()` to `wordcount()`.
+- Rewrote the Vimscript expression evaluator, covering every expression the
+  editor evaluates: operators and precedence, literals and containers,
+  indexing and method calls, `:let`, `:for`, `:echo`, `:execute`, timers and
+  the garbage collector.
 - Generated the API dispatch layer from the API signatures again
   (`just apigen`), covering every msgpack-RPC method, the `vim.api` Lua
   binding, and `nvim --api-info`.
