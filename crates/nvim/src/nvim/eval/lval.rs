@@ -340,7 +340,7 @@ pub(crate) unsafe fn get_lval_subscript(
                 if *p == b'.' as c_char && (*(*lp).ll_tv).v_type != VAR_DICT {
                     if !quiet {
                         semsg(
-                            gettext(e_dot_can_only_be_used_on_dictionary_str.ptr().cast()),
+                            gettext(e_dot_can_only_be_used_on_dictionary_str.as_ptr()),
                             name,
                         );
                     }
@@ -412,7 +412,7 @@ pub(crate) unsafe fn get_lval_subscript(
                     if *p == b':' as c_char {
                         if (*(*lp).ll_tv).v_type == VAR_DICT {
                             if !quiet {
-                                emsg(gettext(e_cannot_slice_dictionary.ptr().cast()));
+                                emsg(gettext(e_cannot_slice_dictionary.as_ptr()));
                             }
                             break 'done;
                         }
@@ -445,7 +445,7 @@ pub(crate) unsafe fn get_lval_subscript(
 
                     if *p != b']' as c_char {
                         if !quiet {
-                            emsg(gettext(e_missbrac.get()));
+                            emsg(gettext(e_missbrac.as_ptr()));
                         }
                         break 'done;
                     }

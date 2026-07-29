@@ -12,7 +12,9 @@ pub mod userfunc;
 pub mod vars;
 pub mod window;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::main::e_invalblob;
+// Named here so the expression tree and `list.rs` can reach it by one
+// path; it belongs to `main`.
+pub(crate) use crate::src::nvim::main::e_invalblob;
 use crate::src::nvim::types::{
     Array, BoolVarValue, CMD_index, CallbackType, ChannelStreamType, GRegFlags, ListLenSpecials,
     LuaRetMode, Map_uint64_t_ptr_t, MapHash, MarkGet, MotionType, Object, ObjectType, OptValType,
@@ -20,7 +22,7 @@ use crate::src::nvim::types::{
     exprtype_T, funcexe_T, key_extra, linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t,
     typval_T, uint32_t, uint64_t, var_flavour_T,
 };
-use core::ffi::{c_char, c_int, c_long, c_uint, c_ulong, c_void};
+use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 
 mod entry;
 pub use self::entry::*;
@@ -51,7 +53,6 @@ pub(crate) use self::expr::*;
 pub const _ISalnum: c_uint = 8;
 pub const kObjectTypeString: ObjectType = 4;
 pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const kCallbackPartial: CallbackType = 2;
 pub const kCallbackFuncref: CallbackType = 1;
 pub const kCallbackNone: CallbackType = 0;
@@ -149,8 +150,6 @@ pub const kMTCharWise: MotionType = 0;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const DOCMD_VERBOSE: c_uint = 1;
 pub const DOCMD_NOWAIT: c_uint = 2;
-pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
-pub const NULL_0: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const INT64_MIN: c_long = -9223372036854775807 as c_long - 1 as c_long;
 pub const INT64_MAX: c_long = 9223372036854775807 as c_long;
 pub const UINT32_MAX: c_uint = 4294967295 as c_uint;
@@ -161,7 +160,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -198,47 +196,28 @@ pub const FNE_INCL_BR: c_int = 1 as c_int;
 pub const FNE_CHECK_START: c_int = 2 as c_int;
 pub const AUTOLOAD_CHAR: c_int = '#' as c_int;
 pub const DICT_MAXNEST: c_int = 100 as c_int;
-static e_missbrac: GlobalCell<*const c_char> =
-    GlobalCell::new(b"E111: Missing ']'\0".as_ptr() as *const c_char);
-static e_list_end: GlobalCell<*const c_char> =
-    GlobalCell::new(b"E697: Missing end of List ']': %s\0".as_ptr() as *const c_char);
-static e_cannot_slice_dictionary: GlobalCell<[c_char; 32]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 32], [c_char; 32]>(*b"E719: Cannot slice a Dictionary\0")
-});
-static e_cannot_index_special_variable: GlobalCell<[c_char; 38]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 38], [c_char; 38]>(*b"E909: Cannot index a special variable\0")
-});
-static e_nowhitespace: GlobalCell<*const c_char> =
-    GlobalCell::new(b"E274: No white space allowed before parenthesis\0".as_ptr() as *const c_char);
-static e_cannot_index_a_funcref: GlobalCell<[c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [c_char; 29]>(*b"E695: Cannot index a Funcref\0")
-});
-static e_variable_nested_too_deep_for_making_copy: GlobalCell<[c_char; 49]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 49], [c_char; 49]>(
-            *b"E698: Variable nested too deep for making a copy\0",
-        )
-    });
-static e_string_list_or_blob_required: GlobalCell<[c_char; 37]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 37], [c_char; 37]>(*b"E1098: String, List or Blob required\0")
-});
-static e_expression_too_recursive_str: GlobalCell<[c_char; 36]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 36], [c_char; 36]>(*b"E1169: Expression too recursive: %s\0")
-});
-static e_dot_can_only_be_used_on_dictionary_str: GlobalCell<[c_char; 48]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 48], [c_char; 48]>(
-            *b"E1203: Dot can only be used on a dictionary: %s\0",
-        )
-    });
-static e_empty_function_name: GlobalCell<[c_char; 27]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 27], [c_char; 27]>(*b"E1192: Empty function name\0")
-});
-static e_cannot_use_partial_here: GlobalCell<[c_char; 33]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 33], [c_char; 33]>(*b"E1265: Cannot use a partial here\0")
-});
-static namespace_char: GlobalCell<*mut c_char> =
-    GlobalCell::new(b"abglstvw\0".as_ptr() as *const c_char as *mut c_char);
+
+/// The messages this tree reports, as the C spells them. Each is a
+/// format string for `semsg` or a plain one for `emsg`; both want a
+/// NUL-terminated pointer, which is what `as_ptr()` gives.
+pub(crate) const e_missbrac: &CStr = c"E111: Missing ']'";
+pub(crate) const e_list_end: &CStr = c"E697: Missing end of List ']': %s";
+pub(crate) const e_cannot_slice_dictionary: &CStr = c"E719: Cannot slice a Dictionary";
+pub(crate) const e_cannot_index_special_variable: &CStr = c"E909: Cannot index a special variable";
+pub(crate) const e_nowhitespace: &CStr = c"E274: No white space allowed before parenthesis";
+pub(crate) const e_cannot_index_a_funcref: &CStr = c"E695: Cannot index a Funcref";
+pub(crate) const e_variable_nested_too_deep_for_making_copy: &CStr =
+    c"E698: Variable nested too deep for making a copy";
+pub(crate) const e_string_list_or_blob_required: &CStr = c"E1098: String, List or Blob required";
+pub(crate) const e_expression_too_recursive_str: &CStr = c"E1169: Expression too recursive: %s";
+pub(crate) const e_dot_can_only_be_used_on_dictionary_str: &CStr =
+    c"E1203: Dot can only be used on a dictionary: %s";
+pub(crate) const e_empty_function_name: &CStr = c"E1192: Empty function name";
+pub(crate) const e_cannot_use_partial_here: &CStr = c"E1265: Cannot use a partial here";
+
+/// The scope letters a `x:` variable prefix may use.
+pub(crate) const namespace_char: &CStr = c"abglstvw";
+
 pub static eval_lavars_used: GlobalCell<*mut bool> =
     GlobalCell::new(::core::ptr::null_mut::<bool>());
 static echo_hl_id: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -251,17 +230,15 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_firstline: 0 as linenr_T,
     fe_lastline: 0 as linenr_T,
     fe_doesrange: ::core::ptr::null_mut::<bool>(),
-    fe_evaluate: false_0 != 0,
+    fe_evaluate: false,
     fe_partial: ::core::ptr::null_mut::<partial_T>(),
     fe_selfdict: ::core::ptr::null_mut::<dict_T>(),
     fe_basetv: ::core::ptr::null_mut::<typval_T>(),
-    fe_found_var: false_0 != 0,
+    fe_found_var: false,
 };
 pub const PROF_YES: c_int = 1 as c_int;
 pub const K_SPECIAL: c_int = 0x80 as c_int;
 pub const KS_EXTRA: c_int = 253 as c_int;
-pub const true_0: c_int = 1 as c_int;
-pub const false_0: c_int = 0 as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;
 pub const RE_MAGIC: c_int = 1 as c_int;
 pub const RE_STRING: c_int = 2 as c_int;

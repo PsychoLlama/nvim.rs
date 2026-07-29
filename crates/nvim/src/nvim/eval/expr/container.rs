@@ -84,7 +84,7 @@ pub(crate) unsafe fn eval_list(
                 break 'items false;
             }
             if **arg != b']' as c_char {
-                semsg(gettext(e_list_end.get()), *arg);
+                semsg(gettext(e_list_end.as_ptr()), *arg);
                 break 'items false;
             }
             *arg = skipwhite((*arg).add(1));

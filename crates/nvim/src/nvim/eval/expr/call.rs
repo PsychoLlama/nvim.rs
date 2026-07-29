@@ -90,7 +90,7 @@ pub(crate) unsafe fn call_func_rettv(
             } else {
                 funcname = functv.vval.v_string;
                 if funcname.is_null() || *funcname as c_int == NUL {
-                    emsg(gettext(e_empty_function_name.ptr().cast()));
+                    emsg(gettext(e_empty_function_name.as_ptr()));
                     tv_clear(&raw mut functv);
                     return FAIL;
                 }
@@ -145,7 +145,7 @@ pub(crate) unsafe fn eval_lambda(
         let ret = if **arg != b'(' as c_char {
             if verbose {
                 if *skipwhite(*arg) == b'(' as c_char {
-                    emsg(gettext(e_nowhitespace.get()));
+                    emsg(gettext(e_nowhitespace.as_ptr()));
                 } else {
                     semsg(gettext(e_missingparen.ptr().cast()), c"lambda".as_ptr());
                 }
@@ -251,7 +251,7 @@ pub(crate) unsafe fn eval_method(
                         || !(*callee.vval.v_partial).pt_dict.is_null()
                     {
                         if verbose {
-                            emsg(gettext(e_cannot_use_partial_here.ptr().cast()));
+                            emsg(gettext(e_cannot_use_partial_here.as_ptr()));
                         }
                         ret = FAIL;
                     } else {
@@ -284,7 +284,7 @@ pub(crate) unsafe fn eval_method(
                     ret = FAIL;
                 } else if ascii_iswhite(*(*arg).offset(-1) as c_int) {
                     if verbose {
-                        emsg(gettext(e_nowhitespace.get()));
+                        emsg(gettext(e_nowhitespace.as_ptr()));
                     }
                     ret = FAIL;
                 } else if !lua_funcname.is_null() {

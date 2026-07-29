@@ -691,7 +691,7 @@ pub(crate) unsafe fn eval7(
         let mut end_leader: *const c_char = *arg;
 
         if RECURSE.get() == MAX_RECURSE {
-            semsg(gettext(e_expression_too_recursive_str.ptr().cast()), *arg);
+            semsg(gettext(e_expression_too_recursive_str.as_ptr()), *arg);
             return FAIL;
         }
         *RECURSE.ptr() += 1;

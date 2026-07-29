@@ -63,7 +63,7 @@ pub unsafe fn get_id_len(arg: *mut *const c_char) -> c_int {
                 let len = p.offset_from(*arg) as c_int;
                 if len > 1
                     || (len == 1
-                        && vim_strchr(namespace_char.get(), **arg as uint8_t as c_int).is_null())
+                        && vim_strchr(namespace_char.as_ptr(), **arg as uint8_t as c_int).is_null())
                 {
                     break;
                 }
@@ -213,7 +213,7 @@ pub unsafe fn find_name_end(
                 let len = p.offset_from(arg) as c_int;
                 if (len > 1 && *p.offset(-1) != b'}' as c_char)
                     || (len == 1
-                        && vim_strchr(namespace_char.get(), *arg as uint8_t as c_int).is_null())
+                        && vim_strchr(namespace_char.as_ptr(), *arg as uint8_t as c_int).is_null())
                 {
                     break;
                 }

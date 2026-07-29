@@ -644,9 +644,7 @@ pub unsafe fn var_item_copy(
 
     unsafe {
         if RECURSE.get() >= DICT_MAXNEST {
-            emsg(gettext(
-                e_variable_nested_too_deep_for_making_copy.ptr().cast(),
-            ));
+            emsg(gettext(e_variable_nested_too_deep_for_making_copy.as_ptr()));
             return FAIL;
         }
         *RECURSE.ptr() += 1;

@@ -125,7 +125,7 @@ pub unsafe fn eval_for_line(
                         }
                     }
                     _ => {
-                        emsg(gettext(e_string_list_or_blob_required.ptr().cast()));
+                        emsg(gettext(e_string_list_or_blob_required.as_ptr()));
                         tv_clear(&raw mut tv);
                     }
                 }

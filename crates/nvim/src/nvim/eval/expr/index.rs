@@ -122,7 +122,7 @@ pub(crate) unsafe fn eval_index(
 
             if **arg != b']' as c_char {
                 if verbose {
-                    emsg(gettext(e_missbrac.get()));
+                    emsg(gettext(e_missbrac.as_ptr()));
                 }
                 // Not guarded by `empty1`: an unread `var1` is still unset.
                 tv_clear(&raw mut var1);
@@ -163,16 +163,16 @@ pub(crate) unsafe fn eval_index(
 /// `rettv` must be valid.
 pub(crate) unsafe fn check_can_index(rettv: *mut typval_T, evaluate: bool, verbose: bool) -> c_int {
     let message = match unsafe { (*rettv).v_type } {
-        VAR_FUNC | VAR_PARTIAL => e_cannot_index_a_funcref.ptr().cast::<c_char>(),
+        VAR_FUNC | VAR_PARTIAL => e_cannot_index_a_funcref.as_ptr(),
         VAR_FLOAT => e_using_float_as_string.ptr().cast::<c_char>(),
-        VAR_BOOL | VAR_SPECIAL => e_cannot_index_special_variable.ptr().cast::<c_char>(),
+        VAR_BOOL | VAR_SPECIAL => e_cannot_index_special_variable.as_ptr(),
         // Not evaluating: the subscript is only being skipped over, and an
         // unset value is what an unevaluated operand looks like.
         VAR_UNKNOWN if !evaluate => return OK,
         // Reported whether or not the caller asked to be verbose.
         VAR_UNKNOWN => {
             // SAFETY: a message constant is a NUL-terminated literal.
-            unsafe { emsg(gettext(e_cannot_index_special_variable.ptr().cast())) };
+            unsafe { emsg(gettext(e_cannot_index_special_variable.as_ptr())) };
             return FAIL;
         }
         _ => return OK,
@@ -245,7 +245,7 @@ pub(crate) unsafe fn eval_index_inner(
         if is_range {
             if (*rettv).v_type == VAR_DICT {
                 if verbose {
-                    emsg(gettext(e_cannot_slice_dictionary.ptr().cast()));
+                    emsg(gettext(e_cannot_slice_dictionary.as_ptr()));
                 }
                 return FAIL;
             }
