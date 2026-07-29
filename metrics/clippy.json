@@ -49,7 +49,6 @@
     "crates/nvim/src/nvim/eval/deprecated.rs": 3,
     "crates/nvim/src/nvim/eval/echo.rs": 7,
     "crates/nvim/src/nvim/eval/encode.rs": 438,
-    "crates/nvim/src/nvim/eval/entry.rs": 4,
     "crates/nvim/src/nvim/eval/expr/index.rs": 1,
     "crates/nvim/src/nvim/eval/forloop.rs": 2,
     "crates/nvim/src/nvim/eval/fs.rs": 104,
