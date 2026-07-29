@@ -814,6 +814,23 @@ pub(crate) unsafe fn clearopbeep(oap: *mut oparg_T) {
     unsafe { beep_flush() };
 }
 
+/// Read one more key for a command that takes several, with mappings and
+/// 'langmap' handled the way a command character wants them, and show it in
+/// the 'showcmd' area.
+pub(crate) unsafe fn read_command_char() -> c_int {
+    // SAFETY: adjusts the two counters that suppress mapping around one read.
+    unsafe {
+        (*no_mapping.ptr()) += 1;
+        (*allow_keys.ptr()) += 1;
+        let mut c = plain_vgetc();
+        langmap_adjust(&mut c, true);
+        (*no_mapping.ptr()) -= 1;
+        (*allow_keys.ptr()) -= 1;
+        add_to_showcmd(c);
+        c
+    }
+}
+
 /// Open a fold the cursor has landed in, if the 'foldopen' flag for this kind
 /// of movement is set, the key was typed rather than mapped, and no operator
 /// is waiting for the motion to finish.
