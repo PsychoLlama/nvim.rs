@@ -1,929 +1,815 @@
-//! Command-line argument scanning, and the small initialisations
-//! whose input is an argument.
+//! Command-line argument scanning, and the small initialisations whose input
+//! is an argument.
 //!
-//! `command_line_scan` walks argv once. Anything it cannot place is a usage
-//! error; anything that needs the next word sets `want_argument` and is
-//! collected at the bottom of the loop.
+//! [`command_line_scan`] walks argv once. Anything it cannot place is a usage
+//! error; anything that needs the *next* word answers `true` for "want an
+//! argument" and is collected by [`Scan::option_argument`] at the bottom of
+//! the loop.
+//!
+//! The cursor is a pair: `argv` points at the word being read and `argv_idx`
+//! at the byte within it, so `-nRo3` is four options in one word. An
+//! `argv_idx` of -1 means "this word is finished", which is how an option
+//! that swallowed the rest of its own word says so.
 
-#[allow(unused_imports)]
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
-pub(crate) unsafe extern "C" fn get_number_arg(
-    mut p: *const c_char,
-    mut idx: *mut c_int,
-    mut def: c_int,
-) -> c_int {
-    if ascii_isdigit(*p.offset(*idx as isize) as c_int) {
-        def = atoi(p.offset(*idx as isize));
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::mem::{size_of, size_of_val};
+use core::ptr;
+
+use crate::src::nvim::api::private::helpers::{api_metadata_raw, cstr_as_string};
+use crate::src::nvim::arglist::{alist_add, alist_name};
+use crate::src::nvim::ascii::ascii_isdigit;
+use crate::src::nvim::diff::diffopt_horizontal;
+use crate::src::nvim::eval::vars::set_vim_var_string;
+use crate::src::nvim::event::libuv::uv_strerror;
+use crate::src::nvim::ex_docmd::do_cmdline_cmd;
+use crate::src::nvim::garray::ga_grow;
+use crate::src::nvim::main::exit::os_exit;
+use crate::src::nvim::main::usage::{mainerr, usage, version};
+use crate::src::nvim::main::{
+    EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, FAIL, IOSIZE, IObuff,
+    MAX_ARG_CMDS, MAXPATHL, NUL, OK, SESSION_FILE, SID_ENV, STDERR_FILENO, STDIN_FILENO,
+    STDOUT_FILENO, VV_PROGNAME, VV_PROGPATH, VV_SWAPCOMMAND, WIN_HOR, WIN_TABS, WIN_VER, curbuf,
+    current_sctx, embedded_mode, err_arg_missing, err_extra_cmd, err_opt_garbage, err_opt_unknown,
+    err_too_many_args, exmode_active, global_alist, headless_mode, kFalse, kOptArabic, kOptKeymap,
+    kOptRightleft, kOptShadafile, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString,
+    kOptVerbosefile, kOptWindow, kTrue, mparm_T, nlua_disable_preload, p_lpl, p_shadafile, p_uc,
+    p_verbose, p_write, readonlymode, recoverymode, silent_mode, stderr_isatty, stdin_fd,
+    stdin_isatty, stdout_isatty, time_msg_at,
+};
+use crate::src::nvim::memory::{strequal, xfree, xmalloc, xstrdup};
+use crate::src::nvim::message::semsg;
+use crate::src::nvim::option::{reset_modifiable, set_option_value_give_err, set_options_bin};
+use crate::src::nvim::os::env::os_getenv;
+use crate::src::nvim::os::fs::{os_exepath, os_isdir, os_write};
+use crate::src::nvim::os::input::os_isatty;
+use crate::src::nvim::os::libc::{
+    atoi, fprintf, gettext, memset, snprintf, stderr, strcasecmp, strlen, strncasecmp,
+};
+use crate::src::nvim::path::{concat_fnames, path_guess_exepath, path_tail};
+use crate::src::nvim::profile::{time_init, time_start};
+use crate::src::nvim::runtime::{estack_pop, estack_push};
+use crate::src::nvim::strings::vim_snprintf;
+use crate::src::nvim::types::{
+    OptInt, OptVal, OptValData, aentry_T, linenr_T, ptrdiff_t, scid_T, sctx_T, size_t,
+};
+
+/// A bare `-V` is "a little bit verbose".
+const DEFAULT_VERBOSE: c_int = 10;
+
+/// The 'window' value a `-w`/`-W` with no digits falls back to. It is never
+/// used -- both spellings that reach `get_number_arg` have already checked
+/// for a digit -- but it is what upstream passes.
+const DEFAULT_WINDOW: c_int = 10;
+
+/// `-D` breaks into the debugger before anything at all.
+const DEBUG_BREAK_ALL: c_int = 9999;
+
+/// `-R` slows the undo-file writes right down: the buffer is read-only, so
+/// there is nothing worth saving often.
+const READONLY_UPDATECOUNT: OptInt = 10000;
+
+/// A string option value naming a string the option layer will copy.
+unsafe fn string_opt(value: *const c_char) -> OptVal {
+    // SAFETY: `value` is NUL-terminated and outlives the call.
+    unsafe {
+        OptVal {
+            type_0: kOptValTypeString,
+            data: OptValData {
+                string: cstr_as_string(value as *mut c_char),
+            },
+        }
+    }
+}
+
+/// A number option value.
+fn number_opt(value: OptInt) -> OptVal {
+    OptVal {
+        type_0: kOptValTypeNumber,
+        data: OptValData { number: value },
+    }
+}
+
+/// A boolean option value. The option layer's booleans are three-state
+/// (`kNone` means "unset"), so an on/off answer is `kTrue`/`kFalse`.
+fn boolean_opt(value: bool) -> OptVal {
+    OptVal {
+        type_0: kOptValTypeBoolean,
+        data: OptValData {
+            boolean: if value { kTrue } else { kFalse },
+        },
+    }
+}
+
+/// Turn 'shadafile' off unless the user already named one.
+///
+/// `-es`, `-Es` and `-l` all do this: a batch process has no business
+/// writing over the user's ShaDa.
+unsafe fn suppress_shada() {
+    // SAFETY: reads and writes one option.
+    unsafe {
+        if p_shadafile.get().is_null() || *p_shadafile.get() as c_int == NUL {
+            set_option_value_give_err(kOptShadafile, string_opt(c"NONE".as_ptr()), 0);
+        }
+    }
+}
+
+/// Read a decimal number out of `p` starting at `*idx`, leaving `*idx` past
+/// it. Answers `def` when there is no number there.
+pub(crate) unsafe fn get_number_arg(p: *const c_char, idx: *mut c_int, def: c_int) -> c_int {
+    // SAFETY: `p` is NUL-terminated and `*idx` indexes into it.
+    unsafe {
+        if !ascii_isdigit(*p.offset(*idx as isize) as c_int) {
+            return def;
+        }
+        let value = atoi(p.offset(*idx as isize));
         while ascii_isdigit(*p.offset(*idx as isize) as c_int) {
-            *idx = *idx + 1 as c_int;
+            *idx += 1;
         }
-    }
-    return def;
-}
-
-pub(crate) unsafe extern "C" fn edit_stdin(mut parmp: *mut mparm_T) -> bool {
-    let mut implicit: bool = !headless_mode.get()
-        && !(embedded_mode.get() as c_int != 0 && stdin_fd.get() <= 0 as c_int)
-        && (!exmode_active.get() || (*parmp).input_istext as c_int != 0)
-        && !stdin_isatty.get()
-        && (*parmp).edit_type <= EDIT_STDIN as c_int
-        && (*parmp).scriptin.is_null();
-    return (*parmp).had_stdin_file as c_int != 0 || implicit as c_int != 0;
-}
-
-pub(crate) unsafe extern "C" fn command_line_scan(mut parmp: *mut mparm_T) {
-    let mut argc: c_int = (*parmp).argc;
-    let mut argv: *mut *mut c_char = (*parmp).argv;
-    let mut argv_idx: c_int = 0;
-    let mut had_minmin: bool = false_0 != 0;
-    let mut want_argument: bool = false;
-    let mut n: c_int = 0;
-    argc -= 1;
-    argv = argv.offset(1);
-    argv_idx = 1 as c_int;
-    while argc > 0 as c_int {
-        if *(*argv.offset(0 as c_int as isize)).offset(0 as c_int as isize) as c_int == '+' as c_int
-            && !had_minmin
-        {
-            if (*parmp).n_commands >= MAX_ARG_CMDS {
-                mainerr(
-                    err_extra_cmd.get(),
-                    ::core::ptr::null::<c_char>(),
-                    ::core::ptr::null::<c_char>(),
-                );
-            }
-            argv_idx = -1 as c_int;
-            if *(*argv.offset(0 as c_int as isize)).offset(1 as c_int as isize) as c_int == NUL {
-                let c2rust_fresh6 = (*parmp).n_commands;
-                (*parmp).n_commands = (*parmp).n_commands + 1;
-                let c2rust_lvalue_ptr = &raw mut (*parmp).commands[c2rust_fresh6 as usize];
-                *c2rust_lvalue_ptr = b"$\0".as_ptr() as *const c_char as *mut c_char;
-            } else {
-                let c2rust_fresh7 = (*parmp).n_commands;
-                (*parmp).n_commands = (*parmp).n_commands + 1;
-                let c2rust_lvalue_ptr_0 = &raw mut (*parmp).commands[c2rust_fresh7 as usize];
-                *c2rust_lvalue_ptr_0 =
-                    (*argv.offset(0 as c_int as isize)).offset(1 as c_int as isize);
-            }
-        } else if *(*argv.offset(0 as c_int as isize)).offset(0 as c_int as isize) as c_int
-            == '-' as c_int
-            && !had_minmin
-        {
-            want_argument = false_0 != 0;
-            let c2rust_fresh8 = argv_idx;
-            argv_idx = argv_idx + 1;
-            let mut c: c_char = *(*argv.offset(0 as c_int as isize)).offset(c2rust_fresh8 as isize);
-            's_747: {
-                'c_49604: {
-                    match c as c_int {
-                        NUL => {
-                            if exmode_active.get() {
-                                silent_mode.set(true_0 != 0);
-                                (*parmp).no_swap_file = true_0;
-                            } else {
-                                if (*parmp).edit_type > EDIT_STDIN as c_int {
-                                    mainerr(
-                                        err_too_many_args.get(),
-                                        *argv.offset(0 as c_int as isize),
-                                        ::core::ptr::null::<c_char>(),
-                                    );
-                                }
-                                (*parmp).had_stdin_file = true_0 != 0;
-                                (*parmp).edit_type = EDIT_STDIN as c_int;
-                            }
-                            argv_idx = -1 as c_int;
-                            break 's_747;
-                        }
-                        45 => {
-                            if strcasecmp(
-                                (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                b"help\0".as_ptr() as *const c_char as *mut c_char,
-                            ) == 0 as c_int
-                            {
-                                usage();
-                                os_exit(0 as c_int);
-                            } else if strcasecmp(
-                                (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                b"version\0".as_ptr() as *const c_char as *mut c_char,
-                            ) == 0 as c_int
-                            {
-                                version();
-                                os_exit(0 as c_int);
-                            } else if strcasecmp(
-                                (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                b"api-info\0".as_ptr() as *const c_char as *mut c_char,
-                            ) == 0 as c_int
-                            {
-                                let mut data: String_0 = api_metadata_raw();
-                                let written_bytes: ptrdiff_t =
-                                    os_write(STDOUT_FILENO, data.data, data.size, false_0 != 0);
-                                if written_bytes < 0 as ptrdiff_t {
-                                    semsg(
-                                        gettext(b"E5420: Failed to write to file: %s\0".as_ptr()
-                                            as *const c_char),
-                                        uv_strerror(written_bytes as c_int),
-                                    );
-                                }
-                                os_exit(0 as c_int);
-                            } else if strcasecmp(
-                                (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                b"headless\0".as_ptr() as *const c_char as *mut c_char,
-                            ) == 0 as c_int
-                            {
-                                headless_mode.set(true_0 != 0);
-                            } else if strcasecmp(
-                                (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                b"embed\0".as_ptr() as *const c_char as *mut c_char,
-                            ) == 0 as c_int
-                            {
-                                embedded_mode.set(true_0 != 0);
-                            } else if strncasecmp(
-                                (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                b"listen\0".as_ptr() as *const c_char as *mut c_char,
-                                6 as c_int as size_t,
-                            ) == 0 as c_int
-                            {
-                                want_argument = true_0 != 0;
-                                argv_idx += 6 as c_int;
-                            } else if strncasecmp(
-                                (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                b"literal\0".as_ptr() as *const c_char as *mut c_char,
-                                7 as c_int as size_t,
-                            ) != 0 as c_int
-                            {
-                                if strncasecmp(
-                                    (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                    b"remote\0".as_ptr() as *const c_char as *mut c_char,
-                                    6 as c_int as size_t,
-                                ) == 0 as c_int
-                                {
-                                    (*parmp).remote = (*parmp).argc - argc;
-                                } else if strncasecmp(
-                                    (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                    b"server\0".as_ptr() as *const c_char as *mut c_char,
-                                    6 as c_int as size_t,
-                                ) == 0 as c_int
-                                {
-                                    want_argument = true_0 != 0;
-                                    argv_idx += 6 as c_int;
-                                } else if strncasecmp(
-                                    (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                    b"noplugin\0".as_ptr() as *const c_char as *mut c_char,
-                                    8 as c_int as size_t,
-                                ) == 0 as c_int
-                                {
-                                    p_lpl.set(false_0);
-                                } else if strncasecmp(
-                                    (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                    b"cmd\0".as_ptr() as *const c_char as *mut c_char,
-                                    3 as c_int as size_t,
-                                ) == 0 as c_int
-                                {
-                                    want_argument = true_0 != 0;
-                                    argv_idx += 3 as c_int;
-                                } else if strncasecmp(
-                                    (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                    b"startuptime\0".as_ptr() as *const c_char as *mut c_char,
-                                    11 as c_int as size_t,
-                                ) == 0 as c_int
-                                {
-                                    want_argument = true_0 != 0;
-                                    argv_idx += 11 as c_int;
-                                } else if strncasecmp(
-                                    (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                    b"clean\0".as_ptr() as *const c_char as *mut c_char,
-                                    5 as c_int as size_t,
-                                ) == 0 as c_int
-                                {
-                                    (*parmp).use_vimrc =
-                                        b"NONE\0".as_ptr() as *const c_char as *mut c_char;
-                                    (*parmp).clean = true_0 != 0;
-                                    set_option_value_give_err(
-                                        kOptShadafile,
-                                        OptVal {
-                                            type_0: kOptValTypeString,
-                                            data: OptValData {
-                                                string: String_0 {
-                                                    data: b"NONE\0".as_ptr() as *const c_char
-                                                        as *mut c_char,
-                                                    size: ::core::mem::size_of::<[c_char; 5]>()
-                                                        .wrapping_sub(1 as size_t),
-                                                },
-                                            },
-                                        },
-                                        0 as c_int,
-                                    );
-                                } else if strncasecmp(
-                                    (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize),
-                                    b"luamod-dev\0".as_ptr() as *const c_char as *mut c_char,
-                                    9 as c_int as size_t,
-                                ) == 0 as c_int
-                                {
-                                    nlua_disable_preload.set(true_0 != 0);
-                                } else {
-                                    if *(*argv.offset(0 as c_int as isize))
-                                        .offset(argv_idx as isize)
-                                        != 0
-                                    {
-                                        mainerr(
-                                            err_opt_unknown.get(),
-                                            *argv.offset(0 as c_int as isize),
-                                            ::core::ptr::null::<c_char>(),
-                                        );
-                                    }
-                                    had_minmin = true_0 != 0;
-                                }
-                            }
-                            if !want_argument {
-                                argv_idx = -1 as c_int;
-                            }
-                            break 's_747;
-                        }
-                        65 => {
-                            set_option_value_give_err(
-                                kOptArabic,
-                                OptVal {
-                                    type_0: kOptValTypeBoolean,
-                                    data: OptValData { boolean: kTrue },
-                                },
-                                0 as c_int,
-                            );
-                            break 's_747;
-                        }
-                        98 => {
-                            set_options_bin((*curbuf.get()).b_p_bin, 1 as c_int, 0 as c_int);
-                            (*curbuf.get()).b_p_bin = 1 as c_int;
-                            break 's_747;
-                        }
-                        68 => {
-                            (*parmp).use_debug_break_level = 9999 as c_int;
-                            break 's_747;
-                        }
-                        100 => {
-                            (*parmp).diff_mode = true_0;
-                            break 's_747;
-                        }
-                        101 => {
-                            exmode_active.set(true_0 != 0);
-                            break 's_747;
-                        }
-                        69 => {
-                            exmode_active.set(true_0 != 0);
-                            (*parmp).input_istext = true_0 != 0;
-                            break 's_747;
-                        }
-                        63 | 104 => {
-                            usage();
-                            os_exit(0 as c_int);
-                        }
-                        72 => {
-                            set_option_value_give_err(
-                                kOptKeymap,
-                                OptVal {
-                                    type_0: kOptValTypeString,
-                                    data: OptValData {
-                                        string: String_0 {
-                                            data: b"hebrew\0".as_ptr() as *const c_char
-                                                as *mut c_char,
-                                            size: ::core::mem::size_of::<[c_char; 7]>()
-                                                .wrapping_sub(1 as size_t),
-                                        },
-                                    },
-                                },
-                                0 as c_int,
-                            );
-                            set_option_value_give_err(
-                                kOptRightleft,
-                                OptVal {
-                                    type_0: kOptValTypeBoolean,
-                                    data: OptValData { boolean: kTrue },
-                                },
-                                0 as c_int,
-                            );
-                            break 's_747;
-                        }
-                        77 => {
-                            reset_modifiable();
-                        }
-                        109 => {}
-                        102 | 78 | 88 => {
-                            break 's_747;
-                        }
-                        110 => {
-                            (*parmp).no_swap_file = true_0;
-                            break 's_747;
-                        }
-                        112 => {
-                            (*parmp).window_count = get_number_arg(
-                                *argv.offset(0 as c_int as isize),
-                                &raw mut argv_idx,
-                                0 as c_int,
-                            );
-                            (*parmp).window_layout = WIN_TABS as c_int;
-                            break 's_747;
-                        }
-                        111 => {
-                            (*parmp).window_count = get_number_arg(
-                                *argv.offset(0 as c_int as isize),
-                                &raw mut argv_idx,
-                                0 as c_int,
-                            );
-                            (*parmp).window_layout = WIN_HOR as c_int;
-                            break 's_747;
-                        }
-                        79 => {
-                            (*parmp).window_count = get_number_arg(
-                                *argv.offset(0 as c_int as isize),
-                                &raw mut argv_idx,
-                                0 as c_int,
-                            );
-                            (*parmp).window_layout = WIN_VER as c_int;
-                            break 's_747;
-                        }
-                        113 => {
-                            if (*parmp).edit_type != EDIT_NONE as c_int {
-                                mainerr(
-                                    err_too_many_args.get(),
-                                    *argv.offset(0 as c_int as isize),
-                                    ::core::ptr::null::<c_char>(),
-                                );
-                            }
-                            (*parmp).edit_type = EDIT_QF as c_int;
-                            if *(*argv.offset(0 as c_int as isize)).offset(argv_idx as isize) != 0 {
-                                (*parmp).use_ef =
-                                    (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize);
-                                argv_idx = -1 as c_int;
-                            } else if argc > 1 as c_int {
-                                want_argument = true_0 != 0;
-                            }
-                            break 's_747;
-                        }
-                        82 => {
-                            readonlymode.set(true_0 != 0);
-                            (*curbuf.get()).b_p_ro = true_0;
-                            p_uc.set(10000 as OptInt);
-                            break 's_747;
-                        }
-                        114 | 76 => {
-                            recoverymode.set(true);
-                            break 's_747;
-                        }
-                        115 => {
-                            if exmode_active.get() {
-                                silent_mode.set(true_0 != 0);
-                                (*parmp).no_swap_file = true_0;
-                                if (*p_shadafile.ptr()).is_null()
-                                    || *p_shadafile.get() as c_int == NUL
-                                {
-                                    set_option_value_give_err(
-                                        kOptShadafile,
-                                        OptVal {
-                                            type_0: kOptValTypeString,
-                                            data: OptValData {
-                                                string: String_0 {
-                                                    data: b"NONE\0".as_ptr() as *const c_char
-                                                        as *mut c_char,
-                                                    size: ::core::mem::size_of::<[c_char; 5]>()
-                                                        .wrapping_sub(1 as size_t),
-                                                },
-                                            },
-                                        },
-                                        0 as c_int,
-                                    );
-                                }
-                            } else {
-                                want_argument = true_0 != 0;
-                            }
-                            break 's_747;
-                        }
-                        116 => {
-                            if (*parmp).edit_type != EDIT_NONE as c_int {
-                                mainerr(
-                                    err_too_many_args.get(),
-                                    *argv.offset(0 as c_int as isize),
-                                    ::core::ptr::null::<c_char>(),
-                                );
-                            }
-                            (*parmp).edit_type = EDIT_TAG as c_int;
-                            if *(*argv.offset(0 as c_int as isize)).offset(argv_idx as isize) != 0 {
-                                (*parmp).tagname =
-                                    (*argv.offset(0 as c_int as isize)).offset(argv_idx as isize);
-                                argv_idx = -1 as c_int;
-                            } else {
-                                want_argument = true_0 != 0;
-                            }
-                            break 's_747;
-                        }
-                        118 => {
-                            version();
-                            os_exit(0 as c_int);
-                        }
-                        86 => {
-                            p_verbose.set(get_number_arg(
-                                *argv.offset(0 as c_int as isize),
-                                &raw mut argv_idx,
-                                10 as c_int,
-                            ) as OptInt);
-                            if *(*argv.offset(0 as c_int as isize)).offset(argv_idx as isize)
-                                as c_int
-                                != NUL
-                            {
-                                set_option_value_give_err(
-                                    kOptVerbosefile,
-                                    OptVal {
-                                        type_0: kOptValTypeString,
-                                        data: OptValData {
-                                            string: cstr_as_string(
-                                                (*argv.offset(0 as c_int as isize))
-                                                    .offset(argv_idx as isize),
-                                            ),
-                                        },
-                                    },
-                                    0 as c_int,
-                                );
-                                argv_idx = strlen(*argv.offset(0 as c_int as isize)) as c_int;
-                            }
-                            break 's_747;
-                        }
-                        119 => {
-                            if ascii_isdigit(
-                                *(*argv.offset(0 as c_int as isize)).offset(argv_idx as isize)
-                                    as c_int,
-                            ) {
-                                n = get_number_arg(
-                                    *argv.offset(0 as c_int as isize),
-                                    &raw mut argv_idx,
-                                    10 as c_int,
-                                );
-                                set_option_value_give_err(
-                                    kOptWindow,
-                                    OptVal {
-                                        type_0: kOptValTypeNumber,
-                                        data: OptValData {
-                                            number: n as OptInt,
-                                        },
-                                    },
-                                    0 as c_int,
-                                );
-                                break 's_747;
-                            } else {
-                                want_argument = true_0 != 0;
-                                break 's_747;
-                            }
-                        }
-                        99 => {
-                            if *(*argv.offset(0 as c_int as isize)).offset(argv_idx as isize)
-                                as c_int
-                                != NUL
-                            {
-                                if (*parmp).n_commands >= MAX_ARG_CMDS {
-                                    mainerr(
-                                        err_extra_cmd.get(),
-                                        ::core::ptr::null::<c_char>(),
-                                        ::core::ptr::null::<c_char>(),
-                                    );
-                                }
-                                let c2rust_fresh9 = (*parmp).n_commands;
-                                (*parmp).n_commands = (*parmp).n_commands + 1;
-                                let c2rust_lvalue_ptr_1 =
-                                    &raw mut (*parmp).commands[c2rust_fresh9 as usize];
-                                *c2rust_lvalue_ptr_1 = (*argv).offset(argv_idx as isize);
-                                argv_idx = -1 as c_int;
-                                break 's_747;
-                            } else {
-                                break 'c_49604;
-                            }
-                        }
-                        83 | 105 | 108 | 117 | 85 | 87 => {
-                            break 'c_49604;
-                        }
-                        _ => {
-                            mainerr(
-                                err_opt_unknown.get(),
-                                *argv.offset(0 as c_int as isize),
-                                ::core::ptr::null::<c_char>(),
-                            );
-                        }
-                    }
-                    p_write.set(false_0);
-                    break 's_747;
-                }
-                want_argument = true_0 != 0;
-            }
-            if want_argument {
-                if *(*argv.offset(0 as c_int as isize)).offset(argv_idx as isize) as c_int != NUL {
-                    mainerr(
-                        err_opt_garbage.get(),
-                        *argv.offset(0 as c_int as isize),
-                        ::core::ptr::null::<c_char>(),
-                    );
-                }
-                argc -= 1;
-                if argc < 1 as c_int && c as c_int != 'S' as c_int {
-                    mainerr(
-                        err_arg_missing.get(),
-                        *argv.offset(0 as c_int as isize),
-                        ::core::ptr::null::<c_char>(),
-                    );
-                }
-                argv = argv.offset(1);
-                argv_idx = -1 as c_int;
-                's_1076: {
-                    '_scripterror: {
-                        's_1075: {
-                            match c as c_int {
-                                99 | 83 => {
-                                    if (*parmp).n_commands >= MAX_ARG_CMDS {
-                                        mainerr(
-                                            err_extra_cmd.get(),
-                                            ::core::ptr::null::<c_char>(),
-                                            ::core::ptr::null::<c_char>(),
-                                        );
-                                    }
-                                    if c as c_int == 'S' as c_int {
-                                        let mut a: *mut c_char = ::core::ptr::null_mut::<c_char>();
-                                        if argc < 1 as c_int {
-                                            a = SESSION_FILE.as_ptr() as *mut c_char;
-                                        } else if *(*argv.offset(0 as c_int as isize))
-                                            .offset(0 as c_int as isize)
-                                            as c_int
-                                            == '-' as c_int
-                                        {
-                                            a = SESSION_FILE.as_ptr() as *mut c_char;
-                                            argc += 1;
-                                            argv = argv.offset(-1);
-                                        } else {
-                                            a = *argv.offset(0 as c_int as isize);
-                                        }
-                                        let mut s_size: size_t =
-                                            strlen(a).wrapping_add(9 as size_t);
-                                        let mut s: *mut c_char = xmalloc(s_size) as *mut c_char;
-                                        snprintf(
-                                            s,
-                                            s_size,
-                                            b"so %s\0".as_ptr() as *const c_char,
-                                            a,
-                                        );
-                                        (*parmp).cmds_tofree[(*parmp).n_commands as usize] =
-                                            true_0 as c_char;
-                                        let c2rust_fresh10 = (*parmp).n_commands;
-                                        (*parmp).n_commands = (*parmp).n_commands + 1;
-                                        let c2rust_lvalue_ptr_2 =
-                                            &raw mut (*parmp).commands[c2rust_fresh10 as usize];
-                                        *c2rust_lvalue_ptr_2 = s;
-                                    } else {
-                                        let c2rust_fresh11 = (*parmp).n_commands;
-                                        (*parmp).n_commands = (*parmp).n_commands + 1;
-                                        let c2rust_lvalue_ptr_3 =
-                                            &raw mut (*parmp).commands[c2rust_fresh11 as usize];
-                                        *c2rust_lvalue_ptr_3 = *argv.offset(0 as c_int as isize);
-                                    }
-                                    break 's_1075;
-                                }
-                                45 => {
-                                    if strequal(
-                                        *argv.offset(-1 as c_int as isize),
-                                        b"--cmd\0".as_ptr() as *const c_char,
-                                    ) {
-                                        if (*parmp).n_pre_commands >= MAX_ARG_CMDS {
-                                            mainerr(
-                                                err_extra_cmd.get(),
-                                                ::core::ptr::null::<c_char>(),
-                                                ::core::ptr::null::<c_char>(),
-                                            );
-                                        }
-                                        let c2rust_fresh12 = (*parmp).n_pre_commands;
-                                        (*parmp).n_pre_commands = (*parmp).n_pre_commands + 1;
-                                        let c2rust_lvalue_ptr_4 =
-                                            &raw mut (*parmp).pre_commands[c2rust_fresh12 as usize];
-                                        *c2rust_lvalue_ptr_4 = *argv.offset(0 as c_int as isize);
-                                    } else if strequal(
-                                        *argv.offset(-1 as c_int as isize),
-                                        b"--listen\0".as_ptr() as *const c_char,
-                                    ) {
-                                        (*parmp).listen_addr = *argv.offset(0 as c_int as isize);
-                                    } else if strequal(
-                                        *argv.offset(-1 as c_int as isize),
-                                        b"--server\0".as_ptr() as *const c_char,
-                                    ) {
-                                        (*parmp).server_addr = *argv.offset(0 as c_int as isize);
-                                    }
-                                    break 's_1075;
-                                }
-                                113 => {
-                                    (*parmp).use_ef = *argv.offset(0 as c_int as isize);
-                                    break 's_1075;
-                                }
-                                105 => {
-                                    set_option_value_give_err(
-                                        kOptShadafile,
-                                        OptVal {
-                                            type_0: kOptValTypeString,
-                                            data: OptValData {
-                                                string: cstr_as_string(
-                                                    *argv.offset(0 as c_int as isize),
-                                                ),
-                                            },
-                                        },
-                                        0 as c_int,
-                                    );
-                                    break 's_1075;
-                                }
-                                108 => {
-                                    headless_mode.set(true_0 != 0);
-                                    silent_mode.set(true_0 != 0);
-                                    p_verbose.set(1 as OptInt);
-                                    (*parmp).no_swap_file = true_0;
-                                    (*parmp).use_vimrc = (if !(*parmp).use_vimrc.is_null() {
-                                        (*parmp).use_vimrc as *const c_char
-                                    } else {
-                                        b"NONE\0".as_ptr() as *const c_char
-                                    })
-                                        as *mut c_char;
-                                    if (*p_shadafile.ptr()).is_null()
-                                        || *p_shadafile.get() as c_int == NUL
-                                    {
-                                        set_option_value_give_err(
-                                            kOptShadafile,
-                                            OptVal {
-                                                type_0: kOptValTypeString,
-                                                data: OptValData {
-                                                    string: String_0 {
-                                                        data: b"NONE\0".as_ptr() as *const c_char
-                                                            as *mut c_char,
-                                                        size: ::core::mem::size_of::<[c_char; 5]>()
-                                                            .wrapping_sub(1 as size_t),
-                                                    },
-                                                },
-                                            },
-                                            0 as c_int,
-                                        );
-                                    }
-                                    (*parmp).luaf = *argv.offset(0 as c_int as isize);
-                                    argc -= 1;
-                                    if argc >= 0 as c_int {
-                                        (*parmp).lua_arg0 = (*parmp).argc - argc;
-                                        argc = 0 as c_int;
-                                    }
-                                    break 's_1075;
-                                }
-                                115 => {
-                                    if !(*parmp).scriptin.is_null() {
-                                        break '_scripterror;
-                                    } else {
-                                        (*parmp).scriptin = *argv.offset(0 as c_int as isize);
-                                        break 's_1075;
-                                    }
-                                }
-                                116 => {
-                                    (*parmp).tagname = *argv.offset(0 as c_int as isize);
-                                    break 's_1075;
-                                }
-                                117 => {
-                                    (*parmp).use_vimrc = *argv.offset(0 as c_int as isize);
-                                    break 's_1075;
-                                }
-                                119 => {
-                                    if ascii_isdigit(**argv.offset(0 as c_int as isize) as c_int) {
-                                        argv_idx = 0 as c_int;
-                                        n = get_number_arg(
-                                            *argv.offset(0 as c_int as isize),
-                                            &raw mut argv_idx,
-                                            10 as c_int,
-                                        );
-                                        set_option_value_give_err(
-                                            kOptWindow,
-                                            OptVal {
-                                                type_0: kOptValTypeNumber,
-                                                data: OptValData {
-                                                    number: n as OptInt,
-                                                },
-                                            },
-                                            0 as c_int,
-                                        );
-                                        argv_idx = -1 as c_int;
-                                        break 's_1075;
-                                    }
-                                }
-                                87 => {}
-                                85 | _ => {
-                                    break 's_1075;
-                                }
-                            }
-                            if !(*parmp).scriptout.is_null() {
-                                break '_scripterror;
-                            } else {
-                                (*parmp).scriptout = *argv.offset(0 as c_int as isize);
-                                (*parmp).scriptout_append = c as c_int == 'w' as c_int;
-                            }
-                        }
-                        break 's_1076;
-                    }
-                    vim_snprintf(
-                        IObuff.ptr() as *mut c_char,
-                        IOSIZE as size_t,
-                        gettext(b"Attempt to open script file again: \"%s %s\"\n\0".as_ptr()
-                            as *const c_char),
-                        *argv.offset(-1 as c_int as isize),
-                        *argv.offset(0 as c_int as isize),
-                    );
-                    fprintf(
-                        stderr,
-                        b"%s\0".as_ptr() as *const c_char,
-                        IObuff.ptr() as *mut c_char,
-                    );
-                    os_exit(2 as c_int);
-                }
-            }
-        } else {
-            argv_idx = -1 as c_int;
-            if (*parmp).edit_type > EDIT_STDIN as c_int {
-                mainerr(
-                    err_too_many_args.get(),
-                    *argv.offset(0 as c_int as isize),
-                    ::core::ptr::null::<c_char>(),
-                );
-            }
-            (*parmp).edit_type = EDIT_FILE as c_int;
-            ga_grow(&raw mut (*global_alist.ptr()).al_ga, 1 as c_int);
-            let mut p: *mut c_char = xstrdup(*argv.offset(0 as c_int as isize));
-            if (*parmp).diff_mode != 0
-                && os_isdir(p) as c_int != 0
-                && (*global_alist.ptr()).al_ga.ga_len > 0 as c_int
-                && !os_isdir(alist_name(
-                    ((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T)
-                        .offset(0 as c_int as isize),
-                ))
-            {
-                let mut r: *mut c_char = concat_fnames(
-                    p,
-                    path_tail(alist_name(
-                        ((*global_alist.ptr()).al_ga.ga_data as *mut aentry_T)
-                            .offset(0 as c_int as isize),
-                    )),
-                    true_0 != 0,
-                );
-                xfree(p as *mut c_void);
-                p = r;
-            }
-            let mut alist_fnum_flag: c_int = if edit_stdin(parmp) as c_int != 0 {
-                1 as c_int
-            } else {
-                2 as c_int
-            };
-            alist_add(global_alist.ptr(), p, alist_fnum_flag);
-        }
-        if argv_idx <= 0 as c_int
-            || *(*argv.offset(0 as c_int as isize)).offset(argv_idx as isize) as c_int == NUL
-        {
-            argc -= 1;
-            argv = argv.offset(1);
-            argv_idx = 1 as c_int;
-        }
-    }
-    if embedded_mode.get() as c_int != 0
-        && (silent_mode.get() as c_int != 0 || !(*parmp).luaf.is_null())
-    {
-        mainerr(
-            gettext(b"--embed conflicts with -es/-Es/-l\0".as_ptr() as *const c_char),
-            ::core::ptr::null::<c_char>(),
-            ::core::ptr::null::<c_char>(),
-        );
-    }
-    if (*parmp).n_commands > 0 as c_int {
-        let swcmd_len: size_t =
-            strlen((*parmp).commands[0 as c_int as usize]).wrapping_add(2 as size_t);
-        let swcmd: *mut c_char = xmalloc(swcmd_len.wrapping_add(1 as size_t)) as *mut c_char;
-        snprintf(
-            swcmd,
-            swcmd_len.wrapping_add(1 as size_t),
-            b":%s\r\0".as_ptr() as *const c_char,
-            (*parmp).commands[0 as c_int as usize],
-        );
-        set_vim_var_string(VV_SWAPCOMMAND, swcmd, swcmd_len as ptrdiff_t);
-        xfree(swcmd as *mut c_void);
-    }
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"parsing arguments\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
+        value
     }
 }
 
-pub(crate) unsafe extern "C" fn init_params(
-    mut paramp: *mut mparm_T,
-    mut argc: c_int,
-    mut argv: *mut *mut c_char,
-) {
-    memset(
-        paramp as *mut c_void,
-        0 as c_int,
-        ::core::mem::size_of::<mparm_T>(),
-    );
-    (*paramp).argc = argc;
-    (*paramp).argv = argv;
-    (*paramp).use_debug_break_level = -1 as c_int;
-    (*paramp).window_count = -1 as c_int;
-    (*paramp).listen_addr = ::core::ptr::null_mut::<c_char>();
-    (*paramp).server_addr = ::core::ptr::null_mut::<c_char>();
-    (*paramp).remote = 0 as c_int;
-    (*paramp).luaf = ::core::ptr::null_mut::<c_char>();
-    (*paramp).lua_arg0 = -1 as c_int;
+/// Whether standard input should become a buffer.
+///
+/// Either the user asked for it with a `-` argument, or the process was
+/// handed a pipe and nothing else claims it: not headless, not an embedded
+/// server without a stdin, not Ex mode reading commands from it, and `-s -`
+/// did not already take it.
+pub(crate) unsafe fn edit_stdin(parmp: *mut mparm_T) -> bool {
+    // SAFETY: `parmp` is the caller's live parameter block.
+    unsafe {
+        let implicit = !headless_mode.get()
+            && !(embedded_mode.get() && stdin_fd.get() <= 0)
+            && (!exmode_active.get() || (*parmp).input_istext)
+            && !stdin_isatty.get()
+            && (*parmp).edit_type <= EDIT_STDIN as c_int
+            && (*parmp).scriptin.is_null();
+        (*parmp).had_stdin_file || implicit
+    }
 }
 
-pub(crate) unsafe extern "C" fn init_startuptime(mut paramp: *mut mparm_T) {
-    let mut is_embed: bool = false_0 != 0;
-    let mut i: c_int = 1 as c_int;
-    while i < (*paramp).argc - 1 as c_int {
-        if strcasecmp(
-            *(*paramp).argv.offset(i as isize),
-            b"--embed\0".as_ptr() as *const c_char as *mut c_char,
-        ) == 0 as c_int
-        {
-            is_embed = true_0 != 0;
-            break;
-        } else {
-            i += 1;
+/// The walking cursor over argv.
+struct Scan {
+    parmp: *mut mparm_T,
+    /// Words left, counting the one `argv` points at.
+    argc: c_int,
+    argv: *mut *mut c_char,
+    /// Byte within `argv[0]`, or -1 for "this word is finished".
+    argv_idx: c_int,
+    /// A bare `--` was seen; everything after it is a file name.
+    had_minmin: bool,
+}
+
+impl Scan {
+    /// The word being read.
+    unsafe fn arg(&self) -> *mut c_char {
+        // SAFETY: `argv[0]` is in range while `argc > 0`.
+        unsafe { *self.argv }
+    }
+
+    /// The unread tail of the word being read.
+    unsafe fn tail(&self) -> *mut c_char {
+        // SAFETY: `argv_idx` indexes within `argv[0]`.
+        unsafe { self.arg().offset(self.argv_idx as isize) }
+    }
+
+    /// Whether the word being read has anything left in it.
+    unsafe fn has_tail(&self) -> bool {
+        // SAFETY: as `tail`.
+        unsafe { *self.tail() as c_int != NUL }
+    }
+
+    /// Does the unread tail *start* with `word`, case-insensitively?
+    unsafe fn tail_starts_with(&self, word: &CStr) -> bool {
+        // SAFETY: as `tail`; `word` is NUL-terminated.
+        unsafe { strncasecmp(self.tail(), word.as_ptr(), word.count_bytes() as size_t) == 0 }
+    }
+
+    /// Is the unread tail exactly `word`, case-insensitively?
+    unsafe fn tail_is(&self, word: &CStr) -> bool {
+        // SAFETY: as `tail`; `word` is NUL-terminated.
+        unsafe { strcasecmp(self.tail(), word.as_ptr()) == 0 }
+    }
+
+    /// Queue a `-c`/`+cmd`/`-S` command for after the first file is loaded.
+    ///
+    /// `owned` marks a command this process allocated, so `exe_commands`
+    /// frees it again.
+    unsafe fn push_command(&mut self, cmd: *mut c_char, owned: bool) {
+        // SAFETY: `parmp` is live; the arrays are `MAX_ARG_CMDS` long.
+        unsafe {
+            if (*self.parmp).n_commands >= MAX_ARG_CMDS {
+                mainerr(err_extra_cmd.get(), ptr::null(), ptr::null());
+            }
+            let at = (*self.parmp).n_commands as usize;
+            (*self.parmp).cmds_tofree[at] = owned as c_char;
+            (*self.parmp).commands[at] = cmd;
+            (*self.parmp).n_commands += 1;
         }
     }
-    let mut i_0: c_int = 1 as c_int;
-    while i_0 < (*paramp).argc - 1 as c_int {
-        if strcasecmp(
-            *(*paramp).argv.offset(i_0 as isize),
-            b"--startuptime\0".as_ptr() as *const c_char as *mut c_char,
-        ) == 0 as c_int
-        {
-            time_init(
-                *(*paramp).argv.offset((i_0 + 1 as c_int) as isize),
-                if is_embed as c_int != 0 {
-                    b"Embedded\0".as_ptr() as *const c_char
-                } else {
-                    b"Primary (or UI client)\0".as_ptr() as *const c_char
-                },
+
+    /// Queue a `--cmd` command for before any config is read.
+    unsafe fn push_pre_command(&mut self, cmd: *mut c_char) {
+        // SAFETY: as `push_command`.
+        unsafe {
+            if (*self.parmp).n_pre_commands >= MAX_ARG_CMDS {
+                mainerr(err_extra_cmd.get(), ptr::null(), ptr::null());
+            }
+            (*self.parmp).pre_commands[(*self.parmp).n_pre_commands as usize] = cmd;
+            (*self.parmp).n_pre_commands += 1;
+        }
+    }
+
+    /// Claim the one "what is this process editing" slot for `-t` or `-q`.
+    unsafe fn claim_edit_type(&mut self, kind: c_int) {
+        // SAFETY: `parmp` is live; `mainerr` does not return.
+        unsafe {
+            if (*self.parmp).edit_type != EDIT_NONE as c_int {
+                mainerr(err_too_many_args.get(), self.arg(), ptr::null());
+            }
+            (*self.parmp).edit_type = kind;
+        }
+    }
+
+    /// `-s`, `-w` and `-W` share one complaint: a script file is already
+    /// open.
+    unsafe fn script_file_twice(&self) -> ! {
+        // SAFETY: `argv[-1]` is the option and `argv[0]` its argument, both
+        // in range by the time this is reachable.
+        unsafe {
+            vim_snprintf(
+                IObuff.ptr() as *mut c_char,
+                IOSIZE as size_t,
+                gettext(c"Attempt to open script file again: \"%s %s\"\n".as_ptr()),
+                *self.argv.offset(-1),
+                *self.argv,
             );
-            time_start(b"--- NVIM STARTING ---\0".as_ptr() as *const c_char);
-            break;
-        } else {
-            i_0 += 1;
+            fprintf(stderr, c"%s".as_ptr(), IObuff.ptr() as *mut c_char);
+            os_exit(2)
+        }
+    }
+
+    /// A `--long` option. Answers whether it wants the next word.
+    unsafe fn long_option(&mut self) -> bool {
+        // SAFETY: reads the tail of `argv[0]` and writes globals.
+        unsafe {
+            if self.tail_is(c"help") {
+                usage();
+                os_exit(0);
+            } else if self.tail_is(c"version") {
+                version();
+                os_exit(0);
+            } else if self.tail_is(c"api-info") {
+                let data = api_metadata_raw();
+                let written = os_write(STDOUT_FILENO, data.data, data.size, false);
+                if written < 0 as ptrdiff_t {
+                    semsg(
+                        gettext(c"E5420: Failed to write to file: %s".as_ptr()),
+                        uv_strerror(written as c_int),
+                    );
+                }
+                os_exit(0);
+            } else if self.tail_is(c"headless") {
+                headless_mode.set(true);
+            } else if self.tail_is(c"embed") {
+                embedded_mode.set(true);
+            } else if self.tail_starts_with(c"listen") {
+                self.argv_idx += 6;
+                return true;
+            } else if self.tail_starts_with(c"literal") {
+                // Nothing to do: file arguments are always literal (#7679).
+            } else if self.tail_starts_with(c"remote") {
+                // Where in the *original* argv this was: everything from
+                // here on is forwarded to the server verbatim.
+                (*self.parmp).remote = (*self.parmp).argc - self.argc;
+            } else if self.tail_starts_with(c"server") {
+                self.argv_idx += 6;
+                return true;
+            } else if self.tail_starts_with(c"noplugin") {
+                p_lpl.set(0);
+            } else if self.tail_starts_with(c"cmd") {
+                self.argv_idx += 3;
+                return true;
+            } else if self.tail_starts_with(c"startuptime") {
+                // The file is already open -- `init_startuptime` found this
+                // argument before the scan began. Only swallow the value.
+                self.argv_idx += 11;
+                return true;
+            } else if self.tail_starts_with(c"clean") {
+                (*self.parmp).use_vimrc = c"NONE".as_ptr() as *mut c_char;
+                (*self.parmp).clean = true;
+                set_option_value_give_err(kOptShadafile, string_opt(c"NONE".as_ptr()), 0);
+            } else if self.tail_starts_with(c"luamod-dev") {
+                nlua_disable_preload.set(true);
+            } else if self.has_tail() {
+                mainerr(err_opt_unknown.get(), self.arg(), ptr::null());
+            } else {
+                // A bare `--`: only file names from here on.
+                self.had_minmin = true;
+            }
+            false
+        }
+    }
+
+    /// A `-x` option. Answers whether it wants the next word.
+    unsafe fn short_option(&mut self, c: u8) -> bool {
+        // SAFETY: reads and writes the parameter block, the current buffer
+        // and the options.
+        unsafe {
+            match c {
+                b'\0' => {
+                    // A bare `-`: read the buffer from standard input, unless
+                    // Ex mode already claimed it, where it means "silent".
+                    if exmode_active.get() {
+                        silent_mode.set(true);
+                        (*self.parmp).no_swap_file = 1;
+                    } else {
+                        if (*self.parmp).edit_type > EDIT_STDIN as c_int {
+                            mainerr(err_too_many_args.get(), self.arg(), ptr::null());
+                        }
+                        (*self.parmp).had_stdin_file = true;
+                        (*self.parmp).edit_type = EDIT_STDIN as c_int;
+                    }
+                    self.argv_idx = -1;
+                }
+                b'-' => {
+                    let want = self.long_option();
+                    if !want {
+                        self.argv_idx = -1;
+                    }
+                    return want;
+                }
+                b'A' => set_option_value_give_err(kOptArabic, boolean_opt(true), 0),
+                b'b' => {
+                    // Before the file names are expanded: on Windows this is
+                    // what decides whether a shortcut is edited or followed.
+                    set_options_bin((*curbuf.get()).b_p_bin, 1, 0);
+                    (*curbuf.get()).b_p_bin = 1;
+                }
+                b'D' => (*self.parmp).use_debug_break_level = DEBUG_BREAK_ALL,
+                b'd' => (*self.parmp).diff_mode = 1,
+                b'e' => exmode_active.set(true),
+                b'E' => {
+                    exmode_active.set(true);
+                    (*self.parmp).input_istext = true;
+                }
+                // `-f` meant "GUI: run in the foreground"; there is no GUI.
+                b'f' => {}
+                // `-?` is the MS-Windows spelling of `-h`.
+                b'?' | b'h' => {
+                    usage();
+                    os_exit(0);
+                }
+                b'H' => {
+                    set_option_value_give_err(kOptKeymap, string_opt(c"hebrew".as_ptr()), 0);
+                    set_option_value_give_err(kOptRightleft, boolean_opt(true), 0);
+                }
+                b'M' | b'm' => {
+                    // `-M` is `-m` plus 'nomodifiable'.
+                    if c == b'M' {
+                        reset_modifiable();
+                    }
+                    p_write.set(0);
+                }
+                // `-N` (nocompatible) and `-X` (no X server) are always so.
+                b'N' | b'X' => {}
+                b'n' => (*self.parmp).no_swap_file = 1,
+                b'p' | b'o' | b'O' => {
+                    // A count of 0 means one window per file.
+                    (*self.parmp).window_count =
+                        get_number_arg(self.arg(), &raw mut self.argv_idx, 0);
+                    (*self.parmp).window_layout = match c {
+                        b'p' => WIN_TABS as c_int,
+                        b'o' => WIN_HOR as c_int,
+                        _ => WIN_VER as c_int,
+                    };
+                }
+                b'q' => {
+                    self.claim_edit_type(EDIT_QF as c_int);
+                    if self.has_tail() {
+                        // `-q{errorfile}`
+                        (*self.parmp).use_ef = self.tail();
+                        self.argv_idx = -1;
+                    } else if self.argc > 1 {
+                        // `-q {errorfile}`. A trailing `-q` with nothing
+                        // after it falls back to the 'errorfile' option.
+                        return true;
+                    }
+                }
+                b'R' => {
+                    readonlymode.set(true);
+                    (*curbuf.get()).b_p_ro = 1;
+                    p_uc.set(READONLY_UPDATECOUNT);
+                }
+                // `-L` is the historical spelling of `-r`.
+                b'r' | b'L' => recoverymode.set(true),
+                b's' => {
+                    if exmode_active.get() {
+                        // `-es`: silent (batch) Ex mode.
+                        silent_mode.set(true);
+                        (*self.parmp).no_swap_file = 1;
+                        suppress_shada();
+                    } else {
+                        // `-s {scriptin}`
+                        return true;
+                    }
+                }
+                b't' => {
+                    self.claim_edit_type(EDIT_TAG as c_int);
+                    if self.has_tail() {
+                        // `-t{tag}`
+                        (*self.parmp).tagname = self.tail();
+                        self.argv_idx = -1;
+                    } else {
+                        // `-t {tag}`
+                        return true;
+                    }
+                }
+                b'v' => {
+                    version();
+                    os_exit(0);
+                }
+                b'V' => {
+                    p_verbose.set(get_number_arg(
+                        self.arg(),
+                        &raw mut self.argv_idx,
+                        DEFAULT_VERBOSE,
+                    ) as OptInt);
+                    if self.has_tail() {
+                        // `-V{N}{file}`: whatever follows the digits is
+                        // 'verbosefile', and it uses up the whole word.
+                        set_option_value_give_err(kOptVerbosefile, string_opt(self.tail()), 0);
+                        self.argv_idx = strlen(self.arg()) as c_int;
+                    }
+                }
+                b'w' => {
+                    // `-w{number}` is a 'window' height; `-w {scriptout}` is
+                    // a file to record the keystrokes into.
+                    if ascii_isdigit(*self.tail() as c_int) {
+                        let n = get_number_arg(self.arg(), &raw mut self.argv_idx, DEFAULT_WINDOW);
+                        set_option_value_give_err(kOptWindow, number_opt(n as OptInt), 0);
+                    } else {
+                        return true;
+                    }
+                }
+                b'c' => {
+                    if self.has_tail() {
+                        // `-c{command}`
+                        let cmd = self.tail();
+                        self.push_command(cmd, false);
+                        self.argv_idx = -1;
+                    } else {
+                        // `-c {command}`
+                        return true;
+                    }
+                }
+                // Each of these takes the next word and nothing else.
+                b'S' | b'i' | b'l' | b'u' | b'U' | b'W' => return true,
+                _ => mainerr(err_opt_unknown.get(), self.arg(), ptr::null()),
+            }
+            false
+        }
+    }
+
+    /// Collect the word an option asked for, and act on it.
+    unsafe fn option_argument(&mut self, c: u8) {
+        // SAFETY: steps `argv` forward by one, having checked there is one
+        // -- except for `-S`, whose argument is optional.
+        unsafe {
+            // Nothing may follow an option that takes a separate word.
+            if self.has_tail() {
+                mainerr(err_opt_garbage.get(), self.arg(), ptr::null());
+            }
+
+            self.argc -= 1;
+            if self.argc < 1 && c != b'S' {
+                mainerr(err_arg_missing.get(), self.arg(), ptr::null());
+            }
+            self.argv = self.argv.offset(1);
+            self.argv_idx = -1;
+
+            match c {
+                b'c' | b'S' => {
+                    if (*self.parmp).n_commands >= MAX_ARG_CMDS {
+                        mainerr(err_extra_cmd.get(), ptr::null(), ptr::null());
+                    }
+                    if c == b'S' {
+                        // `-S` with nothing after it, or with another option
+                        // after it, means the default session file.
+                        let file = if self.argc < 1 {
+                            SESSION_FILE.as_ptr() as *mut c_char
+                        } else if *self.arg() as u8 == b'-' {
+                            // Hand the option back to the loop.
+                            self.argc += 1;
+                            self.argv = self.argv.offset(-1);
+                            SESSION_FILE.as_ptr() as *mut c_char
+                        } else {
+                            self.arg()
+                        };
+                        // "so " + the name + the NUL, with room to spare.
+                        let size = strlen(file) + 9;
+                        let cmd = xmalloc(size) as *mut c_char;
+                        snprintf(cmd, size, c"so %s".as_ptr(), file);
+                        self.push_command(cmd, true);
+                    } else {
+                        let cmd = self.arg();
+                        self.push_command(cmd, false);
+                    }
+                }
+                b'-' => {
+                    // Which `--long` asked for this word is only knowable
+                    // from the word before it.
+                    let opt = *self.argv.offset(-1);
+                    if strequal(opt, c"--cmd".as_ptr()) {
+                        let cmd = self.arg();
+                        self.push_pre_command(cmd);
+                    } else if strequal(opt, c"--listen".as_ptr()) {
+                        (*self.parmp).listen_addr = self.arg();
+                    } else if strequal(opt, c"--server".as_ptr()) {
+                        (*self.parmp).server_addr = self.arg();
+                    }
+                    // `--startuptime <file>` was handled before the scan.
+                }
+                b'q' => (*self.parmp).use_ef = self.arg(),
+                b'i' => set_option_value_give_err(kOptShadafile, string_opt(self.arg()), 0),
+                b'l' => {
+                    // `-l {script}`: a batch Lua run. Everything after the
+                    // script name belongs to the script, not to us.
+                    headless_mode.set(true);
+                    silent_mode.set(true);
+                    p_verbose.set(1 as OptInt);
+                    (*self.parmp).no_swap_file = 1;
+                    if (*self.parmp).use_vimrc.is_null() {
+                        (*self.parmp).use_vimrc = c"NONE".as_ptr() as *mut c_char;
+                    }
+                    suppress_shada();
+                    (*self.parmp).luaf = self.arg();
+                    self.argc -= 1;
+                    if self.argc >= 0 {
+                        (*self.parmp).lua_arg0 = (*self.parmp).argc - self.argc;
+                        // Stop the scan: the rest is the script's own argv.
+                        self.argc = 0;
+                    }
+                }
+                b's' => {
+                    if !(*self.parmp).scriptin.is_null() {
+                        self.script_file_twice();
+                    }
+                    (*self.parmp).scriptin = self.arg();
+                }
+                b't' => (*self.parmp).tagname = self.arg(),
+                b'u' => (*self.parmp).use_vimrc = self.arg(),
+                // `-U {gvimrc}`: there is no GUI.
+                b'U' => {}
+                b'w' | b'W' => {
+                    // `-w {nr}` is still a 'window' height.
+                    if c == b'w' && ascii_isdigit(*self.arg() as c_int) {
+                        self.argv_idx = 0;
+                        let n = get_number_arg(self.arg(), &raw mut self.argv_idx, DEFAULT_WINDOW);
+                        set_option_value_give_err(kOptWindow, number_opt(n as OptInt), 0);
+                        self.argv_idx = -1;
+                        return;
+                    }
+                    if !(*self.parmp).scriptout.is_null() {
+                        self.script_file_twice();
+                    }
+                    (*self.parmp).scriptout = self.arg();
+                    // `-w` appends, `-W` overwrites.
+                    (*self.parmp).scriptout_append = c == b'w';
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// A word that is not an option: a file to edit.
+    unsafe fn file_argument(&mut self) {
+        // SAFETY: `argv[0]` is a NUL-terminated file name; the global
+        // argument list takes ownership of the copy made here.
+        unsafe {
+            self.argv_idx = -1;
+
+            // Only one kind of editing at a time.
+            if (*self.parmp).edit_type > EDIT_STDIN as c_int {
+                mainerr(err_too_many_args.get(), self.arg(), ptr::null());
+            }
+            (*self.parmp).edit_type = EDIT_FILE as c_int;
+
+            let alist = global_alist.ptr();
+            ga_grow(&raw mut (*alist).al_ga, 1);
+            let mut path = xstrdup(self.arg());
+
+            // `nvim -d dir file` diffs `dir/file` against `file`.
+            if (*self.parmp).diff_mode != 0
+                && os_isdir(path)
+                && (*alist).al_ga.ga_len > 0
+                && !os_isdir(alist_name((*alist).al_ga.ga_data as *mut aentry_T))
+            {
+                let joined = concat_fnames(
+                    path,
+                    path_tail(alist_name((*alist).al_ga.ga_data as *mut aentry_T)),
+                    true,
+                );
+                xfree(path as *mut c_void);
+                path = joined;
+            }
+
+            // 1: number the buffer after the name is expanded. 2: number it
+            // now and make it current -- which is wrong when standard input
+            // is going to want the current buffer for itself.
+            let alist_fnum_flag = if edit_stdin(self.parmp) { 1 } else { 2 };
+            alist_add(alist, path, alist_fnum_flag);
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn check_and_set_isatty(mut _paramp: *mut mparm_T) {
-    stdin_isatty.set(os_isatty(STDIN_FILENO));
-    stdout_isatty.set(os_isatty(STDOUT_FILENO));
-    stderr_isatty.set(os_isatty(STDERR_FILENO));
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"window checked\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
+/// Walk the command line once, filling in `parmp`.
+pub(crate) unsafe fn command_line_scan(parmp: *mut mparm_T) {
+    // SAFETY: `parmp` is the caller's live parameter block and holds the
+    // process's own argv, which outlives everything here -- which is why the
+    // strings stored into `parmp` are borrowed rather than copied.
+    unsafe {
+        let mut scan = Scan {
+            parmp,
+            // Skip argv[0].
+            argc: (*parmp).argc - 1,
+            argv: (*parmp).argv.offset(1),
+            argv_idx: 1,
+            had_minmin: false,
+        };
+
+        while scan.argc > 0 {
+            let first = *scan.arg() as u8;
+            if first == b'+' && !scan.had_minmin {
+                // `+`, `+{number}`, `+/{pat}` or `+{command}`.
+                scan.argv_idx = -1;
+                let cmd = if *scan.arg().offset(1) as c_int == NUL {
+                    // A bare `+` means "go to the last line".
+                    c"$".as_ptr() as *mut c_char
+                } else {
+                    scan.arg().offset(1)
+                };
+                scan.push_command(cmd, false);
+            } else if first == b'-' && !scan.had_minmin {
+                let c = *scan.tail() as u8;
+                scan.argv_idx += 1;
+                if scan.short_option(c) {
+                    scan.option_argument(c);
+                }
+            } else {
+                scan.file_argument();
+            }
+
+            // Move on when the word is used up, or when an option said so.
+            if scan.argv_idx <= 0 || !scan.has_tail() {
+                scan.argc -= 1;
+                scan.argv = scan.argv.offset(1);
+                scan.argv_idx = 1;
+            }
+        }
+
+        if embedded_mode.get() && (silent_mode.get() || !(*parmp).luaf.is_null()) {
+            mainerr(
+                gettext(c"--embed conflicts with -es/-Es/-l".as_ptr()),
+                ptr::null(),
+                ptr::null(),
+            );
+        }
+
+        // The first `+cmd`/`-c` becomes `v:swapcommand`, so the ATTENTION
+        // prompt can say what the process was asked to do.
+        if (*parmp).n_commands > 0 {
+            let len = strlen((*parmp).commands[0]) + 2;
+            let swcmd = xmalloc(len + 1) as *mut c_char;
+            snprintf(swcmd, len + 1, c":%s\r".as_ptr(), (*parmp).commands[0]);
+            set_vim_var_string(VV_SWAPCOMMAND, swcmd, len as ptrdiff_t);
+            xfree(swcmd as *mut c_void);
+        }
+
+        time_msg_at(c"parsing arguments");
     }
 }
 
-pub(crate) unsafe extern "C" fn init_path(mut exename: *const c_char) {
-    let mut exepath: [c_char; 4096] = [0 as c_char; 4096];
-    let mut exepathlen: size_t = MAXPATHL as size_t;
-    if os_exepath(&raw mut exepath as *mut c_char, &raw mut exepathlen) != 0 as c_int {
-        path_guess_exepath(
-            exename,
-            &raw mut exepath as *mut c_char,
-            ::core::mem::size_of::<[c_char; 4096]>(),
-        );
+/// Zero the parameter block, and set the fields whose "not given" value is
+/// not zero.
+pub(crate) unsafe fn init_params(paramp: *mut mparm_T, argc: c_int, argv: *mut *mut c_char) {
+    // SAFETY: `paramp` points at one live `mparm_T`.
+    unsafe {
+        memset(paramp as *mut c_void, 0, size_of::<mparm_T>());
+        (*paramp).argc = argc;
+        (*paramp).argv = argv;
+        (*paramp).use_debug_break_level = -1;
+        (*paramp).window_count = -1;
+        (*paramp).listen_addr = ptr::null_mut();
+        (*paramp).server_addr = ptr::null_mut();
+        (*paramp).remote = 0;
+        (*paramp).luaf = ptr::null_mut();
+        (*paramp).lua_arg0 = -1;
     }
-    set_vim_var_string(
-        VV_PROGPATH,
-        &raw mut exepath as *mut c_char,
-        -1 as ptrdiff_t,
-    );
-    set_vim_var_string(VV_PROGNAME, path_tail(exename), -1 as ptrdiff_t);
 }
 
-pub(crate) unsafe extern "C" fn set_window_layout(mut paramp: *mut mparm_T) {
-    if (*paramp).diff_mode != 0 && (*paramp).window_layout == 0 as c_int {
-        if diffopt_horizontal() {
-            (*paramp).window_layout = WIN_HOR as c_int;
-        } else {
-            (*paramp).window_layout = WIN_VER as c_int;
+/// Open the `--startuptime` file, before anything worth timing happens.
+///
+/// This runs its own tiny scan of argv because the real one is far too late:
+/// the point of `--startuptime` is to time the whole startup, the argument
+/// scan included.
+pub(crate) unsafe fn init_startuptime(paramp: *mut mparm_T) {
+    // SAFETY: `paramp.argv[0..argc]` are the process arguments.
+    unsafe {
+        // The last word cannot be either of these: both take a value.
+        let last = (*paramp).argc - 1;
+        let names_embed = (1..last)
+            .any(|i| strcasecmp(*(*paramp).argv.offset(i as isize), c"--embed".as_ptr()) == 0);
+        for i in 1..last {
+            if strcasecmp(
+                *(*paramp).argv.offset(i as isize),
+                c"--startuptime".as_ptr(),
+            ) == 0
+            {
+                time_init(
+                    *(*paramp).argv.offset((i + 1) as isize),
+                    if names_embed {
+                        c"Embedded".as_ptr()
+                    } else {
+                        c"Primary (or UI client)".as_ptr()
+                    },
+                );
+                time_start(c"--- NVIM STARTING ---".as_ptr());
+                break;
+            }
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn execute_env(mut env: *mut c_char) -> c_int {
-    let mut initstr: *mut c_char = os_getenv(env);
-    if initstr.is_null() {
-        return FAIL;
+/// Remember which of the three standard streams are terminals.
+pub(crate) unsafe fn check_and_set_isatty(_paramp: *mut mparm_T) {
+    // SAFETY: three `isatty` calls on the standard descriptors.
+    unsafe {
+        stdin_isatty.set(os_isatty(STDIN_FILENO));
+        stdout_isatty.set(os_isatty(STDOUT_FILENO));
+        stderr_isatty.set(os_isatty(STDERR_FILENO));
+        time_msg_at(c"window checked");
     }
-    estack_push(ETYPE_ENV, env, 0 as linenr_T);
-    let save_current_sctx: sctx_T = current_sctx.get();
-    (*current_sctx.ptr()).sc_sid = SID_ENV as scid_T;
-    (*current_sctx.ptr()).sc_seq = 0 as c_int;
-    (*current_sctx.ptr()).sc_lnum = 0 as c_int as linenr_T;
-    do_cmdline_cmd(initstr);
-    estack_pop();
-    current_sctx.set(save_current_sctx);
-    xfree(initstr as *mut c_void);
-    return OK;
+}
+
+/// Set `v:progpath` and `v:progname`.
+///
+/// `v:progpath` is the absolute path of this executable, which the OS
+/// usually knows; `exename` (argv[0]) is the fallback for when it does not
+/// -- a missing procfs, say (#6734).
+pub(crate) unsafe fn init_path(exename: *const c_char) {
+    // SAFETY: `exename` is NUL-terminated; `exepath` is `MAXPATHL` bytes.
+    unsafe {
+        let mut exepath: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
+        let mut exepathlen: size_t = MAXPATHL as size_t;
+        if os_exepath(exepath.as_mut_ptr(), &raw mut exepathlen) != 0 {
+            path_guess_exepath(exename, exepath.as_mut_ptr(), size_of_val(&exepath));
+        }
+        set_vim_var_string(VV_PROGPATH, exepath.as_mut_ptr(), -1 as ptrdiff_t);
+        set_vim_var_string(VV_PROGNAME, path_tail(exename), -1 as ptrdiff_t);
+    }
+}
+
+/// `-d` with no `-o`/`-O` splits the way 'diffopt' asks.
+pub(crate) unsafe fn set_window_layout(paramp: *mut mparm_T) {
+    // SAFETY: `paramp` is the caller's live parameter block.
+    unsafe {
+        if (*paramp).diff_mode != 0 && (*paramp).window_layout == 0 {
+            (*paramp).window_layout = if diffopt_horizontal() {
+                WIN_HOR as c_int
+            } else {
+                WIN_VER as c_int
+            };
+        }
+    }
+}
+
+/// Run the commands in `$VIMINIT` or `$EXINIT`, if it is set.
+///
+/// Answers `OK` when the variable existed -- which is what makes it count as
+/// a config source, whether or not the commands in it worked.
+pub(crate) unsafe fn execute_env(env: *mut c_char) -> c_int {
+    // SAFETY: `env` names an environment variable; `os_getenv` hands over an
+    // owned copy of its value.
+    unsafe {
+        let initstr = os_getenv(env);
+        if initstr.is_null() {
+            return FAIL;
+        }
+
+        estack_push(ETYPE_ENV, env, 0 as linenr_T);
+        let save_current_sctx: sctx_T = current_sctx.get();
+        (*current_sctx.ptr()).sc_sid = SID_ENV as scid_T;
+        (*current_sctx.ptr()).sc_seq = 0;
+        (*current_sctx.ptr()).sc_lnum = 0 as linenr_T;
+
+        do_cmdline_cmd(initstr);
+
+        estack_pop();
+        current_sctx.set(save_current_sctx);
+        xfree(initstr as *mut c_void);
+        OK
+    }
 }

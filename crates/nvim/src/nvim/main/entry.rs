@@ -1,623 +1,613 @@
 //! Process entry, and the order the startup does things in.
 //!
-//! `main_0` is the sequence itself: it reads as a list of phases because that is
-//! what it is, and the ordering between them is load-bearing -- options before
-//! buffers, buffers before windows, windows before the UI, the UI before
-//! `VimEnter`.
+//! [`main_0`] is the sequence itself. It reads as a list of phases because
+//! that is what it is, and the ordering between them is load-bearing:
+//! options before buffers, buffers before windows, windows before the UI,
+//! the UI before `VimEnter`. The `time_msg_at` calls between the phases are
+//! the seams `--startuptime` reports.
 
-#[allow(unused_imports)]
-use super::*;
+#![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int, c_uint};
+use core::ptr;
+
+use crate::src::nvim::api::ui::remote_ui_wait_for_attach;
+use crate::src::nvim::arglist::alist_init;
+use crate::src::nvim::autocmd::{apply_autocmds, autocmd_init};
+use crate::src::nvim::buffer::do_autochdir;
+use crate::src::nvim::channel::{channel_from_stdio, channel_init, channel_teardown};
+use crate::src::nvim::diff::diff_win_options;
+use crate::src::nvim::drawscreen::{
+    default_grid_alloc, redraw_all_later, redraw_later, screenclear,
+};
+use crate::src::nvim::eval::typval::tv_list_alloc;
+use crate::src::nvim::eval::vars::{
+    get_vim_var_list, get_vim_var_str, set_reg_var, set_vim_var_list, set_vim_var_nr,
+    set_vim_var_string,
+};
+use crate::src::nvim::eval::{eval_has_provider, eval_init, set_argv_var, timer_teardown};
+use crate::src::nvim::event::r#loop::{loop_close, loop_init, loop_poll_events};
+use crate::src::nvim::event::multiqueue::{multiqueue_new_child, multiqueue_process_events};
+use crate::src::nvim::event::proc::proc_teardown;
+use crate::src::nvim::ex_docmd::{filetype_maybe_enable, filetype_plugin_enable};
+use crate::src::nvim::ex_getln::cmdline_init;
+use crate::src::nvim::fileio::shorten_fnames;
+use crate::src::nvim::getchar::{open_scriptin, stuffcharReadbuff};
+use crate::src::nvim::highlight::highlight_init;
+use crate::src::nvim::highlight_group::init_highlight;
+use crate::src::nvim::log::{log_init, logmsg};
+use crate::src::nvim::lua::executor::{
+    nlua_exec_file, nlua_init, nlua_init_defaults, nlua_run_script,
+};
+use crate::src::nvim::main::args::{
+    check_and_set_isatty, command_line_scan, edit_stdin, init_params, init_path, init_startuptime,
+    set_window_layout,
+};
+use crate::src::nvim::main::buffers::{
+    create_windows, edit_buffers, get_fname, handle_quickfix, handle_tag, read_stdin, set_argf_var,
+};
+use crate::src::nvim::main::config::{exe_commands, exe_pre_commands, source_startup_scripts};
+use crate::src::nvim::main::exit::{getout, os_exit};
+use crate::src::nvim::main::remote::remote_request;
+use crate::src::nvim::main::usage::{mainerr, print_mainerr};
+use crate::src::nvim::main::{
+    APPENDBIN, EDIT_QF, EDIT_STDIN, EVENT_BUFENTER, EVENT_VIMENTER, GA_EMPTY_INIT_VALUE, IObuff,
+    KE_NOP, LOGLVL_DBG, LOGLVL_INF, NO_BUFFERS, NUL, RedrawingDisabled, Rows, UPD_NOT_VALID,
+    UPD_VALID, VV_OLDFILES, VV_PROGPATH, VV_STARTTIME, VV_SWAPCOMMAND, VV_VIM_DID_ENTER,
+    VV_VIM_DID_INIT, WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curtab, curwin,
+    debug_break_level, embedded_mode, err_arg_missing, exmode_active, firstwin, full_screen,
+    global_alist, headless_mode, kCallbackNone, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus,
+    main_loop, mparm_T, msg_didout, msg_row, msg_scroll, no_wait_return, p_ch, p_lpl, p_shada,
+    p_uc, p_ut, recoverymode, resize_events, restart_edit, scriptout, silent_mode, starting,
+    stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id,
+    ui_client_forward_stdin,
+};
+use crate::src::nvim::mark::setpcmark;
+use crate::src::nvim::memline::recover_names;
+use crate::src::nvim::memory::strequal;
+use crate::src::nvim::message::msg_putchar;
+use crate::src::nvim::mouse::setmouse;
+use crate::src::nvim::r#move::update_topline;
+use crate::src::nvim::msgpack_rpc::server::{server_init, server_teardown};
+use crate::src::nvim::normal::{check_scrollbind, init_normal_cmds, normal_enter};
+use crate::src::nvim::option::{set_init_1, set_init_2, set_init_3, set_init_tablocal};
+use crate::src::nvim::os::env::{env_init, init_homedir, os_hint_priority};
+use crate::src::nvim::os::fs::os_fopen;
+use crate::src::nvim::os::input::{input_start, input_stop};
+use crate::src::nvim::os::lang::{init_locale, set_lang_var};
+use crate::src::nvim::os::libc::{
+    abort, exit, fprintf, gettext, setbuf, stderr, stdout, strcasecmp,
+};
+use crate::src::nvim::os::signal::{signal_init, signal_teardown};
+use crate::src::nvim::os::stdpaths::appname_is_valid;
+use crate::src::nvim::os::time::os_realtime;
+use crate::src::nvim::quickfix::{qf_init_stack, qf_jump};
+use crate::src::nvim::register::get_default_register_name;
+use crate::src::nvim::runtime::{estack_init, load_plugins, runtime_init};
+use crate::src::nvim::shada::shada_read_everything;
+use crate::src::nvim::syntax::syn_maybe_enable;
+use crate::src::nvim::terminal::{terminal_init, terminal_teardown};
+use crate::src::nvim::types::{
+    Callback, Callback_data, CallbackReader, OptInt, dict_T, int64_t, linenr_T, list_T, qf_info_T,
+    varnumber_T, win_T,
+};
+use crate::src::nvim::ui::{do_autocmd_uienter_all, ui_init};
+use crate::src::nvim::ui_client::{ui_client_run, ui_client_start_server};
+use crate::src::nvim::ui_compositor::ui_comp_syn_init;
+use crate::src::nvim::window::{win_alloc_first, win_init_size, win_new_screensize};
+
+/// Bring up the event loop and everything that hangs off it.
+///
+/// Exported: the unit tests build an editor without a `main`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn event_init() {
-    loop_init(main_loop.ptr());
-    env_init();
-    resize_events.set(multiqueue_new_child((*main_loop.ptr()).events));
-    autocmd_init();
-    signal_init();
-    channel_init();
-    terminal_init();
-    ui_init();
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"event init\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
+    // SAFETY: initialises the singleton main loop and its subsystems, once.
+    unsafe {
+        loop_init(main_loop.ptr());
+        env_init();
+        resize_events.set(multiqueue_new_child((*main_loop.ptr()).events));
+        autocmd_init();
+        signal_init();
+        channel_init();
+        terminal_init();
+        ui_init();
+        time_msg_at(c"event init");
     }
 }
 
-pub(crate) unsafe extern "C" fn event_teardown() -> bool {
-    if (*main_loop.ptr()).events.is_null() {
+/// Take the event loop back down, in the reverse order.
+///
+/// Answers whether it came down cleanly; [`os_exit`] turns a `false` into a
+/// non-zero exit status.
+pub(crate) unsafe fn event_teardown() -> bool {
+    // SAFETY: shuts down the singleton main loop and its subsystems.
+    unsafe {
+        if (*main_loop.ptr()).events.is_null() {
+            // Never came up; there is nothing to drain.
+            input_stop();
+            return true;
+        }
+        // Drain what is already queued before pulling the loop out.
+        multiqueue_process_events((*main_loop.ptr()).events);
+        loop_poll_events(main_loop.ptr(), 0 as int64_t);
         input_stop();
-        return true_0 != 0;
+        server_teardown();
+        channel_teardown();
+        proc_teardown(main_loop.ptr());
+        timer_teardown();
+        signal_teardown();
+        terminal_teardown();
+        loop_close(main_loop.ptr(), true)
     }
-    multiqueue_process_events((*main_loop.ptr()).events);
-    loop_poll_events(main_loop.ptr(), 0 as int64_t);
-    input_stop();
-    server_teardown();
-    channel_teardown();
-    proc_teardown(main_loop.ptr());
-    timer_teardown();
-    signal_teardown();
-    terminal_teardown();
-    return loop_close(main_loop.ptr(), true_0 != 0);
 }
 
+/// The initialisation that has to happen before the command line is even
+/// looked at: the option defaults, the first window, the runtime paths.
+///
+/// Exported: the unit tests build an editor without a `main`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn early_init(mut paramp: *mut mparm_T) {
-    os_hint_priority();
-    estack_init();
-    cmdline_init();
-    eval_init();
-    set_vim_var_nr(VV_STARTTIME, os_realtime());
-    init_path(if !(*argv0.ptr()).is_null() {
-        argv0.get() as *const c_char
-    } else {
-        b"nvim\0".as_ptr() as *const c_char
-    });
-    init_normal_cmds();
-    runtime_init();
-    highlight_init();
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"early init\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    init_locale();
-    set_init_tablocal();
-    win_alloc_first();
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"init first window\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    alist_init(global_alist.ptr());
-    (*global_alist.ptr()).id = 0 as c_int;
-    init_homedir();
-    set_init_1(
-        if !paramp.is_null() {
-            (*paramp).clean as c_int
+pub unsafe extern "C" fn early_init(paramp: *mut mparm_T) {
+    // SAFETY: `paramp` is null when the unit tests call this; every use of
+    // it below is guarded.
+    unsafe {
+        os_hint_priority();
+        estack_init();
+        cmdline_init();
+        eval_init();
+        set_vim_var_nr(VV_STARTTIME, os_realtime());
+
+        init_path(if !argv0.get().is_null() {
+            argv0.get() as *const c_char
         } else {
-            false_0
-        } != 0,
-    );
-    log_init();
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"inits 1\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
+            c"nvim".as_ptr()
+        });
+        init_normal_cmds();
+        runtime_init();
+        highlight_init();
+        time_msg_at(c"early init");
+
+        init_locale();
+        set_init_tablocal();
+        win_alloc_first();
+        time_msg_at(c"init first window");
+
+        alist_init(global_alist.ptr());
+        (*global_alist.ptr()).id = 0;
+        init_homedir();
+        set_init_1(!paramp.is_null() && (*paramp).clean);
+        log_init();
+        time_msg_at(c"inits 1");
+
+        set_lang_var();
+        qf_init_stack();
     }
-    set_lang_var();
-    qf_init_stack();
 }
 
-pub(crate) unsafe fn main_0(mut argc: c_int, mut argv: *mut *mut c_char) -> c_int {
-    argv0.set(*argv.offset(0 as c_int as isize));
-    if !appname_is_valid() {
-        fprintf(
-            stderr,
-            b"$NVIM_APPNAME must be a name or relative path.\n\0".as_ptr() as *const c_char,
-        );
-        exit(1 as c_int);
-    }
-    if argc > 1 as c_int
-        && strcasecmp(
-            *argv.offset(1 as c_int as isize),
-            b"-ll\0".as_ptr() as *const c_char as *mut c_char,
-        ) == 0 as c_int
-    {
-        if argc == 2 as c_int {
-            print_mainerr(
-                err_arg_missing.get(),
-                *argv.offset(1 as c_int as isize),
-                ::core::ptr::null::<c_char>(),
+/// The startup, in order.
+///
+/// Never returns: it ends in `normal_enter`, which is the editor's main
+/// loop, or in one of the exits along the way.
+pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
+    // SAFETY: `argv[0..argc]` are the process arguments and live for the
+    // whole process; `params` lives for the whole of this function, which
+    // never returns while anything still holds a pointer into it.
+    unsafe {
+        argv0.set(*argv);
+        if !appname_is_valid() {
+            fprintf(
+                stderr,
+                c"$NVIM_APPNAME must be a name or relative path.\n".as_ptr(),
             );
-            exit(1 as c_int);
+            exit(1);
         }
-        nlua_run_script(argv, argc, 3 as c_int);
-    }
-    let mut fname: *mut c_char = ::core::ptr::null_mut::<c_char>();
-    let mut params: mparm_T = mparm_T {
-        argc: 0,
-        argv: ::core::ptr::null_mut::<*mut c_char>(),
-        use_vimrc: ::core::ptr::null_mut::<c_char>(),
-        clean: false,
-        n_commands: 0,
-        commands: [::core::ptr::null_mut::<c_char>(); 10],
-        cmds_tofree: [0; 10],
-        n_pre_commands: 0,
-        pre_commands: [::core::ptr::null_mut::<c_char>(); 10],
-        luaf: ::core::ptr::null_mut::<c_char>(),
-        lua_arg0: 0,
-        edit_type: 0,
-        tagname: ::core::ptr::null_mut::<c_char>(),
-        use_ef: ::core::ptr::null_mut::<c_char>(),
-        input_istext: false,
-        no_swap_file: 0,
-        use_debug_break_level: 0,
-        window_count: 0,
-        window_layout: 0,
-        diff_mode: 0,
-        listen_addr: ::core::ptr::null_mut::<c_char>(),
-        remote: 0,
-        server_addr: ::core::ptr::null_mut::<c_char>(),
-        scriptin: ::core::ptr::null_mut::<c_char>(),
-        scriptout: ::core::ptr::null_mut::<c_char>(),
-        scriptout_append: false,
-        had_stdin_file: false,
-    };
-    init_params(&raw mut params, argc, argv);
-    init_startuptime(&raw mut params);
-    let mut i: c_int = 1 as c_int;
-    while i < params.argc {
-        if strcasecmp(
-            *params.argv.offset(i as isize),
-            b"--clean\0".as_ptr() as *const c_char as *mut c_char,
-        ) == 0 as c_int
-        {
-            params.clean = true_0 != 0;
-            break;
-        } else {
-            i += 1;
+
+        // `-ll` is handled before anything else: it is a bare Lua
+        // interpreter with none of the editor behind it.
+        if argc > 1 && strcasecmp(*argv.offset(1), c"-ll".as_ptr()) == 0 {
+            if argc == 2 {
+                print_mainerr(err_arg_missing.get(), *argv.offset(1), ptr::null());
+                exit(1);
+            }
+            nlua_run_script(argv, argc, 3);
         }
-    }
-    event_init();
-    early_init(&raw mut params);
-    set_argv_var(argv, argc);
-    check_and_set_isatty(&raw mut params);
-    command_line_scan(&raw mut params);
-    set_argf_var();
-    nlua_init(argv, argc, params.lua_arg0);
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"init lua interpreter\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    if embedded_mode.get() {
-        let mut err: *const c_char = ::core::ptr::null::<c_char>();
-        if channel_from_stdio(
-            true_0 != 0,
-            CallbackReader {
+
+        // All-zero is the "nothing given" state for everything except the
+        // handful of fields `init_params` sets.
+        let mut params: mparm_T = core::mem::zeroed();
+        init_params(&raw mut params, argc, argv);
+        init_startuptime(&raw mut params);
+
+        // `--clean` has to be known before `early_init` reads any config.
+        for i in 1..params.argc {
+            if strcasecmp(*params.argv.offset(i as isize), c"--clean".as_ptr()) == 0 {
+                params.clean = true;
+                break;
+            }
+        }
+
+        event_init();
+        early_init(&raw mut params);
+        set_argv_var(argv, argc);
+        check_and_set_isatty(&raw mut params);
+        command_line_scan(&raw mut params);
+        set_argf_var();
+
+        nlua_init(argv, argc, params.lua_arg0);
+        time_msg_at(c"init lua interpreter");
+
+        if embedded_mode.get() {
+            // stdin/stdout become the RPC channel.
+            let mut err: *const c_char = ptr::null();
+            let reader = CallbackReader {
                 cb: Callback {
                     data: Callback_data {
-                        funcref: ::core::ptr::null_mut::<c_char>(),
+                        funcref: ptr::null_mut(),
                     },
                     type_0: kCallbackNone,
                 },
-                self_0: ::core::ptr::null_mut::<dict_T>(),
+                self_0: ptr::null_mut::<dict_T>(),
                 buffer: GA_EMPTY_INIT_VALUE,
                 eof: false,
-                buffered: false_0 != 0,
-                fwd_err: false_0 != 0,
-                type_0: ::core::ptr::null::<c_char>(),
-            },
-            &raw mut err,
-        ) == 0
-        {
-            abort();
-        }
-    }
-    if (*global_alist.ptr()).al_ga.ga_len > 0 as c_int {
-        fname = get_fname(&raw mut params);
-    }
-    if recoverymode.get() as c_int != 0 && fname.is_null() {
-        headless_mode.set(true_0 != 0);
-    }
-    let mut has_term: bool = stdin_isatty.get() as c_int != 0
-        || stdout_isatty.get() as c_int != 0
-        || stderr_isatty.get() as c_int != 0;
-    let mut use_builtin_ui: bool = has_term as c_int != 0
-        && !headless_mode.get()
-        && !embedded_mode.get()
-        && !silent_mode.get();
-    if params.remote != 0 {
-        remote_request(
-            &raw mut params,
-            params.remote,
-            params.server_addr,
-            argc,
-            argv,
-            use_builtin_ui,
-        );
-    }
-    let mut remote_ui: bool = ui_client_channel_id.get() != 0 as uint64_t;
-    if use_builtin_ui as c_int != 0 && !remote_ui {
-        ui_client_forward_stdin.set(!stdin_isatty.get());
-        let mut rv: uint64_t = ui_client_start_server(
-            get_vim_var_str(VV_PROGPATH),
-            params.argc as size_t,
-            params.argv,
-        );
-        if rv == 0 {
-            fprintf(
-                stderr,
-                b"Failed to start Nvim server!\n\0".as_ptr() as *const c_char,
-            );
-            os_exit(1 as c_int);
-        }
-        ui_client_channel_id.set(rv);
-    }
-    if ui_client_channel_id.get() != 0 {
-        ui_client_run();
-    }
-    '_c2rust_label: {
-        if ui_client_channel_id.get() == 0 && !use_builtin_ui {
-        } else {
-            __assert_fail(
-                b"!ui_client_channel_id && !use_builtin_ui\0".as_ptr() as *const c_char,
-                b"src/nvim/main.rs\0".as_ptr() as *const c_char,
-                369 as c_uint,
-                b"int main(int, char **)\0".as_ptr() as *const c_char,
-            );
-        }
-    };
-    if !server_init(params.listen_addr) {
-        mainerr(
-            IObuff.ptr() as *mut c_char,
-            ::core::ptr::null::<c_char>(),
-            ::core::ptr::null::<c_char>(),
-        );
-    }
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"expanding arguments\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    if params.diff_mode != 0 && params.window_count == -1 as c_int {
-        params.window_count = 0 as c_int;
-    }
-    (*RedrawingDisabled.ptr()) += 1;
-    setbuf(stdout, ::core::ptr::null_mut::<c_char>());
-    full_screen.set(!silent_mode.get());
-    win_init_size();
-    if params.diff_mode != 0 {
-        diff_win_options(firstwin.get(), false_0 != 0);
-    }
-    '_c2rust_label_0: {
-        if p_ch.get() >= 0 as OptInt
-            && Rows.get() as OptInt >= p_ch.get()
-            && Rows.get() as OptInt - p_ch.get() <= 2147483647 as OptInt
-        {
-        } else {
-            __assert_fail(
-                b"p_ch >= 0 && Rows >= p_ch && Rows - p_ch <= INT_MAX\0".as_ptr() as *const c_char,
-                b"src/nvim/main.rs\0".as_ptr() as *const c_char,
-                414 as c_uint,
-                b"int main(int, char **)\0".as_ptr() as *const c_char,
-            );
-        }
-    };
-    cmdline_row.set(Rows.get() - p_ch.get() as c_int);
-    msg_row.set(cmdline_row.get());
-    default_grid_alloc();
-    set_init_2(headless_mode.get());
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"inits 2\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    msg_scroll.set(true_0);
-    no_wait_return.set(true_0);
-    init_highlight(true_0 != 0, false_0 != 0);
-    ui_comp_syn_init();
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"init highlight\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    debug_break_level.set(params.use_debug_break_level);
-    if !stdin_isatty.get()
-        && !params.input_istext
-        && silent_mode.get() as c_int != 0
-        && exmode_active.get() as c_int != 0
-    {
-        input_start();
-    }
-    let mut use_remote_ui: bool = embedded_mode.get() as c_int != 0 && !headless_mode.get();
-    if use_remote_ui {
-        if !(*time_fd.ptr()).is_null() {
-            time_msg(
-                b"waiting for UI\0".as_ptr() as *const c_char,
-                ::core::ptr::null::<proftime_T>(),
-            );
-        }
-        remote_ui_wait_for_attach();
-        if !(*time_fd.ptr()).is_null() {
-            time_msg(
-                b"done waiting for UI\0".as_ptr() as *const c_char,
-                ::core::ptr::null::<proftime_T>(),
-            );
-        }
-        (*firstwin.get()).w_prev_height = (*firstwin.get()).w_height;
-    }
-    starting.set(NO_BUFFERS);
-    screenclear();
-    win_new_screensize();
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"clear screen\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    if edit_stdin(&raw mut params) {
-        params.edit_type = EDIT_STDIN as c_int;
-    }
-    if !params.scriptin.is_null() {
-        if !open_scriptin(params.scriptin) {
-            os_exit(2 as c_int);
-        }
-    }
-    if !params.scriptout.is_null() {
-        scriptout.set(os_fopen(
-            params.scriptout,
-            if params.scriptout_append as c_int != 0 {
-                APPENDBIN.as_ptr()
-            } else {
-                WRITEBIN.as_ptr()
-            },
-        ));
-        if (*scriptout.ptr()).is_null() {
-            fprintf(
-                stderr,
-                gettext(b"Cannot open for script output: \"\0".as_ptr() as *const c_char),
-            );
-            fprintf(
-                stderr,
-                b"%s\"\n\0".as_ptr() as *const c_char,
-                params.scriptout,
-            );
-            os_exit(2 as c_int);
-        }
-    }
-    nlua_init_defaults();
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"init default mappings & autocommands\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    let mut vimrc_none: bool = strequal(params.use_vimrc, b"NONE\0".as_ptr() as *const c_char);
-    p_lpl.set(if vimrc_none as c_int != 0 {
-        params.clean as c_int
-    } else {
-        p_lpl.get()
-    });
-    exe_pre_commands(&raw mut params);
-    if !vimrc_none || params.clean as c_int != 0 {
-        filetype_plugin_enable();
-    }
-    source_startup_scripts(&raw mut params);
-    if !vimrc_none || params.clean as c_int != 0 {
-        filetype_maybe_enable();
-        syn_maybe_enable();
-    }
-    set_vim_var_nr(VV_VIM_DID_INIT, 1 as varnumber_T);
-    load_plugins();
-    set_window_layout(&raw mut params);
-    if recoverymode.get() as c_int != 0 && fname.is_null() {
-        recover_names(
-            ::core::ptr::null_mut::<c_char>(),
-            true_0 != 0,
-            ::core::ptr::null_mut::<list_T>(),
-            0 as c_int,
-            ::core::ptr::null_mut::<*mut c_char>(),
-        );
-        os_exit(0 as c_int);
-    }
-    set_init_3();
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"inits 3\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    if params.no_swap_file != 0 {
-        p_uc.set(0 as OptInt);
-    }
-    if silent_mode.get() {
-        p_ut.set(1 as OptInt);
-    }
-    if *p_shada.get() as c_int != NUL {
-        shada_read_everything(::core::ptr::null::<c_char>(), false_0 != 0, true_0 != 0);
-        if !(*time_fd.ptr()).is_null() {
-            time_msg(
-                b"reading ShaDa\0".as_ptr() as *const c_char,
-                ::core::ptr::null::<proftime_T>(),
-            );
-        }
-    }
-    if get_vim_var_list(VV_OLDFILES).is_null() {
-        set_vim_var_list(VV_OLDFILES, tv_list_alloc(0 as ptrdiff_t));
-    }
-    handle_quickfix(&raw mut params);
-    starting.set(NO_BUFFERS);
-    no_wait_return.set(false_0);
-    if !exmode_active.get() {
-        msg_scroll.set(false_0);
-    }
-    if params.edit_type == EDIT_STDIN as c_int && !recoverymode.get() {
-        read_stdin();
-    }
-    setmouse();
-    redraw_later(curwin.get(), UPD_VALID as c_int);
-    no_wait_return.set(true_0);
-    create_windows(&raw mut params);
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"opening buffers\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    set_vim_var_string(
-        VV_SWAPCOMMAND,
-        ::core::ptr::null::<c_char>(),
-        -1 as ptrdiff_t,
-    );
-    if exmode_active.get() {
-        (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
-    }
-    apply_autocmds(
-        EVENT_BUFENTER,
-        ::core::ptr::null_mut::<c_char>(),
-        ::core::ptr::null_mut::<c_char>(),
-        false_0 != 0,
-        curbuf.get(),
-    );
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"BufEnter autocommands\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    setpcmark();
-    if params.edit_type == EDIT_QF as c_int {
-        qf_jump(
-            ::core::ptr::null_mut::<qf_info_T>(),
-            0 as c_int,
-            0 as c_int,
-            false_0,
-        );
-        if !(*time_fd.ptr()).is_null() {
-            time_msg(
-                b"jump to first error\0".as_ptr() as *const c_char,
-                ::core::ptr::null::<proftime_T>(),
-            );
-        }
-    }
-    edit_buffers(&raw mut params);
-    if params.diff_mode != 0 {
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            if (*wp).w_arg_idx_invalid == 0 {
-                diff_win_options(wp, true_0 != 0);
+                buffered: false,
+                fwd_err: false,
+                type_0: ptr::null(),
+            };
+            if channel_from_stdio(true, reader, &raw mut err) == 0 {
+                abort();
             }
-            wp = (*wp).w_next;
         }
-    }
-    shorten_fnames(false_0);
-    handle_tag(params.tagname);
-    if params.n_commands > 0 as c_int {
-        exe_commands(&raw mut params);
-    }
-    starting.set(0 as c_int);
-    RedrawingDisabled.set(0 as c_int);
-    redraw_all_later(UPD_NOT_VALID as c_int);
-    no_wait_return.set(false_0);
-    do_autochdir();
-    set_vim_var_nr(VV_VIM_DID_ENTER, 1 as varnumber_T);
-    apply_autocmds(
-        EVENT_VIMENTER,
-        ::core::ptr::null_mut::<c_char>(),
-        ::core::ptr::null_mut::<c_char>(),
-        false_0 != 0,
-        curbuf.get(),
-    );
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"VimEnter autocommands\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
+
+        let mut fname: *mut c_char = ptr::null_mut();
+        if (*global_alist.ptr()).al_ga.ga_len > 0 {
+            fname = get_fname(&raw mut params);
+        }
+        if recoverymode.get() && fname.is_null() {
+            // `-r` with no file only lists the swap files.
+            headless_mode.set(true);
+        }
+
+        let has_term = stdin_isatty.get() || stdout_isatty.get() || stderr_isatty.get();
+        let use_builtin_ui =
+            has_term && !headless_mode.get() && !embedded_mode.get() && !silent_mode.get();
+
+        if params.remote != 0 {
+            remote_request(
+                &raw mut params,
+                params.remote,
+                params.server_addr,
+                argc,
+                argv,
+                use_builtin_ui,
+            );
+        }
+
+        // A `--remote-ui` handled above already has a channel; otherwise the
+        // built-in UI starts a server of its own and re-executes into it.
+        let remote_ui = ui_client_channel_id.get() != 0;
+        if use_builtin_ui && !remote_ui {
+            ui_client_forward_stdin.set(!stdin_isatty.get());
+            let chan = ui_client_start_server(
+                get_vim_var_str(VV_PROGPATH),
+                params.argc as usize,
+                params.argv,
+            );
+            if chan == 0 {
+                fprintf(stderr, c"Failed to start Nvim server!\n".as_ptr());
+                os_exit(1);
+            }
+            ui_client_channel_id.set(chan);
+        }
+        if ui_client_channel_id.get() != 0 {
+            // This process is now a UI, not an editor; it does not return.
+            ui_client_run();
+        }
+        debug_assert!(
+            ui_client_channel_id.get() == 0 && !use_builtin_ui,
+            "a UI client reached the editor startup"
         );
-    }
-    if use_remote_ui {
-        do_autocmd_uienter_all();
-        if !(*time_fd.ptr()).is_null() {
-            time_msg(
-                b"UIEnter autocommands\0".as_ptr() as *const c_char,
-                ::core::ptr::null::<proftime_T>(),
-            );
+
+        if !server_init(params.listen_addr) {
+            // `server_init` left the reason in IObuff.
+            mainerr(IObuff.ptr() as *mut c_char, ptr::null(), ptr::null());
         }
-    }
-    set_reg_var(get_default_register_name());
-    if (*curwin.get()).w_onebuf_opt.wo_diff != 0 && (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
-        update_topline(curwin.get());
-        check_scrollbind(0 as linenr_T, 0 as c_int);
-        if !(*time_fd.ptr()).is_null() {
-            time_msg(
-                b"diff scrollbinding\0".as_ptr() as *const c_char,
-                ::core::ptr::null::<proftime_T>(),
-            );
+        time_msg_at(c"expanding arguments");
+
+        if params.diff_mode != 0 && params.window_count == -1 {
+            // Diff mode wants one window per file.
+            params.window_count = 0;
         }
-    }
-    if restart_edit.get() != 0 as c_int {
-        stuffcharReadbuff(-(253 as c_int + ((KE_NOP as c_int) << 8 as c_int)));
-    }
-    if cb_flags.get() & (kOptCbFlagUnnamed as c_int | kOptCbFlagUnnamedplus as c_int) as c_uint != 0
-    {
-        eval_has_provider(b"clipboard\0".as_ptr() as *const c_char, false_0 != 0);
-    }
-    if !params.luaf.is_null() {
-        msg_scroll.set(true_0);
+
+        (*RedrawingDisabled.ptr()) += 1;
+        setbuf(stdout, ptr::null_mut());
+        full_screen.set(!silent_mode.get());
+
+        win_init_size();
+        if params.diff_mode != 0 {
+            diff_win_options(firstwin.get(), false);
+        }
+
+        debug_assert!(
+            p_ch.get() >= 0
+                && Rows.get() as OptInt >= p_ch.get()
+                && Rows.get() as OptInt - p_ch.get() <= c_int::MAX as OptInt,
+            "'cmdheight' does not fit in the screen"
+        );
+        cmdline_row.set(Rows.get() - p_ch.get() as c_int);
+        msg_row.set(cmdline_row.get());
+        default_grid_alloc();
+
+        set_init_2(headless_mode.get());
+        time_msg_at(c"inits 2");
+
+        msg_scroll.set(1);
+        no_wait_return.set(1);
+        init_highlight(true, false);
+        ui_comp_syn_init();
+        time_msg_at(c"init highlight");
+
+        debug_break_level.set(params.use_debug_break_level);
+
+        // `-es` with a pipe: start reading it now, so the Ex commands are
+        // there when the loop asks.
+        if !stdin_isatty.get() && !params.input_istext && silent_mode.get() && exmode_active.get() {
+            input_start();
+        }
+
+        // `--embed` without `--headless`: the client attaches a UI, and the
+        // startup waits for it so the first redraw has somewhere to go.
+        let use_remote_ui = embedded_mode.get() && !headless_mode.get();
+        if use_remote_ui {
+            time_msg_at(c"waiting for UI");
+            remote_ui_wait_for_attach();
+            time_msg_at(c"done waiting for UI");
+            (*firstwin.get()).w_prev_height = (*firstwin.get()).w_height;
+        }
+
+        starting.set(NO_BUFFERS);
+        screenclear();
+        win_new_screensize();
+        time_msg_at(c"clear screen");
+
+        if edit_stdin(&raw mut params) {
+            params.edit_type = EDIT_STDIN as c_int;
+        }
+        if !params.scriptin.is_null() && !open_scriptin(params.scriptin) {
+            os_exit(2);
+        }
+        if !params.scriptout.is_null() {
+            scriptout.set(os_fopen(
+                params.scriptout,
+                if params.scriptout_append {
+                    APPENDBIN.as_ptr()
+                } else {
+                    WRITEBIN.as_ptr()
+                },
+            ));
+            if scriptout.get().is_null() {
+                fprintf(
+                    stderr,
+                    gettext(c"Cannot open for script output: \"".as_ptr()),
+                );
+                fprintf(stderr, c"%s\"\n".as_ptr(), params.scriptout);
+                os_exit(2);
+            }
+        }
+
+        nlua_init_defaults();
+        time_msg_at(c"init default mappings & autocommands");
+
+        // `-u NONE` also turns the plugins off, unless `--clean` asked for
+        // the defaults.
+        let vimrc_none = strequal(params.use_vimrc, c"NONE".as_ptr());
+        if vimrc_none {
+            p_lpl.set(params.clean as c_int);
+        }
+
+        exe_pre_commands(&raw mut params);
+        if !vimrc_none || params.clean {
+            filetype_plugin_enable();
+        }
+        source_startup_scripts(&raw mut params);
+        if !vimrc_none || params.clean {
+            filetype_maybe_enable();
+            syn_maybe_enable();
+        }
+
+        set_vim_var_nr(VV_VIM_DID_INIT, 1 as varnumber_T);
+        load_plugins();
+        set_window_layout(&raw mut params);
+
+        if recoverymode.get() && fname.is_null() {
+            // `-r` with no file: list the swap files and leave.
+            recover_names(
+                ptr::null_mut(),
+                true,
+                ptr::null_mut::<list_T>(),
+                0,
+                ptr::null_mut(),
+            );
+            os_exit(0);
+        }
+
+        set_init_3();
+        time_msg_at(c"inits 3");
+
+        if params.no_swap_file != 0 {
+            p_uc.set(0 as OptInt);
+        }
+        if silent_mode.get() {
+            p_ut.set(1 as OptInt);
+        }
+
+        if *p_shada.get() as c_int != NUL {
+            shada_read_everything(ptr::null(), false, true);
+            time_msg_at(c"reading ShaDa");
+        }
+        if get_vim_var_list(VV_OLDFILES).is_null() {
+            set_vim_var_list(VV_OLDFILES, tv_list_alloc(0));
+        }
+
+        handle_quickfix(&raw mut params);
+
+        starting.set(NO_BUFFERS);
+        no_wait_return.set(0);
+        if !exmode_active.get() {
+            msg_scroll.set(0);
+        }
+
+        if params.edit_type == EDIT_STDIN as c_int && !recoverymode.get() {
+            read_stdin();
+        }
+
+        setmouse();
+        redraw_later(curwin.get(), UPD_VALID as c_int);
+        no_wait_return.set(1);
+
+        create_windows(&raw mut params);
+        time_msg_at(c"opening buffers");
+
+        // The swap command has served its purpose; the ATTENTION prompts
+        // from here on are the user's own doing.
+        set_vim_var_string(VV_SWAPCOMMAND, ptr::null(), -1);
+
+        if exmode_active.get() {
+            (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count;
+        }
+        apply_autocmds(
+            EVENT_BUFENTER,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            false,
+            curbuf.get(),
+        );
+        time_msg_at(c"BufEnter autocommands");
+        setpcmark();
+
+        if params.edit_type == EDIT_QF as c_int {
+            qf_jump(ptr::null_mut::<qf_info_T>(), 0, 0, 0);
+            time_msg_at(c"jump to first error");
+        }
+
+        edit_buffers(&raw mut params);
+
+        if params.diff_mode != 0 {
+            // NB: `curtab == curtab` is upstream's `FOR_ALL_WINDOWS_IN_TAB`
+            // macro expanded against the current tab page, so this always
+            // walks `firstwin` however it reads.
+            let mut wp: *mut win_T = if curtab.get() == curtab.get() {
+                firstwin.get()
+            } else {
+                (*curtab.get()).tp_firstwin
+            };
+            while !wp.is_null() {
+                if (*wp).w_arg_idx_invalid == 0 {
+                    diff_win_options(wp, true);
+                }
+                wp = (*wp).w_next;
+            }
+        }
+
+        shorten_fnames(0);
+        handle_tag(params.tagname);
+        if params.n_commands > 0 {
+            exe_commands(&raw mut params);
+        }
+
+        starting.set(0);
+        RedrawingDisabled.set(0);
+        redraw_all_later(UPD_NOT_VALID as c_int);
+        no_wait_return.set(0);
+        do_autochdir();
+
+        set_vim_var_nr(VV_VIM_DID_ENTER, 1 as varnumber_T);
+        apply_autocmds(
+            EVENT_VIMENTER,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            false,
+            curbuf.get(),
+        );
+        time_msg_at(c"VimEnter autocommands");
+        if use_remote_ui {
+            do_autocmd_uienter_all();
+            time_msg_at(c"UIEnter autocommands");
+        }
+
+        set_reg_var(get_default_register_name());
+
+        if (*curwin.get()).w_onebuf_opt.wo_diff != 0 && (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
+            update_topline(curwin.get());
+            check_scrollbind(0 as linenr_T, 0);
+            time_msg_at(c"diff scrollbinding");
+        }
+
+        if restart_edit.get() != 0 {
+            // A `-c startinsert` and friends: push the key that gets there.
+            stuffcharReadbuff(-(253 + ((KE_NOP as c_int) << 8)));
+        }
+
+        if cb_flags.get() & (kOptCbFlagUnnamed as c_int | kOptCbFlagUnnamedplus as c_int) as c_uint
+            != 0
+        {
+            // Warm the clipboard provider so the first yank is not slow.
+            eval_has_provider(c"clipboard".as_ptr(), false);
+        }
+
+        if !params.luaf.is_null() {
+            // `-l`: run the script and leave, with its status.
+            msg_scroll.set(1);
+            logmsg(
+                LOGLVL_DBG,
+                ptr::null(),
+                c"main".as_ptr(),
+                678,
+                true,
+                c"executing Lua -l script".as_ptr(),
+            );
+            let lua_ok = nlua_exec_file(params.luaf);
+            time_msg_at(c"executing Lua -l script");
+            if msg_didout.get() {
+                msg_putchar('\n' as c_int);
+                msg_didout.set(false);
+            }
+            getout(if lua_ok { 0 } else { 1 });
+        }
+
+        time_msg_at(c"before starting main loop");
         logmsg(
-            LOGLVL_DBG,
-            ::core::ptr::null::<c_char>(),
-            b"main\0".as_ptr() as *const c_char,
-            678 as c_int,
-            true_0 != 0,
-            b"executing Lua -l script\0".as_ptr() as *const c_char,
+            LOGLVL_INF,
+            ptr::null(),
+            c"main".as_ptr(),
+            689,
+            true,
+            c"starting main loop".as_ptr(),
         );
-        let mut lua_ok: bool = nlua_exec_file(params.luaf);
-        if !(*time_fd.ptr()).is_null() {
-            time_msg(
-                b"executing Lua -l script\0".as_ptr() as *const c_char,
-                ::core::ptr::null::<proftime_T>(),
-            );
-        }
-        if msg_didout.get() {
-            msg_putchar('\n' as c_int);
-            msg_didout.set(false_0 != 0);
-        }
-        getout(if lua_ok as c_int != 0 {
-            0 as c_int
-        } else {
-            1 as c_int
-        });
+
+        // Never returns.
+        normal_enter(false, false);
+        0
     }
-    if !(*time_fd.ptr()).is_null() {
-        time_msg(
-            b"before starting main loop\0".as_ptr() as *const c_char,
-            ::core::ptr::null::<proftime_T>(),
-        );
-    }
-    logmsg(
-        LOGLVL_INF,
-        ::core::ptr::null::<c_char>(),
-        b"main\0".as_ptr() as *const c_char,
-        689 as c_int,
-        true_0 != 0,
-        b"starting main loop\0".as_ptr() as *const c_char,
-    );
-    normal_enter(false_0 != 0, false_0 != 0);
-    return 0 as c_int;
 }
 
+/// The process entry point.
+///
+/// Turns Rust's `args()` into the `argc`/`argv` pair the startup expects and
+/// hands over to [`main_0`], which does not return.
 pub fn main() {
-    let mut args_strings: Vec<Vec<u8>> = ::std::env::args()
+    let mut args: Vec<Vec<u8>> = ::std::env::args()
         .map(|arg| {
             ::std::ffi::CString::new(arg)
                 .expect("Failed to convert argument into CString.")
                 .into_bytes_with_nul()
         })
         .collect();
-    let mut args_ptrs: Vec<*mut c_char> = args_strings
+    // argv is NUL-terminated, as C requires; argc does not count that entry.
+    let mut argv: Vec<*mut c_char> = args
         .iter_mut()
         .map(|arg| arg.as_mut_ptr() as *mut c_char)
-        .chain(::core::iter::once(::core::ptr::null_mut()))
+        .chain(::core::iter::once(ptr::null_mut()))
         .collect();
-    unsafe {
-        ::std::process::exit(main_0(
-            (args_ptrs.len() - 1) as c_int,
-            args_ptrs.as_mut_ptr() as *mut *mut c_char,
-        ) as i32)
-    }
+
+    // SAFETY: `args` outlives the call, and `main_0` never returns.
+    unsafe { ::std::process::exit(main_0((argv.len() - 1) as c_int, argv.as_mut_ptr()) as i32) }
 }
