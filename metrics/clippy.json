@@ -101,7 +101,7 @@
     "crates/nvim/src/nvim/normal/dispatch.rs": 1,
     "crates/nvim/src/nvim/normal/edit.rs": 18,
     "crates/nvim/src/nvim/normal/ident.rs": 59,
-    "crates/nvim/src/nvim/normal/motion.rs": 3,
+    "crates/nvim/src/nvim/normal/motion.rs": 1,
     "crates/nvim/src/nvim/normal/scroll.rs": 11,
     "crates/nvim/src/nvim/normal/visual.rs": 1,
     "crates/nvim/src/nvim/ops.rs": 75,

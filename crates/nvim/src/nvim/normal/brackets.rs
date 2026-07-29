@@ -32,18 +32,6 @@ unsafe fn match_direction(cap: *mut cmdarg_T) -> c_int {
     }
 }
 
-/// Open a fold the cursor landed in, if 'foldopen' says this kind of jump
-/// should and the key was typed rather than mapped.
-unsafe fn may_fold_open(cap: *mut cmdarg_T, flag: c_uint) {
-    // SAFETY: `cap` is the caller's live command argument.
-    unsafe {
-        if fdo_flags.get() & flag != 0 && KeyTyped.get() && (*(*cap).oap).op_type == OP_NOP as c_int
-        {
-            foldOpenCursor();
-        }
-    }
-}
-
 /// `[{`, `]}`, `[(`, `])`, `[*`, `]/`, `[#`, `[m`, `]M` and friends: jump to
 /// an unmatched bracket, or to the start or end of a method.
 ///

@@ -1,774 +1,784 @@
 //! Cursor motions that are not searches: by character, word, line,
 //! screen line, paragraph and sentence.
 
-#[allow(unused_imports)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ptr;
+
 use super::*;
 
+/// Move `dist` *screen* lines, which is what `gj`/`gk` and `g$` past the first
+/// count mean, and what the arrow keys mean under 'wrap'.
+///
+/// The wanted column ('curswant') is carried in screen columns for the whole
+/// walk and only turned back into a buffer column at the end, which is how a
+/// long wrapped line and a short one keep the same apparent column. A closed
+/// fold counts as one screen line however tall its text is, so the walk steps
+/// over it rather than through it.
 pub unsafe extern "C" fn nv_screengo(
-    mut oap: *mut oparg_T,
-    mut dir: c_int,
+    oap: *mut oparg_T,
+    dir: c_int,
     mut dist: c_int,
-    mut skip_conceal: bool,
+    skip_conceal: bool,
 ) -> bool {
-    let mut linelen: c_int = linetabsize(curwin.get(), (*curwin.get()).w_cursor.lnum);
-    let mut retval: bool = true_0 != 0;
-    let mut atend: bool = false_0 != 0;
-    let mut col_off1: c_int = 0;
-    let mut col_off2: c_int = 0;
-    let mut width1: c_int = 0;
-    let mut width2: c_int = 0;
-    (*oap).motion_type = kMTCharWise;
-    (*oap).inclusive = (*curwin.get()).w_curswant == MAXCOL as c_int;
-    col_off1 = win_col_off(curwin.get());
-    col_off2 = col_off1 - win_col_off2(curwin.get());
-    width1 = (*curwin.get()).w_view_width - col_off1;
-    width2 = (*curwin.get()).w_view_width - col_off2;
-    if width2 == 0 as c_int {
-        width2 = 1 as c_int;
-    }
-    if (*curwin.get()).w_view_width != 0 as c_int {
-        let mut n: c_int = 0;
-        if (*curwin.get()).w_curswant == MAXCOL as c_int {
-            atend = true_0 != 0;
-            validate_virtcol(curwin.get());
-            if width1 <= 0 as c_int {
-                (*curwin.get()).w_curswant = 0 as c_int as colnr_T;
-            } else {
-                (*curwin.get()).w_curswant = (width1 - 1 as c_int) as colnr_T;
-                if (*curwin.get()).w_virtcol > (*curwin.get()).w_curswant {
-                    (*curwin.get()).w_curswant += (((*curwin.get()).w_virtcol as c_int
-                        - (*curwin.get()).w_curswant as c_int
-                        - 1 as c_int)
-                        / width2
-                        + 1 as c_int)
-                        * width2;
-                }
-            }
-        } else {
-            if linelen > width1 {
-                n = ((linelen - width1 - 1 as c_int) / width2 + 1 as c_int) * width2 + width1;
-            } else {
-                n = width1;
-            }
-            (*curwin.get()).w_curswant = (if (*curwin.get()).w_curswant < n - 1 as c_int {
-                (*curwin.get()).w_curswant as c_int
-            } else {
-                n - 1 as c_int
-            }) as colnr_T;
+    // SAFETY: `oap` is the caller's live operator.
+    unsafe {
+        let win = curwin.get();
+        let mut linelen = linetabsize(win, (*win).w_cursor.lnum);
+        let mut retval = true;
+        // `$` asked for the end of the line, which has to be recomputed on
+        // every row rather than carried as a column.
+        let mut atend = false;
+        (*oap).motion_type = kMTCharWise;
+        (*oap).inclusive = (*win).w_curswant == MAXCOL as c_int;
+
+        // The first screen row of a line can be narrower than the rest: only
+        // it carries the number column and the signs.
+        let col_off1 = win_col_off(win);
+        let col_off2 = col_off1 - win_col_off2(win);
+        let width1 = (*win).w_view_width - col_off1;
+        let mut width2 = (*win).w_view_width - col_off2;
+        if width2 == 0 {
+            width2 = 1;
         }
-        loop {
-            let c2rust_fresh10 = dist;
-            dist = dist - 1;
-            if c2rust_fresh10 == 0 {
-                break;
-            }
-            if dir == BACKWARD as c_int {
-                if (*curwin.get()).w_curswant >= width1
-                    && !hasFolding(
-                        curwin.get(),
-                        (*curwin.get()).w_cursor.lnum,
-                        ::core::ptr::null_mut::<linenr_T>(),
-                        ::core::ptr::null_mut::<linenr_T>(),
-                    )
-                {
-                    (*curwin.get()).w_curswant -= width2;
-                } else if (*curwin.get()).w_cursor.lnum <= 1 as linenr_T {
-                    retval = false_0 != 0;
-                    break;
-                } else {
-                    cursor_up_inner(curwin.get(), 1 as linenr_T, skip_conceal);
-                    linelen = linetabsize(curwin.get(), (*curwin.get()).w_cursor.lnum);
-                    if linelen > width1 {
-                        let mut w: c_int =
-                            ((linelen - width1 - 1 as c_int) / width2 + 1 as c_int) * width2;
-                        '_c2rust_label: {
-                            if w <= 0 as c_int
-                                || (*curwin.get()).w_curswant <= 2147483647 as c_int - w
-                            {
-                            } else {
-                                __assert_fail(
-                                    b"w <= 0 || curwin->w_curswant <= INT_MAX - w\0".as_ptr()
-                                        as *const c_char,
-                                    b"src/nvim/normal.rs\0".as_ptr() as *const c_char,
-                                    2570 as c_uint,
-                                    b"_Bool nv_screengo(oparg_T *, int, int, _Bool)\0".as_ptr()
-                                        as *const c_char,
-                                );
-                            }
-                        };
-                        (*curwin.get()).w_curswant += w;
-                    }
-                }
-            } else {
+
+        /// The last screen column of the line, given how many rows it takes.
+        macro_rules! line_end {
+            () => {
                 if linelen > width1 {
-                    n = ((linelen - width1 - 1 as c_int) / width2 + 1 as c_int) * width2 + width1;
+                    ((linelen - width1 - 1) / width2 + 1) * width2 + width1
                 } else {
-                    n = width1;
+                    width1
                 }
-                if (*curwin.get()).w_curswant as c_int + width2 < n
-                    && !hasFolding(
-                        curwin.get(),
-                        (*curwin.get()).w_cursor.lnum,
-                        ::core::ptr::null_mut::<linenr_T>(),
-                        ::core::ptr::null_mut::<linenr_T>(),
-                    )
-                {
-                    (*curwin.get()).w_curswant += width2;
-                } else if (*curwin.get()).w_cursor.lnum
-                    >= (*(*curwin.get()).w_buffer).b_ml.ml_line_count
-                {
-                    retval = false_0 != 0;
-                    break;
+            };
+        }
+
+        if (*win).w_view_width != 0 {
+            if (*win).w_curswant == MAXCOL as c_int {
+                atend = true;
+                validate_virtcol(win);
+                if width1 <= 0 {
+                    (*win).w_curswant = 0;
                 } else {
-                    cursor_down_inner(curwin.get(), 1 as c_int, skip_conceal);
-                    (*curwin.get()).w_curswant %= width2;
-                    if (*curwin.get()).w_curswant >= width1 {
-                        (*curwin.get()).w_curswant -= width2;
+                    // Start from the end of the row the cursor is on.
+                    (*win).w_curswant = width1 - 1;
+                    if (*win).w_virtcol > (*win).w_curswant {
+                        (*win).w_curswant +=
+                            (((*win).w_virtcol - (*win).w_curswant - 1) / width2 + 1) * width2;
                     }
-                    linelen = linetabsize(curwin.get(), (*curwin.get()).w_cursor.lnum);
+                }
+            } else {
+                let n = line_end!();
+                (*win).w_curswant = (*win).w_curswant.min(n - 1);
+            }
+            while dist != 0 {
+                dist -= 1;
+                if dir == BACKWARD as c_int {
+                    if (*win).w_curswant >= width1
+                        && !hasFolding(win, (*win).w_cursor.lnum, ptr::null_mut(), ptr::null_mut())
+                    {
+                        // Still inside this line: back one row.
+                        (*win).w_curswant -= width2;
+                    } else if (*win).w_cursor.lnum <= 1 {
+                        retval = false;
+                        break;
+                    } else {
+                        cursor_up_inner(win, 1, skip_conceal);
+                        linelen = linetabsize(win, (*win).w_cursor.lnum);
+                        if linelen > width1 {
+                            // Land on the *last* row of the line above.
+                            let w = ((linelen - width1 - 1) / width2 + 1) * width2;
+                            debug_assert!(w <= 0 || (*win).w_curswant <= c_int::MAX - w);
+                            (*win).w_curswant += w;
+                        }
+                    }
+                } else {
+                    let n = line_end!();
+                    if (*win).w_curswant + width2 < n
+                        && !hasFolding(win, (*win).w_cursor.lnum, ptr::null_mut(), ptr::null_mut())
+                    {
+                        (*win).w_curswant += width2;
+                    } else if (*win).w_cursor.lnum >= (*(*win).w_buffer).b_ml.ml_line_count {
+                        retval = false;
+                        break;
+                    } else {
+                        cursor_down_inner(win, 1, skip_conceal);
+                        // Land on the *first* row of the line below.
+                        (*win).w_curswant %= width2;
+                        if (*win).w_curswant >= width1 {
+                            (*win).w_curswant -= width2;
+                        }
+                        linelen = linetabsize(win, (*win).w_cursor.lnum);
+                    }
                 }
             }
         }
-    }
-    if virtual_active(curwin.get()) as c_int != 0 && atend as c_int != 0 {
-        coladvance(curwin.get(), MAXCOL as c_int);
-    } else {
-        coladvance(curwin.get(), (*curwin.get()).w_curswant);
-    }
-    if (*curwin.get()).w_cursor.col > 0 as c_int && (*curwin.get()).w_onebuf_opt.wo_wrap != 0 {
-        validate_virtcol(curwin.get());
-        let mut virtcol: colnr_T = (*curwin.get()).w_virtcol;
-        if virtcol > width1 && *get_showbreak_value(curwin.get()) as c_int != NUL {
-            virtcol -= vim_strsize(get_showbreak_value(curwin.get()));
+
+        if virtual_active(win) && atend {
+            coladvance(win, MAXCOL as c_int);
+        } else {
+            coladvance(win, (*win).w_curswant);
         }
-        let mut c: c_int = utf_ptr2char(get_cursor_pos_ptr());
-        if dir == FORWARD as c_int
-            && virtcol < (*curwin.get()).w_curswant
-            && (*curwin.get()).w_curswant <= width1
-            && !vim_isprintc(c)
-            && c > 255 as c_int
-        {
-            oneright();
-        }
-        if virtcol > (*curwin.get()).w_curswant
-            && (if (*curwin.get()).w_curswant < width1 {
-                ((*curwin.get()).w_curswant > width1 / 2 as c_int) as c_int
+
+        if (*win).w_cursor.col > 0 && (*win).w_onebuf_opt.wo_wrap != 0 {
+            validate_virtcol(win);
+            let mut virtcol = (*win).w_virtcol;
+            // 'showbreak' is drawn in front of every continuation row and is
+            // not part of the text.
+            if virtcol > width1 && *get_showbreak_value(win) as c_int != NUL {
+                virtcol -= vim_strsize(get_showbreak_value(win));
+            }
+            let c = utf_ptr2char(get_cursor_pos_ptr());
+            // A wide unprintable character is drawn as `<xxxx>`, which is
+            // wider than the cell the column arithmetic assumed.
+            if dir == FORWARD as c_int
+                && virtcol < (*win).w_curswant
+                && (*win).w_curswant <= width1
+                && !vim_isprintc(c)
+                && c > 255
+            {
+                oneright();
+            }
+            // Landed past the wanted column on a multi-cell character: keep
+            // it only if more than half of it is before the wanted column.
+            let mostly_past = if (*win).w_curswant < width1 {
+                (*win).w_curswant > width1 / 2
             } else {
-                (((*curwin.get()).w_curswant as c_int - width1) % width2 > width2 / 2 as c_int)
-                    as c_int
-            }) != 0
-        {
-            (*curwin.get()).w_cursor.col -= 1;
+                ((*win).w_curswant - width1) % width2 > width2 / 2
+            };
+            if virtcol > (*win).w_curswant && mostly_past {
+                (*win).w_cursor.col -= 1;
+            }
         }
+        if atend {
+            (*win).w_curswant = MAXCOL as colnr_T;
+        }
+        adjust_skipcol();
+        retval
     }
-    if atend {
-        (*curwin.get()).w_curswant = MAXCOL as c_int as colnr_T;
-    }
-    adjust_skipcol();
-    return retval;
 }
 
-pub(crate) unsafe extern "C" fn nv_scroll(mut cap: *mut cmdarg_T) {
-    let mut n: c_int = 0;
-    let mut lnum: linenr_T = 0;
-    (*(*cap).oap).motion_type = kMTLineWise;
-    setpcmark();
-    if (*cap).cmdchar == 'L' as c_int {
-        validate_botline_win(curwin.get());
-        (*curwin.get()).w_cursor.lnum = (*curwin.get()).w_botline - 1 as linenr_T;
-        if (*cap).count1 as linenr_T - 1 as linenr_T >= (*curwin.get()).w_cursor.lnum {
-            (*curwin.get()).w_cursor.lnum = 1 as c_int as linenr_T;
-        } else if win_lines_concealed(curwin.get()) {
-            n = (*cap).count1 - 1 as c_int;
-            while n > 0 as c_int && (*curwin.get()).w_cursor.lnum > (*curwin.get()).w_topline {
-                hasFolding(
-                    curwin.get(),
-                    (*curwin.get()).w_cursor.lnum,
-                    &raw mut (*curwin.get()).w_cursor.lnum,
-                    ::core::ptr::null_mut::<linenr_T>(),
-                );
-                n += decor_conceal_line(
-                    curwin.get(),
-                    (*curwin.get()).w_cursor.lnum as c_int,
-                    true_0 != 0,
-                ) as c_int;
-                if (*curwin.get()).w_cursor.lnum > (*curwin.get()).w_topline {
-                    (*curwin.get()).w_cursor.lnum -= 1;
+/// `H`, `M` and `L`: to the top, middle or bottom line of the window.
+pub(crate) unsafe extern "C" fn nv_scroll(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        let win = curwin.get();
+        (*(*cap).oap).motion_type = kMTLineWise;
+        setpcmark();
+        if (*cap).cmdchar == 'L' as c_int {
+            validate_botline_win(win);
+            (*win).w_cursor.lnum = (*win).w_botline - 1;
+            if (*cap).count1 as linenr_T - 1 >= (*win).w_cursor.lnum {
+                (*win).w_cursor.lnum = 1;
+            } else if win_lines_concealed(win) {
+                // A concealed line takes no screen row, so the count has to be
+                // walked rather than subtracted.
+                let mut n = (*cap).count1 - 1;
+                while n > 0 && (*win).w_cursor.lnum > (*win).w_topline {
+                    hasFolding(
+                        win,
+                        (*win).w_cursor.lnum,
+                        &raw mut (*win).w_cursor.lnum,
+                        ptr::null_mut(),
+                    );
+                    n += decor_conceal_line(win, (*win).w_cursor.lnum as c_int, true) as c_int;
+                    if (*win).w_cursor.lnum > (*win).w_topline {
+                        (*win).w_cursor.lnum -= 1;
+                    }
+                    n -= 1;
                 }
-                n -= 1;
+            } else {
+                (*win).w_cursor.lnum -= (*cap).count1 as linenr_T - 1;
             }
         } else {
-            (*curwin.get()).w_cursor.lnum =
-                ((*curwin.get()).w_cursor.lnum as c_int - ((*cap).count1 - 1 as c_int)) as linenr_T;
-        }
-    } else {
-        if (*cap).cmdchar == 'M' as c_int {
-            let mut used: c_int = 0 as c_int;
-            used -=
-                win_get_fill(curwin.get(), (*curwin.get()).w_topline) - (*curwin.get()).w_topfill;
-            validate_botline_win(curwin.get());
-            let mut half: c_int = ((*curwin.get()).w_view_height - (*curwin.get()).w_empty_rows
-                + 1 as c_int)
-                / 2 as c_int;
-            n = 0 as c_int;
-            while ((*curwin.get()).w_topline + n as linenr_T) < (*curbuf.get()).b_ml.ml_line_count {
-                if n > 0 as c_int
-                    && used
-                        + win_get_fill(curwin.get(), (*curwin.get()).w_topline + n as linenr_T)
-                            / 2 as c_int
-                        >= half
-                {
-                    n -= 1;
-                    break;
-                } else {
-                    used += plines_win(
-                        curwin.get(),
-                        (*curwin.get()).w_topline + n as linenr_T,
-                        true_0 != 0,
-                    );
+            let mut n;
+            if (*cap).cmdchar == 'M' as c_int {
+                // Walk down counting screen rows until half the window's are
+                // used up. Filler lines above the top line count against it.
+                let mut used = -(win_get_fill(win, (*win).w_topline) - (*win).w_topfill);
+                validate_botline_win(win);
+                let half = ((*win).w_view_height - (*win).w_empty_rows + 1) / 2;
+                n = 0;
+                while ((*win).w_topline + n as linenr_T) < (*curbuf.get()).b_ml.ml_line_count {
+                    if n > 0
+                        && used + win_get_fill(win, (*win).w_topline + n as linenr_T) / 2 >= half
+                    {
+                        n -= 1;
+                        break;
+                    }
+                    used += plines_win(win, (*win).w_topline + n as linenr_T, true);
                     if used >= half {
                         break;
                     }
+                    let mut last: linenr_T = 0;
                     if hasFolding(
-                        curwin.get(),
-                        (*curwin.get()).w_topline + n as linenr_T,
-                        ::core::ptr::null_mut::<linenr_T>(),
-                        &raw mut lnum,
+                        win,
+                        (*win).w_topline + n as linenr_T,
+                        ptr::null_mut(),
+                        &raw mut last,
                     ) {
-                        n = (lnum - (*curwin.get()).w_topline) as c_int;
+                        // The whole fold is one screen row.
+                        n = (last - (*win).w_topline) as c_int;
                     }
                     n += 1;
                 }
-            }
-            if n > 0 as c_int && used > (*curwin.get()).w_view_height {
-                n -= 1;
-            }
-        } else {
-            n = (*cap).count1 - 1 as c_int;
-            if win_lines_concealed(curwin.get()) {
-                lnum = (*curwin.get()).w_topline;
-                while (decor_conceal_line(curwin.get(), lnum as c_int - 1 as c_int, true_0 != 0)
-                    as c_int
-                    != 0
-                    || {
-                        let c2rust_fresh12 = n;
-                        n = n - 1;
-                        c2rust_fresh12 > 0 as c_int
-                    })
-                    && lnum < (*curwin.get()).w_botline - 1 as linenr_T
-                {
-                    hasFolding(
-                        curwin.get(),
-                        lnum,
-                        ::core::ptr::null_mut::<linenr_T>(),
-                        &raw mut lnum,
-                    );
-                    lnum += 1;
+                if n > 0 && used > (*win).w_view_height {
+                    n -= 1;
                 }
-                n = (lnum - (*curwin.get()).w_topline) as c_int;
-            }
-        }
-        (*curwin.get()).w_cursor.lnum =
-            if ((*curwin.get()).w_topline + n as linenr_T) < (*curbuf.get()).b_ml.ml_line_count {
-                (*curwin.get()).w_topline + n as linenr_T
             } else {
-                (*curbuf.get()).b_ml.ml_line_count
-            };
+                n = (*cap).count1 - 1;
+                if win_lines_concealed(win) {
+                    let mut lnum = (*win).w_topline;
+                    // The decrement is inside the condition, so a concealed
+                    // line is stepped over without spending any of the count.
+                    while (decor_conceal_line(win, lnum as c_int - 1, true) || {
+                        let before = n;
+                        n -= 1;
+                        before > 0
+                    }) && lnum < (*win).w_botline - 1
+                    {
+                        hasFolding(win, lnum, ptr::null_mut(), &raw mut lnum);
+                        lnum += 1;
+                    }
+                    n = (lnum - (*win).w_topline) as c_int;
+                }
+            }
+            (*win).w_cursor.lnum =
+                ((*win).w_topline + n as linenr_T).min((*curbuf.get()).b_ml.ml_line_count);
+        }
+        if (*(*cap).oap).op_type == OP_NOP as c_int {
+            cursor_correct(win);
+        }
+        beginline(BL_SOL as c_int | BL_FIX as c_int);
     }
-    if (*(*cap).oap).op_type == OP_NOP as c_int {
-        cursor_correct(curwin.get());
-    }
-    beginline(BL_SOL as c_int | BL_FIX as c_int);
 }
 
-pub(crate) unsafe extern "C" fn nv_right(mut cap: *mut cmdarg_T) {
-    let mut n: c_int = 0;
-    if mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
-        if mod_mask.get() & MOD_MASK_CTRL != 0 {
-            (*cap).arg = true_0;
+/// `l`, `<Space>` and `<Right>`.
+pub(crate) unsafe extern "C" fn nv_right(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        let win = curwin.get();
+        // A modifier turns this into a word move.
+        if mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
+            if mod_mask.get() & MOD_MASK_CTRL != 0 {
+                (*cap).arg = true_0;
+            }
+            nv_wordcmd(cap);
+            return;
         }
-        nv_wordcmd(cap);
-        return;
-    }
-    (*(*cap).oap).motion_type = kMTCharWise;
-    (*(*cap).oap).inclusive = false_0 != 0;
-    let mut past_line: bool =
-        VIsual_active.get() as c_int != 0 && *p_sel.get() as c_int != 'o' as c_int;
-    if virtual_active(curwin.get()) {
-        past_line = false_0 != 0;
-    }
-    n = (*cap).count1;
-    while n > 0 as c_int {
-        if !past_line && oneright() == false_0
-            || past_line as c_int != 0 && *get_cursor_pos_ptr() as c_int == NUL
-        {
-            if ((*cap).cmdchar == ' ' as c_int && !vim_strchr(p_ww.get(), 's' as c_int).is_null()
-                || (*cap).cmdchar == 'l' as c_int
-                    && !vim_strchr(p_ww.get(), 'l' as c_int).is_null()
-                || (*cap).cmdchar == K_RIGHT && !vim_strchr(p_ww.get(), '>' as c_int).is_null())
-                && (*curwin.get()).w_cursor.lnum < (*curbuf.get()).b_ml.ml_line_count
-            {
-                if (*(*cap).oap).op_type != OP_NOP as c_int
-                    && !(*(*cap).oap).inclusive
-                    && !(*ml_get((*curwin.get()).w_cursor.lnum) as c_int == NUL)
-                {
-                    (*(*cap).oap).inclusive = true_0 != 0;
-                } else {
-                    (*curwin.get()).w_cursor.lnum += 1;
-                    (*curwin.get()).w_cursor.col = 0 as c_int as colnr_T;
-                    (*curwin.get()).w_cursor.coladd = 0 as c_int as colnr_T;
-                    (*curwin.get()).w_set_curswant = true_0;
-                    (*(*cap).oap).inclusive = false_0 != 0;
-                }
+        (*(*cap).oap).motion_type = kMTCharWise;
+        (*(*cap).oap).inclusive = false;
+        // With an inclusive selection the cursor may sit one past the last
+        // character; 'virtualedit' handles that itself.
+        let past_line =
+            VIsual_active.get() && *p_sel.get() as c_int != 'o' as c_int && !virtual_active(win);
+
+        // Which 'whichwrap' flag lets this key wrap to the next line.
+        let wrap_flag = if (*cap).cmdchar == ' ' as c_int {
+            's' as c_int
+        } else if (*cap).cmdchar == 'l' as c_int {
+            'l' as c_int
+        } else if (*cap).cmdchar == K_RIGHT {
+            '>' as c_int
+        } else {
+            NUL
+        };
+
+        let mut n = (*cap).count1;
+        while n > 0 {
+            let at_end = if past_line {
+                *get_cursor_pos_ptr() as c_int == NUL
             } else {
-                if (*(*cap).oap).op_type == OP_NOP as c_int {
-                    if n == (*cap).count1 {
+                oneright() == false_0
+            };
+            if at_end {
+                if wrap_flag != NUL
+                    && !vim_strchr(p_ww.get(), wrap_flag).is_null()
+                    && (*win).w_cursor.lnum < (*curbuf.get()).b_ml.ml_line_count
+                {
+                    // A pending exclusive operator eats the line break by
+                    // becoming inclusive instead of moving.
+                    if (*(*cap).oap).op_type != OP_NOP as c_int
+                        && !(*(*cap).oap).inclusive
+                        && *ml_get((*win).w_cursor.lnum) as c_int != NUL
+                    {
+                        (*(*cap).oap).inclusive = true;
+                    } else {
+                        (*win).w_cursor.lnum += 1;
+                        (*win).w_cursor.col = 0;
+                        (*win).w_cursor.coladd = 0;
+                        (*win).w_set_curswant = true_0;
+                        (*(*cap).oap).inclusive = false;
+                    }
+                } else {
+                    // Only the *first* step failing is worth a beep; running
+                    // out part-way through a count is not.
+                    if (*(*cap).oap).op_type == OP_NOP as c_int {
+                        if n == (*cap).count1 {
+                            beep_flush();
+                        }
+                    } else if *ml_get((*win).w_cursor.lnum) as c_int != NUL {
+                        (*(*cap).oap).inclusive = true;
+                    }
+                    break;
+                }
+            } else if past_line {
+                (*win).w_set_curswant = true_0;
+                if virtual_active(win) {
+                    oneright();
+                } else {
+                    (*win).w_cursor.col += utfc_ptr2len(get_cursor_pos_ptr());
+                }
+            }
+            n -= 1;
+        }
+        if n != (*cap).count1 {
+            may_fold_open(cap, kOptFdoFlagHor as c_uint);
+        }
+    }
+}
+
+/// `h`, `<BS>`, CTRL-H and `<Left>`.
+pub(crate) unsafe extern "C" fn nv_left(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        let win = curwin.get();
+        // A modifier turns this into a word move.
+        if mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
+            if mod_mask.get() & MOD_MASK_CTRL != 0 {
+                (*cap).arg = 1;
+            }
+            nv_bck_word(cap);
+            return;
+        }
+        (*(*cap).oap).motion_type = kMTCharWise;
+        (*(*cap).oap).inclusive = false;
+
+        // Which 'whichwrap' flag lets this key wrap to the previous line.
+        let wrap_flag = if (*cap).cmdchar == K_BS || (*cap).cmdchar == Ctrl_H {
+            'b' as c_int
+        } else if (*cap).cmdchar == 'h' as c_int {
+            'h' as c_int
+        } else if (*cap).cmdchar == K_LEFT {
+            '<' as c_int
+        } else {
+            NUL
+        };
+
+        let mut n = (*cap).count1;
+        while n > 0 {
+            if oneleft() == false_0 {
+                if wrap_flag != NUL
+                    && !vim_strchr(p_ww.get(), wrap_flag).is_null()
+                    && (*win).w_cursor.lnum > 1
+                {
+                    (*win).w_cursor.lnum -= 1;
+                    coladvance(win, MAXCOL as c_int);
+                    (*win).w_set_curswant = true_0;
+                    // A delete or a change that wrapped back over the line
+                    // break must take the break with it, so put the cursor
+                    // one past the last character and tell the caller not to
+                    // pull it back.
+                    if ((*(*cap).oap).op_type == OP_DELETE as c_int
+                        || (*(*cap).oap).op_type == OP_CHANGE as c_int)
+                        && *ml_get((*win).w_cursor.lnum) as c_int != NUL
+                    {
+                        let cp = get_cursor_pos_ptr();
+                        if *cp as c_int != NUL {
+                            (*win).w_cursor.col += utfc_ptr2len(cp);
+                        }
+                        (*cap).retval |= CA_NO_ADJ_OP_END as c_int;
+                    }
+                } else {
+                    if (*(*cap).oap).op_type == OP_NOP as c_int && n == (*cap).count1 {
                         beep_flush();
                     }
-                } else if !(*ml_get((*curwin.get()).w_cursor.lnum) as c_int == NUL) {
-                    (*(*cap).oap).inclusive = true_0 != 0;
+                    break;
                 }
-                break;
             }
-        } else if past_line {
-            (*curwin.get()).w_set_curswant = true_0;
-            if virtual_active(curwin.get()) {
-                oneright();
-            } else {
-                (*curwin.get()).w_cursor.col += utfc_ptr2len(get_cursor_pos_ptr());
-            }
+            n -= 1;
         }
-        n -= 1;
-    }
-    if n != (*cap).count1
-        && fdo_flags.get() & kOptFdoFlagHor as c_int as c_uint != 0
-        && KeyTyped.get() as c_int != 0
-        && (*(*cap).oap).op_type == OP_NOP as c_int
-    {
-        foldOpenCursor();
+        if n != (*cap).count1 {
+            may_fold_open(cap, kOptFdoFlagHor as c_uint);
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn nv_left(mut cap: *mut cmdarg_T) {
-    let mut n: c_int = 0;
-    if mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
-        if mod_mask.get() & MOD_MASK_CTRL != 0 {
-            (*cap).arg = 1 as c_int;
+/// `k`, `CTRL-P`, `-` and `<Up>`. Shifted, it is a page up.
+pub(crate) unsafe extern "C" fn nv_up(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if mod_mask.get() & MOD_MASK_SHIFT != 0 {
+            (*cap).arg = BACKWARD as c_int;
+            nv_page(cap);
+            return;
         }
-        nv_bck_word(cap);
-        return;
+        (*(*cap).oap).motion_type = kMTLineWise;
+        if cursor_up(
+            (*cap).count1 as linenr_T,
+            (*(*cap).oap).op_type == OP_NOP as c_int,
+        ) == false_0
+        {
+            clearopbeep((*cap).oap);
+        } else if (*cap).arg != 0 {
+            // `-` and `CTRL-P` land on the first non-blank; `k` does not.
+            beginline(BL_WHITE as c_int | BL_FIX as c_int);
+        }
     }
-    (*(*cap).oap).motion_type = kMTCharWise;
-    (*(*cap).oap).inclusive = false_0 != 0;
-    n = (*cap).count1;
-    while n > 0 as c_int {
-        if oneleft() == false_0 {
-            if (((*cap).cmdchar == K_BS || (*cap).cmdchar == Ctrl_H)
-                && !vim_strchr(p_ww.get(), 'b' as c_int).is_null()
-                || (*cap).cmdchar == 'h' as c_int
-                    && !vim_strchr(p_ww.get(), 'h' as c_int).is_null()
-                || (*cap).cmdchar == K_LEFT && !vim_strchr(p_ww.get(), '<' as c_int).is_null())
-                && (*curwin.get()).w_cursor.lnum > 1 as linenr_T
+}
+
+/// `j`, `CTRL-N`, `+`, `<CR>` and `<Down>`. Shifted, it is a page down.
+pub(crate) unsafe extern "C" fn nv_down(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if mod_mask.get() & MOD_MASK_SHIFT != 0 {
+            (*cap).arg = FORWARD as c_int;
+            nv_page(cap);
+            return;
+        }
+        // In three kinds of window `<CR>` means "act on this line" rather
+        // than "move down".
+        if (*cap).cmdchar == CAR {
+            if bt_quickfix(curbuf.get()) {
+                qf_view_result(false);
+                return;
+            }
+            if cmdwin_type.get() != 0 {
+                cmdwin_result.set(CAR);
+                return;
+            }
+            if bt_prompt(curbuf.get())
+                && (*curwin.get()).w_cursor.lnum == (*curbuf.get()).b_ml.ml_line_count
             {
-                (*curwin.get()).w_cursor.lnum -= 1;
-                coladvance(curwin.get(), MAXCOL as c_int);
-                (*curwin.get()).w_set_curswant = true_0;
-                if ((*(*cap).oap).op_type == OP_DELETE as c_int
-                    || (*(*cap).oap).op_type == OP_CHANGE as c_int)
-                    && !(*ml_get((*curwin.get()).w_cursor.lnum) as c_int == NUL)
-                {
-                    let mut cp: *mut c_char = get_cursor_pos_ptr();
-                    if *cp as c_int != NUL {
-                        (*curwin.get()).w_cursor.col += utfc_ptr2len(cp);
-                    }
-                    (*cap).retval |= CA_NO_ADJ_OP_END as c_int;
+                prompt_invoke_callback();
+                if restart_edit.get() == 0 {
+                    restart_edit.set('a' as c_int);
                 }
-            } else {
-                if (*(*cap).oap).op_type == OP_NOP as c_int && n == (*cap).count1 {
-                    beep_flush();
-                }
-                break;
+                return;
             }
         }
-        n -= 1;
-    }
-    if n != (*cap).count1
-        && fdo_flags.get() & kOptFdoFlagHor as c_int as c_uint != 0
-        && KeyTyped.get() as c_int != 0
-        && (*(*cap).oap).op_type == OP_NOP as c_int
-    {
-        foldOpenCursor();
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_up(mut cap: *mut cmdarg_T) {
-    if mod_mask.get() & MOD_MASK_SHIFT != 0 {
-        (*cap).arg = BACKWARD as c_int;
-        nv_page(cap);
-        return;
-    }
-    (*(*cap).oap).motion_type = kMTLineWise;
-    if cursor_up(
-        (*cap).count1 as linenr_T,
-        (*(*cap).oap).op_type == OP_NOP as c_int,
-    ) == false_0
-    {
-        clearopbeep((*cap).oap);
-    } else if (*cap).arg != 0 {
-        beginline(BL_WHITE as c_int | BL_FIX as c_int);
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_down(mut cap: *mut cmdarg_T) {
-    if mod_mask.get() & MOD_MASK_SHIFT != 0 {
-        (*cap).arg = FORWARD as c_int;
-        nv_page(cap);
-    } else if bt_quickfix(curbuf.get()) as c_int != 0 && (*cap).cmdchar == CAR {
-        qf_view_result(false_0 != 0);
-    } else if cmdwin_type.get() != 0 as c_int && (*cap).cmdchar == CAR {
-        cmdwin_result.set(CAR);
-    } else if bt_prompt(curbuf.get()) as c_int != 0
-        && (*cap).cmdchar == CAR
-        && (*curwin.get()).w_cursor.lnum == (*curbuf.get()).b_ml.ml_line_count
-    {
-        prompt_invoke_callback();
-        if restart_edit.get() == 0 as c_int {
-            restart_edit.set('a' as c_int);
-        }
-    } else {
         (*(*cap).oap).motion_type = kMTLineWise;
         if cursor_down((*cap).count1, (*(*cap).oap).op_type == OP_NOP as c_int) == false_0 {
             clearopbeep((*cap).oap);
         } else if (*cap).arg != 0 {
+            // `+`, `<CR>` and `CTRL-N` land on the first non-blank; `j` does
+            // not.
             beginline(BL_WHITE as c_int | BL_FIX as c_int);
         }
-    };
-}
-
-pub(crate) unsafe extern "C" fn nv_end(mut cap: *mut cmdarg_T) {
-    if (*cap).arg != 0 || mod_mask.get() & MOD_MASK_CTRL != 0 {
-        (*cap).arg = true_0;
-        nv_goto(cap);
-        (*cap).count1 = 1 as c_int;
-    }
-    nv_dollar(cap);
-}
-
-pub(crate) unsafe extern "C" fn nv_dollar(mut cap: *mut cmdarg_T) {
-    (*(*cap).oap).motion_type = kMTCharWise;
-    (*(*cap).oap).inclusive = true_0 != 0;
-    if !virtual_active(curwin.get())
-        || gchar_cursor() != NUL
-        || (*(*cap).oap).op_type == OP_NOP as c_int
-    {
-        (*curwin.get()).w_curswant = MAXCOL as c_int as colnr_T;
-    }
-    if cursor_down(
-        (*cap).count1 - 1 as c_int,
-        (*(*cap).oap).op_type == OP_NOP as c_int,
-    ) == false_0
-    {
-        clearopbeep((*cap).oap);
-    } else if fdo_flags.get() & kOptFdoFlagHor as c_int as c_uint != 0
-        && KeyTyped.get() as c_int != 0
-        && (*(*cap).oap).op_type == OP_NOP as c_int
-    {
-        foldOpenCursor();
     }
 }
 
-pub(crate) unsafe extern "C" fn nv_csearch(mut cap: *mut cmdarg_T) {
-    let mut cursor_dec: bool = false_0 != 0;
-    if *p_sel.get() as c_int == 'e' as c_int
-        && VIsual_active.get() as c_int != 0
-        && VIsual_mode.get() == 'v' as c_int
-        && VIsual_select_exclu_adj.get() as c_int != 0
-    {
-        unadjust_for_sel();
-        cursor_dec = true_0 != 0;
-    }
-    let mut t_cmd: bool = (*cap).cmdchar == 't' as c_int || (*cap).cmdchar == 'T' as c_int;
-    (*(*cap).oap).motion_type = kMTCharWise;
-    if (*cap).nchar < 0 as c_int || searchc(cap, t_cmd) == false_0 {
-        clearopbeep((*cap).oap);
-        if cursor_dec {
-            adjust_for_sel(cap);
+/// `<End>`: the end of the line -- of the last line with CTRL, which is what
+/// the argument says.
+pub(crate) unsafe extern "C" fn nv_end(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if (*cap).arg != 0 || mod_mask.get() & MOD_MASK_CTRL != 0 {
+            (*cap).arg = true_0;
+            nv_goto(cap);
+            // The count named the line, so `$` must not use it again.
+            (*cap).count1 = 1;
         }
-        return;
-    }
-    (*curwin.get()).w_set_curswant = true_0;
-    if gchar_cursor() == TAB
-        && virtual_active(curwin.get()) as c_int != 0
-        && (*cap).arg == FORWARD as c_int
-        && (t_cmd as c_int != 0 || (*(*cap).oap).op_type != OP_NOP as c_int)
-    {
-        let mut scol: colnr_T = 0;
-        let mut ecol: colnr_T = 0;
-        getvcol(
-            curwin.get(),
-            &raw mut (*curwin.get()).w_cursor,
-            &raw mut scol,
-            ::core::ptr::null_mut::<colnr_T>(),
-            &raw mut ecol,
-        );
-        (*curwin.get()).w_cursor.coladd = ecol - scol;
-    } else {
-        (*curwin.get()).w_cursor.coladd = 0 as c_int as colnr_T;
-    }
-    adjust_for_sel(cap);
-    if fdo_flags.get() & kOptFdoFlagHor as c_int as c_uint != 0
-        && KeyTyped.get() as c_int != 0
-        && (*(*cap).oap).op_type == OP_NOP as c_int
-    {
-        foldOpenCursor();
+        nv_dollar(cap);
     }
 }
 
-pub(crate) unsafe extern "C" fn nv_percent(mut cap: *mut cmdarg_T) {
-    let mut lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
-    (*(*cap).oap).inclusive = true_0 != 0;
-    if (*cap).count0 != 0 {
-        if (*cap).count0 > 100 as c_int {
-            clearopbeep((*cap).oap);
-        } else {
-            (*(*cap).oap).motion_type = kMTLineWise;
-            setpcmark();
-            if (*curbuf.get()).b_ml.ml_line_count >= 21474836 as linenr_T {
-                (*curwin.get()).w_cursor.lnum =
-                    ((*curbuf.get()).b_ml.ml_line_count + 99 as linenr_T) / 100 as linenr_T
-                        * (*cap).count0 as linenr_T;
-            } else {
-                (*curwin.get()).w_cursor.lnum = ((*curbuf.get()).b_ml.ml_line_count
-                    * (*cap).count0 as linenr_T
-                    + 99 as linenr_T)
-                    / 100 as linenr_T;
-            }
-            (*curwin.get()).w_cursor.lnum = if (if (*curwin.get()).w_cursor.lnum > 1 as linenr_T {
-                (*curwin.get()).w_cursor.lnum
-            } else {
-                1 as linenr_T
-            }) < (*curbuf.get()).b_ml.ml_line_count
-            {
-                if (*curwin.get()).w_cursor.lnum > 1 as linenr_T {
-                    (*curwin.get()).w_cursor.lnum
-                } else {
-                    1 as linenr_T
-                }
-            } else {
-                (*curbuf.get()).b_ml.ml_line_count
-            };
-            beginline(BL_SOL as c_int | BL_FIX as c_int);
-        }
-    } else {
-        let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
+/// `$`: the end of the line, `count1 - 1` lines down.
+pub(crate) unsafe extern "C" fn nv_dollar(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
         (*(*cap).oap).motion_type = kMTCharWise;
-        (*(*cap).oap).use_reg_one = true_0 != 0;
-        pos = findmatch((*cap).oap, NUL);
-        if pos.is_null() {
+        (*(*cap).oap).inclusive = true;
+        // Under 'virtualedit' an operator that starts past the end of the
+        // line keeps the column it has rather than asking for the end again.
+        if !virtual_active(curwin.get())
+            || gchar_cursor() != NUL
+            || (*(*cap).oap).op_type == OP_NOP as c_int
+        {
+            (*curwin.get()).w_curswant = MAXCOL as colnr_T;
+        }
+        if cursor_down((*cap).count1 - 1, (*(*cap).oap).op_type == OP_NOP as c_int) == false_0 {
             clearopbeep((*cap).oap);
         } else {
-            setpcmark();
-            (*curwin.get()).w_cursor = *pos;
-            (*curwin.get()).w_set_curswant = true_0;
-            (*curwin.get()).w_cursor.coladd = 0 as c_int as colnr_T;
-            adjust_for_sel(cap);
+            may_fold_open(cap, kOptFdoFlagHor as c_uint);
         }
     }
-    if (*(*cap).oap).op_type == OP_NOP as c_int
-        && lnum != (*curwin.get()).w_cursor.lnum
-        && fdo_flags.get() & kOptFdoFlagPercent as c_int as c_uint != 0
-        && KeyTyped.get() as c_int != 0
-    {
-        foldOpenCursor();
-    }
 }
 
-pub(crate) unsafe extern "C" fn nv_brace(mut cap: *mut cmdarg_T) {
-    (*(*cap).oap).motion_type = kMTCharWise;
-    (*(*cap).oap).use_reg_one = true_0 != 0;
-    (*(*cap).oap).inclusive = false_0 != 0;
-    (*curwin.get()).w_set_curswant = true_0;
-    if findsent((*cap).arg as Direction, (*cap).count1) == FAIL {
-        clearopbeep((*cap).oap);
-        return;
-    }
-    adjust_cursor((*cap).oap);
-    (*curwin.get()).w_cursor.coladd = 0 as c_int as colnr_T;
-    if fdo_flags.get() & kOptFdoFlagBlock as c_int as c_uint != 0
-        && KeyTyped.get() as c_int != 0
-        && (*(*cap).oap).op_type == OP_NOP as c_int
-    {
-        foldOpenCursor();
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_findpar(mut cap: *mut cmdarg_T) {
-    (*(*cap).oap).motion_type = kMTCharWise;
-    (*(*cap).oap).inclusive = false_0 != 0;
-    (*(*cap).oap).use_reg_one = true_0 != 0;
-    (*curwin.get()).w_set_curswant = true_0;
-    if !findpar(
-        &raw mut (*(*cap).oap).inclusive,
-        (*cap).arg,
-        (*cap).count1,
-        NUL,
-        false_0 != 0,
-    ) {
-        clearopbeep((*cap).oap);
-        return;
-    }
-    (*curwin.get()).w_cursor.coladd = 0 as c_int as colnr_T;
-    if fdo_flags.get() & kOptFdoFlagBlock as c_int as c_uint != 0
-        && KeyTyped.get() as c_int != 0
-        && (*(*cap).oap).op_type == OP_NOP as c_int
-    {
-        foldOpenCursor();
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_home(mut cap: *mut cmdarg_T) {
-    if mod_mask.get() & MOD_MASK_CTRL != 0 {
-        nv_goto(cap);
-    } else {
-        (*cap).count0 = 1 as c_int;
-        nv_pipe(cap);
-    }
-    ins_at_eol.set(false_0 != 0);
-}
-
-pub(crate) unsafe extern "C" fn nv_pipe(mut cap: *mut cmdarg_T) {
-    (*(*cap).oap).motion_type = kMTCharWise;
-    (*(*cap).oap).inclusive = false_0 != 0;
-    beginline(0 as c_int);
-    if (*cap).count0 > 0 as c_int {
-        coladvance(curwin.get(), (*cap).count0 - 1 as c_int);
-        (*curwin.get()).w_curswant = (*cap).count0 - 1 as c_int;
-    } else {
-        (*curwin.get()).w_curswant = 0 as c_int as colnr_T;
-    }
-    (*curwin.get()).w_set_curswant = false_0;
-}
-
-pub(crate) unsafe extern "C" fn nv_bck_word(mut cap: *mut cmdarg_T) {
-    (*(*cap).oap).motion_type = kMTCharWise;
-    (*(*cap).oap).inclusive = false_0 != 0;
-    (*curwin.get()).w_set_curswant = true_0;
-    if bck_word((*cap).count1, (*cap).arg != 0, false_0 != 0) == false_0 {
-        clearopbeep((*cap).oap);
-    } else if fdo_flags.get() & kOptFdoFlagHor as c_int as c_uint != 0
-        && KeyTyped.get() as c_int != 0
-        && (*(*cap).oap).op_type == OP_NOP as c_int
-    {
-        foldOpenCursor();
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_wordcmd(mut cap: *mut cmdarg_T) {
-    let mut n: c_int = 0;
-    let mut word_end: bool = false;
-    let mut flag: bool = false_0 != 0;
-    let mut startpos: pos_T = (*curwin.get()).w_cursor;
-    if (*cap).cmdchar == 'e' as c_int || (*cap).cmdchar == 'E' as c_int {
-        word_end = true_0 != 0;
-    } else {
-        word_end = false_0 != 0;
-    }
-    (*(*cap).oap).inclusive = word_end;
-    if !word_end && (*(*cap).oap).op_type == OP_CHANGE as c_int {
-        n = gchar_cursor();
-        if n != NUL && !ascii_iswhite(n) {
-            if !vim_strchr(p_cpo.get(), CPO_CHANGEW).is_null() {
-                (*(*cap).oap).inclusive = true_0 != 0;
-                word_end = true_0 != 0;
-            }
-            flag = true_0 != 0;
-        }
-    }
-    (*(*cap).oap).motion_type = kMTCharWise;
-    (*curwin.get()).w_set_curswant = true_0;
-    if word_end {
-        n = end_word((*cap).count1, (*cap).arg != 0, flag, false_0 != 0);
-    } else {
-        n = fwd_word(
-            (*cap).count1,
-            (*cap).arg != 0,
-            (*(*cap).oap).op_type != OP_NOP as c_int,
-        );
-    }
-    if lt(startpos, (*curwin.get()).w_cursor) {
-        adjust_cursor((*cap).oap);
-    }
-    if n == false_0 && (*(*cap).oap).op_type == OP_NOP as c_int {
-        clearopbeep((*cap).oap);
-    } else {
-        adjust_for_sel(cap);
-        if fdo_flags.get() & kOptFdoFlagHor as c_int as c_uint != 0
-            && KeyTyped.get() as c_int != 0
-            && (*(*cap).oap).op_type == OP_NOP as c_int
+/// `f`, `F`, `t`, `T`, `;` and `,`: search this line for a character.
+pub(crate) unsafe extern "C" fn nv_csearch(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        // An exclusive Select-mode selection was widened by one when it was
+        // made; the search has to run against the real cursor position.
+        let mut cursor_dec = false;
+        if *p_sel.get() as c_int == 'e' as c_int
+            && VIsual_active.get()
+            && VIsual_mode.get() == 'v' as c_int
+            && VIsual_select_exclu_adj.get()
         {
-            foldOpenCursor();
+            unadjust_for_sel();
+            cursor_dec = true;
         }
-    };
-}
-
-pub(crate) unsafe extern "C" fn adjust_cursor(mut oap: *mut oparg_T) {
-    if (*curwin.get()).w_cursor.col > 0 as c_int
-        && gchar_cursor() == NUL
-        && (!VIsual_active.get() || *p_sel.get() as c_int == 'o' as c_int)
-        && !virtual_active(curwin.get())
-        && get_ve_flags(curwin.get()) & kOptVeFlagOnemore as c_int as c_uint == 0 as c_uint
-    {
-        (*curwin.get()).w_cursor.col -= 1;
-        mb_adjust_cursor();
-        (*oap).inclusive = true_0 != 0;
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_beginline(mut cap: *mut cmdarg_T) {
-    (*(*cap).oap).motion_type = kMTCharWise;
-    (*(*cap).oap).inclusive = false_0 != 0;
-    beginline((*cap).arg);
-    if fdo_flags.get() & kOptFdoFlagHor as c_int as c_uint != 0
-        && KeyTyped.get() as c_int != 0
-        && (*(*cap).oap).op_type == OP_NOP as c_int
-    {
-        foldOpenCursor();
-    }
-    ins_at_eol.set(false_0 != 0);
-}
-
-pub(crate) unsafe extern "C" fn nv_goto(mut cap: *mut cmdarg_T) {
-    let mut lnum: linenr_T = 0;
-    if (*cap).arg != 0 {
-        lnum = (*curbuf.get()).b_ml.ml_line_count;
-    } else {
-        lnum = 1 as c_int as linenr_T;
-    }
-    (*(*cap).oap).motion_type = kMTLineWise;
-    setpcmark();
-    if (*cap).count0 != 0 as c_int {
-        lnum = (*cap).count0 as linenr_T;
-    }
-    lnum = if (if lnum > 1 as linenr_T {
-        lnum
-    } else {
-        1 as linenr_T
-    }) < (*curbuf.get()).b_ml.ml_line_count
-    {
-        if lnum > 1 as linenr_T {
-            lnum
+        // `t` and `T` stop *before* the character.
+        let t_cmd = (*cap).cmdchar == 't' as c_int || (*cap).cmdchar == 'T' as c_int;
+        (*(*cap).oap).motion_type = kMTCharWise;
+        if (*cap).nchar < 0 || searchc(cap, t_cmd) == false_0 {
+            clearopbeep((*cap).oap);
+            if cursor_dec {
+                adjust_for_sel(cap);
+            }
+            return;
+        }
+        (*curwin.get()).w_set_curswant = true_0;
+        // Landing on a TAB with 'virtualedit' means the *last* cell of it,
+        // so that `dt<Tab>` takes the whole tab.
+        if gchar_cursor() == TAB
+            && virtual_active(curwin.get())
+            && (*cap).arg == FORWARD as c_int
+            && (t_cmd || (*(*cap).oap).op_type != OP_NOP as c_int)
+        {
+            let mut scol: colnr_T = 0;
+            let mut ecol: colnr_T = 0;
+            getvcol(
+                curwin.get(),
+                &raw mut (*curwin.get()).w_cursor,
+                &raw mut scol,
+                ptr::null_mut(),
+                &raw mut ecol,
+            );
+            (*curwin.get()).w_cursor.coladd = ecol - scol;
         } else {
-            1 as linenr_T
+            (*curwin.get()).w_cursor.coladd = 0;
         }
-    } else {
-        (*curbuf.get()).b_ml.ml_line_count
-    };
-    (*curwin.get()).w_cursor.lnum = lnum;
-    beginline(BL_SOL as c_int | BL_FIX as c_int);
-    if fdo_flags.get() & kOptFdoFlagJump as c_int as c_uint != 0
-        && KeyTyped.get() as c_int != 0
-        && (*(*cap).oap).op_type == OP_NOP as c_int
-    {
-        foldOpenCursor();
+        adjust_for_sel(cap);
+        may_fold_open(cap, kOptFdoFlagHor as c_uint);
+    }
+}
+
+/// `%`: to the matching bracket, or with a count to that percentage of the
+/// file.
+pub(crate) unsafe extern "C" fn nv_percent(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        let win = curwin.get();
+        let lnum = (*win).w_cursor.lnum;
+        (*(*cap).oap).inclusive = true;
+        if (*cap).count0 != 0 {
+            if (*cap).count0 > 100 {
+                clearopbeep((*cap).oap);
+            } else {
+                (*(*cap).oap).motion_type = kMTLineWise;
+                setpcmark();
+                let count = (*curbuf.get()).b_ml.ml_line_count;
+                // Divide first for a file long enough that `count * 100`
+                // would not fit.
+                (*win).w_cursor.lnum = if count >= 21474836 {
+                    (count + 99) / 100 * (*cap).count0 as linenr_T
+                } else {
+                    (count * (*cap).count0 as linenr_T + 99) / 100
+                };
+                (*win).w_cursor.lnum = (*win).w_cursor.lnum.max(1).min(count);
+                beginline(BL_SOL as c_int | BL_FIX as c_int);
+            }
+        } else {
+            (*(*cap).oap).motion_type = kMTCharWise;
+            (*(*cap).oap).use_reg_one = true;
+            let pos = findmatch((*cap).oap, NUL);
+            if pos.is_null() {
+                clearopbeep((*cap).oap);
+            } else {
+                setpcmark();
+                (*win).w_cursor = *pos;
+                (*win).w_set_curswant = true_0;
+                (*win).w_cursor.coladd = 0;
+                adjust_for_sel(cap);
+            }
+        }
+        if lnum != (*win).w_cursor.lnum {
+            may_fold_open(cap, kOptFdoFlagPercent as c_uint);
+        }
+    }
+}
+
+/// `(` and `)`: back and forward a sentence.
+pub(crate) unsafe extern "C" fn nv_brace(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        (*(*cap).oap).motion_type = kMTCharWise;
+        (*(*cap).oap).use_reg_one = true;
+        (*(*cap).oap).inclusive = false;
+        (*curwin.get()).w_set_curswant = true_0;
+        if findsent((*cap).arg as Direction, (*cap).count1) == FAIL {
+            clearopbeep((*cap).oap);
+            return;
+        }
+        adjust_cursor((*cap).oap);
+        (*curwin.get()).w_cursor.coladd = 0;
+        may_fold_open(cap, kOptFdoFlagBlock as c_uint);
+    }
+}
+
+/// `{` and `}`: back and forward a paragraph.
+pub(crate) unsafe extern "C" fn nv_findpar(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        (*(*cap).oap).motion_type = kMTCharWise;
+        (*(*cap).oap).inclusive = false;
+        (*(*cap).oap).use_reg_one = true;
+        (*curwin.get()).w_set_curswant = true_0;
+        if !findpar(
+            &raw mut (*(*cap).oap).inclusive,
+            (*cap).arg,
+            (*cap).count1,
+            NUL,
+            false,
+        ) {
+            clearopbeep((*cap).oap);
+            return;
+        }
+        (*curwin.get()).w_cursor.coladd = 0;
+        may_fold_open(cap, kOptFdoFlagBlock as c_uint);
+    }
+}
+
+/// `<Home>`: the first column -- the first line with CTRL.
+pub(crate) unsafe extern "C" fn nv_home(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if mod_mask.get() & MOD_MASK_CTRL != 0 {
+            nv_goto(cap);
+        } else {
+            // `<Home>` is `1|`.
+            (*cap).count0 = 1;
+            nv_pipe(cap);
+        }
+    }
+    ins_at_eol.set(false);
+}
+
+/// `|`: to a screen column.
+pub(crate) unsafe extern "C" fn nv_pipe(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        (*(*cap).oap).motion_type = kMTCharWise;
+        (*(*cap).oap).inclusive = false;
+        beginline(0);
+        if (*cap).count0 > 0 {
+            coladvance(curwin.get(), (*cap).count0 - 1);
+            (*curwin.get()).w_curswant = (*cap).count0 - 1;
+        } else {
+            (*curwin.get()).w_curswant = 0;
+        }
+        // The column was named outright, so it is not a remembered want.
+        (*curwin.get()).w_set_curswant = false_0;
+    }
+}
+
+/// `b` and `B`: back a word.
+pub(crate) unsafe extern "C" fn nv_bck_word(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        (*(*cap).oap).motion_type = kMTCharWise;
+        (*(*cap).oap).inclusive = false;
+        (*curwin.get()).w_set_curswant = true_0;
+        if bck_word((*cap).count1, (*cap).arg != 0, false) == false_0 {
+            clearopbeep((*cap).oap);
+        } else {
+            may_fold_open(cap, kOptFdoFlagHor as c_uint);
+        }
+    }
+}
+
+/// `w`, `W`, `e` and `E`: forward a word, or to a word's end.
+pub(crate) unsafe extern "C" fn nv_wordcmd(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        let startpos = (*curwin.get()).w_cursor;
+        let mut word_end = (*cap).cmdchar == 'e' as c_int || (*cap).cmdchar == 'E' as c_int;
+        (*(*cap).oap).inclusive = word_end;
+
+        // `cw` on a non-blank is `ce`: it changes the word, not up to the next
+        // one. 'cpoptions' with `_` extends that to trailing white space.
+        let mut cw_on_word = false;
+        if !word_end && (*(*cap).oap).op_type == OP_CHANGE as c_int {
+            let c = gchar_cursor();
+            if c != NUL && !ascii_iswhite(c) {
+                if !vim_strchr(p_cpo.get(), CPO_CHANGEW).is_null() {
+                    (*(*cap).oap).inclusive = true;
+                    word_end = true;
+                }
+                cw_on_word = true;
+            }
+        }
+
+        (*(*cap).oap).motion_type = kMTCharWise;
+        (*curwin.get()).w_set_curswant = true_0;
+        let moved = if word_end {
+            end_word((*cap).count1, (*cap).arg != 0, cw_on_word, false)
+        } else {
+            fwd_word(
+                (*cap).count1,
+                (*cap).arg != 0,
+                (*(*cap).oap).op_type != OP_NOP as c_int,
+            )
+        };
+        if lt(startpos, (*curwin.get()).w_cursor) {
+            adjust_cursor((*cap).oap);
+        }
+        if moved == false_0 && (*(*cap).oap).op_type == OP_NOP as c_int {
+            clearopbeep((*cap).oap);
+        } else {
+            adjust_for_sel(cap);
+            may_fold_open(cap, kOptFdoFlagHor as c_uint);
+        }
+    }
+}
+
+/// Pull the cursor back off the line's terminator, which is not a position an
+/// operator may include -- and say the operator now covers the last character.
+pub(crate) unsafe extern "C" fn adjust_cursor(oap: *mut oparg_T) {
+    // SAFETY: `oap` is the caller's live operator.
+    unsafe {
+        if (*curwin.get()).w_cursor.col > 0
+            && gchar_cursor() == NUL
+            && (!VIsual_active.get() || *p_sel.get() as c_int == 'o' as c_int)
+            && !virtual_active(curwin.get())
+            && get_ve_flags(curwin.get()) & kOptVeFlagOnemore as c_uint == 0
+        {
+            (*curwin.get()).w_cursor.col -= 1;
+            mb_adjust_cursor();
+            (*oap).inclusive = true;
+        }
+    }
+}
+
+/// `0` and `^`: the first column, or the first non-blank, which is what the
+/// argument says.
+pub(crate) unsafe extern "C" fn nv_beginline(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        (*(*cap).oap).motion_type = kMTCharWise;
+        (*(*cap).oap).inclusive = false;
+        beginline((*cap).arg);
+        may_fold_open(cap, kOptFdoFlagHor as c_uint);
+    }
+    ins_at_eol.set(false);
+}
+
+/// `gg` and `G`: to the first or last line, or to the count'th.
+pub(crate) unsafe extern "C" fn nv_goto(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        let last = (*curbuf.get()).b_ml.ml_line_count;
+        let mut lnum = if (*cap).arg != 0 { last } else { 1 };
+        (*(*cap).oap).motion_type = kMTLineWise;
+        setpcmark();
+        if (*cap).count0 != 0 {
+            lnum = (*cap).count0 as linenr_T;
+        }
+        (*curwin.get()).w_cursor.lnum = lnum.max(1).min(last);
+        beginline(BL_SOL as c_int | BL_FIX as c_int);
+        may_fold_open(cap, kOptFdoFlagJump as c_uint);
     }
 }

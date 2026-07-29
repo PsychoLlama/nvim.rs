@@ -814,6 +814,21 @@ pub(crate) unsafe fn clearopbeep(oap: *mut oparg_T) {
     unsafe { beep_flush() };
 }
 
+/// Open a fold the cursor has landed in, if the 'foldopen' flag for this kind
+/// of movement is set, the key was typed rather than mapped, and no operator
+/// is waiting for the motion to finish.
+pub(crate) unsafe fn may_fold_open(cap: *mut cmdarg_T, fdo_flag: c_uint) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if fdo_flags.get() & fdo_flag != 0
+            && KeyTyped.get()
+            && (*(*cap).oap).op_type == OP_NOP as c_int
+        {
+            foldOpenCursor();
+        }
+    }
+}
+
 /// Turn a shifted special key into its unshifted self.
 pub(crate) unsafe fn unshift_special(cap: *mut cmdarg_T) {
     const K_S_UP: c_int = -1277;
