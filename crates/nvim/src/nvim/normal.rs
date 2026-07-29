@@ -113,8 +113,8 @@ use crate::src::nvim::options::{
 };
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, gettext, memmove, memset, qsort, snprintf, strcat, strchr,
-    strcmp, strcpy, strlen, time,
+    __assert_fail, __ctype_b_loc, gettext, memmove, memset, qsort, snprintf, strcat, strcmp,
+    strcpy, strlen, time,
 };
 use crate::src::nvim::plines::{
     getvcol, getvcols, getvvcol, linetabsize, plines_m_win_fill, plines_win, win_get_fill,

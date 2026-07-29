@@ -99,7 +99,6 @@
     "crates/nvim/src/nvim/move.rs": 29,
     "crates/nvim/src/nvim/msgpack_rpc/unpacker.rs": 1,
     "crates/nvim/src/nvim/normal/dispatch.rs": 1,
-    "crates/nvim/src/nvim/normal/edit.rs": 18,
     "crates/nvim/src/nvim/normal/ident.rs": 59,
     "crates/nvim/src/nvim/normal/motion.rs": 1,
     "crates/nvim/src/nvim/normal/scroll.rs": 11,
