@@ -25,6 +25,10 @@ Behavior-preserving: same features, formats, and RPC surface.
   editor evaluates: operators and precedence, literals and containers,
   indexing and method calls, `:let`, `:for`, `:echo`, `:execute`, timers and
   the garbage collector.
+- Rewrote normal mode, covering every key the editor answers to outside
+  insert and command-line mode: motions, operators, counts and registers,
+  Visual and Select mode, the `g`, `z`, `[` and `]` commands, scrolling and
+  folding, marks and jumps, and the tag and identifier lookups.
 - Generated the API dispatch layer from the API signatures again
   (`just apigen`), covering every msgpack-RPC method, the `vim.api` Lua
   binding, and `nvim --api-info`.
