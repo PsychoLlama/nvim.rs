@@ -1,7 +1,7 @@
 {
   "internal_exports": 120,
   "files_without_forbid_unsafe": 398,
-  "files_without_deny_unsafe_op": 241,
+  "files_without_deny_unsafe_op": 239,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -86,7 +86,7 @@
     "crates/nvim/src/nvim/eval/buffer/lines.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/eval/buffer/lookup.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/eval/buffer/prompt.rs": {"unsafe": 4},
-    "crates/nvim/src/nvim/eval/callback.rs": {"unsafe": 5},
+    "crates/nvim/src/nvim/eval/callback.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/eval/collect.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/eval/decode.rs": {"lines": 2160, "no_mangle": 1, "unsafe": 15},
     "crates/nvim/src/nvim/eval/deprecated.rs": {"unsafe": 4},
@@ -136,7 +136,7 @@
     "crates/nvim/src/nvim/eval/pos.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/eval/provider.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/eval/system.rs": {"unsafe": 6},
-    "crates/nvim/src/nvim/eval/timer.rs": {"unsafe": 15},
+    "crates/nvim/src/nvim/eval/timer.rs": {"unsafe": 24},
     "crates/nvim/src/nvim/eval/typval.rs": {"lines": 6840, "no_mangle": 77, "unsafe": 236},
     "crates/nvim/src/nvim/eval/userfunc.rs": {"lines": 6639, "unsafe": 116},
     "crates/nvim/src/nvim/eval/vars.rs": {"lines": 8527, "unsafe": 119},
