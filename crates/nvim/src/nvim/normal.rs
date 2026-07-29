@@ -113,8 +113,7 @@ use crate::src::nvim::options::{
 };
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, gettext, memmove, memset, qsort, snprintf, strcat, strcmp,
-    strcpy, strlen, time,
+    __ctype_b_loc, gettext, memmove, qsort, snprintf, strcat, strcmp, strcpy, strlen, time,
 };
 use crate::src::nvim::plines::{
     getvcol, getvcols, getvvcol, linetabsize, plines_m_win_fill, plines_win, win_get_fill,
@@ -150,9 +149,9 @@ use crate::src::nvim::textobject::{
 use crate::src::nvim::types::{
     Array, Direction, GraphemeState, Integer, MarkGet, MarkMove, MarkMoveRes, MotionType, Object,
     ObjectType, OptInt, SpellAddType, UIExtension, VimState, VimVarIndex, auto_event, buf_T,
-    cmdarg_T, colnr_T, exarg_T, fmark_T, getf_values, hlf_T, int16_t, int64_t, key_extra, linenr_T,
-    object, object_data as C2Rust_Unnamed_0, oparg_T, pos_T, searchit_arg_T, size_t, smt_T,
-    uint8_t, uint16_t, win_T, yankreg_T,
+    cmdarg_T, colnr_T, fmark_T, getf_values, hlf_T, int16_t, int64_t, key_extra, linenr_T, object,
+    object_data as C2Rust_Unnamed_0, oparg_T, pos_T, searchit_arg_T, size_t, smt_T, uint8_t,
+    uint16_t, win_T, yankreg_T,
 };
 use crate::src::nvim::ui::{
     ui_call_msg_showcmd, ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush, ui_has,
@@ -167,7 +166,7 @@ use crate::src::nvim::window::{
     may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized, set_fraction,
     win_setheight,
 };
-use core::ffi::{CStr, c_char, c_int, c_uint, c_ulong, c_ushort, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 mod state;
 pub(crate) use self::state::*;
