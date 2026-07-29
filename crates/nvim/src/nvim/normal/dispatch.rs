@@ -381,7 +381,7 @@ pub(crate) unsafe extern "C" fn normal_get_command_count(mut s: *mut NormalState
             (*s).ca.count0 = (*s).ca.count0 * 10 as c_int + ((*s).c - '0' as c_int);
         }
         if (*s).toplevel as c_int != 0 && readbuf1_empty() as c_int != 0 {
-            set_vcount_ca(&raw mut (*s).ca, &raw mut (*s).set_prevcount);
+            set_vcount_ca(&raw mut (*s).ca, &mut (*s).set_prevcount);
         }
         if (*s).ctrl_w {
             (*no_mapping.ptr()) += 1;
@@ -468,7 +468,7 @@ pub(crate) unsafe extern "C" fn normal_finish_command(mut s: *mut NormalState) {
             do_pending_operator(&raw mut (*s).ca, (*s).old_col, false_0 != 0);
         }
         if normal_need_redraw_mode_message(s) {
-            normal_redraw_mode_message(s);
+            normal_redraw_mode_message();
         }
     }
     msg_nowait.set(false_0 != 0);
