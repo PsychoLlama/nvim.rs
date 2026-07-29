@@ -1,38 +1,28 @@
-use crate::src::nvim::api::private::helpers::{api_free_object, api_metadata_raw, cstr_as_string};
+use crate::src::nvim::api::private::helpers::{api_metadata_raw, cstr_as_string};
 use crate::src::nvim::api::ui::remote_ui_wait_for_attach;
 use crate::src::nvim::arglist::{alist_add, alist_init, alist_name};
 use crate::src::nvim::ascii::ascii_isdigit;
-use crate::src::nvim::autocmd::{
-    apply_autocmds, autocmd_init, block_autocmds, is_autocmd_blocked, unblock_autocmds,
-};
-use crate::src::nvim::buffer::buf_get_changedtick;
+use crate::src::nvim::autocmd::{apply_autocmds, autocmd_init};
 use crate::src::nvim::buffer::{
-    buf_is_empty, buf_set_changedtick, buf_valid, buflist_new, bufref_valid, do_autochdir,
-    do_modelines, handle_swap_exists, open_buffer, set_buflisted, set_bufref, set_curbuf, setfname,
+    buf_is_empty, buflist_new, do_autochdir, do_modelines, handle_swap_exists, open_buffer,
+    set_buflisted, set_curbuf, setfname,
 };
-use crate::src::nvim::channel::{
-    channel_connect, channel_from_stdio, channel_init, channel_teardown,
-};
+use crate::src::nvim::channel::{channel_from_stdio, channel_init, channel_teardown};
 use crate::src::nvim::diff::{diff_win_options, diffopt_horizontal};
 use crate::src::nvim::drawscreen::{
     default_grid_alloc, redraw_all_later, redraw_later, screenclear,
 };
 use crate::src::nvim::eval::typval::tv_list_set_lock;
 use crate::src::nvim::eval::typval::{tv_list_alloc, tv_list_append_string};
-use crate::src::nvim::eval::userfunc::invoke_all_defer;
 use crate::src::nvim::eval::vars::{
     get_vim_var_list, get_vim_var_str, set_reg_var, set_vim_var_list, set_vim_var_nr,
-    set_vim_var_string, set_vim_var_type,
+    set_vim_var_string,
 };
-use crate::src::nvim::eval::{
-    eval_has_provider, eval_init, garbage_collect, set_argv_var, timer_teardown,
-};
+use crate::src::nvim::eval::{eval_has_provider, eval_init, set_argv_var, timer_teardown};
 use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::event::r#loop::{loop_close, loop_init, loop_poll_events};
 use crate::src::nvim::event::multiqueue::{multiqueue_new_child, multiqueue_process_events};
 use crate::src::nvim::event::proc::proc_teardown;
-use crate::src::nvim::event::socket::socket_address_is_tcp;
-use crate::src::nvim::event::stream::stream_set_blocking;
 use crate::src::nvim::ex_cmds::do_ecmd;
 use crate::src::nvim::ex_docmd::{do_cmdline_cmd, filetype_maybe_enable, filetype_plugin_enable};
 use crate::src::nvim::ex_getln::cmdline_init;
@@ -44,16 +34,13 @@ use crate::src::nvim::highlight::highlight_init;
 use crate::src::nvim::highlight_group::init_highlight;
 use crate::src::nvim::log::{log_init, logmsg};
 use crate::src::nvim::lua::executor::{
-    get_global_lstate, nlua_exec, nlua_exec_file, nlua_init, nlua_init_defaults, nlua_pcall,
-    nlua_run_script,
+    get_global_lstate, nlua_exec_file, nlua_init, nlua_init_defaults, nlua_pcall, nlua_run_script,
 };
 use crate::src::nvim::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
 use crate::src::nvim::mark::setpcmark;
-use crate::src::nvim::memline::{
-    ml_close_all, ml_close_notmod, ml_recover, ml_sync_all, recover_names,
-};
-use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc, xstrdup};
-use crate::src::nvim::message::{msg_putchar, semsg, wait_return};
+use crate::src::nvim::memline::{ml_recover, recover_names};
+use crate::src::nvim::memory::{strequal, xfree, xmalloc, xstrdup};
+use crate::src::nvim::message::{msg_putchar, semsg};
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::update_topline;
 use crate::src::nvim::msgpack_rpc::server::{server_init, server_teardown};
@@ -67,18 +54,16 @@ use crate::src::nvim::options::{
     kOptShadafile, kOptShortmess, kOptVerbosefile, kOptWindow,
 };
 use crate::src::nvim::os::env::{
-    env_init, init_homedir, os_getenv, os_getenv_noalloc, os_hint_priority, vim_env_iter,
+    env_init, init_homedir, os_getenv, os_hint_priority, vim_env_iter,
 };
 use crate::src::nvim::os::fs::{os_exepath, os_fopen, os_isdir, os_path_exists, os_write};
 use crate::src::nvim::os::input::{input_start, input_stop, os_breakcheck, os_isatty};
 use crate::src::nvim::os::lang::{init_locale, set_lang_var};
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, atoi, exit, fprintf, gettext, memcpy, memset, printf, setbuf, snprintf,
-    stderr, stdout, strcasecmp, strlen, strncasecmp, tcdrain,
+    __assert_fail, abort, atoi, exit, fprintf, gettext, memcpy, memset, setbuf, snprintf, stderr,
+    stdout, strcasecmp, strlen, strncasecmp,
 };
-use crate::src::nvim::os::signal::{
-    signal_init, signal_reject_deadly, signal_stop, signal_teardown,
-};
+use crate::src::nvim::os::signal::{signal_init, signal_teardown};
 use crate::src::nvim::os::stdpaths::{
     appname_is_valid, get_appname, stdpaths_get_xdg_var, stdpaths_user_conf_subpath,
 };
@@ -86,48 +71,44 @@ use crate::src::nvim::os::time::os_realtime;
 use crate::src::nvim::path::{
     concat_fnames, path_full_compare, path_guess_exepath, path_tail, vim_FullName,
 };
-use crate::src::nvim::profile::{profile_dump, time_finish, time_init, time_msg, time_start};
+use crate::src::nvim::profile::{time_init, time_msg, time_start};
 use crate::src::nvim::quickfix::qf_init_stack;
 use crate::src::nvim::register::get_default_register_name;
 use crate::src::nvim::runtime::{
     do_source, estack_init, estack_pop, estack_push, load_plugins, runtime_init,
 };
-use crate::src::nvim::shada::{shada_read_everything, shada_write_file};
+use crate::src::nvim::shada::shada_read_everything;
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::syntax::syn_maybe_enable;
 use crate::src::nvim::terminal::{terminal_init, terminal_teardown};
 use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    AdditionalData, Arena, Array, Callback, Callback_data, CallbackReader, CallbackType,
-    DecorRangeSlot, DecorSignHighlight, DecorState, DecorState_ranges_i, DecorState_slots, Error,
-    ErrorType, FILE, GridView, Integer, ListLenSpecials, Loop, LuaRef, LuaRetMode, MTNode, MTPos,
-    Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash, MarkTreeIter, MarkTreeIter_s,
-    MultiQueue, NS, Object, ObjectType, OptInt, OptVal, OptValData, OptValType, RgbValue,
-    ScreenGrid, Set_String, Set_int, Set_uint32_t, Set_uint64_t, StlClickDefinition, String_0,
-    TriState, VarLockStatus, VarType, VimVarIndex, WinExtmark, XDGVarType, aentry_T, alist_T,
-    aucmdwin_T, auto_event, bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, colnr_T, dict_T,
-    disptick_T, estack_T, estack_T_es_info, etype_T, evalarg_T, exarg_T, except_T, file_comparison,
-    fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t, int32_t, int64_t, key_extra,
-    linenr_T, list_T, lpos_T, lua_State, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s,
-    object, object_data as C2Rust_Unnamed, optmagic_T, pos_T, proftime_T, pthread_mutex_t,
-    pthread_rwlock_t, ptr_t, ptrdiff_t, qf_info_T, reg_extmatch_T, regmatch_T, regmmatch_T,
-    regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t, ssize_t, tabpage_T, typebuf_T, uint8_t,
-    uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
-    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
-    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, varnumber_T, vimmenu_T,
-    win_T, xfmark_T,
+    AdditionalData, Array, Callback, Callback_data, CallbackReader, CallbackType, DecorRangeSlot,
+    DecorSignHighlight, DecorState, DecorState_ranges_i, DecorState_slots, ErrorType, FILE,
+    GridView, Integer, ListLenSpecials, Loop, LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int,
+    Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash, MarkTreeIter, MarkTreeIter_s, MultiQueue, NS,
+    Object, ObjectType, OptInt, OptVal, OptValData, OptValType, RgbValue, ScreenGrid, Set_String,
+    Set_int, Set_uint32_t, Set_uint64_t, StlClickDefinition, String_0, TriState, VarLockStatus,
+    VarType, VimVarIndex, WinExtmark, XDGVarType, aentry_T, alist_T, aucmdwin_T, auto_event,
+    bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, colnr_T, dict_T, disptick_T, estack_T,
+    estack_T_es_info, etype_T, evalarg_T, exarg_T, except_T, file_comparison, fmark_T, fmarkv_T,
+    frame_T, garray_T, handle_T, hlf_T, int16_t, int32_t, int64_t, key_extra, linenr_T, list_T,
+    lpos_T, lua_State, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, optmagic_T, pos_T,
+    proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, ptrdiff_t, qf_info_T, reg_extmatch_T,
+    regmatch_T, regmmatch_T, regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t, ssize_t,
+    tabpage_T, typebuf_T, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u,
+    uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap,
+    uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node,
+    uv_timer_s_u, uv_timer_t, varnumber_T, vimmenu_T, win_T, xfmark_T,
 };
-use crate::src::nvim::ui::{
-    do_autocmd_uienter_all, ui_call_error_exit, ui_call_set_title, ui_call_stop, ui_flush, ui_init,
-};
-use crate::src::nvim::ui_client::{ui_client_run, ui_client_start_server, ui_client_stop};
+use crate::src::nvim::ui::{do_autocmd_uienter_all, ui_call_error_exit, ui_init};
+use crate::src::nvim::ui_client::{ui_client_run, ui_client_start_server};
 use crate::src::nvim::ui_compositor::ui_comp_syn_init;
-use crate::src::nvim::version::list_version;
 use crate::src::nvim::window::{
     goto_tabpage, make_tabpages, make_windows, only_one_window, win_alloc_first, win_close,
     win_count, win_enter, win_equal, win_init_size, win_new_screensize,
 };
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 
 mod entry;
 pub use self::entry::*;
