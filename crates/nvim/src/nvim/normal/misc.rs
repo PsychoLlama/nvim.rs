@@ -1,246 +1,321 @@
 //! Commands that do not belong to a family: the no-ops, the error
 //! handler, `:`, the CTRL-key odds and ends, and leaving a mode.
 
-#[allow(unused_imports)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ptr;
+
 use super::*;
 
-pub(crate) unsafe extern "C" fn nv_ignore(mut cap: *mut cmdarg_T) {
-    (*cap).retval |= CA_COMMAND_BUSY as c_int;
+/// The key a `<Cmd>` mapping arrives as.
+const K_COMMAND: c_int = -(253 + ((KE_COMMAND as c_int) << 8));
+/// The key a Lua callback mapping arrives as.
+const K_LUA: c_int = -(253 + ((KE_LUA as c_int) << 8));
+/// The answer that leaves the command-line window open.
+const K_IGNORE: c_int = -(253 + ((KE_IGNORE as c_int) << 8));
+
+/// A key the command loop must swallow without doing anything: it marks the
+/// command busy so nothing else acts on it.
+pub(crate) unsafe extern "C" fn nv_ignore(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe { (*cap).retval |= CA_COMMAND_BUSY as c_int };
 }
 
-pub(crate) unsafe extern "C" fn nv_nop(mut _cap: *mut cmdarg_T) {}
+/// A key with no effect at all -- unlike [`nv_ignore`], the command still
+/// counts as having run.
+pub(crate) unsafe extern "C" fn nv_nop(_cap: *mut cmdarg_T) {}
 
-pub(crate) unsafe extern "C" fn nv_error(mut cap: *mut cmdarg_T) {
-    clearopbeep((*cap).oap);
+/// A key that is not a command: beep and drop whatever was pending.
+pub(crate) unsafe extern "C" fn nv_error(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe { clearopbeep((*cap).oap) };
 }
 
-pub(crate) unsafe extern "C" fn nv_help(mut cap: *mut cmdarg_T) {
-    if !checkclearopq((*cap).oap) {
-        ex_help(::core::ptr::null_mut::<exarg_T>());
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_colon(mut cap: *mut cmdarg_T) {
-    let mut cmd_result: bool = false;
-    let mut is_cmdkey: bool =
-        (*cap).cmdchar == -(253 as c_int + ((KE_COMMAND as c_int) << 8 as c_int));
-    let mut is_lua: bool = (*cap).cmdchar == -(253 as c_int + ((KE_LUA as c_int) << 8 as c_int));
-    if VIsual_active.get() as c_int != 0 && !is_cmdkey && !is_lua {
-        nv_operator(cap);
-        return;
-    }
-    if (*(*cap).oap).op_type != OP_NOP as c_int {
-        (*(*cap).oap).motion_type = kMTCharWise;
-        (*(*cap).oap).inclusive = false_0 != 0;
-    } else if (*cap).count0 != 0 && !is_cmdkey && !is_lua {
-        stuffcharReadbuff('.' as c_int);
-        if (*cap).count0 > 1 as c_int {
-            stuffReadbuff(b",.+\0".as_ptr() as *const c_char);
-            stuffnumReadbuff((*cap).count0 - 1 as c_int);
+/// `<Help>`: open the help window.
+pub(crate) unsafe extern "C" fn nv_help(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if !checkclearopq((*cap).oap) {
+            ex_help(ptr::null_mut());
         }
     }
-    if KeyTyped.get() {
-        msg_ext_set_trigger(b"typed_cmd\0".as_ptr() as *const c_char);
-        compute_cmdrow();
-    }
-    if is_lua {
-        cmd_result = map_execute_lua(true_0 != 0, false_0 != 0);
-    } else {
-        cmd_result = do_cmdline(
-            ::core::ptr::null_mut::<c_char>(),
-            if is_cmdkey as c_int != 0 {
-                Some(
-                    getcmdkeycmd
-                        as unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
-                )
-            } else {
-                Some(
-                    getexline
-                        as unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
-                )
-            },
-            NULL,
-            if (*(*cap).oap).op_type != OP_NOP as c_int {
-                DOCMD_KEEPLINE as c_int
-            } else {
-                0 as c_int
-            },
-        ) != 0;
-    }
-    msg_ext_set_trigger(b"\0".as_ptr() as *const c_char);
-    if cmd_result as c_int == false_0 {
-        clearop((*cap).oap);
-    } else if (*(*cap).oap).op_type != OP_NOP as c_int
-        && ((*(*cap).oap).start.lnum > (*curbuf.get()).b_ml.ml_line_count
-            || (*(*cap).oap).start.col > ml_get_len((*(*cap).oap).start.lnum)
-            || did_emsg.get() != 0)
-    {
-        clearopbeep((*cap).oap);
-    }
 }
 
-pub(crate) unsafe extern "C" fn nv_ctrlg(mut cap: *mut cmdarg_T) {
-    if VIsual_active.get() {
-        VIsual_select.set(!VIsual_select.get());
-        may_trigger_modechanged();
-        showmode();
-    } else if !checkclearop((*cap).oap) {
-        fileinfo((*cap).count0, false_0, true_0 != 0);
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_ctrlh(mut cap: *mut cmdarg_T) {
-    if VIsual_active.get() as c_int != 0 && VIsual_select.get() as c_int != 0 {
-        (*cap).cmdchar = 'x' as c_int;
-        v_visop(cap);
-    } else {
-        nv_left(cap);
-    };
-}
-
-pub(crate) unsafe extern "C" fn nv_clear(mut cap: *mut cmdarg_T) {
-    if checkclearop((*cap).oap) {
-        return;
-    }
-    syn_stack_free_all((*curwin.get()).w_s);
-    let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-        firstwin.get()
-    } else {
-        (*curtab.get()).tp_firstwin
-    };
-    while !wp.is_null() {
-        (*(*wp).w_s).b_syn_slow = false_0 != 0;
-        wp = (*wp).w_next;
-    }
-    redraw_later(curwin.get(), UPD_CLEAR as c_int);
-}
-
-pub(crate) unsafe extern "C" fn nv_ctrlo(mut cap: *mut cmdarg_T) {
-    if VIsual_active.get() as c_int != 0 && VIsual_select.get() as c_int != 0 {
-        VIsual_select.set(false_0 != 0);
-        may_trigger_modechanged();
-        showmode();
-        restart_VIsual_select.set(2 as c_int);
-    } else {
-        (*cap).count1 = -(*cap).count1;
-        nv_pcmark(cap);
-    };
-}
-
-pub(crate) unsafe extern "C" fn nv_hat(mut cap: *mut cmdarg_T) {
-    if !checkclearopq((*cap).oap) {
-        buflist_getfile(
-            (*cap).count0,
-            0 as linenr_T,
-            GETF_SETMARK as c_int | GETF_ALT as c_int,
-            false_0,
-        );
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_window(mut cap: *mut cmdarg_T) {
-    if (*cap).nchar == ':' as c_int {
-        (*cap).cmdchar = ':' as c_int;
-        (*cap).nchar = NUL;
-        nv_colon(cap);
-    } else if !checkclearop((*cap).oap) {
-        do_window((*cap).nchar, (*cap).count0, NUL);
-    }
-}
-
-pub(crate) unsafe extern "C" fn nv_suspend(mut cap: *mut cmdarg_T) {
-    clearop((*cap).oap);
-    if VIsual_active.get() {
-        end_visual_mode();
-    }
-    do_cmdline_cmd(b"st\0".as_ptr() as *const c_char);
-}
-
-pub(crate) unsafe extern "C" fn nv_normal(mut cap: *mut cmdarg_T) {
-    if (*cap).nchar == Ctrl_N || (*cap).nchar == Ctrl_G {
-        clearop((*cap).oap);
-        if restart_edit.get() != 0 as c_int && mode_displayed.get() as c_int != 0 {
-            clear_cmdline.set(true_0 != 0);
+/// `:`, and the two synthetic keys that carry a command or a Lua callback in
+/// from a mapping.
+pub(crate) unsafe extern "C" fn nv_colon(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        let is_cmdkey = (*cap).cmdchar == K_COMMAND;
+        let is_lua = (*cap).cmdchar == K_LUA;
+        // A plain `:` during a selection is the `:` *operator*, which puts the
+        // selection's range on the command line. The synthetic keys are not.
+        if VIsual_active.get() && !is_cmdkey && !is_lua {
+            nv_operator(cap);
+            return;
         }
-        restart_edit.set(0 as c_int);
-        if cmdwin_type.get() != 0 as c_int {
+        let oap = (*cap).oap;
+        if (*oap).op_type != OP_NOP as c_int {
+            (*oap).motion_type = kMTCharWise;
+            (*oap).inclusive = false;
+        } else if (*cap).count0 != 0 && !is_cmdkey && !is_lua {
+            // A count in front of `:` becomes a range: `3:` is `:.,.+2`.
+            stuffcharReadbuff('.' as c_int);
+            if (*cap).count0 > 1 {
+                stuffReadbuff(c",.+".as_ptr());
+                stuffnumReadbuff((*cap).count0 - 1);
+            }
+        }
+        // A typed `:` scrolls the message area up to make room for the
+        // command line; a mapped one leaves the display alone.
+        if KeyTyped.get() {
+            msg_ext_set_trigger(c"typed_cmd".as_ptr());
+            compute_cmdrow();
+        }
+        let cmd_result = if is_lua {
+            map_execute_lua(true, false)
+        } else {
+            let getline: Option<
+                unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
+            > = if is_cmdkey {
+                Some(getcmdkeycmd)
+            } else {
+                Some(getexline)
+            };
+            do_cmdline(
+                ptr::null_mut(),
+                getline,
+                NULL,
+                if (*oap).op_type != OP_NOP as c_int {
+                    DOCMD_KEEPLINE as c_int
+                } else {
+                    0
+                },
+            ) != 0
+        };
+        msg_ext_set_trigger(c"".as_ptr());
+        if !cmd_result {
+            clearop(oap);
+        } else if (*oap).op_type != OP_NOP as c_int
+            && ((*oap).start.lnum > (*curbuf.get()).b_ml.ml_line_count
+                || (*oap).start.col > ml_get_len((*oap).start.lnum)
+                || did_emsg.get() != 0)
+        {
+            // The command moved or deleted the line the operator started on,
+            // so there is nothing left to apply it to.
+            clearopbeep(oap);
+        }
+    }
+}
+
+/// `CTRL-G`: report the file's position -- or toggle between Visual and
+/// Select mode when a selection is up.
+pub(crate) unsafe extern "C" fn nv_ctrlg(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if VIsual_active.get() {
+            VIsual_select.set(!VIsual_select.get());
+            may_trigger_modechanged();
+            showmode();
+        } else if !checkclearop((*cap).oap) {
+            fileinfo((*cap).count0, false_0, true);
+        }
+    }
+}
+
+/// `CTRL-H`: one character left -- or delete the selection in Select mode.
+pub(crate) unsafe extern "C" fn nv_ctrlh(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if VIsual_active.get() && VIsual_select.get() {
+            (*cap).cmdchar = 'x' as c_int;
+            v_visop(cap);
+        } else {
+            nv_left(cap);
+        }
+    }
+}
+
+/// `CTRL-L`: throw the screen away and redraw it, and let syntax highlighting
+/// that timed out try again.
+pub(crate) unsafe extern "C" fn nv_clear(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if checkclearop((*cap).oap) {
+            return;
+        }
+        syn_stack_free_all((*curwin.get()).w_s);
+        // Upstream walks `firstwin` -- the *current* tab page's windows --
+        // even though the loop reads as if it might walk another one's.
+        let mut wp = firstwin.get();
+        while !wp.is_null() {
+            (*(*wp).w_s).b_syn_slow = false;
+            wp = (*wp).w_next;
+        }
+        redraw_later(curwin.get(), UPD_CLEAR as c_int);
+    }
+}
+
+/// `CTRL-O`: jump back in the jump list -- or leave Select mode for one
+/// command.
+pub(crate) unsafe extern "C" fn nv_ctrlo(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if VIsual_active.get() && VIsual_select.get() {
+            VIsual_select.set(false);
+            may_trigger_modechanged();
+            showmode();
+            // 2 means "one command, then back to Select mode".
+            restart_VIsual_select.set(2);
+        } else {
+            // A backwards jump is a negative count to the same handler `CTRL-I`
+            // uses forwards.
+            (*cap).count1 = -(*cap).count1;
+            nv_pcmark(cap);
+        }
+    }
+}
+
+/// `CTRL-^`: edit the alternate file.
+pub(crate) unsafe extern "C" fn nv_hat(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if !checkclearopq((*cap).oap) {
+            buflist_getfile(
+                (*cap).count0,
+                0 as linenr_T,
+                GETF_SETMARK as c_int | GETF_ALT as c_int,
+                false_0,
+            );
+        }
+    }
+}
+
+/// `CTRL-W`: a window command. `CTRL-W :` is `:` with the window prefix
+/// dropped.
+pub(crate) unsafe extern "C" fn nv_window(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if (*cap).nchar == ':' as c_int {
+            (*cap).cmdchar = ':' as c_int;
+            (*cap).nchar = NUL;
+            nv_colon(cap);
+        } else if !checkclearop((*cap).oap) {
+            do_window((*cap).nchar, (*cap).count0, NUL);
+        }
+    }
+}
+
+/// `CTRL-Z`: suspend, through `:stop` so that 'autowrite' and the autocommands
+/// happen.
+pub(crate) unsafe extern "C" fn nv_suspend(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        clearop((*cap).oap);
+        if VIsual_active.get() {
+            end_visual_mode();
+        }
+        do_cmdline_cmd(c"st".as_ptr());
+    }
+}
+
+/// `CTRL-\`: only `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` exist, and both mean
+/// "back to Normal mode".
+pub(crate) unsafe extern "C" fn nv_normal(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if (*cap).nchar != Ctrl_N && (*cap).nchar != Ctrl_G {
+            clearopbeep((*cap).oap);
+            return;
+        }
+        clearop((*cap).oap);
+        if restart_edit.get() != 0 && mode_displayed.get() {
+            clear_cmdline.set(true);
+        }
+        restart_edit.set(0);
+        if cmdwin_type.get() != 0 {
             cmdwin_result.set(Ctrl_C);
         }
         if VIsual_active.get() {
             end_visual_mode();
             redraw_curbuf_later(UPD_INVERTED as c_int);
         }
-    } else {
-        clearopbeep((*cap).oap);
-    };
+    }
 }
 
-pub(crate) unsafe extern "C" fn nv_esc(mut cap: *mut cmdarg_T) {
-    let mut no_reason: bool = (*(*cap).oap).op_type == OP_NOP as c_int
-        && (*cap).opcount == 0 as c_int
-        && (*cap).count0 == 0 as c_int
-        && (*(*cap).oap).regname == 0 as c_int;
-    if (*cap).arg != 0 {
-        if restart_edit.get() == 0 as c_int
-            && cmdwin_type.get() == 0 as c_int
-            && !VIsual_active.get()
-            && no_reason as c_int != 0
-        {
-            if anyBufIsChanged() {
-                msg(
-                    gettext(
-                        b"Type  :qa!  and press <Enter> to abandon all changes and exit Nvim\0"
-                            .as_ptr() as *const c_char,
-                    ),
-                    0 as c_int,
-                );
-            } else {
-                msg(
-                    gettext(
-                        b"Type  :qa  and press <Enter> to exit Nvim\0".as_ptr() as *const c_char
-                    ),
-                    0 as c_int,
-                );
+/// `<Esc>` and `CTRL-C`. The table's argument says which: `CTRL-C` is the one
+/// that offers the "how do I quit" hint.
+pub(crate) unsafe extern "C" fn nv_esc(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        // Nothing was pending, so the key had no work to do and is worth a
+        // beep or a hint.
+        let no_reason = (*(*cap).oap).op_type == OP_NOP as c_int
+            && (*cap).opcount == 0
+            && (*cap).count0 == 0
+            && (*(*cap).oap).regname == 0;
+        if (*cap).arg != 0 {
+            if restart_edit.get() == 0
+                && cmdwin_type.get() == 0
+                && !VIsual_active.get()
+                && no_reason
+            {
+                let hint = if anyBufIsChanged() {
+                    c"Type  :qa!  and press <Enter> to abandon all changes and exit Nvim"
+                } else {
+                    c"Type  :qa  and press <Enter> to exit Nvim"
+                };
+                msg(gettext(hint.as_ptr()), 0);
             }
-        }
-        if restart_edit.get() != 0 as c_int {
-            redraw_mode.set(true_0 != 0);
-        }
-        restart_edit.set(0 as c_int);
-        if cmdwin_type.get() != 0 as c_int {
-            cmdwin_result.set(-(253 as c_int + ((KE_IGNORE as c_int) << 8 as c_int)));
-            got_int.set(false_0 != 0);
+            if restart_edit.get() != 0 {
+                redraw_mode.set(true);
+            }
+            restart_edit.set(0);
+            if cmdwin_type.get() != 0 {
+                cmdwin_result.set(K_IGNORE);
+                got_int.set(false);
+                return;
+            }
+        } else if cmdwin_type.get() != 0 && ex_normal_busy.get() != 0 && typebuf_was_empty.get() {
+            // `:normal` in the command-line window ran out of keys: leave the
+            // window open rather than acting on the <Esc> it synthesised.
+            cmdwin_result.set(K_IGNORE);
             return;
         }
-    } else if cmdwin_type.get() != 0 as c_int
-        && ex_normal_busy.get() != 0
-        && typebuf_was_empty.get() as c_int != 0
-    {
-        cmdwin_result.set(-(253 as c_int + ((KE_IGNORE as c_int) << 8 as c_int)));
-        return;
+        if VIsual_active.get() {
+            end_visual_mode();
+            check_cursor_col(curwin.get());
+            (*curwin.get()).w_set_curswant = true_0;
+            redraw_curbuf_later(UPD_INVERTED as c_int);
+        } else if no_reason {
+            vim_beep(kOptBoFlagEsc as c_uint);
+        }
+        clearop((*cap).oap);
     }
-    if VIsual_active.get() {
-        end_visual_mode();
-        check_cursor_col(curwin.get());
-        (*curwin.get()).w_set_curswant = true_0;
-        redraw_curbuf_later(UPD_INVERTED as c_int);
-    } else if no_reason {
-        vim_beep(kOptBoFlagEsc as c_int as c_uint);
-    }
-    clearop((*cap).oap);
 }
 
-pub(crate) unsafe extern "C" fn nv_paste(mut cap: *mut cmdarg_T) {
-    paste_repeat((*cap).count1);
+/// The key the terminal sends to repeat a bracketed paste.
+pub(crate) unsafe extern "C" fn nv_paste(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe { paste_repeat((*cap).count1) };
 }
 
-pub(crate) unsafe extern "C" fn nv_event(mut cap: *mut cmdarg_T) {
-    may_garbage_collect.set(false_0 != 0);
-    let mut may_restart: bool =
-        restart_edit.get() != 0 as c_int || restart_VIsual_select.get() != 0 as c_int;
-    state_handle_k_event();
-    finish_op.set(false_0 != 0);
-    if may_restart {
-        (*cap).retval |= CA_COMMAND_BUSY as c_int;
+/// The synthetic key that stands for "the event loop has work": run it, then
+/// tell the command loop whether a mode was waiting to be restarted.
+pub(crate) unsafe extern "C" fn nv_event(cap: *mut cmdarg_T) {
+    // An event's callback is not a safe point for a collection: it may be
+    // holding values the marker cannot see.
+    may_garbage_collect.set(false);
+    let may_restart = restart_edit.get() != 0 || restart_VIsual_select.get() != 0;
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        state_handle_k_event();
+        finish_op.set(false);
+        if may_restart {
+            // The callback may have left insert or Select mode pending, and
+            // the command loop must not treat this key as having finished a
+            // command.
+            (*cap).retval |= CA_COMMAND_BUSY as c_int;
+        }
     }
 }

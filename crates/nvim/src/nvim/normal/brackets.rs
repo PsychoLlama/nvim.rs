@@ -1,374 +1,362 @@
 //! The `[` and `]` commands: the block, comment, define and method
-//! searches, and the paste variants.
+//! searches, the mark and fold jumps, and the paste variants.
 
-#[allow(unused_imports)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ptr;
+
 use super::*;
 
-pub(crate) unsafe extern "C" fn nv_bracket_block(
-    mut cap: *mut cmdarg_T,
-    mut old_pos: *const pos_T,
-) {
-    let mut new_pos: pos_T = pos_T {
-        lnum: 0 as linenr_T,
-        col: 0 as colnr_T,
-        coladd: 0 as colnr_T,
-    };
-    let mut pos: *mut pos_T = ::core::ptr::null_mut::<pos_T>();
-    let mut prev_pos: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut n: c_int = 0;
-    let mut findc: c_int = 0;
-    if (*cap).nchar == '*' as c_int {
-        (*cap).nchar = '/' as c_int;
-    }
-    prev_pos.lnum = 0 as c_int as linenr_T;
-    if (*cap).nchar == 'm' as c_int || (*cap).nchar == 'M' as c_int {
-        if (*cap).cmdchar == '[' as c_int {
-            findc = '{' as c_int;
-        } else {
-            findc = '}' as c_int;
-        }
-        n = 9999 as c_int;
+/// The mouse keys `[` and `]` accept, which are one contiguous run.
+const K_LEFTMOUSE: c_int = -(253 + ((KE_LEFTMOUSE as c_int) << 8));
+const K_RIGHTRELEASE: c_int = -(253 + ((KE_RIGHTRELEASE as c_int) << 8));
+
+/// Which way a `[` or `]` command searches.
+unsafe fn direction(cap: *mut cmdarg_T) -> c_int {
+    // SAFETY: `cap` is the caller's live command argument.
+    if unsafe { (*cap).cmdchar } == ']' as c_int {
+        FORWARD as c_int
     } else {
-        findc = (*cap).nchar;
-        n = (*cap).count1;
+        BACKWARD as c_int
     }
-    while n > 0 as c_int {
-        pos = findmatchlimit(
-            (*cap).oap,
-            findc,
-            if (*cap).cmdchar == '[' as c_int {
-                FM_BACKWARD as c_int
-            } else {
-                FM_FORWARD as c_int
-            },
-            0 as int64_t,
-        );
-        if pos.is_null() {
-            if new_pos.lnum == 0 as linenr_T {
-                if (*cap).nchar != 'm' as c_int && (*cap).nchar != 'M' as c_int {
-                    clearopbeep((*cap).oap);
-                }
-            } else {
-                pos = &raw mut new_pos;
-            }
-            break;
-        } else {
-            prev_pos = new_pos;
-            (*curwin.get()).w_cursor = *pos;
-            new_pos = *pos;
-            n -= 1;
-        }
+}
+
+/// The same choice spelled in `findmatchlimit`'s own flags, which are not the
+/// `Direction` constants.
+unsafe fn match_direction(cap: *mut cmdarg_T) -> c_int {
+    // SAFETY: `cap` is the caller's live command argument.
+    if unsafe { (*cap).cmdchar } == '[' as c_int {
+        FM_BACKWARD as c_int
+    } else {
+        FM_FORWARD as c_int
     }
-    (*curwin.get()).w_cursor = *old_pos;
-    if (*cap).nchar == 'm' as c_int || (*cap).nchar == 'M' as c_int {
-        let mut c: c_int = 0;
-        let mut norm: bool =
-            (findc == '{' as c_int) as c_int == ((*cap).nchar == 'm' as c_int) as c_int;
-        n = (*cap).count1;
-        if prev_pos.lnum != 0 as linenr_T {
-            pos = &raw mut prev_pos;
-            (*curwin.get()).w_cursor = prev_pos;
-            if norm {
-                n -= 1;
-            }
-        } else {
-            pos = ::core::ptr::null_mut::<pos_T>();
-        }
-        while n > 0 as c_int {
-            loop {
-                if (if findc == '{' as c_int {
-                    dec_cursor()
-                } else {
-                    inc_cursor()
-                }) < 0 as c_int
-                {
-                    if pos.is_null() {
-                        clearopbeep((*cap).oap);
-                    }
-                    n = 0 as c_int;
-                    break;
-                } else {
-                    c = gchar_cursor();
-                    if !(c == '{' as c_int || c == '}' as c_int) {
-                        continue;
-                    }
-                    if c == findc && norm as c_int != 0 || n == 1 as c_int && !norm {
-                        new_pos = (*curwin.get()).w_cursor;
-                        pos = &raw mut new_pos;
-                        n = 0 as c_int;
-                    } else if new_pos.lnum == 0 as linenr_T {
-                        new_pos = (*curwin.get()).w_cursor;
-                        pos = &raw mut new_pos;
-                    } else {
-                        pos = findmatchlimit(
-                            (*cap).oap,
-                            findc,
-                            if (*cap).cmdchar == '[' as c_int {
-                                FM_BACKWARD as c_int
-                            } else {
-                                FM_FORWARD as c_int
-                            },
-                            0 as int64_t,
-                        );
-                        if pos.is_null() {
-                            n = 0 as c_int;
-                        } else {
-                            (*curwin.get()).w_cursor = *pos;
-                        }
-                    }
-                    break;
-                }
-            }
-            n -= 1;
-        }
-        (*curwin.get()).w_cursor = *old_pos;
-        if pos.is_null() && new_pos.lnum != 0 as linenr_T {
-            clearopbeep((*cap).oap);
-        }
-    }
-    if !pos.is_null() {
-        setpcmark();
-        (*curwin.get()).w_cursor = *pos;
-        (*curwin.get()).w_set_curswant = true_0;
-        if fdo_flags.get() & kOptFdoFlagBlock as c_int as c_uint != 0
-            && KeyTyped.get() as c_int != 0
-            && (*(*cap).oap).op_type == OP_NOP as c_int
+}
+
+/// Open a fold the cursor landed in, if 'foldopen' says this kind of jump
+/// should and the key was typed rather than mapped.
+unsafe fn may_fold_open(cap: *mut cmdarg_T, flag: c_uint) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        if fdo_flags.get() & flag != 0 && KeyTyped.get() && (*(*cap).oap).op_type == OP_NOP as c_int
         {
             foldOpenCursor();
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn nv_brackets(mut cap: *mut cmdarg_T) {
-    let mut flag: c_int = 0;
-    let mut n: c_int = 0;
-    (*(*cap).oap).motion_type = kMTCharWise;
-    (*(*cap).oap).inclusive = false_0 != 0;
-    let mut old_pos: pos_T = (*curwin.get()).w_cursor;
-    (*curwin.get()).w_cursor.coladd = 0 as c_int as colnr_T;
-    if (*cap).nchar == 'f' as c_int {
-        nv_gotofile(cap);
-    } else if !vim_strchr(b"iI\tdD\x04\0".as_ptr() as *const c_char, (*cap).nchar).is_null() {
-        let mut ptr: *mut c_char = ::core::ptr::null_mut::<c_char>();
-        let mut len: size_t = 0;
-        len = find_ident_under_cursor(
-            &raw mut ptr,
-            FIND_IDENT as c_int,
-            ::core::ptr::null_mut::<c_int>(),
-        );
-        if len == 0 as size_t {
-            clearop((*cap).oap);
-        } else {
-            ptr = xmemdupz(ptr as *const c_void, len) as *mut c_char;
-            find_pattern_in_path(
-                ptr,
-                kDirectionNotSet,
-                len,
-                true_0 != 0,
-                if (*cap).count0 == 0 as c_int {
-                    (*(*__ctype_b_loc()).offset((*cap).nchar as isize) as c_int
-                        & _ISupper as c_int as c_ushort as c_int
-                        == 0) as c_int
-                } else {
-                    false_0
-                } != 0,
-                if (*cap).nchar & 0xf as c_int == 'd' as c_int & 0xf as c_int {
-                    FIND_DEFINE as c_int
-                } else {
-                    FIND_ANY as c_int
-                },
-                (*cap).count1,
-                if *(*__ctype_b_loc()).offset((*cap).nchar as isize) as c_int
-                    & _ISupper as c_int as c_ushort as c_int
-                    != 0
-                {
-                    ACTION_SHOW_ALL as c_int
-                } else if *(*__ctype_b_loc()).offset((*cap).nchar as isize) as c_int
-                    & _ISlower as c_int as c_ushort as c_int
-                    != 0
-                {
-                    ACTION_SHOW as c_int
-                } else {
-                    ACTION_GOTO as c_int
-                },
-                if (*cap).cmdchar == ']' as c_int {
-                    (*curwin.get()).w_cursor.lnum + 1 as linenr_T
-                } else {
-                    1 as linenr_T
-                },
-                MAXLNUM as c_int as linenr_T,
-                false_0 != 0,
-                false_0 != 0,
-            );
-            xfree(ptr as *mut c_void);
-            (*curwin.get()).w_set_curswant = true_0;
-        }
-    } else if (*cap).cmdchar == '[' as c_int
-        && !vim_strchr(b"{(*/#mM\0".as_ptr() as *const c_char, (*cap).nchar).is_null()
-        || (*cap).cmdchar == ']' as c_int
-            && !vim_strchr(b"})*/#mM\0".as_ptr() as *const c_char, (*cap).nchar).is_null()
-    {
-        nv_bracket_block(cap, &raw mut old_pos);
-    } else if (*cap).nchar == '[' as c_int || (*cap).nchar == ']' as c_int {
-        if (*cap).nchar == (*cap).cmdchar {
-            flag = '{' as c_int;
-        } else {
-            flag = '}' as c_int;
-        }
-        (*curwin.get()).w_set_curswant = true_0;
-        if !findpar(
-            &raw mut (*(*cap).oap).inclusive,
-            (*cap).arg,
-            (*cap).count1,
-            flag,
-            (*(*cap).oap).op_type != OP_NOP as c_int
-                && (*cap).arg == FORWARD as c_int
-                && flag == '{' as c_int,
-        ) {
-            clearopbeep((*cap).oap);
-        } else {
-            if (*(*cap).oap).op_type == OP_NOP as c_int {
-                beginline(BL_WHITE as c_int | BL_FIX as c_int);
-            }
-            if fdo_flags.get() & kOptFdoFlagBlock as c_int as c_uint != 0
-                && KeyTyped.get() as c_int != 0
-                && (*(*cap).oap).op_type == OP_NOP as c_int
-            {
-                foldOpenCursor();
-            }
-        }
-    } else if (*cap).nchar == 'p' as c_int || (*cap).nchar == 'P' as c_int {
-        nv_put_opt(cap, true_0 != 0);
-    } else if (*cap).nchar == '\'' as c_int || (*cap).nchar == '`' as c_int {
-        let mut fm: *mut fmark_T = pos_to_mark(
-            curbuf.get(),
-            ::core::ptr::null_mut::<fmark_T>(),
-            (*curwin.get()).w_cursor,
-        );
-        '_c2rust_label: {
-            if !fm.is_null() {
-            } else {
-                __assert_fail(
-                    b"fm != NULL\0".as_ptr() as *const c_char,
-                    b"src/nvim/normal.rs\0".as_ptr() as *const c_char,
-                    4311 as c_uint,
-                    b"void nv_brackets(cmdarg_T *)\0".as_ptr() as *const c_char,
-                );
-            }
+/// `[{`, `]}`, `[(`, `])`, `[*`, `]/`, `[#`, `[m`, `]M` and friends: jump to
+/// an unmatched bracket, or to the start or end of a method.
+///
+/// The `m`/`M` forms run in two passes. The first walks *out* through as many
+/// enclosing `{}` as it can (up to 9,999), which finds the outermost block the
+/// cursor is inside; the second walks back in from there, counting the braces
+/// the count asked for. `prev_pos` carries the second-outermost block between
+/// the two, which is what makes `2[m` mean "the method one level out".
+unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
+    // SAFETY: `cap` is the caller's live command argument and `old_pos` is the
+    // cursor position its caller saved.
+    unsafe {
+        let mut new_pos = pos_T {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
         };
-        let mut prev_fm: *mut fmark_T = ::core::ptr::null_mut::<fmark_T>();
-        n = (*cap).count1;
-        while n > 0 as c_int {
-            prev_fm = fm;
-            fm = getnextmark(
-                &raw mut (*fm).mark,
-                if (*cap).cmdchar == '[' as c_int {
-                    BACKWARD as c_int
+        let mut prev_pos = pos_T {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        };
+        let mut pos: *mut pos_T = ptr::null_mut();
+
+        // `[*` and `]*` are spelled `[/` and `]/` to findmatchlimit.
+        if (*cap).nchar == '*' as c_int {
+            (*cap).nchar = '/' as c_int;
+        }
+        let method = (*cap).nchar == 'm' as c_int || (*cap).nchar == 'M' as c_int;
+        let findc = if method {
+            if (*cap).cmdchar == '[' as c_int {
+                '{' as c_int
+            } else {
+                '}' as c_int
+            }
+        } else {
+            (*cap).nchar
+        };
+        let mut n = if method { 9999 } else { (*cap).count1 };
+
+        while n > 0 {
+            pos = findmatchlimit((*cap).oap, findc, match_direction(cap), 0);
+            if pos.is_null() {
+                if new_pos.lnum == 0 {
+                    // Nothing found at all. A method search says so by leaving
+                    // `pos` null for the second pass to notice.
+                    if !method {
+                        clearopbeep((*cap).oap);
+                    }
                 } else {
-                    FORWARD as c_int
-                },
-                ((*cap).nchar == '\'' as c_int) as c_int,
-            );
+                    // Ran out of enclosing blocks: the last one found is it.
+                    pos = &raw mut new_pos;
+                }
+                break;
+            }
+            prev_pos = new_pos;
+            (*curwin.get()).w_cursor = *pos;
+            new_pos = *pos;
+            n -= 1;
+        }
+        (*curwin.get()).w_cursor = *old_pos;
+
+        if method {
+            // `[m` and `]M` want the brace itself; `[M` and `]m` want the one
+            // before it. `norm` is true for the first pair.
+            let norm = (findc == '{' as c_int) == ((*cap).nchar == 'm' as c_int);
+            n = (*cap).count1;
+            if prev_pos.lnum != 0 {
+                pos = &raw mut prev_pos;
+                (*curwin.get()).w_cursor = prev_pos;
+                if norm {
+                    n -= 1;
+                }
+            } else {
+                pos = ptr::null_mut();
+            }
+            while n > 0 {
+                loop {
+                    let stepped = if findc == '{' as c_int {
+                        dec_cursor()
+                    } else {
+                        inc_cursor()
+                    };
+                    if stepped < 0 {
+                        // Hit the end of the buffer with nothing found.
+                        if pos.is_null() {
+                            clearopbeep((*cap).oap);
+                        }
+                        n = 0;
+                        break;
+                    }
+                    let c = gchar_cursor();
+                    if c != '{' as c_int && c != '}' as c_int {
+                        continue;
+                    }
+                    if (c == findc && norm) || (n == 1 && !norm) {
+                        new_pos = (*curwin.get()).w_cursor;
+                        pos = &raw mut new_pos;
+                        n = 0;
+                    } else if new_pos.lnum == 0 {
+                        new_pos = (*curwin.get()).w_cursor;
+                        pos = &raw mut new_pos;
+                    } else {
+                        // A brace of the other kind: step over the block it
+                        // opens or closes.
+                        pos = findmatchlimit((*cap).oap, findc, match_direction(cap), 0);
+                        if pos.is_null() {
+                            n = 0;
+                        } else {
+                            (*curwin.get()).w_cursor = *pos;
+                        }
+                    }
+                    break;
+                }
+                n -= 1;
+            }
+            (*curwin.get()).w_cursor = *old_pos;
+            // A position was found on the way out but lost on the way back in.
+            if pos.is_null() && new_pos.lnum != 0 {
+                clearopbeep((*cap).oap);
+            }
+        }
+
+        if !pos.is_null() {
+            setpcmark();
+            (*curwin.get()).w_cursor = *pos;
+            (*curwin.get()).w_set_curswant = true_0;
+            may_fold_open(cap, kOptFdoFlagBlock as c_uint);
+        }
+    }
+}
+
+/// Look an identifier under the cursor up in the included files.
+///
+/// The case of the second character picks the action: an upper-case one lists
+/// every match, a lower-case one lists the first, and a control character
+/// jumps to it. `d`-family keys (`d`, `D`, CTRL-D) search for a `#define`
+/// rather than for any occurrence, which is what the low-nibble comparison
+/// tests -- CTRL-D, `d` and `D` all end in the same four bits.
+unsafe fn nv_bracket_ident(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        let mut found: *mut c_char = ptr::null_mut();
+        let len = find_ident_under_cursor(&raw mut found, FIND_IDENT as c_int, ptr::null_mut());
+        if len == 0 {
+            clearop((*cap).oap);
+            return;
+        }
+        let nchar = (*cap).nchar;
+        let ctype = *(*__ctype_b_loc()).offset(nchar as isize) as c_int;
+        let is_upper = ctype & _ISupper as c_ushort as c_int != 0;
+        let is_lower = ctype & _ISlower as c_ushort as c_int != 0;
+        // `find_pattern_in_path` keeps the name, so hand it a copy.
+        let name = xmemdupz(found as *const c_void, len) as *mut c_char;
+        find_pattern_in_path(
+            name,
+            kDirectionNotSet,
+            len,
+            true,
+            // Without a count, a lower-case key searches case-insensitively.
+            if (*cap).count0 == 0 { !is_upper } else { false },
+            if nchar & 0xf == 'd' as c_int & 0xf {
+                FIND_DEFINE as c_int
+            } else {
+                FIND_ANY as c_int
+            },
+            (*cap).count1,
+            if is_upper {
+                ACTION_SHOW_ALL as c_int
+            } else if is_lower {
+                ACTION_SHOW as c_int
+            } else {
+                ACTION_GOTO as c_int
+            },
+            // `]` starts below the cursor line, `[` at the top of the file.
+            if (*cap).cmdchar == ']' as c_int {
+                (*curwin.get()).w_cursor.lnum + 1
+            } else {
+                1
+            },
+            MAXLNUM as linenr_T,
+            false,
+            false,
+        );
+        xfree(name as *mut c_void);
+        (*curwin.get()).w_set_curswant = true_0;
+    }
+}
+
+/// `['`, `` [` ``, `]'` and `` ]` ``: jump to the next or previous lower-case
+/// mark in this buffer.
+unsafe fn nv_bracket_mark(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        // The walk starts from a mark standing for the cursor itself.
+        let mut fm = pos_to_mark(curbuf.get(), ptr::null_mut(), (*curwin.get()).w_cursor);
+        debug_assert!(!fm.is_null());
+        let linewise = (*cap).nchar == '\'' as c_int;
+        let mut prev_fm = ptr::null_mut();
+        let mut n = (*cap).count1;
+        while n > 0 {
+            prev_fm = fm;
+            fm = getnextmark(&raw mut (*fm).mark, direction(cap), linewise as c_int);
             if fm.is_null() {
                 break;
             }
             n -= 1;
         }
+        // Running out of marks stops at the last one rather than failing.
         if fm.is_null() {
             fm = prev_fm;
         }
-        let mut flags: MarkMove = kMarkContext;
-        flags = (flags as c_uint
-            | (if (*cap).nchar == '\'' as c_int {
-                kMarkBeginLine as c_int
-            } else {
-                0 as c_int
-            }) as c_uint) as MarkMove;
+        let mut flags = kMarkContext as MarkMove;
+        if linewise {
+            flags |= kMarkBeginLine as MarkMove;
+        }
         nv_mark_move_to(cap, flags, fm);
-    } else if (*cap).nchar >= -(253 as c_int + ((KE_RIGHTRELEASE as c_int) << 8 as c_int))
-        && (*cap).nchar <= -(253 as c_int + ((KE_LEFTMOUSE as c_int) << 8 as c_int))
-    {
-        do_mouse(
-            (*cap).oap,
-            (*cap).nchar,
-            if (*cap).cmdchar == ']' as c_int {
-                FORWARD as c_int
-            } else {
-                BACKWARD as c_int
-            },
-            (*cap).count1,
-            PUT_FIXINDENT as c_int != 0,
-        );
-    } else if (*cap).nchar == 'z' as c_int {
-        if foldMoveTo(
-            false_0 != 0,
-            if (*cap).cmdchar == ']' as c_int {
-                FORWARD as c_int
-            } else {
-                BACKWARD as c_int
-            },
-            (*cap).count1,
-        ) == false_0
-        {
-            clearopbeep((*cap).oap);
-        }
-    } else if (*cap).nchar == 'c' as c_int {
-        if diff_move_to(
-            if (*cap).cmdchar == ']' as c_int {
-                FORWARD as c_int
-            } else {
-                BACKWARD as c_int
-            },
-            (*cap).count1,
-        ) == false_0
-        {
-            clearopbeep((*cap).oap);
-        }
-    } else if (*cap).nchar == 'r' as c_int
-        || (*cap).nchar == 's' as c_int
-        || (*cap).nchar == 'S' as c_int
-    {
+    }
+}
+
+/// `[s`, `[r`, `[S`, `]s`, `]r` and `]S`: jump to a misspelled word.
+unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
         setpcmark();
-        n = 0 as c_int;
-        while n < (*cap).count1 {
-            if spell_move_to(
-                curwin.get(),
-                if (*cap).cmdchar == ']' as c_int {
-                    FORWARD as c_int
-                } else {
-                    BACKWARD as c_int
-                },
-                (if (*cap).nchar == 's' as c_int {
-                    SMT_ALL as c_int
-                } else {
-                    if (*cap).nchar == 'r' as c_int {
-                        SMT_RARE as c_int
-                    } else {
-                        SMT_BAD as c_int
-                    }
-                }) as smt_T,
-                false_0 != 0,
-                ::core::ptr::null_mut::<hlf_T>(),
-            ) == 0 as size_t
-            {
+        let what = match u8::try_from((*cap).nchar) {
+            Ok(b's') => SMT_ALL as smt_T,
+            Ok(b'r') => SMT_RARE as smt_T,
+            _ => SMT_BAD as smt_T,
+        };
+        for _ in 0..(*cap).count1 {
+            if spell_move_to(curwin.get(), direction(cap), what, false, ptr::null_mut()) == 0 {
                 clearopbeep((*cap).oap);
                 break;
-            } else {
-                (*curwin.get()).w_set_curswant = true_0;
-                n += 1;
             }
+            (*curwin.get()).w_set_curswant = true_0;
         }
-        if (*(*cap).oap).op_type == OP_NOP as c_int
-            && fdo_flags.get() & kOptFdoFlagSearch as c_int as c_uint != 0
-            && KeyTyped.get() as c_int != 0
-        {
-            foldOpenCursor();
+        may_fold_open(cap, kOptFdoFlagSearch as c_uint);
+    }
+}
+
+/// `[` and `]`, whose second character says what kind of jump this is.
+pub(crate) unsafe extern "C" fn nv_brackets(cap: *mut cmdarg_T) {
+    // SAFETY: `cap` is the caller's live command argument.
+    unsafe {
+        (*(*cap).oap).motion_type = kMTCharWise;
+        (*(*cap).oap).inclusive = false;
+        let old_pos = (*curwin.get()).w_cursor;
+        (*curwin.get()).w_cursor.coladd = 0;
+
+        let nchar = (*cap).nchar;
+        let opening = (*cap).cmdchar == '[' as c_int;
+        // The bracket forms that name a block: `[{ [( [* [/ [# [m [M` and the
+        // closing halves of each.
+        let block_chars: &CStr = if opening { c"{(*/#mM" } else { c"})*/#mM" };
+
+        if nchar == 'f' as c_int {
+            nv_gotofile(cap);
+        } else if !vim_strchr(c"iI\tdD\x04".as_ptr(), nchar).is_null() {
+            nv_bracket_ident(cap);
+        } else if !vim_strchr(block_chars.as_ptr(), nchar).is_null() {
+            nv_bracket_block(cap, &raw const old_pos);
+        } else if nchar == '[' as c_int || nchar == ']' as c_int {
+            // `[[` and `]]` look for a section start, `[]` and `][` for its
+            // end.
+            let flag = if nchar == (*cap).cmdchar {
+                '{' as c_int
+            } else {
+                '}' as c_int
+            };
+            (*curwin.get()).w_set_curswant = true_0;
+            if !findpar(
+                &raw mut (*(*cap).oap).inclusive,
+                (*cap).arg,
+                (*cap).count1,
+                flag,
+                (*(*cap).oap).op_type != OP_NOP as c_int
+                    && (*cap).arg == FORWARD as c_int
+                    && flag == '{' as c_int,
+            ) {
+                clearopbeep((*cap).oap);
+            } else {
+                if (*(*cap).oap).op_type == OP_NOP as c_int {
+                    beginline(BL_WHITE as c_int | BL_FIX as c_int);
+                }
+                may_fold_open(cap, kOptFdoFlagBlock as c_uint);
+            }
+        } else if nchar == 'p' as c_int || nchar == 'P' as c_int {
+            // The put that reindents to the current line.
+            nv_put_opt(cap, true);
+        } else if nchar == '\'' as c_int || nchar == '`' as c_int {
+            nv_bracket_mark(cap);
+        } else if nchar >= K_RIGHTRELEASE && nchar <= K_LEFTMOUSE {
+            // A mouse click after `[` or `]` pastes at the click, reindenting.
+            do_mouse(
+                (*cap).oap,
+                nchar,
+                direction(cap),
+                (*cap).count1,
+                PUT_FIXINDENT as c_int != 0,
+            );
+        } else if nchar == 'z' as c_int {
+            if foldMoveTo(false, direction(cap), (*cap).count1) == false_0 {
+                clearopbeep((*cap).oap);
+            }
+        } else if nchar == 'c' as c_int {
+            if diff_move_to(direction(cap), (*cap).count1) == false_0 {
+                clearopbeep((*cap).oap);
+            }
+        } else if nchar == 'r' as c_int || nchar == 's' as c_int || nchar == 'S' as c_int {
+            nv_bracket_spell(cap);
+        } else {
+            clearopbeep((*cap).oap);
         }
-    } else {
-        clearopbeep((*cap).oap);
-    };
+    }
 }
