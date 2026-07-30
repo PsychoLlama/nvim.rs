@@ -32,6 +32,12 @@ Behavior-preserving: same features, formats, and RPC surface.
 - Rewrote the startup, covering command-line argument parsing, the order the
   editor initialises in, where the config is read from, `--embed`,
   `--headless`, `-l` and `--remote`, and every path out of the process.
+- Rewrote the Ex command dispatcher, covering every `:` command the editor
+  runs: the command table and how a name is resolved, ranges, counts and
+  registers, command modifiers, `++opt` and `+cmd` arguments, `%`/`#`/
+  `<cfile>` expansion, `nvim_parse_cmd` and `nvim_cmd`, and the sourcing
+  loop that `:source`, `:execute`, `:global`, autocommands and mappings all
+  run through.
 - Generated the API dispatch layer from the API signatures again
   (`just apigen`), covering every msgpack-RPC method, the `vim.api` Lua
   binding, and `nvim --api-info`.
