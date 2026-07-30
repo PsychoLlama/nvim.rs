@@ -1,137 +1,182 @@
 //! Leaving: a window, a tab page, a buffer, or the editor.
+//!
+//! Every quit is two questions asked in order. First, may we leave at all
+//! — QuitPre and ExitPre autocommands run here and may close the window
+//! under us, so everything is re-validated afterwards. Second, is anything
+//! unsaved — which may put a dialog up, which may itself change the answer
+//! to the first question.
+//!
+//! `exiting` is set *before* the checks and put back by `not_exiting` when
+//! any of them refuses, because the checks themselves look at it.
+#![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn ex_bunload(mut eap: *mut exarg_T) {
-    (*eap).errmsg = do_bufdel(
-        if (*eap).cmdidx as c_int == CMD_bdelete as c_int {
-            DOBUF_DEL as c_int
-        } else if (*eap).cmdidx as c_int == CMD_bwipeout as c_int {
-            DOBUF_WIPE as c_int
+use crate::src::nvim::autocmd::{apply_autocmds, is_aucmd_win, may_trigger_vim_suspend_resume};
+use crate::src::nvim::buffer::{buf_hide, bufref_valid, do_bufdel, no_write_message, set_bufref};
+use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
+use crate::src::nvim::ex_cmds::do_write;
+use crate::src::nvim::ex_cmds2::{autowrite_all, check_changed, check_changed_any, dialog_changed};
+use crate::src::nvim::ex_docmd::argopt::{check_more, get_tabpage_arg};
+use crate::src::nvim::ex_docmd::source::not_exiting;
+use crate::src::nvim::ex_docmd::{
+    CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide,
+    CMD_only, CMD_tabclose, CMD_tabonly, CMD_wq, CMOD_CONFIRM, Ctrl_C, DOBUF_DEL, DOBUF_UNLOAD,
+    DOBUF_WIPE, EVENT_EXITPRE, EVENT_QUITPRE, EXIT_FAILURE, FAIL, KE_IGNORE, KE_XF1, KE_XF2, NUL,
+    OK, VV_EXITREASON, cmdmod,
+};
+use crate::src::nvim::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
+use crate::src::nvim::getchar::beep_flush;
+use crate::src::nvim::main::{
+    cmdwin_result, cmdwin_type, curbuf, curtab, curwin, e_autocmd_close, exiting, first_tabpage,
+    firstwin, getout, lastwin, p_awa, p_confirm, p_write, topframe,
+};
+use crate::src::nvim::message::{emsg, msg};
+use crate::src::nvim::os::libc::{gettext, snprintf};
+use crate::src::nvim::types::{
+    Integer, buf_T, bufref_T, exarg_T, linenr_T, ptrdiff_t, tabpage_T, win_T,
+};
+use crate::src::nvim::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
+use crate::src::nvim::undo::{bufIsChanged, curbufIsChanged};
+use crate::src::nvim::window::{
+    close_others, find_tabpage, goto_tabpage, only_one_window, tabpage_index, trigger_tabclosedpre,
+    valid_tabpage, win_close, win_close_othertab, win_goto, win_valid, window_layout_locked,
+};
+
+/// The key a command-line window sends back to close itself, with the
+/// modifier bits an `xf1`/`xf2`/`ignore` special key carries.
+const fn special_key(code: c_int) -> c_int {
+    -(253 + (code << 8))
+}
+
+/// `:bdelete`, `:bwipeout` and `:bunload`.
+pub(crate) unsafe extern "C" fn ex_bunload(eap: *mut exarg_T) {
+    unsafe {
+        let idx = (*eap).cmdidx as c_int;
+        let action = if idx == CMD_bdelete as c_int {
+            DOBUF_DEL
+        } else if idx == CMD_bwipeout as c_int {
+            DOBUF_WIPE
         } else {
-            DOBUF_UNLOAD as c_int
-        },
-        (*eap).arg,
-        (*eap).addr_count,
-        (*eap).line1 as c_int,
-        (*eap).line2 as c_int,
-        (*eap).forceit,
-    );
+            DOBUF_UNLOAD
+        } as c_int;
+        (*eap).errmsg = do_bufdel(
+            action,
+            (*eap).arg,
+            (*eap).addr_count,
+            (*eap).line1 as c_int,
+            (*eap).line2 as c_int,
+            (*eap).forceit,
+        );
+    }
 }
 
-pub unsafe extern "C" fn before_quit_autocmds(
-    mut wp: *mut win_T,
-    mut quit_all: bool,
-    mut forceit: bool,
-) -> bool {
-    if *get_vim_var_str(VV_EXITREASON) as c_int == NUL {
-        set_vim_var_string(
-            VV_EXITREASON,
-            b"quit\0".as_ptr() as *const c_char,
-            ::core::mem::size_of::<[c_char; 5]>().wrapping_sub(1 as usize) as ptrdiff_t,
-        );
-    }
-    apply_autocmds(
-        EVENT_QUITPRE,
-        ::core::ptr::null_mut::<c_char>(),
-        ::core::ptr::null_mut::<c_char>(),
-        false_0 != 0,
-        (*wp).w_buffer,
-    );
-    if !win_valid(wp)
-        || curbuf_locked() as c_int != 0
-        || (*(*wp).w_buffer).b_nwindows == 1 as c_int && (*(*wp).w_buffer).b_locked > 0 as c_int
-    {
-        set_vim_var_string(
-            VV_EXITREASON,
-            ::core::ptr::null::<c_char>(),
-            -1 as ptrdiff_t,
-        );
-        return true_0 != 0;
-    }
-    if quit_all as c_int != 0
-        || check_more(false_0 != 0, forceit) == OK && only_one_window() as c_int != 0
-    {
+/// Run QuitPre, and ExitPre when this really is the last window.
+///
+/// Answers `true` when the quit must be abandoned. An autocommand can
+/// close the window, lock the buffer or start a text operation, so both
+/// events are followed by the same three-part re-validation.
+pub unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool) -> bool {
+    unsafe {
+        // `v:exitreason` is set for the autocommands to read, and cleared
+        // again if the quit does not happen.
+        if *get_vim_var_str(VV_EXITREASON) as c_int == NUL {
+            set_vim_var_string(VV_EXITREASON, c"quit".as_ptr(), 4 as ptrdiff_t);
+        }
         apply_autocmds(
-            EVENT_EXITPRE,
-            ::core::ptr::null_mut::<c_char>(),
-            ::core::ptr::null_mut::<c_char>(),
-            false_0 != 0,
-            curbuf.get(),
+            EVENT_QUITPRE,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            false,
+            (*wp).w_buffer,
         );
-        if !win_valid(wp)
-            || curbuf_locked() as c_int != 0
-            || (*curbuf.get()).b_nwindows == 1 as c_int && (*curbuf.get()).b_locked > 0 as c_int
-        {
-            set_vim_var_string(
-                VV_EXITREASON,
-                ::core::ptr::null::<c_char>(),
-                -1 as ptrdiff_t,
-            );
-            return true_0 != 0;
+        if quit_was_cancelled(wp, (*wp).w_buffer) {
+            return true;
         }
+
+        // ExitPre is only for a quit that would end the process.
+        if quit_all || check_more(false, forceit) == OK && only_one_window() {
+            apply_autocmds(
+                EVENT_EXITPRE,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                false,
+                curbuf.get(),
+            );
+            if quit_was_cancelled(wp, curbuf.get()) {
+                return true;
+            }
+        }
+        false
     }
-    return false_0 != 0;
 }
 
-pub(crate) unsafe extern "C" fn ex_quit(mut eap: *mut exarg_T) {
-    if cmdwin_type.get() != 0 as c_int {
-        cmdwin_result.set(Ctrl_C);
-        return;
-    }
-    if text_locked() {
-        text_locked_msg();
-        return;
-    }
-    let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    if (*eap).addr_count > 0 as c_int {
-        let mut wnr: linenr_T = (*eap).line2;
-        wp = firstwin.get();
-        while !(*wp).w_next.is_null() {
-            wnr -= 1;
-            if wnr <= 0 as linenr_T {
-                break;
-            }
-            wp = (*wp).w_next;
+/// Did an autocommand make the quit impossible — by closing the window,
+/// locking the buffer, or starting something that must finish first?
+unsafe fn quit_was_cancelled(wp: *mut win_T, buf: *mut buf_T) -> bool {
+    unsafe {
+        if win_valid(wp) && !curbuf_locked() && !((*buf).b_nwindows == 1 && (*buf).b_locked > 0) {
+            return false;
         }
-    } else {
-        wp = curwin.get();
+        set_vim_var_string(VV_EXITREASON, ptr::null(), -1 as ptrdiff_t);
+        true
     }
-    if curbuf_locked() {
-        return;
-    }
-    if before_quit_autocmds(wp, false_0 != 0, (*eap).forceit != 0) {
-        return;
-    }
-    let mut save_exiting: bool = exiting.get();
-    if check_more(false_0 != 0, (*eap).forceit != 0) == OK && only_one_window() as c_int != 0 {
-        exiting.set(true_0 != 0);
-    }
-    if !buf_hide((*wp).w_buffer)
-        && check_changed(
-            (*wp).w_buffer,
-            (if p_awa.get() != 0 {
-                CCGD_AW as c_int
-            } else {
-                0 as c_int
-            }) | (if (*eap).forceit != 0 {
-                CCGD_FORCEIT as c_int
-            } else {
-                0 as c_int
-            }) | CCGD_EXCMD as c_int,
-        ) as c_int
-            != 0
-        || check_more(true_0 != 0, (*eap).forceit != 0) == FAIL
-        || only_one_window() as c_int != 0
-            && check_changed_any((*eap).forceit != 0, true_0 != 0) as c_int != 0
-    {
-        not_exiting(save_exiting);
-    } else {
-        if only_one_window() as c_int != 0
-            && (firstwin.get() == lastwin.get() || (*eap).addr_count == 0 as c_int)
+}
+
+/// `:quit`.
+pub(crate) unsafe extern "C" fn ex_quit(eap: *mut exarg_T) {
+    unsafe {
+        if cmdwin_type.get() != 0 {
+            // In the command-line window, `:q` closes that instead.
+            cmdwin_result.set(Ctrl_C);
+            return;
+        }
+        if text_locked() {
+            text_locked_msg();
+            return;
+        }
+        let wp = if (*eap).addr_count > 0 {
+            window_at((*eap).line2)
+        } else {
+            curwin.get()
+        };
+        if curbuf_locked() {
+            return;
+        }
+        if before_quit_autocmds(wp, false, (*eap).forceit != 0) {
+            return;
+        }
+
+        let save_exiting = exiting.get();
+        if check_more(false, (*eap).forceit != 0) == OK && only_one_window() {
+            exiting.set(true);
+        }
+        // The three refusals: unsaved changes in this buffer, files left in
+        // the argument list, unsaved changes anywhere else.
+        if !buf_hide((*wp).w_buffer)
+            && check_changed(
+                (*wp).w_buffer,
+                (if p_awa.get() != 0 {
+                    CCGD_AW as c_int
+                } else {
+                    0
+                }) | (if (*eap).forceit != 0 {
+                    CCGD_FORCEIT as c_int
+                } else {
+                    0
+                }) | CCGD_EXCMD as c_int,
+            )
+            || check_more(true, (*eap).forceit != 0) == FAIL
+            || only_one_window() && check_changed_any((*eap).forceit != 0, true)
         {
-            getout(0 as c_int);
+            not_exiting(save_exiting);
+            return;
+        }
+        // `:1quit` with one window open closes the window rather than
+        // exiting; a bare `:quit` exits.
+        if only_one_window() && (firstwin.get() == lastwin.get() || (*eap).addr_count == 0) {
+            getout(0);
         }
         not_exiting(save_exiting);
         win_close(
@@ -139,381 +184,423 @@ pub(crate) unsafe extern "C" fn ex_quit(mut eap: *mut exarg_T) {
             !buf_hide((*wp).w_buffer) || (*eap).forceit != 0,
             (*eap).forceit != 0,
         );
-    };
+    }
 }
 
-/// `:cquit` never returns — `getout` exits the process. The signature
-/// still says `()` because the command table holds one fn pointer type
-/// and a `-> !` fn item does not coerce to it.
-pub(crate) unsafe extern "C" fn ex_cquit(mut eap: *mut exarg_T) {
-    let mut status: c_int = if (*eap).addr_count > 0 as c_int {
-        (*eap).line2 as c_int
-    } else {
-        EXIT_FAILURE
-    };
-    ui_call_error_exit(status as Integer);
-    getout(status);
-}
-
-pub unsafe extern "C" fn before_quit_all(mut eap: *mut exarg_T) -> c_int {
-    if cmdwin_type.get() != 0 as c_int {
-        cmdwin_result.set(if (*eap).forceit != 0 {
-            -(253 as c_int + ((KE_XF1 as c_int) << 8 as c_int))
-        } else {
-            -(253 as c_int + ((KE_XF2 as c_int) << 8 as c_int))
-        });
-        return FAIL;
-    }
-    if text_locked() {
-        text_locked_msg();
-        return FAIL;
-    }
-    if before_quit_autocmds(curwin.get(), true_0 != 0, (*eap).forceit != 0) {
-        return FAIL;
-    }
-    return OK;
-}
-
-pub(crate) unsafe extern "C" fn ex_quitall(mut eap: *mut exarg_T) {
-    if before_quit_all(eap) == FAIL {
-        return;
-    }
-    let mut save_exiting: bool = exiting.get();
-    exiting.set(true_0 != 0);
-    if (*eap).forceit != 0 || !check_changed_any(false_0 != 0, false_0 != 0) {
-        getout(0 as c_int);
-    }
-    not_exiting(save_exiting);
-}
-
-pub(crate) unsafe extern "C" fn ex_close(mut eap: *mut exarg_T) {
-    let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    let mut winnr: c_int = 0 as c_int;
-    if cmdwin_type.get() != 0 as c_int {
-        cmdwin_result.set(Ctrl_C);
-    } else if !text_locked() && !curbuf_locked() {
-        if (*eap).addr_count == 0 as c_int {
-            ex_win_close(
-                (*eap).forceit,
-                curwin.get(),
-                ::core::ptr::null_mut::<tabpage_T>(),
-            );
-        } else {
-            let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-                firstwin.get()
-            } else {
-                (*curtab.get()).tp_firstwin
-            };
-            while !wp.is_null() {
-                winnr += 1;
-                if winnr as linenr_T == (*eap).line2 {
-                    win = wp;
-                    break;
-                } else {
-                    wp = (*wp).w_next;
-                }
+/// The `nr`'th window of the current tab page, clamped to the last one.
+unsafe fn window_at(nr: linenr_T) -> *mut win_T {
+    unsafe {
+        let mut wp = firstwin.get();
+        let mut n = nr;
+        while !(*wp).w_next.is_null() {
+            n -= 1;
+            if n <= 0 {
+                break;
             }
-            if win.is_null() {
-                win = lastwin.get();
-            }
-            ex_win_close((*eap).forceit, win, ::core::ptr::null_mut::<tabpage_T>());
+            wp = (*wp).w_next;
         }
+        wp
     }
 }
 
-pub(crate) unsafe extern "C" fn ex_pclose(mut eap: *mut exarg_T) {
-    let mut win: *mut win_T = if curtab.get() == curtab.get() {
-        firstwin.get()
-    } else {
-        (*curtab.get()).tp_firstwin
-    };
-    while !win.is_null() {
-        if (*win).w_onebuf_opt.wo_pvw != 0 {
-            ex_win_close((*eap).forceit, win, ::core::ptr::null_mut::<tabpage_T>());
-            break;
+/// `:cquit` — exit with a status, never returning.
+///
+/// The signature still says `()` because the command table holds one fn
+/// pointer type and a `-> !` fn item does not coerce to it.
+pub(crate) unsafe extern "C" fn ex_cquit(eap: *mut exarg_T) {
+    unsafe {
+        let status = if (*eap).addr_count > 0 {
+            (*eap).line2 as c_int
         } else {
+            EXIT_FAILURE
+        };
+        // Tell the UI *why* the process is about to vanish, before it does.
+        ui_call_error_exit(status as Integer);
+        getout(status);
+    }
+}
+
+/// The checks `:qall`, `:xall` and `:wqall` share before any of them
+/// starts writing.
+pub unsafe fn before_quit_all(eap: *mut exarg_T) -> c_int {
+    unsafe {
+        if cmdwin_type.get() != 0 {
+            cmdwin_result.set(special_key(if (*eap).forceit != 0 {
+                KE_XF1 as c_int
+            } else {
+                KE_XF2 as c_int
+            }));
+            return FAIL;
+        }
+        if text_locked() {
+            text_locked_msg();
+            return FAIL;
+        }
+        if before_quit_autocmds(curwin.get(), true, (*eap).forceit != 0) {
+            return FAIL;
+        }
+        OK
+    }
+}
+
+/// `:qall`.
+pub(crate) unsafe extern "C" fn ex_quitall(eap: *mut exarg_T) {
+    unsafe {
+        if before_quit_all(eap) == FAIL {
+            return;
+        }
+        let save_exiting = exiting.get();
+        exiting.set(true);
+        if (*eap).forceit != 0 || !check_changed_any(false, false) {
+            getout(0);
+        }
+        not_exiting(save_exiting);
+    }
+}
+
+/// `:close`.
+pub(crate) unsafe extern "C" fn ex_close(eap: *mut exarg_T) {
+    unsafe {
+        if cmdwin_type.get() != 0 {
+            cmdwin_result.set(Ctrl_C);
+            return;
+        }
+        if text_locked() || curbuf_locked() {
+            return;
+        }
+        let win = if (*eap).addr_count == 0 {
+            curwin.get()
+        } else {
+            numbered_window((*eap).line2)
+        };
+        ex_win_close((*eap).forceit, win, ptr::null_mut());
+    }
+}
+
+/// The window with this number in the current tab page, or the last one.
+///
+/// Unlike `window_at`, this counts from one and falls back to `lastwin`
+/// rather than stopping at the end.
+unsafe fn numbered_window(nr: linenr_T) -> *mut win_T {
+    unsafe {
+        let mut winnr = 0;
+        let mut wp = firstwin.get();
+        while !wp.is_null() {
+            winnr += 1;
+            if winnr as linenr_T == nr {
+                return wp;
+            }
+            wp = (*wp).w_next;
+        }
+        lastwin.get()
+    }
+}
+
+/// `:pclose` — close the preview window, wherever it is.
+pub(crate) unsafe extern "C" fn ex_pclose(eap: *mut exarg_T) {
+    unsafe {
+        let mut win = firstwin.get();
+        while !win.is_null() {
+            if (*win).w_onebuf_opt.wo_pvw != 0 {
+                ex_win_close((*eap).forceit, win, ptr::null_mut());
+                return;
+            }
             win = (*win).w_next;
         }
     }
 }
 
-pub unsafe extern "C" fn ex_win_close(
-    mut forceit: c_int,
-    mut win: *mut win_T,
-    mut tp: *mut tabpage_T,
-) {
-    if is_aucmd_win(win) {
-        emsg(gettext(&raw const e_autocmd_close as *const c_char));
-        return;
-    }
-    if !(*win).w_floating && window_layout_locked(CMD_close) as c_int != 0 {
-        return;
-    }
-    let mut buf: *mut buf_T = (*win).w_buffer;
-    let mut need_hide: bool = bufIsChanged(buf) as c_int != 0 && (*buf).b_nwindows <= 1 as c_int;
-    if need_hide as c_int != 0 && !buf_hide(buf) && forceit == 0 {
-        if (p_confirm.get() != 0 || (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as c_int != 0)
-            && p_write.get() != 0
-        {
-            let mut bufref: bufref_T = bufref_T {
-                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            };
-            set_bufref(&raw mut bufref, buf);
-            dialog_changed(buf, false_0 != 0);
-            if bufref_valid(&raw mut bufref) as c_int != 0 && bufIsChanged(buf) as c_int != 0 {
-                return;
-            }
-            need_hide = false_0 != 0;
-        } else {
-            no_write_message();
+/// Close one window, asking about unsaved changes first.
+///
+/// `tp` is the tab page the window belongs to, or null for this one; a
+/// window in another tab page cannot simply be entered, so it takes the
+/// other close path.
+pub unsafe fn ex_win_close(forceit: c_int, win: *mut win_T, tp: *mut tabpage_T) {
+    unsafe {
+        if is_aucmd_win(win) {
+            emsg(gettext(&raw const e_autocmd_close as *const c_char));
             return;
         }
-    }
-    if tp.is_null() {
-        win_close(win, !need_hide && !buf_hide(buf), forceit != 0);
-    } else {
-        win_close_othertab(
-            win,
-            (!need_hide && !buf_hide(buf)) as c_int,
-            tp,
-            forceit != 0,
-        );
-    };
-}
+        // A floating window is not part of the layout, so a locked layout
+        // does not protect it.
+        if !(*win).w_floating && window_layout_locked(CMD_close) {
+            return;
+        }
 
-pub(crate) unsafe extern "C" fn ex_tabclose(mut eap: *mut exarg_T) {
-    if cmdwin_type.get() != 0 as c_int {
-        cmdwin_result.set(-(253 as c_int + ((KE_IGNORE as c_int) << 8 as c_int)));
-        return;
-    }
-    if (*first_tabpage.get()).tp_next.is_null() {
-        emsg(gettext(
-            b"E784: Cannot close last tab page\0".as_ptr() as *const c_char
-        ));
-        return;
-    }
-    if window_layout_locked(CMD_tabclose) {
-        return;
-    }
-    let mut tab_number: c_int = get_tabpage_arg(eap);
-    if !(*eap).errmsg.is_null() {
-        return;
-    }
-    let mut tp: *mut tabpage_T = find_tabpage(tab_number);
-    if tp.is_null() {
-        beep_flush();
-        return;
-    }
-    if tp != curtab.get() {
-        tabpage_close_other(tp, (*eap).forceit);
-        return;
-    } else if !text_locked() && !curbuf_locked() {
-        tabpage_close((*eap).forceit);
-    }
-}
-
-pub(crate) unsafe extern "C" fn ex_tabonly(mut eap: *mut exarg_T) {
-    if cmdwin_type.get() != 0 as c_int {
-        cmdwin_result.set(-(253 as c_int + ((KE_IGNORE as c_int) << 8 as c_int)));
-        return;
-    }
-    if (*first_tabpage.get()).tp_next.is_null() {
-        msg(
-            gettext(b"Already only one tab page\0".as_ptr() as *const c_char),
-            0 as c_int,
-        );
-        return;
-    }
-    if window_layout_locked(CMD_tabonly) {
-        return;
-    }
-    let mut tab_number: c_int = get_tabpage_arg(eap);
-    if !(*eap).errmsg.is_null() {
-        return;
-    }
-    goto_tabpage(tab_number);
-    let mut done: c_int = 0 as c_int;
-    while done < 1000 as c_int {
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp.is_null() {
-            if (*tp).tp_topframe != topframe.get() {
-                tabpage_close_other(tp as *mut tabpage_T, (*eap).forceit);
-                if valid_tabpage(tp as *mut tabpage_T) {
-                    done = 1000 as c_int;
+        let buf = (*win).w_buffer;
+        // Only the last window on a changed buffer has to ask.
+        let mut need_hide = bufIsChanged(buf) && (*buf).b_nwindows <= 1;
+        if need_hide && !buf_hide(buf) && forceit == 0 {
+            if (p_confirm.get() != 0 || (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as c_int != 0)
+                && p_write.get() != 0
+            {
+                let mut bufref: bufref_T = core::mem::zeroed();
+                set_bufref(&raw mut bufref, buf);
+                dialog_changed(buf, false);
+                // The dialog may have wiped the buffer, or written it.
+                if bufref_valid(&raw mut bufref) && bufIsChanged(buf) {
+                    return;
                 }
-                break;
+                need_hide = false;
             } else {
-                tp = (*tp).tp_next as *mut tabpage_T;
+                no_write_message();
+                return;
             }
         }
-        '_c2rust_label: {
-            if !(*first_tabpage.ptr()).is_null() {
-            } else {
-                __assert_fail(
-                    b"first_tabpage\0".as_ptr() as *const c_char,
-                    b"src/nvim/ex_docmd.rs\0".as_ptr() as *const c_char,
-                    5361 as c_uint,
-                    b"void ex_tabonly(exarg_T *)\0".as_ptr() as *const c_char,
-                );
-            }
-        };
+
+        if tp.is_null() {
+            win_close(win, !need_hide && !buf_hide(buf), forceit != 0);
+        } else {
+            win_close_othertab(
+                win,
+                (!need_hide && !buf_hide(buf)) as c_int,
+                tp,
+                forceit != 0,
+            );
+        }
+    }
+}
+
+/// `:tabclose`.
+pub(crate) unsafe extern "C" fn ex_tabclose(eap: *mut exarg_T) {
+    unsafe {
+        if cmdwin_type.get() != 0 {
+            cmdwin_result.set(special_key(KE_IGNORE as c_int));
+            return;
+        }
         if (*first_tabpage.get()).tp_next.is_null() {
-            break;
+            emsg(gettext(c"E784: Cannot close last tab page".as_ptr()));
+            return;
         }
-        done += 1;
+        if window_layout_locked(CMD_tabclose) {
+            return;
+        }
+        let tab_number = get_tabpage_arg(eap);
+        if !(*eap).errmsg.is_null() {
+            return;
+        }
+        let tp = find_tabpage(tab_number);
+        if tp.is_null() {
+            beep_flush();
+            return;
+        }
+        if tp != curtab.get() {
+            tabpage_close_other(tp, (*eap).forceit);
+        } else if !text_locked() && !curbuf_locked() {
+            tabpage_close((*eap).forceit);
+        }
     }
 }
 
-pub unsafe extern "C" fn tabpage_close(mut forceit: c_int) {
-    if window_layout_locked(CMD_tabclose) {
-        return;
-    }
-    trigger_tabclosedpre(curtab.get());
-    (*curtab.get()).tp_did_tabclosedpre = true_0 != 0;
-    let save_curtab: *mut tabpage_T = curtab.get();
-    while (*curwin.get()).w_floating {
-        ex_win_close(forceit, curwin.get(), ::core::ptr::null_mut::<tabpage_T>());
-    }
-    if !(firstwin.get() == lastwin.get()) {
-        close_others(true_0, forceit);
-    }
-    if firstwin.get() == lastwin.get() {
-        ex_win_close(forceit, curwin.get(), ::core::ptr::null_mut::<tabpage_T>());
-    }
-    if curtab.get() == save_curtab {
-        (*curtab.get()).tp_did_tabclosedpre = false_0 != 0;
-    }
-}
+/// `:tabonly`.
+pub(crate) unsafe extern "C" fn ex_tabonly(eap: *mut exarg_T) {
+    unsafe {
+        if cmdwin_type.get() != 0 {
+            cmdwin_result.set(special_key(KE_IGNORE as c_int));
+            return;
+        }
+        if (*first_tabpage.get()).tp_next.is_null() {
+            msg(gettext(c"Already only one tab page".as_ptr()), 0);
+            return;
+        }
+        if window_layout_locked(CMD_tabonly) {
+            return;
+        }
+        let tab_number = get_tabpage_arg(eap);
+        if !(*eap).errmsg.is_null() {
+            return;
+        }
+        goto_tabpage(tab_number);
 
-pub unsafe extern "C" fn tabpage_close_other(mut tp: *mut tabpage_T, mut forceit: c_int) {
-    let mut done: c_int = 0 as c_int;
-    let mut prev_idx: [c_char; 65] = [0; 65];
-    if window_layout_locked(CMD_SIZE) {
-        return;
-    }
-    trigger_tabclosedpre(tp);
-    (*tp).tp_did_tabclosedpre = true_0 != 0;
-    loop {
-        done += 1;
-        if done >= 1000 as c_int {
-            break;
-        }
-        snprintf(
-            &raw mut prev_idx as *mut c_char,
-            ::core::mem::size_of::<[c_char; 65]>(),
-            b"%i\0".as_ptr() as *const c_char,
-            tabpage_index(tp),
-        );
-        let mut wp: *mut win_T = (*tp).tp_lastwin;
-        ex_win_close(forceit, wp, tp);
-        if !valid_tabpage(tp) {
-            break;
-        }
-        if (*tp).tp_lastwin != wp {
-            continue;
-        }
-        done = 1000 as c_int;
-        break;
-    }
-    if done >= 1000 as c_int {
-        (*tp).tp_did_tabclosedpre = false_0 != 0;
-        return;
-    }
-}
-
-pub(crate) unsafe extern "C" fn ex_only(mut eap: *mut exarg_T) {
-    if window_layout_locked(CMD_only) {
-        return;
-    }
-    if (*eap).addr_count > 0 as c_int {
-        let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        let mut wnr: linenr_T = (*eap).line2;
-        wp = firstwin.get();
-        loop {
-            wnr -= 1;
-            if wnr <= 0 as linenr_T {
+        // Close the first tab page that is not this one, and start again —
+        // closing one may close others through autocommands, so the list
+        // has to be walked from the top each time. The counter is a guard
+        // against a tab page that refuses to close.
+        let mut done = 0;
+        while done < 1000 {
+            let mut tp = first_tabpage.get();
+            while !tp.is_null() {
+                if (*tp).tp_topframe != topframe.get() {
+                    tabpage_close_other(tp, (*eap).forceit);
+                    if valid_tabpage(tp) {
+                        done = 1000;
+                    }
+                    break;
+                }
+                tp = (*tp).tp_next;
+            }
+            debug_assert!(!first_tabpage.get().is_null());
+            if (*first_tabpage.get()).tp_next.is_null() {
                 break;
             }
-            if (*wp).w_next.is_null() {
+            done += 1;
+        }
+    }
+}
+
+/// Close the current tab page, by closing every window in it.
+pub unsafe fn tabpage_close(forceit: c_int) {
+    unsafe {
+        if window_layout_locked(CMD_tabclose) {
+            return;
+        }
+        trigger_tabclosedpre(curtab.get());
+        // The flag stops the per-window closes triggering TabClosedPre
+        // again; it is cleared only if this is still the tab page it was
+        // set on.
+        (*curtab.get()).tp_did_tabclosedpre = true;
+        let save_curtab = curtab.get();
+
+        while (*curwin.get()).w_floating {
+            ex_win_close(forceit, curwin.get(), ptr::null_mut());
+        }
+        if firstwin.get() != lastwin.get() {
+            close_others(1, forceit);
+        }
+        if firstwin.get() == lastwin.get() {
+            ex_win_close(forceit, curwin.get(), ptr::null_mut());
+        }
+        if curtab.get() == save_curtab {
+            (*curtab.get()).tp_did_tabclosedpre = false;
+        }
+    }
+}
+
+/// Close a tab page that is not the current one.
+///
+/// Its windows are closed from the last backwards; the loop stops as soon
+/// as one refuses, which is what `tp_lastwin` not changing means.
+pub unsafe fn tabpage_close_other(tp: *mut tabpage_T, forceit: c_int) {
+    unsafe {
+        if window_layout_locked(CMD_SIZE) {
+            return;
+        }
+        trigger_tabclosedpre(tp);
+        (*tp).tp_did_tabclosedpre = true;
+
+        let mut done = 0;
+        let mut prev_idx: [c_char; 65] = [0; 65];
+        loop {
+            done += 1;
+            if done >= 1000 {
+                break;
+            }
+            // Written for its side effect on `prev_idx`, which upstream
+            // keeps for a message it no longer prints.
+            snprintf(
+                &raw mut prev_idx as *mut c_char,
+                size_of::<[c_char; 65]>(),
+                c"%i".as_ptr(),
+                tabpage_index(tp),
+            );
+            let wp = (*tp).tp_lastwin;
+            ex_win_close(forceit, wp, tp);
+            if !valid_tabpage(tp) {
+                break;
+            }
+            if (*tp).tp_lastwin == wp {
+                // Nothing closed: give up.
+                done = 1000;
+                break;
+            }
+        }
+        if done >= 1000 {
+            (*tp).tp_did_tabclosedpre = false;
+        }
+    }
+}
+
+/// `:only`.
+pub(crate) unsafe extern "C" fn ex_only(eap: *mut exarg_T) {
+    unsafe {
+        if window_layout_locked(CMD_only) {
+            return;
+        }
+        if (*eap).addr_count > 0 {
+            let wp = window_at_stepwise((*eap).line2);
+            if wp != curwin.get() {
+                win_goto(wp);
+            }
+        }
+        close_others(1, (*eap).forceit);
+    }
+}
+
+/// The `nr`'th window, counting down rather than up.
+///
+/// `:1only` is the *current* window: the count is spent before the walk
+/// starts, unlike `window_at`, which always steps at least once.
+unsafe fn window_at_stepwise(nr: linenr_T) -> *mut win_T {
+    unsafe {
+        let mut wp = firstwin.get();
+        let mut n = nr;
+        loop {
+            n -= 1;
+            if n <= 0 || (*wp).w_next.is_null() {
                 break;
             }
             wp = (*wp).w_next;
         }
-        if wp != curwin.get() {
-            win_goto(wp);
-        }
+        wp
     }
-    close_others(true_0, (*eap).forceit);
 }
 
-pub(crate) unsafe extern "C" fn ex_hide(mut eap: *mut exarg_T) {
-    if (*eap).skip != 0 {
-        return;
-    }
-    let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    if (*eap).addr_count == 0 as c_int {
-        win = curwin.get();
-    } else {
-        let mut winnr: c_int = 0 as c_int;
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
+/// `:hide` used as a command rather than as a modifier.
+pub(crate) unsafe extern "C" fn ex_hide(eap: *mut exarg_T) {
+    unsafe {
+        if (*eap).skip != 0 {
+            return;
+        }
+        let win = if (*eap).addr_count == 0 {
+            curwin.get()
         } else {
-            (*curtab.get()).tp_firstwin
+            numbered_window((*eap).line2)
         };
-        while !wp.is_null() {
-            winnr += 1;
-            if winnr as linenr_T == (*eap).line2 {
-                win = wp;
-                break;
-            } else {
-                wp = (*wp).w_next;
-            }
+        if !(*win).w_floating && window_layout_locked(CMD_hide) {
+            return;
         }
-        if win.is_null() {
-            win = lastwin.get();
-        }
+        win_close(win, false, (*eap).forceit != 0);
     }
-    if !(*win).w_floating && window_layout_locked(CMD_hide) as c_int != 0 {
-        return;
-    }
-    win_close(win, false_0 != 0, (*eap).forceit != 0);
 }
 
-pub(crate) unsafe extern "C" fn ex_stop(mut eap: *mut exarg_T) {
-    if (*eap).forceit == 0 {
-        autowrite_all();
+/// `:stop` and `:suspend`.
+pub(crate) unsafe extern "C" fn ex_stop(eap: *mut exarg_T) {
+    unsafe {
+        if (*eap).forceit == 0 {
+            autowrite_all();
+        }
+        may_trigger_vim_suspend_resume(true);
+        ui_call_suspend();
+        ui_flush();
     }
-    may_trigger_vim_suspend_resume(true_0 != 0);
-    ui_call_suspend();
-    ui_flush();
 }
 
-pub(crate) unsafe extern "C" fn ex_exit(mut eap: *mut exarg_T) {
-    if cmdwin_type.get() != 0 as c_int {
-        cmdwin_result.set(Ctrl_C);
-        return;
-    }
-    if text_locked() {
-        text_locked_msg();
-        return;
-    }
-    let mut save_exiting: bool = exiting.get();
-    if check_more(false_0 != 0, (*eap).forceit != 0) == OK && only_one_window() as c_int != 0 {
-        exiting.set(true_0 != 0);
-    }
-    if ((*eap).cmdidx as c_int == CMD_wq as c_int || curbufIsChanged() as c_int != 0)
-        && do_write(eap) == FAIL
-        || before_quit_autocmds(curwin.get(), false_0 != 0, (*eap).forceit != 0) as c_int != 0
-        || check_more(true_0 != 0, (*eap).forceit != 0) == FAIL
-        || only_one_window() as c_int != 0
-            && check_changed_any((*eap).forceit != 0, false_0 != 0) as c_int != 0
-    {
-        not_exiting(save_exiting);
-    } else {
+/// `:xit` and `:wq` — write, then quit.
+pub(crate) unsafe extern "C" fn ex_exit(eap: *mut exarg_T) {
+    unsafe {
+        if cmdwin_type.get() != 0 {
+            cmdwin_result.set(Ctrl_C);
+            return;
+        }
+        if text_locked() {
+            text_locked_msg();
+            return;
+        }
+        let save_exiting = exiting.get();
+        if check_more(false, (*eap).forceit != 0) == OK && only_one_window() {
+            exiting.set(true);
+        }
+        // `:wq` always writes; `:x` only writes a changed buffer.
+        if ((*eap).cmdidx as c_int == CMD_wq as c_int || curbufIsChanged()) && do_write(eap) == FAIL
+            || before_quit_autocmds(curwin.get(), false, (*eap).forceit != 0)
+            || check_more(true, (*eap).forceit != 0) == FAIL
+            || only_one_window() && check_changed_any((*eap).forceit != 0, false)
+        {
+            not_exiting(save_exiting);
+            return;
+        }
         if only_one_window() {
-            getout(0 as c_int);
+            getout(0);
         }
         not_exiting(save_exiting);
         win_close(
@@ -521,5 +608,5 @@ pub(crate) unsafe extern "C" fn ex_exit(mut eap: *mut exarg_T) {
             !buf_hide((*curwin.get()).w_buffer),
             (*eap).forceit != 0,
         );
-    };
+    }
 }
