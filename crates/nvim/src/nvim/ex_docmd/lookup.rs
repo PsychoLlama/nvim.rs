@@ -29,6 +29,15 @@ use crate::src::nvim::types::{
 };
 use crate::src::nvim::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};
 
+/// Is this index a *user* command rather than a row of `cmdnames`?
+///
+/// `find_ucmd` answers a negative index, whose magnitude has nothing to do
+/// with `cmdnames` — `eap->useridx` says which user command it is. So a
+/// negative `cmdidx` is the signal that the table must not be indexed.
+pub fn is_user_cmd(cmdidx: cmdidx_T) -> bool {
+    (cmdidx as c_int) < 0
+}
+
 /// Does `pp` start with at least `len` characters of `cmd`, and end there?
 ///
 /// **Advances `*pp` past the word on a match**, which is why the modifier

@@ -9,27 +9,25 @@ use crate::src::nvim::arglist::{
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::src::nvim::autocmd::{
     apply_autocmds, check_nomodeline, do_augroup, do_autocmd, do_doautocmd, ex_doautoall,
-    getnextac, has_event, is_aucmd_win, may_trigger_vim_suspend_resume,
+    is_aucmd_win, may_trigger_vim_suspend_resume,
 };
 use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::{
-    bt_prompt, bt_quickfix, buf_hide, buf_spname, buflist_findnr, buflist_findpat, buflist_list,
-    bufref_valid, do_bufdel, do_modelines, ex_buffer_all, goto_buffer, maketitle, no_write_message,
-    otherfile, set_bufref, setaltfname, setfname,
+    bt_prompt, bt_quickfix, buf_hide, buf_spname, buflist_findnr, buflist_list, bufref_valid,
+    do_bufdel, do_modelines, ex_buffer_all, goto_buffer, maketitle, no_write_message, otherfile,
+    set_bufref, setaltfname, setfname,
 };
 use crate::src::nvim::change::deleted_lines_mark;
 use crate::src::nvim::channel::channel_proc;
 use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::channel::{channel_close, channel_job_start};
-use crate::src::nvim::charset::{
-    backslash_halve, getdigits, getdigits_int, skiptowhite_esc, skipwhite,
-};
+use crate::src::nvim::charset::{backslash_halve, getdigits, getdigits_int, skipwhite};
 use crate::src::nvim::cmdexpand::{ExpandGeneric, ExpandInit, ExpandOne};
 use crate::src::nvim::cmdhist::ex_history;
 use crate::src::nvim::cursor::{check_cursor, check_cursor_col};
 use crate::src::nvim::debugger::{
-    dbg_breakpoint, dbg_check_breakpoint, dbg_find_breakpoint, do_debug, ex_breakadd, ex_breakdel,
-    ex_breaklist, ex_debug, ex_debuggreedy,
+    dbg_breakpoint, dbg_find_breakpoint, do_debug, ex_breakadd, ex_breakdel, ex_breaklist,
+    ex_debug, ex_debuggreedy,
 };
 use crate::src::nvim::diff::{
     ex_diffgetput, ex_diffoff, ex_diffpatch, ex_diffsplit, ex_diffthis, ex_diffupdate,
@@ -48,9 +46,8 @@ use crate::src::nvim::eval::typval::{
     tv_list_free,
 };
 use crate::src::nvim::eval::userfunc::{
-    current_func_returned, do_return, ex_call, ex_delfunction, ex_function, ex_return,
-    func_breakpoint, func_dbg_tick, func_has_abort, func_has_ended, func_level, func_name,
-    get_func_line, get_scriptlocal_funcname,
+    ex_call, ex_delfunction, ex_function, ex_return, func_breakpoint, func_dbg_tick,
+    func_has_abort, func_has_ended, func_level, func_name, get_func_line, get_scriptlocal_funcname,
 };
 use crate::src::nvim::eval::vars::{
     ex_let, ex_lockvar, ex_unlet, get_vim_var_list, get_vim_var_str, set_vim_var_nr,
@@ -75,15 +72,14 @@ use crate::src::nvim::ex_cmds2::{
     ex_python3, ex_ruby, ex_rubydo, ex_rubyfile,
 };
 use crate::src::nvim::ex_eval::{
-    aborting, cleanup_conditionals, discard_current_exception, do_errthrow, do_intthrow, do_throw,
+    aborting, cleanup_conditionals, discard_current_exception, do_errthrow, do_intthrow,
     enter_cleanup, ex_break, ex_catch, ex_continue, ex_else, ex_endfunction, ex_endif, ex_endtry,
     ex_endwhile, ex_eval, ex_finally, ex_if, ex_throw, ex_try, ex_while, has_loop_cmd,
     leave_cleanup, report_make_pending, rewind_conditionals,
 };
 use crate::src::nvim::ex_getln::{
-    allbuf_locked, cmdpreview_get_bufnr, cmdpreview_get_ns, curbuf_locked, get_text_locked_msg,
-    getcmdline, getexline, script_get, text_locked, text_locked_msg, text_or_buf_locked,
-    ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave,
+    allbuf_locked, curbuf_locked, getcmdline, getexline, text_locked, text_locked_msg,
+    text_or_buf_locked, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave,
 };
 use crate::src::nvim::ex_session::{ex_loadview, ex_mkrc};
 use crate::src::nvim::file_search::{
@@ -100,7 +96,6 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::help::{ex_exusage, ex_help, ex_helpclose, ex_helptags, ex_viusage};
 use crate::src::nvim::highlight_group::{do_highlight, load_colors};
 use crate::src::nvim::indent::ex_retab;
-use crate::src::nvim::input::ask_yesno;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::{ex_lua, ex_luado, ex_luafile, nlua_exec};
 use crate::src::nvim::lua::secure::ex_trust;
@@ -111,33 +106,31 @@ use crate::src::nvim::main::{
     check_cstack, cmdline_row, cmdpreview, cmdwin_result, cmdwin_type, curbuf, current_exception,
     current_sctx, current_ui, curtab, curwin, debug_break_level, debug_tick, did_emsg,
     did_emsg_syntax, did_endif, did_syncbind, did_throw, do_profiling, e_argreq, e_autocmd_close,
-    e_backslash, e_cant_find_file_str_in_path, e_cmdwin, e_command_too_recursive, e_curdir,
-    e_empty_buffer, e_endfor, e_endif, e_endtry, e_endwhile, e_failed,
-    e_invalid_return_type_from_findfunc, e_invarg, e_invarg2, e_invargval, e_invchan, e_invcmd,
-    e_invrange, e_isadir2, e_line_number_out_of_range, e_mkdir, e_modifiable, e_no_errors,
-    e_no_more_file_str_found_in_path, e_nobang, e_norange, e_notopen, e_sandbox, e_screenmode,
-    e_secure, e_shellempty, e_trailing_arg, e_undobang_cannot_redo_or_move_branch, e_usingsid,
-    e_zerocount, emsg_off, emsg_silent, emsg_skip, escape_chars, ex_nesting_level, ex_no_reprint,
-    ex_normal_busy, exec_from_reg, exiting, exmode_active, finish_op, first_tabpage, firstwin,
-    force_abort, force_restart_edit, g_do_tagpreview, getout, global_busy, globaldir, got_int,
-    last_chdir_reason, last_cmdline, lastused_tabpage, lastwin, lines_left, magic_overruled,
-    main_loop, msg_col, msg_didany, msg_didout, msg_list, msg_row, msg_scroll, msg_silent,
-    must_redraw, need_maketitle, need_rethrow, need_wait_return, new_last_cmdline, no_hlsearch,
-    no_wait_return, opcount, p_awa, p_cdh, p_confirm, p_cpo, p_ffu, p_gp, p_hls, p_lz, p_mfd,
-    p_mmd, p_mp, p_pvh, p_rtp, p_sh, p_shada, p_verbose, p_wic, p_write, pending_end_reg_executing,
-    pending_exmode_active, postponed_split, postponed_split_flags, postponed_split_tab,
-    readonlymode, recoverymode, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
-    reg_executing, repeat_cmdline, restart_edit, sandbox, searchcmdlen, secure, stop_insert_mode,
-    suppress_errthrow, textlock, topframe, trylevel, typebuf, virtual_op,
+    e_backslash, e_cant_find_file_str_in_path, e_command_too_recursive, e_curdir, e_empty_buffer,
+    e_endfor, e_endif, e_endtry, e_endwhile, e_failed, e_invalid_return_type_from_findfunc,
+    e_invarg, e_invarg2, e_invargval, e_invchan, e_invcmd, e_invrange, e_isadir2,
+    e_line_number_out_of_range, e_mkdir, e_no_errors, e_no_more_file_str_found_in_path, e_norange,
+    e_notopen, e_screenmode, e_secure, e_shellempty, e_trailing_arg,
+    e_undobang_cannot_redo_or_move_branch, e_usingsid, e_zerocount, emsg_off, emsg_silent,
+    escape_chars, ex_nesting_level, ex_no_reprint, ex_normal_busy, exec_from_reg, exiting,
+    exmode_active, finish_op, first_tabpage, firstwin, force_abort, force_restart_edit,
+    g_do_tagpreview, getout, global_busy, globaldir, got_int, last_chdir_reason, last_cmdline,
+    lastused_tabpage, lastwin, lines_left, magic_overruled, main_loop, msg_col, msg_didany,
+    msg_didout, msg_list, msg_row, msg_scroll, msg_silent, must_redraw, need_maketitle,
+    need_rethrow, need_wait_return, new_last_cmdline, no_hlsearch, no_wait_return, opcount, p_awa,
+    p_cdh, p_confirm, p_cpo, p_ffu, p_gp, p_hls, p_lz, p_mfd, p_mmd, p_mp, p_pvh, p_rtp, p_sh,
+    p_shada, p_verbose, p_wic, p_write, pending_end_reg_executing, pending_exmode_active,
+    postponed_split, postponed_split_flags, postponed_split_tab, readonlymode, recoverymode,
+    redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline, reg_executing, repeat_cmdline,
+    restart_edit, searchcmdlen, secure, stop_insert_mode, suppress_errthrow, textlock, topframe,
+    trylevel, typebuf, virtual_op,
 };
 use crate::src::nvim::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::src::nvim::mark::{
     checkpcmark, ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks, setmark, setpcmark,
 };
 use crate::src::nvim::r#match::ex_match;
-use crate::src::nvim::mbyte::{
-    get_encoding_name, mb_copy_char, utf_head_off, utf8len_tab, utfc_ptr2len,
-};
+use crate::src::nvim::mbyte::{get_encoding_name, utf8len_tab, utfc_ptr2len};
 use crate::src::nvim::memline::{
     goto_byte, ml_clearmarked, ml_delete, ml_get, ml_preserve, ml_recover, ml_setmarked,
 };
@@ -185,8 +178,7 @@ use crate::src::nvim::path::{
 use crate::src::nvim::plines::plines_m_win_fill;
 use crate::src::nvim::popupmenu::pum_make_popup;
 use crate::src::nvim::profile::{
-    ex_profile, func_line_end, func_line_exec, func_line_start, script_line_end, script_line_exec,
-    script_line_start,
+    ex_profile, func_line_end, func_line_start, script_line_end, script_line_start,
 };
 use crate::src::nvim::quickfix::{
     ex_cbelow, ex_cbottom, ex_cbuffer, ex_cc, ex_cclose, ex_cexpr, ex_cfile, ex_cnext, ex_copen,
@@ -197,14 +189,11 @@ use crate::src::nvim::register::{
     do_execreg, do_put, ex_display, op_yank, valid_yank_reg, write_reg_contents,
 };
 use crate::src::nvim::runtime::{
-    do_finish, estack_pop, estack_push, estack_sfile, ex_finish, ex_options, ex_packadd,
-    ex_packloadall, ex_runtime, ex_scriptencoding, ex_scriptnames, ex_source, exestack,
-    getsourceline, source_breakpoint, source_dbg_tick, source_finished, source_level,
-    source_runtime,
+    estack_pop, estack_push, estack_sfile, ex_finish, ex_options, ex_packadd, ex_packloadall,
+    ex_runtime, ex_scriptencoding, ex_scriptnames, ex_source, exestack, getsourceline,
+    source_breakpoint, source_dbg_tick, source_finished, source_level, source_runtime,
 };
-use crate::src::nvim::search::{
-    find_pattern_in_path, restore_last_search_pattern, save_last_search_pattern,
-};
+use crate::src::nvim::search::find_pattern_in_path;
 use crate::src::nvim::shada::{shada_read_everything, shada_write_file};
 use crate::src::nvim::sign::ex_sign;
 use crate::src::nvim::spell::{ex_spelldump, ex_spellinfo, ex_spellrepall};
@@ -290,9 +279,7 @@ use crate::src::nvim::undo::{
     bufIsChanged, curbufIsChanged, ex_undojoin, ex_undolist, u_clearline, u_compute_hash,
     u_read_undo, u_redo, u_save, u_savedel, u_undo, u_undo_and_forget, u_write_undo, undo_time,
 };
-use crate::src::nvim::usercmd::{
-    add_win_cmd_modifiers, do_ucmd, ex_comclear, ex_command, ex_delcommand,
-};
+use crate::src::nvim::usercmd::{add_win_cmd_modifiers, ex_comclear, ex_command, ex_delcommand};
 use crate::src::nvim::version::{ex_intro, ex_version};
 use crate::src::nvim::window::{
     check_can_set_curbuf_forceit, close_others, do_window, find_tabpage, goto_tabpage,
@@ -413,14 +400,17 @@ pub const CSL_HAD_LOOP: C2Rust_Unnamed_37 = 1;
 pub const kUICmdline: UIExtension = 0;
 pub const CMD_SIZE: CMD_index = 557;
 pub const CMD_Next: CMD_index = 556;
+pub const CMD_tilde: CMD_index = 555;
 pub const CMD_at: CMD_index = 554;
 pub const CMD_rshift: CMD_index = 553;
 pub const CMD_lshift: CMD_index = 551;
+pub const CMD_and: CMD_index = 550;
 pub const CMD_pound: CMD_index = 549;
 pub const CMD_bang: CMD_index = 548;
 pub const CMD_yank: CMD_index = 546;
 pub const CMD_wq: CMD_index = 532;
 pub const CMD_wincmd: CMD_index = 527;
+pub const CMD_while: CMD_index = 525;
 pub const CMD_write: CMD_index = 522;
 pub const CMD_vsplit: CMD_index = 519;
 pub const CMD_vnew: CMD_index = 517;
@@ -428,55 +418,98 @@ pub const CMD_vimgrepadd: CMD_index = 511;
 pub const CMD_vimgrep: CMD_index = 510;
 pub const CMD_view: CMD_index = 509;
 pub const CMD_visual: CMD_index = 508;
+pub const CMD_vertical: CMD_index = 507;
+pub const CMD_verbose: CMD_index = 506;
 pub const CMD_vglobal: CMD_index = 504;
 pub const CMD_update: CMD_index = 503;
+pub const CMD_unlockvar: CMD_index = 499;
+pub const CMD_unlet: CMD_index = 498;
 pub const CMD_try: CMD_index = 488;
+pub const CMD_topleft: CMD_index = 484;
+pub const CMD_throw: CMD_index = 473;
 pub const CMD_terminal: CMD_index = 471;
+pub const CMD_tcl: CMD_index = 468;
 pub const CMD_tabonly: CMD_index = 463;
 pub const CMD_tabnew: CMD_index = 462;
 pub const CMD_tabmove: CMD_index = 459;
 pub const CMD_tabfind: CMD_index = 457;
 pub const CMD_tabedit: CMD_index = 456;
 pub const CMD_tabclose: CMD_index = 454;
+pub const CMD_tab: CMD_index = 453;
+pub const CMD_syntax: CMD_index = 444;
 pub const CMD_sview: CMD_index = 442;
 pub const CMD_startreplace: CMD_index = 434;
 pub const CMD_startinsert: CMD_index = 432;
 pub const CMD_split: CMD_index = 420;
 pub const CMD_snomagic: CMD_index = 415;
 pub const CMD_smagic: CMD_index = 410;
+pub const CMD_silent: CMD_index = 407;
 pub const CMD_sfind: CMD_index = 403;
 pub const CMD_substitute: CMD_index = 382;
 pub const CMD_rviminfo: CMD_index = 381;
+pub const CMD_ruby: CMD_index = 378;
 pub const CMD_rshada: CMD_index = 375;
+pub const CMD_rightbelow: CMD_index = 374;
+pub const CMD_return: CMD_index = 371;
 pub const CMD_redir: CMD_index = 363;
 pub const CMD_read: CMD_index = 360;
+pub const CMD_pythonx: CMD_index = 355;
+pub const CMD_pyx: CMD_index = 353;
+pub const CMD_python3: CMD_index = 351;
+pub const CMD_py3: CMD_index = 349;
+pub const CMD_python: CMD_index = 346;
 pub const CMD_put: CMD_index = 344;
+pub const CMD_psearch: CMD_index = 334;
+pub const CMD_perl: CMD_index = 323;
 pub const CMD_print: CMD_index = 318;
 pub const CMD_only: CMD_index = 311;
 pub const CMD_number: CMD_index = 304;
+pub const CMD_noswapfile: CMD_index = 302;
+pub const CMD_noautocmd: CMD_index = 298;
 pub const CMD_new: CMD_index = 291;
+pub const CMD_mzscheme: CMD_index = 288;
 pub const CMD_match: CMD_index = 278;
 pub const CMD_make: CMD_index = 274;
 pub const CMD_move: CMD_index = 272;
 pub const CMD_lvimgrepadd: CMD_index = 268;
 pub const CMD_lvimgrep: CMD_index = 267;
+pub const CMD_lua: CMD_index = 264;
+pub const CMD_lockvar: CMD_index = 256;
+pub const CMD_lockmarks: CMD_index = 255;
 pub const CMD_lmake: CMD_index = 248;
 pub const CMD_ll: CMD_index = 243;
 pub const CMD_lgrepadd: CMD_index = 240;
 pub const CMD_lgrep: CMD_index = 239;
+pub const CMD_let: CMD_index = 231;
+pub const CMD_leftabove: CMD_index = 230;
 pub const CMD_list: CMD_index = 210;
+pub const CMD_keepalt: CMD_index = 209;
+pub const CMD_keeppatterns: CMD_index = 208;
+pub const CMD_keepjumps: CMD_index = 207;
+pub const CMD_keepmarks: CMD_index = 206;
 pub const CMD_k: CMD_index = 205;
+pub const CMD_isplit: CMD_index = 199;
+pub const CMD_isearch: CMD_index = 198;
 pub const CMD_iput: CMD_index = 197;
+pub const CMD_ilist: CMD_index = 189;
+pub const CMD_ijump: CMD_index = 188;
+pub const CMD_if: CMD_index = 187;
 pub const CMD_insert: CMD_index = 184;
+pub const CMD_horizontal: CMD_index = 183;
 pub const CMD_hide: CMD_index = 181;
+pub const CMD_help: CMD_index = 176;
 pub const CMD_grepadd: CMD_index = 173;
 pub const CMD_grep: CMD_index = 172;
 pub const CMD_global: CMD_index = 170;
+pub const CMD_function: CMD_index = 168;
+pub const CMD_for: CMD_index = 167;
 pub const CMD_foldopen: CMD_index = 166;
 pub const CMD_folddoclosed: CMD_index = 165;
 pub const CMD_finally: CMD_index = 159;
+pub const CMD_filter: CMD_index = 157;
 pub const CMD_file: CMD_index = 154;
 pub const CMD_execute: CMD_index = 151;
+pub const CMD_eval: CMD_index = 149;
 pub const CMD_enew: CMD_index = 148;
 pub const CMD_endwhile: CMD_index = 147;
 pub const CMD_endtry: CMD_index = 146;
@@ -490,19 +523,31 @@ pub const CMD_echoerr: CMD_index = 136;
 pub const CMD_echo: CMD_index = 135;
 pub const CMD_earlier: CMD_index = 134;
 pub const CMD_edit: CMD_index = 133;
+pub const CMD_dsplit: CMD_index = 132;
+pub const CMD_dsearch: CMD_index = 131;
+pub const CMD_dlist: CMD_index = 127;
+pub const CMD_djump: CMD_index = 126;
 pub const CMD_diffput: CMD_index = 122;
 pub const CMD_diffget: CMD_index = 119;
+pub const CMD_delfunction: CMD_index = 115;
+pub const CMD_const: CMD_index = 99;
+pub const CMD_confirm: CMD_index = 97;
 pub const CMD_close: CMD_index = 79;
 pub const CMD_checktime: CMD_index = 75;
 pub const CMD_cc: CMD_index = 59;
 pub const CMD_catch: CMD_index = 54;
+pub const CMD_call: CMD_index = 53;
 pub const CMD_change: CMD_index = 43;
 pub const CMD_bwipeout: CMD_index = 42;
 pub const CMD_bunload: CMD_index = 41;
+pub const CMD_browse: CMD_index = 38;
+pub const CMD_botright: CMD_index = 31;
+pub const CMD_belowright: CMD_index = 26;
 pub const CMD_bdelete: CMD_index = 25;
 pub const CMD_balt: CMD_index = 24;
 pub const CMD_badd: CMD_index = 23;
 pub const CMD_autocmd: CMD_index = 17;
+pub const CMD_aboveleft: CMD_index = 3;
 pub const CMD_append: CMD_index = 0;
 pub const ADDR_NONE: cmd_addr_T = 11;
 pub const ADDR_OTHER: cmd_addr_T = 10;
