@@ -7,7 +7,17 @@ Rust source file (crates/*/src/**/*.rs plus the crate-root .rs files;
 integration tests under crates/*/tests are not migration surface and stay
 unmeasured, as they were when they lived at the repo root):
 
-  unsafe      occurrences of "unsafe "
+  unsafe      occurrences of "unsafe ", less the unsafe-fn *declarations*
+              ("unsafe fn name", "unsafe extern \"C\" fn name") in files that
+              carry #![deny(unsafe_op_in_unsafe_fn)]. Under that lint a
+              function's real unsafe surface is spelled by the explicit
+              unsafe blocks in its body, which stay counted; charging the
+              declaration too would make adopting the lint *raise* this
+              metric while lowering the surface, pitting it against
+              files_without_deny_unsafe_op below. Declarations in files
+              without the lint keep costing their token: there the body is
+              implicitly unsafe, so the declaration is the only thing
+              standing in for it.
   static_mut  occurrences of "static mut "
   no_mangle   occurrences of "#[unsafe(no_mangle)]"
   variadic    occurrences of ": ..." — C-variadic parameters, whose calls
@@ -92,6 +102,11 @@ COUNTED = {
 }
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
+# Unsafe-fn declaration forms, discounted from the "unsafe" metric in files
+# denying unsafe_op_in_unsafe_fn. The trailing space is what separates a
+# declaration (a name follows) from a function-pointer type ("fn(" follows),
+# which is not a declaration and keeps costing its token.
+UNSAFE_FN_DECLS = ('unsafe extern "C" fn ', "unsafe fn ")
 
 
 def measure():
@@ -106,6 +121,8 @@ def measure():
     ):
         text = path.read_text()
         counts = {name: text.count(needle) for name, needle in COUNTED.items()}
+        if DENY_UNSAFE_OP in text:
+            counts["unsafe"] -= sum(text.count(decl) for decl in UNSAFE_FN_DECLS)
         counts["lines"] = len(text.splitlines())
         stats[str(path.relative_to(ROOT))] = counts
         without_forbid += FORBID not in text
