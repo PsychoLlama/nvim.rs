@@ -1198,6 +1198,9 @@ fn main() {
     for name in &emitter.opaque {
         const_vals.remove(name);
     }
+    for name in &emitter.unknown {
+        const_vals.remove(name);
+    }
 
     // ---- topological order over by-value deps
     let emitted = emitter.emitted.clone();
@@ -1242,6 +1245,15 @@ fn main() {
     .unwrap();
 
     for name in &emitter.opaque {
+        let c = c_name(name);
+        writeln!(chunk, "typedef struct {} {};", c, c).unwrap();
+    }
+    // A referenced type with no #[repr(C)] definition anywhere is a plain
+    // Rust struct: it has no C-visible layout by construction, so the only
+    // honest declaration is an incomplete one. That is enough for the
+    // pointer-typed fields and prototypes that reference it, and leaves any
+    // by-value use a loud incomplete-type error at fixture-compile time.
+    for name in &emitter.unknown {
         let c = c_name(name);
         writeln!(chunk, "typedef struct {} {};", c, c).unwrap();
     }

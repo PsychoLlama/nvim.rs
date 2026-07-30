@@ -19,6 +19,13 @@ use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
 use crate::src::nvim::os::env::{os_env_exists, os_get_pid};
 use crate::src::nvim::os::libc::{__assert_fail, abort, close, dup, memcmp};
 use crate::src::nvim::profile::{time_finish, time_msg};
+use crate::src::nvim::tui::tui::{
+    TUIData, tui_add_url, tui_bell, tui_busy_start, tui_busy_stop, tui_chdir,
+    tui_default_colors_set, tui_flush, tui_grid_clear, tui_grid_cursor_goto, tui_grid_resize,
+    tui_grid_scroll, tui_hl_attr_define, tui_is_stopped, tui_mode_change, tui_mode_info_set,
+    tui_mouse_off, tui_mouse_on, tui_option_set, tui_raw_line, tui_screenshot, tui_set_icon,
+    tui_set_title, tui_start, tui_stop, tui_suspend, tui_ui_send, tui_update_menu, tui_visual_bell,
+};
 pub use crate::src::nvim::types::{
     __gid_t, __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
     __pthread_rwlock_arch_t, __uid_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
@@ -29,12 +36,12 @@ pub use crate::src::nvim::types::{
     KeyDict_highlight, KeySetLink, KeyValuePair, LibuvProc, LineFlags, Loop, LuaRef, MultiQueue,
     Object, ObjectType, OptionalKeys, PackerBuffer, PackerBufferFlush, Proc, ProcType, PtyProc,
     QUEUE, RStream, RemoteUI, RgbValue, RpcState, ScopeDictDictItem, ScopeType, SpecialVarValue,
-    StderrState, StdioPair, Stream, String_0, TUIData, Terminal, UIClientHandler, Unpacker,
-    VarLockStatus, VarType, argv_callback, blob_T, blobvar_S, consumed_blk, dict_T, dictvar_S,
-    float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t,
-    hash_T, hashitem_T, hashtab_T, int16_t, int32_t, int64_t, internal_proc_cb, key_value_pair,
-    linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0,
-    multiqueue, object, object_data as C2Rust_Unnamed, packer_buffer_t, partial_S, partial_T, proc,
+    StderrState, StdioPair, Stream, String_0, Terminal, UIClientHandler, Unpacker, VarLockStatus,
+    VarType, argv_callback, blob_T, blobvar_S, consumed_blk, dict_T, dictvar_S, float_T,
+    funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t, hash_T,
+    hashitem_T, hashtab_T, int16_t, int32_t, int64_t, internal_proc_cb, key_value_pair, linenr_T,
+    list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0, multiqueue,
+    object, object_data as C2Rust_Unnamed, packer_buffer_t, partial_S, partial_T, proc,
     proc_exit_cb, proc_state_cb, proftime_T, pthread_mutex_t, pthread_rwlock_t, queue, rstream,
     sattr_T, schar_T, scid_T, sctx_T, size_t, ssize_t, stream, stream_close_cb, stream_read_cb,
     stream_uv as C2Rust_Unnamed_12, stream_write_cb, terminal, typval_T, typval_vval_union,
@@ -56,75 +63,6 @@ pub use crate::src::nvim::types::{
     varnumber_T, winsize,
 };
 use core::ffi::CStr;
-unsafe extern "C" {
-    fn tui_start(
-        tui_p: *mut *mut TUIData,
-        width: *mut ::core::ffi::c_int,
-        height: *mut ::core::ffi::c_int,
-        term: *mut *mut ::core::ffi::c_char,
-        rgb: *mut bool,
-    );
-    fn tui_stop(tui_0: *mut TUIData);
-    fn tui_is_stopped(tui_0: *mut TUIData) -> bool;
-    fn tui_grid_resize(tui_0: *mut TUIData, g: Integer, width: Integer, height: Integer);
-    fn tui_grid_clear(tui_0: *mut TUIData, g: Integer);
-    fn tui_grid_cursor_goto(tui_0: *mut TUIData, grid: Integer, row: Integer, col: Integer);
-    fn tui_mode_info_set(tui_0: *mut TUIData, guicursor_enabled: bool, args: Array);
-    fn tui_update_menu(tui_0: *mut TUIData);
-    fn tui_busy_start(tui_0: *mut TUIData);
-    fn tui_busy_stop(tui_0: *mut TUIData);
-    fn tui_mouse_on(tui_0: *mut TUIData);
-    fn tui_mouse_off(tui_0: *mut TUIData);
-    fn tui_mode_change(tui_0: *mut TUIData, mode: String_0, mode_idx: Integer);
-    fn tui_grid_scroll(
-        tui_0: *mut TUIData,
-        g: Integer,
-        startrow: Integer,
-        endrow: Integer,
-        startcol: Integer,
-        endcol: Integer,
-        rows: Integer,
-        cols: Integer,
-    );
-    fn tui_add_url(tui_0: *mut TUIData, url: *const ::core::ffi::c_char) -> int32_t;
-    fn tui_hl_attr_define(
-        tui_0: *mut TUIData,
-        id: Integer,
-        attrs: HlAttrs,
-        cterm_attrs: HlAttrs,
-        info: Array,
-    );
-    fn tui_bell(tui_0: *mut TUIData);
-    fn tui_visual_bell(tui_0: *mut TUIData);
-    fn tui_default_colors_set(
-        tui_0: *mut TUIData,
-        rgb_fg: Integer,
-        rgb_bg: Integer,
-        rgb_sp: Integer,
-        cterm_fg: Integer,
-        cterm_bg: Integer,
-    );
-    fn tui_ui_send(tui_0: *mut TUIData, content: String_0);
-    fn tui_flush(tui_0: *mut TUIData);
-    fn tui_suspend(tui_0: *mut TUIData);
-    fn tui_set_title(tui_0: *mut TUIData, title: String_0);
-    fn tui_set_icon(tui_0: *mut TUIData, icon: String_0);
-    fn tui_screenshot(tui_0: *mut TUIData, path: String_0);
-    fn tui_option_set(tui_0: *mut TUIData, name: String_0, value: Object);
-    fn tui_chdir(tui_0: *mut TUIData, path: String_0);
-    fn tui_raw_line(
-        tui_0: *mut TUIData,
-        g: Integer,
-        linerow: Integer,
-        startcol: Integer,
-        endcol: Integer,
-        clearcol: Integer,
-        clearattr: Integer,
-        flags: LineFlags,
-        chunk: *const schar_T,
-        attrs: *const sattr_T,
-    );
-}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

@@ -22,11 +22,14 @@ use crate::src::nvim::tui::termkey::termkey::{
     termkey_new_abstract, termkey_push_bytes, termkey_set_buffer_size, termkey_set_canonflags,
     termkey_start, termkey_strfkey,
 };
+use crate::src::nvim::tui::tui::{
+    TUIData, tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color, tui_set_size,
+};
 pub use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, Array,
     Boolean, Dict, Event, Float, Integer, KeyEncoding, KeyValuePair, Loop, LuaRef, Map_int_ptr_t,
     MapHash, MultiQueue, Object, ObjectType, OptInt, Proc, ProcType, QUEUE, RStream, ScopeType,
-    Set_int, Stream, String_0, StringBuilder, TUIData, TermKey, TermKey_Terminfo_Getstr_Hook,
+    Set_int, Stream, String_0, StringBuilder, TermKey, TermKey_Terminfo_Getstr_Hook,
     TermKeyCsiParam, TermKeyEvent, TermKeyFormat, TermKeyKey, TermKeyKey_code as C2Rust_Unnamed_18,
     TermKeyMouseEvent, TermKeyResult, TermKeySym, TermKeyType, TermMode, TermModeState,
     TerminfoEntry, VarLockStatus, argv_callback, dict_T, dictvar_S, hash_T, hashitem_T, hashtab_T,
@@ -47,12 +50,6 @@ pub use crate::src::nvim::types::{
     uv_tcp_s_u as C2Rust_Unnamed_12, uv_tcp_t, uv_timer_cb, uv_timer_s,
     uv_timer_s_node as C2Rust_Unnamed_6, uv_timer_s_u as C2Rust_Unnamed_7, uv_timer_t,
 };
-unsafe extern "C" {
-    fn tui_handle_term_mode(tui: *mut TUIData, mode: TermMode, state: TermModeState);
-    fn tui_enable_extended_underline(tui: *mut TUIData);
-    fn tui_query_bg_color(tui: *mut TUIData);
-    fn tui_set_size(tui: *mut TUIData, width: ::core::ffi::c_int, height: ::core::ffi::c_int);
-}
 pub const kObjectTypeTabpage: ObjectType = 10;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeBuffer: ObjectType = 8;
