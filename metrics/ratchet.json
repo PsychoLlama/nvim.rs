@@ -1,7 +1,7 @@
 {
   "internal_exports": 120,
   "files_without_forbid_unsafe": 440,
-  "files_without_deny_unsafe_op": 252,
+  "files_without_deny_unsafe_op": 251,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -157,8 +157,8 @@
     "crates/nvim/src/nvim/event/wstream.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/ex_cmds.rs": {"lines": 7260, "no_mangle": 1, "unsafe": 59},
     "crates/nvim/src/nvim/ex_cmds2.rs": {"lines": 2223, "no_mangle": 1, "unsafe": 27},
-    "crates/nvim/src/nvim/ex_docmd.rs": {"lines": 1551, "unsafe": 7},
-    "crates/nvim/src/nvim/ex_docmd/address.rs": {"unsafe": 12},
+    "crates/nvim/src/nvim/ex_docmd.rs": {"lines": 1548, "unsafe": 7},
+    "crates/nvim/src/nvim/ex_docmd/address.rs": {"unsafe": 37},
     "crates/nvim/src/nvim/ex_docmd/api.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/ex_docmd/argopt.rs": {"unsafe": 17},
     "crates/nvim/src/nvim/ex_docmd/childproc.rs": {"unsafe": 2},
