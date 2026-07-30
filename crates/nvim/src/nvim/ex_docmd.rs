@@ -3,26 +3,25 @@ use crate::src::nvim::api::ui::{remote_ui_connect, remote_ui_disconnect};
 use crate::src::nvim::api::vim::nvim__chan_set_detach;
 use crate::src::nvim::api::vimscript::nvim_command;
 use crate::src::nvim::arglist::{
-    arg_all, check_arg_idx, ex_all, ex_argadd, ex_argdedupe, ex_argdelete, ex_argedit, ex_args,
-    ex_argument, ex_last, ex_next, ex_previous, ex_rewind,
+    check_arg_idx, ex_all, ex_argadd, ex_argdedupe, ex_argdelete, ex_argedit, ex_args, ex_argument,
+    ex_last, ex_next, ex_previous, ex_rewind,
 };
-use crate::src::nvim::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
+use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{
     apply_autocmds, check_nomodeline, do_augroup, do_autocmd, do_doautocmd, ex_doautoall,
     is_aucmd_win, may_trigger_vim_suspend_resume,
 };
 use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::{
-    bt_prompt, bt_quickfix, buf_hide, buf_spname, buflist_findnr, buflist_list, bufref_valid,
-    do_bufdel, do_modelines, ex_buffer_all, goto_buffer, maketitle, no_write_message, otherfile,
-    set_bufref, setaltfname, setfname,
+    bt_prompt, bt_quickfix, buf_hide, buf_spname, buflist_list, bufref_valid, do_bufdel,
+    do_modelines, ex_buffer_all, goto_buffer, maketitle, no_write_message, otherfile, set_bufref,
+    setaltfname, setfname,
 };
 use crate::src::nvim::change::deleted_lines_mark;
 use crate::src::nvim::channel::channel_proc;
 use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::channel::{channel_close, channel_job_start};
-use crate::src::nvim::charset::{backslash_halve, getdigits, getdigits_int, skipwhite};
-use crate::src::nvim::cmdexpand::{ExpandGeneric, ExpandInit, ExpandOne};
+use crate::src::nvim::charset::{getdigits, getdigits_int, skipwhite};
 use crate::src::nvim::cmdhist::ex_history;
 use crate::src::nvim::cursor::{check_cursor, check_cursor_col};
 use crate::src::nvim::debugger::{
@@ -38,11 +37,9 @@ use crate::src::nvim::drawscreen::{
     update_screen,
 };
 use crate::src::nvim::edit::beginline;
-use crate::src::nvim::eval::fs::modify_fname;
 use crate::src::nvim::eval::typval::tv_list_len;
 use crate::src::nvim::eval::typval::{
-    callback_free, tv_clear, tv_get_string, tv_list_copy, tv_list_find, tv_list_find_str,
-    tv_list_free,
+    callback_free, tv_clear, tv_get_string, tv_list_copy, tv_list_find, tv_list_free,
 };
 use crate::src::nvim::eval::userfunc::{
     ex_call, ex_delfunction, ex_function, ex_return, get_scriptlocal_funcname,
@@ -53,9 +50,7 @@ use crate::src::nvim::eval::vars::{
 };
 use crate::src::nvim::eval::{
     callback_call, eval_to_string, ex_echo, ex_echohl, ex_execute, get_copyID, set_ref_in_callback,
-    skip_expr,
 };
-use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::event::r#loop::process_events_until;
 use crate::src::nvim::event::proc::{proc_stop, proc_wait};
 use crate::src::nvim::ex_cmds::{
@@ -80,7 +75,7 @@ use crate::src::nvim::ex_getln::{
 };
 use crate::src::nvim::ex_session::{ex_loadview, ex_mkrc};
 use crate::src::nvim::file_search::{
-    do_autocmd_dirchanged, file_name_at_cursor, find_file_in_path, vim_chdir, vim_findfile_cleanup,
+    do_autocmd_dirchanged, find_file_in_path, vim_chdir, vim_findfile_cleanup,
 };
 use crate::src::nvim::fileio::{readfile, shorten_fnames};
 use crate::src::nvim::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
@@ -99,32 +94,30 @@ use crate::src::nvim::lua::secure::ex_trust;
 use crate::src::nvim::main::c_bytes;
 use crate::src::nvim::main::{
     Columns, IObuff, KeyTyped, NameBuff, RedrawingDisabled, Rows, State, VIsual_active,
-    arg_had_last, autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, caught_stack,
-    check_cstack, cmdline_row, cmdpreview, cmdwin_result, cmdwin_type, curbuf, current_exception,
-    current_sctx, current_ui, curtab, curwin, did_emsg, did_syncbind, did_throw, e_argreq,
-    e_autocmd_close, e_backslash, e_cant_find_file_str_in_path, e_curdir, e_empty_buffer, e_failed,
-    e_invalid_return_type_from_findfunc, e_invarg, e_invarg2, e_invargval, e_invchan, e_invcmd,
-    e_invrange, e_isadir2, e_line_number_out_of_range, e_mkdir, e_no_errors,
-    e_no_more_file_str_found_in_path, e_norange, e_notopen, e_screenmode, e_secure, e_shellempty,
-    e_trailing_arg, e_undobang_cannot_redo_or_move_branch, e_usingsid, e_zerocount, emsg_off,
-    emsg_silent, escape_chars, ex_no_reprint, ex_normal_busy, exec_from_reg, exiting,
-    exmode_active, finish_op, first_tabpage, firstwin, force_abort, force_restart_edit,
-    g_do_tagpreview, getout, global_busy, globaldir, got_int, last_chdir_reason, lastused_tabpage,
-    lastwin, lines_left, magic_overruled, main_loop, msg_col, msg_didout, msg_row, msg_scroll,
-    msg_silent, must_redraw, need_maketitle, need_rethrow, need_wait_return, no_hlsearch,
-    no_wait_return, opcount, p_awa, p_cdh, p_confirm, p_cpo, p_ffu, p_gp, p_hls, p_lz, p_mfd,
-    p_mmd, p_mp, p_pvh, p_rtp, p_sh, p_shada, p_verbose, p_wic, p_write, pending_end_reg_executing,
-    pending_exmode_active, postponed_split, postponed_split_flags, postponed_split_tab,
-    readonlymode, recoverymode, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
-    reg_executing, restart_edit, searchcmdlen, secure, stop_insert_mode, suppress_errthrow,
-    textlock, topframe, trylevel, typebuf, virtual_op,
+    caught_stack, check_cstack, cmdline_row, cmdpreview, cmdwin_result, cmdwin_type, curbuf,
+    current_exception, current_sctx, current_ui, curtab, curwin, did_emsg, did_syncbind, did_throw,
+    e_argreq, e_autocmd_close, e_backslash, e_cant_find_file_str_in_path, e_curdir, e_empty_buffer,
+    e_failed, e_invalid_return_type_from_findfunc, e_invarg, e_invarg2, e_invchan, e_invcmd,
+    e_invrange, e_line_number_out_of_range, e_no_errors, e_no_more_file_str_found_in_path,
+    e_norange, e_notopen, e_screenmode, e_secure, e_shellempty, e_trailing_arg,
+    e_undobang_cannot_redo_or_move_branch, e_zerocount, emsg_off, emsg_silent, ex_no_reprint,
+    ex_normal_busy, exec_from_reg, exiting, exmode_active, finish_op, first_tabpage, firstwin,
+    force_abort, force_restart_edit, g_do_tagpreview, getout, global_busy, globaldir, got_int,
+    last_chdir_reason, lastused_tabpage, lastwin, lines_left, magic_overruled, main_loop, msg_col,
+    msg_didout, msg_row, msg_scroll, msg_silent, must_redraw, need_maketitle, need_rethrow,
+    need_wait_return, no_hlsearch, no_wait_return, opcount, p_awa, p_cdh, p_confirm, p_cpo, p_ffu,
+    p_hls, p_lz, p_mfd, p_mmd, p_pvh, p_rtp, p_sh, p_shada, p_verbose, p_write,
+    pending_end_reg_executing, pending_exmode_active, postponed_split, postponed_split_flags,
+    postponed_split_tab, readonlymode, recoverymode, redir_fd, redir_off, redir_reg, redir_vname,
+    redraw_cmdline, reg_executing, restart_edit, searchcmdlen, secure, stop_insert_mode,
+    suppress_errthrow, textlock, topframe, trylevel, typebuf, virtual_op,
 };
 use crate::src::nvim::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::src::nvim::mark::{
     checkpcmark, ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks, setmark, setpcmark,
 };
 use crate::src::nvim::r#match::ex_match;
-use crate::src::nvim::mbyte::{get_encoding_name, utf8len_tab, utfc_ptr2len};
+use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memline::{
     goto_byte, ml_clearmarked, ml_delete, ml_get, ml_preserve, ml_recover, ml_setmarked,
 };
@@ -133,9 +126,9 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::menu::{ex_emenu, ex_menu, ex_menutranslate};
 use crate::src::nvim::message::{
-    emsg, emsg_multiline, ex_messages, msg, msg_clr_eos, msg_ext_set_kind, msg_make, msg_outtrans,
+    emsg, emsg_multiline, ex_messages, msg, msg_clr_eos, msg_ext_set_kind, msg_outtrans,
     msg_putchar, msg_puts, msg_scroll_flush, msg_start, semsg, semsg_multiline, smsg,
-    verbose_enter_scroll, verbose_leave_scroll, vim_dialog_yesno,
+    verbose_enter_scroll, verbose_leave_scroll,
 };
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::{
@@ -145,8 +138,8 @@ use crate::src::nvim::r#move::{
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_call;
 use crate::src::nvim::msgpack_rpc::server::{server_start, server_stop};
 use crate::src::nvim::normal::{
-    do_check_scrollbind, end_visual_mode, find_ident_under_cursor, get_vtopline, normal_cmd,
-    normal_enter, set_cursor_for_append_to_line,
+    do_check_scrollbind, end_visual_mode, get_vtopline, normal_cmd, normal_enter,
+    set_cursor_for_append_to_line,
 };
 use crate::src::nvim::ops::{clear_oparg, do_join, op_delete, op_shift};
 use crate::src::nvim::option::{
@@ -154,35 +147,31 @@ use crate::src::nvim::option::{
     option_set_callback_func, set_option_value_give_err,
 };
 use crate::src::nvim::options::{kOptFiletype, kOptFindfunc};
-use crate::src::nvim::optionstr::{check_ff_value, free_string_option, get_fileformat_name};
-use crate::src::nvim::os::env::{
-    expand_env, expand_env_esc, expand_env_save, home_replace, os_getenv_noalloc,
-};
-use crate::src::nvim::os::fs::{os_dirname, os_fopen, os_isdir, os_mkdir, os_path_exists};
+use crate::src::nvim::optionstr::free_string_option;
+use crate::src::nvim::os::env::{expand_env, expand_env_save, home_replace, os_getenv_noalloc};
+use crate::src::nvim::os::fs::os_dirname;
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::lang::ex_language;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, atol, fclose, gettext, memmove, ngettext, snprintf,
-    strcasecmp, strcat, strcmp, strcpy, strlen, strncmp, strpbrk, strrchr, strstr,
+    __assert_fail, __ctype_b_loc, abort, atol, fclose, gettext, snprintf, strcasecmp, strcmp,
+    strlen, strncmp, strstr,
 };
 use crate::src::nvim::os::shell::{shell_build_argv, shell_free_argv};
-use crate::src::nvim::path::{
-    FullName_save, path_fnamecmp, path_has_wildcard, path_tail, path_try_shorten_fname, pathcmp,
-};
+use crate::src::nvim::path::{path_fnamecmp, pathcmp};
 use crate::src::nvim::plines::plines_m_win_fill;
 use crate::src::nvim::popupmenu::pum_make_popup;
 use crate::src::nvim::profile::ex_profile;
 use crate::src::nvim::quickfix::{
     ex_cbelow, ex_cbottom, ex_cbuffer, ex_cc, ex_cclose, ex_cexpr, ex_cfile, ex_cnext, ex_copen,
-    ex_cwindow, ex_helpgrep, ex_make, ex_vimgrep, grep_internal, qf_age, qf_history, qf_list,
+    ex_cwindow, ex_helpgrep, ex_make, ex_vimgrep, qf_age, qf_history, qf_list,
 };
 use crate::src::nvim::regexp::skip_regexp;
 use crate::src::nvim::register::{
     do_execreg, do_put, ex_display, op_yank, valid_yank_reg, write_reg_contents,
 };
 use crate::src::nvim::runtime::{
-    estack_pop, estack_push, estack_sfile, ex_finish, ex_options, ex_packadd, ex_packloadall,
-    ex_runtime, ex_scriptencoding, ex_scriptnames, ex_source, exestack, source_runtime,
+    estack_pop, estack_push, ex_finish, ex_options, ex_packadd, ex_packloadall, ex_runtime,
+    ex_scriptencoding, ex_scriptnames, ex_source, exestack, source_runtime,
 };
 use crate::src::nvim::search::find_pattern_in_path;
 use crate::src::nvim::shada::{shada_read_everything, shada_write_file};
@@ -191,9 +180,7 @@ use crate::src::nvim::spell::{ex_spelldump, ex_spellinfo, ex_spellrepall};
 use crate::src::nvim::spellfile::{ex_mkspell, ex_spell};
 use crate::src::nvim::state::may_trigger_modechanged;
 use crate::src::nvim::statusline::draw_tabline;
-use crate::src::nvim::strings::{
-    concat_str, strrep, vim_snprintf, vim_strchr, vim_strsave_escaped,
-};
+use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_strchr, vim_strsave_escaped};
 use crate::src::nvim::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::src::nvim::tag::{do_tag, do_tags};
 pub use crate::src::nvim::types::{
@@ -279,7 +266,7 @@ use crate::src::nvim::window::{
     win_split, win_valid, window_layout_locked,
 };
 use crate::src::nvim::winfloat::win_float_remove;
-use core::ffi::{c_char, c_int, c_long, c_uint, c_ulong, c_ushort, c_void};
+use core::ffi::{c_char, c_int, c_uint, c_ushort, c_void};
 
 mod cmdline;
 pub use self::cmdline::*;
