@@ -364,12 +364,18 @@ pub unsafe fn patch_terminfo_bugs(ti: &mut TerminfoEntry, arena: *mut Arena, t: 
         // rxvt's own alternate-screen entries do not save the cursor.
         set(ti, kTerm_enter_ca_mode, c"\x1b[?1049h");
         set(ti, kTerm_exit_ca_mode, c"\x1b[?1049l");
-    } else if t.screen || t.tmux {
+    } else if t.screen {
         set_if_empty(ti, kTerm_to_status_line, c"\x1b_");
         set_if_empty(ti, kTerm_from_status_line, c"\x1b\\");
-        if t.tmux {
-            set_if_empty(ti, kTerm_enter_italics_mode, c"\x1b[3m");
-        }
+    } else if t.tmux {
+        // Deliberately not merged with the `screen` arm above: screen
+        // running inside tmux matches both, and taking the `screen` arm
+        // first is what leaves italics unset there. Merging the two and
+        // testing `tmux` inside gives screen-in-tmux italics it has never
+        // had.
+        set_if_empty(ti, kTerm_to_status_line, c"\x1b_");
+        set_if_empty(ti, kTerm_from_status_line, c"\x1b\\");
+        set_if_empty(ti, kTerm_enter_italics_mode, c"\x1b[3m");
     } else if t.interix {
         set_if_empty(ti, kTerm_carriage_return, c"\r");
     } else if t.linuxvt {
