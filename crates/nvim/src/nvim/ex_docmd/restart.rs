@@ -15,11 +15,11 @@ use crate::src::nvim::eval::vars::{get_vim_var_list, get_vim_var_str, set_vim_va
 use crate::src::nvim::event::proc::{proc_stop, proc_wait};
 use crate::src::nvim::ex_docmd::{
     CMOD_CONFIRM, GA_EMPTY_INIT_VALUE, LOGLVL_INF, NUL, VV_ARGV, VV_EXITREASON, VV_PROGPATH,
-    cmdmod, kCallbackNone, kChannelPartAll, kChannelStdinPipe, kErrorTypeNone, kObjectTypeBoolean,
+    kCallbackNone, kChannelPartAll, kChannelStdinPipe, kErrorTypeNone, kObjectTypeBoolean,
     kObjectTypeDict, kObjectTypeString,
 };
 use crate::src::nvim::log::logmsg;
-use crate::src::nvim::main::{current_ui, e_invchan, exiting, getout};
+use crate::src::nvim::main::{cmdmod, current_ui, e_invchan, exiting, getout};
 use crate::src::nvim::memory::{arena_mem_free, strequal, xcalloc, xfree, xmemdupz, xstrdup};
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_call;

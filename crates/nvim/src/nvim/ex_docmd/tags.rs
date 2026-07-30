@@ -15,11 +15,11 @@ use crate::src::nvim::ex_docmd::scan::{check_nextcmd, ends_excmd};
 use crate::src::nvim::ex_docmd::source::ex_errmsg;
 use crate::src::nvim::ex_docmd::{
     ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, ACTION_SPLIT, DT_FIRST, DT_JUMP, DT_LAST, DT_LTAG,
-    DT_NEXT, DT_POP, DT_PREV, DT_SELECT, DT_TAG, FIND_ANY, FIND_DEFINE, NUL, cmdmod, cmdnames,
+    DT_NEXT, DT_POP, DT_PREV, DT_SELECT, DT_TAG, FIND_ANY, FIND_DEFINE, NUL, cmdnames,
     kDirectionNotSet,
 };
 use crate::src::nvim::main::{
-    e_trailing_arg, g_do_tagpreview, p_pvh, postponed_split, postponed_split_flags,
+    cmdmod, e_trailing_arg, g_do_tagpreview, p_pvh, postponed_split, postponed_split_flags,
     postponed_split_tab,
 };
 use crate::src::nvim::option::magic_isset;

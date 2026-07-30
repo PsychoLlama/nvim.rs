@@ -11,11 +11,11 @@ use crate::src::nvim::buffer::do_modelines;
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::ex_docmd::{
     CMD_autocmd, DIP_ALL, FILETYPE_FILE, FTOFF_FILE, FTPLUGIN_FILE, FTPLUGOF_FILE, INDENT_FILE,
-    INDOFF_FILE, NUL, OPT_LOCAL, cmdmod, filetype_detect, filetype_indent, filetype_plugin,
-    kErrorTypeNone, kFalse, kNone, kObjectTypeString, kOptValTypeString, kRetNilBool, kTrue,
+    INDOFF_FILE, NUL, OPT_LOCAL, filetype_detect, filetype_indent, filetype_plugin, kErrorTypeNone,
+    kFalse, kNone, kObjectTypeString, kOptValTypeString, kRetNilBool, kTrue,
 };
 use crate::src::nvim::lua::executor::nlua_exec;
-use crate::src::nvim::main::{curbuf, e_curdir, e_invarg2, p_rtp, secure};
+use crate::src::nvim::main::{cmdmod, curbuf, e_curdir, e_invarg2, p_rtp, secure};
 use crate::src::nvim::message::{emsg, semsg, semsg_multiline, smsg};
 use crate::src::nvim::option::set_option_value_give_err;
 use crate::src::nvim::options::kOptFiletype;

@@ -36,7 +36,7 @@ use crate::src::nvim::ex_docmd::{
     ADDR_LINES, ADDR_NONE, CMD_SIZE, CMD_bang, CMD_bdelete, CMD_bunload, CMD_bwipeout,
     CMD_checktime, CMD_edit, CMD_file, CMD_iput, CMD_put, CMD_read, CMD_try, EX_BANG, EX_BUFNAME,
     EX_BUFUNL, EX_CMDWIN, EX_DFLALL, EX_LOCK_OK, EX_MODIFY, EX_RANGE, EX_TRLBAR, EX_WHOLEFOLD,
-    EX_XFILE, FAIL, IOSIZE, NUL, OK, cmdmod, cmdnames, e_ambiguous_use_of_user_defined_command,
+    EX_XFILE, FAIL, IOSIZE, NUL, OK, cmdnames, e_ambiguous_use_of_user_defined_command,
     e_not_an_editor_command, ex_pressedreturn,
 };
 use crate::src::nvim::ex_getln::{
@@ -44,8 +44,8 @@ use crate::src::nvim::ex_getln::{
 };
 use crate::src::nvim::fold::hasFolding;
 use crate::src::nvim::main::{
-    IObuff, cmdwin_type, curbuf, curwin, e_cmdwin, e_command_too_recursive, e_modifiable, e_nobang,
-    e_norange, emsg_silent, emsg_skip, global_busy,
+    IObuff, cmdmod, cmdwin_type, curbuf, curwin, e_cmdwin, e_command_too_recursive, e_modifiable,
+    e_nobang, e_norange, emsg_silent, emsg_skip, global_busy,
 };
 use crate::src::nvim::memory::xstrlcpy;
 use crate::src::nvim::message::emsg;

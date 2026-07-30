@@ -53,7 +53,7 @@ use crate::src::nvim::ex_docmd::{
     CMD_write, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DOCMD_VERBOSE, EVENT_CMDUNDEFINED,
     EX_ARGOPT, EX_BANG, EX_CMDARG, EX_CMDWIN, EX_COUNT, EX_DFLALL, EX_EXTRA, EX_FLAGS, EX_LOCK_OK,
     EX_MODIFY, EX_NEEDARG, EX_RANGE, EX_SBOXOK, EX_TRLBAR, EX_WHOLEFOLD, FAIL, IOSIZE, NUL,
-    PROF_YES, cmdmod, cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command,
+    PROF_YES, cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command,
     ex_func_T, exmode_plus, quitmore,
 };
 use crate::src::nvim::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
@@ -61,10 +61,10 @@ use crate::src::nvim::ex_getln::{curbuf_locked, get_text_locked_msg, script_get,
 use crate::src::nvim::fold::hasFolding;
 use crate::src::nvim::input::ask_yesno;
 use crate::src::nvim::main::{
-    IObuff, check_cstack, cmdwin_type, curbuf, curwin, did_emsg, did_emsg_syntax, did_throw,
-    do_profiling, e_argreq, e_cmdwin, e_invarg, e_invrange, e_modifiable, e_nobang, e_norange,
-    e_sandbox, e_trailing_arg, ex_nesting_level, exiting, exmode_active, global_busy, got_int,
-    msg_silent, need_rethrow, pending_end_reg_executing, reg_executing, sandbox,
+    IObuff, check_cstack, cmdmod, cmdwin_type, curbuf, curwin, did_emsg, did_emsg_syntax,
+    did_throw, do_profiling, e_argreq, e_cmdwin, e_invarg, e_invrange, e_modifiable, e_nobang,
+    e_norange, e_sandbox, e_trailing_arg, ex_nesting_level, exiting, exmode_active, global_busy,
+    got_int, msg_silent, need_rethrow, pending_end_reg_executing, reg_executing, sandbox,
 };
 use crate::src::nvim::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
 use crate::src::nvim::memory::{xcalloc, xfree, xmemdupz, xstrlcat, xstrlcpy};

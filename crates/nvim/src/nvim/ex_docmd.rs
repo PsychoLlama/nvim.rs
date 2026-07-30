@@ -1,3 +1,13 @@
+//! The Ex command dispatcher: the command table, and the shared
+//! vocabulary its twenty-one children are written against.
+//!
+//! `cmdnames` is the whole of `:` — 557 rows, in the order `ex_cmds.lua`
+//! lists them, with `CMD_*` as indices into it. Nothing else lives here:
+//! the parsing is under `scan`, `address`, `modifier` and `lookup`, the
+//! driving under `onecmd`, `cmdline` and `source`, and one file per family
+//! of `ex_*` handler.
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::arglist::{
     ex_all, ex_argadd, ex_argdedupe, ex_argdelete, ex_argedit, ex_args, ex_argument, ex_last,
     ex_next, ex_previous, ex_rewind,
@@ -174,11 +184,6 @@ mod filetype;
 pub use self::filetype::*;
 mod childproc;
 pub(crate) use self::childproc::*;
-unsafe extern "C" {
-    static cmdmod: GlobalCell<cmdmod_T>;
-    fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-}
 pub const kErrorTypeNone: ErrorType = -1;
 pub const kObjectTypeDict: ObjectType = 6;
 pub const kObjectTypeString: ObjectType = 4;

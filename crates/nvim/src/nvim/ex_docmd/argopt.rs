@@ -15,11 +15,11 @@ use crate::src::nvim::ex_docmd::source::ex_errmsg;
 use crate::src::nvim::ex_docmd::window::current_tab_nr;
 use crate::src::nvim::ex_docmd::{
     BAD_DROP, BAD_KEEP, CMD_tabmove, CMD_tabnext, CMOD_CONFIRM, DIALOG_MSG_SIZE, FAIL, FORCE_BIN,
-    FORCE_NOBIN, NUL, OK, VIM_QUESTION, VIM_YES, cmdmod, dollar_command, quitmore,
+    FORCE_NOBIN, NUL, OK, VIM_QUESTION, VIM_YES, dollar_command, quitmore,
 };
 use crate::src::nvim::main::{
-    arg_had_last, curbuf, curtab, curwin, e_invarg2, e_invargval, e_invrange, e_isadir2, e_mkdir,
-    lastused_tabpage, p_confirm,
+    arg_had_last, cmdmod, curbuf, curtab, curwin, e_invarg2, e_invargval, e_invrange, e_isadir2,
+    e_mkdir, lastused_tabpage, p_confirm,
 };
 use crate::src::nvim::mbyte::{get_encoding_name, utf8len_tab};
 use crate::src::nvim::memory::{xmalloc, xstrdup};

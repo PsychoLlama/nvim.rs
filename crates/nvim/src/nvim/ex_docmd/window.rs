@@ -22,13 +22,13 @@ use crate::src::nvim::ex_docmd::{
     CMD_new, CMD_sfind, CMD_split, CMD_tabNext, CMD_tabedit, CMD_tabfind, CMD_tabfirst,
     CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, CMOD_KEEPALT,
     Ctrl_G, EVENT_TABNEWENTERED, FAIL, FNAME_MESS, HLF_T, IOSIZE, NUL, UPD_CLEAR, UPD_VALID,
-    WSP_VERT, cmdmod,
+    WSP_VERT,
 };
 use crate::src::nvim::file_search::{find_file_in_path, vim_findfile_cleanup};
 use crate::src::nvim::main::{
-    Columns, IObuff, Rows, curbuf, curtab, curwin, e_invarg, e_invarg2, e_invcmd, e_invrange,
-    e_screenmode, first_tabpage, firstwin, g_do_tagpreview, got_int, lastused_tabpage, msg_col,
-    msg_scroll, must_redraw, p_pvh, postponed_split_flags, postponed_split_tab,
+    Columns, IObuff, Rows, cmdmod, curbuf, curtab, curwin, e_invarg, e_invarg2, e_invcmd,
+    e_invrange, e_screenmode, first_tabpage, firstwin, g_do_tagpreview, got_int, lastused_tabpage,
+    msg_col, msg_scroll, must_redraw, p_pvh, postponed_split_flags, postponed_split_tab,
 };
 use crate::src::nvim::memory::{xfree, xstrlcpy};
 use crate::src::nvim::message::{

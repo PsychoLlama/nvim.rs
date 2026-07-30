@@ -22,8 +22,8 @@ use crate::src::nvim::ex_docmd::{
     CMD_split, CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit,
     CMOD_KEEPALT, CPO_ALTREAD, DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF,
     ECMD_ALTBUF, ECMD_FORCEIT, ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, FAIL, FNAME_MESS, FORWARD,
-    MAXLNUM, ML_EMPTY, NUL, OK, UPD_NOT_VALID, UPD_VALID, cmdmod, ex_pressedreturn,
-    kDirectionNotSet, kUICmdline,
+    MAXLNUM, ML_EMPTY, NUL, OK, UPD_NOT_VALID, UPD_VALID, ex_pressedreturn, kDirectionNotSet,
+    kUICmdline,
 };
 use crate::src::nvim::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::src::nvim::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
@@ -31,9 +31,9 @@ use crate::src::nvim::file_search::{find_file_in_path, vim_findfile_cleanup};
 use crate::src::nvim::fileio::readfile;
 use crate::src::nvim::getchar::stuffReadbuff;
 use crate::src::nvim::main::{
-    RedrawingDisabled, curbuf, curwin, e_notopen, e_trailing_arg, ex_no_reprint, exmode_active,
-    global_busy, msg_scroll, need_wait_return, no_wait_return, p_awa, p_cpo, p_shada,
-    pending_exmode_active, readonlymode, recoverymode,
+    RedrawingDisabled, cmdmod, curbuf, curwin, e_notopen, e_trailing_arg, ex_no_reprint,
+    exmode_active, global_busy, msg_scroll, need_wait_return, no_wait_return, p_awa, p_cpo,
+    p_shada, pending_exmode_active, readonlymode, recoverymode,
 };
 use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::memline::{ml_delete, ml_get, ml_preserve, ml_recover};

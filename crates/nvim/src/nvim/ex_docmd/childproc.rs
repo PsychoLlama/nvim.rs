@@ -6,11 +6,9 @@ use core::ptr;
 
 use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string};
 use crate::src::nvim::ex_docmd::cmdline::do_cmdline_cmd;
-use crate::src::nvim::ex_docmd::{
-    HLF_E, NUL, cmdmod, kErrorTypeNone, kObjectTypeString, kRetNilBool,
-};
+use crate::src::nvim::ex_docmd::{HLF_E, NUL, kErrorTypeNone, kObjectTypeString, kRetNilBool};
 use crate::src::nvim::lua::executor::nlua_exec;
-use crate::src::nvim::main::{e_shellempty, p_sh};
+use crate::src::nvim::main::{cmdmod, e_shellempty, p_sh};
 use crate::src::nvim::memory::{xfree, xstrlcat};
 use crate::src::nvim::message::{emsg, emsg_multiline};
 use crate::src::nvim::os::libc::{gettext, snprintf};

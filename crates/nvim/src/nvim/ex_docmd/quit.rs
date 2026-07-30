@@ -24,13 +24,13 @@ use crate::src::nvim::ex_docmd::{
     CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide,
     CMD_only, CMD_tabclose, CMD_tabonly, CMD_wq, CMOD_CONFIRM, Ctrl_C, DOBUF_DEL, DOBUF_UNLOAD,
     DOBUF_WIPE, EVENT_EXITPRE, EVENT_QUITPRE, EXIT_FAILURE, FAIL, KE_IGNORE, KE_XF1, KE_XF2, NUL,
-    OK, VV_EXITREASON, cmdmod,
+    OK, VV_EXITREASON,
 };
 use crate::src::nvim::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::src::nvim::getchar::beep_flush;
 use crate::src::nvim::main::{
-    cmdwin_result, cmdwin_type, curbuf, curtab, curwin, e_autocmd_close, exiting, first_tabpage,
-    firstwin, getout, lastwin, p_awa, p_confirm, p_write, topframe,
+    cmdmod, cmdwin_result, cmdwin_type, curbuf, curtab, curwin, e_autocmd_close, exiting,
+    first_tabpage, firstwin, getout, lastwin, p_awa, p_confirm, p_write, topframe,
 };
 use crate::src::nvim::message::{emsg, msg};
 use crate::src::nvim::os::libc::{gettext, snprintf};
