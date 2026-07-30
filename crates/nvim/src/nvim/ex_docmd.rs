@@ -200,7 +200,7 @@ use crate::src::nvim::quickfix::{
 };
 use crate::src::nvim::regexp::skip_regexp;
 use crate::src::nvim::register::{
-    do_execreg, do_put, ex_display, op_yank, set_expr_line, valid_yank_reg, write_reg_contents,
+    do_execreg, do_put, ex_display, op_yank, valid_yank_reg, write_reg_contents,
 };
 use crate::src::nvim::runtime::{
     do_finish, estack_pop, estack_push, estack_sfile, ex_finish, ex_options, ex_packadd,
@@ -219,7 +219,7 @@ use crate::src::nvim::spellfile::{ex_mkspell, ex_spell};
 use crate::src::nvim::state::may_trigger_modechanged;
 use crate::src::nvim::statusline::draw_tabline;
 use crate::src::nvim::strings::{
-    concat_str, del_trailing_spaces, strrep, vim_snprintf, vim_strchr, vim_strsave_escaped,
+    concat_str, strrep, vim_snprintf, vim_strchr, vim_strsave_escaped,
 };
 use crate::src::nvim::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::src::nvim::tag::{do_tag, do_tags};
