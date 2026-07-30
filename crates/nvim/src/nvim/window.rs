@@ -8233,7 +8233,11 @@ pub unsafe extern "C" fn win_setheight_win(mut height: ::core::ffi::c_int, mut w
     } else {
         frame_setheight(
             (*win).w_frame,
-            height + (*win).w_hsep_height + (*win).w_status_height,
+            // `height` came from `:resize`, which does not clamp it; the C
+            // wraps here and `frame_setheight` clamps whatever comes out.
+            height
+                .wrapping_add((*win).w_hsep_height)
+                .wrapping_add((*win).w_status_height),
         );
         win_comp_pos();
         win_fix_scroll(true_0 != 0);

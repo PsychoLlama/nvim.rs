@@ -325,11 +325,17 @@ pub(crate) unsafe fn get_tabpage_arg(eap: *mut exarg_T) -> c_int {
                         invarg2(ea);
                         break 'theend;
                     }
-                    tab_number = tab_number * relative + tabpage_index(curtab.get());
+                    // `int` arithmetic on a number the user typed: the C
+                    // wraps, and the range check below is what refuses
+                    // whatever comes out. `:tabmove -2147483648` is the
+                    // case that reaches it.
+                    tab_number = tab_number
+                        .wrapping_mul(relative)
+                        .wrapping_add(tabpage_index(curtab.get()));
                     // `:tabmove -1` moves *before* the tab to the left,
                     // which is one place further than counting says.
                     if unaccept_arg0 == 0 && relative == -1 {
-                        tab_number -= 1;
+                        tab_number = tab_number.wrapping_sub(1);
                     }
                 }
                 if tab_number < unaccept_arg0 || tab_number > last_tab() {
@@ -355,7 +361,7 @@ pub(crate) unsafe fn get_tabpage_arg(eap: *mut exarg_T) -> c_int {
                             }
                         }
                         if *cmdp as c_int == '-' as c_int {
-                            tab_number -= 1;
+                            tab_number = tab_number.wrapping_sub(1);
                             if tab_number < unaccept_arg0 {
                                 ea.errmsg = gettext(&raw const e_invrange as *const c_char);
                             }

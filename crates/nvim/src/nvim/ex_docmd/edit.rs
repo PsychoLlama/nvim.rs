@@ -546,20 +546,24 @@ pub(crate) unsafe extern "C" fn ex_later(eap: *mut exarg_T) {
                     p = p.add(1);
                     sec = true;
                 }
+                // The three multiplications are `int` arithmetic on a
+                // number the user typed, and the C wraps: `:later
+                // 100000000d` is nine orders of magnitude past `INT_MAX`.
+                // `undo_time` clamps whatever comes out.
                 b'm' => {
                     p = p.add(1);
                     sec = true;
-                    count *= 60;
+                    count = count.wrapping_mul(60);
                 }
                 b'h' => {
                     p = p.add(1);
                     sec = true;
-                    count *= 60 * 60;
+                    count = count.wrapping_mul(60 * 60);
                 }
                 b'd' => {
                     p = p.add(1);
                     sec = true;
-                    count *= 24 * 60 * 60;
+                    count = count.wrapping_mul(24 * 60 * 60);
                 }
                 b'f' => {
                     p = p.add(1);
@@ -574,7 +578,7 @@ pub(crate) unsafe extern "C" fn ex_later(eap: *mut exarg_T) {
         }
         undo_time(
             if (*eap).cmdidx as c_int == CMD_earlier as c_int {
-                -count
+                count.wrapping_neg()
             } else {
                 count
             },

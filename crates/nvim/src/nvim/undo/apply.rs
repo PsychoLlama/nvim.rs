@@ -144,7 +144,7 @@ pub unsafe extern "C" fn undo_time(
         closest = -1;
     } else {
         if dosec {
-            target = (*curbuf.get()).b_u_time_cur as c_int + step;
+            target = ((*curbuf.get()).b_u_time_cur as c_int).wrapping_add(step);
         } else if dofile {
             if step < 0 {
                 uhp = (*curbuf.get()).b_u_curhead;
@@ -154,22 +154,28 @@ pub unsafe extern "C" fn undo_time(
                     uhp = (*curbuf.get()).b_u_newhead;
                 }
                 if !uhp.is_null() && (*uhp).uh_save_nr != 0 {
-                    target = (*curbuf.get()).b_u_save_nr_cur + step;
+                    target = (*curbuf.get()).b_u_save_nr_cur.wrapping_add(step);
                 } else {
-                    target = (*curbuf.get()).b_u_save_nr_cur + step + 1;
+                    target = (*curbuf.get())
+                        .b_u_save_nr_cur
+                        .wrapping_add(step)
+                        .wrapping_add(1);
                 }
                 if target <= 0 {
                     dofile = false;
                 }
             } else {
-                target = (*curbuf.get()).b_u_save_nr_cur + step;
+                target = (*curbuf.get()).b_u_save_nr_cur.wrapping_add(step);
                 if target > (*curbuf.get()).b_u_save_nr_last {
                     target = (*curbuf.get()).b_u_seq_last + 1;
                     dofile = false;
                 }
             }
         } else {
-            target = (*curbuf.get()).b_u_seq_cur + step;
+            // `step` is a user count, so this is `int` arithmetic that
+            // wraps in the C: `:later 2147483647` runs past `INT_MAX` and
+            // the clamp below is what catches it.
+            target = (*curbuf.get()).b_u_seq_cur.wrapping_add(step);
         }
         if step < 0 {
             target = if target > 0 { target } else { 0 };
