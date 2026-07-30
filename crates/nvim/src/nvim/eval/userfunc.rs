@@ -4740,7 +4740,7 @@ unsafe extern "C" fn get_function_body(
     );
     return ret;
 }
-pub unsafe extern "C" fn ex_function(mut eap: *mut exarg_T) {
+pub unsafe fn ex_function(mut eap: *mut exarg_T) {
     let mut sourcing_lnum_top: linenr_T = 0;
     let mut namelen: size_t = 0;
     let mut line_to_free: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -5391,7 +5391,7 @@ pub unsafe extern "C" fn get_user_func_name(
     }
     return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-pub unsafe extern "C" fn ex_delfunction(mut eap: *mut exarg_T) {
+pub unsafe fn ex_delfunction(mut eap: *mut exarg_T) {
     let mut fp: *mut ufunc_T = ::core::ptr::null_mut::<ufunc_T>();
     let mut fudi: funcdict_T = funcdict_T {
         fd_dict: ::core::ptr::null_mut::<dict_T>(),
@@ -5552,7 +5552,7 @@ unsafe extern "C" fn can_free_funccal(
         && (*fc).fc_l_avars.dv_copyID != copyID
         && (*fc).fc_copyID != copyID;
 }
-pub unsafe extern "C" fn ex_return(mut eap: *mut exarg_T) {
+pub unsafe fn ex_return(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut rettv: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
@@ -5865,7 +5865,7 @@ pub unsafe extern "C" fn invoke_all_defer() {
         fce = (*fce).next;
     }
 }
-pub unsafe extern "C" fn ex_call(mut eap: *mut exarg_T) {
+pub unsafe fn ex_call(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut failed: bool = false_0 != 0;
     let mut fudi: funcdict_T = funcdict_T {

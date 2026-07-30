@@ -34,7 +34,7 @@ use crate::src::nvim::types::exarg_T;
 /// The third letter of the name says what to do with what is found, and
 /// the first says whether the search is for a *definition* or for any
 /// occurrence.
-pub(crate) unsafe extern "C" fn ex_findpat(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_findpat(eap: *mut exarg_T) {
     unsafe {
         let ea = &mut *eap;
         let name = (*cmdnames.ptr())[ea.cmdidx as usize].cmd_name;
@@ -102,7 +102,7 @@ pub(crate) unsafe extern "C" fn ex_findpat(eap: *mut exarg_T) {
 }
 
 /// `:ptag` and friends — the same as `:tag`, in the preview window.
-pub(crate) unsafe extern "C" fn ex_ptag(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_ptag(eap: *mut exarg_T) {
     unsafe {
         g_do_tagpreview.set(p_pvh.get() as c_int);
         ex_tag_cmd(
@@ -113,7 +113,7 @@ pub(crate) unsafe extern "C" fn ex_ptag(eap: *mut exarg_T) {
 }
 
 /// `:stag` and friends — the same as `:tag`, in a new window.
-pub(crate) unsafe extern "C" fn ex_stag(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_stag(eap: *mut exarg_T) {
     unsafe {
         // `-1` means "split, and let the tag code choose the size".
         postponed_split.set(-1);
@@ -129,7 +129,7 @@ pub(crate) unsafe extern "C" fn ex_stag(eap: *mut exarg_T) {
 }
 
 /// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …
-pub(crate) unsafe extern "C" fn ex_tag(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_tag(eap: *mut exarg_T) {
     unsafe {
         ex_tag_cmd(eap, (*cmdnames.ptr())[(*eap).cmdidx as usize].cmd_name);
     }

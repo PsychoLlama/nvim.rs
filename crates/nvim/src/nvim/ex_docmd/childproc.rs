@@ -26,7 +26,7 @@ use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 /// attaches a terminal to a buffer, and it is a vimscript function. The
 /// argument therefore has to survive being read as a vimscript string
 /// literal, which is what the `"` and `\` escaping is for.
-pub(crate) unsafe extern "C" fn ex_terminal(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
     unsafe {
         const CMD_LEN: usize = 1024;
         let mut ex_cmd: [c_char; CMD_LEN] = [0; CMD_LEN];
@@ -116,7 +116,7 @@ pub(crate) unsafe extern "C" fn ex_terminal(eap: *mut exarg_T) {
 }
 
 /// `:lsp` — a Lua entry point that takes the whole argument as one string.
-pub(crate) unsafe extern "C" fn ex_lsp(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_lsp(eap: *mut exarg_T) {
     unsafe {
         let mut err = Error {
             type_0: kErrorTypeNone,

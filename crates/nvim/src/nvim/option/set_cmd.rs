@@ -72,7 +72,7 @@ enum Prefix {
 /// # Safety
 ///
 /// `eap` must be the command's own argument block.
-pub unsafe extern "C" fn ex_set(eap: *mut exarg_T) {
+pub unsafe fn ex_set(eap: *mut exarg_T) {
     // SAFETY: the caller's argument block.
     unsafe {
         let mut flags = match (*eap).cmdidx as CMD_index {

@@ -9269,7 +9269,7 @@ pub unsafe extern "C" fn check_need_cap(
     xfree(line_copy as *mut ::core::ffi::c_void);
     return need_cap;
 }
-pub unsafe extern "C" fn ex_spellrepall(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_spellrepall(mut _eap: *mut exarg_T) {
     let mut pos: pos_T = (*curwin.get()).w_cursor;
     let mut save_ws: bool = p_ws.get() != 0;
     let mut prev_lnum: linenr_T = 0 as linenr_T;
@@ -9942,7 +9942,7 @@ unsafe extern "C" fn spell_soundfold_wsal(
     }
     *res.offset(l as isize) = NUL as ::core::ffi::c_char;
 }
-pub unsafe extern "C" fn ex_spellinfo(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_spellinfo(mut _eap: *mut exarg_T) {
     if no_spell_checking(curwin.get()) {
         return;
     }
@@ -9973,7 +9973,7 @@ pub const DUMPFLAG_COUNT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DUMPFLAG_ICASE: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const DUMPFLAG_ONECAP: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const DUMPFLAG_ALLCAP: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-pub unsafe extern "C" fn ex_spelldump(mut eap: *mut exarg_T) {
+pub unsafe fn ex_spelldump(mut eap: *mut exarg_T) {
     if no_spell_checking(curwin.get()) {
         return;
     }

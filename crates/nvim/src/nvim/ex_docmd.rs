@@ -414,8 +414,11 @@ pub const ADDR_LOADED_BUFFERS: cmd_addr_T = 3;
 pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
-pub type ex_func_T = Option<unsafe extern "C" fn(*mut exarg_T) -> ()>;
-pub type ex_preview_func_T = Option<unsafe extern "C" fn(*mut exarg_T, c_int, handle_T) -> c_int>;
+/// A command handler. Plain `unsafe fn`, not `extern "C"`: nothing
+/// outside this crate calls the table.
+pub type ex_func_T = Option<unsafe fn(*mut exarg_T)>;
+/// An 'inccommand' preview callback, likewise.
+pub type ex_preview_func_T = Option<unsafe fn(*mut exarg_T, c_int, handle_T) -> c_int>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct CommandDefinition {
@@ -755,7 +758,7 @@ static command_count: GlobalCell<c_int> = GlobalCell::new(557 as c_int);
 /// a no-op that cost three `unsafe ` tokens a row.
 const fn cmd<const N: usize>(
     name: &'static [u8; N],
-    func: unsafe extern "C" fn(*mut exarg_T),
+    func: unsafe fn(*mut exarg_T),
     argt: c_uint,
     addr: cmd_addr_T,
 ) -> CommandDefinition {
@@ -771,8 +774,8 @@ const fn cmd<const N: usize>(
 /// A row whose command also has a 'inccommand' preview implementation.
 const fn cmd_pv<const N: usize>(
     name: &'static [u8; N],
-    func: unsafe extern "C" fn(*mut exarg_T),
-    preview: unsafe extern "C" fn(*mut exarg_T, c_int, handle_T) -> c_int,
+    func: unsafe fn(*mut exarg_T),
+    preview: unsafe fn(*mut exarg_T, c_int, handle_T) -> c_int,
     argt: c_uint,
     addr: cmd_addr_T,
 ) -> CommandDefinition {

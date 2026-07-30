@@ -4020,7 +4020,7 @@ unsafe extern "C" fn dis_msg(mut p: *const ::core::ffi::c_char, mut skip_esc: bo
     }
     os_breakcheck();
 }
-pub unsafe extern "C" fn ex_display(mut eap: *mut exarg_T) {
+pub unsafe fn ex_display(mut eap: *mut exarg_T) {
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut yb: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;

@@ -2269,7 +2269,7 @@ unsafe extern "C" fn parse_sign_cmd_args(
     }
     return OK;
 }
-pub unsafe extern "C" fn ex_sign(mut eap: *mut exarg_T) {
+pub unsafe fn ex_sign(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut p: *mut ::core::ffi::c_char = skiptowhite(arg);
     let mut idx: ::core::ffi::c_int = sign_cmd_idx(arg, p);

@@ -677,7 +677,7 @@ pub fn keymap_init() -> *const c_char {
 /// # Safety
 ///
 /// `eap` must be a valid command block (ex-command contract).
-pub unsafe extern "C" fn ex_loadkeymap(eap: *mut exarg_T) {
+pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
     if !getline_equal(
         (*eap).ea_getline,
         (*eap).cookie,

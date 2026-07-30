@@ -2179,7 +2179,7 @@ pub unsafe extern "C" fn f_matchdelete(
         ) as varnumber_T;
     };
 }
-pub unsafe extern "C" fn ex_match(mut eap: *mut exarg_T) {
+pub unsafe fn ex_match(mut eap: *mut exarg_T) {
     let mut g: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut id: ::core::ffi::c_int = 0;

@@ -271,7 +271,7 @@ pub unsafe extern "C" fn free_jumplist(mut wp: *mut win_T) {
 }
 
 /// print the jumplist
-pub unsafe extern "C" fn ex_jumps(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_jumps(mut _eap: *mut exarg_T) {
     cleanup_jumplist(curwin.get(), true);
     msg_ext_set_kind(c"list_cmd".as_ptr());
     msg_puts_title(gettext(c"\n jump line  col file/text".as_ptr()));
@@ -336,14 +336,14 @@ pub unsafe extern "C" fn ex_jumps(mut _eap: *mut exarg_T) {
     }
 }
 
-pub unsafe extern "C" fn ex_clearjumps(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_clearjumps(mut _eap: *mut exarg_T) {
     free_jumplist(curwin.get());
     (*curwin.get()).w_jumplistlen = 0;
     (*curwin.get()).w_jumplistidx = 0;
 }
 
 /// print the changelist
-pub unsafe extern "C" fn ex_changes(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_changes(mut _eap: *mut exarg_T) {
     msg_ext_set_kind(c"list_cmd".as_ptr());
     msg_puts_title(gettext(c"\nchange line  col text".as_ptr()));
     let mut i: c_int = 0;

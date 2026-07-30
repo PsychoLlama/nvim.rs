@@ -82,7 +82,7 @@ pub(crate) unsafe fn is_other_file(fnum: c_int, ffname: *mut c_char) -> bool {
 }
 
 /// `:buffer`.
-pub(crate) unsafe extern "C" fn ex_buffer(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_buffer(eap: *mut exarg_T) {
     unsafe {
         do_exbuffer(eap);
     }
@@ -121,7 +121,7 @@ unsafe fn run_ecmd_cmd(eap: *mut exarg_T) {
 }
 
 /// `:bmodified`.
-pub(crate) unsafe extern "C" fn ex_bmodified(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_bmodified(eap: *mut exarg_T) {
     unsafe {
         goto_buffer(
             eap,
@@ -134,7 +134,7 @@ pub(crate) unsafe extern "C" fn ex_bmodified(eap: *mut exarg_T) {
 }
 
 /// `:bnext`.
-pub(crate) unsafe extern "C" fn ex_bnext(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_bnext(eap: *mut exarg_T) {
     unsafe {
         goto_buffer(
             eap,
@@ -147,7 +147,7 @@ pub(crate) unsafe extern "C" fn ex_bnext(eap: *mut exarg_T) {
 }
 
 /// `:bprevious` and `:bNext`.
-pub(crate) unsafe extern "C" fn ex_bprevious(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_bprevious(eap: *mut exarg_T) {
     unsafe {
         goto_buffer(
             eap,
@@ -160,7 +160,7 @@ pub(crate) unsafe extern "C" fn ex_bprevious(eap: *mut exarg_T) {
 }
 
 /// `:brewind` and `:bfirst`.
-pub(crate) unsafe extern "C" fn ex_brewind(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_brewind(eap: *mut exarg_T) {
     unsafe {
         goto_buffer(eap, DOBUF_FIRST as c_int, FORWARD as c_int, 0);
         run_ecmd_cmd(eap);
@@ -168,7 +168,7 @@ pub(crate) unsafe extern "C" fn ex_brewind(eap: *mut exarg_T) {
 }
 
 /// `:blast`.
-pub(crate) unsafe extern "C" fn ex_blast(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_blast(eap: *mut exarg_T) {
     unsafe {
         goto_buffer(eap, DOBUF_LAST as c_int, BACKWARD as c_int, 0);
         run_ecmd_cmd(eap);
@@ -176,14 +176,14 @@ pub(crate) unsafe extern "C" fn ex_blast(eap: *mut exarg_T) {
 }
 
 /// `:preserve` — flush the swap file to disk now.
-pub(crate) unsafe extern "C" fn ex_preserve(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_preserve(_eap: *mut exarg_T) {
     unsafe {
         ml_preserve(curbuf.get(), true, true);
     }
 }
 
 /// `:recover` — read the buffer back out of a swap file.
-pub(crate) unsafe extern "C" fn ex_recover(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_recover(eap: *mut exarg_T) {
     unsafe {
         // The flag changes what the swap-file machinery does with what it
         // finds, and is read from several modules.
@@ -213,7 +213,7 @@ pub(crate) unsafe extern "C" fn ex_recover(eap: *mut exarg_T) {
 }
 
 /// `:find` — edit the first file of that name on 'path', or the `count`'th.
-pub(crate) unsafe extern "C" fn ex_find(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_find(eap: *mut exarg_T) {
     unsafe {
         if !check_can_set_curbuf_forceit((*eap).forceit) {
             return;
@@ -280,7 +280,7 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: linenr_T)
 }
 
 /// `:edit`, `:enew`, `:view`, `:badd`, `:balt`.
-pub(crate) unsafe extern "C" fn ex_edit(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_edit(eap: *mut exarg_T) {
     unsafe {
         let ffname = if (*eap).cmdidx as c_int == CMD_enew as c_int {
             ptr::null_mut()
@@ -474,7 +474,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
 }
 
 /// `:swapname`.
-pub(crate) unsafe extern "C" fn ex_swapname(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_swapname(_eap: *mut exarg_T) {
     unsafe {
         let mfp = (*curbuf.get()).b_ml.ml_mfp;
         if mfp.is_null() || (*mfp).mf_fname.is_null() {
@@ -486,7 +486,7 @@ pub(crate) unsafe extern "C" fn ex_swapname(_eap: *mut exarg_T) {
 }
 
 /// `:read` — insert a file, or the output of a command.
-pub(crate) unsafe extern "C" fn ex_read(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
     unsafe {
         let was_empty = (*curbuf.get()).b_ml.ml_flags & ML_EMPTY;
         if (*eap).usefilter != 0 {
@@ -555,7 +555,7 @@ pub(crate) unsafe extern "C" fn ex_read(eap: *mut exarg_T) {
 }
 
 /// `:!cmd`.
-pub(crate) unsafe extern "C" fn ex_bang(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_bang(eap: *mut exarg_T) {
     unsafe {
         do_bang((*eap).addr_count, eap, (*eap).forceit != 0, true, true);
     }
@@ -563,7 +563,7 @@ pub(crate) unsafe extern "C" fn ex_bang(eap: *mut exarg_T) {
 
 /// `:wundo` — write the undo tree to a file, tagged with a hash of the
 /// buffer text so that reading it back into a different buffer is refused.
-pub(crate) unsafe extern "C" fn ex_wundo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_wundo(eap: *mut exarg_T) {
     unsafe {
         let mut hash: [uint8_t; 32] = [0; 32];
         u_compute_hash(curbuf.get(), &raw mut hash as *mut uint8_t);
@@ -577,7 +577,7 @@ pub(crate) unsafe extern "C" fn ex_wundo(eap: *mut exarg_T) {
 }
 
 /// `:rundo`.
-pub(crate) unsafe extern "C" fn ex_rundo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_rundo(eap: *mut exarg_T) {
     unsafe {
         let mut hash: [uint8_t; 32] = [0; 32];
         u_compute_hash(curbuf.get(), &raw mut hash as *mut uint8_t);
@@ -586,7 +586,7 @@ pub(crate) unsafe extern "C" fn ex_rundo(eap: *mut exarg_T) {
 }
 
 /// `:checkpath` — every file 'path' reaches from the includes of this one.
-pub(crate) unsafe extern "C" fn ex_checkpath(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_checkpath(eap: *mut exarg_T) {
     unsafe {
         find_pattern_in_path(
             ptr::null_mut(),
@@ -610,7 +610,7 @@ pub(crate) unsafe extern "C" fn ex_checkpath(eap: *mut exarg_T) {
 }
 
 /// `:rshada`, `:wshada` and their `viminfo` spellings.
-pub(crate) unsafe extern "C" fn ex_shada(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_shada(eap: *mut exarg_T) {
     unsafe {
         // An empty 'shada' would mean "save nothing", which is not what an
         // explicit command means.
@@ -630,7 +630,7 @@ pub(crate) unsafe extern "C" fn ex_shada(eap: *mut exarg_T) {
 }
 
 /// `:fclose` — close a floating window by its handle.
-pub(crate) unsafe extern "C" fn ex_fclose(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_fclose(eap: *mut exarg_T) {
     unsafe {
         win_float_remove((*eap).forceit != 0, (*eap).line1 as c_int);
     }

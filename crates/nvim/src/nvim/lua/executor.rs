@@ -3326,7 +3326,7 @@ unsafe extern "C-unwind" fn nlua_call_pop_retval(
 pub unsafe extern "C-unwind" fn nlua_is_deferred_safe() -> bool {
     return in_fast_callback.get() == 0 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn ex_lua(eap: *mut exarg_T) {
+pub unsafe fn ex_lua(eap: *mut exarg_T) {
     if *(*eap).arg as ::core::ffi::c_int == NUL {
         if (*eap).addr_count > 0 as ::core::ffi::c_int {
             cmd_source_buffer(eap, true_0 != 0);
@@ -3377,7 +3377,7 @@ pub unsafe extern "C" fn ex_lua(eap: *mut exarg_T) {
     );
     xfree(code as *mut ::core::ffi::c_void);
 }
-pub unsafe extern "C" fn ex_luado(eap: *mut exarg_T) {
+pub unsafe fn ex_luado(eap: *mut exarg_T) {
     if u_save((*eap).line1 - 1 as linenr_T, (*eap).line2 + 1 as linenr_T) == FAIL {
         emsg(gettext(
             b"cannot save undo information\0".as_ptr() as *const ::core::ffi::c_char
@@ -3498,7 +3498,7 @@ pub const DOSTART: [::core::ffi::c_char; 31] = unsafe {
 };
 pub const DOEND: [::core::ffi::c_char; 5] =
     unsafe { ::core::mem::transmute::<[u8; 5], [::core::ffi::c_char; 5]>(*b" end\0") };
-pub unsafe extern "C" fn ex_luafile(eap: *mut exarg_T) {
+pub unsafe fn ex_luafile(eap: *mut exarg_T) {
     nlua_exec_file((*eap).arg);
 }
 pub unsafe extern "C-unwind" fn nlua_exec_file(mut path: *const ::core::ffi::c_char) -> bool {

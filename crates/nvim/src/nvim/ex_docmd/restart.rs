@@ -88,7 +88,7 @@ fn entry(key: &'static core::ffi::CStr, value: Object) -> KeyValuePair {
 /// UIs to. Only then does this server try to quit — and if it *cannot*
 /// (an unsaved buffer, a `+cmd` that did not quit), the new server is
 /// killed again and nothing has changed.
-pub(crate) unsafe extern "C" fn ex_restart(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
     unsafe {
         let mut err = Error {
             type_0: kErrorTypeNone,
@@ -356,7 +356,7 @@ fn blank_callback() -> Callback {
 ///
 /// Called with a null `eap` by `:connect`, which has already attached
 /// somewhere else.
-pub(crate) unsafe extern "C" fn ex_detach(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_detach(eap: *mut exarg_T) {
     unsafe {
         if !eap.is_null() && (*eap).forceit != 0 {
             emsg(c"bang (!) not supported yet".as_ptr());
@@ -413,7 +413,7 @@ pub(crate) unsafe extern "C" fn ex_detach(eap: *mut exarg_T) {
 ///
 /// `:connect!` also *exits* when this was the only UI, so that the session
 /// really moves rather than being left running.
-pub(crate) unsafe extern "C" fn ex_connect(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_connect(eap: *mut exarg_T) {
     unsafe {
         let stop_server = (*eap).forceit != 0 && ui_active() == 1;
         let mut err = Error {

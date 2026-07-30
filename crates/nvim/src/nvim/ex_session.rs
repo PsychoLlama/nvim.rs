@@ -2146,7 +2146,7 @@ unsafe extern "C" fn makeopens(
     }
     return OK;
 }
-pub unsafe extern "C" fn ex_loadview(mut eap: *mut exarg_T) {
+pub unsafe fn ex_loadview(mut eap: *mut exarg_T) {
     let mut fname: *mut ::core::ffi::c_char = get_view_file(*(*eap).arg);
     if fname.is_null() {
         return;
@@ -2165,7 +2165,7 @@ pub unsafe extern "C" fn ex_loadview(mut eap: *mut exarg_T) {
     }
     xfree(fname as *mut ::core::ffi::c_void);
 }
-pub unsafe extern "C" fn ex_mkrc(mut eap: *mut exarg_T) {
+pub unsafe fn ex_mkrc(mut eap: *mut exarg_T) {
     let mut view_session: bool = false_0 != 0;
     let mut using_vdir: ::core::ffi::c_int = false_0;
     let mut viewFile: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();

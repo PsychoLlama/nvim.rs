@@ -1679,7 +1679,7 @@ unsafe extern "C" fn report_discard_pending(
         }
     }
 }
-pub unsafe extern "C" fn ex_eval(mut eap: *mut exarg_T) {
+pub unsafe fn ex_eval(mut eap: *mut exarg_T) {
     let mut tv: typval_T = typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VAR_UNLOCKED,
@@ -1697,7 +1697,7 @@ pub unsafe extern "C" fn ex_eval(mut eap: *mut exarg_T) {
     }
     clear_evalarg(&raw mut evalarg, eap);
 }
-pub unsafe extern "C" fn ex_if(mut eap: *mut exarg_T) {
+pub unsafe fn ex_if(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_idx == CSTACK_LEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int {
         (*eap).errmsg =
@@ -1724,7 +1724,7 @@ pub unsafe extern "C" fn ex_if(mut eap: *mut exarg_T) {
         }
     };
 }
-pub unsafe extern "C" fn ex_endif(mut eap: *mut exarg_T) {
+pub unsafe fn ex_endif(mut eap: *mut exarg_T) {
     did_endif.set(true_0 != 0);
     if (*(*eap).cstack).cs_idx < 0 as ::core::ffi::c_int
         || (*(*eap).cstack).cs_flags[(*(*eap).cstack).cs_idx as usize]
@@ -1746,7 +1746,7 @@ pub unsafe extern "C" fn ex_endif(mut eap: *mut exarg_T) {
         (*(*eap).cstack).cs_idx -= 1;
     };
 }
-pub unsafe extern "C" fn ex_else(mut eap: *mut exarg_T) {
+pub unsafe fn ex_else(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     let mut skip: bool = did_emsg.get() != 0
         || got_int.get() as ::core::ffi::c_int != 0
@@ -1825,7 +1825,7 @@ pub unsafe extern "C" fn ex_else(mut eap: *mut exarg_T) {
         (*cstack).cs_flags[(*cstack).cs_idx as usize] |= CSF_ELSE as ::core::ffi::c_int;
     };
 }
-pub unsafe extern "C" fn ex_while(mut eap: *mut exarg_T) {
+pub unsafe fn ex_while(mut eap: *mut exarg_T) {
     let mut error: bool = false;
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_idx == CSTACK_LEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int {
@@ -1892,7 +1892,7 @@ pub unsafe extern "C" fn ex_while(mut eap: *mut exarg_T) {
         }
     };
 }
-pub unsafe extern "C" fn ex_continue(mut eap: *mut exarg_T) {
+pub unsafe fn ex_continue(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_looplevel <= 0 as ::core::ffi::c_int
         || (*cstack).cs_idx < 0 as ::core::ffi::c_int
@@ -1935,7 +1935,7 @@ pub unsafe extern "C" fn ex_continue(mut eap: *mut exarg_T) {
         }
     };
 }
-pub unsafe extern "C" fn ex_break(mut eap: *mut exarg_T) {
+pub unsafe fn ex_break(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_looplevel <= 0 as ::core::ffi::c_int
         || (*cstack).cs_idx < 0 as ::core::ffi::c_int
@@ -1960,7 +1960,7 @@ pub unsafe extern "C" fn ex_break(mut eap: *mut exarg_T) {
         }
     };
 }
-pub unsafe extern "C" fn ex_endwhile(mut eap: *mut exarg_T) {
+pub unsafe fn ex_endwhile(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     let mut err: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut csf: ::core::ffi::c_int = 0;
@@ -2030,7 +2030,7 @@ pub unsafe extern "C" fn ex_endwhile(mut eap: *mut exarg_T) {
         (*cstack).cs_lflags |= CSL_HAD_ENDLOOP as ::core::ffi::c_int;
     };
 }
-pub unsafe extern "C" fn ex_throw(mut eap: *mut exarg_T) {
+pub unsafe fn ex_throw(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut value: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if *arg as ::core::ffi::c_int != NUL
@@ -2076,7 +2076,7 @@ pub unsafe extern "C" fn do_throw(mut cstack: *mut cstack_T) {
     }
     did_throw.set(true_0 != 0);
 }
-pub unsafe extern "C" fn ex_try(mut eap: *mut exarg_T) {
+pub unsafe fn ex_try(mut eap: *mut exarg_T) {
     let cstack: *mut cstack_T = (*eap).cstack;
     if (*cstack).cs_idx == CSTACK_LEN as ::core::ffi::c_int - 1 as ::core::ffi::c_int {
         (*eap).errmsg =
@@ -2109,7 +2109,7 @@ pub unsafe extern "C" fn ex_try(mut eap: *mut exarg_T) {
         }
     };
 }
-pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
+pub unsafe fn ex_catch(mut eap: *mut exarg_T) {
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut give_up: bool = false_0 != 0;
     let mut skip: bool = false_0 != 0;
@@ -2243,7 +2243,7 @@ pub unsafe extern "C" fn ex_catch(mut eap: *mut exarg_T) {
         (*eap).nextcmd = find_nextcmd(end);
     }
 }
-pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
+pub unsafe fn ex_finally(mut eap: *mut exarg_T) {
     let mut idx: ::core::ffi::c_int = 0;
     let mut pending: ::core::ffi::c_int = CSTP_NONE as ::core::ffi::c_int;
     let cstack: *mut cstack_T = (*eap).cstack;
@@ -2346,7 +2346,7 @@ pub unsafe extern "C" fn ex_finally(mut eap: *mut exarg_T) {
         (*cstack).cs_lflags |= CSL_HAD_FINA as ::core::ffi::c_int;
     }
 }
-pub unsafe extern "C" fn ex_endtry(mut eap: *mut exarg_T) {
+pub unsafe fn ex_endtry(mut eap: *mut exarg_T) {
     let mut idx: ::core::ffi::c_int = 0;
     let mut rethrow: bool = false_0 != 0;
     let mut pending: ::core::ffi::c_char = CSTP_NONE as ::core::ffi::c_int as ::core::ffi::c_char;
@@ -2688,7 +2688,7 @@ pub unsafe extern "C" fn rewind_conditionals(
         (*cstack).cs_idx -= 1;
     }
 }
-pub unsafe extern "C" fn ex_endfunction(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_endfunction(mut _eap: *mut exarg_T) {
     semsg(
         gettext(&raw const e_str_not_inside_function as *const ::core::ffi::c_char),
         b":endfunction\0".as_ptr() as *const ::core::ffi::c_char,

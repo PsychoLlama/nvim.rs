@@ -86,7 +86,7 @@ pub(crate) unsafe fn current_tab_nr(tab: *mut tabpage_T) -> c_int {
 
 /// The handler every command modifier carries in the table, for the case
 /// where it was typed as a command in its own right.
-pub(crate) unsafe extern "C" fn ex_wrongmodifier(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_wrongmodifier(eap: *mut exarg_T) {
     unsafe {
         (*eap).errmsg = gettext(&raw const e_invcmd as *const c_char);
     }
@@ -94,7 +94,7 @@ pub(crate) unsafe extern "C" fn ex_wrongmodifier(eap: *mut exarg_T) {
 
 /// `:split`, `:vsplit`, `:new`, `:sfind`, `:tabedit`, `:tabnew`,
 /// `:tabfind` — open a window or a tab page, then edit into it.
-pub unsafe extern "C" fn ex_splitview(eap: *mut exarg_T) {
+pub unsafe fn ex_splitview(eap: *mut exarg_T) {
     unsafe {
         let ea = &mut *eap;
         let old_curwin = curwin.get();
@@ -227,7 +227,7 @@ pub unsafe fn tabpage_new() {
 /// `:tabprevious`/`:tabNext` count *backwards*, which `goto_tabpage`
 /// spells as a negative argument; the rest go to an absolute number that
 /// `get_tabpage_arg` works out.
-pub(crate) unsafe extern "C" fn ex_tabnext(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_tabnext(eap: *mut exarg_T) {
     unsafe {
         let ea = &mut *eap;
         let idx = ea.cmdidx as c_int;
@@ -279,7 +279,7 @@ pub(crate) unsafe extern "C" fn ex_tabnext(eap: *mut exarg_T) {
 }
 
 /// `:tabmove`.
-pub(crate) unsafe extern "C" fn ex_tabmove(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_tabmove(eap: *mut exarg_T) {
     unsafe {
         let tab_number = get_tabpage_arg(eap);
         if (*eap).errmsg.is_null() {
@@ -289,7 +289,7 @@ pub(crate) unsafe extern "C" fn ex_tabmove(eap: *mut exarg_T) {
 }
 
 /// `:tabs` — every tab page, with its windows.
-pub(crate) unsafe extern "C" fn ex_tabs(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_tabs(_eap: *mut exarg_T) {
     unsafe {
         msg_ext_set_kind(c"list_cmd".as_ptr());
         msg_start();
@@ -366,7 +366,7 @@ pub(crate) unsafe extern "C" fn ex_tabs(_eap: *mut exarg_T) {
 
 /// `:mode` — a redraw; the Vim spelling that took a terminal mode name is
 /// refused.
-pub(crate) unsafe extern "C" fn ex_mode(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_mode(eap: *mut exarg_T) {
     unsafe {
         if *(*eap).arg as c_int == NUL {
             must_redraw.set(UPD_CLEAR as c_int);
@@ -382,7 +382,7 @@ pub(crate) unsafe extern "C" fn ex_mode(eap: *mut exarg_T) {
 /// A leading `-` or `+` makes the argument relative — `atol` already read
 /// the sign, so the current size is simply added. No argument at all means
 /// "as large as possible".
-pub(crate) unsafe extern "C" fn ex_resize(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_resize(eap: *mut exarg_T) {
     unsafe {
         let ea = &mut *eap;
         let mut wp = curwin.get();
@@ -419,21 +419,21 @@ pub(crate) unsafe extern "C" fn ex_resize(eap: *mut exarg_T) {
 }
 
 /// The Vim commands that only make sense with a built-in GUI.
-pub(crate) unsafe extern "C" fn ex_nogui(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_nogui(eap: *mut exarg_T) {
     unsafe {
         (*eap).errmsg = gettext(c"E25: Nvim does not have a built-in GUI".as_ptr());
     }
 }
 
 /// `:popup`.
-pub(crate) unsafe extern "C" fn ex_popup(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_popup(eap: *mut exarg_T) {
     unsafe {
         pum_make_popup((*eap).arg, (*eap).forceit);
     }
 }
 
 /// `:winsize` — two numbers, and nothing else.
-pub(crate) unsafe extern "C" fn ex_winsize(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_winsize(eap: *mut exarg_T) {
     unsafe {
         let mut arg = (*eap).arg;
         if !ascii_isdigit(*arg as c_int) {
@@ -457,7 +457,7 @@ pub(crate) unsafe extern "C" fn ex_winsize(eap: *mut exarg_T) {
 }
 
 /// `:wincmd` — one window command, spelled as a command line.
-pub(crate) unsafe extern "C" fn ex_wincmd(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_wincmd(eap: *mut exarg_T) {
     unsafe {
         let ea = &mut *eap;
         // `CTRL-W g` takes a second character.
@@ -499,7 +499,7 @@ pub(crate) unsafe extern "C" fn ex_wincmd(eap: *mut exarg_T) {
 }
 
 /// `:psearch` — `:isearch` with the result shown in the preview window.
-pub(crate) unsafe extern "C" fn ex_psearch(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_psearch(eap: *mut exarg_T) {
     unsafe {
         g_do_tagpreview.set(p_pvh.get() as c_int);
         ex_findpat(eap);
@@ -508,7 +508,7 @@ pub(crate) unsafe extern "C" fn ex_psearch(eap: *mut exarg_T) {
 }
 
 /// `:pedit`.
-pub(crate) unsafe extern "C" fn ex_pedit(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_pedit(eap: *mut exarg_T) {
     unsafe {
         let curwin_save = curwin.get();
         prepare_preview_window();
@@ -518,7 +518,7 @@ pub(crate) unsafe extern "C" fn ex_pedit(eap: *mut exarg_T) {
 }
 
 /// `:pbuffer`.
-pub(crate) unsafe extern "C" fn ex_pbuffer(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_pbuffer(eap: *mut exarg_T) {
     unsafe {
         let curwin_save = curwin.get();
         prepare_preview_window();

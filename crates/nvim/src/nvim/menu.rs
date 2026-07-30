@@ -1116,7 +1116,7 @@ unsafe extern "C" fn is_menus_locked() -> ::core::ffi::c_int {
     }
     return false_0;
 }
-pub unsafe extern "C" fn ex_menu(mut eap: *mut exarg_T) {
+pub unsafe fn ex_menu(mut eap: *mut exarg_T) {
     let mut map_to: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut noremap: ::core::ffi::c_int = 0;
     let mut silent: bool = false_0 != 0;
@@ -2999,7 +2999,7 @@ unsafe extern "C" fn menu_getbyname(mut name_arg: *mut ::core::ffi::c_char) -> *
     }
     return menu;
 }
-pub unsafe extern "C" fn ex_emenu(mut eap: *mut exarg_T) {
+pub unsafe fn ex_emenu(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut mode_idx: ::core::ffi::c_int = MENU_INDEX_INVALID as ::core::ffi::c_int;
     if *arg.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != 0
@@ -3092,7 +3092,7 @@ pub unsafe extern "C" fn menu_find(mut path_name: *const ::core::ffi::c_char) ->
     return menu;
 }
 static menutrans_ga: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
-pub unsafe extern "C" fn ex_menutranslate(mut eap: *mut exarg_T) {
+pub unsafe fn ex_menutranslate(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     if (*menutrans_ga.ptr()).ga_itemsize == 0 as ::core::ffi::c_int {
         ga_init(

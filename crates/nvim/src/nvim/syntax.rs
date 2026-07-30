@@ -7165,7 +7165,7 @@ static subcommands: GlobalCell<[subcommand; 19]> = GlobalCell::new([
         func: Some(syn_cmd_list as unsafe extern "C" fn(*mut exarg_T, ::core::ffi::c_int) -> ()),
     },
 ]);
-pub unsafe extern "C" fn ex_syntax(mut eap: *mut exarg_T) {
+pub unsafe fn ex_syntax(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut subcmd_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     syn_cmdlinep.set((*eap).cmdlinep);
@@ -7222,7 +7222,7 @@ pub unsafe extern "C" fn ex_syntax(mut eap: *mut exarg_T) {
         (*emsg_skip.ptr()) -= 1;
     }
 }
-pub unsafe extern "C" fn ex_ownsyntax(mut eap: *mut exarg_T) {
+pub unsafe fn ex_ownsyntax(mut eap: *mut exarg_T) {
     if (*curwin.get()).w_s == &raw mut (*(*curwin.get()).w_buffer).b_s {
         (*curwin.get()).w_s =
             xcalloc(1 as size_t, ::core::mem::size_of::<synblock_T>()) as *mut synblock_T;
@@ -7528,7 +7528,7 @@ pub unsafe extern "C" fn syn_get_foldlevel(
     }
     return level;
 }
-pub unsafe extern "C" fn ex_syntime(mut eap: *mut exarg_T) {
+pub unsafe fn ex_syntime(mut eap: *mut exarg_T) {
     if strcmp((*eap).arg, b"on\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
     {
         syn_time_on.set(true_0 != 0);

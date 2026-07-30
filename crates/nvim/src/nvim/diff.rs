@@ -1975,7 +1975,7 @@ pub unsafe extern "C" fn diff_internal() -> ::core::ffi::c_int {
     return (diff_flags.get() & DIFF_INTERNAL != 0 as ::core::ffi::c_int
         && *p_dex.get() as ::core::ffi::c_int == NUL) as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn ex_diffupdate(mut eap: *mut exarg_T) {
+pub unsafe fn ex_diffupdate(mut eap: *mut exarg_T) {
     let mut idx_new: ::core::ffi::c_int = 0;
     let mut diffio: diffio_T = diffio_T {
         dio_orig: diffin_T {
@@ -2328,7 +2328,7 @@ unsafe extern "C" fn diff_file(mut dio: *mut diffio_T) -> ::core::ffi::c_int {
     xfree(cmd as *mut ::core::ffi::c_void);
     return OK;
 }
-pub unsafe extern "C" fn ex_diffpatch(mut eap: *mut exarg_T) {
+pub unsafe fn ex_diffpatch(mut eap: *mut exarg_T) {
     let mut buflen: size_t = 0;
     let mut dirbuf: [::core::ffi::c_char; 4096] = [0; 4096];
     let mut file_info: FileInfo = FileInfo {
@@ -2550,7 +2550,7 @@ pub unsafe extern "C" fn ex_diffpatch(mut eap: *mut exarg_T) {
     xfree(fullname as *mut ::core::ffi::c_void);
     xfree(esc_name as *mut ::core::ffi::c_void);
 }
-pub unsafe extern "C" fn ex_diffsplit(mut eap: *mut exarg_T) {
+pub unsafe fn ex_diffsplit(mut eap: *mut exarg_T) {
     let mut old_curwin: *mut win_T = curwin.get();
     let mut old_curbuf: bufref_T = bufref_T {
         br_buf: ::core::ptr::null_mut::<buf_T>(),
@@ -2588,7 +2588,7 @@ pub unsafe extern "C" fn ex_diffsplit(mut eap: *mut exarg_T) {
     }
     scroll_to_fraction(curwin.get(), (*curwin.get()).w_height);
 }
-pub unsafe extern "C" fn ex_diffthis(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_diffthis(mut _eap: *mut exarg_T) {
     diff_win_options(curwin.get(), true_0 != 0);
 }
 unsafe extern "C" fn set_diff_option(mut wp: *mut win_T, mut value: bool) {
@@ -2698,7 +2698,7 @@ pub unsafe extern "C" fn diff_win_options(mut wp: *mut win_T, mut addbuf: bool) 
     }
     redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
 }
-pub unsafe extern "C" fn ex_diffoff(mut eap: *mut exarg_T) {
+pub unsafe fn ex_diffoff(mut eap: *mut exarg_T) {
     let mut diffwin: bool = false_0 != 0;
     let mut wp: *mut win_T = if curtab.get() == curtab.get() {
         firstwin.get()
@@ -5027,7 +5027,7 @@ unsafe extern "C" fn valid_diff(mut diff: *mut diff_T) -> bool {
     }
     return false_0 != 0;
 }
-pub unsafe extern "C" fn ex_diffgetput(mut eap: *mut exarg_T) {
+pub unsafe fn ex_diffgetput(mut eap: *mut exarg_T) {
     let mut idx_other: ::core::ffi::c_int = 0;
     let mut idx_cur: ::core::ffi::c_int = diff_buf_idx(curbuf.get(), curtab.get());
     if idx_cur == DB_COUNT {

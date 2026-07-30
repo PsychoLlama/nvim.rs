@@ -6772,7 +6772,7 @@ unsafe extern "C" fn put_node(
     }
     return newindex;
 }
-pub unsafe extern "C" fn ex_mkspell(mut eap: *mut exarg_T) {
+pub unsafe fn ex_mkspell(mut eap: *mut exarg_T) {
     let mut fcount: ::core::ffi::c_int = 0;
     let mut fnames: *mut *mut ::core::ffi::c_char =
         ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
@@ -7637,7 +7637,7 @@ unsafe extern "C" fn spell_message(
         }
     }
 }
-pub unsafe extern "C" fn ex_spell(mut eap: *mut exarg_T) {
+pub unsafe fn ex_spell(mut eap: *mut exarg_T) {
     spell_add_word(
         (*eap).arg,
         strlen((*eap).arg) as ::core::ffi::c_int,

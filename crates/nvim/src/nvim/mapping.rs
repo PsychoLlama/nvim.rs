@@ -5210,10 +5210,10 @@ unsafe extern "C" fn do_exmap(mut eap: *mut exarg_T, mut isabbrev: ::core::ffi::
     xfree(parsed_args.rhs as *mut ::core::ffi::c_void);
     xfree(parsed_args.orig_rhs as *mut ::core::ffi::c_void);
 }
-pub unsafe extern "C" fn ex_abbreviate(mut eap: *mut exarg_T) {
+pub unsafe fn ex_abbreviate(mut eap: *mut exarg_T) {
     do_exmap(eap, true_0);
 }
-pub unsafe extern "C" fn ex_map(mut eap: *mut exarg_T) {
+pub unsafe fn ex_map(mut eap: *mut exarg_T) {
     if secure.get() != 0 {
         secure.set(2 as ::core::ffi::c_int);
         msg_outtrans((*eap).cmd, 0 as ::core::ffi::c_int, false_0 != 0);
@@ -5221,13 +5221,13 @@ pub unsafe extern "C" fn ex_map(mut eap: *mut exarg_T) {
     }
     do_exmap(eap, false_0);
 }
-pub unsafe extern "C" fn ex_unmap(mut eap: *mut exarg_T) {
+pub unsafe fn ex_unmap(mut eap: *mut exarg_T) {
     do_exmap(eap, false_0);
 }
-pub unsafe extern "C" fn ex_mapclear(mut eap: *mut exarg_T) {
+pub unsafe fn ex_mapclear(mut eap: *mut exarg_T) {
     do_mapclear((*eap).cmd, (*eap).arg, (*eap).forceit, false_0);
 }
-pub unsafe extern "C" fn ex_abclear(mut eap: *mut exarg_T) {
+pub unsafe fn ex_abclear(mut eap: *mut exarg_T) {
     do_mapclear((*eap).cmd, (*eap).arg, true_0, true_0);
 }
 pub unsafe extern "C" fn modify_keymap(

@@ -2490,7 +2490,7 @@ pub unsafe extern "C" fn uc_add_command(
     }
     return FAIL;
 }
-pub unsafe extern "C" fn ex_command(mut eap: *mut exarg_T) {
+pub unsafe fn ex_command(mut eap: *mut exarg_T) {
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut name_len: size_t = 0;
     let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -2581,7 +2581,7 @@ pub unsafe extern "C" fn ex_command(mut eap: *mut exarg_T) {
     }
     xfree(compl_arg as *mut ::core::ffi::c_void);
 }
-pub unsafe extern "C" fn ex_comclear(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_comclear(mut _eap: *mut exarg_T) {
     uc_clear(ucmds.ptr());
     if !(*curbuf.ptr()).is_null() {
         uc_clear(&raw mut (*curbuf.get()).b_ucmds);
@@ -2616,7 +2616,7 @@ pub unsafe extern "C" fn uc_clear(mut gap: *mut garray_T) {
     }
     ga_clear(_gap);
 }
-pub unsafe extern "C" fn ex_delcommand(mut eap: *mut exarg_T) {
+pub unsafe fn ex_delcommand(mut eap: *mut exarg_T) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut cmd: *mut ucmd_T = ::core::ptr::null_mut::<ucmd_T>();
     let mut res: ::core::ffi::c_int = -1 as ::core::ffi::c_int;

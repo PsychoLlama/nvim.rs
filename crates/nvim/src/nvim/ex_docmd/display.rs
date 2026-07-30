@@ -36,7 +36,7 @@ use crate::src::nvim::types::{FILE, exarg_T, ssize_t, uint8_t, varnumber_T};
 use crate::src::nvim::ui::ui_flush;
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
-pub(crate) unsafe extern "C" fn ex_colorscheme(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
     unsafe {
         if *(*eap).arg as c_int != NUL {
             if load_colors((*eap).arg) == FAIL {
@@ -66,7 +66,7 @@ pub(crate) unsafe extern "C" fn ex_colorscheme(eap: *mut exarg_T) {
 }
 
 /// `:highlight`, and the greeting `:hi!` prints on its own.
-pub(crate) unsafe extern "C" fn ex_highlight(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_highlight(eap: *mut exarg_T) {
     unsafe {
         if *(*eap).arg as c_int == NUL && *(*eap).cmd.add(2) as c_int == '!' as c_int {
             msg(gettext(c"Greetings, Vim user!".as_ptr()), 0);
@@ -80,7 +80,7 @@ pub(crate) unsafe extern "C" fn ex_highlight(eap: *mut exarg_T) {
 ///
 /// Only one destination at a time: every form closes whatever was open
 /// first.
-pub(crate) unsafe extern "C" fn ex_redir(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
     unsafe {
         let mut arg = (*eap).arg;
         if strcasecmp((*eap).arg, c"END".as_ptr() as *mut c_char) == 0 {
@@ -148,7 +148,7 @@ pub(crate) unsafe extern "C" fn ex_redir(eap: *mut exarg_T) {
 
 /// `:redraw` — draw now, with 'lazyredraw' and the redraw suppression
 /// counter out of the way.
-pub(crate) unsafe extern "C" fn ex_redraw(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
     unsafe {
         if cmdpreview.get() {
             return;
@@ -177,7 +177,7 @@ pub(crate) unsafe extern "C" fn ex_redraw(eap: *mut exarg_T) {
 
 /// `:redrawstatus` — the status lines only, unless a full redraw is
 /// needed to show them.
-pub(crate) unsafe extern "C" fn ex_redrawstatus(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_redrawstatus(eap: *mut exarg_T) {
     unsafe {
         if cmdpreview.get() {
             return;
@@ -202,7 +202,7 @@ pub(crate) unsafe extern "C" fn ex_redrawstatus(eap: *mut exarg_T) {
 }
 
 /// `:redrawtabline`.
-pub(crate) unsafe extern "C" fn ex_redrawtabline(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_redrawtabline(_eap: *mut exarg_T) {
     unsafe {
         let (r, p) = suspend_lazyredraw();
         draw_tabline();
@@ -242,7 +242,7 @@ pub(crate) unsafe fn close_redir() {
 }
 
 /// `:digraphs` — define digraphs, or list them.
-pub(crate) unsafe extern "C" fn ex_digraphs(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_digraphs(eap: *mut exarg_T) {
     unsafe {
         if *(*eap).arg as c_int != NUL {
             putdigraph(core::ffi::CStr::from_ptr((*eap).arg).to_bytes());
@@ -264,7 +264,7 @@ pub unsafe fn set_no_hlsearch(flag: bool) {
 }
 
 /// `:nohlsearch`.
-pub(crate) unsafe extern "C" fn ex_nohlsearch(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_nohlsearch(_eap: *mut exarg_T) {
     unsafe {
         set_no_hlsearch(true);
         redraw_all_later(UPD_SOME_VALID as c_int);

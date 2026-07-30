@@ -571,7 +571,7 @@ unsafe extern "C" fn emsg_text_too_long() {
         got_int.set(true);
     }
 }
-pub unsafe extern "C" fn ex_retab(mut eap: *mut exarg_T) {
+pub unsafe fn ex_retab(mut eap: *mut exarg_T) {
     let mut got_tab: bool = false;
     let mut num_spaces: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut start_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

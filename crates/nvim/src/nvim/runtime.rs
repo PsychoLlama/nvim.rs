@@ -1636,7 +1636,7 @@ unsafe extern "C" fn get_runtime_cmd_flags(
     }
     return 0 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn ex_runtime(mut eap: *mut exarg_T) {
+pub unsafe fn ex_runtime(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut flags: ::core::ffi::c_int = if (*eap).forceit != 0 {
         DIP_ALL as ::core::ffi::c_int
@@ -3427,7 +3427,7 @@ pub unsafe extern "C" fn load_start_packages() {
     );
     update_runtime_search_path_thread(false_0 != 0);
 }
-pub unsafe extern "C" fn ex_packloadall(mut eap: *mut exarg_T) {
+pub unsafe fn ex_packloadall(mut eap: *mut exarg_T) {
     if !did_source_packages.get() || (*eap).forceit != 0 {
         add_pack_start_dirs();
         load_start_packages();
@@ -3475,7 +3475,7 @@ pub unsafe extern "C" fn load_plugins() {
         }
     }
 }
-pub unsafe extern "C" fn ex_packadd(mut eap: *mut exarg_T) {
+pub unsafe fn ex_packadd(mut eap: *mut exarg_T) {
     static plugpat: GlobalCell<[::core::ffi::c_char; 13]> = GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 13], [::core::ffi::c_char; 13]>(*b"pack/*/%s/%s\0")
     });
@@ -4456,10 +4456,10 @@ unsafe extern "C" fn cmd_source(mut fname: *mut ::core::ffi::c_char, mut eap: *m
         );
     }
 }
-pub unsafe extern "C" fn ex_source(mut eap: *mut exarg_T) {
+pub unsafe fn ex_source(mut eap: *mut exarg_T) {
     cmd_source((*eap).arg, eap);
 }
-pub unsafe extern "C" fn ex_options(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_options(mut _eap: *mut exarg_T) {
     let mut buf: [::core::ffi::c_char; 500] = [0; 500];
     let mut multi_mods: bool = false;
     buf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
@@ -5293,7 +5293,7 @@ pub unsafe extern "C" fn find_script_by_name(
     }
     return -1 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn ex_scriptnames(mut eap: *mut exarg_T) {
+pub unsafe fn ex_scriptnames(mut eap: *mut exarg_T) {
     if (*eap).addr_count > 0 as ::core::ffi::c_int || *(*eap).arg as ::core::ffi::c_int != NUL {
         if (*eap).addr_count > 0 as ::core::ffi::c_int
             && !((*eap).line2 > 0 as linenr_T
@@ -5819,7 +5819,7 @@ pub unsafe extern "C" fn sourcing_a_script(mut eap: *mut exarg_T) -> ::core::ffi
         ),
     ) as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn ex_scriptencoding(mut eap: *mut exarg_T) {
+pub unsafe fn ex_scriptencoding(mut eap: *mut exarg_T) {
     if sourcing_a_script(eap) == 0 {
         emsg(gettext(
             b"E167: :scriptencoding used outside of a sourced file\0".as_ptr()
@@ -5839,7 +5839,7 @@ pub unsafe extern "C" fn ex_scriptencoding(mut eap: *mut exarg_T) {
         xfree(name as *mut ::core::ffi::c_void);
     }
 }
-pub unsafe extern "C" fn ex_finish(mut eap: *mut exarg_T) {
+pub unsafe fn ex_finish(mut eap: *mut exarg_T) {
     if sourcing_a_script(eap) != 0 {
         do_finish(eap, false_0 != 0);
     } else {

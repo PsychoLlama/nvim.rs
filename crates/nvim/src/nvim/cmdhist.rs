@@ -748,7 +748,7 @@ pub unsafe extern "C" fn f_histnr(
 
 /// ":history" command: list history entries, optionally filtered by
 /// history name ("cmd", ":", "all", ...) and a number range.
-pub unsafe extern "C" fn ex_history(eap: *mut exarg_T) {
+pub unsafe fn ex_history(eap: *mut exarg_T) {
     let mut histype1 = HIST_CMD;
     let mut histype2 = HIST_CMD;
     let mut hisidx1: c_int = 1;

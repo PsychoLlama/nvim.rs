@@ -1497,7 +1497,7 @@ pub unsafe extern "C" fn has_vim_patch(
     }
     return false_0 != 0;
 }
-pub unsafe extern "C" fn ex_version(mut eap: *mut exarg_T) {
+pub unsafe fn ex_version(mut eap: *mut exarg_T) {
     if *(*eap).arg as ::core::ffi::c_int == NUL {
         if !ui_has(kUIMessages) {
             msg_putchar('\n' as ::core::ffi::c_int);
@@ -2009,7 +2009,7 @@ unsafe extern "C" fn do_intro_line(
     }
     grid_line_flush();
 }
-pub unsafe extern "C" fn ex_intro(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_intro(mut _eap: *mut exarg_T) {
     screenclear();
     intro_message(true_0 != 0);
     plain_vgetc();

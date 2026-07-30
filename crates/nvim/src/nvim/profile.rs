@@ -196,7 +196,7 @@ pub fn profile_msg(tm: proftime_T) -> *const c_char {
 // The :profile command.
 
 /// `:profile cmd args`. In the ex_docmd command table.
-pub unsafe extern "C" fn ex_profile(eap: *mut exarg_T) {
+pub unsafe fn ex_profile(eap: *mut exarg_T) {
     /// Time at which `:profile pause` stopped the clock.
     static PAUSE_TIME: GlobalCell<proftime_T> = GlobalCell::new(0);
 

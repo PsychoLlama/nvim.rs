@@ -334,7 +334,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
 }
 
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.
-pub unsafe extern "C" fn ex_cd(eap: *mut exarg_T) {
+pub unsafe fn ex_cd(eap: *mut exarg_T) {
     unsafe {
         let new_dir = (*eap).arg;
         // Without 'cdhome', a bare `:cd` reports the directory instead of
@@ -358,7 +358,7 @@ pub unsafe extern "C" fn ex_cd(eap: *mut exarg_T) {
 }
 
 /// `:pwd` — and with 'verbose' set, which scope the directory came from.
-pub(crate) unsafe extern "C" fn ex_pwd(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_pwd(_eap: *mut exarg_T) {
     unsafe {
         if os_dirname(NameBuff.ptr() as *mut c_char, MAXPATHL as size_t) != OK {
             emsg(gettext(c"E187: Unknown".as_ptr()));

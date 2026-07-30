@@ -1025,7 +1025,7 @@ pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 57] = unsafe {
     )
 };
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub unsafe extern "C" fn ex_help(mut eap: *mut exarg_T) {
+pub unsafe fn ex_help(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut helpfd: *mut FILE = ::core::ptr::null_mut::<FILE>();
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
@@ -1268,7 +1268,7 @@ pub unsafe extern "C" fn ex_help(mut eap: *mut exarg_T) {
     xfree(tag as *mut ::core::ffi::c_void);
     xfree(allocated_arg as *mut ::core::ffi::c_void);
 }
-pub unsafe extern "C" fn ex_helpclose(mut eap: *mut exarg_T) {
+pub unsafe fn ex_helpclose(mut eap: *mut exarg_T) {
     let mut win: *mut win_T = if curtab.get() == curtab.get() {
         firstwin.get()
     } else {
@@ -1677,10 +1677,10 @@ pub unsafe extern "C" fn get_local_additions() {
     api_free_object(res);
     api_clear_error(&raw mut err);
 }
-pub unsafe extern "C" fn ex_exusage(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_exusage(mut _eap: *mut exarg_T) {
     do_cmdline_cmd(b"help ex-cmd-index\0".as_ptr() as *const ::core::ffi::c_char);
 }
-pub unsafe extern "C" fn ex_viusage(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_viusage(mut _eap: *mut exarg_T) {
     do_cmdline_cmd(b"help normal-index\0".as_ptr() as *const ::core::ffi::c_char);
 }
 unsafe extern "C" fn helptags_one(
@@ -2259,7 +2259,7 @@ unsafe extern "C" fn helptags_cb(
     }
     return num_fnames > 0 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn ex_helptags(mut eap: *mut exarg_T) {
+pub unsafe fn ex_helptags(mut eap: *mut exarg_T) {
     let mut xpc: expand_T = expand_T {
         xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         xp_context: 0,

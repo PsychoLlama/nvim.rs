@@ -69,7 +69,7 @@ use crate::src::nvim::undo::u_clearline;
 use crate::src::nvim::undo::{u_redo, u_undo, u_undo_and_forget, undo_time};
 
 /// `:print`, `:number` and `:list`.
-pub(crate) unsafe extern "C" fn ex_print(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {
     unsafe {
         if (*curbuf.get()).b_ml.ml_flags & ML_EMPTY != 0 {
             emsg(gettext(&raw const e_empty_buffer as *const c_char));
@@ -96,7 +96,7 @@ pub(crate) unsafe extern "C" fn ex_print(eap: *mut exarg_T) {
 }
 
 /// `:goto` — the range is a byte offset, not a line number.
-pub(crate) unsafe extern "C" fn ex_goto(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_goto(eap: *mut exarg_T) {
     unsafe {
         goto_byte((*eap).line2 as c_int);
     }
@@ -104,7 +104,7 @@ pub(crate) unsafe extern "C" fn ex_goto(eap: *mut exarg_T) {
 
 /// `:syncbind` — line up every 'scrollbind' window at the same relative
 /// position.
-pub(crate) unsafe extern "C" fn ex_syncbind(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
     unsafe {
         let old_linenr = (*curwin.get()).w_cursor.lnum;
         setpcmark();
@@ -164,7 +164,7 @@ pub(crate) unsafe extern "C" fn ex_syncbind(_eap: *mut exarg_T) {
 
 /// `:=` — the line number, unless something follows it, in which case it
 /// is `:lua`'s alias.
-pub(crate) unsafe extern "C" fn ex_equal(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_equal(eap: *mut exarg_T) {
     unsafe {
         if *(*eap).arg as c_int != NUL && *(*eap).arg as c_int != '|' as c_int {
             ex_lua(eap);
@@ -176,7 +176,7 @@ pub(crate) unsafe extern "C" fn ex_equal(eap: *mut exarg_T) {
 }
 
 /// `:sleep` — the count is in seconds unless it is followed by `m`.
-pub(crate) unsafe extern "C" fn ex_sleep(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_sleep(eap: *mut exarg_T) {
     unsafe {
         if cursor_valid(curwin.get()) != 0 {
             setcursor_mayforce(curwin.get(), true);
@@ -217,7 +217,7 @@ pub unsafe fn do_sleep(msec: int64_t, hide_cursor: bool) {
 
 /// `:delete`, `:yank`, `:<` and `:>` — the four normal-mode operators that
 /// have an Ex spelling.
-pub(crate) unsafe extern "C" fn ex_operators(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
     unsafe {
         let mut oa: oparg_T = core::mem::zeroed();
         clear_oparg(&raw mut oa);
@@ -268,14 +268,14 @@ pub(crate) unsafe extern "C" fn ex_operators(eap: *mut exarg_T) {
 }
 
 /// `:put`.
-pub(crate) unsafe extern "C" fn ex_put(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_put(eap: *mut exarg_T) {
     unsafe {
         put_lines(eap, PUT_LINE as c_int | PUT_CURSLINE as c_int);
     }
 }
 
 /// `:iput` — the same, re-indenting what is put.
-pub(crate) unsafe extern "C" fn ex_iput(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_iput(eap: *mut exarg_T) {
     unsafe {
         put_lines(
             eap,
@@ -309,7 +309,7 @@ unsafe fn put_lines(eap: *mut exarg_T, flags: c_int) {
 
 /// `:copy` and `:move` — both take a destination address after the
 /// command, which is why they parse one more address here.
-pub(crate) unsafe extern "C" fn ex_copymove(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
     unsafe {
         let mut errormsg: *const c_char = ptr::null();
         let n = get_address(
@@ -367,7 +367,7 @@ pub unsafe fn ex_may_print(eap: *mut exarg_T) {
 
 /// `:smagic` and `:snomagic` — `:substitute` with 'magic' forced either
 /// way for the duration.
-pub(crate) unsafe extern "C" fn ex_submagic(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_submagic(eap: *mut exarg_T) {
     unsafe {
         let saved = force_magic(eap);
         ex_substitute(eap);
@@ -376,7 +376,7 @@ pub(crate) unsafe extern "C" fn ex_submagic(eap: *mut exarg_T) {
 }
 
 /// The 'inccommand' preview of the same.
-pub(crate) unsafe extern "C" fn ex_submagic_preview(
+pub(crate) unsafe fn ex_submagic_preview(
     eap: *mut exarg_T,
     cmdpreview_ns: c_int,
     cmdpreview_bufnr: handle_T,
@@ -403,7 +403,7 @@ unsafe fn force_magic(eap: *mut exarg_T) -> optmagic_T {
 }
 
 /// `:join`.
-pub(crate) unsafe extern "C" fn ex_join(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_join(eap: *mut exarg_T) {
     unsafe {
         (*curwin.get()).w_cursor.lnum = (*eap).line1;
         if (*eap).line1 == (*eap).line2 {
@@ -435,7 +435,7 @@ pub(crate) unsafe extern "C" fn ex_join(eap: *mut exarg_T) {
 /// The register's text goes into the typeahead, and command lines are read
 /// out of it until it is empty. `prev_len` is what tells "empty" from
 /// "there was already typeahead before this".
-pub(crate) unsafe extern "C" fn ex_at(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_at(eap: *mut exarg_T) {
     unsafe {
         let prev_len = (*typebuf.ptr()).tb_len;
         (*curwin.get()).w_cursor.lnum = (*eap).line2;
@@ -476,7 +476,7 @@ pub(crate) unsafe extern "C" fn ex_at(eap: *mut exarg_T) {
 /// `:undo! N` is different again: it *forgets* the states between here and
 /// N rather than moving to it, so it can only go backwards along the
 /// current branch.
-pub(crate) unsafe extern "C" fn ex_undo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
     unsafe {
         if (*eap).addr_count != 1 {
             if (*eap).forceit != 0 {
@@ -523,7 +523,7 @@ pub(crate) unsafe extern "C" fn ex_undo(eap: *mut exarg_T) {
 }
 
 /// `:redo`.
-pub(crate) unsafe extern "C" fn ex_redo(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_redo(_eap: *mut exarg_T) {
     unsafe {
         u_redo(1);
     }
@@ -531,7 +531,7 @@ pub(crate) unsafe extern "C" fn ex_redo(_eap: *mut exarg_T) {
 
 /// `:earlier` and `:later` — a count of changes, of seconds (`s`, `m`,
 /// `h`, `d`) or of file writes (`f`).
-pub(crate) unsafe extern "C" fn ex_later(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
     unsafe {
         let mut count = 0;
         let mut sec = false;
@@ -590,7 +590,7 @@ pub(crate) unsafe extern "C" fn ex_later(eap: *mut exarg_T) {
 }
 
 /// `:mark` and `:k`.
-pub(crate) unsafe extern "C" fn ex_mark(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
     unsafe {
         if *(*eap).arg as c_int == NUL {
             emsg(gettext(&raw const e_argreq as *const c_char));
@@ -678,7 +678,7 @@ pub unsafe fn restore_current_state(sst: *mut save_state_T) {
 }
 
 /// `:normal` — run the argument as normal-mode keys.
-pub(crate) unsafe extern "C" fn ex_normal(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
     unsafe {
         if !(*curbuf.get()).terminal.is_null() && State.get() & MODE_TERMINAL as c_int != 0 {
             emsg(c"Can't re-enter normal mode from terminal mode".as_ptr());
@@ -783,7 +783,7 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
 }
 
 /// `:startinsert`, `:startreplace` and `:startgreplace`.
-pub(crate) unsafe extern "C" fn ex_startinsert(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_startinsert(eap: *mut exarg_T) {
     unsafe {
         if (*eap).forceit != 0 {
             if (*curwin.get()).w_cursor.lnum == 0 {
@@ -817,7 +817,7 @@ pub(crate) unsafe extern "C" fn ex_startinsert(eap: *mut exarg_T) {
 }
 
 /// `:stopinsert`.
-pub(crate) unsafe extern "C" fn ex_stopinsert(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_stopinsert(_eap: *mut exarg_T) {
     unsafe {
         restart_edit.set(0);
         stop_insert_mode.set(true);
@@ -857,7 +857,7 @@ pub unsafe fn exec_normal(was_typed: bool, use_vpeekc: bool) {
 }
 
 /// `:fold`.
-pub(crate) unsafe extern "C" fn ex_fold(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_fold(eap: *mut exarg_T) {
     unsafe {
         if foldManualAllowed(true) != 0 {
             foldCreate(curwin.get(), range_start(eap), range_end(eap));
@@ -866,7 +866,7 @@ pub(crate) unsafe extern "C" fn ex_fold(eap: *mut exarg_T) {
 }
 
 /// `:foldopen` and `:foldclose`.
-pub(crate) unsafe extern "C" fn ex_foldopen(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_foldopen(eap: *mut exarg_T) {
     unsafe {
         opFoldRange(
             range_start(eap),
@@ -898,7 +898,7 @@ unsafe fn range_end(eap: *const exarg_T) -> pos_T {
 
 /// `:folddoopen` and `:folddoclosed` — run a command on every line that is
 /// (or is not) inside a closed fold.
-pub(crate) unsafe extern "C" fn ex_folddo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_folddo(eap: *mut exarg_T) {
     unsafe {
         let want_closed = ((*eap).cmdidx as c_int == CMD_folddoclosed as c_int) as c_int;
         let mut lnum = (*eap).line1;

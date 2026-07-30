@@ -4755,7 +4755,7 @@ unsafe extern "C" fn qf_list_entry(
     ga_append(gap, NUL as uint8_t);
     msg_prt_line((*gap).ga_data as *const ::core::ffi::c_char, false_0 != 0);
 }
-pub unsafe extern "C" fn qf_list(mut eap: *mut exarg_T) {
+pub unsafe fn qf_list(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut all: ::core::ffi::c_int = (*eap).forceit;
     let mut qi: *mut qf_info_T = qf_cmd_get_stack(eap, true_0 != 0);
@@ -4950,7 +4950,7 @@ unsafe extern "C" fn qf_msg(
         0 as ::core::ffi::c_int,
     );
 }
-pub unsafe extern "C" fn qf_age(mut eap: *mut exarg_T) {
+pub unsafe fn qf_age(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
     if qi.is_null() {
@@ -4994,7 +4994,7 @@ pub unsafe extern "C" fn qf_age(mut eap: *mut exarg_T) {
     );
     qf_update_buffer(qi, ::core::ptr::null_mut::<qfline_T>());
 }
-pub unsafe extern "C" fn qf_history(mut eap: *mut exarg_T) {
+pub unsafe fn qf_history(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = qf_cmd_get_stack(eap, false_0 != 0);
     if (*eap).addr_count > 0 as ::core::ffi::c_int {
         if qi.is_null() {
@@ -5239,7 +5239,7 @@ pub unsafe extern "C" fn qf_view_result(mut split: bool) {
         },
     );
 }
-pub unsafe extern "C" fn ex_cwindow(mut eap: *mut exarg_T) {
+pub unsafe fn ex_cwindow(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
     if qi.is_null() {
@@ -5258,7 +5258,7 @@ pub unsafe extern "C" fn ex_cwindow(mut eap: *mut exarg_T) {
         ex_copen(eap);
     }
 }
-pub unsafe extern "C" fn ex_cclose(mut eap: *mut exarg_T) {
+pub unsafe fn ex_cclose(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, false_0 != 0);
     if qi.is_null() {
@@ -5440,7 +5440,7 @@ unsafe extern "C" fn qf_set_title_var(mut qfl: *mut qf_list_T) {
         );
     }
 }
-pub unsafe extern "C" fn ex_copen(mut eap: *mut exarg_T) {
+pub unsafe fn ex_copen(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
     if qi.is_null() {
@@ -5498,7 +5498,7 @@ unsafe extern "C" fn qf_win_goto(mut win: *mut win_T, mut lnum: linenr_T) {
     curwin.set(old_curwin);
     curbuf.set((*curwin.get()).w_buffer);
 }
-pub unsafe extern "C" fn ex_cbottom(mut eap: *mut exarg_T) {
+pub unsafe fn ex_cbottom(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
     if qi.is_null() {
@@ -6180,7 +6180,7 @@ unsafe extern "C" fn make_get_fullcmd(
     msg_outtrans(cmd, 0 as ::core::ffi::c_int, false_0 != 0);
     return cmd;
 }
-pub unsafe extern "C" fn ex_make(mut eap: *mut exarg_T) {
+pub unsafe fn ex_make(mut eap: *mut exarg_T) {
     let mut save_qfid: ::core::ffi::c_uint = 0;
     let mut enc: *mut ::core::ffi::c_char =
         if *(*curbuf.get()).b_p_menc as ::core::ffi::c_int != NUL {
@@ -6540,7 +6540,7 @@ unsafe extern "C" fn qf_get_nth_valid_entry(
         1 as size_t
     };
 }
-pub unsafe extern "C" fn ex_cc(mut eap: *mut exarg_T) {
+pub unsafe fn ex_cc(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
     if qi.is_null() {
@@ -6605,7 +6605,7 @@ pub unsafe extern "C" fn ex_cc(mut eap: *mut exarg_T) {
     }
     qf_jump(qi, 0 as ::core::ffi::c_int, errornr, (*eap).forceit);
 }
-pub unsafe extern "C" fn ex_cnext(mut eap: *mut exarg_T) {
+pub unsafe fn ex_cnext(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
     qi = qf_cmd_get_stack(eap, true_0 != 0);
     if qi.is_null() {
@@ -6870,7 +6870,7 @@ unsafe extern "C" fn qf_find_nth_adj_entry(
     }
     return errornr;
 }
-pub unsafe extern "C" fn ex_cbelow(mut eap: *mut exarg_T) {
+pub unsafe fn ex_cbelow(mut eap: *mut exarg_T) {
     if (*eap).addr_count > 0 as ::core::ffi::c_int && (*eap).line2 <= 0 as linenr_T {
         emsg(gettext(&raw const e_invrange as *const ::core::ffi::c_char));
         return;
@@ -6963,7 +6963,7 @@ unsafe extern "C" fn cfile_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi:
         _ => return ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
 }
-pub unsafe extern "C" fn ex_cfile(mut eap: *mut exarg_T) {
+pub unsafe fn ex_cfile(mut eap: *mut exarg_T) {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
@@ -7569,7 +7569,7 @@ unsafe extern "C" fn vgr_process_files(
     xfree(dirname_start as *mut ::core::ffi::c_void);
     return status;
 }
-pub unsafe extern "C" fn ex_vimgrep(mut eap: *mut exarg_T) {
+pub unsafe fn ex_vimgrep(mut eap: *mut exarg_T) {
     let mut redraw_for_dummy: bool = false;
     let mut first_match_buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     let mut status: ::core::ffi::c_int = 0;
@@ -9549,7 +9549,7 @@ unsafe extern "C" fn cbuffer_process_args(
     *bufp = buf;
     return OK;
 }
-pub unsafe extern "C" fn ex_cbuffer(mut eap: *mut exarg_T) {
+pub unsafe fn ex_cbuffer(mut eap: *mut exarg_T) {
     let mut au_name: *mut ::core::ffi::c_char = cbuffer_get_auname((*eap).cmdidx);
     if !au_name.is_null()
         && apply_autocmds(
@@ -9735,7 +9735,7 @@ pub unsafe extern "C" fn cexpr_core(
     }
     return FAIL;
 }
-pub unsafe extern "C" fn ex_cexpr(mut eap: *mut exarg_T) {
+pub unsafe fn ex_cexpr(mut eap: *mut exarg_T) {
     if trigger_cexpr_autocmd((*eap).cmdidx as ::core::ffi::c_int) == FAIL {
         return;
     }
@@ -9896,7 +9896,7 @@ unsafe extern "C" fn hgr_search_in_rtp(
         );
     }
 }
-pub unsafe extern "C" fn ex_helpgrep(mut eap: *mut exarg_T) {
+pub unsafe fn ex_helpgrep(mut eap: *mut exarg_T) {
     let mut qi: *mut qf_info_T = ql_info.get();
     '_c2rust_label: {
         if !qi.is_null() {

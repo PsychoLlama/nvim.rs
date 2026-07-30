@@ -3,7 +3,7 @@
 use super::file::*;
 use super::*;
 
-pub unsafe extern "C" fn ex_undolist(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_undolist(mut _eap: *mut exarg_T) {
     let mut changes: c_int = 1;
     (*lastmark.ptr()) += 1;
     let mut mark: c_int = lastmark.get();

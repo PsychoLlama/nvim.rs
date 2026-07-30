@@ -21,7 +21,7 @@ use core::ptr;
 use super::*;
 
 /// print the marks
-pub unsafe extern "C" fn ex_marks(mut eap: *mut exarg_T) {
+pub unsafe fn ex_marks(mut eap: *mut exarg_T) {
     let mut arg: *mut c_char = (*eap).arg;
     let mut name: *mut c_char = ptr::null_mut();
     let mut posp: *mut pos_T = ptr::null_mut();
@@ -191,7 +191,7 @@ pub(super) unsafe extern "C" fn show_one_mark(
 }
 
 /// ":delmarks[!] [marks]"
-pub unsafe extern "C" fn ex_delmarks(mut eap: *mut exarg_T) {
+pub unsafe fn ex_delmarks(mut eap: *mut exarg_T) {
     let mut from: c_int = 0;
     let mut to: c_int = 0;
     let mut n: c_int = 0;

@@ -2687,7 +2687,7 @@ unsafe extern "C" fn taglen_advance(mut l: ::core::ffi::c_int) {
         msg_advance(13 as ::core::ffi::c_int + l);
     };
 }
-pub unsafe extern "C" fn do_tags(mut _eap: *mut exarg_T) {
+pub unsafe fn do_tags(mut _eap: *mut exarg_T) {
     let mut tagstack: *mut taggy_T = &raw mut (*curwin.get()).w_tagstack as *mut taggy_T;
     let mut tagstackidx: ::core::ffi::c_int = (*curwin.get()).w_tagstackidx;
     let mut tagstacklen: ::core::ffi::c_int = (*curwin.get()).w_tagstacklen;

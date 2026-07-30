@@ -324,7 +324,7 @@ unsafe extern "C" fn do_arg_all(mut count: c_int, mut forceit: c_int, mut keep_t
     (*autocmd_no_leave.ptr()) -= 1;
     xfree(aall.opened as *mut c_void);
 }
-pub unsafe extern "C" fn ex_all(mut eap: *mut exarg_T) {
+pub unsafe fn ex_all(mut eap: *mut exarg_T) {
     if (*eap).addr_count == 0 {
         (*eap).line2 = 9999 as linenr_T;
     }

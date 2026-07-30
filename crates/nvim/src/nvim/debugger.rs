@@ -1558,7 +1558,7 @@ unsafe extern "C" fn do_showbacktrace(mut cmd: *mut ::core::ffi::c_char) {
         );
     };
 }
-pub unsafe extern "C" fn ex_debug(mut eap: *mut exarg_T) {
+pub unsafe fn ex_debug(mut eap: *mut exarg_T) {
     let mut debug_break_level_save: ::core::ffi::c_int = debug_break_level.get();
     debug_break_level.set(9999 as ::core::ffi::c_int);
     do_cmdline_cmd((*eap).arg);
@@ -1768,7 +1768,7 @@ unsafe extern "C" fn dbg_parsearg(
     }
     return OK;
 }
-pub unsafe extern "C" fn ex_breakadd(mut eap: *mut exarg_T) {
+pub unsafe fn ex_breakadd(mut eap: *mut exarg_T) {
     let mut gap: *mut garray_T = dbg_breakp.ptr();
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_profile as ::core::ffi::c_int {
         gap = prof_ga.ptr();
@@ -1815,7 +1815,7 @@ pub unsafe extern "C" fn ex_breakadd(mut eap: *mut exarg_T) {
         }
     };
 }
-pub unsafe extern "C" fn ex_debuggreedy(mut eap: *mut exarg_T) {
+pub unsafe fn ex_debuggreedy(mut eap: *mut exarg_T) {
     if (*eap).addr_count == 0 as ::core::ffi::c_int || (*eap).line2 != 0 as linenr_T {
         debug_greedy.set(true_0 != 0);
     } else {
@@ -1835,7 +1835,7 @@ unsafe extern "C" fn update_has_expr_breakpoint() {
         }
     }
 }
-pub unsafe extern "C" fn ex_breakdel(mut eap: *mut exarg_T) {
+pub unsafe fn ex_breakdel(mut eap: *mut exarg_T) {
     let mut todel: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let mut del_all: bool = false_0 != 0;
     let mut best_lnum: linenr_T = 0 as linenr_T;
@@ -1921,7 +1921,7 @@ pub unsafe extern "C" fn ex_breakdel(mut eap: *mut exarg_T) {
         update_has_expr_breakpoint();
     }
 }
-pub unsafe extern "C" fn ex_breaklist(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_breaklist(mut _eap: *mut exarg_T) {
     if (*dbg_breakp.ptr()).ga_len <= 0 as ::core::ffi::c_int {
         msg(
             gettext(b"No breakpoints defined\0".as_ptr() as *const ::core::ffi::c_char),

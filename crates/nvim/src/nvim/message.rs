@@ -3144,7 +3144,7 @@ pub unsafe extern "C" fn messagesopt_changed() -> ::core::ffi::c_int {
     msg_hist_clear(msg_hist_max.get());
     return OK;
 }
-pub unsafe extern "C" fn ex_messages(mut eap: *mut exarg_T) {
+pub unsafe fn ex_messages(mut eap: *mut exarg_T) {
     if strcmp(
         (*eap).arg,
         b"clear\0".as_ptr() as *const ::core::ffi::c_char,

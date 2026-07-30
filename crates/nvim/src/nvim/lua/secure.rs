@@ -101,7 +101,7 @@ unsafe fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
 
 /// `:trust [++deny|++remove] [path]`. Without a path it acts on the
 /// current buffer.
-pub unsafe extern "C" fn ex_trust(eap: *mut exarg_T) {
+pub unsafe fn ex_trust(eap: *mut exarg_T) {
     let arg = (*eap).arg;
     let rest = skiptowhite(arg);
     let word = slice::from_raw_parts(arg as *const u8, rest.addr() - arg.addr());

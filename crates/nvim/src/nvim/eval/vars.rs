@@ -5176,7 +5176,7 @@ pub unsafe extern "C" fn heredoc_get(
     }
     return l;
 }
-pub unsafe extern "C" fn ex_let(mut eap: *mut exarg_T) {
+pub unsafe fn ex_let(mut eap: *mut exarg_T) {
     let is_const: bool = (*eap).cmdidx as ::core::ffi::c_int == CMD_const as ::core::ffi::c_int;
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut expr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -6073,7 +6073,7 @@ unsafe extern "C" fn ex_let_one(
     }
     return arg_end;
 }
-pub unsafe extern "C" fn ex_unlet(mut eap: *mut exarg_T) {
+pub unsafe fn ex_unlet(mut eap: *mut exarg_T) {
     ex_unletlock(
         eap,
         (*eap).arg,
@@ -6094,7 +6094,7 @@ pub unsafe extern "C" fn ex_unlet(mut eap: *mut exarg_T) {
         ),
     );
 }
-pub unsafe extern "C" fn ex_lockvar(mut eap: *mut exarg_T) {
+pub unsafe fn ex_lockvar(mut eap: *mut exarg_T) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut deep: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
     if (*eap).forceit != 0 {

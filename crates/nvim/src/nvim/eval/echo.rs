@@ -72,7 +72,7 @@ fn ends_args(c: c_char) -> bool {
 ///
 /// # Safety
 /// `eap` must be valid.
-pub unsafe extern "C" fn ex_echo(eap: *mut exarg_T) {
+pub unsafe fn ex_echo(eap: *mut exarg_T) {
     unsafe {
         let mut arg: *mut c_char = (*eap).arg;
         let mut rettv = UNSET_TV;
@@ -158,7 +158,7 @@ pub unsafe extern "C" fn ex_echo(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` must be valid.
-pub unsafe extern "C" fn ex_echohl(eap: *mut exarg_T) {
+pub unsafe fn ex_echohl(eap: *mut exarg_T) {
     unsafe { echo_hl_id.set(syn_name2id((*eap).arg)) }
 }
 
@@ -173,7 +173,7 @@ pub fn get_echo_hl_id() -> c_int {
 ///
 /// # Safety
 /// `eap` must be valid.
-pub unsafe extern "C" fn ex_execute(eap: *mut exarg_T) {
+pub unsafe fn ex_execute(eap: *mut exarg_T) {
     unsafe {
         let mut arg: *mut c_char = (*eap).arg;
         let mut rettv = UNSET_TV;

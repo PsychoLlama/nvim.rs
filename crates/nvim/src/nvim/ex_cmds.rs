@@ -1584,7 +1584,7 @@ static e_non_numeric_argument_to_z: GlobalCell<[::core::ffi::c_char; 33]> =
             *b"E144: Non-numeric argument to :z\0",
         )
     });
-pub unsafe extern "C" fn do_ascii(mut _eap: *mut exarg_T) {
+pub unsafe fn do_ascii(mut _eap: *mut exarg_T) {
     let mut data: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
     let mut len: size_t = utfc_ptr2len(data) as size_t;
     if len == 0 as size_t {
@@ -1730,7 +1730,7 @@ pub unsafe extern "C" fn do_ascii(mut _eap: *mut exarg_T) {
     }
     msg_end();
 }
-pub unsafe extern "C" fn ex_align(mut eap: *mut exarg_T) {
+pub unsafe fn ex_align(mut eap: *mut exarg_T) {
     let mut indent: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut new_indent: ::core::ffi::c_int = 0;
     if (*curwin.get()).w_onebuf_opt.wo_rl != 0 {
@@ -1947,7 +1947,7 @@ unsafe extern "C" fn sort_compare(
     }
     return result;
 }
-pub unsafe extern "C" fn ex_sort(mut eap: *mut exarg_T) {
+pub unsafe fn ex_sort(mut eap: *mut exarg_T) {
     let mut old_count: bcount_t = 0;
     let mut new_count: bcount_t = 0;
     let mut lnum_0: linenr_T = 0;
@@ -2291,7 +2291,7 @@ pub unsafe extern "C" fn ex_sort(mut eap: *mut exarg_T) {
         emsg(gettext(&raw const e_interr as *const ::core::ffi::c_char));
     }
 }
-pub unsafe extern "C" fn ex_uniq(mut eap: *mut exarg_T) {
+pub unsafe fn ex_uniq(mut eap: *mut exarg_T) {
     let mut match_continue: bool = false;
     let mut next_is_unmatch: bool = false;
     let mut done_lnum: linenr_T = 0;
@@ -3487,7 +3487,7 @@ pub unsafe extern "C" fn rename_buffer(
     do_autochdir();
     return OK;
 }
-pub unsafe extern "C" fn ex_file(mut eap: *mut exarg_T) {
+pub unsafe fn ex_file(mut eap: *mut exarg_T) {
     if (*eap).addr_count > 0 as ::core::ffi::c_int
         && (*(*eap).arg as ::core::ffi::c_int != NUL
             || (*eap).line2 > 0 as linenr_T
@@ -3506,7 +3506,7 @@ pub unsafe extern "C" fn ex_file(mut eap: *mut exarg_T) {
         fileinfo(false_0, false_0, (*eap).forceit != 0);
     }
 }
-pub unsafe extern "C" fn ex_update(mut eap: *mut exarg_T) {
+pub unsafe fn ex_update(mut eap: *mut exarg_T) {
     if curbufIsChanged() as ::core::ffi::c_int != 0
         || !bt_nofilename(curbuf.get())
             && !(*curbuf.get()).b_ffname.is_null()
@@ -3515,7 +3515,7 @@ pub unsafe extern "C" fn ex_update(mut eap: *mut exarg_T) {
         do_write(eap);
     }
 }
-pub unsafe extern "C" fn ex_write(mut eap: *mut exarg_T) {
+pub unsafe fn ex_write(mut eap: *mut exarg_T) {
     if (*eap).cmdidx as ::core::ffi::c_int == CMD_saveas as ::core::ffi::c_int {
         (*eap).line1 = 1 as ::core::ffi::c_int as linenr_T;
         (*eap).line2 = (*curbuf.get()).b_ml.ml_line_count;
@@ -3852,7 +3852,7 @@ pub unsafe extern "C" fn check_overwrite(
     }
     return OK;
 }
-pub unsafe extern "C" fn ex_wnext(mut eap: *mut exarg_T) {
+pub unsafe fn ex_wnext(mut eap: *mut exarg_T) {
     let mut i: ::core::ffi::c_int = 0;
     if *(*eap).cmd.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
         == 'n' as ::core::ffi::c_int
@@ -3867,7 +3867,7 @@ pub unsafe extern "C" fn ex_wnext(mut eap: *mut exarg_T) {
         do_argfile(eap, i);
     }
 }
-pub unsafe extern "C" fn do_wqall(mut eap: *mut exarg_T) {
+pub unsafe fn do_wqall(mut eap: *mut exarg_T) {
     let mut error: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut save_forceit: ::core::ffi::c_int = (*eap).forceit;
     let mut save_exiting: bool = exiting.get();
@@ -4761,7 +4761,7 @@ unsafe extern "C" fn delbuf_msg(mut name: *mut ::core::ffi::c_char) {
     (*au_new_curbuf.ptr()).br_buf_free_count = 0 as ::core::ffi::c_int;
 }
 static append_indent: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-pub unsafe extern "C" fn ex_append(mut eap: *mut exarg_T) {
+pub unsafe fn ex_append(mut eap: *mut exarg_T) {
     let mut theline: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut did_undo: bool = false_0 != 0;
     let mut lnum: linenr_T = (*eap).line2;
@@ -4915,7 +4915,7 @@ pub unsafe extern "C" fn ex_append(mut eap: *mut exarg_T) {
     need_wait_return.set(false_0 != 0);
     ex_no_reprint.set(true_0 != 0);
 }
-pub unsafe extern "C" fn ex_change(mut eap: *mut exarg_T) {
+pub unsafe fn ex_change(mut eap: *mut exarg_T) {
     let mut lnum: linenr_T = 0;
     if (*eap).line2 >= (*eap).line1
         && u_save((*eap).line1 - 1 as linenr_T, (*eap).line2 + 1 as linenr_T) == FAIL
@@ -4946,7 +4946,7 @@ pub unsafe extern "C" fn ex_change(mut eap: *mut exarg_T) {
     (*eap).line2 = (*eap).line1;
     ex_append(eap);
 }
-pub unsafe extern "C" fn ex_z(mut eap: *mut exarg_T) {
+pub unsafe fn ex_z(mut eap: *mut exarg_T) {
     let mut bigness: int64_t = 0;
     let mut minus: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut start: linenr_T = 0;
@@ -6660,7 +6660,7 @@ unsafe extern "C" fn global_exe_one(cmd: *mut ::core::ffi::c_char, lnum: linenr_
         do_cmdline(cmd, None, NULL_0, DOCMD_NOWAIT as ::core::ffi::c_int);
     };
 }
-pub unsafe extern "C" fn ex_global(mut eap: *mut exarg_T) {
+pub unsafe fn ex_global(mut eap: *mut exarg_T) {
     let mut lnum: linenr_T = 0;
     let mut type_0: ::core::ffi::c_int = 0;
     let mut cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -7114,10 +7114,10 @@ unsafe extern "C" fn show_sub(
         1 as ::core::ffi::c_int
     };
 }
-pub unsafe extern "C" fn ex_substitute(mut eap: *mut exarg_T) {
+pub unsafe fn ex_substitute(mut eap: *mut exarg_T) {
     do_sub(eap, profile_zero(), 0 as ::core::ffi::c_int, 0 as handle_T);
 }
-pub unsafe extern "C" fn ex_substitute_preview(
+pub unsafe fn ex_substitute_preview(
     mut eap: *mut exarg_T,
     mut cmdpreview_ns: ::core::ffi::c_int,
     mut cmdpreview_bufnr: handle_T,
@@ -7187,7 +7187,7 @@ pub unsafe extern "C" fn skip_vimgrep_pat(
     }
     return p;
 }
-pub unsafe extern "C" fn ex_oldfiles(mut eap: *mut exarg_T) {
+pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
     let mut l: *mut list_T = get_vim_var_list(VV_OLDFILES);
     let mut nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if l.is_null() {

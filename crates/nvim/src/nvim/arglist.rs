@@ -587,7 +587,7 @@ pub unsafe extern "C" fn check_arg_idx(mut win: *mut win_T) {
         }
     };
 }
-pub unsafe extern "C" fn ex_args(mut eap: *mut exarg_T) {
+pub unsafe fn ex_args(mut eap: *mut exarg_T) {
     if (*eap).cmdidx as c_int != CMD_args as c_int {
         if check_arglist_locked() == FAIL {
             return;
@@ -638,20 +638,20 @@ pub unsafe extern "C" fn ex_args(mut eap: *mut exarg_T) {
         }
     }
 }
-pub unsafe extern "C" fn ex_previous(mut eap: *mut exarg_T) {
+pub unsafe fn ex_previous(mut eap: *mut exarg_T) {
     if (*curwin.get()).w_arg_idx - (*eap).line2 as c_int >= argcount() {
         do_argfile(eap, argcount() - 1);
     } else {
         do_argfile(eap, (*curwin.get()).w_arg_idx - (*eap).line2 as c_int);
     };
 }
-pub unsafe extern "C" fn ex_rewind(mut eap: *mut exarg_T) {
+pub unsafe fn ex_rewind(mut eap: *mut exarg_T) {
     do_argfile(eap, 0);
 }
-pub unsafe extern "C" fn ex_last(mut eap: *mut exarg_T) {
+pub unsafe fn ex_last(mut eap: *mut exarg_T) {
     do_argfile(eap, argcount() - 1);
 }
-pub unsafe extern "C" fn ex_argument(mut eap: *mut exarg_T) {
+pub unsafe fn ex_argument(mut eap: *mut exarg_T) {
     let mut i: c_int = 0;
     if (*eap).addr_count > 0 {
         i = (*eap).line2 as c_int - 1;
@@ -737,7 +737,7 @@ pub unsafe extern "C" fn do_argfile(mut eap: *mut exarg_T, mut argn: c_int) {
         setmark('\'' as c_int);
     }
 }
-pub unsafe extern "C" fn ex_next(mut eap: *mut exarg_T) {
+pub unsafe fn ex_next(mut eap: *mut exarg_T) {
     if buf_hide(curbuf.get())
         || (*eap).cmdidx as c_int == CMD_snext as c_int
         || !check_changed(
@@ -763,7 +763,7 @@ pub unsafe extern "C" fn ex_next(mut eap: *mut exarg_T) {
         do_argfile(eap, i);
     }
 }
-pub unsafe extern "C" fn ex_argdedupe(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_argdedupe(mut _eap: *mut exarg_T) {
     let mut i: c_int = 0;
     while i < argcount() {
         let mut firstFullname: *mut c_char = FullName_save((*arg(i)).ae_fname, false);
@@ -793,7 +793,7 @@ pub unsafe extern "C" fn ex_argdedupe(mut _eap: *mut exarg_T) {
         i += 1;
     }
 }
-pub unsafe extern "C" fn ex_argedit(mut eap: *mut exarg_T) {
+pub unsafe fn ex_argedit(mut eap: *mut exarg_T) {
     let mut i: c_int = if (*eap).addr_count != 0 {
         (*eap).line2 as c_int
     } else {
@@ -814,7 +814,7 @@ pub unsafe extern "C" fn ex_argedit(mut eap: *mut exarg_T) {
         do_argfile(eap, i);
     }
 }
-pub unsafe extern "C" fn ex_argadd(mut eap: *mut exarg_T) {
+pub unsafe fn ex_argadd(mut eap: *mut exarg_T) {
     do_arglist(
         (*eap).arg,
         AL_ADD as c_int,
@@ -827,7 +827,7 @@ pub unsafe extern "C" fn ex_argadd(mut eap: *mut exarg_T) {
     );
     maketitle();
 }
-pub unsafe extern "C" fn ex_argdelete(mut eap: *mut exarg_T) {
+pub unsafe fn ex_argdelete(mut eap: *mut exarg_T) {
     if check_arglist_locked() == FAIL {
         return;
     }

@@ -459,7 +459,7 @@ pub unsafe extern "C" fn u_sync(mut force: bool) {
         (*curbuf.get()).b_u_curhead = ptr::null_mut();
     };
 }
-pub unsafe extern "C" fn ex_undojoin(mut _eap: *mut exarg_T) {
+pub unsafe fn ex_undojoin(mut _eap: *mut exarg_T) {
     if (*curbuf.get()).b_u_newhead.is_null() {
         return;
     }

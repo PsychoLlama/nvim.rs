@@ -4900,7 +4900,7 @@ pub unsafe extern "C" fn init_locale() {
         );
     }
 }
-pub unsafe extern "C" fn ex_language(mut eap: *mut exarg_T) {
+pub unsafe fn ex_language(mut eap: *mut exarg_T) {
     let mut loc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut what: ::core::ffi::c_int = LC_ALL;
     let mut whatstr: *mut ::core::ffi::c_char =

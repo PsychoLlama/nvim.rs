@@ -31,7 +31,7 @@ use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 ///
 /// Both are refused in a 'secure' context — a modeline or an untrusted
 /// config — because an autocommand can run anything later.
-pub(crate) unsafe extern "C" fn ex_autocmd(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_autocmd(eap: *mut exarg_T) {
     unsafe {
         if secure.get() != 0 {
             // 2 means "an error was already reported for this".
@@ -47,7 +47,7 @@ pub(crate) unsafe extern "C" fn ex_autocmd(eap: *mut exarg_T) {
 
 /// `:doautocmd` — and the modelines that a `<nomodeline>` argument
 /// suppresses.
-pub(crate) unsafe extern "C" fn ex_doautocmd(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_doautocmd(eap: *mut exarg_T) {
     unsafe {
         let mut arg = (*eap).arg;
         let call_do_modelines = check_nomodeline(&raw mut arg);
@@ -60,7 +60,7 @@ pub(crate) unsafe extern "C" fn ex_doautocmd(eap: *mut exarg_T) {
 }
 
 /// `:filetype [plugin] [indent] on|off|detect`.
-pub(crate) unsafe extern "C" fn ex_filetype(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
     unsafe {
         if *(*eap).arg as c_int == NUL {
             report_filetype_state();
@@ -188,7 +188,7 @@ pub unsafe fn filetype_maybe_enable() {
 /// A `FALLBACK ` prefix means "only if nothing better is found later", and
 /// is spelled by leaving `b_did_filetype` clear so that a later
 /// `:setfiletype` still applies.
-pub(crate) unsafe extern "C" fn ex_setfiletype(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
     unsafe {
         if (*curbuf.get()).b_did_filetype {
             return;
@@ -215,7 +215,7 @@ pub(crate) unsafe extern "C" fn ex_setfiletype(eap: *mut exarg_T) {
 
 /// `:checkhealth` — hand the window modifiers and the argument to
 /// `vim.health._check`.
-pub(crate) unsafe extern "C" fn ex_checkhealth(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
     unsafe {
         let mut err = Error {
             type_0: kErrorTypeNone,

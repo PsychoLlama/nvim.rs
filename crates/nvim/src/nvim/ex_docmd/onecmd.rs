@@ -54,7 +54,7 @@ use crate::src::nvim::ex_docmd::{
     EX_ARGOPT, EX_BANG, EX_CMDARG, EX_CMDWIN, EX_COUNT, EX_DFLALL, EX_EXTRA, EX_FLAGS, EX_LOCK_OK,
     EX_MODIFY, EX_NEEDARG, EX_RANGE, EX_SBOXOK, EX_TRLBAR, EX_WHOLEFOLD, FAIL, IOSIZE, NUL,
     PROF_YES, cmdmod, cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command,
-    exmode_plus, quitmore,
+    ex_func_T, exmode_plus, quitmore,
 };
 use crate::src::nvim::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
 use crate::src::nvim::ex_getln::{curbuf_locked, get_text_locked_msg, script_get, text_locked};
@@ -95,10 +95,7 @@ pub(crate) fn fresh_exarg() -> exarg_T {
 /// Ex-command callbacks are identified by address, as the C code did; the
 /// comparison is spelled out so the intent survives the
 /// `unpredictable_function_pointer_comparisons` lint.
-pub(crate) fn ex_func_is(
-    func: Option<unsafe extern "C" fn(*mut exarg_T)>,
-    f: unsafe extern "C" fn(*mut exarg_T),
-) -> bool {
+pub(crate) fn ex_func_is(func: ex_func_T, f: unsafe fn(*mut exarg_T)) -> bool {
     func.is_some_and(|g| ptr::fn_addr_eq(g, f))
 }
 
@@ -789,7 +786,7 @@ pub(crate) unsafe fn append_command(cmd: *const c_char) {
 ///
 /// Keeps `extern "C"`: it is a `cmd_func` in the command table, and
 /// `is_cmd_ni` recognises a command by comparing against its address.
-pub unsafe extern "C" fn ex_ni(eap: *mut exarg_T) {
+pub unsafe fn ex_ni(eap: *mut exarg_T) {
     unsafe {
         if (*eap).skip == 0 {
             (*eap).errmsg = gettext(c"E319: The command is not available in this version".as_ptr());
@@ -800,7 +797,7 @@ pub unsafe extern "C" fn ex_ni(eap: *mut exarg_T) {
 /// The same, for a command whose argument may be a here-document
 /// (`:perl <<EOF`) — the body has to be consumed even when the command
 /// cannot run, or its lines would be read as commands.
-pub(crate) unsafe extern "C" fn ex_script_ni(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_script_ni(eap: *mut exarg_T) {
     unsafe {
         if (*eap).skip == 0 {
             ex_ni(eap);

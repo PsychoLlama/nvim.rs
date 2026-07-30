@@ -2683,7 +2683,7 @@ pub unsafe extern "C" fn do_doautocmd(
         OK
     };
 }
-pub unsafe extern "C" fn ex_doautoall(mut eap: *mut exarg_T) {
+pub unsafe fn ex_doautoall(mut eap: *mut exarg_T) {
     let mut retval: ::core::ffi::c_int = OK;
     let mut aco: aco_save_T = aco_save_T {
         use_aucmd_win_idx: 0,

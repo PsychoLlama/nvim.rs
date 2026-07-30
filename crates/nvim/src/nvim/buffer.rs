@@ -4362,7 +4362,7 @@ pub unsafe extern "C" fn buflist_findfmark(mut buf: *mut buf_T) -> *mut fmark_T 
 pub unsafe extern "C" fn buflist_findlnum(mut buf: *mut buf_T) -> linenr_T {
     return (*buflist_findfmark(buf)).mark.lnum;
 }
-pub unsafe extern "C" fn buflist_list(mut eap: *mut exarg_T) {
+pub unsafe fn buflist_list(mut eap: *mut exarg_T) {
     let mut buf: *mut buf_T = firstbuf.get();
     let mut buflist: garray_T = garray_T {
         ga_len: 0,
@@ -5219,7 +5219,7 @@ pub unsafe extern "C" fn bt_prompt(mut buf: *mut buf_T) -> bool {
         && *(*buf).b_p_bt.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
             == 'p' as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn ex_buffer_all(mut eap: *mut exarg_T) {
+pub unsafe fn ex_buffer_all(mut eap: *mut exarg_T) {
     let mut wpnext: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut split_ret: ::core::ffi::c_int = OK;
     let mut open_wins: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
