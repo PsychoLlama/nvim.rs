@@ -74,7 +74,6 @@
     "crates/nvim/src/nvim/ex_docmd/restart.rs": 45,
     "crates/nvim/src/nvim/ex_docmd/scan.rs": 1,
     "crates/nvim/src/nvim/ex_docmd/source.rs": 17,
-    "crates/nvim/src/nvim/ex_docmd/verify.rs": 143,
     "crates/nvim/src/nvim/ex_docmd/window.rs": 6,
     "crates/nvim/src/nvim/ex_eval.rs": 66,
     "crates/nvim/src/nvim/ex_getln.rs": 149,
