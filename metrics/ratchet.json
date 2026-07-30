@@ -398,7 +398,7 @@
     "crates/nvim/src/nvim/tui/termkey/driver_csi.rs": {"no_mangle": 4, "unsafe": 17},
     "crates/nvim/src/nvim/tui/termkey/driver_ti.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/tui/termkey/termkey.rs": {"no_mangle": 18, "unsafe": 25},
-    "crates/nvim/src/nvim/tui/tui.rs": {"lines": 4248, "no_mangle": 32, "unsafe": 102, "variadic": 1},
+    "crates/nvim/src/nvim/tui/tui.rs": {"lines": 4085, "no_mangle": 32, "unsafe": 102, "variadic": 1},
     "crates/nvim/src/nvim/types/api.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/types/cmdexpand.rs": {"unsafe": 1},
     "crates/nvim/src/nvim/types/dispatch.rs": {"unsafe": 1},
