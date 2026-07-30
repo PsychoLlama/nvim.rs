@@ -7,49 +7,44 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
-Ongoing migration of the transpiled code toward safe, idiomatic Rust, and of
-the transpiled tables back onto generated code.
-Behavior-preserving: same features, formats, and RPC surface.
+Ongoing migration of the transpiled code toward safe, idiomatic Rust.
 
 ### Changed
 
-- Rewrote the regular-expression engines, covering every pattern the editor
-  matches: search, `:substitute`, syntax highlighting, and both
-  'regexpengine' settings.
+- Rewrote the regular-expression engines, covering search, `:substitute`,
+  syntax highlighting, and both 'regexpengine' settings.
 - Rewrote the option logic, covering `:set` and its relatives, option
-  validation, the per-option callbacks, and how a window or buffer gets its
-  own values.
-- Rewrote the Vimscript builtin functions, covering every builtin the editor
-  answers to and how one is dispatched, from `abs()` to `wordcount()`.
-- Rewrote the Vimscript expression evaluator, covering every expression the
-  editor evaluates: operators and precedence, literals and containers,
-  indexing and method calls, `:let`, `:for`, `:echo`, `:execute`, timers and
-  the garbage collector.
-- Rewrote normal mode, covering every key the editor answers to outside
-  insert and command-line mode: motions, operators, counts and registers,
-  Visual and Select mode, the `g`, `z`, `[` and `]` commands, scrolling and
-  folding, marks and jumps, and the tag and identifier lookups.
-- Rewrote the startup, covering command-line argument parsing, the order the
-  editor initialises in, where the config is read from, `--embed`,
-  `--headless`, `-l` and `--remote`, and every path out of the process.
-- Rewrote the Ex command dispatcher, covering every `:` command the editor
-  runs: the command table and how a name is resolved, ranges, counts and
-  registers, command modifiers, `++opt` and `+cmd` arguments, `%`/`#`/
-  `<cfile>` expansion, `nvim_parse_cmd` and `nvim_cmd`, and the sourcing
-  loop that `:source`, `:execute`, `:global`, autocommands and mappings all
-  run through.
-- Generated the API dispatch layer from the API signatures again
-  (`just apigen`), covering every msgpack-RPC method, the `vim.api` Lua
-  binding, and `nvim --api-info`.
-- Generated the option table from `options.lua` again (`just apigen`),
-  covering every option's default, valid values, and `:set`.
-- Generated the Vimscript builtin-function table from `eval.lua` again
-  (`just apigen`), covering every builtin function call.
+  validation, and the per-window and per-buffer values.
+- Rewrote the Vimscript builtin functions, covering every builtin from
+  `abs()` to `wordcount()`.
+- Rewrote the Vimscript expression evaluator, covering expression syntax,
+  `:let`, `:for`, `:echo`, `:execute`, timers, and the garbage collector.
+- Rewrote normal mode, covering motions, operators, counts and registers,
+  Visual and Select mode, scrolling and folding, marks and jumps, and the tag
+  and identifier lookups.
+- Rewrote startup, covering command-line arguments, config sourcing,
+  `--embed`, `--headless`, `-l`, `--remote`, and every path out of the
+  process.
+- Rewrote the Ex command dispatcher, covering every `:` command, ranges,
+  counts and registers, command modifiers, `nvim_parse_cmd` and `nvim_cmd`,
+  and the sourcing loop behind `:source`, `:execute`, `:global`,
+  autocommands and mappings.
+- Generated the API dispatch layer, the option table and the Vimscript
+  builtin-function table from their specs again (`just apigen`), covering
+  every msgpack-RPC method, the `vim.api` Lua binding, `nvim --api-info`,
+  every option's default and valid values, and every builtin function call.
+
+### Fixed
+
+- `:later`, `:resize`, `:tabmove`, `:tabnext`, `zH`, `zL`, `z<N>l` and a
+  Visual reselection count at the number extremes wrap as documented instead
+  of aborting a debug build.
+- A write to freed memory in the backtracking regexp engine, on a pattern
+  that visits enough distinct back edges.
 
 ## [2026.07.27-dd16441f3f]
 
 Ongoing migration of the transpiled code toward safe, idiomatic Rust.
-Behavior-preserving except where noted under Fixed.
 
 ### Changed
 
@@ -94,7 +89,6 @@ Behavior-preserving except where noted under Fixed.
 ## [2026.07.23-95cd63254c]
 
 Ongoing migration of the transpiled code toward safe, idiomatic Rust.
-Behavior-preserving: same features, formats, and RPC surface.
 
 ### Changed
 
