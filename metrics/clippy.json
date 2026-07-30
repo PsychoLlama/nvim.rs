@@ -62,7 +62,7 @@
     "crates/nvim/src/nvim/ex_docmd/api.rs": 1,
     "crates/nvim/src/nvim/ex_docmd/argopt.rs": 42,
     "crates/nvim/src/nvim/ex_docmd/childproc.rs": 27,
-    "crates/nvim/src/nvim/ex_docmd/cmdline.rs": 3,
+    "crates/nvim/src/nvim/ex_docmd/cmdline.rs": 1,
     "crates/nvim/src/nvim/ex_docmd/display.rs": 9,
     "crates/nvim/src/nvim/ex_docmd/edit.rs": 4,
     "crates/nvim/src/nvim/ex_docmd/file.rs": 3,

@@ -26,8 +26,7 @@ use crate::src::nvim::cmdexpand::{ExpandGeneric, ExpandInit, ExpandOne};
 use crate::src::nvim::cmdhist::ex_history;
 use crate::src::nvim::cursor::{check_cursor, check_cursor_col};
 use crate::src::nvim::debugger::{
-    dbg_breakpoint, dbg_find_breakpoint, do_debug, ex_breakadd, ex_breakdel, ex_breaklist,
-    ex_debug, ex_debuggreedy,
+    ex_breakadd, ex_breakdel, ex_breaklist, ex_debug, ex_debuggreedy,
 };
 use crate::src::nvim::diff::{
     ex_diffgetput, ex_diffoff, ex_diffpatch, ex_diffsplit, ex_diffthis, ex_diffupdate,
@@ -46,8 +45,7 @@ use crate::src::nvim::eval::typval::{
     tv_list_free,
 };
 use crate::src::nvim::eval::userfunc::{
-    ex_call, ex_delfunction, ex_function, ex_return, func_breakpoint, func_dbg_tick,
-    func_has_abort, func_has_ended, func_level, func_name, get_func_line, get_scriptlocal_funcname,
+    ex_call, ex_delfunction, ex_function, ex_return, get_scriptlocal_funcname,
 };
 use crate::src::nvim::eval::vars::{
     ex_let, ex_lockvar, ex_unlet, get_vim_var_list, get_vim_var_str, set_vim_var_nr,
@@ -72,14 +70,13 @@ use crate::src::nvim::ex_cmds2::{
     ex_python3, ex_ruby, ex_rubydo, ex_rubyfile,
 };
 use crate::src::nvim::ex_eval::{
-    aborting, cleanup_conditionals, discard_current_exception, do_errthrow, do_intthrow,
-    enter_cleanup, ex_break, ex_catch, ex_continue, ex_else, ex_endfunction, ex_endif, ex_endtry,
-    ex_endwhile, ex_eval, ex_finally, ex_if, ex_throw, ex_try, ex_while, has_loop_cmd,
-    leave_cleanup, report_make_pending, rewind_conditionals,
+    aborting, discard_current_exception, enter_cleanup, ex_break, ex_catch, ex_continue, ex_else,
+    ex_endfunction, ex_endif, ex_endtry, ex_endwhile, ex_eval, ex_finally, ex_if, ex_throw, ex_try,
+    ex_while, leave_cleanup,
 };
 use crate::src::nvim::ex_getln::{
     allbuf_locked, curbuf_locked, getcmdline, getexline, text_locked, text_locked_msg,
-    text_or_buf_locked, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave,
+    text_or_buf_locked, ui_ext_cmdline_block_leave,
 };
 use crate::src::nvim::ex_session::{ex_loadview, ex_mkrc};
 use crate::src::nvim::file_search::{
@@ -87,7 +84,7 @@ use crate::src::nvim::file_search::{
 };
 use crate::src::nvim::fileio::{readfile, shorten_fnames};
 use crate::src::nvim::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
-use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_init};
+use crate::src::nvim::garray::ga_append_via_ptr;
 use crate::src::nvim::getchar::{
     beep_flush, ins_typebuf, restore_typeahead, save_typeahead, stuff_empty, stuffReadbuff,
     typebuf_typed, vpeekc,
@@ -104,26 +101,23 @@ use crate::src::nvim::main::{
     Columns, IObuff, KeyTyped, NameBuff, RedrawingDisabled, Rows, State, VIsual_active,
     arg_had_last, autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, caught_stack,
     check_cstack, cmdline_row, cmdpreview, cmdwin_result, cmdwin_type, curbuf, current_exception,
-    current_sctx, current_ui, curtab, curwin, debug_break_level, debug_tick, did_emsg,
-    did_emsg_syntax, did_endif, did_syncbind, did_throw, do_profiling, e_argreq, e_autocmd_close,
-    e_backslash, e_cant_find_file_str_in_path, e_command_too_recursive, e_curdir, e_empty_buffer,
-    e_endfor, e_endif, e_endtry, e_endwhile, e_failed, e_invalid_return_type_from_findfunc,
-    e_invarg, e_invarg2, e_invargval, e_invchan, e_invcmd, e_invrange, e_isadir2,
-    e_line_number_out_of_range, e_mkdir, e_no_errors, e_no_more_file_str_found_in_path, e_norange,
-    e_notopen, e_screenmode, e_secure, e_shellempty, e_trailing_arg,
-    e_undobang_cannot_redo_or_move_branch, e_usingsid, e_zerocount, emsg_off, emsg_silent,
-    escape_chars, ex_nesting_level, ex_no_reprint, ex_normal_busy, exec_from_reg, exiting,
+    current_sctx, current_ui, curtab, curwin, did_emsg, did_syncbind, did_throw, e_argreq,
+    e_autocmd_close, e_backslash, e_cant_find_file_str_in_path, e_curdir, e_empty_buffer, e_failed,
+    e_invalid_return_type_from_findfunc, e_invarg, e_invarg2, e_invargval, e_invchan, e_invcmd,
+    e_invrange, e_isadir2, e_line_number_out_of_range, e_mkdir, e_no_errors,
+    e_no_more_file_str_found_in_path, e_norange, e_notopen, e_screenmode, e_secure, e_shellempty,
+    e_trailing_arg, e_undobang_cannot_redo_or_move_branch, e_usingsid, e_zerocount, emsg_off,
+    emsg_silent, escape_chars, ex_no_reprint, ex_normal_busy, exec_from_reg, exiting,
     exmode_active, finish_op, first_tabpage, firstwin, force_abort, force_restart_edit,
-    g_do_tagpreview, getout, global_busy, globaldir, got_int, last_chdir_reason, last_cmdline,
-    lastused_tabpage, lastwin, lines_left, magic_overruled, main_loop, msg_col, msg_didany,
-    msg_didout, msg_list, msg_row, msg_scroll, msg_silent, must_redraw, need_maketitle,
-    need_rethrow, need_wait_return, new_last_cmdline, no_hlsearch, no_wait_return, opcount, p_awa,
-    p_cdh, p_confirm, p_cpo, p_ffu, p_gp, p_hls, p_lz, p_mfd, p_mmd, p_mp, p_pvh, p_rtp, p_sh,
-    p_shada, p_verbose, p_wic, p_write, pending_end_reg_executing, pending_exmode_active,
-    postponed_split, postponed_split_flags, postponed_split_tab, readonlymode, recoverymode,
-    redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline, reg_executing, repeat_cmdline,
-    restart_edit, searchcmdlen, secure, stop_insert_mode, suppress_errthrow, textlock, topframe,
-    trylevel, typebuf, virtual_op,
+    g_do_tagpreview, getout, global_busy, globaldir, got_int, last_chdir_reason, lastused_tabpage,
+    lastwin, lines_left, magic_overruled, main_loop, msg_col, msg_didout, msg_row, msg_scroll,
+    msg_silent, must_redraw, need_maketitle, need_rethrow, need_wait_return, no_hlsearch,
+    no_wait_return, opcount, p_awa, p_cdh, p_confirm, p_cpo, p_ffu, p_gp, p_hls, p_lz, p_mfd,
+    p_mmd, p_mp, p_pvh, p_rtp, p_sh, p_shada, p_verbose, p_wic, p_write, pending_end_reg_executing,
+    pending_exmode_active, postponed_split, postponed_split_flags, postponed_split_tab,
+    readonlymode, recoverymode, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
+    reg_executing, restart_edit, searchcmdlen, secure, stop_insert_mode, suppress_errthrow,
+    textlock, topframe, trylevel, typebuf, virtual_op,
 };
 use crate::src::nvim::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::src::nvim::mark::{
@@ -141,7 +135,7 @@ use crate::src::nvim::menu::{ex_emenu, ex_menu, ex_menutranslate};
 use crate::src::nvim::message::{
     emsg, emsg_multiline, ex_messages, msg, msg_clr_eos, msg_ext_set_kind, msg_make, msg_outtrans,
     msg_putchar, msg_puts, msg_scroll_flush, msg_start, semsg, semsg_multiline, smsg,
-    verbose_enter_scroll, verbose_leave_scroll, vim_dialog_yesno, wait_return,
+    verbose_enter_scroll, verbose_leave_scroll, vim_dialog_yesno,
 };
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::{
@@ -165,11 +159,11 @@ use crate::src::nvim::os::env::{
     expand_env, expand_env_esc, expand_env_save, home_replace, os_getenv_noalloc,
 };
 use crate::src::nvim::os::fs::{os_dirname, os_fopen, os_isdir, os_mkdir, os_path_exists};
-use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
+use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::lang::ex_language;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, atol, fclose, gettext, memmove, memset, ngettext,
-    snprintf, strcasecmp, strcat, strcmp, strcpy, strlen, strncmp, strpbrk, strrchr, strstr,
+    __assert_fail, __ctype_b_loc, abort, atol, fclose, gettext, memmove, ngettext, snprintf,
+    strcasecmp, strcat, strcmp, strcpy, strlen, strncmp, strpbrk, strrchr, strstr,
 };
 use crate::src::nvim::os::shell::{shell_build_argv, shell_free_argv};
 use crate::src::nvim::path::{
@@ -177,9 +171,7 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::plines::plines_m_win_fill;
 use crate::src::nvim::popupmenu::pum_make_popup;
-use crate::src::nvim::profile::{
-    ex_profile, func_line_end, func_line_start, script_line_end, script_line_start,
-};
+use crate::src::nvim::profile::ex_profile;
 use crate::src::nvim::quickfix::{
     ex_cbelow, ex_cbottom, ex_cbuffer, ex_cc, ex_cclose, ex_cexpr, ex_cfile, ex_cnext, ex_copen,
     ex_cwindow, ex_helpgrep, ex_make, ex_vimgrep, grep_internal, qf_age, qf_history, qf_list,
@@ -190,8 +182,7 @@ use crate::src::nvim::register::{
 };
 use crate::src::nvim::runtime::{
     estack_pop, estack_push, estack_sfile, ex_finish, ex_options, ex_packadd, ex_packloadall,
-    ex_runtime, ex_scriptencoding, ex_scriptnames, ex_source, exestack, getsourceline,
-    source_breakpoint, source_dbg_tick, source_finished, source_level, source_runtime,
+    ex_runtime, ex_scriptencoding, ex_scriptnames, ex_source, exestack, source_runtime,
 };
 use crate::src::nvim::search::find_pattern_in_path;
 use crate::src::nvim::shada::{shada_read_everything, shada_write_file};
