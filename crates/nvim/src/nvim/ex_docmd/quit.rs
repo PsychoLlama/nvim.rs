@@ -91,7 +91,9 @@ pub unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool
             false,
             (*wp).w_buffer,
         );
-        if quit_was_cancelled(wp, (*wp).w_buffer) {
+        // The buffer is read *through* `wp`, and only after `win_valid`
+        // has said `wp` is still there — QuitPre may have closed it.
+        if quit_was_cancelled(wp, || (*wp).w_buffer) {
             return true;
         }
 
@@ -104,7 +106,7 @@ pub unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool
                 false,
                 curbuf.get(),
             );
-            if quit_was_cancelled(wp, curbuf.get()) {
+            if quit_was_cancelled(wp, || curbuf.get()) {
                 return true;
             }
         }
@@ -114,10 +116,20 @@ pub unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool
 
 /// Did an autocommand make the quit impossible — by closing the window,
 /// locking the buffer, or starting something that must finish first?
-unsafe fn quit_was_cancelled(wp: *mut win_T, buf: *mut buf_T) -> bool {
+///
+/// **`buf` is a closure, and that is load-bearing.** The C's
+/// `!win_valid(wp) || curbuf_locked() || (wp->w_buffer->…)` reads the
+/// buffer only when the first two tests are false, because a QuitPre
+/// autocommand may have closed `wp` — and an *argument* would be evaluated
+/// before the call, which is a use-after-free ASan catches on
+/// `test_tabpage`.
+unsafe fn quit_was_cancelled(wp: *mut win_T, buf: impl FnOnce() -> *mut buf_T) -> bool {
     unsafe {
-        if win_valid(wp) && !curbuf_locked() && !((*buf).b_nwindows == 1 && (*buf).b_locked > 0) {
-            return false;
+        if win_valid(wp) && !curbuf_locked() {
+            let buf = buf();
+            if !((*buf).b_nwindows == 1 && (*buf).b_locked > 0) {
+                return false;
+            }
         }
         set_vim_var_string(VV_EXITREASON, ptr::null(), -1 as ptrdiff_t);
         true
