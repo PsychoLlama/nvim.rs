@@ -157,7 +157,7 @@
     "crates/nvim/src/nvim/event/wstream.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/ex_cmds.rs": {"lines": 7260, "no_mangle": 1, "unsafe": 59},
     "crates/nvim/src/nvim/ex_cmds2.rs": {"lines": 2223, "no_mangle": 1, "unsafe": 27},
-    "crates/nvim/src/nvim/ex_docmd.rs": {"lines": 18007, "unsafe": 1376},
+    "crates/nvim/src/nvim/ex_docmd.rs": {"lines": 12058, "unsafe": 262},
     "crates/nvim/src/nvim/ex_eval.rs": {"lines": 2730, "unsafe": 47},
     "crates/nvim/src/nvim/ex_getln.rs": {"lines": 8359, "unsafe": 126},
     "crates/nvim/src/nvim/ex_session.rs": {"lines": 2473, "unsafe": 24},

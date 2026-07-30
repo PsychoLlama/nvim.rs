@@ -59,7 +59,7 @@
     "crates/nvim/src/nvim/event/rstream.rs": 1,
     "crates/nvim/src/nvim/ex_cmds.rs": 123,
     "crates/nvim/src/nvim/ex_cmds2.rs": 48,
-    "crates/nvim/src/nvim/ex_docmd.rs": 1628,
+    "crates/nvim/src/nvim/ex_docmd.rs": 515,
     "crates/nvim/src/nvim/ex_eval.rs": 66,
     "crates/nvim/src/nvim/ex_getln.rs": 149,
     "crates/nvim/src/nvim/ex_session.rs": 97,
