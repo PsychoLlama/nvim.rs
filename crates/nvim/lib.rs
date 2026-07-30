@@ -196,6 +196,7 @@ pub mod src {
         pub mod textobject;
         pub mod tui {
             pub mod input;
+            pub mod quirks;
             pub mod terminfo;
             pub mod termkey {
                 pub mod csi;

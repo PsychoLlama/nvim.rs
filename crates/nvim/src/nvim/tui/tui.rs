@@ -21,20 +21,21 @@ use crate::src::nvim::main::{
 use crate::src::nvim::map::mh_put_cstr_t;
 use crate::src::nvim::mbyte::{utf_ambiguous_width, utf_char2cells, utf_ptr2char};
 use crate::src::nvim::memory::{
-    ARENA_EMPTY, arena_finish, arena_mem_free, arena_memdupz, arena_strdup, strequal, xcalloc,
-    xfree, xrealloc, xstrdup, xstrlcpy,
+    ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, strequal, xcalloc, xfree, xrealloc,
+    xstrdup, xstrlcpy,
 };
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
-use crate::src::nvim::os::env::{os_env_exists, os_getenv, os_getenv_noalloc};
+use crate::src::nvim::os::env::{os_getenv, os_getenv_noalloc};
 use crate::src::nvim::os::input::os_isatty;
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, fclose, fopen, fprintf, fwrite, kill, memcmp, memcpy, memset, snprintf,
-    sscanf, strchr, strcmp, strlen, strstr, strtol, tcgetattr, vsnprintf,
+    __assert_fail, abort, fclose, fopen, fprintf, fwrite, kill, memcpy, memset, snprintf, sscanf,
+    strlen, tcgetattr, vsnprintf,
 };
 use crate::src::nvim::strings::kv_do_printf;
 use crate::src::nvim::tui::input::{
     TermInput, tinput_destroy, tinput_init, tinput_start, tinput_stop,
 };
+use crate::src::nvim::tui::quirks::{Terminal, TerminfoExt, augment_terminfo, patch_terminfo_bugs};
 use crate::src::nvim::tui::terminfo::caps::{
     TerminfoDef, kTerm_carriage_return, kTerm_change_scroll_region, kTerm_clear_screen,
     kTerm_clr_eol, kTerm_clr_eos, kTerm_cursor_address, kTerm_cursor_down, kTerm_cursor_home,
@@ -52,7 +53,6 @@ use crate::src::nvim::tui::terminfo::caps::{
 };
 use crate::src::nvim::tui::terminfo::{
     terminfo_fmt, terminfo_from_builtin, terminfo_from_database, terminfo_info_msg,
-    terminfo_is_bsd_console, terminfo_is_term_family,
 };
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __pid_t, __pthread_internal_list,
@@ -220,7 +220,7 @@ pub struct TUIData {
     pub can_clear_attr: bool,
     pub showing_mode: ModeShape,
     pub verbose: Integer,
-    pub terminfo_ext: C2Rust_Unnamed_18,
+    pub terminfo_ext: TerminfoExt,
     pub can_set_title: bool,
     pub can_set_underline_color: bool,
     pub can_resize_screen: bool,
@@ -232,14 +232,6 @@ pub struct TUIData {
     pub url: ::core::ffi::c_int,
     pub urlbuf: StringBuilder,
     pub ti_arena: Arena,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_18 {
-    pub enable_focus_reporting: *mut ::core::ffi::c_char,
-    pub disable_focus_reporting: *mut ::core::ffi::c_char,
-    pub reset_scroll_region: *mut ::core::ffi::c_char,
-    pub enter_altfont_mode: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -324,10 +316,6 @@ pub const DEL_STR: [::core::ffi::c_char; 2] =
 pub const CTRL_H_STR: [::core::ffi::c_char; 2] =
     unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\x08\0") };
 pub const TOO_MANY_EVENTS: ::core::ffi::c_int = 1000000 as ::core::ffi::c_int;
-pub const LINUXSET0C: [::core::ffi::c_char; 6] =
-    unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"\x1B[?0c\0") };
-pub const LINUXSET1C: [::core::ffi::c_char; 6] =
-    unsafe { ::core::mem::transmute::<[u8; 6], [::core::ffi::c_char; 6]>(*b"\x1B[?1c\0") };
 static cursor_style_enabled: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 pub const TERMINFO_SEQ_LIMIT: ::core::ffi::c_int = 128 as ::core::ffi::c_int;
 static urls: GlobalCell<Set_cstr_t> = GlobalCell::new(SET_INIT);
@@ -557,11 +545,9 @@ unsafe extern "C" fn tui_query_extended_underline(mut tui: *mut TUIData) {
     (*tui).print_attr_id = -1 as ::core::ffi::c_int;
 }
 pub unsafe fn tui_enable_extended_underline(mut tui: *mut TUIData) {
-    terminfo_set_if_empty(
-        tui,
-        kTerm_set_underline_style,
-        b"\x1B[4:%p1%dm\0".as_ptr() as *const ::core::ffi::c_char,
-    );
+    if (*tui).ti.defs[kTerm_set_underline_style as usize].is_null() {
+        (*tui).ti.defs[kTerm_set_underline_style as usize] = c"\x1b[4:%p1%dm".as_ptr();
+    }
     (*tui).can_set_underline_color = true_0 != 0;
 }
 unsafe extern "C" fn tui_query_kitty_keyboard(mut tui: *mut TUIData) {
@@ -637,8 +623,7 @@ unsafe extern "C" fn terminfo_start(mut tui: *mut TUIData) {
     (*tui).modes.set_resize_events((false_0 != 0) as bool);
     (*tui).modes.set_theme_updates((false_0 != 0) as bool);
     (*tui).showing_mode = SHAPE_IDX_N;
-    (*tui).terminfo_ext.enable_focus_reporting = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    (*tui).terminfo_ext.disable_focus_reporting = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    (*tui).terminfo_ext = TerminfoExt::default();
     (*tui).out_fd = STDOUT_FILENO;
     (*tui).out_isatty = os_isatty((*tui).out_fd);
     (*tui).input.tui_data = tui;
@@ -671,77 +656,21 @@ unsafe extern "C" fn terminfo_start(mut tui: *mut TUIData) {
         (*tui).ti = entry;
         (*tui).term = builtin_name.as_ptr().cast_mut();
     }
-    let mut colorterm: *mut ::core::ffi::c_char =
-        os_getenv(b"COLORTERM\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut termprg: *mut ::core::ffi::c_char =
-        os_getenv(b"TERM_PROGRAM\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut vte_version_env: *mut ::core::ffi::c_char =
-        os_getenv(b"VTE_VERSION\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut konsolev_env: *mut ::core::ffi::c_char =
-        os_getenv(b"KONSOLE_VERSION\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut term_program_version_env: *mut ::core::ffi::c_char =
-        os_getenv(b"TERM_PROGRAM_VERSION\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut vtev: ::core::ffi::c_int = if !vte_version_env.is_null() {
-        strtol(
-            vte_version_env,
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            10 as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int
-    } else {
-        0 as ::core::ffi::c_int
-    };
-    let mut iterm_env: bool = !termprg.is_null()
-        && !strstr(
-            termprg,
-            b"iTerm.app\0".as_ptr() as *const ::core::ffi::c_char,
-        )
-        .is_null();
-    let mut nsterm: bool = !termprg.is_null()
-        && !strstr(
-            termprg,
-            b"Apple_Terminal\0".as_ptr() as *const ::core::ffi::c_char,
-        )
-        .is_null()
-        || terminfo_is_term_family(term, c"nsterm") as ::core::ffi::c_int != 0;
-    let mut konsole: bool = terminfo_is_term_family(term, c"konsole") as ::core::ffi::c_int != 0
-        || os_env_exists(
-            b"KONSOLE_PROFILE_NAME\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0 != 0,
-        ) as ::core::ffi::c_int
-            != 0
-        || os_env_exists(
-            b"KONSOLE_DBUS_SESSION\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0 != 0,
-        ) as ::core::ffi::c_int
-            != 0;
-    let mut konsolev: ::core::ffi::c_int = if !konsolev_env.is_null() {
-        strtol(
-            konsolev_env,
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            10 as ::core::ffi::c_int,
-        ) as ::core::ffi::c_int
-    } else if konsole as ::core::ffi::c_int != 0 {
-        1 as ::core::ffi::c_int
-    } else {
-        0 as ::core::ffi::c_int
-    };
-    let mut wezterm: bool = strequal(termprg, b"WezTerm\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut weztermv: *const ::core::ffi::c_char = if wezterm as ::core::ffi::c_int != 0 {
-        term_program_version_env
-    } else {
-        ::core::ptr::null_mut::<::core::ffi::c_char>()
-    };
-    let mut screen: bool = terminfo_is_term_family(term, c"screen");
-    let mut tmux: bool = terminfo_is_term_family(term, c"tmux") as ::core::ffi::c_int != 0
-        || os_env_exists(
-            b"TMUX\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0 != 0,
-        ) as ::core::ffi::c_int
-            != 0;
-    (*tui).screen_or_tmux = screen as ::core::ffi::c_int != 0 || tmux as ::core::ffi::c_int != 0;
-    (*tui).rgb = term_has_truecolor(tui, colorterm);
-    patch_terminfo_bugs(tui, term, colorterm, vtev, konsolev, iterm_env, nsterm);
-    augment_terminfo(tui, term, vtev, konsolev, weztermv, iterm_env, nsterm);
+    let quirks = Terminal::identify(term_name);
+    (*tui).screen_or_tmux = quirks.screen || quirks.tmux;
+    (*tui).rgb = quirks.has_truecolor(&(*tui).ti);
+    patch_terminfo_bugs(&mut (*tui).ti, &raw mut (*tui).ti_arena, &quirks);
+    let augmented = augment_terminfo(&mut (*tui).ti, &quirks);
+    (*tui).can_resize_screen = augmented.can_resize_screen;
+    (*tui).can_set_title = augmented.can_set_title;
+    (*tui).set_cursor_color_as_str = augmented.set_cursor_color_as_str;
+    (*tui).terminfo_ext = augmented.ext;
+    (*tui).input.key_encoding = augmented.key_encoding;
+    if augmented.extended_underline {
+        tui_enable_extended_underline(tui);
+    }
+    let nsterm = quirks.nsterm;
+    let (screen, tmux) = (quirks.screen, quirks.tmux);
     (*tui).can_change_scroll_region =
         !(*tui).ti.defs[kTerm_change_scroll_region as ::core::ffi::c_int as usize].is_null();
     (*tui).can_set_lr_margin =
@@ -752,11 +681,7 @@ unsafe extern "C" fn terminfo_start(mut tui: *mut TUIData) {
         && !(*tui).ti.defs[kTerm_parm_insert_line as ::core::ffi::c_int as usize].is_null();
     (*tui).can_erase_chars =
         !(*tui).ti.defs[kTerm_erase_chars as ::core::ffi::c_int as usize].is_null();
-    (*tui).immediate_wrap_after_last_column =
-        terminfo_is_term_family(term, c"conemu") as ::core::ffi::c_int != 0
-            || terminfo_is_term_family(term, c"cygwin") as ::core::ffi::c_int != 0
-            || terminfo_is_term_family(term, c"win32con") as ::core::ffi::c_int != 0
-            || terminfo_is_term_family(term, c"interix") as ::core::ffi::c_int != 0;
+    (*tui).immediate_wrap_after_last_column = quirks.wraps_after_last_column;
     (*tui).bce = (*tui).ti.bce;
     t_colors.set((*tui).ti.max_colors);
     terminfo_out(tui, kTerm_enter_ca_mode);
@@ -852,11 +777,6 @@ unsafe extern "C" fn terminfo_start(mut tui: *mut TUIData) {
     }
     flush_buf(tui);
     xfree(term as *mut ::core::ffi::c_void);
-    xfree(colorterm as *mut ::core::ffi::c_void);
-    xfree(termprg as *mut ::core::ffi::c_void);
-    xfree(vte_version_env as *mut ::core::ffi::c_void);
-    xfree(konsolev_env as *mut ::core::ffi::c_void);
-    xfree(term_program_version_env as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn terminfo_disable(mut tui: *mut TUIData) {
     if (*tui).modes.theme_updates() {
@@ -884,7 +804,7 @@ unsafe extern "C" fn terminfo_disable(mut tui: *mut TUIData) {
         terminfo_out(tui, kTerm_reset_cursor_color);
     }
     tui_set_term_mode(tui, kTermModeBracketedPaste, false_0 != 0);
-    out_len(tui, (*tui).terminfo_ext.disable_focus_reporting);
+    out_cstr(tui, (*tui).terminfo_ext.disable_focus_reporting);
     out(
         tui,
         b"\x1B[c\0".as_ptr() as *const ::core::ffi::c_char,
@@ -941,7 +861,7 @@ unsafe extern "C" fn after_startup_cb(mut handle: *mut uv_timer_t) {
     tui_terminal_after_startup(tui);
 }
 unsafe extern "C" fn tui_terminal_after_startup(mut tui: *mut TUIData) {
-    out_len(tui, (*tui).terminfo_ext.enable_focus_reporting);
+    out_cstr(tui, (*tui).terminfo_ext.enable_focus_reporting);
     flush_buf(tui);
 }
 pub unsafe fn tui_stop(mut tui: *mut TUIData) {
@@ -1169,7 +1089,7 @@ unsafe extern "C" fn update_attrs(mut tui: *mut TUIData, mut attr_id: ::core::ff
         terminfo_out(tui, kTerm_enter_italics_mode);
     }
     if altfont {
-        out_len(tui, (*tui).terminfo_ext.enter_altfont_mode);
+        out_cstr(tui, (*tui).terminfo_ext.enter_altfont_mode);
     }
     if strikethrough {
         terminfo_out(tui, kTerm_enter_strikethrough_mode);
@@ -1688,8 +1608,8 @@ unsafe extern "C" fn set_scroll_region(
 }
 unsafe extern "C" fn reset_scroll_region(mut tui: *mut TUIData, mut fullwidth: bool) {
     let mut grid: *mut UGrid = &raw mut (*tui).grid;
-    if !(*tui).terminfo_ext.reset_scroll_region.is_null() {
-        out_len(tui, (*tui).terminfo_ext.reset_scroll_region);
+    if (*tui).terminfo_ext.reset_scroll_region.is_some() {
+        out_cstr(tui, (*tui).terminfo_ext.reset_scroll_region);
     } else {
         terminfo_print_num(
             tui,
@@ -2956,6 +2876,13 @@ unsafe extern "C" fn out_len(mut tui: *mut TUIData, mut str: *const ::core::ffi:
         out(tui, str, strlen(str));
     }
 }
+/// Write a capability nvim carries itself, doing nothing when this terminal
+/// has none. Unlike `out_len` the length is known without a scan.
+unsafe fn out_cstr(tui: *mut TUIData, s: Option<&core::ffi::CStr>) {
+    if let Some(s) = s {
+        unsafe { out(tui, s.as_ptr(), s.to_bytes().len()) };
+    }
+}
 pub unsafe extern "C" fn out_printf(
     mut tui: *mut TUIData,
     mut limit: size_t,
@@ -3129,567 +3056,6 @@ unsafe extern "C" fn terminfo_print(
     if len_0 > 0 as size_t {
         (*tui).bufpos = (*tui).bufpos.wrapping_add(len_0);
     }
-}
-unsafe extern "C" fn terminfo_set_if_empty(
-    mut tui: *mut TUIData,
-    mut str: TerminfoDef,
-    mut val: *const ::core::ffi::c_char,
-) {
-    if (*tui).ti.defs[str as usize].is_null() {
-        (*tui).ti.defs[str as usize] = val;
-    }
-}
-unsafe extern "C" fn terminfo_set_str(
-    mut tui: *mut TUIData,
-    mut str: TerminfoDef,
-    mut val: *const ::core::ffi::c_char,
-) {
-    (*tui).ti.defs[str as usize] = val;
-}
-unsafe extern "C" fn term_has_truecolor(
-    mut tui: *mut TUIData,
-    mut colorterm: *const ::core::ffi::c_char,
-) -> bool {
-    if strequal(
-        colorterm,
-        b"truecolor\0".as_ptr() as *const ::core::ffi::c_char,
-    ) as ::core::ffi::c_int
-        != 0
-        || strequal(colorterm, b"24bit\0".as_ptr() as *const ::core::ffi::c_char)
-            as ::core::ffi::c_int
-            != 0
-    {
-        return true_0 != 0;
-    }
-    if (*tui).ti.has_Tc_or_RGB {
-        return true_0 != 0;
-    }
-    let mut setrgbf: bool =
-        !(*tui).ti.defs[kTerm_set_rgb_foreground as ::core::ffi::c_int as usize].is_null();
-    let mut setrgbb: bool =
-        !(*tui).ti.defs[kTerm_set_rgb_background as ::core::ffi::c_int as usize].is_null();
-    return setrgbf as ::core::ffi::c_int != 0 && setrgbb as ::core::ffi::c_int != 0;
-}
-unsafe extern "C" fn patch_terminfo_bugs(
-    mut tui: *mut TUIData,
-    mut term: *const ::core::ffi::c_char,
-    mut colorterm: *const ::core::ffi::c_char,
-    mut vte_version: ::core::ffi::c_int,
-    mut konsolev: ::core::ffi::c_int,
-    mut iterm_env: bool,
-    mut nsterm: bool,
-) {
-    let mut xterm_version: *mut ::core::ffi::c_char =
-        os_getenv(b"XTERM_VERSION\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut xterm: bool = terminfo_is_term_family(term, c"xterm") as ::core::ffi::c_int != 0
-        || nsterm as ::core::ffi::c_int != 0;
-    let mut hterm: bool = terminfo_is_term_family(term, c"hterm");
-    let mut kitty: bool = terminfo_is_term_family(term, c"xterm-kitty");
-    let mut linuxvt: bool = terminfo_is_term_family(term, c"linux");
-    let mut bsdvt: bool = terminfo_is_bsd_console(term);
-    let mut rxvt: bool = terminfo_is_term_family(term, c"rxvt");
-    let mut teraterm: bool = terminfo_is_term_family(term, c"teraterm");
-    let mut putty: bool = terminfo_is_term_family(term, c"putty");
-    let mut screen: bool = terminfo_is_term_family(term, c"screen");
-    let mut tmux: bool = terminfo_is_term_family(term, c"tmux") as ::core::ffi::c_int != 0
-        || os_env_exists(
-            b"TMUX\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0 != 0,
-        ) as ::core::ffi::c_int
-            != 0;
-    let mut st: bool = terminfo_is_term_family(term, c"st");
-    let mut gnome: bool = terminfo_is_term_family(term, c"gnome") as ::core::ffi::c_int != 0
-        || terminfo_is_term_family(term, c"vte") as ::core::ffi::c_int != 0;
-    let mut iterm: bool = terminfo_is_term_family(term, c"iterm") as ::core::ffi::c_int != 0
-        || terminfo_is_term_family(term, c"iterm2") as ::core::ffi::c_int != 0
-        || terminfo_is_term_family(term, c"iTerm.app") as ::core::ffi::c_int != 0
-        || terminfo_is_term_family(term, c"iTerm2.app") as ::core::ffi::c_int != 0;
-    let mut alacritty: bool = terminfo_is_term_family(term, c"alacritty");
-    let mut foot: bool = terminfo_is_term_family(term, c"foot");
-    let mut iterm_pretending_xterm: bool =
-        xterm as ::core::ffi::c_int != 0 && iterm_env as ::core::ffi::c_int != 0;
-    let mut gnome_pretending_xterm: bool = xterm as ::core::ffi::c_int != 0
-        && !colorterm.is_null()
-        && !strstr(
-            colorterm,
-            b"gnome-terminal\0".as_ptr() as *const ::core::ffi::c_char,
-        )
-        .is_null();
-    let mut mate_pretending_xterm: bool = xterm as ::core::ffi::c_int != 0
-        && !colorterm.is_null()
-        && !strstr(
-            colorterm,
-            b"mate-terminal\0".as_ptr() as *const ::core::ffi::c_char,
-        )
-        .is_null();
-    let mut true_xterm: bool =
-        xterm as ::core::ffi::c_int != 0 && !xterm_version.is_null() && !bsdvt;
-    let mut cygwin: bool = terminfo_is_term_family(term, c"cygwin");
-    let mut ghostty: bool = terminfo_is_term_family(term, c"xterm-ghostty");
-    let mut fix_normal: *const ::core::ffi::c_char =
-        (*tui).ti.defs[kTerm_cursor_normal as ::core::ffi::c_int as usize];
-    if !fix_normal.is_null() {
-        if strlen(fix_normal)
-            >= ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as usize)
-            && 0 as ::core::ffi::c_int
-                == memcmp(
-                    fix_normal as *const ::core::ffi::c_void,
-                    b"\x1B[?12l\0".as_ptr() as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_void,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-                )
-        {
-            fix_normal = fix_normal.offset(
-                ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as usize)
-                    as isize,
-            );
-            terminfo_set_str(tui, kTerm_cursor_normal, fix_normal);
-        }
-        if linuxvt as ::core::ffi::c_int != 0
-            && strlen(fix_normal)
-                >= ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-            && memcmp(
-                strchr(fix_normal, 0 as ::core::ffi::c_int).offset(
-                    -(::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-                        as isize),
-                ) as *const ::core::ffi::c_void,
-                LINUXSET0C.as_ptr() as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-            ) == 0
-        {
-            let mut new_normal: *mut ::core::ffi::c_char = arena_memdupz(
-                &raw mut (*tui).ti_arena,
-                fix_normal,
-                strlen(fix_normal).wrapping_sub(
-                    ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-                ),
-            );
-            terminfo_set_str(tui, kTerm_cursor_normal, new_normal);
-        }
-    }
-    let mut fix_invisible: *const ::core::ffi::c_char =
-        (*tui).ti.defs[kTerm_cursor_invisible as ::core::ffi::c_int as usize];
-    if !fix_invisible.is_null() {
-        if linuxvt as ::core::ffi::c_int != 0
-            && strlen(fix_invisible)
-                >= ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-            && memcmp(
-                strchr(fix_invisible, 0 as ::core::ffi::c_int).offset(
-                    -(::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-                        as isize),
-                ) as *const ::core::ffi::c_void,
-                LINUXSET1C.as_ptr() as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-            ) == 0
-        {
-            let mut new_invisible: *mut ::core::ffi::c_char = arena_memdupz(
-                &raw mut (*tui).ti_arena,
-                fix_invisible,
-                strlen(fix_invisible).wrapping_sub(
-                    ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-                ),
-            );
-            terminfo_set_str(tui, kTerm_cursor_invisible, new_invisible);
-        }
-    }
-    if tmux as ::core::ffi::c_int != 0
-        || screen as ::core::ffi::c_int != 0
-        || kitty as ::core::ffi::c_int != 0
-    {
-        (*tui).ti.bce = false_0 != 0;
-    }
-    if xterm as ::core::ffi::c_int != 0 || hterm as ::core::ffi::c_int != 0 {
-        if !hterm {
-            terminfo_set_if_empty(
-                tui,
-                kTerm_to_status_line,
-                b"\x1B]0;\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            terminfo_set_if_empty(
-                tui,
-                kTerm_from_status_line,
-                b"\x07\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-        terminfo_set_if_empty(
-            tui,
-            kTerm_enter_italics_mode,
-            b"\x1B[3m\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_if_empty(
-            tui,
-            kTerm_set_lr_margin,
-            b"\x1B[%i%p1%d;%p2%ds\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    } else if rxvt {
-        terminfo_set_if_empty(
-            tui,
-            kTerm_enter_italics_mode,
-            b"\x1B[3m\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_if_empty(
-            tui,
-            kTerm_to_status_line,
-            b"\x1B]2\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_if_empty(
-            tui,
-            kTerm_from_status_line,
-            b"\x07\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_str(
-            tui,
-            kTerm_enter_ca_mode,
-            b"\x1B[?1049h\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_str(
-            tui,
-            kTerm_exit_ca_mode,
-            b"\x1B[?1049l\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    } else if screen {
-        terminfo_set_if_empty(
-            tui,
-            kTerm_to_status_line,
-            b"\x1B_\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_if_empty(
-            tui,
-            kTerm_from_status_line,
-            b"\x1B\\\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    } else if tmux {
-        terminfo_set_if_empty(
-            tui,
-            kTerm_to_status_line,
-            b"\x1B_\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_if_empty(
-            tui,
-            kTerm_from_status_line,
-            b"\x1B\\\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_if_empty(
-            tui,
-            kTerm_enter_italics_mode,
-            b"\x1B[3m\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    } else if terminfo_is_term_family(term, c"interix") {
-        terminfo_set_if_empty(
-            tui,
-            kTerm_carriage_return,
-            b"\r\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    } else if linuxvt {
-        terminfo_set_if_empty(
-            tui,
-            kTerm_parm_up_cursor,
-            b"\x1B[%p1%dA\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_if_empty(
-            tui,
-            kTerm_parm_down_cursor,
-            b"\x1B[%p1%dB\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_if_empty(
-            tui,
-            kTerm_parm_right_cursor,
-            b"\x1B[%p1%dC\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_if_empty(
-            tui,
-            kTerm_parm_left_cursor,
-            b"\x1B[%p1%dD\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    } else if !putty {
-        if iterm {
-            terminfo_set_str(
-                tui,
-                kTerm_enter_ca_mode,
-                b"\x1B[?1049h\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            terminfo_set_str(
-                tui,
-                kTerm_exit_ca_mode,
-                b"\x1B[?1049l\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            terminfo_set_if_empty(
-                tui,
-                kTerm_enter_italics_mode,
-                b"\x1B[3m\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        } else {
-            let _ = st;
-        }
-    }
-    if (*tui).ti.max_colors < 256 as ::core::ffi::c_int {
-        if true_xterm as ::core::ffi::c_int != 0
-            || iterm as ::core::ffi::c_int != 0
-            || iterm_pretending_xterm as ::core::ffi::c_int != 0
-        {
-            (*tui).ti.max_colors = 256 as ::core::ffi::c_int;
-            terminfo_set_str(tui, kTerm_set_a_foreground, XTERM_SETAF_256_COLON.as_ptr());
-            terminfo_set_str(tui, kTerm_set_a_background, XTERM_SETAB_256_COLON.as_ptr());
-        } else if konsolev != 0
-            || xterm as ::core::ffi::c_int != 0
-            || gnome as ::core::ffi::c_int != 0
-            || rxvt as ::core::ffi::c_int != 0
-            || st as ::core::ffi::c_int != 0
-            || putty as ::core::ffi::c_int != 0
-            || linuxvt as ::core::ffi::c_int != 0
-            || mate_pretending_xterm as ::core::ffi::c_int != 0
-            || gnome_pretending_xterm as ::core::ffi::c_int != 0
-            || tmux as ::core::ffi::c_int != 0
-            || !colorterm.is_null()
-                && !strstr(colorterm, b"256\0".as_ptr() as *const ::core::ffi::c_char).is_null()
-            || !term.is_null()
-                && !strstr(term, b"256\0".as_ptr() as *const ::core::ffi::c_char).is_null()
-        {
-            (*tui).ti.max_colors = 256 as ::core::ffi::c_int;
-            terminfo_set_str(tui, kTerm_set_a_foreground, XTERM_SETAF_256.as_ptr());
-            terminfo_set_str(tui, kTerm_set_a_background, XTERM_SETAB_256.as_ptr());
-        }
-    }
-    if (*tui).ti.max_colors < 16 as ::core::ffi::c_int {
-        if !colorterm.is_null() {
-            (*tui).ti.max_colors = 16 as ::core::ffi::c_int;
-            terminfo_set_if_empty(tui, kTerm_set_a_foreground, XTERM_SETAF_16.as_ptr());
-            terminfo_set_if_empty(tui, kTerm_set_a_background, XTERM_SETAB_16.as_ptr());
-        }
-    }
-    if st as ::core::ffi::c_int != 0
-        || vte_version != 0 as ::core::ffi::c_int && vte_version < 3900 as ::core::ffi::c_int
-        || konsolev != 0
-    {
-        (*tui).ti.defs[kTerm_reset_cursor_style as ::core::ffi::c_int as usize] =
-            ::core::ptr::null::<::core::ffi::c_char>();
-    }
-    if !bsdvt
-        && (xterm as ::core::ffi::c_int != 0
-            || putty as ::core::ffi::c_int != 0
-            || hterm as ::core::ffi::c_int != 0
-            || vte_version != 0
-            || konsolev != 0
-            || tmux as ::core::ffi::c_int != 0
-            || screen as ::core::ffi::c_int != 0
-            || st as ::core::ffi::c_int != 0
-            || rxvt as ::core::ffi::c_int != 0
-            || iterm as ::core::ffi::c_int != 0
-            || iterm_pretending_xterm as ::core::ffi::c_int != 0
-            || teraterm as ::core::ffi::c_int != 0
-            || alacritty as ::core::ffi::c_int != 0
-            || cygwin as ::core::ffi::c_int != 0
-            || foot as ::core::ffi::c_int != 0
-            || kitty as ::core::ffi::c_int != 0
-            || ghostty as ::core::ffi::c_int != 0
-            || linuxvt as ::core::ffi::c_int != 0
-                && (!xterm_version.is_null() || !colorterm.is_null()))
-    {
-        terminfo_set_str(
-            tui,
-            kTerm_set_cursor_style,
-            b"\x1B[%p1%d q\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_str(
-            tui,
-            kTerm_reset_cursor_style,
-            b"\x1B[0 q\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    } else if linuxvt {
-        terminfo_set_str(
-            tui,
-            kTerm_set_cursor_style,
-            b"\x1B[?%?%p1%{2}%<%t%{8}%e%p1%{2}%=%t%{112}%e%p1%{3}%=%t%{4}%e%p1%{4}%=%t%{4}%e%p1%{5}%=%t%{2}%e%p1%{6}%=%t%{2}%e%{0}%;%dc\0"
-                .as_ptr() as *const ::core::ffi::c_char,
-        );
-        terminfo_set_str(
-            tui,
-            kTerm_reset_cursor_style,
-            b"\x1B[?c\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    }
-    xfree(xterm_version as *mut ::core::ffi::c_void);
-}
-pub const XTERM_SETAF_256_COLON: [::core::ffi::c_char; 63] = unsafe {
-    ::core::mem::transmute::<[u8; 63], [::core::ffi::c_char; 63]>(
-        *b"\x1B[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38:5:%p1%d%;m\0",
-    )
-};
-pub const XTERM_SETAB_256_COLON: [::core::ffi::c_char; 64] = unsafe {
-    ::core::mem::transmute::<[u8; 64], [::core::ffi::c_char; 64]>(
-        *b"\x1B[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e48:5:%p1%d%;m\0",
-    )
-};
-pub const XTERM_SETAF_256: [::core::ffi::c_char; 63] = unsafe {
-    ::core::mem::transmute::<[u8; 63], [::core::ffi::c_char; 63]>(
-        *b"\x1B[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38;5;%p1%d%;m\0",
-    )
-};
-pub const XTERM_SETAB_256: [::core::ffi::c_char; 64] = unsafe {
-    ::core::mem::transmute::<[u8; 64], [::core::ffi::c_char; 64]>(
-        *b"\x1B[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e48;5;%p1%d%;m\0",
-    )
-};
-pub const XTERM_SETAF_16: [::core::ffi::c_char; 55] = unsafe {
-    ::core::mem::transmute::<[u8; 55], [::core::ffi::c_char; 55]>(
-        *b"\x1B[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e39%;m\0",
-    )
-};
-pub const XTERM_SETAB_16: [::core::ffi::c_char; 56] = unsafe {
-    ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
-        *b"\x1B[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e39%;m\0",
-    )
-};
-unsafe extern "C" fn augment_terminfo(
-    mut tui: *mut TUIData,
-    mut term: *const ::core::ffi::c_char,
-    mut vte_version: ::core::ffi::c_int,
-    mut konsolev: ::core::ffi::c_int,
-    mut weztermv: *const ::core::ffi::c_char,
-    mut iterm_env: bool,
-    mut nsterm: bool,
-) {
-    let mut xterm_version: *mut ::core::ffi::c_char =
-        os_getenv(b"XTERM_VERSION\0".as_ptr() as *const ::core::ffi::c_char);
-    let mut xterm: bool = terminfo_is_term_family(term, c"xterm") as ::core::ffi::c_int != 0
-        || nsterm as ::core::ffi::c_int != 0;
-    let mut hterm: bool = terminfo_is_term_family(term, c"hterm");
-    let mut bsdvt: bool = terminfo_is_bsd_console(term);
-    let mut dtterm: bool = terminfo_is_term_family(term, c"dtterm");
-    let mut rxvt: bool = terminfo_is_term_family(term, c"rxvt");
-    let mut teraterm: bool = terminfo_is_term_family(term, c"teraterm");
-    let mut putty: bool = terminfo_is_term_family(term, c"putty");
-    let mut screen: bool = terminfo_is_term_family(term, c"screen");
-    let mut tmux: bool = terminfo_is_term_family(term, c"tmux") as ::core::ffi::c_int != 0
-        || os_env_exists(
-            b"TMUX\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0 != 0,
-        ) as ::core::ffi::c_int
-            != 0;
-    let mut st: bool = terminfo_is_term_family(term, c"st");
-    let mut iterm: bool = terminfo_is_term_family(term, c"iterm") as ::core::ffi::c_int != 0
-        || terminfo_is_term_family(term, c"iterm2") as ::core::ffi::c_int != 0
-        || terminfo_is_term_family(term, c"iTerm.app") as ::core::ffi::c_int != 0
-        || terminfo_is_term_family(term, c"iTerm2.app") as ::core::ffi::c_int != 0;
-    let mut alacritty: bool = terminfo_is_term_family(term, c"alacritty");
-    let mut kitty: bool = terminfo_is_term_family(term, c"xterm-kitty");
-    let mut iterm_pretending_xterm: bool =
-        xterm as ::core::ffi::c_int != 0 && iterm_env as ::core::ffi::c_int != 0;
-    let mut true_xterm: bool =
-        xterm as ::core::ffi::c_int != 0 && !xterm_version.is_null() && !bsdvt;
-    if dtterm as ::core::ffi::c_int != 0
-        || xterm as ::core::ffi::c_int != 0
-        || konsolev != 0
-        || teraterm as ::core::ffi::c_int != 0
-        || rxvt as ::core::ffi::c_int != 0
-    {
-        (*tui).can_resize_screen = true_0 != 0;
-    }
-    if putty as ::core::ffi::c_int != 0
-        || xterm as ::core::ffi::c_int != 0
-        || hterm as ::core::ffi::c_int != 0
-        || rxvt as ::core::ffi::c_int != 0
-    {
-        (*tui).terminfo_ext.reset_scroll_region =
-            b"\x1B[r\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-    }
-    (*tui).terminfo_ext.enter_altfont_mode =
-        b"\x1B[11m\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-    let mut has_colon_rgb: bool = !tmux
-        && !screen
-        && vte_version == 0
-        && (iterm as ::core::ffi::c_int != 0
-            || iterm_pretending_xterm as ::core::ffi::c_int != 0
-            || true_xterm as ::core::ffi::c_int != 0);
-    if (*tui).ti.defs[kTerm_set_rgb_foreground as ::core::ffi::c_int as usize].is_null() {
-        if has_colon_rgb {
-            (*tui).ti.defs[kTerm_set_rgb_foreground as ::core::ffi::c_int as usize] =
-                b"\x1B[38:2:%p1%d:%p2%d:%p3%dm\0".as_ptr() as *const ::core::ffi::c_char;
-        } else {
-            (*tui).ti.defs[kTerm_set_rgb_foreground as ::core::ffi::c_int as usize] =
-                b"\x1B[38;2;%p1%d;%p2%d;%p3%dm\0".as_ptr() as *const ::core::ffi::c_char;
-        }
-    }
-    if (*tui).ti.defs[kTerm_set_rgb_background as ::core::ffi::c_int as usize].is_null() {
-        if has_colon_rgb {
-            (*tui).ti.defs[kTerm_set_rgb_background as ::core::ffi::c_int as usize] =
-                b"\x1B[48:2:%p1%d:%p2%d:%p3%dm\0".as_ptr() as *const ::core::ffi::c_char;
-        } else {
-            (*tui).ti.defs[kTerm_set_rgb_background as ::core::ffi::c_int as usize] =
-                b"\x1B[48;2;%p1%d;%p2%d;%p3%dm\0".as_ptr() as *const ::core::ffi::c_char;
-        }
-    }
-    if (*tui).ti.defs[kTerm_set_cursor_color as ::core::ffi::c_int as usize].is_null() {
-        if iterm as ::core::ffi::c_int != 0 || iterm_pretending_xterm as ::core::ffi::c_int != 0 {
-            (*tui).ti.defs[kTerm_set_cursor_color as ::core::ffi::c_int as usize] =
-                if tmux as ::core::ffi::c_int != 0 {
-                    b"\x1BPtmux;\x1B\x1B]Pl%p1%06x\x1B\\\x1B\\\0".as_ptr()
-                        as *const ::core::ffi::c_char
-                } else {
-                    b"\x1B]Pl%p1%06x\x1B\\\0".as_ptr() as *const ::core::ffi::c_char
-                };
-        } else if (xterm as ::core::ffi::c_int != 0
-            || hterm as ::core::ffi::c_int != 0
-            || rxvt as ::core::ffi::c_int != 0
-            || tmux as ::core::ffi::c_int != 0
-            || alacritty as ::core::ffi::c_int != 0
-            || st as ::core::ffi::c_int != 0)
-            && (vte_version == 0 as ::core::ffi::c_int || vte_version >= 3900 as ::core::ffi::c_int)
-        {
-            (*tui).ti.defs[kTerm_set_cursor_color as ::core::ffi::c_int as usize] =
-                b"\x1B]12;%p1%s\x07\0".as_ptr() as *const ::core::ffi::c_char;
-        }
-    }
-    if !(*tui).ti.defs[kTerm_set_cursor_color as ::core::ffi::c_int as usize].is_null() {
-        (*tui).set_cursor_color_as_str = !strstr(
-            (*tui).ti.defs[kTerm_set_cursor_color as ::core::ffi::c_int as usize],
-            b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-        )
-        .is_null();
-        terminfo_set_if_empty(
-            tui,
-            kTerm_reset_cursor_color,
-            b"\x1B]112\x07\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    }
-    if !(*tui).ti.defs[kTerm_to_status_line as ::core::ffi::c_int as usize].is_null()
-        && !(*tui).ti.defs[kTerm_from_status_line as ::core::ffi::c_int as usize].is_null()
-    {
-        (*tui).can_set_title = true_0 != 0;
-    }
-    (*tui).terminfo_ext.enable_focus_reporting = (if rxvt as ::core::ffi::c_int != 0 {
-        b"\x1B[?1004h\x1B]777;focus;on\x07\0".as_ptr() as *const ::core::ffi::c_char
-    } else {
-        b"\x1B[?1004h\0".as_ptr() as *const ::core::ffi::c_char
-    }) as *mut ::core::ffi::c_char;
-    (*tui).terminfo_ext.disable_focus_reporting = (if rxvt as ::core::ffi::c_int != 0 {
-        b"\x1B[?1004l\x1B]777;focus;off\x07\0".as_ptr() as *const ::core::ffi::c_char
-    } else {
-        b"\x1B[?1004l\0".as_ptr() as *const ::core::ffi::c_char
-    }) as *mut ::core::ffi::c_char;
-    if (*tui).ti.defs[kTerm_set_underline_style as ::core::ffi::c_int as usize].is_null() {
-        if vte_version >= 5102 as ::core::ffi::c_int
-            || konsolev >= 221170 as ::core::ffi::c_int
-            || (*tui).ti.Su as ::core::ffi::c_int != 0
-            || !weztermv.is_null()
-                && strcmp(
-                    weztermv,
-                    b"20210203-095643\0".as_ptr() as *const ::core::ffi::c_char,
-                ) > 0 as ::core::ffi::c_int
-        {
-            tui_enable_extended_underline(tui);
-        }
-    } else {
-        tui_enable_extended_underline(tui);
-    }
-    if kitty as ::core::ffi::c_int != 0
-        || vte_version != 0 as ::core::ffi::c_int && vte_version < 5400 as ::core::ffi::c_int
-    {
-        (*tui).input.key_encoding = kKeyEncodingLegacy;
-    } else {
-        (*tui).input.key_encoding = kKeyEncodingXterm;
-    }
-    xfree(xterm_version as *mut ::core::ffi::c_void);
 }
 unsafe extern "C" fn should_invisible(mut tui: *mut TUIData) -> bool {
     return (*tui).busy as ::core::ffi::c_int != 0
