@@ -1,148 +1,171 @@
-//! `:tag` and the identifier searches that share its argument
-//! handling.
+//! `:tag` and the identifier searches that share its argument handling.
+//!
+//! Both families are dispatched by *spelling*: every one of the twenty-odd
+//! commands runs the same handler, which reads its own name out of
+//! `cmdnames` to decide what it does. `:djump`, `:dlist`, `:dsearch` and
+//! `:dsplit` differ only in their third letter; `:tnext`, `:tprevious`,
+//! `:tselect` and the rest only in their second.
+#![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{c_char, c_int};
 
-pub(crate) unsafe extern "C" fn ex_findpat(mut eap: *mut exarg_T) {
-    let mut whole: bool = true_0 != 0;
-    let mut action: c_int = 0;
-    match *(*cmdnames.ptr())[(*eap).cmdidx as usize]
-        .cmd_name
-        .offset(2 as c_int as isize) as c_int
-    {
-        101 => {
-            if *(*cmdnames.ptr())[(*eap).cmdidx as usize]
-                .cmd_name
-                .offset(0 as c_int as isize) as c_int
-                == 'p' as c_int
-            {
-                action = ACTION_GOTO as c_int;
-            } else {
-                action = ACTION_SHOW as c_int;
+use crate::src::nvim::ascii::ascii_isdigit;
+use crate::src::nvim::charset::{getdigits_int, skipwhite};
+use crate::src::nvim::ex_docmd::scan::{check_nextcmd, ends_excmd};
+use crate::src::nvim::ex_docmd::source::ex_errmsg;
+use crate::src::nvim::ex_docmd::{
+    ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, ACTION_SPLIT, DT_FIRST, DT_JUMP, DT_LAST, DT_LTAG,
+    DT_NEXT, DT_POP, DT_PREV, DT_SELECT, DT_TAG, FIND_ANY, FIND_DEFINE, NUL, cmdmod, cmdnames,
+    kDirectionNotSet,
+};
+use crate::src::nvim::main::{
+    e_trailing_arg, g_do_tagpreview, p_pvh, postponed_split, postponed_split_flags,
+    postponed_split_tab,
+};
+use crate::src::nvim::option::magic_isset;
+use crate::src::nvim::os::libc::strlen;
+use crate::src::nvim::regexp::skip_regexp;
+use crate::src::nvim::search::find_pattern_in_path;
+use crate::src::nvim::tag::do_tag;
+use crate::src::nvim::types::exarg_T;
+
+/// `:isearch`, `:ilist`, `:ijump`, `:isplit` and their `:d…` twins.
+///
+/// The third letter of the name says what to do with what is found, and
+/// the first says whether the search is for a *definition* or for any
+/// occurrence.
+pub(crate) unsafe extern "C" fn ex_findpat(eap: *mut exarg_T) {
+    unsafe {
+        let ea = &mut *eap;
+        let name = (*cmdnames.ptr())[ea.cmdidx as usize].cmd_name;
+        let action = match *name.add(2) as u8 {
+            // `:isearch`/`:dsearch` show the first match; `:psearch` goes
+            // to it in the preview window.
+            b'e' => {
+                if *name as c_int == 'p' as c_int {
+                    ACTION_GOTO
+                } else {
+                    ACTION_SHOW
+                }
+            }
+            b'i' => ACTION_SHOW_ALL, // `:ilist`
+            b'u' => ACTION_GOTO,     // `:ijump`
+            _ => ACTION_SPLIT,       // `:isplit`
+        } as c_int;
+
+        // A leading count is which match to take.
+        let mut n = 1;
+        if ascii_isdigit(*ea.arg as c_int) {
+            n = getdigits_int(&raw mut ea.arg, false, 0);
+            ea.arg = skipwhite(ea.arg);
+        }
+
+        // `/pat/` searches for a pattern rather than for a whole word, and
+        // the rest of the line after it may be another command.
+        let mut whole = true;
+        if *ea.arg as c_int == '/' as c_int {
+            whole = false;
+            ea.arg = ea.arg.add(1);
+            let mut p = skip_regexp(ea.arg, '/' as c_int, magic_isset() as c_int);
+            if *p != 0 {
+                *p = NUL as c_char;
+                p = skipwhite(p.add(1));
+                if ends_excmd(*p as c_int) == 0 {
+                    ea.errmsg = ex_errmsg(&raw const e_trailing_arg as *const c_char, p);
+                } else {
+                    ea.nextcmd = check_nextcmd(p);
+                }
             }
         }
-        105 => {
-            action = ACTION_SHOW_ALL as c_int;
-        }
-        117 => {
-            action = ACTION_GOTO as c_int;
-        }
-        _ => {
-            action = ACTION_SPLIT as c_int;
-        }
-    }
-    let mut n: c_int = 1 as c_int;
-    if ascii_isdigit(*(*eap).arg as c_int) {
-        n = getdigits_int(&raw mut (*eap).arg, false_0 != 0, 0 as c_int);
-        (*eap).arg = skipwhite((*eap).arg);
-    }
-    if *(*eap).arg as c_int == '/' as c_int {
-        whole = false_0 != 0;
-        (*eap).arg = (*eap).arg.offset(1);
-        let mut p: *mut c_char = skip_regexp((*eap).arg, '/' as c_int, magic_isset() as c_int);
-        if *p != 0 {
-            let c2rust_fresh16 = p;
-            p = p.offset(1);
-            *c2rust_fresh16 = NUL as c_char;
-            p = skipwhite(p);
-            if ends_excmd(*p as c_int) == 0 {
-                (*eap).errmsg = ex_errmsg(&raw const e_trailing_arg as *const c_char, p);
-            } else {
-                (*eap).nextcmd = check_nextcmd(p);
-            }
+
+        if ea.skip == 0 {
+            find_pattern_in_path(
+                ea.arg,
+                kDirectionNotSet,
+                strlen(ea.arg),
+                whole,
+                ea.forceit == 0,
+                if *ea.cmd as c_int == 'd' as c_int {
+                    FIND_DEFINE as c_int
+                } else {
+                    FIND_ANY as c_int
+                },
+                n,
+                action,
+                ea.line1,
+                ea.line2,
+                ea.forceit != 0,
+                false,
+            );
         }
     }
-    if (*eap).skip == 0 {
-        find_pattern_in_path(
-            (*eap).arg,
-            kDirectionNotSet,
-            strlen((*eap).arg),
-            whole,
-            (*eap).forceit == 0,
-            if *(*eap).cmd as c_int == 'd' as c_int {
-                FIND_DEFINE as c_int
-            } else {
-                FIND_ANY as c_int
-            },
-            n,
-            action,
-            (*eap).line1,
-            (*eap).line2,
-            (*eap).forceit != 0,
-            false_0 != 0,
+}
+
+/// `:ptag` and friends — the same as `:tag`, in the preview window.
+pub(crate) unsafe extern "C" fn ex_ptag(eap: *mut exarg_T) {
+    unsafe {
+        g_do_tagpreview.set(p_pvh.get() as c_int);
+        ex_tag_cmd(
+            eap,
+            (*cmdnames.ptr())[(*eap).cmdidx as usize].cmd_name.add(1),
         );
     }
 }
 
-pub(crate) unsafe extern "C" fn ex_ptag(mut eap: *mut exarg_T) {
-    g_do_tagpreview.set(p_pvh.get() as c_int);
-    ex_tag_cmd(
-        eap,
-        (*cmdnames.ptr())[(*eap).cmdidx as usize]
-            .cmd_name
-            .offset(1 as c_int as isize),
-    );
-}
-
-pub(crate) unsafe extern "C" fn ex_stag(mut eap: *mut exarg_T) {
-    postponed_split.set(-1 as c_int);
-    postponed_split_flags.set((*cmdmod.ptr()).cmod_split);
-    postponed_split_tab.set((*cmdmod.ptr()).cmod_tab);
-    ex_tag_cmd(
-        eap,
-        (*cmdnames.ptr())[(*eap).cmdidx as usize]
-            .cmd_name
-            .offset(1 as c_int as isize),
-    );
-    postponed_split_flags.set(0 as c_int);
-    postponed_split_tab.set(0 as c_int);
-}
-
-pub(crate) unsafe extern "C" fn ex_tag(mut eap: *mut exarg_T) {
-    ex_tag_cmd(eap, (*cmdnames.ptr())[(*eap).cmdidx as usize].cmd_name);
-}
-
-pub(crate) unsafe extern "C" fn ex_tag_cmd(mut eap: *mut exarg_T, mut name: *const c_char) {
-    let mut cmd: c_int = 0;
-    match *name.offset(1 as c_int as isize) as c_int {
-        106 => {
-            cmd = DT_JUMP as c_int;
-        }
-        115 => {
-            cmd = DT_SELECT as c_int;
-        }
-        112 | 78 => {
-            cmd = DT_PREV as c_int;
-        }
-        110 => {
-            cmd = DT_NEXT as c_int;
-        }
-        111 => {
-            cmd = DT_POP as c_int;
-        }
-        102 | 114 => {
-            cmd = DT_FIRST as c_int;
-        }
-        108 => {
-            cmd = DT_LAST as c_int;
-        }
-        _ => {
-            cmd = DT_TAG as c_int;
-        }
+/// `:stag` and friends — the same as `:tag`, in a new window.
+pub(crate) unsafe extern "C" fn ex_stag(eap: *mut exarg_T) {
+    unsafe {
+        // `-1` means "split, and let the tag code choose the size".
+        postponed_split.set(-1);
+        postponed_split_flags.set((*cmdmod.ptr()).cmod_split);
+        postponed_split_tab.set((*cmdmod.ptr()).cmod_tab);
+        ex_tag_cmd(
+            eap,
+            (*cmdnames.ptr())[(*eap).cmdidx as usize].cmd_name.add(1),
+        );
+        postponed_split_flags.set(0);
+        postponed_split_tab.set(0);
     }
-    if *name.offset(0 as c_int as isize) as c_int == 'l' as c_int {
-        cmd = DT_LTAG as c_int;
+}
+
+/// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …
+pub(crate) unsafe extern "C" fn ex_tag(eap: *mut exarg_T) {
+    unsafe {
+        ex_tag_cmd(eap, (*cmdnames.ptr())[(*eap).cmdidx as usize].cmd_name);
     }
-    do_tag(
-        (*eap).arg,
-        cmd,
-        if (*eap).addr_count > 0 as c_int {
-            (*eap).line2 as c_int
-        } else {
-            1 as c_int
-        },
-        (*eap).forceit,
-        true_0 != 0,
-    );
+}
+
+/// Run a tag command named by `name`, whose *second* letter says which one
+/// it is.
+///
+/// `ex_ptag` and `ex_stag` pass the name one byte in, so that `:ptnext`
+/// and `:stselect` read the same letter `:tnext` and `:tselect` do. A
+/// leading `l` overrides everything: it is the location-list form.
+pub(crate) unsafe fn ex_tag_cmd(eap: *mut exarg_T, name: *const c_char) {
+    unsafe {
+        let mut cmd = match *name.add(1) as u8 {
+            b'j' => DT_JUMP,
+            b's' => DT_SELECT,
+            b'p' | b'N' => DT_PREV,
+            b'n' => DT_NEXT,
+            b'o' => DT_POP,
+            b'f' | b'r' => DT_FIRST,
+            b'l' => DT_LAST,
+            _ => DT_TAG,
+        } as c_int;
+        if *name as c_int == 'l' as c_int {
+            cmd = DT_LTAG as c_int;
+        }
+        do_tag(
+            (*eap).arg,
+            cmd,
+            if (*eap).addr_count > 0 {
+                (*eap).line2 as c_int
+            } else {
+                1
+            },
+            (*eap).forceit,
+            true,
+        );
+    }
 }
