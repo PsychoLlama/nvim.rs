@@ -146,8 +146,8 @@ use crate::src::nvim::memory::{
 };
 use crate::src::nvim::menu::{ex_emenu, ex_menu, ex_menutranslate};
 use crate::src::nvim::message::{
-    emsg, emsg_multiline, ex_messages, iemsg, msg, msg_clr_eos, msg_ext_set_kind, msg_make,
-    msg_outtrans, msg_putchar, msg_puts, msg_scroll_flush, msg_start, semsg, semsg_multiline, smsg,
+    emsg, emsg_multiline, ex_messages, msg, msg_clr_eos, msg_ext_set_kind, msg_make, msg_outtrans,
+    msg_putchar, msg_puts, msg_scroll_flush, msg_start, semsg, semsg_multiline, smsg,
     verbose_enter_scroll, verbose_leave_scroll, vim_dialog_yesno, wait_return,
 };
 use crate::src::nvim::mouse::setmouse;
@@ -292,7 +292,6 @@ use crate::src::nvim::undo::{
 };
 use crate::src::nvim::usercmd::{
     add_win_cmd_modifiers, do_ucmd, ex_comclear, ex_command, ex_delcommand,
-    expand_user_command_name, find_ucmd, get_user_command_name,
 };
 use crate::src::nvim::version::{ex_intro, ex_version};
 use crate::src::nvim::window::{

@@ -68,7 +68,6 @@
     "crates/nvim/src/nvim/ex_docmd/file.rs": 3,
     "crates/nvim/src/nvim/ex_docmd/filename.rs": 62,
     "crates/nvim/src/nvim/ex_docmd/filetype.rs": 27,
-    "crates/nvim/src/nvim/ex_docmd/lookup.rs": 7,
     "crates/nvim/src/nvim/ex_docmd/onecmd.rs": 22,
     "crates/nvim/src/nvim/ex_docmd/path.rs": 11,
     "crates/nvim/src/nvim/ex_docmd/quit.rs": 8,
