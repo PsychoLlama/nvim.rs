@@ -1,5 +1,4 @@
 use crate::src::nvim::api::private::helpers::cstr_as_string;
-use crate::src::nvim::cursor_shape::shape_table;
 use crate::src::nvim::event::libuv::{
     uv_chdir, uv_close, uv_is_closing, uv_loop_close, uv_loop_init, uv_pipe_init, uv_pipe_open,
     uv_run, uv_sleep, uv_strerror, uv_timer_init, uv_timer_start, uv_tty_reset_mode, uv_write,
@@ -31,6 +30,10 @@ use crate::src::nvim::os::libc::{
     __assert_fail, abort, fclose, fopen, fprintf, kill, memset, snprintf, sscanf, strlen, tcgetattr,
 };
 use crate::src::nvim::strings::kv_do_printf;
+use crate::src::nvim::tui::cursor::{
+    cursor_style_enabled, decode_cursor_entry, reset_style as cursor_reset_style,
+    set_mode as cursor_set_mode,
+};
 use crate::src::nvim::tui::input::{
     TermInput, tinput_destroy, tinput_init, tinput_start, tinput_stop,
 };
@@ -51,8 +54,8 @@ use crate::src::nvim::tui::terminfo::caps::{
     kTerm_parm_down_cursor, kTerm_parm_insert_line, kTerm_parm_left_cursor,
     kTerm_parm_right_cursor, kTerm_parm_up_cursor, kTerm_reset_cursor_color,
     kTerm_reset_cursor_style, kTerm_set_a_background, kTerm_set_a_foreground, kTerm_set_attributes,
-    kTerm_set_cursor_color, kTerm_set_cursor_style, kTerm_set_lr_margin, kTerm_set_rgb_background,
-    kTerm_set_rgb_foreground, kTerm_set_underline_style, kTerm_to_status_line,
+    kTerm_set_lr_margin, kTerm_set_rgb_background, kTerm_set_rgb_foreground,
+    kTerm_set_underline_style, kTerm_to_status_line,
 };
 use crate::src::nvim::tui::terminfo::{
     terminfo_from_builtin, terminfo_from_database, terminfo_info_msg,
@@ -319,7 +322,6 @@ pub const DEL_STR: [::core::ffi::c_char; 2] =
 pub const CTRL_H_STR: [::core::ffi::c_char; 2] =
     unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\x08\0") };
 pub const TOO_MANY_EVENTS: ::core::ffi::c_int = 1000000 as ::core::ffi::c_int;
-static cursor_style_enabled: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static urls: GlobalCell<Set_cstr_t> = GlobalCell::new(SET_INIT);
 pub unsafe fn tui_start(
     mut tui_p: *mut *mut TUIData,
@@ -1649,106 +1651,22 @@ pub unsafe fn tui_grid_cursor_goto(
     (*tui).row = row as ::core::ffi::c_int;
     (*tui).col = col as ::core::ffi::c_int;
 }
-unsafe extern "C" fn tui_cursor_decode_shape(
-    mut shape_str: *const ::core::ffi::c_char,
-) -> CursorShape {
-    let mut shape: CursorShape = SHAPE_BLOCK;
-    if strequal(shape_str, b"block\0".as_ptr() as *const ::core::ffi::c_char) {
-        shape = SHAPE_BLOCK;
-    } else if strequal(
-        shape_str,
-        b"vertical\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        shape = SHAPE_VER;
-    } else if strequal(
-        shape_str,
-        b"horizontal\0".as_ptr() as *const ::core::ffi::c_char,
-    ) {
-        shape = SHAPE_HOR;
-    } else {
-        logmsg(
-            LOGLVL_WRN,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            b"tui_cursor_decode_shape\0".as_ptr() as *const ::core::ffi::c_char,
-            1281 as ::core::ffi::c_int,
-            true_0 != 0,
-            b"Unknown shape value '%s'\0".as_ptr() as *const ::core::ffi::c_char,
-            shape_str,
-        );
-        shape = SHAPE_BLOCK;
-    }
-    return shape;
-}
-unsafe extern "C" fn tui_cursor_reset_style(mut tui: *mut TUIData) {
-    terminfo_out(tui, kTerm_reset_cursor_style);
-}
-unsafe extern "C" fn decode_cursor_entry(mut args: Dict) -> cursorentry_T {
-    let mut r: cursorentry_T = (*shape_table.ptr())[0 as ::core::ffi::c_int as usize];
-    let mut i: size_t = 0 as size_t;
-    while i < args.size {
-        let mut key: *mut ::core::ffi::c_char = (*args.items.offset(i as isize)).key.data;
-        let mut value: Object = (*args.items.offset(i as isize)).value;
-        if strequal(
-            key,
-            b"cursor_shape\0".as_ptr() as *const ::core::ffi::c_char,
-        ) {
-            r.shape =
-                tui_cursor_decode_shape((*args.items.offset(i as isize)).value.data.string.data);
-        } else if strequal(key, b"blinkon\0".as_ptr() as *const ::core::ffi::c_char) {
-            r.blinkon = value.data.integer as ::core::ffi::c_int;
-        } else if strequal(key, b"blinkoff\0".as_ptr() as *const ::core::ffi::c_char) {
-            r.blinkoff = value.data.integer as ::core::ffi::c_int;
-        } else if strequal(key, b"attr_id\0".as_ptr() as *const ::core::ffi::c_char) {
-            r.id = value.data.integer as ::core::ffi::c_int;
-        }
-        i = i.wrapping_add(1);
-    }
-    return r;
-}
-pub unsafe fn tui_mode_info_set(
-    mut tui: *mut TUIData,
-    mut guicursor_enabled: bool,
-    mut args: Array,
-) {
+pub unsafe fn tui_mode_info_set(tui: *mut TUIData, guicursor_enabled: bool, args: Array) {
     cursor_style_enabled.set(guicursor_enabled);
     if !guicursor_enabled {
-        tui_cursor_reset_style(tui);
+        cursor_reset_style(tui);
         return;
     }
-    '_c2rust_label: {
-        if args.size != 0 {
-        } else {
-            __assert_fail(
-                b"args.size\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/tui/tui.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1327 as ::core::ffi::c_uint,
-                b"void tui_mode_info_set(TUIData *, _Bool, Array)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut i: size_t = 0 as size_t;
-    while i < args.size {
-        '_c2rust_label_0: {
-            if (*args.items.offset(i as isize)).type_0 as ::core::ffi::c_uint
-                == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-            } else {
-                __assert_fail(
-                    b"args.items[i].type == kObjectTypeDict\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                    b"src/nvim/tui/tui.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1331 as ::core::ffi::c_uint,
-                    b"void tui_mode_info_set(TUIData *, _Bool, Array)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        let mut r: cursorentry_T = decode_cursor_entry((*args.items.offset(i as isize)).data.dict);
-        (*tui).cursor_shapes[i as usize] = r;
-        i = i.wrapping_add(1);
+    assert!(args.size != 0, "mode_info_set with no modes");
+    for i in 0..args.size {
+        let item = &*args.items.add(i);
+        assert!(
+            item.type_0 == kObjectTypeDict,
+            "mode_info_set entry is not a dict"
+        );
+        (*tui).cursor_shapes[i] = decode_cursor_entry(item.data.dict);
     }
-    tui_set_mode(tui, (*tui).showing_mode);
+    cursor_set_mode(tui, (*tui).showing_mode as usize);
 }
 pub unsafe fn tui_update_menu(mut _tui: *mut TUIData) {}
 pub unsafe fn tui_busy_start(mut tui: *mut TUIData) {
@@ -1776,111 +1694,6 @@ pub unsafe fn tui_mouse_off(mut tui: *mut TUIData) {
         tui_set_term_mode(tui, kTermModeMouseSGRExt, false_0 != 0);
         (*tui).mouse_enabled = false_0 != 0;
     }
-}
-unsafe extern "C" fn tui_set_mode(mut tui: *mut TUIData, mut mode: ModeShape) {
-    if !cursor_style_enabled.get() {
-        tui_cursor_reset_style(tui);
-        return;
-    }
-    let mut c: cursorentry_T = (*tui).cursor_shapes[mode as usize];
-    if c.id != 0 as ::core::ffi::c_int
-        && c.id < (*tui).attrs.size as ::core::ffi::c_int
-        && (*tui).rgb as ::core::ffi::c_int != 0
-    {
-        let mut aep: HlAttrs = *(*tui).attrs.items.offset(c.id as isize);
-        (*tui).want_invisible = aep.hl_blend == 100 as int32_t;
-        if !(*tui).want_invisible
-            && aep.rgb_ae_attr & HL_INVERSE as ::core::ffi::c_int as int32_t != 0
-        {
-            terminfo_out(tui, kTerm_reset_cursor_color);
-        } else if !(*tui).want_invisible && aep.rgb_bg_color >= 0 as RgbValue {
-            let mut params: [TPVAR; 9] = [
-                TPVAR {
-                    num: 0 as ::core::ffi::c_long,
-                    string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                },
-                TPVAR {
-                    num: 0,
-                    string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                },
-                TPVAR {
-                    num: 0,
-                    string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                },
-                TPVAR {
-                    num: 0,
-                    string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                },
-                TPVAR {
-                    num: 0,
-                    string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                },
-                TPVAR {
-                    num: 0,
-                    string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                },
-                TPVAR {
-                    num: 0,
-                    string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                },
-                TPVAR {
-                    num: 0,
-                    string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                },
-                TPVAR {
-                    num: 0,
-                    string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                },
-            ];
-            let mut hexbuf: [::core::ffi::c_char; 8] = [0; 8];
-            if (*tui).set_cursor_color_as_str {
-                snprintf(
-                    &raw mut hexbuf as *mut ::core::ffi::c_char,
-                    (7 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t,
-                    b"#%06x\0".as_ptr() as *const ::core::ffi::c_char,
-                    aep.rgb_bg_color,
-                );
-                params[0 as ::core::ffi::c_int as usize].string =
-                    &raw mut hexbuf as *mut ::core::ffi::c_char;
-            } else {
-                params[0 as ::core::ffi::c_int as usize].num =
-                    aep.rgb_bg_color as ::core::ffi::c_long;
-            }
-            terminfo_print(tui, kTerm_set_cursor_color, &mut params);
-            (*tui).cursor_has_color = true_0 != 0;
-        }
-    } else if c.id == 0 as ::core::ffi::c_int
-        && ((*tui).want_invisible as ::core::ffi::c_int != 0
-            || (*tui).cursor_has_color as ::core::ffi::c_int != 0)
-    {
-        (*tui).want_invisible = false_0 != 0;
-        (*tui).cursor_has_color = false_0 != 0;
-        terminfo_out(tui, kTerm_reset_cursor_color);
-    }
-    let mut shape: ::core::ffi::c_int = 0;
-    match c.shape as ::core::ffi::c_uint {
-        0 => {
-            shape = 1 as ::core::ffi::c_int;
-        }
-        1 => {
-            shape = 3 as ::core::ffi::c_int;
-        }
-        2 => {
-            shape = 5 as ::core::ffi::c_int;
-        }
-        _ => {}
-    }
-    terminfo_print_num(
-        tui,
-        kTerm_set_cursor_style,
-        [
-            shape
-                + (c.blinkon == 0 as ::core::ffi::c_int || c.blinkoff == 0 as ::core::ffi::c_int)
-                    as ::core::ffi::c_int,
-            0 as ::core::ffi::c_int,
-            0 as ::core::ffi::c_int,
-        ],
-    );
 }
 pub unsafe fn tui_mode_change(mut tui: *mut TUIData, mut _mode: String_0, mut mode_idx: Integer) {
     if (*tui).out_isatty as ::core::ffi::c_int != 0
@@ -1913,7 +1726,7 @@ pub unsafe fn tui_mode_change(mut tui: *mut TUIData, mut _mode: String_0, mut mo
             );
         }
     }
-    tui_set_mode(tui, mode_idx as ModeShape);
+    cursor_set_mode(tui, mode_idx as usize);
     if (*tui).is_starting {
         if (*tui).verbose >= 3 as Integer {
             show_verbose_terminfo(tui);

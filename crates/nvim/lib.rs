@@ -195,6 +195,7 @@ pub mod src {
         pub mod textformat;
         pub mod textobject;
         pub mod tui {
+            pub mod cursor;
             pub mod input;
             pub mod output;
             pub mod quirks;

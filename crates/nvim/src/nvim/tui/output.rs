@@ -175,6 +175,16 @@ pub unsafe fn terminfo_print_num(tui: *mut TUIData, what: TerminfoDef, nums: [c_
     unsafe { terminfo_print(tui, what, &mut params) };
 }
 
+/// Stage capability `what` with a single string parameter.
+///
+/// # Safety
+/// `tui` must point to a live `TUIData`; `s` must outlive the call.
+pub unsafe fn terminfo_print_str(tui: *mut TUIData, what: TerminfoDef, s: &CStr) {
+    let mut params = NO_PARAMS;
+    params[0].string = s.as_ptr().cast_mut();
+    unsafe { terminfo_print(tui, what, &mut params) };
+}
+
 /// Expand capability `what` against `params` and stage the result.
 ///
 /// The expansion writes straight into the staging buffer, so it is tried
