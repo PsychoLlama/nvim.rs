@@ -22,8 +22,7 @@ use crate::src::nvim::channel::channel_proc;
 use crate::src::nvim::channel::find_channel;
 use crate::src::nvim::channel::{channel_close, channel_job_start};
 use crate::src::nvim::charset::{
-    backslash_halve, getdigits, getdigits_int, getdigits_int32, skipdigits, skiptowhite_esc,
-    skipwhite,
+    backslash_halve, getdigits, getdigits_int, getdigits_int32, skiptowhite_esc, skipwhite,
 };
 use crate::src::nvim::cmdexpand::{ExpandGeneric, ExpandInit, ExpandOne};
 use crate::src::nvim::cmdhist::ex_history;
@@ -68,7 +67,7 @@ use crate::src::nvim::ex_cmds::{
     do_ascii, do_bang, do_ecmd, do_move, do_wqall, do_write, ex_align, ex_append, ex_change,
     ex_copy, ex_file, ex_global, ex_oldfiles, ex_sort, ex_substitute, ex_substitute_preview,
     ex_uniq, ex_update, ex_wnext, ex_write, ex_z, global_exe, prepare_tagpreview, print_line,
-    print_line_no_prefix, skip_vimgrep_pat,
+    print_line_no_prefix,
 };
 use crate::src::nvim::ex_cmds2::{
     autowrite_all, check_changed, check_changed_any, check_fname, dialog_changed, ex_checktime,
@@ -119,18 +118,17 @@ use crate::src::nvim::main::{
     e_no_more_file_str_found_in_path, e_nobang, e_norange, e_notopen, e_sandbox, e_screenmode,
     e_secure, e_shellempty, e_trailing_arg, e_undobang_cannot_redo_or_move_branch, e_usingsid,
     e_zerocount, emsg_off, emsg_silent, emsg_skip, escape_chars, ex_nesting_level, ex_no_reprint,
-    ex_normal_busy, exec_from_reg, exiting, exmode_active, expr_map_lock, finish_op, first_tabpage,
-    firstbuf, firstwin, force_abort, force_restart_edit, g_do_tagpreview, getout, global_busy,
-    globaldir, got_int, last_chdir_reason, last_cmdline, lastbuf, lastused_tabpage, lastwin,
-    lines_left, magic_overruled, main_loop, msg_col, msg_didany, msg_didout, msg_list, msg_row,
-    msg_scroll, msg_silent, must_redraw, need_maketitle, need_rethrow, need_wait_return,
-    new_last_cmdline, no_hlsearch, no_wait_return, opcount, p_awa, p_cdh, p_confirm, p_cpo, p_ei,
-    p_ffu, p_gp, p_hls, p_lz, p_mfd, p_mmd, p_mp, p_pvh, p_rtp, p_sh, p_shada, p_verbose, p_wic,
-    p_write, pending_end_reg_executing, pending_exmode_active, postponed_split,
-    postponed_split_flags, postponed_split_tab, readonlymode, recoverymode, redir_fd, redir_off,
-    redir_reg, redir_vname, redraw_cmdline, reg_executing, repeat_cmdline, restart_edit, sandbox,
-    searchcmdlen, secure, stop_insert_mode, suppress_errthrow, textlock, topframe, trylevel,
-    typebuf, virtual_op,
+    ex_normal_busy, exec_from_reg, exiting, exmode_active, finish_op, first_tabpage, firstbuf,
+    firstwin, force_abort, force_restart_edit, g_do_tagpreview, getout, global_busy, globaldir,
+    got_int, last_chdir_reason, last_cmdline, lastbuf, lastused_tabpage, lastwin, lines_left,
+    magic_overruled, main_loop, msg_col, msg_didany, msg_didout, msg_list, msg_row, msg_scroll,
+    msg_silent, must_redraw, need_maketitle, need_rethrow, need_wait_return, new_last_cmdline,
+    no_hlsearch, no_wait_return, opcount, p_awa, p_cdh, p_confirm, p_cpo, p_ffu, p_gp, p_hls, p_lz,
+    p_mfd, p_mmd, p_mp, p_pvh, p_rtp, p_sh, p_shada, p_verbose, p_wic, p_write,
+    pending_end_reg_executing, pending_exmode_active, postponed_split, postponed_split_flags,
+    postponed_split_tab, readonlymode, recoverymode, redir_fd, redir_off, redir_reg, redir_vname,
+    redraw_cmdline, reg_executing, repeat_cmdline, restart_edit, sandbox, searchcmdlen, secure,
+    stop_insert_mode, suppress_errthrow, textlock, topframe, trylevel, typebuf, virtual_op,
 };
 use crate::src::nvim::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::src::nvim::mark::{
@@ -145,15 +143,13 @@ use crate::src::nvim::memline::{
     goto_byte, ml_clearmarked, ml_delete, ml_get, ml_preserve, ml_recover, ml_setmarked,
 };
 use crate::src::nvim::memory::{
-    arena_mem_free, strequal, xcalloc, xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcat,
-    xstrlcpy,
+    arena_mem_free, strequal, xcalloc, xfree, xmalloc, xmemdupz, xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::src::nvim::menu::{ex_emenu, ex_menu, ex_menutranslate};
 use crate::src::nvim::message::{
     emsg, emsg_multiline, ex_messages, iemsg, msg, msg_clr_eos, msg_ext_set_kind, msg_make,
-    msg_outtrans, msg_putchar, msg_puts, msg_scroll_flush, msg_start, redirecting, semsg,
-    semsg_multiline, smsg, verbose_enter_scroll, verbose_leave_scroll, vim_dialog_yesno,
-    wait_return,
+    msg_outtrans, msg_putchar, msg_puts, msg_scroll_flush, msg_start, semsg, semsg_multiline, smsg,
+    verbose_enter_scroll, verbose_leave_scroll, vim_dialog_yesno, wait_return,
 };
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::r#move::{
@@ -169,9 +165,9 @@ use crate::src::nvim::normal::{
 use crate::src::nvim::ops::{clear_oparg, do_join, op_delete, op_shift};
 use crate::src::nvim::option::{
     ex_set, get_findfunc, get_option_sctx, get_scrolloff_value, magic_isset,
-    option_set_callback_func, set_option_direct, set_option_value_give_err,
+    option_set_callback_func, set_option_value_give_err,
 };
-use crate::src::nvim::options::{kOptEventignore, kOptFiletype, kOptFindfunc};
+use crate::src::nvim::options::{kOptFiletype, kOptFindfunc};
 use crate::src::nvim::optionstr::{check_ff_value, free_string_option, get_fileformat_name};
 use crate::src::nvim::os::env::{
     expand_env, expand_env_esc, expand_env_save, home_replace, os_getenv_noalloc,
@@ -180,7 +176,7 @@ use crate::src::nvim::os::fs::{os_dirname, os_fopen, os_isdir, os_mkdir, os_path
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::lang::ex_language;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, atoi, atol, fclose, gettext, memmove, memset, ngettext,
+    __assert_fail, __ctype_b_loc, abort, atol, fclose, gettext, memmove, memset, ngettext,
     snprintf, strcasecmp, strcat, strcmp, strcpy, strlen, strncmp, strpbrk, strrchr, strstr,
 };
 use crate::src::nvim::os::shell::{shell_build_argv, shell_free_argv};
@@ -706,13 +702,6 @@ pub const WSP_ABOVE: C2Rust_Unnamed_66 = 128;
 pub const WSP_HOR: C2Rust_Unnamed_66 = 4;
 pub const WSP_BOT: C2Rust_Unnamed_66 = 16;
 pub const MODE_NORMAL: C2Rust_Unnamed_57 = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct cmdmod {
-    pub name: *mut c_char,
-    pub minlen: c_int,
-    pub has_count: c_int,
-}
 pub const OPT_GLOBAL: C2Rust_Unnamed_59 = 1;
 pub type C2Rust_Unnamed_56 = c_uint;
 pub type C2Rust_Unnamed_57 = c_uint;
@@ -841,128 +830,6 @@ static dollar_command: GlobalCell<[c_char; 2]> = GlobalCell::new(['$' as c_char,
 static cmdline_call_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static ex_error_buf: GlobalCell<[c_char; 480]> = GlobalCell::new([0; 480]);
 static exmode_plus: GlobalCell<[c_char; 2]> = GlobalCell::new(c_bytes(b"+\0"));
-static cmdmods: GlobalCell<[cmdmod; 24]> = GlobalCell::new([
-    cmdmod {
-        name: b"aboveleft\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"belowright\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"botright\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 2 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"browse\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"confirm\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 4 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"filter\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 4 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"hide\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"horizontal\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"keepalt\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 5 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"keepjumps\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 5 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"keepmarks\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"keeppatterns\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 5 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"leftabove\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 5 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"lockmarks\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"noautocmd\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"noswapfile\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"rightbelow\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 6 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"sandbox\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"silent\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"tab\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: true_0,
-    },
-    cmdmod {
-        name: b"topleft\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 2 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"unsilent\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 3 as c_int,
-        has_count: false_0,
-    },
-    cmdmod {
-        name: b"verbose\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 4 as c_int,
-        has_count: true_0,
-    },
-    cmdmod {
-        name: b"vertical\0".as_ptr() as *const c_char as *mut c_char,
-        minlen: 4 as c_int,
-        has_count: false_0,
-    },
-]);
 static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: C2Rust_Unnamed_20 {
         funcref: ::core::ptr::null_mut::<c_char>(),

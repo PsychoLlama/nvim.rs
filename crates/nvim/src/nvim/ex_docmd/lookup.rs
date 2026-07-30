@@ -219,32 +219,11 @@ pub unsafe extern "C" fn find_ex_command(
 }
 
 pub unsafe extern "C" fn cmd_exists(name: *const c_char) -> c_int {
-    let mut i: c_int = 0 as c_int;
-    while i < ::core::mem::size_of::<[cmdmod; 24]>()
-        .wrapping_div(::core::mem::size_of::<cmdmod>())
-        .wrapping_div(
-            (::core::mem::size_of::<[cmdmod; 24]>().wrapping_rem(::core::mem::size_of::<cmdmod>())
-                == 0) as c_int as usize,
-        ) as c_int
-    {
-        let mut j: c_int = 0;
-        j = 0 as c_int;
-        while *name.offset(j as isize) as c_int != NUL {
-            if *name.offset(j as isize) as c_int
-                != *(*cmdmods.ptr())[i as usize].name.offset(j as isize) as c_int
-            {
-                break;
-            }
-            j += 1;
+    for md in &CMDMODS {
+        let j = shared_prefix(name, md.name);
+        if *name.add(j) as c_int == NUL && j >= md.minlen {
+            return if md.name.to_bytes().len() == j { 2 } else { 1 };
         }
-        if *name.offset(j as isize) as c_int == NUL && j >= (*cmdmods.ptr())[i as usize].minlen {
-            return if *(*cmdmods.ptr())[i as usize].name.offset(j as isize) as c_int == NUL {
-                2 as c_int
-            } else {
-                1 as c_int
-            };
-        }
-        i += 1;
     }
     let mut ea: exarg_T = exarg_T {
         arg: ::core::ptr::null_mut::<c_char>(),
