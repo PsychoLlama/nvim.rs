@@ -1,16 +1,9 @@
-use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string};
-use crate::src::nvim::api::ui::{remote_ui_connect, remote_ui_disconnect};
-use crate::src::nvim::api::vim::nvim__chan_set_detach;
-use crate::src::nvim::api::vimscript::nvim_command;
 use crate::src::nvim::arglist::{
     ex_all, ex_argadd, ex_argdedupe, ex_argdelete, ex_argedit, ex_args, ex_argument, ex_last,
     ex_next, ex_previous, ex_rewind,
 };
 use crate::src::nvim::autocmd::ex_doautoall;
 use crate::src::nvim::buffer::{buflist_list, ex_buffer_all};
-use crate::src::nvim::channel::channel_proc;
-use crate::src::nvim::channel::find_channel;
-use crate::src::nvim::channel::{channel_close, channel_job_start};
 use crate::src::nvim::cmdhist::ex_history;
 use crate::src::nvim::debugger::{
     ex_breakadd, ex_breakdel, ex_breaklist, ex_debug, ex_debuggreedy,
@@ -19,14 +12,9 @@ use crate::src::nvim::diff::{
     ex_diffgetput, ex_diffoff, ex_diffpatch, ex_diffsplit, ex_diffthis, ex_diffupdate,
 };
 use crate::src::nvim::digraph::ex_loadkeymap;
-use crate::src::nvim::eval::typval::tv_get_string;
-use crate::src::nvim::eval::typval::tv_list_len;
 use crate::src::nvim::eval::userfunc::{ex_call, ex_delfunction, ex_function, ex_return};
-use crate::src::nvim::eval::vars::{
-    ex_let, ex_lockvar, ex_unlet, get_vim_var_list, get_vim_var_str, set_vim_var_string,
-};
+use crate::src::nvim::eval::vars::{ex_let, ex_lockvar, ex_unlet};
 use crate::src::nvim::eval::{ex_echo, ex_echohl, ex_execute};
-use crate::src::nvim::event::proc::{proc_stop, proc_wait};
 use crate::src::nvim::ex_cmds::{
     do_ascii, do_wqall, ex_align, ex_append, ex_change, ex_file, ex_global, ex_oldfiles, ex_sort,
     ex_substitute, ex_substitute_preview, ex_uniq, ex_update, ex_wnext, ex_write, ex_z,
@@ -44,28 +32,20 @@ use crate::src::nvim::ex_session::{ex_loadview, ex_mkrc};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::help::{ex_exusage, ex_help, ex_helpclose, ex_helptags, ex_viusage};
 use crate::src::nvim::indent::ex_retab;
-use crate::src::nvim::log::logmsg;
-use crate::src::nvim::lua::executor::{ex_lua, ex_luado, ex_luafile, nlua_exec};
+use crate::src::nvim::lua::executor::{ex_lua, ex_luado, ex_luafile};
 use crate::src::nvim::lua::secure::ex_trust;
 use crate::src::nvim::main::c_bytes;
 use crate::src::nvim::main::{
-    current_ui, e_backslash, e_invchan, e_invrange, e_line_number_out_of_range, e_no_errors,
-    e_norange, e_shellempty, e_zerocount, exiting, getout, p_sh, searchcmdlen,
+    e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange, e_zerocount,
+    searchcmdlen,
 };
 use crate::src::nvim::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::src::nvim::mark::{ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks};
 use crate::src::nvim::r#match::ex_match;
-use crate::src::nvim::memory::{
-    arena_mem_free, strequal, xcalloc, xfree, xmemdupz, xstrdup, xstrlcat,
-};
 use crate::src::nvim::menu::{ex_emenu, ex_menu, ex_menutranslate};
-use crate::src::nvim::message::{emsg, emsg_multiline, ex_messages, semsg};
-use crate::src::nvim::msgpack_rpc::channel::rpc_send_call;
-use crate::src::nvim::msgpack_rpc::server::{server_start, server_stop};
+use crate::src::nvim::message::ex_messages;
 use crate::src::nvim::option::ex_set;
 use crate::src::nvim::os::lang::ex_language;
-use crate::src::nvim::os::libc::{__assert_fail, gettext, snprintf, strstr};
-use crate::src::nvim::os::shell::{shell_build_argv, shell_free_argv};
 use crate::src::nvim::profile::ex_profile;
 use crate::src::nvim::quickfix::{
     ex_cbelow, ex_cbottom, ex_cbuffer, ex_cc, ex_cclose, ex_cexpr, ex_cfile, ex_cnext, ex_copen,
@@ -79,7 +59,6 @@ use crate::src::nvim::runtime::{
 use crate::src::nvim::sign::ex_sign;
 use crate::src::nvim::spell::{ex_spelldump, ex_spellinfo, ex_spellrepall};
 use crate::src::nvim::spellfile::{ex_mkspell, ex_spell};
-use crate::src::nvim::strings::{concat_str, vim_strsave_escaped};
 use crate::src::nvim::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::src::nvim::tag::do_tags;
 pub use crate::src::nvim::types::{
@@ -148,9 +127,8 @@ pub use crate::src::nvim::types::{
     varnumber_T, vim_exception, vimconv_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S,
     winopt_T, winsize, wline_T, xfmark_T, xp_prefix_T, yankreg_T,
 };
-use crate::src::nvim::ui::{ui_active, ui_call_restart, ui_flush};
 use crate::src::nvim::undo::{ex_undojoin, ex_undolist};
-use crate::src::nvim::usercmd::{add_win_cmd_modifiers, ex_comclear, ex_command, ex_delcommand};
+use crate::src::nvim::usercmd::{ex_comclear, ex_command, ex_delcommand};
 use crate::src::nvim::version::{ex_intro, ex_version};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 

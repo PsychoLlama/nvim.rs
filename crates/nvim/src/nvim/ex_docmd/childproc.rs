@@ -1,687 +1,153 @@
-//! `:terminal` and `:lsp`, which both hand a buffer to a
-//! process.
+//! `:terminal` and `:lsp`, which both hand a buffer to a process.
+#![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn ex_terminal(mut eap: *mut exarg_T) {
-    let mut ex_cmd: [c_char; 1024] = [0; 1024];
-    let mut len: size_t = 0 as size_t;
-    if (*cmdmod.ptr()).cmod_tab > 0 as c_int || (*cmdmod.ptr()).cmod_split != 0 as c_int {
-        let mut multi_mods: bool = false_0 != 0;
-        ex_cmd[0 as c_int as usize] = NUL as c_char;
-        len = add_win_cmd_modifiers(
-            &raw mut ex_cmd as *mut c_char,
-            cmdmod.ptr(),
-            &raw mut multi_mods,
-        );
-        '_c2rust_label: {
-            if len < ::core::mem::size_of::<[c_char; 1024]>() {
-            } else {
-                __assert_fail(
-                    b"len < sizeof(ex_cmd)\0".as_ptr() as *const c_char,
-                    b"src/nvim/ex_docmd.rs\0".as_ptr() as *const c_char,
-                    8298 as c_uint,
-                    b"void ex_terminal(exarg_T *)\0".as_ptr() as *const c_char,
-                );
-            }
-        };
-        let mut result: c_int = snprintf(
-            (&raw mut ex_cmd as *mut c_char).offset(len as isize),
-            ::core::mem::size_of::<[c_char; 1024]>().wrapping_sub(len),
-            b" new\0".as_ptr() as *const c_char,
-        );
-        '_c2rust_label_0: {
-            if result > 0 as c_int {
-            } else {
-                __assert_fail(
-                    b"result > 0\0".as_ptr() as *const c_char,
-                    b"src/nvim/ex_docmd.rs\0".as_ptr() as *const c_char,
-                    8300 as c_uint,
-                    b"void ex_terminal(exarg_T *)\0".as_ptr() as *const c_char,
-                );
-            }
-        };
-        len = len.wrapping_add(result as size_t);
-    } else {
-        let mut result_0: c_int = snprintf(
-            &raw mut ex_cmd as *mut c_char,
-            ::core::mem::size_of::<[c_char; 1024]>(),
-            b"enew%s\0".as_ptr() as *const c_char,
-            if (*eap).forceit != 0 {
-                b"!\0".as_ptr() as *const c_char
-            } else {
-                b"\0".as_ptr() as *const c_char
-            },
-        );
-        '_c2rust_label_1: {
-            if result_0 > 0 as c_int {
-            } else {
-                __assert_fail(
-                    b"result > 0\0".as_ptr() as *const c_char,
-                    b"src/nvim/ex_docmd.rs\0".as_ptr() as *const c_char,
-                    8304 as c_uint,
-                    b"void ex_terminal(exarg_T *)\0".as_ptr() as *const c_char,
-                );
-            }
-        };
-        len = len.wrapping_add(result_0 as size_t);
-    }
-    '_c2rust_label_2: {
-        if len < ::core::mem::size_of::<[c_char; 1024]>() {
+use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string};
+use crate::src::nvim::ex_docmd::cmdline::do_cmdline_cmd;
+use crate::src::nvim::ex_docmd::{
+    HLF_E, NUL, cmdmod, kErrorTypeNone, kObjectTypeString, kRetNilBool,
+};
+use crate::src::nvim::lua::executor::nlua_exec;
+use crate::src::nvim::main::{e_shellempty, p_sh};
+use crate::src::nvim::memory::{xfree, xstrlcat};
+use crate::src::nvim::message::{emsg, emsg_multiline};
+use crate::src::nvim::os::libc::{gettext, snprintf};
+use crate::src::nvim::os::shell::{shell_build_argv, shell_free_argv};
+use crate::src::nvim::strings::vim_strsave_escaped;
+use crate::src::nvim::types::{Array, Error, Object, String_0, exarg_T, size_t};
+use crate::src::nvim::usercmd::add_win_cmd_modifiers;
+
+/// `:terminal` — spelled as a command line, not as a call.
+///
+/// The whole command is built as text and handed back to `do_cmdline_cmd`,
+/// because `jobstart(…, {'term': v:true})` is the only entry point that
+/// attaches a terminal to a buffer, and it is a vimscript function. The
+/// argument therefore has to survive being read as a vimscript string
+/// literal, which is what the `"` and `\` escaping is for.
+pub(crate) unsafe extern "C" fn ex_terminal(eap: *mut exarg_T) {
+    unsafe {
+        const CMD_LEN: usize = 1024;
+        let mut ex_cmd: [c_char; CMD_LEN] = [0; CMD_LEN];
+        let mut len: size_t = 0;
+
+        // With a window modifier, the modifier plus `new` makes the window;
+        // without one, `enew` reuses the current window.
+        if (*cmdmod.ptr()).cmod_tab > 0 || (*cmdmod.ptr()).cmod_split != 0 {
+            let mut multi_mods = false;
+            len = add_win_cmd_modifiers(
+                &raw mut ex_cmd as *mut c_char,
+                cmdmod.ptr(),
+                &raw mut multi_mods,
+            );
+            debug_assert!(len < CMD_LEN);
+            let written = snprintf(
+                (&raw mut ex_cmd as *mut c_char).add(len as usize),
+                CMD_LEN - len as usize,
+                c" new".as_ptr(),
+            );
+            debug_assert!(written > 0);
+            len += written as size_t;
         } else {
-            __assert_fail(
-                b"len < sizeof(ex_cmd)\0".as_ptr() as *const c_char,
-                b"src/nvim/ex_docmd.rs\0".as_ptr() as *const c_char,
-                8308 as c_uint,
-                b"void ex_terminal(exarg_T *)\0".as_ptr() as *const c_char,
+            let written = snprintf(
+                &raw mut ex_cmd as *mut c_char,
+                CMD_LEN,
+                c"enew%s".as_ptr(),
+                if (*eap).forceit != 0 {
+                    c"!".as_ptr()
+                } else {
+                    c"".as_ptr()
+                },
             );
+            debug_assert!(written > 0);
+            len += written as size_t;
         }
-    };
-    if *(*eap).arg as c_int != NUL {
-        let mut name: *mut c_char =
-            vim_strsave_escaped((*eap).arg, b"\"\\\0".as_ptr() as *const c_char);
-        snprintf(
-            (&raw mut ex_cmd as *mut c_char).offset(len as isize),
-            ::core::mem::size_of::<[c_char; 1024]>().wrapping_sub(len),
-            b" | call jobstart(\"%s\",{'term':v:true})\0".as_ptr() as *const c_char,
-            name,
-        );
-        xfree(name as *mut c_void);
-    } else {
-        if *p_sh.get() as c_int == NUL {
-            emsg(gettext(&raw const e_shellempty as *const c_char));
-            return;
-        }
-        let mut argv: *mut *mut c_char =
-            shell_build_argv(::core::ptr::null::<c_char>(), ::core::ptr::null::<c_char>());
-        let mut p: *mut *mut c_char = argv;
-        let mut tempstring: [c_char; 512] = [0; 512];
-        let mut shell_argv: [c_char; 512] = [
-            0 as c_char,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        ];
-        while !(*p).is_null() {
-            let mut escaped: *mut c_char =
-                vim_strsave_escaped(*p, b"\"\\\0".as_ptr() as *const c_char);
+        debug_assert!(len < CMD_LEN);
+
+        if *(*eap).arg as c_int != NUL {
+            let name = vim_strsave_escaped((*eap).arg, c"\"\\".as_ptr());
             snprintf(
-                &raw mut tempstring as *mut c_char,
-                ::core::mem::size_of::<[c_char; 512]>(),
-                b",\"%s\"\0".as_ptr() as *const c_char,
-                escaped,
+                (&raw mut ex_cmd as *mut c_char).add(len as usize),
+                CMD_LEN - len as usize,
+                c" | call jobstart(\"%s\",{'term':v:true})".as_ptr(),
+                name,
             );
-            xfree(escaped as *mut c_void);
-            xstrlcat(
-                &raw mut shell_argv as *mut c_char,
-                &raw mut tempstring as *mut c_char,
-                ::core::mem::size_of::<[c_char; 512]>(),
+            xfree(name as *mut core::ffi::c_void);
+        } else {
+            if *p_sh.get() as c_int == NUL {
+                emsg(gettext(&raw const e_shellempty as *const c_char));
+                return;
+            }
+            // No argument: run 'shell', as a *list* so that the shell's own
+            // arguments are not re-split.
+            let mut shell_argv: [c_char; 512] = [0; 512];
+            let argv = shell_build_argv(ptr::null(), ptr::null());
+            let mut p = argv;
+            while !(*p).is_null() {
+                let escaped = vim_strsave_escaped(*p, c"\"\\".as_ptr());
+                let mut one: [c_char; 512] = [0; 512];
+                snprintf(
+                    &raw mut one as *mut c_char,
+                    512,
+                    c",\"%s\"".as_ptr(),
+                    escaped,
+                );
+                xfree(escaped as *mut core::ffi::c_void);
+                xstrlcat(
+                    &raw mut shell_argv as *mut c_char,
+                    &raw mut one as *mut c_char,
+                    512,
+                );
+                p = p.add(1);
+            }
+            shell_free_argv(argv);
+            // Every element was written with a leading comma, so the list
+            // starts one byte in.
+            snprintf(
+                (&raw mut ex_cmd as *mut c_char).add(len as usize),
+                CMD_LEN - len as usize,
+                c" | call jobstart([%s], {'term':v:true})".as_ptr(),
+                (&raw mut shell_argv as *mut c_char).add(1),
             );
-            p = p.offset(1);
         }
-        shell_free_argv(argv);
-        snprintf(
-            (&raw mut ex_cmd as *mut c_char).offset(len as isize),
-            ::core::mem::size_of::<[c_char; 1024]>().wrapping_sub(len),
-            b" | call jobstart([%s], {'term':v:true})\0".as_ptr() as *const c_char,
-            (&raw mut shell_argv as *mut c_char).offset(1 as c_int as isize),
-        );
+        do_cmdline_cmd(&raw mut ex_cmd as *mut c_char);
     }
-    do_cmdline_cmd(&raw mut ex_cmd as *mut c_char);
 }
 
-pub(crate) unsafe extern "C" fn ex_lsp(mut eap: *mut exarg_T) {
-    let mut err: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut::<c_char>(),
-    };
-    let mut args: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    let mut args__items: [Object; 1] = [Object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_14 { boolean: false },
-    }; 1];
-    args.capacity = 1 as size_t;
-    args.items = &raw mut args__items as *mut Object;
-    let c2rust_fresh22 = args.size;
-    args.size = args.size.wrapping_add(1);
-    *args.items.offset(c2rust_fresh22 as isize) = object {
-        type_0: kObjectTypeString,
-        data: C2Rust_Unnamed_14 {
-            string: cstr_as_string((*eap).arg),
-        },
-    };
-    nlua_exec(
-        String_0 {
-            data: b"require'vim._core.ex_cmd'.ex_lsp(...)\0".as_ptr() as *const c_char
-                as *mut c_char,
-            size: ::core::mem::size_of::<[c_char; 38]>().wrapping_sub(1 as size_t),
-        },
-        ::core::ptr::null::<c_char>(),
-        args,
-        kRetNilBool,
-        ::core::ptr::null_mut::<Arena>(),
-        &raw mut err,
-    );
-    if err.type_0 as c_int != kErrorTypeNone as c_int {
-        emsg_multiline(
-            err.msg,
-            b"lua_error\0".as_ptr() as *const c_char,
-            HLF_E as c_int,
-            true_0 != 0,
+/// `:lsp` — a Lua entry point that takes the whole argument as one string.
+pub(crate) unsafe extern "C" fn ex_lsp(eap: *mut exarg_T) {
+    unsafe {
+        let mut err = Error {
+            type_0: kErrorTypeNone,
+            msg: ptr::null_mut(),
+        };
+        let mut items: [Object; 1] = [Object {
+            type_0: kObjectTypeString,
+            data: crate::src::nvim::types::object_data {
+                string: cstr_as_string((*eap).arg),
+            },
+        }];
+        let args = Array {
+            size: 1,
+            capacity: 1,
+            items: &raw mut items as *mut Object,
+        };
+        const CHUNK: &core::ffi::CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
+        nlua_exec(
+            String_0 {
+                data: CHUNK.as_ptr() as *mut c_char,
+                size: CHUNK.to_bytes().len() as size_t,
+            },
+            ptr::null(),
+            args,
+            kRetNilBool,
+            ptr::null_mut(),
+            &raw mut err,
         );
+        if err.type_0 as c_int != kErrorTypeNone as c_int {
+            emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E as c_int, true);
+        }
+        api_clear_error(&raw mut err);
     }
-    api_clear_error(&raw mut err);
 }

@@ -1,479 +1,435 @@
-//! `:restart`, `:detach` and `:connect` — the commands that hand
-//! the session to another process or take it back.
+//! `:restart`, `:detach` and `:connect` — the commands that hand the
+//! session to another process or take it back.
+#![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn ex_restart(mut eap: *mut exarg_T) {
-    let mut servername_args: Array = Array {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    let mut servername_args__items: [Object; 1] = [Object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_14 { boolean: false },
-    }; 1];
-    let mut result: Object = Object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_14 { boolean: false },
-    };
-    let mut listen_addr: *mut c_char = ::core::ptr::null_mut::<c_char>();
-    let mut quit_cmd: *mut c_char = ::core::ptr::null_mut::<c_char>();
-    let mut quit_cmd_copy: *mut c_char = ::core::ptr::null_mut::<c_char>();
-    let mut result_mem: ArenaMem = ::core::ptr::null_mut::<consumed_blk>();
-    let mut detach_args: Array = Array {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    let mut detach_args__items: [Object; 1] = [Object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_14 { boolean: false },
-    }; 1];
-    let mut chanclose_expr_args: Array = Array {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    let mut chanclose_expr_args__items: [Object; 1] = [Object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed_14 { boolean: false },
-    }; 1];
-    let mut err: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut::<c_char>(),
-    };
-    let no_ui: bool = ui_active() == 0;
-    let mut exepath: *const c_char = get_vim_var_str(VV_PROGPATH);
-    let mut l: *const list_T = get_vim_var_list(VV_ARGV);
-    let mut argc: c_int = tv_list_len(l);
-    let mut argv: *mut *mut c_char = xcalloc(
-        (argc as size_t).wrapping_add(3 as size_t),
-        ::core::mem::size_of::<*mut c_char>(),
-    ) as *mut *mut c_char;
-    let mut i: size_t = 0 as size_t;
-    let mut listen_arg: *const c_char = ::core::ptr::null::<c_char>();
-    let mut li: *const listitem_T = (*l).lv_first;
-    while !li.is_null() {
-        let mut arg: *const c_char = tv_get_string(&raw const (*li).li_tv);
-        if i > 0 as size_t && strequal(arg, b"--\0".as_ptr() as *const c_char) as c_int != 0 {
-            break;
-        }
-        if i > 0 as size_t && strequal(arg, b"-s\0".as_ptr() as *const c_char) as c_int != 0 {
-            li = (*li).li_next;
-        } else {
-            if i > 0 as size_t
-                && strequal(arg, b"--listen\0".as_ptr() as *const c_char) as c_int != 0
-            {
-                let mut next_li: *const listitem_T = (*li).li_next;
+use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string};
+use crate::src::nvim::api::ui::{remote_ui_connect, remote_ui_disconnect};
+use crate::src::nvim::api::vim::nvim__chan_set_detach;
+use crate::src::nvim::api::vimscript::nvim_command;
+use crate::src::nvim::channel::{channel_close, channel_job_start, channel_proc, find_channel};
+use crate::src::nvim::eval::typval::{tv_get_string, tv_list_len};
+use crate::src::nvim::eval::vars::{get_vim_var_list, get_vim_var_str, set_vim_var_string};
+use crate::src::nvim::event::proc::{proc_stop, proc_wait};
+use crate::src::nvim::ex_docmd::{
+    CMOD_CONFIRM, GA_EMPTY_INIT_VALUE, LOGLVL_INF, NUL, VV_ARGV, VV_EXITREASON, VV_PROGPATH,
+    cmdmod, kCallbackNone, kChannelPartAll, kChannelStdinPipe, kErrorTypeNone, kObjectTypeBoolean,
+    kObjectTypeDict, kObjectTypeString,
+};
+use crate::src::nvim::log::logmsg;
+use crate::src::nvim::main::{current_ui, e_invchan, exiting, getout};
+use crate::src::nvim::memory::{arena_mem_free, strequal, xcalloc, xfree, xmemdupz, xstrdup};
+use crate::src::nvim::message::{emsg, semsg};
+use crate::src::nvim::msgpack_rpc::channel::rpc_send_call;
+use crate::src::nvim::msgpack_rpc::server::{server_start, server_stop};
+use crate::src::nvim::os::libc::strstr;
+use crate::src::nvim::strings::concat_str;
+use crate::src::nvim::types::{
+    ArenaMem, Array, Callback, CallbackReader, Dict, Error, KeyValuePair, Object, exarg_T,
+    key_value_pair, listitem_T, object_data, ptrdiff_t, size_t, uint16_t, varnumber_T,
+};
+use crate::src::nvim::ui::{ui_active, ui_call_restart, ui_flush};
+
+/// An `Object` holding a NUL-terminated string, without copying it.
+fn obj_str(s: *const c_char) -> Object {
+    Object {
+        type_0: kObjectTypeString,
+        data: object_data {
+            // SAFETY: `cstr_as_string` measures the string; it does not
+            // outlive the caller's storage, which every call site keeps
+            // alive across the RPC call.
+            string: unsafe { cstr_as_string(s) },
+        },
+    }
+}
+
+/// An `Object` holding a boolean.
+fn obj_bool(b: bool) -> Object {
+    Object {
+        type_0: kObjectTypeBoolean,
+        data: object_data { boolean: b },
+    }
+}
+
+/// A borrowed `Array` over `items`, full.
+fn array_of(items: &mut [Object]) -> Array {
+    Array {
+        size: items.len() as size_t,
+        capacity: items.len() as size_t,
+        items: items.as_mut_ptr(),
+    }
+}
+
+/// A borrowed `Dict` over `items`, full.
+fn dict_of(items: &mut [KeyValuePair]) -> Dict {
+    Dict {
+        size: items.len() as size_t,
+        capacity: items.len() as size_t,
+        items: items.as_mut_ptr(),
+    }
+}
+
+/// A `key = value` entry for a borrowed `Dict`.
+fn entry(key: &'static core::ffi::CStr, value: Object) -> KeyValuePair {
+    key_value_pair {
+        // SAFETY: the key is a `'static` C string literal.
+        key: unsafe { cstr_as_string(key.as_ptr()) },
+        value,
+    }
+}
+
+/// `:restart` — start a second Nvim, hand every UI over to it, and quit.
+///
+/// The new server is started as an embedded RPC job so that this one can
+/// talk to it: it has to be told not to exit when the channel closes, told
+/// what to run once a UI arrives, and asked for the address to send the
+/// UIs to. Only then does this server try to quit — and if it *cannot*
+/// (an unsaved buffer, a `+cmd` that did not quit), the new server is
+/// killed again and nothing has changed.
+pub(crate) unsafe extern "C" fn ex_restart(eap: *mut exarg_T) {
+    unsafe {
+        let mut err = Error {
+            type_0: kErrorTypeNone,
+            msg: ptr::null_mut(),
+        };
+        let no_ui = ui_active() == 0;
+        let exepath = get_vim_var_str(VV_PROGPATH);
+        let argv_list = get_vim_var_list(VV_ARGV);
+        let argc = tv_list_len(argv_list);
+
+        // Three more than `v:argv`: `--embed`, `--headless`, and the null
+        // terminator.
+        let argv = xcalloc(argc as size_t + 3, size_of::<*mut c_char>()) as *mut *mut c_char;
+        let mut i: size_t = 0;
+        let mut listen_arg: *const c_char = ptr::null();
+
+        let mut li: *const listitem_T = (*argv_list).lv_first;
+        while !li.is_null() {
+            let arg = tv_get_string(&raw const (*li).li_tv);
+            // `-- [files…]` is dropped: it is almost never wanted, and
+            // `:mksession` is the way to carry a session over.
+            if i > 0 && strequal(arg, c"--".as_ptr()) {
+                break;
+            }
+            // `-s <scriptfile>` is dropped, script file and all.
+            if i > 0 && strequal(arg, c"-s".as_ptr()) {
+                li = (*li).li_next;
+                if li.is_null() {
+                    break;
+                }
+                li = (*li).li_next;
+                continue;
+            }
+            // The address after `--listen` is in use by *this* server, so
+            // it has to be released before the new one can take it.
+            if i > 0 && strequal(arg, c"--listen".as_ptr()) {
+                let next_li = (*li).li_next;
                 if !next_li.is_null() {
-                    let mut addr: *const c_char = tv_get_string(&raw const (*next_li).li_tv);
-                    if !strstr(addr, b":\0".as_ptr() as *const c_char).is_null()
-                        || !strstr(addr, b"/\0".as_ptr() as *const c_char).is_null()
-                        || !strstr(addr, b"\\\0".as_ptr() as *const c_char).is_null()
+                    let addr = tv_get_string(&raw const (*next_li).li_tv);
+                    if !strstr(addr, c":".as_ptr()).is_null()
+                        || !strstr(addr, c"/".as_ptr()).is_null()
+                        || !strstr(addr, c"\\".as_ptr()).is_null()
                     {
                         listen_arg = addr;
                     }
                 }
             }
-            if i == 0 as size_t
-                || !strequal(arg, b"--embed\0".as_ptr() as *const c_char)
-                    && !strequal(arg, b"--headless\0".as_ptr() as *const c_char)
-                    && !strequal(arg, b"-\0".as_ptr() as *const c_char)
+            // `--embed`, `--headless` and `-` are replaced by exactly one
+            // `--embed` (plus `--headless` when there is no UI), inserted
+            // right after argv[0].
+            if i == 0
+                || !strequal(arg, c"--embed".as_ptr())
+                    && !strequal(arg, c"--headless".as_ptr())
+                    && !strequal(arg, c"-".as_ptr())
             {
-                let c2rust_fresh4 = i;
-                i = i.wrapping_add(1);
-                let c2rust_lvalue_ptr = &raw mut *argv.offset(c2rust_fresh4 as isize);
-                *c2rust_lvalue_ptr = xstrdup(arg);
-                if i == 1 as size_t {
-                    let c2rust_fresh5 = i;
-                    i = i.wrapping_add(1);
-                    let c2rust_lvalue_ptr_0 = &raw mut *argv.offset(c2rust_fresh5 as isize);
-                    *c2rust_lvalue_ptr_0 = xstrdup(b"--embed\0".as_ptr() as *const c_char);
+                *argv.add(i as usize) = xstrdup(arg);
+                i += 1;
+                if i == 1 {
+                    *argv.add(i as usize) = xstrdup(c"--embed".as_ptr());
+                    i += 1;
+                    // Without `--headless`, an embedded server waits for a
+                    // UI to attach.
                     if no_ui {
-                        let c2rust_fresh6 = i;
-                        i = i.wrapping_add(1);
-                        let c2rust_lvalue_ptr_1 = &raw mut *argv.offset(c2rust_fresh6 as isize);
-                        *c2rust_lvalue_ptr_1 = xstrdup(b"--headless\0".as_ptr() as *const c_char);
+                        *argv.add(i as usize) = xstrdup(c"--headless".as_ptr());
+                        i += 1;
                     }
                 }
             }
+            li = (*li).li_next;
         }
-        li = (*li).li_next;
-    }
-    let mut server_stopped: bool = if !listen_arg.is_null() {
-        server_stop(listen_arg, true_0 != 0) as c_int
-    } else {
-        false_0
-    } != 0;
-    let mut on_err: CallbackReader = CallbackReader {
-        cb: Callback {
-            data: C2Rust_Unnamed_20 {
-                funcref: ::core::ptr::null_mut::<c_char>(),
-            },
-            type_0: kCallbackNone,
-        },
-        self_0: ::core::ptr::null_mut::<dict_T>(),
-        buffer: GA_EMPTY_INIT_VALUE,
-        eof: false,
-        buffered: false_0 != 0,
-        fwd_err: false_0 != 0,
-        type_0: ::core::ptr::null::<c_char>(),
-    };
-    on_err.fwd_err = true_0 != 0;
-    let mut detach: bool = true_0 != 0;
-    let mut exit_status: varnumber_T = 0;
-    let mut channel: *mut Channel = channel_job_start(
-        argv,
-        exepath,
-        CallbackReader {
-            cb: Callback {
-                data: C2Rust_Unnamed_20 {
-                    funcref: ::core::ptr::null_mut::<c_char>(),
-                },
-                type_0: kCallbackNone,
-            },
-            self_0: ::core::ptr::null_mut::<dict_T>(),
-            buffer: GA_EMPTY_INIT_VALUE,
-            eof: false,
-            buffered: false_0 != 0,
-            fwd_err: false_0 != 0,
-            type_0: ::core::ptr::null::<c_char>(),
-        },
-        on_err,
-        Callback {
-            data: C2Rust_Unnamed_20 {
-                funcref: ::core::ptr::null_mut::<c_char>(),
-            },
-            type_0: kCallbackNone,
-        },
-        false_0 != 0,
-        true_0 != 0,
-        true_0 != 0,
-        detach,
-        kChannelStdinPipe,
-        ::core::ptr::null::<c_char>(),
-        0 as uint16_t,
-        0 as uint16_t,
-        ::core::ptr::null_mut::<dict_T>(),
-        &raw mut exit_status,
-    );
-    if channel.is_null() {
-        emsg(b"cannot create a channel job\0".as_ptr() as *const c_char);
-    } else {
-        result_mem = ::core::ptr::null_mut::<consumed_blk>();
-        detach_args = Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
-        detach_args__items = [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed_14 { boolean: false },
-        }; 1];
-        detach_args.capacity = 1 as size_t;
-        detach_args.items = &raw mut detach_args__items as *mut Object;
-        let c2rust_fresh7 = detach_args.size;
-        detach_args.size = detach_args.size.wrapping_add(1);
-        *detach_args.items.offset(c2rust_fresh7 as isize) = object {
-            type_0: kObjectTypeBoolean,
-            data: C2Rust_Unnamed_14 { boolean: true },
-        };
-        rpc_send_call(
-            (*channel).id,
-            b"nvim__chan_set_detach\0".as_ptr() as *const c_char,
-            detach_args,
-            &raw mut result_mem,
-            &raw mut err,
+
+        let server_stopped = !listen_arg.is_null() && server_stop(listen_arg, true);
+
+        let mut on_err = blank_reader();
+        // The stderr fd is inherited, so forwarding still works after this
+        // server exits.
+        on_err.fwd_err = true;
+        let mut exit_status: varnumber_T = 0;
+        let channel = channel_job_start(
+            argv,
+            exepath,
+            blank_reader(),
+            on_err,
+            blank_callback(),
+            false,
+            true,
+            true,
+            true, // detach: the new server outlives this one
+            kChannelStdinPipe,
+            ptr::null(),
+            0 as uint16_t,
+            0 as uint16_t,
+            ptr::null_mut(),
+            &raw mut exit_status,
         );
-        '_fail_2: {
-            if err.type_0 as c_int == kErrorTypeNone as c_int {
+
+        'fail_1: {
+            if channel.is_null() {
+                emsg(c"cannot create a channel job".as_ptr());
+                break 'fail_1;
+            }
+            let id = (*channel).id;
+            let mut result_mem: ArenaMem = ptr::null_mut();
+
+            'fail_2: {
+                // Stop the new server exiting when this channel closes.
+                let mut detach_items = [obj_bool(true)];
+                rpc_send_call(
+                    id,
+                    c"nvim__chan_set_detach".as_ptr(),
+                    array_of(&mut detach_items),
+                    &raw mut result_mem,
+                    &raw mut err,
+                );
+                if err.type_0 as c_int != kErrorTypeNone as c_int {
+                    break 'fail_2;
+                }
                 arena_mem_free(result_mem);
-                result_mem = ::core::ptr::null_mut::<consumed_blk>();
+                result_mem = ptr::null_mut();
+
+                // `:restart {cmd}` runs {cmd} over there, once a UI has
+                // arrived.
                 if *(*eap).arg as c_int != NUL {
-                    let mut autocmd_opts: Dict = Dict {
-                        size: 0 as size_t,
-                        capacity: 0 as size_t,
-                        items: ::core::ptr::null_mut::<KeyValuePair>(),
-                    };
-                    let mut autocmd_opts__items: [KeyValuePair; 3] = [KeyValuePair {
-                        key: String_0 {
-                            data: ::core::ptr::null_mut::<c_char>(),
-                            size: 0,
-                        },
-                        value: Object {
-                            type_0: kObjectTypeNil,
-                            data: C2Rust_Unnamed_14 { boolean: false },
-                        },
-                    }; 3];
-                    autocmd_opts.capacity = 3 as size_t;
-                    autocmd_opts.items = &raw mut autocmd_opts__items as *mut KeyValuePair;
-                    let c2rust_fresh8 = autocmd_opts.size;
-                    autocmd_opts.size = autocmd_opts.size.wrapping_add(1);
-                    *autocmd_opts.items.offset(c2rust_fresh8 as isize) = key_value_pair {
-                        key: cstr_as_string(b"once\0".as_ptr() as *const c_char),
-                        value: object {
-                            type_0: kObjectTypeBoolean,
-                            data: C2Rust_Unnamed_14 { boolean: true },
-                        },
-                    };
-                    let c2rust_fresh9 = autocmd_opts.size;
-                    autocmd_opts.size = autocmd_opts.size.wrapping_add(1);
-                    *autocmd_opts.items.offset(c2rust_fresh9 as isize) = key_value_pair {
-                        key: cstr_as_string(b"nested\0".as_ptr() as *const c_char),
-                        value: object {
-                            type_0: kObjectTypeBoolean,
-                            data: C2Rust_Unnamed_14 { boolean: true },
-                        },
-                    };
-                    let c2rust_fresh10 = autocmd_opts.size;
-                    autocmd_opts.size = autocmd_opts.size.wrapping_add(1);
-                    *autocmd_opts.items.offset(c2rust_fresh10 as isize) = key_value_pair {
-                        key: cstr_as_string(b"command\0".as_ptr() as *const c_char),
-                        value: object {
-                            type_0: kObjectTypeString,
-                            data: C2Rust_Unnamed_14 {
-                                string: cstr_as_string((*eap).arg),
+                    let mut opt_items = [
+                        entry(c"once", obj_bool(true)),
+                        entry(c"nested", obj_bool(true)),
+                        entry(c"command", obj_str((*eap).arg)),
+                    ];
+                    let mut autocmd_items = [
+                        obj_str(c"UIEnter".as_ptr()),
+                        Object {
+                            type_0: kObjectTypeDict,
+                            data: object_data {
+                                dict: dict_of(&mut opt_items),
                             },
                         },
-                    };
-                    let mut autocmd_args: Array = Array {
-                        size: 0 as size_t,
-                        capacity: 0 as size_t,
-                        items: ::core::ptr::null_mut::<Object>(),
-                    };
-                    let mut autocmd_args__items: [Object; 2] = [Object {
-                        type_0: kObjectTypeNil,
-                        data: C2Rust_Unnamed_14 { boolean: false },
-                    }; 2];
-                    autocmd_args.capacity = 2 as size_t;
-                    autocmd_args.items = &raw mut autocmd_args__items as *mut Object;
-                    let c2rust_fresh11 = autocmd_args.size;
-                    autocmd_args.size = autocmd_args.size.wrapping_add(1);
-                    *autocmd_args.items.offset(c2rust_fresh11 as isize) = object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_14 {
-                            string: cstr_as_string(b"UIEnter\0".as_ptr() as *const c_char),
-                        },
-                    };
-                    let c2rust_fresh12 = autocmd_args.size;
-                    autocmd_args.size = autocmd_args.size.wrapping_add(1);
-                    *autocmd_args.items.offset(c2rust_fresh12 as isize) = object {
-                        type_0: kObjectTypeDict,
-                        data: C2Rust_Unnamed_14 { dict: autocmd_opts },
-                    };
+                    ];
                     rpc_send_call(
-                        (*channel).id,
-                        b"nvim_create_autocmd\0".as_ptr() as *const c_char,
-                        autocmd_args,
+                        id,
+                        c"nvim_create_autocmd".as_ptr(),
+                        array_of(&mut autocmd_items),
                         &raw mut result_mem,
                         &raw mut err,
                     );
                     if err.type_0 as c_int != kErrorTypeNone as c_int {
-                        break '_fail_2;
-                    } else {
-                        arena_mem_free(result_mem);
-                        result_mem = ::core::ptr::null_mut::<consumed_blk>();
+                        break 'fail_2;
                     }
+                    arena_mem_free(result_mem);
+                    result_mem = ptr::null_mut();
                 }
-                servername_args = Array {
-                    size: 0 as size_t,
-                    capacity: 0 as size_t,
-                    items: ::core::ptr::null_mut::<Object>(),
-                };
-                servername_args__items = [Object {
-                    type_0: kObjectTypeNil,
-                    data: C2Rust_Unnamed_14 { boolean: false },
-                }; 1];
-                servername_args.capacity = 1 as size_t;
-                servername_args.items = &raw mut servername_args__items as *mut Object;
-                let c2rust_fresh13 = servername_args.size;
-                servername_args.size = servername_args.size.wrapping_add(1);
-                *servername_args.items.offset(c2rust_fresh13 as isize) = object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed_14 {
-                        string: cstr_as_string(b"servername\0".as_ptr() as *const c_char),
-                    },
-                };
-                result = rpc_send_call(
-                    (*channel).id,
-                    b"nvim_get_vvar\0".as_ptr() as *const c_char,
-                    servername_args,
+
+                // Where the UIs are to reconnect.
+                let mut name_items = [obj_str(c"servername".as_ptr())];
+                let result = rpc_send_call(
+                    id,
+                    c"nvim_get_vvar".as_ptr(),
+                    array_of(&mut name_items),
                     &raw mut result_mem,
                     &raw mut err,
                 );
-                if err.type_0 as c_int == kErrorTypeNone as c_int {
-                    if result.type_0 as c_uint != kObjectTypeString as c_int as c_uint
-                        || result.data.string.size == 0 as size_t
-                    {
-                        emsg(
-                            b"restart failed: could not get listen address from new server\0"
-                                .as_ptr() as *const c_char,
-                        );
-                    } else {
-                        listen_addr = xmemdupz(
-                            result.data.string.data as *const c_void,
-                            result.data.string.size,
-                        ) as *mut c_char;
-                        arena_mem_free(result_mem);
-                        result_mem = ::core::ptr::null_mut::<consumed_blk>();
-                        ui_call_restart(cstr_as_string(listen_addr));
-                        ui_flush();
-                        xfree(listen_addr as *mut c_void);
-                        set_vim_var_string(
-                            VV_EXITREASON,
-                            b"restart\0".as_ptr() as *const c_char,
-                            ::core::mem::size_of::<[c_char; 8]>().wrapping_sub(1 as usize)
-                                as ptrdiff_t,
-                        );
-                        quit_cmd = (if !(*eap).do_ecmd_cmd.is_null() {
-                            (*eap).do_ecmd_cmd as *const c_char
-                        } else {
-                            b"qall\0".as_ptr() as *const c_char
-                        }) as *mut c_char;
-                        quit_cmd_copy = ::core::ptr::null_mut::<c_char>();
-                        if (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as c_int != 0 {
-                            quit_cmd_copy =
-                                concat_str(b"confirm \0".as_ptr() as *const c_char, quit_cmd);
-                            quit_cmd = quit_cmd_copy;
-                        }
-                        nvim_command(cstr_as_string(quit_cmd), &raw mut err);
-                        xfree(quit_cmd_copy as *mut c_void);
-                        if err.type_0 as c_int != kErrorTypeNone as c_int {
-                            emsg(err.msg);
-                            api_clear_error(&raw mut err);
-                        } else if !exiting.get() {
-                            emsg(b"restart failed: +cmd did not quit the server\0".as_ptr()
-                                as *const c_char);
-                        }
-                    }
+                if err.type_0 as c_int != kErrorTypeNone as c_int {
+                    break 'fail_2;
+                }
+                if result.type_0 as c_int != kObjectTypeString as c_int
+                    || result.data.string.size == 0
+                {
+                    emsg(c"restart failed: could not get listen address from new server".as_ptr());
+                    break 'fail_2;
+                }
+                // Copied out before the arena it lives in is freed.
+                let listen_addr = xmemdupz(
+                    result.data.string.data as *const c_void,
+                    result.data.string.size,
+                ) as *mut c_char;
+                arena_mem_free(result_mem);
+                result_mem = ptr::null_mut();
+
+                ui_call_restart(cstr_as_string(listen_addr));
+                ui_flush();
+                xfree(listen_addr as *mut c_void);
+
+                set_vim_var_string(VV_EXITREASON, c"restart".as_ptr(), 7 as ptrdiff_t);
+
+                let mut quit_cmd = if (*eap).do_ecmd_cmd.is_null() {
+                    c"qall".as_ptr() as *mut c_char
+                } else {
+                    (*eap).do_ecmd_cmd
+                };
+                let mut quit_cmd_copy: *mut c_char = ptr::null_mut();
+                if (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as c_int != 0 {
+                    quit_cmd_copy = concat_str(c"confirm ".as_ptr(), quit_cmd);
+                    quit_cmd = quit_cmd_copy;
+                }
+                nvim_command(cstr_as_string(quit_cmd), &raw mut err);
+                xfree(quit_cmd_copy as *mut c_void);
+
+                if err.type_0 as c_int != kErrorTypeNone as c_int {
+                    emsg(err.msg);
+                    api_clear_error(&raw mut err);
+                } else if !exiting.get() {
+                    emsg(c"restart failed: +cmd did not quit the server".as_ptr());
                 }
             }
-        }
-        set_vim_var_string(
-            VV_EXITREASON,
-            ::core::ptr::null::<c_char>(),
-            -1 as ptrdiff_t,
-        );
-        if err.type_0 as c_int != kErrorTypeNone as c_int {
-            emsg(err.msg);
+
+            // Reached both on success — where `exiting` is set and this is
+            // the last thing that runs — and on every failure.
+            set_vim_var_string(VV_EXITREASON, ptr::null(), -1 as ptrdiff_t);
+            if err.type_0 as c_int != kErrorTypeNone as c_int {
+                emsg(err.msg);
+                api_clear_error(&raw mut err);
+            }
+            arena_mem_free(result_mem);
+            result_mem = ptr::null_mut();
+
+            // Close the new server's stderr before killing it, or its dying
+            // words land on this UI.
+            let mut chanclose_items = [obj_str(c"chanclose(v:stderr)".as_ptr())];
+            rpc_send_call(
+                id,
+                c"nvim_eval".as_ptr(),
+                array_of(&mut chanclose_items),
+                &raw mut result_mem,
+                &raw mut err,
+            );
             api_clear_error(&raw mut err);
+            arena_mem_free(result_mem);
+
+            proc_stop(channel_proc(channel));
+            if proc_wait(channel_proc(channel), -1, ptr::null_mut()) < 0 {
+                emsg(c"killing new nvim server failed".as_ptr());
+            }
         }
-        arena_mem_free(result_mem);
-        result_mem = ::core::ptr::null_mut::<consumed_blk>();
-        chanclose_expr_args = Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
-        chanclose_expr_args__items = [Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed_14 { boolean: false },
-        }; 1];
-        chanclose_expr_args.capacity = 1 as size_t;
-        chanclose_expr_args.items = &raw mut chanclose_expr_args__items as *mut Object;
-        let c2rust_fresh14 = chanclose_expr_args.size;
-        chanclose_expr_args.size = chanclose_expr_args.size.wrapping_add(1);
-        *chanclose_expr_args.items.offset(c2rust_fresh14 as isize) = object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed_14 {
-                string: cstr_as_string(b"chanclose(v:stderr)\0".as_ptr() as *const c_char),
-            },
-        };
-        rpc_send_call(
-            (*channel).id,
-            b"nvim_eval\0".as_ptr() as *const c_char,
-            chanclose_expr_args,
-            &raw mut result_mem,
-            &raw mut err,
-        );
-        api_clear_error(&raw mut err);
-        arena_mem_free(result_mem);
-        proc_stop(channel_proc(channel));
-        if proc_wait(
-            channel_proc(channel),
-            -1 as c_int,
-            ::core::ptr::null_mut::<MultiQueue>(),
-        ) < 0 as c_int
-        {
-            emsg(b"killing new nvim server failed\0".as_ptr() as *const c_char);
+
+        // The address was released for a server that is not going to use it.
+        if server_stopped && server_start(listen_arg) != 0 {
+            semsg(c"couldn't resume listening on %s".as_ptr(), listen_arg);
         }
-    }
-    if server_stopped as c_int != 0 && server_start(listen_arg) != 0 as c_int {
-        semsg(
-            b"couldn't resume listening on %s\0".as_ptr() as *const c_char,
-            listen_arg,
-        );
     }
 }
 
-pub(crate) unsafe extern "C" fn ex_detach(mut eap: *mut exarg_T) {
-    if !eap.is_null() && (*eap).forceit != 0 {
-        emsg(b"bang (!) not supported yet\0".as_ptr() as *const c_char);
-    } else {
-        if current_ui.get() == 0 {
-            emsg(b"UI not attached\0".as_ptr() as *const c_char);
+/// A `CallbackReader` that reads nothing.
+fn blank_reader() -> CallbackReader {
+    CallbackReader {
+        cb: blank_callback(),
+        self_0: ptr::null_mut(),
+        buffer: GA_EMPTY_INIT_VALUE,
+        eof: false,
+        buffered: false,
+        fwd_err: false,
+        type_0: ptr::null(),
+    }
+}
+
+/// A `Callback` that calls nothing.
+fn blank_callback() -> Callback {
+    Callback {
+        data: crate::src::nvim::types::Callback_data {
+            funcref: ptr::null_mut(),
+        },
+        type_0: kCallbackNone,
+    }
+}
+
+/// `:detach` — let the UI go, and keep running headless.
+///
+/// Called with a null `eap` by `:connect`, which has already attached
+/// somewhere else.
+pub(crate) unsafe extern "C" fn ex_detach(eap: *mut exarg_T) {
+    unsafe {
+        if !eap.is_null() && (*eap).forceit != 0 {
+            emsg(c"bang (!) not supported yet".as_ptr());
             return;
         }
-        let mut chan: *mut Channel = find_channel(current_ui.get());
+        if current_ui.get() == 0 {
+            emsg(c"UI not attached".as_ptr());
+            return;
+        }
+        let chan = find_channel(current_ui.get());
         if chan.is_null() {
             emsg(&raw const e_invchan as *const c_char);
             return;
         }
-        let mut detach_err: Error = Error {
+
+        // Tell the UI's channel not to take the server down with it.
+        let mut detach_err = Error {
             type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut::<c_char>(),
+            msg: ptr::null_mut(),
         };
-        nvim__chan_set_detach((*chan).id, true_0 != 0, &raw mut detach_err);
+        nvim__chan_set_detach((*chan).id, true, &raw mut detach_err);
         api_clear_error(&raw mut detach_err);
-        let mut err2: Error = Error {
+
+        let mut err2 = Error {
             type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut::<c_char>(),
+            msg: ptr::null_mut(),
         };
-        remote_ui_disconnect((*chan).id, &raw mut err2, true_0 != 0);
+        remote_ui_disconnect((*chan).id, &raw mut err2, true);
         if err2.type_0 as c_int != kErrorTypeNone as c_int {
             emsg(err2.msg);
             api_clear_error(&raw mut err2);
             return;
         }
-        let mut err: *const c_char = ::core::ptr::null::<c_char>();
-        let mut rv: bool = channel_close((*chan).id, kChannelPartAll, &raw mut err);
-        if !rv && !err.is_null() {
-            emsg(err);
+
+        let mut close_err: *const c_char = ptr::null();
+        if !channel_close((*chan).id, kChannelPartAll, &raw mut close_err) && !close_err.is_null() {
+            emsg(close_err);
             return;
         }
         logmsg(
             LOGLVL_INF,
-            ::core::ptr::null::<c_char>(),
-            b"ex_detach\0".as_ptr() as *const c_char,
-            6019 as c_int,
-            true_0 != 0,
-            b"detach current_ui=%ld\0".as_ptr() as *const c_char,
+            ptr::null(),
+            c"ex_detach".as_ptr(),
+            6019,
+            true,
+            c"detach current_ui=%ld".as_ptr(),
             (*chan).id,
         );
-    };
+    }
 }
 
-pub(crate) unsafe extern "C" fn ex_connect(mut eap: *mut exarg_T) {
-    let mut stop_server: bool = if (*eap).forceit != 0 {
-        (ui_active() == 1 as size_t) as c_int
-    } else {
-        false_0
-    } != 0;
-    let mut err: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut::<c_char>(),
-    };
-    remote_ui_connect(current_ui.get(), (*eap).arg, &raw mut err);
-    if err.type_0 as c_int != kErrorTypeNone as c_int {
-        emsg(err.msg);
-        api_clear_error(&raw mut err);
-        return;
-    }
-    ex_detach(::core::ptr::null_mut::<exarg_T>());
-    if stop_server {
-        exiting.set(true_0 != 0);
-        getout(0 as c_int);
+/// `:connect` — attach this session's UI to another server, then detach
+/// from here.
+///
+/// `:connect!` also *exits* when this was the only UI, so that the session
+/// really moves rather than being left running.
+pub(crate) unsafe extern "C" fn ex_connect(eap: *mut exarg_T) {
+    unsafe {
+        let stop_server = (*eap).forceit != 0 && ui_active() == 1;
+        let mut err = Error {
+            type_0: kErrorTypeNone,
+            msg: ptr::null_mut(),
+        };
+        remote_ui_connect(current_ui.get(), (*eap).arg, &raw mut err);
+        if err.type_0 as c_int != kErrorTypeNone as c_int {
+            emsg(err.msg);
+            api_clear_error(&raw mut err);
+            return;
+        }
+        ex_detach(ptr::null_mut());
+        if stop_server {
+            exiting.set(true);
+            getout(0);
+        }
     }
 }
