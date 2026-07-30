@@ -22,37 +22,40 @@ use crate::src::nvim::map::mh_put_cstr_t;
 use crate::src::nvim::mbyte::{utf_ambiguous_width, utf_char2cells, utf_ptr2char};
 use crate::src::nvim::memory::{
     ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, strequal, xcalloc, xfree, xrealloc,
-    xstrdup, xstrlcpy,
+    xstrdup,
 };
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
 use crate::src::nvim::os::env::{os_getenv, os_getenv_noalloc};
 use crate::src::nvim::os::input::os_isatty;
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, fclose, fopen, fprintf, fwrite, kill, memcpy, memset, snprintf, sscanf,
-    strlen, tcgetattr, vsnprintf,
+    __assert_fail, abort, fclose, fopen, fprintf, kill, memset, snprintf, sscanf, strlen, tcgetattr,
 };
 use crate::src::nvim::strings::kv_do_printf;
 use crate::src::nvim::tui::input::{
     TermInput, tinput_destroy, tinput_init, tinput_start, tinput_stop,
 };
+use crate::src::nvim::tui::output::{
+    TERMINFO_SEQ_LIMIT, flush_buf, out, out_cstr, out_fmt, out_raw, terminfo_out, terminfo_print,
+    terminfo_print_num,
+};
 use crate::src::nvim::tui::quirks::{Terminal, TerminfoExt, augment_terminfo, patch_terminfo_bugs};
 use crate::src::nvim::tui::terminfo::caps::{
-    TerminfoDef, kTerm_carriage_return, kTerm_change_scroll_region, kTerm_clear_screen,
-    kTerm_clr_eol, kTerm_clr_eos, kTerm_cursor_address, kTerm_cursor_down, kTerm_cursor_home,
-    kTerm_cursor_invisible, kTerm_cursor_left, kTerm_cursor_normal, kTerm_cursor_right,
-    kTerm_cursor_up, kTerm_delete_line, kTerm_enter_blink_mode, kTerm_enter_bold_mode,
-    kTerm_enter_ca_mode, kTerm_enter_dim_mode, kTerm_enter_italics_mode, kTerm_enter_reverse_mode,
-    kTerm_enter_secure_mode, kTerm_enter_standout_mode, kTerm_enter_strikethrough_mode,
-    kTerm_enter_underline_mode, kTerm_erase_chars, kTerm_exit_attribute_mode, kTerm_exit_ca_mode,
-    kTerm_from_status_line, kTerm_insert_line, kTerm_keypad_local, kTerm_keypad_xmit,
-    kTerm_parm_delete_line, kTerm_parm_down_cursor, kTerm_parm_insert_line, kTerm_parm_left_cursor,
+    kTerm_carriage_return, kTerm_change_scroll_region, kTerm_clear_screen, kTerm_clr_eol,
+    kTerm_clr_eos, kTerm_cursor_address, kTerm_cursor_down, kTerm_cursor_home, kTerm_cursor_left,
+    kTerm_cursor_normal, kTerm_cursor_right, kTerm_cursor_up, kTerm_delete_line,
+    kTerm_enter_blink_mode, kTerm_enter_bold_mode, kTerm_enter_ca_mode, kTerm_enter_dim_mode,
+    kTerm_enter_italics_mode, kTerm_enter_reverse_mode, kTerm_enter_secure_mode,
+    kTerm_enter_standout_mode, kTerm_enter_strikethrough_mode, kTerm_enter_underline_mode,
+    kTerm_erase_chars, kTerm_exit_attribute_mode, kTerm_exit_ca_mode, kTerm_from_status_line,
+    kTerm_insert_line, kTerm_keypad_local, kTerm_keypad_xmit, kTerm_parm_delete_line,
+    kTerm_parm_down_cursor, kTerm_parm_insert_line, kTerm_parm_left_cursor,
     kTerm_parm_right_cursor, kTerm_parm_up_cursor, kTerm_reset_cursor_color,
     kTerm_reset_cursor_style, kTerm_set_a_background, kTerm_set_a_foreground, kTerm_set_attributes,
     kTerm_set_cursor_color, kTerm_set_cursor_style, kTerm_set_lr_margin, kTerm_set_rgb_background,
-    kTerm_set_rgb_foreground, kTerm_set_underline_style, kTerm_to_status_line, kTermCount,
+    kTerm_set_rgb_foreground, kTerm_set_underline_style, kTerm_to_status_line,
 };
 use crate::src::nvim::tui::terminfo::{
-    terminfo_fmt, terminfo_from_builtin, terminfo_from_database, terminfo_info_msg,
+    terminfo_from_builtin, terminfo_from_database, terminfo_info_msg,
 };
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __pid_t, __pthread_internal_list,
@@ -317,7 +320,6 @@ pub const CTRL_H_STR: [::core::ffi::c_char; 2] =
     unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"\x08\0") };
 pub const TOO_MANY_EVENTS: ::core::ffi::c_int = 1000000 as ::core::ffi::c_int;
 static cursor_style_enabled: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-pub const TERMINFO_SEQ_LIMIT: ::core::ffi::c_int = 128 as ::core::ffi::c_int;
 static urls: GlobalCell<Set_cstr_t> = GlobalCell::new(SET_INIT);
 pub unsafe fn tui_start(
     mut tui_p: *mut *mut TUIData,
@@ -430,7 +432,7 @@ unsafe extern "C" fn tui_request_term_mode(mut tui: *mut TUIData, mut mode: Term
             );
         }
     };
-    out(tui, &raw mut buf as *mut ::core::ffi::c_char, len as size_t);
+    out_raw(tui, (&raw const buf).cast(), len as usize);
 }
 unsafe extern "C" fn tui_set_term_mode(mut tui: *mut TUIData, mut mode: TermMode, mut set: bool) {
     let mut buf: [::core::ffi::c_char; 12] = [0; 12];
@@ -459,7 +461,7 @@ unsafe extern "C" fn tui_set_term_mode(mut tui: *mut TUIData, mut mode: TermMode
             );
         }
     };
-    out(tui, &raw mut buf as *mut ::core::ffi::c_char, len as size_t);
+    out_raw(tui, (&raw const buf).cast(), len as usize);
 }
 pub unsafe fn tui_handle_term_mode(
     mut tui: *mut TUIData,
@@ -537,11 +539,7 @@ pub unsafe fn tui_handle_term_mode(
     };
 }
 unsafe extern "C" fn tui_query_extended_underline(mut tui: *mut TUIData) {
-    out(
-        tui,
-        b"\x1B[0m\x1B[4:3m\x1BP$qm\x1B\\\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 18]>().wrapping_sub(1 as size_t),
-    );
+    out(tui, b"\x1B[0m\x1B[4:3m\x1BP$qm\x1B\\");
     (*tui).print_attr_id = -1 as ::core::ffi::c_int;
 }
 pub unsafe fn tui_enable_extended_underline(mut tui: *mut TUIData) {
@@ -553,28 +551,16 @@ pub unsafe fn tui_enable_extended_underline(mut tui: *mut TUIData) {
 unsafe extern "C" fn tui_query_kitty_keyboard(mut tui: *mut TUIData) {
     (*tui).input.callbacks.primary_device_attr =
         Some(tui_set_key_encoding as unsafe extern "C" fn(*mut TUIData) -> ());
-    out(
-        tui,
-        b"\x1B[?u\x1B[c\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-    );
+    out(tui, b"\x1B[?u\x1B[c");
 }
 pub unsafe extern "C" fn tui_set_key_encoding(tui: *mut TUIData) {
     let mut tui: *mut TUIData = tui.cast::<TUIData>();
     match (*tui).input.key_encoding as ::core::ffi::c_uint {
         1 => {
-            out(
-                tui,
-                b"\x1B[>3u\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-            );
+            out(tui, b"\x1B[>3u");
         }
         2 => {
-            out(
-                tui,
-                b"\x1B[>4;2m\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-            );
+            out(tui, b"\x1B[>4;2m");
         }
         0 | _ => {}
     };
@@ -582,28 +568,16 @@ pub unsafe extern "C" fn tui_set_key_encoding(tui: *mut TUIData) {
 unsafe extern "C" fn tui_reset_key_encoding(mut tui: *mut TUIData) {
     match (*tui).input.key_encoding as ::core::ffi::c_uint {
         1 => {
-            out(
-                tui,
-                b"\x1B[<u\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-            );
+            out(tui, b"\x1B[<u");
         }
         2 => {
-            out(
-                tui,
-                b"\x1B[>4;0m\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-            );
+            out(tui, b"\x1B[>4;0m");
         }
         0 | _ => {}
     };
 }
 unsafe extern "C" fn tui_query_bg_color_noflush(mut tui: *mut TUIData) {
-    out(
-        tui,
-        b"\x1B]11;?\x07\x1B[5n\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
-    );
+    out(tui, b"\x1B]11;?\x07\x1B[5n");
 }
 pub unsafe fn tui_query_bg_color(mut tui: *mut TUIData) {
     tui_query_bg_color_noflush(tui);
@@ -805,11 +779,7 @@ unsafe extern "C" fn terminfo_disable(mut tui: *mut TUIData) {
     }
     tui_set_term_mode(tui, kTermModeBracketedPaste, false_0 != 0);
     out_cstr(tui, (*tui).terminfo_ext.disable_focus_reporting);
-    out(
-        tui,
-        b"\x1B[c\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
-    );
+    out(tui, b"\x1B[c");
     flush_buf(tui);
 }
 unsafe extern "C" fn terminfo_stop(mut tui: *mut TUIData) {
@@ -1058,7 +1028,7 @@ unsafe extern "C" fn update_attrs(mut tui: *mut TUIData, mut attr_id: ::core::ff
             params[6 as ::core::ffi::c_int as usize].num = 0 as ::core::ffi::c_long;
             params[7 as ::core::ffi::c_int as usize].num = 0 as ::core::ffi::c_long;
             params[8 as ::core::ffi::c_int as usize].num = 0 as ::core::ffi::c_long;
-            terminfo_print(tui, kTerm_set_attributes, &raw mut params as *mut TPVAR);
+            terminfo_print(tui, kTerm_set_attributes, &mut params);
         } else if !(*tui).default_attr {
             terminfo_out(tui, kTerm_exit_attribute_mode);
         }
@@ -1098,47 +1068,51 @@ unsafe extern "C" fn update_attrs(mut tui: *mut TUIData, mut attr_id: ::core::ff
         terminfo_out(tui, kTerm_enter_secure_mode);
     }
     if overline {
-        out(
-            tui,
-            b"\x1B[53m\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        );
+        out(tui, b"\x1B[53m");
     }
     if !(*tui).ti.defs[kTerm_set_underline_style as ::core::ffi::c_int as usize].is_null() {
         if undercurl {
             terminfo_print_num(
                 tui,
                 kTerm_set_underline_style,
-                3 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
+                [
+                    3 as ::core::ffi::c_int,
+                    0 as ::core::ffi::c_int,
+                    0 as ::core::ffi::c_int,
+                ],
             );
         }
         if underdouble {
             terminfo_print_num(
                 tui,
                 kTerm_set_underline_style,
-                2 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
+                [
+                    2 as ::core::ffi::c_int,
+                    0 as ::core::ffi::c_int,
+                    0 as ::core::ffi::c_int,
+                ],
             );
         }
         if underdotted {
             terminfo_print_num(
                 tui,
                 kTerm_set_underline_style,
-                4 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
+                [
+                    4 as ::core::ffi::c_int,
+                    0 as ::core::ffi::c_int,
+                    0 as ::core::ffi::c_int,
+                ],
             );
         }
         if underdashed {
             terminfo_print_num(
                 tui,
                 kTerm_set_underline_style,
-                5 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
+                [
+                    5 as ::core::ffi::c_int,
+                    0 as ::core::ffi::c_int,
+                    0 as ::core::ffi::c_int,
+                ],
             );
         }
     }
@@ -1147,13 +1121,14 @@ unsafe extern "C" fn update_attrs(mut tui: *mut TUIData, mut attr_id: ::core::ff
     {
         let mut color: ::core::ffi::c_int = attrs.rgb_sp_color as ::core::ffi::c_int;
         if color != -1 as ::core::ffi::c_int {
-            out_printf(
+            out_fmt(
                 tui,
-                128 as size_t,
-                b"\x1B[58:2::%d:%d:%dm\0".as_ptr() as *const ::core::ffi::c_char,
-                color >> 16 as ::core::ffi::c_int & 0xff as ::core::ffi::c_int,
-                color >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_int,
-                color & 0xff as ::core::ffi::c_int,
+                format_args!(
+                    "\x1b[58:2::{}:{}:{}m",
+                    color >> 16 & 0xff,
+                    color >> 8 & 0xff,
+                    color & 0xff
+                ),
             );
         }
     }
@@ -1169,9 +1144,11 @@ unsafe extern "C" fn update_attrs(mut tui: *mut TUIData, mut attr_id: ::core::ff
             terminfo_print_num(
                 tui,
                 kTerm_set_rgb_foreground,
-                fg >> 16 as ::core::ffi::c_int & 0xff as ::core::ffi::c_int,
-                fg >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_int,
-                fg & 0xff as ::core::ffi::c_int,
+                [
+                    fg >> 16 as ::core::ffi::c_int & 0xff as ::core::ffi::c_int,
+                    fg >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_int,
+                    fg & 0xff as ::core::ffi::c_int,
+                ],
             );
         }
     } else {
@@ -1184,9 +1161,7 @@ unsafe extern "C" fn update_attrs(mut tui: *mut TUIData, mut attr_id: ::core::ff
             terminfo_print_num(
                 tui,
                 kTerm_set_a_foreground,
-                fg,
-                0 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
+                [fg, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int],
             );
         }
     }
@@ -1200,9 +1175,11 @@ unsafe extern "C" fn update_attrs(mut tui: *mut TUIData, mut attr_id: ::core::ff
             terminfo_print_num(
                 tui,
                 kTerm_set_rgb_background,
-                bg >> 16 as ::core::ffi::c_int & 0xff as ::core::ffi::c_int,
-                bg >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_int,
-                bg & 0xff as ::core::ffi::c_int,
+                [
+                    bg >> 16 as ::core::ffi::c_int & 0xff as ::core::ffi::c_int,
+                    bg >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_int,
+                    bg & 0xff as ::core::ffi::c_int,
+                ],
             );
         }
     } else {
@@ -1215,9 +1192,7 @@ unsafe extern "C" fn update_attrs(mut tui: *mut TUIData, mut attr_id: ::core::ff
             terminfo_print_num(
                 tui,
                 kTerm_set_a_background,
-                bg,
-                0 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
+                [bg, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int],
             );
         }
     }
@@ -1234,13 +1209,9 @@ unsafe extern "C" fn update_attrs(mut tui: *mut TUIData, mut attr_id: ::core::ff
                 id,
                 url,
             );
-            out(tui, (*tui).urlbuf.items, (*tui).urlbuf.size);
+            out_raw(tui, (*tui).urlbuf.items, (*tui).urlbuf.size);
         } else {
-            out(
-                tui,
-                b"\x1B]8;;\x1B\\\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-            );
+            out(tui, b"\x1B]8;;\x1B\\");
         }
         (*tui).url = attrs.url as ::core::ffi::c_int;
     }
@@ -1291,7 +1262,7 @@ unsafe extern "C" fn print_cell(
         final_column_wrap(tui);
     }
     update_attrs(tui, attr as ::core::ffi::c_int);
-    out(tui, buf, strlen(buf));
+    out_raw(tui, buf, strlen(buf));
     (*grid).col += 1;
     if (*tui).immediate_wrap_after_last_column {
         final_column_wrap(tui);
@@ -1333,11 +1304,7 @@ unsafe extern "C" fn cursor_goto(
         return;
     }
     if (*tui).url >= 0 as ::core::ffi::c_int {
-        out(
-            tui,
-            b"\x1B]8;;\x1B\\\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        );
+        out(tui, b"\x1B]8;;\x1B\\");
         (*tui).url = -1 as ::core::ffi::c_int;
         (*tui).print_attr_id = -1 as ::core::ffi::c_int;
     }
@@ -1387,9 +1354,7 @@ unsafe extern "C" fn cursor_goto(
                     terminfo_print_num(
                         tui,
                         kTerm_parm_left_cursor,
-                        n,
-                        0 as ::core::ffi::c_int,
-                        0 as ::core::ffi::c_int,
+                        [n, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int],
                     );
                 }
                 (*grid).goto(row, col);
@@ -1409,9 +1374,7 @@ unsafe extern "C" fn cursor_goto(
                     terminfo_print_num(
                         tui,
                         kTerm_parm_right_cursor,
-                        n_0,
-                        0 as ::core::ffi::c_int,
-                        0 as ::core::ffi::c_int,
+                        [n_0, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int],
                     );
                 }
                 (*grid).goto(row, col);
@@ -1434,9 +1397,7 @@ unsafe extern "C" fn cursor_goto(
                     terminfo_print_num(
                         tui,
                         kTerm_parm_down_cursor,
-                        n_1,
-                        0 as ::core::ffi::c_int,
-                        0 as ::core::ffi::c_int,
+                        [n_1, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int],
                     );
                 }
                 (*grid).goto(row, col);
@@ -1456,9 +1417,7 @@ unsafe extern "C" fn cursor_goto(
                     terminfo_print_num(
                         tui,
                         kTerm_parm_up_cursor,
-                        n_2,
-                        0 as ::core::ffi::c_int,
-                        0 as ::core::ffi::c_int,
+                        [n_2, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int],
                     );
                 }
                 (*grid).goto(row, col);
@@ -1466,7 +1425,11 @@ unsafe extern "C" fn cursor_goto(
             }
         }
     }
-    terminfo_print_num(tui, kTerm_cursor_address, row, col, 0 as ::core::ffi::c_int);
+    terminfo_print_num(
+        tui,
+        kTerm_cursor_address,
+        [row, col, 0 as ::core::ffi::c_int],
+    );
     (*grid).goto(row, col);
 }
 unsafe extern "C" fn print_spaces(mut tui: *mut TUIData, mut width: ::core::ffi::c_int) {
@@ -1568,9 +1531,7 @@ unsafe extern "C" fn clear_region(
                 terminfo_print_num(
                     tui,
                     kTerm_erase_chars,
-                    width,
-                    0 as ::core::ffi::c_int,
-                    0 as ::core::ffi::c_int,
+                    [width, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int],
                 );
             } else {
                 print_spaces(tui, width);
@@ -1590,18 +1551,14 @@ unsafe extern "C" fn set_scroll_region(
     terminfo_print_num(
         tui,
         kTerm_change_scroll_region,
-        top,
-        bot,
-        0 as ::core::ffi::c_int,
+        [top, bot, 0 as ::core::ffi::c_int],
     );
     if left != 0 as ::core::ffi::c_int || right != (*tui).width - 1 as ::core::ffi::c_int {
         tui_set_term_mode(tui, kTermModeLeftAndRightMargins, true_0 != 0);
         terminfo_print_num(
             tui,
             kTerm_set_lr_margin,
-            left,
-            right,
-            0 as ::core::ffi::c_int,
+            [left, right, 0 as ::core::ffi::c_int],
         );
     }
     (*grid).row = -1 as ::core::ffi::c_int;
@@ -1614,18 +1571,22 @@ unsafe extern "C" fn reset_scroll_region(mut tui: *mut TUIData, mut fullwidth: b
         terminfo_print_num(
             tui,
             kTerm_change_scroll_region,
-            0 as ::core::ffi::c_int,
-            (*tui).height - 1 as ::core::ffi::c_int,
-            0 as ::core::ffi::c_int,
+            [
+                0 as ::core::ffi::c_int,
+                (*tui).height - 1 as ::core::ffi::c_int,
+                0 as ::core::ffi::c_int,
+            ],
         );
     }
     if !fullwidth {
         terminfo_print_num(
             tui,
             kTerm_set_lr_margin,
-            0 as ::core::ffi::c_int,
-            (*tui).width - 1 as ::core::ffi::c_int,
-            0 as ::core::ffi::c_int,
+            [
+                0 as ::core::ffi::c_int,
+                (*tui).width - 1 as ::core::ffi::c_int,
+                0 as ::core::ffi::c_int,
+            ],
         );
         tui_set_term_mode(tui, kTermModeLeftAndRightMargins, false_0 != 0);
     }
@@ -1655,13 +1616,7 @@ pub unsafe fn tui_grid_resize(
         i = i.wrapping_add(1);
     }
     if (*tui).pending_resize_events == 0 as ::core::ffi::c_int && !(*tui).is_starting {
-        out_printf(
-            tui,
-            64 as size_t,
-            b"\x1B[8;%d;%dt\0".as_ptr() as *const ::core::ffi::c_char,
-            height as ::core::ffi::c_int,
-            width as ::core::ffi::c_int,
-        );
+        out_fmt(tui, format_args!("\x1b[8;{height};{width}t"));
     } else {
         (*tui).pending_resize_events = if (*tui).pending_resize_events > 0 as ::core::ffi::c_int {
             (*tui).pending_resize_events - 1 as ::core::ffi::c_int
@@ -1891,7 +1846,7 @@ unsafe extern "C" fn tui_set_mode(mut tui: *mut TUIData, mut mode: ModeShape) {
                 params[0 as ::core::ffi::c_int as usize].num =
                     aep.rgb_bg_color as ::core::ffi::c_long;
             }
-            terminfo_print(tui, kTerm_set_cursor_color, &raw mut params as *mut TPVAR);
+            terminfo_print(tui, kTerm_set_cursor_color, &mut params);
             (*tui).cursor_has_color = true_0 != 0;
         }
     } else if c.id == 0 as ::core::ffi::c_int
@@ -1918,11 +1873,13 @@ unsafe extern "C" fn tui_set_mode(mut tui: *mut TUIData, mut mode: ModeShape) {
     terminfo_print_num(
         tui,
         kTerm_set_cursor_style,
-        shape
-            + (c.blinkon == 0 as ::core::ffi::c_int || c.blinkoff == 0 as ::core::ffi::c_int)
-                as ::core::ffi::c_int,
-        0 as ::core::ffi::c_int,
-        0 as ::core::ffi::c_int,
+        [
+            shape
+                + (c.blinkon == 0 as ::core::ffi::c_int || c.blinkoff == 0 as ::core::ffi::c_int)
+                    as ::core::ffi::c_int,
+            0 as ::core::ffi::c_int,
+            0 as ::core::ffi::c_int,
+        ],
     );
 }
 pub unsafe fn tui_mode_change(mut tui: *mut TUIData, mut _mode: String_0, mut mode_idx: Integer) {
@@ -2007,9 +1964,11 @@ pub unsafe fn tui_grid_scroll(
                 terminfo_print_num(
                     tui,
                     kTerm_parm_delete_line,
-                    rows as ::core::ffi::c_int,
-                    0 as ::core::ffi::c_int,
-                    0 as ::core::ffi::c_int,
+                    [
+                        rows as ::core::ffi::c_int,
+                        0 as ::core::ffi::c_int,
+                        0 as ::core::ffi::c_int,
+                    ],
                 );
             }
         } else if rows == -1 as Integer {
@@ -2018,9 +1977,11 @@ pub unsafe fn tui_grid_scroll(
             terminfo_print_num(
                 tui,
                 kTerm_parm_insert_line,
-                -(rows as ::core::ffi::c_int),
-                0 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
+                [
+                    -(rows as ::core::ffi::c_int),
+                    0 as ::core::ffi::c_int,
+                    0 as ::core::ffi::c_int,
+                ],
             );
         }
         if !full_screen_scroll {
@@ -2085,32 +2046,16 @@ pub unsafe fn tui_hl_attr_define(
     *(*tui).attrs.items.offset(id as size_t as isize) = attrs;
 }
 pub unsafe fn tui_bell(mut tui: *mut TUIData) {
-    out(
-        tui,
-        b"\x07\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
-    );
+    out(tui, b"\x07");
 }
 pub unsafe fn tui_visual_bell(mut tui: *mut TUIData) {
     if (*tui).screen_or_tmux {
-        out(
-            tui,
-            b"\x1Bg\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as size_t),
-        );
+        out(tui, b"\x1Bg");
     } else {
-        out(
-            tui,
-            b"\x1B[?5h\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        );
+        out(tui, b"\x1B[?5h");
         flush_buf(tui);
         uv_sleep(100 as ::core::ffi::c_uint);
-        out(
-            tui,
-            b"\x1B[?5l\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        );
+        out(tui, b"\x1B[?5l");
     }
     flush_buf(tui);
 }
@@ -2465,30 +2410,20 @@ pub unsafe fn tui_set_title(mut tui: *mut TUIData, mut title: String_0) {
     }
     if title.size > 0 as size_t && !too_long {
         if !(*tui).title_enabled {
-            out(
-                tui,
-                b"\x1B[22;0t\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-            );
+            out(tui, b"\x1B[22;0t");
             (*tui).title_enabled = true_0 != 0;
         }
         if ::core::mem::size_of::<[::core::ffi::c_char; 65535]>()
             .wrapping_sub((*tui).bufpos as usize)
-            < title
-                .size
-                .wrapping_add((2 as ::core::ffi::c_int * TERMINFO_SEQ_LIMIT) as size_t)
+            < title.size.wrapping_add(2 * TERMINFO_SEQ_LIMIT)
         {
             flush_buf(tui);
         }
         terminfo_out(tui, kTerm_to_status_line);
-        out(tui, title.data, title.size);
+        out_raw(tui, title.data, title.size);
         terminfo_out(tui, kTerm_from_status_line);
     } else if (*tui).title_enabled {
-        out(
-            tui,
-            b"\x1B[23;0t\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        );
+        out(tui, b"\x1B[23;0t");
         (*tui).title_enabled = false_0 != 0;
     }
 }
@@ -2846,461 +2781,6 @@ pub unsafe extern "C" fn tui_guess_size(mut tui: *mut TUIData) {
     tui_set_size(tui, width, height);
     xfree(lines as *mut ::core::ffi::c_void);
     xfree(columns as *mut ::core::ffi::c_void);
-}
-unsafe extern "C" fn out(
-    mut tui: *mut TUIData,
-    mut str: *const ::core::ffi::c_char,
-    mut len: size_t,
-) {
-    let mut available: size_t =
-        ::core::mem::size_of::<[::core::ffi::c_char; 65535]>().wrapping_sub((*tui).bufpos);
-    if len > available {
-        flush_buf(tui);
-        if len > ::core::mem::size_of::<[::core::ffi::c_char; 65535]>() {
-            (*tui).buf_to_flush = str as *mut ::core::ffi::c_char;
-            (*tui).bufpos = len;
-            flush_buf(tui);
-            return;
-        }
-    }
-    memcpy(
-        (&raw mut (*tui).buf as *mut ::core::ffi::c_char).offset((*tui).bufpos as isize)
-            as *mut ::core::ffi::c_void,
-        str as *const ::core::ffi::c_void,
-        len,
-    );
-    (*tui).bufpos = (*tui).bufpos.wrapping_add(len);
-}
-unsafe extern "C" fn out_len(mut tui: *mut TUIData, mut str: *const ::core::ffi::c_char) {
-    if !str.is_null() {
-        out(tui, str, strlen(str));
-    }
-}
-/// Write a capability nvim carries itself, doing nothing when this terminal
-/// has none. Unlike `out_len` the length is known without a scan.
-unsafe fn out_cstr(tui: *mut TUIData, s: Option<&core::ffi::CStr>) {
-    if let Some(s) = s {
-        unsafe { out(tui, s.as_ptr(), s.to_bytes().len()) };
-    }
-}
-pub unsafe extern "C" fn out_printf(
-    mut tui: *mut TUIData,
-    mut limit: size_t,
-    mut fmt: *const ::core::ffi::c_char,
-    mut c2rust_args: ...
-) {
-    '_c2rust_label: {
-        if limit <= ::core::mem::size_of::<[::core::ffi::c_char; 65535]>() {
-        } else {
-            __assert_fail(
-                b"limit <= sizeof(tui->buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/tui/tui.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1951 as ::core::ffi::c_uint,
-                b"void out_printf(TUIData *, size_t, const char *, ...)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut available: size_t =
-        ::core::mem::size_of::<[::core::ffi::c_char; 65535]>().wrapping_sub((*tui).bufpos);
-    if available < limit {
-        flush_buf(tui);
-    }
-    let mut ap: ::core::ffi::VaList;
-    ap = c2rust_args.clone();
-    let mut printed: ::core::ffi::c_int = vsnprintf(
-        (&raw mut (*tui).buf as *mut ::core::ffi::c_char).offset((*tui).bufpos as isize),
-        limit,
-        fmt,
-        ap,
-    );
-    if printed > 0 as ::core::ffi::c_int {
-        (*tui).bufpos = (*tui).bufpos.wrapping_add(printed as size_t);
-    }
-}
-unsafe extern "C" fn terminfo_out(mut tui: *mut TUIData, mut what: TerminfoDef) {
-    let mut null_params: [TPVAR; 9] = [
-        TPVAR {
-            num: 0 as ::core::ffi::c_long,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-    ];
-    terminfo_print(tui, what, &raw mut null_params as *mut TPVAR);
-}
-unsafe extern "C" fn terminfo_print_num(
-    mut tui: *mut TUIData,
-    mut what: TerminfoDef,
-    mut num1: ::core::ffi::c_int,
-    mut num2: ::core::ffi::c_int,
-    mut num3: ::core::ffi::c_int,
-) {
-    let mut params: [TPVAR; 9] = [
-        TPVAR {
-            num: 0 as ::core::ffi::c_long,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-    ];
-    params[0 as ::core::ffi::c_int as usize].num = num1 as ::core::ffi::c_long;
-    params[1 as ::core::ffi::c_int as usize].num = num2 as ::core::ffi::c_long;
-    params[2 as ::core::ffi::c_int as usize].num = num3 as ::core::ffi::c_long;
-    terminfo_print(tui, what, &raw mut params as *mut TPVAR);
-}
-unsafe extern "C" fn terminfo_print(
-    mut tui: *mut TUIData,
-    mut what: TerminfoDef,
-    mut params: *mut TPVAR,
-) {
-    if what as ::core::ffi::c_uint >= kTermCount as ::core::ffi::c_int as ::core::ffi::c_uint {
-        abort();
-    }
-    let mut str: *const ::core::ffi::c_char = (*tui).ti.defs[what as usize];
-    if str.is_null() || *str as ::core::ffi::c_int == NUL {
-        return;
-    }
-    if ::core::mem::size_of::<[::core::ffi::c_char; 65535]>().wrapping_sub((*tui).bufpos as usize)
-        > TERMINFO_SEQ_LIMIT as usize
-    {
-        let mut copy_params: [TPVAR; 9] = [TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        }; 9];
-        memcpy(
-            &raw mut copy_params as *mut TPVAR as *mut ::core::ffi::c_void,
-            params as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<[TPVAR; 9]>(),
-        );
-        let mut len: size_t = terminfo_fmt(
-            (&raw mut (*tui).buf as *mut ::core::ffi::c_char).offset((*tui).bufpos as isize),
-            (&raw mut (*tui).buf as *mut ::core::ffi::c_char)
-                .offset(::core::mem::size_of::<[::core::ffi::c_char; 65535]>() as isize),
-            str,
-            &raw mut copy_params as *mut TPVAR,
-        );
-        if len > 0 as size_t {
-            (*tui).bufpos = (*tui).bufpos.wrapping_add(len);
-            return;
-        }
-    }
-    flush_buf(tui);
-    let mut len_0: size_t = terminfo_fmt(
-        (&raw mut (*tui).buf as *mut ::core::ffi::c_char).offset((*tui).bufpos as isize),
-        (&raw mut (*tui).buf as *mut ::core::ffi::c_char)
-            .offset(::core::mem::size_of::<[::core::ffi::c_char; 65535]>() as isize),
-        str,
-        params as *mut TPVAR,
-    );
-    if len_0 > 0 as size_t {
-        (*tui).bufpos = (*tui).bufpos.wrapping_add(len_0);
-    }
-}
-unsafe extern "C" fn should_invisible(mut tui: *mut TUIData) -> bool {
-    return (*tui).busy as ::core::ffi::c_int != 0
-        || (*tui).want_invisible as ::core::ffi::c_int != 0;
-}
-unsafe extern "C" fn flush_buf_start(
-    mut tui: *mut TUIData,
-    mut buf: *mut ::core::ffi::c_char,
-    mut len: size_t,
-) -> size_t {
-    if (*tui).sync_output as ::core::ffi::c_int != 0
-        && (*tui).has_sync_mode as ::core::ffi::c_int != 0
-    {
-        return xstrlcpy(
-            buf,
-            b"\x1B[?2026h\0".as_ptr() as *const ::core::ffi::c_char,
-            len,
-        );
-    } else if !(*tui).is_invisible {
-        (*tui).is_invisible = true_0 != 0;
-        let mut null_params: [TPVAR; 9] = [
-            TPVAR {
-                num: 0 as ::core::ffi::c_long,
-                string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-            TPVAR {
-                num: 0,
-                string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-            TPVAR {
-                num: 0,
-                string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-            TPVAR {
-                num: 0,
-                string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-            TPVAR {
-                num: 0,
-                string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-            TPVAR {
-                num: 0,
-                string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-            TPVAR {
-                num: 0,
-                string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-            TPVAR {
-                num: 0,
-                string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-            TPVAR {
-                num: 0,
-                string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-        ];
-        let mut str: *const ::core::ffi::c_char =
-            (*tui).ti.defs[kTerm_cursor_invisible as ::core::ffi::c_int as usize];
-        if !str.is_null() {
-            return terminfo_fmt(
-                buf,
-                buf.offset(len as isize),
-                str,
-                &raw mut null_params as *mut TPVAR,
-            );
-        }
-    }
-    return 0 as size_t;
-}
-unsafe extern "C" fn flush_buf_end(
-    mut tui: *mut TUIData,
-    mut buf: *mut ::core::ffi::c_char,
-    mut len: size_t,
-) -> size_t {
-    let mut offset: size_t = 0 as size_t;
-    if (*tui).sync_output as ::core::ffi::c_int != 0
-        && (*tui).has_sync_mode as ::core::ffi::c_int != 0
-    {
-        memcpy(
-            buf as *mut ::core::ffi::c_void,
-            SYNC_END.as_ptr() as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<[::core::ffi::c_char; 9]>(),
-        );
-        offset = (offset as ::core::ffi::c_ulong).wrapping_add(
-            ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as usize)
-                as ::core::ffi::c_ulong,
-        ) as size_t;
-    }
-    let mut str: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    if (*tui).is_invisible as ::core::ffi::c_int != 0 && !should_invisible(tui) {
-        str = (*tui).ti.defs[kTerm_cursor_normal as ::core::ffi::c_int as usize];
-        (*tui).is_invisible = false_0 != 0;
-    } else if !(*tui).is_invisible && should_invisible(tui) as ::core::ffi::c_int != 0 {
-        str = (*tui).ti.defs[kTerm_cursor_invisible as ::core::ffi::c_int as usize];
-        (*tui).is_invisible = true_0 != 0;
-    }
-    let mut null_params: [TPVAR; 9] = [
-        TPVAR {
-            num: 0 as ::core::ffi::c_long,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        TPVAR {
-            num: 0,
-            string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-    ];
-    if !str.is_null() {
-        offset = offset.wrapping_add(terminfo_fmt(
-            buf.offset(offset as isize),
-            buf.offset(len as isize),
-            str,
-            &raw mut null_params as *mut TPVAR,
-        ));
-    }
-    return offset;
-}
-pub const SYNC_END: [::core::ffi::c_char; 9] =
-    unsafe { ::core::mem::transmute::<[u8; 9], [::core::ffi::c_char; 9]>(*b"\x1B[?2026l\0") };
-unsafe extern "C" fn flush_buf(mut tui: *mut TUIData) {
-    let mut req: uv_write_t = uv_write_t {
-        data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        type_0: UV_UNKNOWN_REQ,
-        reserved: [::core::ptr::null_mut::<::core::ffi::c_void>(); 6],
-        cb: None,
-        send_handle: ::core::ptr::null_mut::<uv_stream_t>(),
-        handle: ::core::ptr::null_mut::<uv_stream_t>(),
-        queue: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        write_index: 0,
-        bufs: ::core::ptr::null_mut::<uv_buf_t>(),
-        nbufs: 0,
-        error: 0,
-        bufsml: [uv_buf_t {
-            base: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            len: 0,
-        }; 4],
-    };
-    let mut bufs: [uv_buf_t; 3] = [uv_buf_t {
-        base: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        len: 0,
-    }; 3];
-    let mut pre: [::core::ffi::c_char; 32] = [0; 32];
-    let mut post: [::core::ffi::c_char; 32] = [0; 32];
-    if (*tui).bufpos <= 0 as size_t
-        && (*tui).is_invisible as ::core::ffi::c_int == should_invisible(tui) as ::core::ffi::c_int
-    {
-        return;
-    }
-    bufs[0 as ::core::ffi::c_int as usize].base = &raw mut pre as *mut ::core::ffi::c_char;
-    bufs[0 as ::core::ffi::c_int as usize].len = flush_buf_start(
-        tui,
-        &raw mut pre as *mut ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 32]>(),
-    );
-    bufs[1 as ::core::ffi::c_int as usize].base = if !(*tui).buf_to_flush.is_null() {
-        (*tui).buf_to_flush
-    } else {
-        &raw mut (*tui).buf as *mut ::core::ffi::c_char
-    };
-    bufs[1 as ::core::ffi::c_int as usize].len = (*tui).bufpos;
-    bufs[2 as ::core::ffi::c_int as usize].base = &raw mut post as *mut ::core::ffi::c_char;
-    bufs[2 as ::core::ffi::c_int as usize].len = flush_buf_end(
-        tui,
-        &raw mut post as *mut ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 32]>(),
-    );
-    if !(*tui).screenshot.is_null() {
-        let mut i: size_t = 0 as size_t;
-        while i < ::core::mem::size_of::<[uv_buf_t; 3]>()
-            .wrapping_div(::core::mem::size_of::<uv_buf_t>())
-            .wrapping_div(
-                (::core::mem::size_of::<[uv_buf_t; 3]>()
-                    .wrapping_rem(::core::mem::size_of::<uv_buf_t>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
-        {
-            fwrite(
-                bufs[i as usize].base as *const ::core::ffi::c_void,
-                bufs[i as usize].len,
-                1 as size_t,
-                (*tui).screenshot,
-            );
-            i = i.wrapping_add(1);
-        }
-    } else {
-        let mut ret: ::core::ffi::c_int = uv_write(
-            &raw mut req,
-            &raw mut (*tui).output_handle as *mut uv_stream_t,
-            &raw mut bufs as *mut uv_buf_t as *const uv_buf_t,
-            ::core::mem::size_of::<[uv_buf_t; 3]>()
-                .wrapping_div(::core::mem::size_of::<uv_buf_t>())
-                .wrapping_div(
-                    (::core::mem::size_of::<[uv_buf_t; 3]>()
-                        .wrapping_rem(::core::mem::size_of::<uv_buf_t>())
-                        == 0) as ::core::ffi::c_int as usize,
-                ) as ::core::ffi::c_uint,
-            None,
-        );
-        if ret != 0 {
-            logmsg(
-                LOGLVL_ERR,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                b"flush_buf\0".as_ptr() as *const ::core::ffi::c_char,
-                2534 as ::core::ffi::c_int,
-                true_0 != 0,
-                b"uv_write failed: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                uv_strerror(ret),
-            );
-        }
-        uv_run(&raw mut (*tui).write_loop, UV_RUN_DEFAULT);
-    }
-    (*tui).buf_to_flush = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    (*tui).bufpos = 0 as size_t;
 }
 unsafe extern "C" fn tui_get_stty_erase(mut input: *mut TermInput) -> *const ::core::ffi::c_char {
     static stty_erase: GlobalCell<[::core::ffi::c_char; 2]> =
