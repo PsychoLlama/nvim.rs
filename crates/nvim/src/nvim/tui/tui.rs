@@ -50,7 +50,7 @@ use crate::src::nvim::tui::negotiate::{
     tui_query_extended_underline, tui_query_kitty_keyboard, tui_request_term_mode,
     tui_reset_key_encoding, tui_set_term_mode, tui_tk_ti_getstr,
 };
-use crate::src::nvim::tui::output::{flush_buf, out, out_cstr, terminfo_out};
+use crate::src::nvim::tui::output::{BUF_SIZE, flush, out, out_cstr, terminfo_out};
 use crate::src::nvim::tui::paint::cursor_goto;
 use crate::src::nvim::tui::quirks::{Terminal, TerminfoExt, augment_terminfo, patch_terminfo_bugs};
 use crate::src::nvim::tui::terminfo::caps::{
@@ -82,11 +82,18 @@ unsafe extern "C" {
 /// One of these exists per UI process. It is allocated zeroed and torn down
 /// by [`tui_start`]/[`tui_stop`]; libuv handles and the input layer hold
 /// pointers into it, which is why it never moves.
+///
+/// Holding a `&mut TUIData` means holding a TUI that [`tui_start`] finished
+/// setting up: the write handles are open, the staging buffer is this
+/// struct's own, and `ti` describes the terminal on the other end. The
+/// modules that only paint (see [`output`](super::output),
+/// [`paint`](super::paint)) are safe on the strength of that, rather than
+/// re-asserting it at every call.
 pub struct TUIData {
     /// The editor's event loop, borrowed. Not the loop writes go out on.
     pub loop_0: *mut Loop,
     /// Bytes staged for the next flush.
-    pub buf: [c_char; 65535],
+    pub buf: [u8; BUF_SIZE],
     /// A single write too large to stage, handed to the flush directly.
     pub buf_to_flush: *mut c_char,
     /// How much of `buf` is staged.
@@ -391,10 +398,10 @@ unsafe fn terminfo_start(tui: *mut TUIData) {
         (*tui).bce = (*tui).ti.bce;
         t_colors.set((*tui).ti.max_colors);
 
-        terminfo_out(tui, kTerm_enter_ca_mode);
-        terminfo_out(tui, kTerm_keypad_xmit);
-        terminfo_out(tui, kTerm_clear_screen);
-        tui_set_term_mode(tui, BRACKETED_PASTE, true);
+        terminfo_out(&mut *tui, kTerm_enter_ca_mode);
+        terminfo_out(&mut *tui, kTerm_keypad_xmit);
+        terminfo_out(&mut *tui, kTerm_clear_screen);
+        tui_set_term_mode(&mut *tui, BRACKETED_PASTE, true);
 
         // What the terminal supports is only known once it answers; assume
         // nothing until then.
@@ -410,7 +417,7 @@ unsafe fn terminfo_start(tui: *mut TUIData) {
                 THEME_UPDATES,
                 RESIZE_EVENTS,
             ] {
-                tui_request_term_mode(tui, mode);
+                tui_request_term_mode(&mut *tui, mode);
             }
         }
         if !defined(kTerm_set_underline_style) && !quirks.screen && !quirks.tmux && !quirks.nsterm {
@@ -420,7 +427,7 @@ unsafe fn terminfo_start(tui: *mut TUIData) {
         tui_query_bg_color_noflush(tui);
 
         open_output(tui);
-        flush_buf(tui);
+        flush(&mut *tui);
         xfree(term.cast());
     }
 }
@@ -498,29 +505,30 @@ unsafe fn terminfo_disable(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
     unsafe {
         if (*tui).modes.theme_updates() {
-            tui_set_term_mode(tui, THEME_UPDATES, false);
+            tui_set_term_mode(&mut *tui, THEME_UPDATES, false);
         }
         tui_mode_change(tui, NULL_STRING, 0);
         tui_mouse_off(tui);
-        terminfo_out(tui, kTerm_exit_attribute_mode);
-        terminfo_out(tui, kTerm_cursor_normal);
-        terminfo_out(tui, kTerm_reset_cursor_style);
-        terminfo_out(tui, kTerm_keypad_local);
+        terminfo_out(&mut *tui, kTerm_exit_attribute_mode);
+        terminfo_out(&mut *tui, kTerm_cursor_normal);
+        terminfo_out(&mut *tui, kTerm_reset_cursor_style);
+        terminfo_out(&mut *tui, kTerm_keypad_local);
         tui_reset_key_encoding(tui);
         if (*tui).modes.resize_events() {
-            tui_set_term_mode(tui, RESIZE_EVENTS, false);
+            tui_set_term_mode(&mut *tui, RESIZE_EVENTS, false);
         }
         if (*tui).modes.grapheme_clusters() {
-            tui_set_term_mode(tui, GRAPHEME_CLUSTERS, false);
+            tui_set_term_mode(&mut *tui, GRAPHEME_CLUSTERS, false);
         }
         tui_set_title(tui, NULL_STRING);
         if (*tui).cursor_has_color {
-            terminfo_out(tui, kTerm_reset_cursor_color);
+            terminfo_out(&mut *tui, kTerm_reset_cursor_color);
         }
-        tui_set_term_mode(tui, BRACKETED_PASTE, false);
-        out_cstr(tui, (*tui).terminfo_ext.disable_focus_reporting);
-        out(tui, b"\x1b[c");
-        flush_buf(tui);
+        tui_set_term_mode(&mut *tui, BRACKETED_PASTE, false);
+        let focus_off = (*tui).terminfo_ext.disable_focus_reporting;
+        out_cstr(&mut *tui, focus_off);
+        out(&mut *tui, b"\x1b[c");
+        flush(&mut *tui);
     }
 }
 
@@ -546,9 +554,9 @@ unsafe fn terminfo_stop(tui: *mut TUIData) {
         }
         if ui_client_exit_status.get() == ui_client_error_exit.get().max(0) {
             cursor_goto(&mut *tui, (*tui).height - 1, 0);
-            terminfo_out(tui, kTerm_exit_ca_mode);
+            terminfo_out(&mut *tui, kTerm_exit_ca_mode);
         }
-        flush_buf(tui);
+        flush(&mut *tui);
         uv_tty_reset_mode();
         uv_close((&raw mut (*tui).output_handle).cast::<uv_handle_t>(), None);
         uv_run(&raw mut (*tui).write_loop, UV_RUN_DEFAULT);
@@ -596,8 +604,9 @@ unsafe extern "C" fn after_startup_cb(handle: *mut uv_timer_t) {
 unsafe fn tui_terminal_after_startup(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
     unsafe {
-        out_cstr(tui, (*tui).terminfo_ext.enable_focus_reporting);
-        flush_buf(tui);
+        let focus_on = (*tui).terminfo_ext.enable_focus_reporting;
+        out_cstr(&mut *tui, focus_on);
+        flush(&mut *tui);
     }
 }
 

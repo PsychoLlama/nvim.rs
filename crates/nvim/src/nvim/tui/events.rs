@@ -23,7 +23,7 @@ use crate::src::nvim::tui::negotiate::{
     MOUSE_ANY_EVENT, MOUSE_BUTTON_EVENT, MOUSE_SGR_EXT, tui_set_term_mode,
 };
 use crate::src::nvim::tui::output::{
-    BUF_SIZE, TERMINFO_SEQ_LIMIT, flush_buf, out, out_raw, terminfo_out,
+    BUF_SIZE, TERMINFO_SEQ_LIMIT, flush, out, out_raw, terminfo_out,
 };
 use crate::src::nvim::tui::paint::invalidate;
 use crate::src::nvim::tui::terminfo::caps::{kTerm_from_status_line, kTerm_to_status_line};
@@ -81,11 +81,11 @@ pub unsafe fn tui_mouse_on(tui: *mut TUIData) {
         if (*tui).mouse_enabled {
             return;
         }
-        tui_set_term_mode(tui, MOUSE_BUTTON_EVENT, true);
+        tui_set_term_mode(&mut *tui, MOUSE_BUTTON_EVENT, true);
         // SGR coordinates, so columns past 223 are reportable at all.
-        tui_set_term_mode(tui, MOUSE_SGR_EXT, true);
+        tui_set_term_mode(&mut *tui, MOUSE_SGR_EXT, true);
         if (*tui).mouse_move_enabled {
-            tui_set_term_mode(tui, MOUSE_ANY_EVENT, true);
+            tui_set_term_mode(&mut *tui, MOUSE_ANY_EVENT, true);
         }
         (*tui).mouse_enabled = true;
     }
@@ -102,10 +102,10 @@ pub unsafe fn tui_mouse_off(tui: *mut TUIData) {
             return;
         }
         if (*tui).mouse_move_enabled {
-            tui_set_term_mode(tui, MOUSE_ANY_EVENT, false);
+            tui_set_term_mode(&mut *tui, MOUSE_ANY_EVENT, false);
         }
-        tui_set_term_mode(tui, MOUSE_BUTTON_EVENT, false);
-        tui_set_term_mode(tui, MOUSE_SGR_EXT, false);
+        tui_set_term_mode(&mut *tui, MOUSE_BUTTON_EVENT, false);
+        tui_set_term_mode(&mut *tui, MOUSE_SGR_EXT, false);
         (*tui).mouse_enabled = false;
     }
 }
@@ -121,7 +121,7 @@ pub unsafe fn tui_mode_info_set(tui: *mut TUIData, guicursor_enabled: bool, args
     // SAFETY: the caller guarantees `tui` and `args`.
     unsafe {
         if !guicursor_enabled {
-            cursor_reset_style(tui);
+            cursor_reset_style(&mut *tui);
             return;
         }
         assert!(args.size != 0, "mode_info_set with no modes");
@@ -133,7 +133,8 @@ pub unsafe fn tui_mode_info_set(tui: *mut TUIData, guicursor_enabled: bool, args
             );
             (*tui).cursor_shapes[i] = decode_cursor_entry(item.data.dict);
         }
-        cursor_set_mode(tui, (*tui).showing_mode);
+        let showing = (*tui).showing_mode;
+        cursor_set_mode(&mut *tui, showing);
     }
 }
 
@@ -168,7 +169,7 @@ pub unsafe fn tui_mode_change(tui: *mut TUIData, _mode: String_0, mode_idx: Inte
                 }
             }
         }
-        cursor_set_mode(tui, mode_idx as usize);
+        cursor_set_mode(&mut *tui, mode_idx as usize);
         if (*tui).is_starting && (*tui).verbose >= 3 {
             show_verbose_terminfo(tui);
         }
@@ -183,7 +184,7 @@ pub unsafe fn tui_mode_change(tui: *mut TUIData, _mode: String_0, mode_idx: Inte
 /// `tui` must point to a live [`TUIData`].
 pub unsafe fn tui_bell(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
-    unsafe { out(tui, b"\x07") };
+    unsafe { out(&mut *tui, b"\x07") };
 }
 
 /// Flash the screen instead of ringing.
@@ -196,15 +197,15 @@ pub unsafe fn tui_visual_bell(tui: *mut TUIData) {
         if (*tui).screen_or_tmux {
             // screen and tmux have a visual bell of their own; reverse video
             // would be applied to their own status line as well.
-            out(tui, b"\x1bg");
+            out(&mut *tui, b"\x1bg");
         } else {
             // Reverse the screen, hold it long enough to be seen, undo it.
-            out(tui, b"\x1b[?5h");
-            flush_buf(tui);
+            out(&mut *tui, b"\x1b[?5h");
+            flush(&mut *tui);
             uv_sleep(VISUAL_BELL_MS);
-            out(tui, b"\x1b[?5l");
+            out(&mut *tui, b"\x1b[?5l");
         }
-        flush_buf(tui);
+        flush(&mut *tui);
     }
 }
 
@@ -278,19 +279,19 @@ pub unsafe fn tui_set_title(tui: *mut TUIData, title: String_0) {
         }
         if title.size > 0 && !too_long {
             if !(*tui).title_enabled {
-                out(tui, b"\x1b[22;0t");
+                out(&mut *tui, b"\x1b[22;0t");
                 (*tui).title_enabled = true;
             }
             // The title and its brackets have to reach the terminal in one
             // piece, so make room for all of it before starting.
             if BUF_SIZE - (*tui).bufpos < title.size + 2 * TERMINFO_SEQ_LIMIT {
-                flush_buf(tui);
+                flush(&mut *tui);
             }
-            terminfo_out(tui, kTerm_to_status_line);
-            out_raw(tui, title.data, title.size);
-            terminfo_out(tui, kTerm_from_status_line);
+            terminfo_out(&mut *tui, kTerm_to_status_line);
+            out_raw(&mut *tui, title.data, title.size);
+            terminfo_out(&mut *tui, kTerm_from_status_line);
         } else if (*tui).title_enabled {
-            out(tui, b"\x1b[23;0t");
+            out(&mut *tui, b"\x1b[23;0t");
             (*tui).title_enabled = false;
         }
     }

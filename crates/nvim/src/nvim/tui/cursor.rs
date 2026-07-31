@@ -121,30 +121,20 @@ pub unsafe fn decode_cursor_entry(args: Dict) -> cursorentry_T {
 }
 
 /// Put the cursor style back to the terminal's default.
-///
-/// # Safety
-/// `tui` must point to a live `TUIData`.
-pub unsafe fn reset_style(tui: *mut TUIData) {
-    unsafe { terminfo_out(tui, kTerm_reset_cursor_style) };
+pub fn reset_style(tui: &mut TUIData) {
+    terminfo_out(tui, kTerm_reset_cursor_style);
 }
 
 /// Emit the cursor the editor wants for `mode`.
-///
-/// # Safety
-/// `tui` must point to a live `TUIData`.
-pub unsafe fn set_mode(tui: *mut TUIData, mode: usize) {
+pub fn set_mode(tui: &mut TUIData, mode: usize) {
     if !cursor_style_enabled.get() {
-        // SAFETY: `tui` is live per the contract.
-        unsafe { reset_style(tui) };
+        reset_style(tui);
         return;
     }
-    // SAFETY: `tui` is live per the contract; `mode` indexes the fixed-size
-    // shape array, whose bounds Rust checks.
-    unsafe {
-        let entry = (*tui).cursor_shapes[mode];
-        apply_color(tui, &entry);
-        terminfo_print_nums(tui, kTerm_set_cursor_style, &[decscusr_code(&entry)]);
-    }
+    // `mode` indexes the fixed-size shape array, whose bounds Rust checks.
+    let entry = tui.cursor_shapes[mode];
+    apply_color(tui, &entry);
+    terminfo_print_nums(tui, kTerm_set_cursor_style, &[decscusr_code(&entry)]);
 }
 
 /// Colour the cursor to match the highlight group its mode names, or undo a
@@ -154,49 +144,47 @@ pub unsafe fn set_mode(tui: *mut TUIData, mode: usize) {
 /// the cursor colour capability takes an RGB value, and there is nothing
 /// sensible to send it from a palette index.
 ///
-/// # Safety
-/// `tui` must point to a live `TUIData`.
-unsafe fn apply_color(tui: *mut TUIData, entry: &cursorentry_T) {
-    unsafe {
-        let in_range = entry.id != 0 && entry.id < (*tui).attrs.size as c_int && (*tui).rgb;
-        if !in_range {
-            // Attribute 0 means "no special cursor". Only bother resetting
-            // if a previous mode actually changed something.
-            if entry.id == 0 && ((*tui).want_invisible || (*tui).cursor_has_color) {
-                (*tui).want_invisible = false;
-                (*tui).cursor_has_color = false;
-                terminfo_out(tui, kTerm_reset_cursor_color);
-            }
-            return;
-        }
-
-        let aep: HlAttrs = *(*tui).attrs.items.add(entry.id as usize);
-        (*tui).want_invisible = aep.hl_blend == BLEND_INVISIBLE;
-        if (*tui).want_invisible {
-            return;
-        }
-        if aep.rgb_ae_attr & HL_INVERSE != 0 {
-            // The terminal's own inverse video is the cursor; any colour we
-            // set would fight it.
+fn apply_color(tui: &mut TUIData, entry: &cursorentry_T) {
+    let in_range = entry.id != 0 && entry.id < tui.attrs.size as c_int && tui.rgb;
+    if !in_range {
+        // Attribute 0 means "no special cursor". Only bother resetting if a
+        // previous mode actually changed something.
+        if entry.id == 0 && (tui.want_invisible || tui.cursor_has_color) {
+            tui.want_invisible = false;
+            tui.cursor_has_color = false;
             terminfo_out(tui, kTerm_reset_cursor_color);
-        } else if aep.rgb_bg_color >= 0 as RgbValue {
-            // Some terminals want `#rrggbb`, the rest a bare number; which
-            // one was settled when the description was augmented.
-            if (*tui).set_cursor_color_as_str {
-                let mut hex = [0u8; 8];
-                // 24 bits is all the capability can carry.
-                let color = aep.rgb_bg_color as u32 & 0xff_ffff;
-                hex[0] = b'#';
-                for i in 0..6 {
-                    let nibble = (color >> (20 - 4 * i)) & 0xf;
-                    hex[1 + i as usize] = char::from_digit(nibble, 16).unwrap_or('0') as u8;
-                }
-                let s = CStr::from_bytes_with_nul(&hex).expect("hex buffer is NUL-terminated");
-                terminfo_print_str(tui, kTerm_set_cursor_color, s);
-            } else {
-                terminfo_print_nums(tui, kTerm_set_cursor_color, &[aep.rgb_bg_color as c_int]);
-            }
-            (*tui).cursor_has_color = true;
         }
+        return;
+    }
+
+    // SAFETY: the highlight table holds `size` initialised entries, and
+    // `in_range` put `entry.id` inside it.
+    let aep: HlAttrs = unsafe { *tui.attrs.items.add(entry.id as usize) };
+    tui.want_invisible = aep.hl_blend == BLEND_INVISIBLE;
+    if tui.want_invisible {
+        return;
+    }
+    if aep.rgb_ae_attr & HL_INVERSE != 0 {
+        // The terminal's own inverse video is the cursor; any colour we set
+        // would fight it.
+        terminfo_out(tui, kTerm_reset_cursor_color);
+    } else if aep.rgb_bg_color >= 0 as RgbValue {
+        // Some terminals want `#rrggbb`, the rest a bare number; which one
+        // was settled when the description was augmented.
+        if tui.set_cursor_color_as_str {
+            let mut hex = [0u8; 8];
+            // 24 bits is all the capability can carry.
+            let color = aep.rgb_bg_color as u32 & 0xff_ffff;
+            hex[0] = b'#';
+            for i in 0..6 {
+                let nibble = (color >> (20 - 4 * i)) & 0xf;
+                hex[1 + i as usize] = char::from_digit(nibble, 16).unwrap_or('0') as u8;
+            }
+            let s = CStr::from_bytes_with_nul(&hex).expect("hex buffer is NUL-terminated");
+            terminfo_print_str(tui, kTerm_set_cursor_color, s);
+        } else {
+            terminfo_print_nums(tui, kTerm_set_cursor_color, &[aep.rgb_bg_color as c_int]);
+        }
+        tui.cursor_has_color = true;
     }
 }

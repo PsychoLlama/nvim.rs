@@ -18,7 +18,7 @@ use crate::src::nvim::main::nvim_testing;
 use crate::src::nvim::memory::strequal;
 use crate::src::nvim::os::libc::tcgetattr;
 use crate::src::nvim::tui::input::TermInput;
-use crate::src::nvim::tui::output::{flush_buf, out, out_fmt};
+use crate::src::nvim::tui::output::{flush, out, out_fmt};
 use crate::src::nvim::tui::terminfo::caps::kTerm_set_underline_style;
 use crate::src::nvim::tui::tui::{LOGLVL_DBG, LOGLVL_WRN, TUIData};
 use crate::src::nvim::types::{KeyEncoding, TermMode, TermModeState, termios};
@@ -51,22 +51,14 @@ const DEL: c_char = 0x7f;
 const CTRL_H: c_char = 8;
 
 /// Ask the terminal whether it has `mode` (DECRQM).
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub(crate) unsafe fn tui_request_term_mode(tui: *mut TUIData, mode: TermMode) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe { out_fmt(tui, format_args!("\x1b[?{mode}$p")) };
+pub(crate) fn tui_request_term_mode(tui: &mut TUIData, mode: TermMode) {
+    out_fmt(tui, format_args!("\x1b[?{mode}$p"));
 }
 
 /// Turn `mode` on or off (DECSET/DECRST).
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub(crate) unsafe fn tui_set_term_mode(tui: *mut TUIData, mode: TermMode, set: bool) {
+pub(crate) fn tui_set_term_mode(tui: &mut TUIData, mode: TermMode, set: bool) {
     let letter = if set { 'h' } else { 'l' };
-    // SAFETY: the caller guarantees `tui`.
-    unsafe { out_fmt(tui, format_args!("\x1b[?{mode}{letter}")) };
+    out_fmt(tui, format_args!("\x1b[?{mode}{letter}"));
 }
 
 /// Act on the terminal's answer to a mode query.
@@ -92,16 +84,16 @@ pub unsafe fn tui_handle_term_mode(tui: *mut TUIData, mode: TermMode, state: Ter
         match mode {
             SYNCHRONIZED_OUTPUT => (*tui).has_sync_mode = true,
             GRAPHEME_CLUSTERS if !is_set => {
-                tui_set_term_mode(tui, mode, true);
+                tui_set_term_mode(&mut *tui, mode, true);
                 (*tui).modes.set_grapheme_clusters(true);
             }
             THEME_UPDATES if !is_set => {
-                tui_set_term_mode(tui, mode, true);
+                tui_set_term_mode(&mut *tui, mode, true);
                 (*tui).modes.set_theme_updates(true);
             }
             RESIZE_EVENTS => {
                 if !is_set {
-                    tui_set_term_mode(tui, mode, true);
+                    tui_set_term_mode(&mut *tui, mode, true);
                     (*tui).modes.set_resize_events(true);
                 }
                 (*tui).resize_events_enabled = true;
@@ -142,7 +134,7 @@ fn log_mode(message: &CStr, mode: TermMode, state: TermModeState) {
 pub(crate) unsafe fn tui_query_extended_underline(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
     unsafe {
-        out(tui, b"\x1b[0m\x1b[4:3m\x1bP$qm\x1b\\");
+        out(&mut *tui, b"\x1b[0m\x1b[4:3m\x1bP$qm\x1b\\");
         // The query left the terminal's attributes somewhere unknown.
         (*tui).print_attr_id = -1;
     }
@@ -171,7 +163,7 @@ pub(crate) unsafe fn tui_query_kitty_keyboard(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
     unsafe {
         (*tui).input.callbacks.primary_device_attr = Some(tui_set_key_encoding);
-        out(tui, b"\x1b[?u\x1b[c");
+        out(&mut *tui, b"\x1b[?u\x1b[c");
     }
 }
 
@@ -183,8 +175,8 @@ pub unsafe extern "C" fn tui_set_key_encoding(tui: *mut TUIData) {
     // SAFETY: the input layer holds this TUI's own pointer.
     unsafe {
         match (*tui).input.key_encoding {
-            KEY_ENCODING_KITTY => out(tui, b"\x1b[>3u"),
-            KEY_ENCODING_XTERM => out(tui, b"\x1b[>4;2m"),
+            KEY_ENCODING_KITTY => out(&mut *tui, b"\x1b[>3u"),
+            KEY_ENCODING_XTERM => out(&mut *tui, b"\x1b[>4;2m"),
             _ => {}
         }
     }
@@ -198,8 +190,8 @@ pub(crate) unsafe fn tui_reset_key_encoding(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
     unsafe {
         match (*tui).input.key_encoding {
-            KEY_ENCODING_KITTY => out(tui, b"\x1b[<u"),
-            KEY_ENCODING_XTERM => out(tui, b"\x1b[>4;0m"),
+            KEY_ENCODING_KITTY => out(&mut *tui, b"\x1b[<u"),
+            KEY_ENCODING_XTERM => out(&mut *tui, b"\x1b[>4;0m"),
             _ => {}
         }
     }
@@ -215,7 +207,7 @@ const KEY_ENCODING_XTERM: KeyEncoding = 2;
 /// `tui` must point to a live [`TUIData`].
 pub(crate) unsafe fn tui_query_bg_color_noflush(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
-    unsafe { out(tui, b"\x1b]11;?\x07\x1b[5n") };
+    unsafe { out(&mut *tui, b"\x1b]11;?\x07\x1b[5n") };
 }
 
 /// [`tui_query_bg_color_noflush`], sent right away.
@@ -226,7 +218,7 @@ pub unsafe fn tui_query_bg_color(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
     unsafe {
         tui_query_bg_color_noflush(tui);
-        flush_buf(tui);
+        flush(&mut *tui);
     }
 }
 

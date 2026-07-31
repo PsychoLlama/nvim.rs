@@ -24,7 +24,7 @@ use crate::src::nvim::tui::attrs::{attrs_differ, update_attrs};
 use crate::src::nvim::tui::events::tui_busy_stop;
 use crate::src::nvim::tui::negotiate::{LEFT_AND_RIGHT_MARGINS, tui_set_term_mode};
 use crate::src::nvim::tui::output::{
-    flush_buf, out, out_cstr, out_fmt, out_repeat, terminfo_out, terminfo_print_nums,
+    flush, out, out_cstr, out_fmt, out_repeat, terminfo_out, terminfo_print_nums,
 };
 use crate::src::nvim::tui::terminfo::caps::{
     TerminfoDef, kTerm_carriage_return, kTerm_change_scroll_region, kTerm_clear_screen,
@@ -125,9 +125,7 @@ pub(crate) fn cursor_goto(tui: &mut TUIData, row: c_int, col: c_int) {
     // A hyperlink must not be left open across a jump: the cells in between
     // would join the link.
     if tui.url >= 0 {
-        let raw = &raw mut *tui;
-        // SAFETY: `raw` is this borrow.
-        unsafe { out(raw, b"\x1b]8;;\x1b\\") };
+        out(tui, b"\x1b]8;;\x1b\\");
         tui.url = -1;
         tui.print_attr_id = -1;
     }
@@ -213,9 +211,7 @@ fn step(tui: &mut TUIData, count: c_int, max_repeats: c_int, one: TerminfoDef, m
 
 /// Stage capability `what` with `params`.
 fn emit(tui: &mut TUIData, what: TerminfoDef, params: &[c_int]) {
-    let raw = &raw mut *tui;
-    // SAFETY: `raw` is this borrow, and `params` is the caller's own slice.
-    unsafe { terminfo_print_nums(raw, what, params) };
+    terminfo_print_nums(tui, what, params);
 }
 
 // ------------------------------------------------------------------- cells
@@ -226,9 +222,7 @@ fn print_cell(tui: &mut TUIData, text: &[u8], attr: sattr_T) {
         final_column_wrap(tui);
     }
     update_attrs(tui, attr as c_int);
-    let raw = &raw mut *tui;
-    // SAFETY: `raw` is this borrow; `text` is the caller's buffer.
-    unsafe { out(raw, text) };
+    out(tui, text);
     tui.grid.col += 1;
     if tui.immediate_wrap_after_last_column {
         final_column_wrap(tui);
@@ -237,9 +231,7 @@ fn print_cell(tui: &mut TUIData, text: &[u8], attr: sattr_T) {
 
 /// Print `width` spaces in the current attributes.
 fn print_spaces(tui: &mut TUIData, width: c_int) {
-    let raw = &raw mut *tui;
-    // SAFETY: `raw` is this borrow.
-    unsafe { out_repeat(raw, b' ', width as usize) };
+    out_repeat(tui, b' ', width as usize);
     tui.grid.col += width;
     if tui.immediate_wrap_after_last_column {
         final_column_wrap(tui);
@@ -328,9 +320,7 @@ pub(crate) fn clear_region(
 
 /// Stage a capability that takes no parameters.
 fn emit_out(tui: &mut TUIData, what: TerminfoDef) {
-    let raw = &raw mut *tui;
-    // SAFETY: `raw` is this borrow.
-    unsafe { terminfo_out(raw, what) };
+    terminfo_out(tui, what);
 }
 
 // --------------------------------------------------------------- scrolling
@@ -339,9 +329,7 @@ fn emit_out(tui: &mut TUIData, what: TerminfoDef) {
 fn set_scroll_region(tui: &mut TUIData, top: c_int, bot: c_int, left: c_int, right: c_int) {
     emit(tui, kTerm_change_scroll_region, &[top, bot]);
     if left != 0 || right != tui.width - 1 {
-        let raw = &raw mut *tui;
-        // SAFETY: `raw` is this borrow.
-        unsafe { tui_set_term_mode(raw, LEFT_AND_RIGHT_MARGINS, true) };
+        tui_set_term_mode(tui, LEFT_AND_RIGHT_MARGINS, true);
         emit(tui, kTerm_set_lr_margin, &[left, right]);
     }
     // Terminals differ on where the cursor lands after this.
@@ -350,19 +338,14 @@ fn set_scroll_region(tui: &mut TUIData, top: c_int, bot: c_int, left: c_int, rig
 
 /// Give the whole screen back to the terminal's scrolling.
 fn reset_scroll_region(tui: &mut TUIData, fullwidth: bool) {
-    if tui.terminfo_ext.reset_scroll_region.is_some() {
-        let raw = &raw mut *tui;
-        let cap = tui.terminfo_ext.reset_scroll_region;
-        // SAFETY: `raw` is this borrow; `cap` is a static capability string.
-        unsafe { out_cstr(raw, cap) };
+    if let Some(cap) = tui.terminfo_ext.reset_scroll_region {
+        out_cstr(tui, Some(cap));
     } else {
         emit(tui, kTerm_change_scroll_region, &[0, tui.height - 1]);
     }
     if !fullwidth {
         emit(tui, kTerm_set_lr_margin, &[0, tui.width - 1]);
-        let raw = &raw mut *tui;
-        // SAFETY: `raw` is this borrow.
-        unsafe { tui_set_term_mode(raw, LEFT_AND_RIGHT_MARGINS, false) };
+        tui_set_term_mode(tui, LEFT_AND_RIGHT_MARGINS, false);
     }
     tui.grid.row = -1;
 }
@@ -440,9 +423,7 @@ pub unsafe fn tui_grid_resize(tui: *mut TUIData, _grid: Integer, width: Integer,
     }
     if tui.pending_resize_events == 0 && !tui.is_starting {
         // The editor resized itself, so ask the terminal to follow.
-        let raw = &raw mut *tui;
-        // SAFETY: `raw` is this borrow.
-        unsafe { out_fmt(raw, format_args!("\x1b[8;{height};{width}t")) };
+        out_fmt(tui, format_args!("\x1b[8;{height};{width}t"));
     } else {
         // This is the echo of a resize the terminal already made.
         tui.pending_resize_events = (tui.pending_resize_events - 1).max(0);
@@ -674,9 +655,7 @@ pub unsafe fn tui_flush(tui: *mut TUIData) {
         }
     }
     cursor_goto(tui, tui.row, tui.col);
-    let raw = &raw mut *tui;
-    // SAFETY: `raw` is this borrow.
-    unsafe { flush_buf(raw) };
+    flush(tui);
 }
 
 /// How many queued events count as the editor having run away with itself.
@@ -722,12 +701,11 @@ pub unsafe fn tui_screenshot(tui: *mut TUIData, path: String_0) {
     if file.is_null() {
         return;
     }
-    let raw = &raw mut *tui;
-    // SAFETY: `raw` is this borrow; `file` is the handle just opened.
-    unsafe {
-        flush_buf(raw);
-        fprintf(file, c"%d,%d\n".as_ptr(), tui.grid.height, tui.grid.width);
-    }
+    flush(tui);
+    let (height, width) = (tui.grid.height, tui.grid.width);
+    // SAFETY: `file` is the handle just opened, and the format string holds
+    // the two `%d` these arguments fill.
+    unsafe { fprintf(file, c"%d,%d\n".as_ptr(), height, width) };
     tui.grid.goto(0, 0);
     tui.screenshot = file.cast::<FILE>();
     emit_out(tui, kTerm_clear_screen);
@@ -741,11 +719,8 @@ pub unsafe fn tui_screenshot(tui: *mut TUIData, path: String_0) {
             print_cell(tui, &buf[..len], cell.attr);
         }
     }
-    let raw = &raw mut *tui;
-    // SAFETY: `raw` is this borrow; `file` is still open.
-    unsafe {
-        flush_buf(raw);
-        tui.screenshot = core::ptr::null_mut();
-        fclose(file);
-    }
+    flush(tui);
+    tui.screenshot = core::ptr::null_mut();
+    // SAFETY: `file` is the handle opened above and not closed since.
+    unsafe { fclose(file) };
 }

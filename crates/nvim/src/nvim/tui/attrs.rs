@@ -206,105 +206,101 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
     let style_of = |bit: u32| styled_underline && underline_bits == bit as c_int;
     let any_underline = underline || UNDERLINE_STYLES.iter().any(|&(bit, _)| style_of(bit));
 
-    let raw = &raw mut *tui;
-    // SAFETY: `raw` is this borrow; nothing else reads `tui` until the
-    // staging calls return.
-    unsafe {
-        if !tui.ti.defs[kTerm_set_attributes as usize].is_null() {
-            // One sequence describes the six attributes `sgr` covers, so
-            // whatever it does not mention is turned off for free.
-            if bold || dim || blink || reverse || underline || standout {
-                terminfo_print_nums(
-                    raw,
-                    kTerm_set_attributes,
-                    &[
-                        standout as c_int,
-                        underline as c_int,
-                        reverse as c_int,
-                        blink as c_int,
-                        dim as c_int,
-                        bold as c_int,
-                    ],
-                );
-            } else if !tui.default_attr {
-                terminfo_out(raw, kTerm_exit_attribute_mode);
-            }
-        } else {
-            // Without `sgr` there is no way to say "only these": reset, then
-            // build the set back up one capability at a time.
-            if !tui.default_attr {
-                terminfo_out(raw, kTerm_exit_attribute_mode);
-            }
-            for (on, cap) in [
-                (bold, kTerm_enter_bold_mode),
-                (underline, kTerm_enter_underline_mode),
-                (standout, kTerm_enter_standout_mode),
-                (reverse, kTerm_enter_reverse_mode),
-                (dim, kTerm_enter_dim_mode),
-                (blink, kTerm_enter_blink_mode),
-            ] {
-                if on {
-                    terminfo_out(raw, cap);
-                }
+    if !tui.ti.defs[kTerm_set_attributes as usize].is_null() {
+        // One sequence describes the six attributes `sgr` covers, so
+        // whatever it does not mention is turned off for free.
+        if bold || dim || blink || reverse || underline || standout {
+            terminfo_print_nums(
+                tui,
+                kTerm_set_attributes,
+                &[
+                    standout as c_int,
+                    underline as c_int,
+                    reverse as c_int,
+                    blink as c_int,
+                    dim as c_int,
+                    bold as c_int,
+                ],
+            );
+        } else if !tui.default_attr {
+            terminfo_out(tui, kTerm_exit_attribute_mode);
+        }
+    } else {
+        // Without `sgr` there is no way to say "only these": reset, then
+        // build the set back up one capability at a time.
+        if !tui.default_attr {
+            terminfo_out(tui, kTerm_exit_attribute_mode);
+        }
+        for (on, cap) in [
+            (bold, kTerm_enter_bold_mode),
+            (underline, kTerm_enter_underline_mode),
+            (standout, kTerm_enter_standout_mode),
+            (reverse, kTerm_enter_reverse_mode),
+            (dim, kTerm_enter_dim_mode),
+            (blink, kTerm_enter_blink_mode),
+        ] {
+            if on {
+                terminfo_out(tui, cap);
             }
         }
-
-        // Attributes `sgr` never covered, whichever branch ran.
-        if italic {
-            terminfo_out(raw, kTerm_enter_italics_mode);
-        }
-        if altfont {
-            out_cstr(raw, tui.terminfo_ext.enter_altfont_mode);
-        }
-        if strikethrough {
-            terminfo_out(raw, kTerm_enter_strikethrough_mode);
-        }
-        if conceal {
-            terminfo_out(raw, kTerm_enter_secure_mode);
-        }
-        if overline {
-            out(raw, b"\x1b[53m");
-        }
-        for (bit, style) in UNDERLINE_STYLES {
-            if style_of(bit) {
-                terminfo_print_nums(raw, kTerm_set_underline_style, &[style]);
-            }
-        }
-        if any_underline && tui.can_set_underline_color {
-            let color = attrs.rgb_sp_color;
-            if color != -1 {
-                out_fmt(
-                    raw,
-                    format_args!(
-                        "\x1b[58:2::{}:{}:{}m",
-                        color >> 16 & 0xff,
-                        color >> 8 & 0xff,
-                        color & 0xff
-                    ),
-                );
-            }
-        }
-
-        let fg = set_color(tui, ColorRole::Foreground, attrs, attr);
-        let bg = set_color(tui, ColorRole::Background, attrs, attr);
-        set_url(tui, attrs.url);
-
-        // What the next cell can assume it inherits: whether the terminal is
-        // back at its defaults, and whether a clear will paint the right
-        // background (`bce` terminals clear in the current background, so a
-        // coloured background is only safe to clear through if they say so).
-        let plain = !bold && !dim && !blink && !conceal && !overline && !italic && !any_underline;
-        tui.default_attr = fg == -1 && bg == -1 && plain && !reverse && !standout && !strikethrough;
-        tui.can_clear_attr = !reverse
-            && !standout
-            && !dim
-            && !blink
-            && !conceal
-            && !overline
-            && !any_underline
-            && !strikethrough
-            && (tui.bce || bg == -1);
     }
+
+    // Attributes `sgr` never covered, whichever branch ran.
+    if italic {
+        terminfo_out(tui, kTerm_enter_italics_mode);
+    }
+    if altfont {
+        let cap = tui.terminfo_ext.enter_altfont_mode;
+        out_cstr(tui, cap);
+    }
+    if strikethrough {
+        terminfo_out(tui, kTerm_enter_strikethrough_mode);
+    }
+    if conceal {
+        terminfo_out(tui, kTerm_enter_secure_mode);
+    }
+    if overline {
+        out(tui, b"\x1b[53m");
+    }
+    for (bit, style) in UNDERLINE_STYLES {
+        if style_of(bit) {
+            terminfo_print_nums(tui, kTerm_set_underline_style, &[style]);
+        }
+    }
+    if any_underline && tui.can_set_underline_color {
+        let color = attrs.rgb_sp_color;
+        if color != -1 {
+            out_fmt(
+                tui,
+                format_args!(
+                    "\x1b[58:2::{}:{}:{}m",
+                    color >> 16 & 0xff,
+                    color >> 8 & 0xff,
+                    color & 0xff
+                ),
+            );
+        }
+    }
+
+    let fg = set_color(tui, ColorRole::Foreground, attrs, attr);
+    let bg = set_color(tui, ColorRole::Background, attrs, attr);
+    set_url(tui, attrs.url);
+
+    // What the next cell can assume it inherits: whether the terminal is
+    // back at its defaults, and whether a clear will paint the right
+    // background (`bce` terminals clear in the current background, so a
+    // coloured background is only safe to clear through if they say so).
+    let plain = !bold && !dim && !blink && !conceal && !overline && !italic && !any_underline;
+    tui.default_attr = fg == -1 && bg == -1 && plain && !reverse && !standout && !strikethrough;
+    tui.can_clear_attr = !reverse
+        && !standout
+        && !dim
+        && !blink
+        && !conceal
+        && !overline
+        && !any_underline
+        && !strikethrough
+        && (tui.bce || bg == -1);
 }
 
 /// Which half of a colour pair is being set.
@@ -328,48 +324,44 @@ fn set_color(tui: &mut TUIData, role: ColorRole, attrs: HlAttrs, attr: c_int) ->
     } else {
         HL_BG_INDEXED
     };
-    let raw = &raw mut *tui;
-    // SAFETY: `raw` is this borrow, used only for the staging call below.
-    unsafe {
-        if tui.rgb && attr & indexed_bit as c_int == 0 {
-            let (want, fallback) = if foreground {
-                (attrs.rgb_fg_color, tui.clear_attrs.rgb_fg_color)
-            } else {
-                (attrs.rgb_bg_color, tui.clear_attrs.rgb_bg_color)
-            };
-            let color = if want != -1 { want } else { fallback };
-            if color != -1 {
-                let cap = if foreground {
-                    kTerm_set_rgb_foreground
-                } else {
-                    kTerm_set_rgb_background
-                };
-                terminfo_print_nums(
-                    raw,
-                    cap,
-                    &[color >> 16 & 0xff, color >> 8 & 0xff, color & 0xff],
-                );
-            }
-            color
+    if tui.rgb && attr & indexed_bit as c_int == 0 {
+        let (want, fallback) = if foreground {
+            (attrs.rgb_fg_color, tui.clear_attrs.rgb_fg_color)
         } else {
-            // cterm colours are stored one higher than they are sent, so
-            // that zero can mean "no colour of my own".
-            let (want, fallback) = if foreground {
-                (attrs.cterm_fg_color, tui.clear_attrs.cterm_fg_color)
+            (attrs.rgb_bg_color, tui.clear_attrs.rgb_bg_color)
+        };
+        let color = if want != -1 { want } else { fallback };
+        if color != -1 {
+            let cap = if foreground {
+                kTerm_set_rgb_foreground
             } else {
-                (attrs.cterm_bg_color, tui.clear_attrs.cterm_bg_color)
+                kTerm_set_rgb_background
             };
-            let color = c_int::from(if want != 0 { want } else { fallback }) - 1;
-            if color != -1 {
-                let cap = if foreground {
-                    kTerm_set_a_foreground
-                } else {
-                    kTerm_set_a_background
-                };
-                terminfo_print_nums(raw, cap, &[color]);
-            }
-            color
+            terminfo_print_nums(
+                tui,
+                cap,
+                &[color >> 16 & 0xff, color >> 8 & 0xff, color & 0xff],
+            );
         }
+        color
+    } else {
+        // cterm colours are stored one higher than they are sent, so that
+        // zero can mean "no colour of my own".
+        let (want, fallback) = if foreground {
+            (attrs.cterm_fg_color, tui.clear_attrs.cterm_fg_color)
+        } else {
+            (attrs.cterm_bg_color, tui.clear_attrs.cterm_bg_color)
+        };
+        let color = c_int::from(if want != 0 { want } else { fallback }) - 1;
+        if color != -1 {
+            let cap = if foreground {
+                kTerm_set_a_foreground
+            } else {
+                kTerm_set_a_background
+            };
+            terminfo_print_nums(tui, cap, &[color]);
+        }
+        color
     }
 }
 
@@ -379,25 +371,23 @@ fn set_url(tui: &mut TUIData, url: int32_t) {
     if tui.url == url {
         return;
     }
-    let raw = &raw mut *tui;
-    // SAFETY: `raw` is this borrow; the interned key is NUL-terminated and
-    // outlives the call.
-    unsafe {
-        if url >= 0 {
-            // Assembled whole and staged in one go: a URL can be longer than
-            // the staging buffer, and staging it in pieces would let a flush
-            // fall between them — which wraps what it writes in
-            // synchronised-output or cursor sequences, inside the OSC.
-            let id = URL_ID_BASE.wrapping_add(url as u32);
-            let target = CStr::from_ptr(*(*URLS.ptr()).keys.add(url as usize)).to_bytes();
-            let mut seq = format!("\x1b]8;id={id};").into_bytes();
-            seq.reserve(target.len() + OSC8_TERMINATOR.len());
-            seq.extend_from_slice(target);
-            seq.extend_from_slice(OSC8_TERMINATOR);
-            out(raw, &seq);
-        } else {
-            out(raw, b"\x1b]8;;\x1b\\");
-        }
+    if url >= 0 {
+        // Assembled whole and staged in one go: a URL can be longer than the
+        // staging buffer, and staging it in pieces would let a flush fall
+        // between them — which wraps what it writes in synchronised-output
+        // or cursor sequences, inside the OSC.
+        let id = URL_ID_BASE.wrapping_add(url as u32);
+        // SAFETY: the interned key is a NUL-terminated copy this module owns
+        // and never frees.
+        let target = unsafe { CStr::from_ptr(*(*URLS.ptr()).keys.add(url as usize)) };
+        let mut seq = format!("\x1b]8;id={id};").into_bytes();
+        let target = target.to_bytes();
+        seq.reserve(target.len() + OSC8_TERMINATOR.len());
+        seq.extend_from_slice(target);
+        seq.extend_from_slice(OSC8_TERMINATOR);
+        out(tui, &seq);
+    } else {
+        out(tui, b"\x1b]8;;\x1b\\");
     }
     tui.url = url;
 }
