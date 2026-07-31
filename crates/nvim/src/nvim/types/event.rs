@@ -10,6 +10,25 @@ pub struct Event {
     pub handler: argv_callback,
     pub argv: [*mut ::core::ffi::c_void; 10],
 }
+
+impl Event {
+    /// An event carrying `args`, with the unused tail of the argv left
+    /// null.
+    ///
+    /// The argv is a fixed ten slots because C's `event_create` is a
+    /// variadic macro that pads; handlers read only the slots they were
+    /// given. Spelling the padding out at every call site is what made the
+    /// transpiled queueing code twelve lines an event.
+    pub fn new<const N: usize>(
+        handler: argv_callback,
+        args: [*mut ::core::ffi::c_void; N],
+    ) -> Self {
+        const { assert!(N <= 10, "an event carries at most ten arguments") };
+        let mut argv = [::core::ptr::null_mut::<::core::ffi::c_void>(); 10];
+        argv[..N].copy_from_slice(&args);
+        Self { handler, argv }
+    }
+}
 pub type MultiQueue = multiqueue;
 pub type Proc = proc;
 pub type ProcType = ::core::ffi::c_uint;
@@ -187,6 +206,38 @@ pub struct time_watcher {
     pub close_cb: time_cb,
     pub events: *mut MultiQueue,
     pub blockable: bool,
+}
+
+impl time_watcher {
+    /// An unarmed watcher, for a `static` that `time_watcher_init` fills
+    /// in. Every field is what C's zero-initialisation would have left.
+    pub const EMPTY: Self = Self {
+        uv: uv_timer_t {
+            data: ::core::ptr::null_mut(),
+            loop_0: ::core::ptr::null_mut(),
+            type_0: 0,
+            close_cb: None,
+            handle_queue: uv__queue {
+                next: ::core::ptr::null_mut(),
+                prev: ::core::ptr::null_mut(),
+            },
+            u: uv_timer_s_u { fd: 0 },
+            next_closing: ::core::ptr::null_mut(),
+            flags: 0,
+            timer_cb: None,
+            node: uv_timer_s_node {
+                heap: [::core::ptr::null_mut(); 3],
+            },
+            timeout: 0,
+            repeat: 0,
+            start_id: 0,
+        },
+        data: ::core::ptr::null_mut(),
+        cb: None,
+        close_cb: None,
+        events: ::core::ptr::null_mut(),
+        blockable: false,
+    };
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

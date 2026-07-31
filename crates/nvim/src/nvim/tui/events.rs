@@ -401,7 +401,7 @@ unsafe fn show_verbose_terminfo(tui: *mut TUIData) {
     chunks.push(end_fold.object());
 
     let mut opts = DictBuf::<1>::new();
-    opts.insert("verbose", Object::boolean(true));
+    opts.insert(c"verbose", Object::boolean(true));
     let mut args = ArrayBuf::<3>::new();
     args.push(chunks.object());
     args.push(Object::boolean(true));

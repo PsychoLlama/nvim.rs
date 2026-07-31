@@ -20,14 +20,31 @@ use super::{
     kObjectTypeBoolean, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil,
     kObjectTypeString, object_data,
 };
-use core::ffi::c_char;
+use core::ffi::{CStr, c_char};
 
 /// `text`'s bytes viewed as an API string. Borrowed, never freed — the
 /// bytes are in the binary's read-only data.
+///
+/// Fine for a *value*, which every consumer reads `size` bytes of. Not for
+/// anything a C callee will treat as a C string, because a Rust `str`
+/// literal has no terminator past its last byte — see [`static_cstring`].
 pub const fn static_string(text: &'static str) -> String_0 {
     String_0 {
         data: text.as_ptr().cast::<c_char>().cast_mut(),
         size: text.len(),
+    }
+}
+
+/// [`static_string`] for the callees that read one byte past `size`.
+///
+/// Dict keys mostly end up in one of the editor's hashtables, which are
+/// keyed by C string; the transpiled code got the terminator for free from
+/// the C literals it was translating. This is why [`DictBuf::insert`] takes
+/// a `CStr` rather than a `str`.
+pub const fn static_cstring(text: &'static CStr) -> String_0 {
+    String_0 {
+        data: text.as_ptr().cast_mut(),
+        size: text.count_bytes(),
     }
 }
 
@@ -156,8 +173,11 @@ impl<const N: usize> DictBuf<N> {
 
     /// Appends `key: value`, with `key` a literal. Dict keys in generated
     /// calls always are; a computed key wants [`Self::insert_string`].
-    pub fn insert(&mut self, key: &'static str, value: Object) -> &mut Self {
-        self.insert_string(static_string(key), value)
+    ///
+    /// The literal is a `CStr` so that the terminator is there for the
+    /// callees that want one: see [`static_cstring`].
+    pub fn insert(&mut self, key: &'static CStr, value: Object) -> &mut Self {
+        self.insert_string(static_cstring(key), value)
     }
 
     /// [`Self::insert`], keeping whatever ownership `key` already had.
@@ -214,7 +234,7 @@ mod tests {
     #[test]
     fn dict_nests_in_an_array() {
         let mut opts = DictBuf::<1>::new();
-        opts.insert("verbose", Object::boolean(true));
+        opts.insert(c"verbose", Object::boolean(true));
         assert_eq!(opts.items[0].key.size, "verbose".len());
         assert_eq!(opts.items[0].value.type_0, kObjectTypeBoolean);
 
