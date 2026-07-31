@@ -141,7 +141,6 @@
     "crates/nvim/src/nvim/tui/terminfo.rs": 1,
     "crates/nvim/src/nvim/tui/unibi.rs": 3,
     "crates/nvim/src/nvim/ui/sinks.rs": 2,
-    "crates/nvim/src/nvim/ui_client.rs": 127,
     "crates/nvim/src/nvim/ui_compositor.rs": 76,
     "crates/nvim/src/nvim/usercmd.rs": 251,
     "crates/nvim/src/nvim/version.rs": 66,

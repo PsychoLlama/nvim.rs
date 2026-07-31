@@ -46,94 +46,70 @@ unsafe extern "C" {
 const MAX_TITLE: usize = 4096;
 
 /// The menu the TUI does not draw.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_update_menu(_tui: *mut TUIData) {}
+pub fn tui_update_menu(_tui: &mut TUIData) {}
 
 /// The editor is busy: hide the cursor until it says otherwise.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_busy_start(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe { (*tui).busy = true };
+pub fn tui_busy_start(tui: &mut TUIData) {
+    tui.busy = true;
 }
 
 /// The editor is idle again.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_busy_stop(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe { (*tui).busy = false };
+pub fn tui_busy_stop(tui: &mut TUIData) {
+    tui.busy = false;
 }
 
 /// Start reporting mouse events.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_mouse_on(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        if (*tui).mouse_enabled {
-            return;
-        }
-        tui_set_term_mode(&mut *tui, MOUSE_BUTTON_EVENT, true);
-        // SGR coordinates, so columns past 223 are reportable at all.
-        tui_set_term_mode(&mut *tui, MOUSE_SGR_EXT, true);
-        if (*tui).mouse_move_enabled {
-            tui_set_term_mode(&mut *tui, MOUSE_ANY_EVENT, true);
-        }
-        (*tui).mouse_enabled = true;
+pub fn tui_mouse_on(tui: &mut TUIData) {
+    if tui.mouse_enabled {
+        return;
     }
+    tui_set_term_mode(tui, MOUSE_BUTTON_EVENT, true);
+    // SGR coordinates, so columns past 223 are reportable at all.
+    tui_set_term_mode(tui, MOUSE_SGR_EXT, true);
+    if tui.mouse_move_enabled {
+        tui_set_term_mode(tui, MOUSE_ANY_EVENT, true);
+    }
+    tui.mouse_enabled = true;
 }
 
 /// Stop reporting mouse events, in the reverse order they were turned on.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_mouse_off(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        if !(*tui).mouse_enabled {
-            return;
-        }
-        if (*tui).mouse_move_enabled {
-            tui_set_term_mode(&mut *tui, MOUSE_ANY_EVENT, false);
-        }
-        tui_set_term_mode(&mut *tui, MOUSE_BUTTON_EVENT, false);
-        tui_set_term_mode(&mut *tui, MOUSE_SGR_EXT, false);
-        (*tui).mouse_enabled = false;
+pub fn tui_mouse_off(tui: &mut TUIData) {
+    if !tui.mouse_enabled {
+        return;
     }
+    if tui.mouse_move_enabled {
+        tui_set_term_mode(tui, MOUSE_ANY_EVENT, false);
+    }
+    tui_set_term_mode(tui, MOUSE_BUTTON_EVENT, false);
+    tui_set_term_mode(tui, MOUSE_SGR_EXT, false);
+    tui.mouse_enabled = false;
 }
 
 /// The editor's `'guicursor'` was (re)parsed: take the cursor description
 /// for every mode.
 ///
 /// # Safety
-/// `tui` must point to a live [`TUIData`], and `args` must be an array of
-/// mode dictionaries.
-pub unsafe fn tui_mode_info_set(tui: *mut TUIData, guicursor_enabled: bool, args: Array) {
+/// `args` must be an array of mode dictionaries.
+pub unsafe fn tui_mode_info_set(tui: &mut TUIData, guicursor_enabled: bool, args: Array) {
     cursor_style_enabled.set(guicursor_enabled);
-    // SAFETY: the caller guarantees `tui` and `args`.
+    if !guicursor_enabled {
+        cursor_reset_style(tui);
+        return;
+    }
+    assert!(args.size != 0, "mode_info_set with no modes");
+    // SAFETY: the caller guarantees `args`.
     unsafe {
-        if !guicursor_enabled {
-            cursor_reset_style(&mut *tui);
-            return;
-        }
-        assert!(args.size != 0, "mode_info_set with no modes");
         for i in 0..args.size {
             let item = &*args.items.add(i);
             assert!(
                 item.type_0 == OBJECT_TYPE_DICT,
                 "mode_info_set entry is not a dict"
             );
-            (*tui).cursor_shapes[i] = decode_cursor_entry(item.data.dict);
+            tui.cursor_shapes[i] = decode_cursor_entry(item.data.dict);
         }
-        let showing = (*tui).showing_mode;
-        cursor_set_mode(&mut *tui, showing);
     }
+    let showing = tui.showing_mode;
+    cursor_set_mode(tui, showing);
 }
 
 /// The `Object` type tag for a dictionary.
@@ -144,17 +120,16 @@ const OBJECT_TYPE_DICT: ObjectType = 6;
 /// This is also where startup ends, because it is the first event that
 /// arrives after the editor has finished reading its configuration.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_mode_change(tui: *mut TUIData, _mode: String_0, mode_idx: Integer) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        // Reading from a pipe while writing to a tty leaves libuv's idea of
-        // the terminal mode stale; setting it twice re-applies it.
-        if (*tui).out_isatty && (*tui).is_starting && !stdin_isatty.get() {
-            for mode in [UV_TTY_MODE_NORMAL, UV_TTY_MODE_IO] {
-                let ret = uv_tty_set_mode(&raw mut (*tui).output_handle.tty, mode);
-                if ret != 0 {
+pub fn tui_mode_change(tui: &mut TUIData, _mode: String_0, mode_idx: Integer) {
+    // Reading from a pipe while writing to a tty leaves libuv's idea of the
+    // terminal mode stale; setting it twice re-applies it.
+    if tui.out_isatty && tui.is_starting && !stdin_isatty.get() {
+        for mode in [UV_TTY_MODE_NORMAL, UV_TTY_MODE_IO] {
+            // SAFETY: the handle is the TUI's own and libuv owns its state.
+            let ret = unsafe { uv_tty_set_mode(&raw mut tui.output_handle.tty, mode) };
+            if ret != 0 {
+                // SAFETY: the format string holds the one `%s` filled here.
+                unsafe {
                     logmsg(
                         LOGLVL_ERR,
                         core::ptr::null(),
@@ -163,48 +138,41 @@ pub unsafe fn tui_mode_change(tui: *mut TUIData, _mode: String_0, mode_idx: Inte
                         true,
                         c"uv_tty_set_mode failed: %s".as_ptr(),
                         uv_strerror(ret),
-                    );
-                }
+                    )
+                };
             }
         }
-        cursor_set_mode(&mut *tui, mode_idx as usize);
-        if (*tui).is_starting && (*tui).verbose >= 3 {
-            show_verbose_terminfo(tui);
-        }
-        (*tui).is_starting = false;
-        (*tui).showing_mode = mode_idx as usize;
     }
+    cursor_set_mode(tui, mode_idx as usize);
+    if tui.is_starting && tui.verbose >= 3 {
+        show_verbose_terminfo(tui);
+    }
+    tui.is_starting = false;
+    tui.showing_mode = mode_idx as usize;
 }
 
 /// Ring the terminal's bell.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_bell(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe { out(&mut *tui, b"\x07") };
+pub fn tui_bell(tui: &mut TUIData) {
+    out(tui, b"\x07");
 }
 
 /// Flash the screen instead of ringing.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_visual_bell(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        if (*tui).screen_or_tmux {
-            // screen and tmux have a visual bell of their own; reverse video
-            // would be applied to their own status line as well.
-            out(&mut *tui, b"\x1bg");
-        } else {
-            // Reverse the screen, hold it long enough to be seen, undo it.
-            out(&mut *tui, b"\x1b[?5h");
-            flush(&mut *tui);
-            uv_sleep(VISUAL_BELL_MS);
-            out(&mut *tui, b"\x1b[?5l");
-        }
-        flush(&mut *tui);
+pub fn tui_visual_bell(tui: &mut TUIData) {
+    if tui.screen_or_tmux {
+        // screen and tmux have a visual bell of their own; reverse video
+        // would be applied to their own status line as well.
+        out(tui, b"\x1bg");
+    } else {
+        // Reverse the screen, hold it long enough to be seen, undo it.
+        out(tui, b"\x1b[?5h");
+        flush(tui);
+        // SAFETY: libuv's sleep takes no state of ours.
+        unsafe { uv_sleep(VISUAL_BELL_MS) };
+        out(tui, b"\x1b[?5l");
     }
+    flush(tui);
 }
 
 /// How long the screen stays reversed for a visual bell.
@@ -216,11 +184,10 @@ const VISUAL_BELL_MS: core::ffi::c_uint = 100;
 /// synchronously, without the TUI interpreting any of it.
 ///
 /// # Safety
-/// `tui` must point to a live [`TUIData`] and `content` must be a valid API
-/// string.
-pub unsafe fn tui_ui_send(tui: *mut TUIData, content: String_0) {
-    // SAFETY: the caller guarantees `tui` and `content`; `uv_write` fills in
-    // the request, which lives until the loop below has run it.
+/// `content` must be a valid API string.
+pub unsafe fn tui_ui_send(tui: &mut TUIData, content: String_0) {
+    // SAFETY: the caller guarantees `content`; `uv_write` fills in the
+    // request, which lives until the loop below has run it.
     unsafe {
         let mut req: uv_write_t = core::mem::zeroed();
         let buf = uv_buf_t {
@@ -229,7 +196,7 @@ pub unsafe fn tui_ui_send(tui: *mut TUIData, content: String_0) {
         };
         let ret = uv_write(
             &raw mut req,
-            (&raw mut (*tui).output_handle).cast::<uv_stream_t>(),
+            (&raw mut tui.output_handle).cast::<uv_stream_t>(),
             &raw const buf,
             1,
             None,
@@ -245,7 +212,7 @@ pub unsafe fn tui_ui_send(tui: *mut TUIData, content: String_0) {
                 uv_strerror(ret),
             );
         }
-        uv_run(&raw mut (*tui).write_loop, UV_RUN_DEFAULT);
+        uv_run(&raw mut tui.write_loop, UV_RUN_DEFAULT);
     }
 }
 
@@ -256,16 +223,15 @@ pub unsafe fn tui_ui_send(tui: *mut TUIData, content: String_0) {
 /// a terminal being left titled `nvim` after the editor exits.
 ///
 /// # Safety
-/// `tui` must point to a live [`TUIData`] and `title` must be a valid API
-/// string.
-pub unsafe fn tui_set_title(tui: *mut TUIData, title: String_0) {
-    // SAFETY: the caller guarantees `tui` and `title`.
-    unsafe {
-        if !(*tui).can_set_title {
-            return;
-        }
-        let too_long = title.size > MAX_TITLE;
-        if too_long {
+/// `title` must be a valid API string.
+pub unsafe fn tui_set_title(tui: &mut TUIData, title: String_0) {
+    if !tui.can_set_title {
+        return;
+    }
+    let too_long = title.size > MAX_TITLE;
+    if too_long {
+        // SAFETY: the format string takes no arguments.
+        unsafe {
             logmsg(
                 LOGLVL_ERR,
                 core::ptr::null(),
@@ -273,83 +239,86 @@ pub unsafe fn tui_set_title(tui: *mut TUIData, title: String_0) {
                 0,
                 true,
                 c"set_title: title string too long!".as_ptr(),
-            );
+            )
+        };
+    }
+    if title.size > 0 && !too_long {
+        if !tui.title_enabled {
+            out(tui, b"\x1b[22;0t");
+            tui.title_enabled = true;
         }
-        if title.size > 0 && !too_long {
-            if !(*tui).title_enabled {
-                out(&mut *tui, b"\x1b[22;0t");
-                (*tui).title_enabled = true;
-            }
-            // The title and its brackets have to reach the terminal in one
-            // piece, so make room for all of it before starting.
-            if (*tui).staging.room() < title.size + 2 * TERMINFO_SEQ_LIMIT {
-                flush(&mut *tui);
-            }
-            terminfo_out(&mut *tui, kTerm_to_status_line);
-            out_raw(&mut *tui, title.data, title.size);
-            terminfo_out(&mut *tui, kTerm_from_status_line);
-        } else if (*tui).title_enabled {
-            out(&mut *tui, b"\x1b[23;0t");
-            (*tui).title_enabled = false;
+        // The title and its brackets have to reach the terminal in one
+        // piece, so make room for all of it before starting.
+        if tui.staging.room() < title.size + 2 * TERMINFO_SEQ_LIMIT {
+            flush(tui);
         }
+        terminfo_out(tui, kTerm_to_status_line);
+        // SAFETY: the caller guarantees `title`.
+        unsafe { out_raw(tui, title.data, title.size) };
+        terminfo_out(tui, kTerm_from_status_line);
+    } else if tui.title_enabled {
+        out(tui, b"\x1b[23;0t");
+        tui.title_enabled = false;
     }
 }
 
 /// The icon name, which no terminal this runs on distinguishes from the
 /// title.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_set_icon(_tui: *mut TUIData, _icon: String_0) {}
+pub fn tui_set_icon(_tui: &mut TUIData, _icon: String_0) {}
 
 /// An option the TUI acts on changed.
 ///
 /// # Safety
-/// `tui` must point to a live [`TUIData`]; `name` must be a valid API string
-/// and `value` must hold the type that option's name implies.
-pub unsafe fn tui_option_set(tui: *mut TUIData, name: String_0, value: Object) {
-    // SAFETY: the caller guarantees `tui`, `name` and `value`'s type.
-    unsafe {
-        let is = |option: &core::ffi::CStr| strequal(name.data, option.as_ptr());
-        if is(c"mousemoveevent") {
-            let wanted = value.data.boolean;
-            if (*tui).mouse_move_enabled != wanted {
-                // The mode is part of what mouse reporting turns on, so it
-                // can only change while reporting is off.
-                if (*tui).mouse_enabled {
-                    tui_mouse_off(tui);
-                    (*tui).mouse_move_enabled = wanted;
-                    tui_mouse_on(tui);
-                } else {
-                    (*tui).mouse_move_enabled = wanted;
-                }
+/// `name` must be a valid API string and `value` must hold the type that
+/// option's name implies.
+pub unsafe fn tui_option_set(tui: &mut TUIData, name: String_0, value: Object) {
+    // SAFETY: the caller guarantees `name` and `value`'s type.
+    let is = |option: &core::ffi::CStr| unsafe { strequal(name.data, option.as_ptr()) };
+    let boolean = || unsafe { value.data.boolean };
+    let integer = || unsafe { value.data.integer };
+
+    if is(c"mousemoveevent") {
+        let wanted = boolean();
+        if tui.mouse_move_enabled != wanted {
+            // The mode is part of what mouse reporting turns on, so it can
+            // only change while reporting is off.
+            if tui.mouse_enabled {
+                tui_mouse_off(tui);
+                tui.mouse_move_enabled = wanted;
+                tui_mouse_on(tui);
+            } else {
+                tui.mouse_move_enabled = wanted;
             }
-        } else if is(c"termguicolors") {
-            (*tui).rgb = value.data.boolean;
-            (*tui).print_attr_id = -1;
-            let (height, width) = ((*tui).grid.height, (*tui).grid.width);
-            invalidate(&mut *tui, 0, height, 0, width);
-            // The editor decides what colours to send by what the UI says it
-            // wants, so tell it this changed.
-            if ui_client_channel_id.get() != 0 {
-                let mut args = ArrayBuf::<2>::new();
-                args.push(Object::literal("rgb"));
-                args.push(Object::boolean(value.data.boolean));
+        }
+    } else if is(c"termguicolors") {
+        tui.rgb = boolean();
+        tui.print_attr_id = -1;
+        let (height, width) = (tui.grid.height, tui.grid.width);
+        invalidate(tui, 0, height, 0, width);
+        // The editor decides what colours to send by what the UI says it
+        // wants, so tell it this changed.
+        if ui_client_channel_id.get() != 0 {
+            let mut args = ArrayBuf::<2>::new();
+            args.push(Object::literal("rgb"));
+            args.push(Object::boolean(boolean()));
+            // SAFETY: the event borrows `args`, which outlives the call.
+            unsafe {
                 rpc_send_event(
                     ui_client_channel_id.get(),
                     c"nvim_ui_set_option".as_ptr(),
                     args.array(),
-                );
-            }
-        } else if is(c"ttimeout") {
-            (*tui).input.ttimeout = value.data.boolean;
-        } else if is(c"ttimeoutlen") {
-            (*tui).input.ttimeoutlen = value.data.integer;
-        } else if is(c"verbose") {
-            (*tui).verbose = value.data.integer;
-        } else if is(c"termsync") {
-            (*tui).sync_output = value.data.boolean;
+                )
+            };
         }
+    } else if is(c"ttimeout") {
+        tui.input.ttimeout = boolean();
+    } else if is(c"ttimeoutlen") {
+        tui.input.ttimeoutlen = integer();
+    } else if is(c"verbose") {
+        tui.verbose = integer();
+    } else if is(c"termsync") {
+        tui.sync_output = boolean();
     }
 }
 
@@ -358,7 +327,7 @@ pub unsafe fn tui_option_set(tui: *mut TUIData, name: String_0, value: Object) {
 ///
 /// # Safety
 /// `path` must be a valid API string.
-pub unsafe fn tui_chdir(_tui: *mut TUIData, path: String_0) {
+pub unsafe fn tui_chdir(_tui: &mut TUIData, path: String_0) {
     // SAFETY: the caller guarantees `path`.
     unsafe {
         let err = uv_chdir(path.data);
@@ -379,12 +348,11 @@ pub unsafe fn tui_chdir(_tui: *mut TUIData, path: String_0) {
 
 /// Echo what was resolved about this terminal, for `nvim -V3`.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`] with its terminfo resolved.
-unsafe fn show_verbose_terminfo(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`; the message is owned here and
-    // freed once the event has been serialised.
-    let info = unsafe { terminfo_info_msg(&(*tui).ti, (*tui).term, (*tui).terminfo_found_in_db) };
+/// `tui`'s terminfo must be resolved.
+fn show_verbose_terminfo(tui: &TUIData) {
+    // SAFETY: the message is owned here and freed once the event has been
+    // serialised.
+    let info = unsafe { terminfo_info_msg(&tui.ti, tui.term, tui.terminfo_found_in_db) };
 
     // Each chunk is [text] or [text, highlight group], as `nvim_echo` takes.
     let mut title = ArrayBuf::<2>::new();

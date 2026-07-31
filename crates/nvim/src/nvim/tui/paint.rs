@@ -380,11 +380,7 @@ pub(crate) fn invalidate(tui: &mut TUIData, top: c_int, bot: c_int, left: c_int,
 
 /// The editor's screen changed size.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_grid_resize(tui: *mut TUIData, _grid: Integer, width: Integer, height: Integer) {
-    // SAFETY: the caller guarantees `tui`.
-    let tui = unsafe { &mut *tui };
+pub fn tui_grid_resize(tui: &mut TUIData, _grid: Integer, width: Integer, height: Integer) {
     tui.grid.resize(width as c_int, height as c_int);
     let (grid_width, grid_height) = (tui.grid.width, tui.grid.height);
     for r in &mut tui.invalid_regions {
@@ -403,11 +399,7 @@ pub unsafe fn tui_grid_resize(tui: *mut TUIData, _grid: Integer, width: Integer,
 
 /// Blank the whole screen.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_grid_clear(tui: *mut TUIData, _grid: Integer) {
-    // SAFETY: the caller guarantees `tui`.
-    let tui = unsafe { &mut *tui };
+pub fn tui_grid_clear(tui: &mut TUIData, _grid: Integer) {
     tui.grid.clear();
     // SAFETY: no grapheme handle is held across this call.
     unsafe { schar_cache_clear_if_full() };
@@ -418,11 +410,7 @@ pub unsafe fn tui_grid_clear(tui: *mut TUIData, _grid: Integer) {
 
 /// Where the cursor should be left after the next flush.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_grid_cursor_goto(tui: *mut TUIData, _grid: Integer, row: Integer, col: Integer) {
-    // SAFETY: the caller guarantees `tui`.
-    let tui = unsafe { &mut *tui };
+pub fn tui_grid_cursor_goto(tui: &mut TUIData, _grid: Integer, row: Integer, col: Integer) {
     tui.row = row as c_int;
     tui.col = col as c_int;
 }
@@ -435,11 +423,9 @@ pub unsafe fn tui_grid_cursor_goto(tui: *mut TUIData, _grid: Integer, row: Integ
 /// scroll region, and margins as well when the region is not full width.
 /// Failing that the region is simply repainted.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
 #[expect(clippy::too_many_arguments, reason = "the UI event's own shape")]
-pub unsafe fn tui_grid_scroll(
-    tui: *mut TUIData,
+pub fn tui_grid_scroll(
+    tui: &mut TUIData,
     _grid: Integer,
     startrow: Integer,
     endrow: Integer,
@@ -448,8 +434,6 @@ pub unsafe fn tui_grid_scroll(
     rows: Integer,
     _cols: Integer,
 ) {
-    // SAFETY: the caller guarantees `tui`.
-    let tui = unsafe { &mut *tui };
     let (top, bot) = (startrow as c_int, endrow as c_int - 1);
     let (left, right) = (startcol as c_int, endcol as c_int - 1);
     let fullwidth = left == 0 && right == tui.width - 1;
@@ -502,11 +486,10 @@ pub unsafe fn tui_grid_scroll(
 /// `clearcol` is blank in `clearattr`.
 ///
 /// # Safety
-/// `tui` must point to a live [`TUIData`], and `chunk` and `attrs` must each
-/// hold `endcol - startcol` entries.
+/// `chunk` and `attrs` must each hold `endcol - startcol` entries.
 #[expect(clippy::too_many_arguments, reason = "the UI event's own shape")]
 pub unsafe fn tui_raw_line(
-    tui: *mut TUIData,
+    tui: &mut TUIData,
     _grid: Integer,
     linerow: Integer,
     startcol: Integer,
@@ -518,14 +501,13 @@ pub unsafe fn tui_raw_line(
     attrs: *const sattr_T,
 ) {
     let len = (endcol - startcol) as usize;
-    // SAFETY: the caller guarantees `tui` and the two arrays' length. An
-    // empty range says nothing about the pointers, which may be null.
-    let (tui, chunk, attrs) = unsafe {
+    // SAFETY: the caller guarantees the two arrays' length. An empty range
+    // says nothing about the pointers, which may be null.
+    let (chunk, attrs) = unsafe {
         if len == 0 {
-            (&mut *tui, [].as_slice(), [].as_slice())
+            ([].as_slice(), [].as_slice())
         } else {
             (
-                &mut *tui,
                 core::slice::from_raw_parts(chunk, len),
                 core::slice::from_raw_parts(attrs, len),
             )
@@ -585,11 +567,7 @@ pub unsafe fn tui_raw_line(
 /// Repaint everything that was invalidated and put the cursor where the
 /// editor last asked for it.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_flush(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    let tui = unsafe { &mut *tui };
+pub fn tui_flush(tui: &mut TUIData) {
     // SAFETY: the loop is the TUI's own, alive for as long as the TUI is.
     unsafe {
         let queued = loop_size(tui.loop_0);
@@ -606,7 +584,7 @@ pub unsafe fn tui_flush(tui: *mut TUIData) {
                 queued,
             );
             loop_purge(tui.loop_0);
-            tui_busy_stop(&raw mut *tui);
+            tui_busy_stop(tui);
         }
     }
 
@@ -660,11 +638,10 @@ fn repaint_row(tui: &mut TUIData, row: c_int, left: c_int, right: c_int) {
 /// not a rendering of them.
 ///
 /// # Safety
-/// `tui` must point to a live [`TUIData`], and `path` must be a valid API
-/// string.
-pub unsafe fn tui_screenshot(tui: *mut TUIData, path: String_0) {
-    // SAFETY: the caller guarantees `tui` and `path`.
-    let (tui, file) = unsafe { (&mut *tui, fopen(path.data, c"w".as_ptr())) };
+/// `path` must be a valid API string.
+pub unsafe fn tui_screenshot(tui: &mut TUIData, path: String_0) {
+    // SAFETY: the caller guarantees `path`.
+    let file = unsafe { fopen(path.data, c"w".as_ptr()) };
     if file.is_null() {
         return;
     }

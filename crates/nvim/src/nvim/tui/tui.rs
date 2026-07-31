@@ -105,23 +105,16 @@ pub(crate) const DEFAULT_ATTRS: HlAttrs = HlAttrs {
 
 // ------------------------------------------------------------- the lifecycle
 
-/// Start the TUI and hand back the terminal it found.
+/// Take over the terminal, returning the TUI that now owns it.
 ///
-/// The event loop is pumped once before returning so that the terminal's
-/// answers to the capability queries sent during startup are in hand: the
-/// size, name and colour depth written back through the out-parameters are
-/// what the editor is then told about.
+/// The queries whose answers the client needs — size, name, colour depth —
+/// have been sent but not answered when this returns; [`tui_wait_ready`]
+/// collects them.
 ///
 /// # Safety
-/// Every out-parameter must be valid for writes.
-pub unsafe fn tui_start(
-    tui_p: *mut *mut TUIData,
-    width: *mut c_int,
-    height: *mut c_int,
-    term: *mut *mut c_char,
-    rgb: *mut bool,
-) {
-    // SAFETY: the out-parameters are the caller's.
+/// Must be called once, on the main thread.
+pub unsafe fn tui_start() -> *mut TUIData {
+    // SAFETY: called once, on the main thread, before anything is drawn.
     unsafe {
         let tui: *mut TUIData = Box::into_raw(TUIData::new());
         signal_watcher_init((*tui).loop_0, &raw mut (*tui).winch_handle, tui.cast());
@@ -141,13 +134,41 @@ pub unsafe fn tui_start(
             0,
         );
 
-        *tui_p = tui;
-        loop_poll_events(main_loop.ptr(), 1);
-        *width = (*tui).width;
-        *height = (*tui).height;
-        *term = (*tui).term;
-        *rgb = (*tui).rgb;
+        tui
     }
+}
+
+/// Wait for the terminal to answer what [`tui_start`] asked it.
+///
+/// One turn of the event loop, so that what the client is told is the
+/// terminal's answer rather than the guess. It is separate from
+/// [`tui_start`] because that turn can run any callback the loop has
+/// pending — including the one that stops this TUI when its channel is
+/// already at EOF — so the caller has to have published the TUI first.
+///
+/// # Safety
+/// `tui` must be the result of [`tui_start`].
+pub unsafe fn tui_wait_ready(tui: *mut TUIData) -> TuiStart {
+    // SAFETY: the caller guarantees `tui`.
+    unsafe {
+        loop_poll_events(main_loop.ptr(), 1);
+        TuiStart {
+            width: (*tui).width,
+            height: (*tui).height,
+            term: (*tui).term,
+            rgb: (*tui).rgb,
+        }
+    }
+}
+
+/// What a started TUI tells its client about the terminal it found.
+pub struct TuiStart {
+    pub width: c_int,
+    pub height: c_int,
+    /// The `TERM` the TUI resolved, owned by the [`TUIData`].
+    pub term: *mut c_char,
+    /// Whether the terminal was found to do 24-bit colour.
+    pub rgb: bool,
 }
 
 /// How long to wait before sending the sequences that must not race the
@@ -412,8 +433,8 @@ unsafe fn terminfo_disable(tui: *mut TUIData) {
         if (*tui).modes.theme_updates() {
             tui_set_term_mode(&mut *tui, THEME_UPDATES, false);
         }
-        tui_mode_change(tui, NULL_STRING, 0);
-        tui_mouse_off(tui);
+        tui_mode_change(&mut *tui, NULL_STRING, 0);
+        tui_mouse_off(&mut *tui);
         terminfo_out(&mut *tui, kTerm_exit_attribute_mode);
         terminfo_out(&mut *tui, kTerm_cursor_normal);
         terminfo_out(&mut *tui, kTerm_reset_cursor_style);
@@ -425,7 +446,7 @@ unsafe fn terminfo_disable(tui: *mut TUIData) {
         if (*tui).modes.grapheme_clusters() {
             tui_set_term_mode(&mut *tui, GRAPHEME_CLUSTERS, false);
         }
-        tui_set_title(tui, NULL_STRING);
+        tui_set_title(&mut *tui, NULL_STRING);
         if (*tui).cursor_has_color {
             terminfo_out(&mut *tui, kTerm_reset_cursor_color);
         }
@@ -634,7 +655,7 @@ unsafe fn tui_suspend_cb(tui: *mut TUIData) {
         tui_terminal_start(tui);
         tui_terminal_after_startup(tui);
         if (*tui).mouse_enabled_save {
-            tui_mouse_on(tui);
+            tui_mouse_on(&mut *tui);
         }
         stream_set_blocking((*tui).input.in_fd, false);
         ui_client_attach((*tui).width, (*tui).height, (*tui).term, (*tui).rgb);

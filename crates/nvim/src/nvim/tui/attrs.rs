@@ -64,7 +64,7 @@ const KEY_EXISTING: MHPutStatus = 0;
 ///
 /// # Safety
 /// `url` must be null or NUL-terminated.
-pub unsafe fn tui_add_url(_tui: *mut TUIData, url: *const c_char) -> int32_t {
+pub unsafe fn tui_add_url(_tui: &mut TUIData, url: *const c_char) -> int32_t {
     if url.is_null() {
         return -1;
     }
@@ -87,17 +87,13 @@ pub unsafe fn tui_add_url(_tui: *mut TUIData, url: *const c_char) -> int32_t {
 /// structures; the TUI keeps a single merged entry and picks a half at paint
 /// time depending on `'termguicolors'`.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_hl_attr_define(
-    tui: *mut TUIData,
+pub fn tui_hl_attr_define(
+    tui: &mut TUIData,
     id: Integer,
     mut attrs: HlAttrs,
     cterm_attrs: HlAttrs,
     _info: Array,
 ) {
-    // SAFETY: the caller guarantees `tui`.
-    let tui = unsafe { &mut *tui };
     attrs.cterm_ae_attr = cterm_attrs.cterm_ae_attr;
     attrs.cterm_fg_color = cterm_attrs.cterm_fg_color;
     attrs.cterm_bg_color = cterm_attrs.cterm_bg_color;
@@ -388,18 +384,14 @@ fn set_url(tui: &mut TUIData, url: int32_t) {
 /// Every cell on screen may have been painted against the old defaults, so
 /// the whole grid is repainted.
 ///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_default_colors_set(
-    tui: *mut TUIData,
+pub fn tui_default_colors_set(
+    tui: &mut TUIData,
     rgb_fg: Integer,
     rgb_bg: Integer,
     rgb_sp: Integer,
     cterm_fg: Integer,
     cterm_bg: Integer,
 ) {
-    // SAFETY: the caller guarantees `tui`.
-    let tui = unsafe { &mut *tui };
     tui.clear_attrs.rgb_fg_color = rgb_fg as int32_t;
     tui.clear_attrs.rgb_bg_color = rgb_bg as int32_t;
     tui.clear_attrs.rgb_sp_color = rgb_sp as int32_t;
