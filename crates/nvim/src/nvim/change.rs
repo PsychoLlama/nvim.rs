@@ -12,7 +12,8 @@ use crate::src::nvim::cursor::{
 };
 use crate::src::nvim::diff::{diff_internal, diff_lnum_win, diff_update_line};
 use crate::src::nvim::drawscreen::{
-    redraw_buf_status_later, redraw_later, redrawWinline, set_must_redraw, showmode,
+    UPD_NOT_VALID, UPD_VALID, redraw_buf_status_later, redraw_later, redrawWinline,
+    set_must_redraw, showmode,
 };
 use crate::src::nvim::edit::{prompt_text, replace_push, replace_push_nul, truncate_spaces};
 use crate::src::nvim::eval::vars::set_vim_var_string;
@@ -394,8 +395,6 @@ pub const kUIWildmenu: UIExtension = 3;
 pub const kUITabline: UIExtension = 2;
 pub const kUIPopupmenu: UIExtension = 1;
 pub const kUICmdline: UIExtension = 0;
-pub const UPD_VALID: C2Rust_Unnamed_20 = 10;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_20 = 40;
 pub const KEY_OPEN_BACK: C2Rust_Unnamed_21 = 258;
 pub const KEY_OPEN_FORW: C2Rust_Unnamed_21 = 257;
 pub const SIN_NOMARK: C2Rust_Unnamed_23 = 8;
@@ -406,11 +405,6 @@ pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
 pub const ML_DEL_MESSAGE: C2Rust_Unnamed_24 = 1;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_20 = 50;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_20 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_20 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_20 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_20 = 20;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const KEY_COMPLETE: C2Rust_Unnamed_21 = 259;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
@@ -715,13 +709,11 @@ unsafe extern "C" fn changed_common(
         };
         while !wp_1.is_null() {
             if (*wp_1).w_buffer == buf {
-                if !redraw_not_allowed.get()
-                    && (*wp_1).w_redr_type < UPD_VALID as ::core::ffi::c_int
-                {
-                    (*wp_1).w_redr_type = UPD_VALID as ::core::ffi::c_int;
+                if !redraw_not_allowed.get() && (*wp_1).w_redr_type < UPD_VALID {
+                    (*wp_1).w_redr_type = UPD_VALID;
                 }
                 if xtra != 0 as linenr_T && (*wp_1).w_redraw_top != 0 as linenr_T {
-                    redraw_later(wp_1, UPD_NOT_VALID as ::core::ffi::c_int);
+                    redraw_later(wp_1, UPD_NOT_VALID);
                 }
                 let mut last: linenr_T = lnume + xtra - 1 as linenr_T;
                 if (*wp_1).w_skipcol > 0 as ::core::ffi::c_int
@@ -782,7 +774,7 @@ unsafe extern "C" fn changed_common(
         }
         tp_1 = (*tp_1).tp_next as *mut tabpage_T;
     }
-    set_must_redraw(UPD_VALID as ::core::ffi::c_int);
+    set_must_redraw(UPD_VALID);
     if last_cursormoved_win.get() == curwin.get()
         && (*curwin.get()).w_buffer == buf
         && lnum <= (*curwin.get()).w_cursor.lnum
@@ -809,7 +801,7 @@ pub unsafe extern "C" fn changed_bytes(mut lnum: linenr_T, mut col: colnr_T) {
         };
         while !wp.is_null() {
             if (*wp).w_onebuf_opt.wo_diff != 0 && wp != curwin.get() {
-                redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
+                redraw_later(wp, UPD_VALID);
                 let mut wlnum: linenr_T = diff_lnum_win(lnum, wp);
                 if wlnum > 0 as linenr_T {
                     changed_lines_redraw_buf(
@@ -984,7 +976,7 @@ pub unsafe extern "C" fn changed_lines(
         };
         while !wp.is_null() {
             if (*wp).w_onebuf_opt.wo_diff != 0 && wp != curwin.get() {
-                redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
+                redraw_later(wp, UPD_VALID);
                 wlnum = diff_lnum_win(lnum, wp);
                 if wlnum > 0 as linenr_T {
                     changed_lines_redraw_buf(

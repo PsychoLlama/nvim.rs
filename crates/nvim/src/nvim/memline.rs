@@ -5,7 +5,7 @@ use crate::src::nvim::autocmd::{
 use crate::src::nvim::buffer::{buf_inc_changedtick, buf_spname, open_buffer, setfname};
 use crate::src::nvim::change::{changed_internal, unchanged};
 use crate::src::nvim::cursor::{check_cursor, coladvance};
-use crate::src::nvim::drawscreen::redraw_curbuf_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::src::nvim::eval::typval::{
     tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len, tv_list_append_allocated_string,
 };
@@ -831,13 +831,6 @@ pub const CMOD_SILENT: C2Rust_Unnamed_16 = 2;
 pub const CMOD_SANDBOX: C2Rust_Unnamed_16 = 1;
 pub const NUM_EVENTS: auto_event = 145;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_17 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_17 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_17 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_17 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_17 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_17 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_17 = 10;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const VIM_LAST_TYPE: C2Rust_Unnamed_18 = 4;
 pub const VIM_QUESTION: C2Rust_Unnamed_18 = 4;
@@ -2859,7 +2852,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                             }
                             cmdline_row.set(msg_row.get());
                         }
-                        redraw_curbuf_later(UPD_NOT_VALID as ::core::ffi::c_int);
+                        redraw_curbuf_later(UPD_NOT_VALID);
                     }
                 }
             }

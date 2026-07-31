@@ -10,7 +10,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::src::nvim::change::inserted_bytes;
-use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::src::nvim::fold::{hasAnyFolding, hasFolding};
 use crate::src::nvim::main::{State, VIsual, VIsual_active, curbuf, curwin, p_sel, restart_edit};
 use crate::src::nvim::mark::mark_mb_adjustpos;
@@ -37,7 +37,6 @@ pub const MAXCOL: c_int = 2147483647;
 const NUL: c_int = 0;
 const TAB: c_int = 9;
 const VALID_VIRTCOL: c_int = 0x4;
-const UPD_NOT_VALID: c_int = 40;
 
 /// Virtual column of the cursor, as `getvvcol` reports it (list mode off).
 ///

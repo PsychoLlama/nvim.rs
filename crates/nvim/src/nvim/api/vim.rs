@@ -29,8 +29,8 @@ use crate::src::nvim::cursor::get_cursor_rel_lnum;
 use crate::src::nvim::decoration::decor_redraw_signs;
 use crate::src::nvim::drawline::use_cursor_line_highlight;
 use crate::src::nvim::drawscreen::{
-    redraw_all_later, redraw_buf_later, redraw_buf_range_later, redraw_later, setcursor_mayforce,
-    update_screen, win_update_cursorline,
+    UPD_CLEAR, UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_buf_later,
+    redraw_buf_range_later, redraw_later, setcursor_mayforce, update_screen, win_update_cursorline,
 };
 use crate::src::nvim::eval::typval::tv_dict_find;
 use crate::src::nvim::eval::vars::{get_globvar_dict, get_vimvar_dict, set_vim_var_nr};
@@ -419,7 +419,6 @@ pub const STL_FILEPATH: StlFlag = 102;
 pub const ET_INTERRUPT: except_type_T = 2;
 pub const ET_ERROR: except_type_T = 1;
 pub const ET_USER: except_type_T = 0;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_34 = 40;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
 pub const KE_LEFTMOUSE: key_extra = 44;
@@ -493,7 +492,6 @@ pub const kCtxGVars: C2Rust_Unnamed_33 = 8;
 pub const kCtxBufs: C2Rust_Unnamed_33 = 4;
 pub const kCtxJumps: C2Rust_Unnamed_33 = 2;
 pub const kCtxRegs: C2Rust_Unnamed_33 = 1;
-pub const UPD_CLEAR: C2Rust_Unnamed_34 = 50;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;
@@ -600,7 +598,6 @@ pub const VV_ERRMSG: VimVarIndex = 3;
 pub const VV_PREVCOUNT: VimVarIndex = 2;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
-pub const UPD_VALID: C2Rust_Unnamed_34 = 10;
 pub const BLN_NOCURWIN: bln_values = 128;
 pub const BLN_DUMMY: bln_values = 4;
 pub const BLN_CURBUF: bln_values = 1;
@@ -613,10 +610,6 @@ pub const DOBUF_LAST: dobuf_start_values = 2;
 pub const DOBUF_CURRENT: dobuf_start_values = 0;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_34 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_34 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_34 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_34 = 20;
 pub const REMAP_SKIP: RemapValues = -3;
 pub const REMAP_SCRIPT: RemapValues = -2;
 pub const KE_WILD: key_extra = 108;
@@ -874,7 +867,7 @@ pub unsafe extern "C" fn nvim_set_hl_ns(mut ns_id: Integer, mut err: *mut Error)
     }
     ns_hl_global.set(ns_id as NS);
     hl_check_ns();
-    redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_all_later(UPD_NOT_VALID);
 }
 pub unsafe extern "C" fn nvim_set_hl_ns_fast(mut ns_id: Integer, mut _err: *mut Error) {
     ns_hl_fast.set(ns_id as NS);
@@ -3117,7 +3110,7 @@ pub unsafe extern "C" fn nvim__screenshot(mut path: String_0) {
 }
 pub unsafe extern "C" fn nvim__invalidate_glyph_cache() {
     schar_cache_clear();
-    must_redraw.set(UPD_CLEAR as ::core::ffi::c_int);
+    must_redraw.set(UPD_CLEAR);
 }
 pub unsafe extern "C" fn nvim__unpack(
     mut str: String_0,
@@ -3837,9 +3830,9 @@ pub unsafe extern "C" fn nvim__redraw(mut opts: *mut KeyDict_redraw, mut err: *m
         != 0 as ::core::ffi::c_ulonglong
     {
         let mut type_0: ::core::ffi::c_int = if (*opts).valid as ::core::ffi::c_int != 0 {
-            UPD_VALID as ::core::ffi::c_int
+            UPD_VALID
         } else {
-            UPD_NOT_VALID as ::core::ffi::c_int
+            UPD_NOT_VALID
         };
         if !win.is_null() {
             redraw_later(win, type_0);

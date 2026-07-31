@@ -108,8 +108,6 @@ pub struct WinExtmarkVec {
     pub capacity: size_t,
     pub items: *mut WinExtmark,
 }
-pub(crate) const UPD_NOT_VALID: c_uint = 40;
-pub(crate) const UPD_VALID: c_uint = 10;
 pub(crate) const VV_EXITREASON: VimVarIndex = 105;
 pub(crate) const VV_STARTTIME: VimVarIndex = 104;
 pub(crate) const VV_VIM_DID_INIT: VimVarIndex = 94;

@@ -10,7 +10,9 @@ use crate::src::nvim::buffer::{
     bt_prompt, buf_hide, goto_buffer, maketitle, otherfile, setaltfname, setfname,
 };
 use crate::src::nvim::change::deleted_lines_mark;
-use crate::src::nvim::drawscreen::{redraw_all_later, redraw_curbuf_later};
+use crate::src::nvim::drawscreen::{
+    UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_curbuf_later,
+};
 use crate::src::nvim::ex_cmds::{do_bang, do_ecmd};
 use crate::src::nvim::ex_cmds2::{check_changed, check_fname};
 use crate::src::nvim::ex_docmd::cmdline::do_cmdline_cmd;
@@ -22,7 +24,7 @@ use crate::src::nvim::ex_docmd::{
     CMD_split, CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit,
     CMOD_KEEPALT, CPO_ALTREAD, DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF,
     ECMD_ALTBUF, ECMD_FORCEIT, ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, FAIL, FNAME_MESS, FORWARD,
-    ML_EMPTY, NUL, OK, UPD_NOT_VALID, UPD_VALID, ex_pressedreturn, kDirectionNotSet, kUICmdline,
+    ML_EMPTY, NUL, OK, ex_pressedreturn, kDirectionNotSet, kUICmdline,
 };
 use crate::src::nvim::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::src::nvim::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
@@ -341,7 +343,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
                     need_wait_return.set(false);
                     let save_ms = msg_scroll.get();
                     msg_scroll.set(0);
-                    redraw_all_later(UPD_NOT_VALID as c_int);
+                    redraw_all_later(UPD_NOT_VALID);
                     pending_exmode_active.set(true);
                     normal_enter(false, true);
                     pending_exmode_active.set(false);
@@ -550,7 +552,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
                 deleted_lines_mark(lnum, 1);
             }
         }
-        redraw_curbuf_later(UPD_VALID as c_int);
+        redraw_curbuf_later(UPD_VALID);
     }
 }
 

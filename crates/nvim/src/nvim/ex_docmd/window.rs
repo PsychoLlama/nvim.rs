@@ -8,7 +8,7 @@ use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{EVENT_TABNEWENTERED, apply_autocmds};
 use crate::src::nvim::buffer::{bt_quickfix, buf_spname};
 use crate::src::nvim::charset::{getdigits, getdigits_int, skipwhite};
-use crate::src::nvim::drawscreen::{redraw_later, screen_resize};
+use crate::src::nvim::drawscreen::{UPD_CLEAR, UPD_VALID, redraw_later, screen_resize};
 use crate::src::nvim::ex_cmds::prepare_tagpreview;
 use crate::src::nvim::ex_docmd::argopt::get_tabpage_arg;
 use crate::src::nvim::ex_docmd::display::ex_redraw;
@@ -21,7 +21,7 @@ use crate::src::nvim::ex_docmd::tags::ex_findpat;
 use crate::src::nvim::ex_docmd::{
     CMD_new, CMD_sfind, CMD_split, CMD_tabNext, CMD_tabedit, CMD_tabfind, CMD_tabfirst,
     CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, CMOD_KEEPALT,
-    Ctrl_G, FAIL, FNAME_MESS, HLF_T, IOSIZE, NUL, UPD_CLEAR, UPD_VALID, WSP_VERT,
+    Ctrl_G, FAIL, FNAME_MESS, HLF_T, IOSIZE, NUL, WSP_VERT,
 };
 use crate::src::nvim::file_search::{find_file_in_path, vim_findfile_cleanup};
 use crate::src::nvim::main::{
@@ -368,7 +368,7 @@ pub(crate) unsafe fn ex_tabs(_eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_mode(eap: *mut exarg_T) {
     unsafe {
         if *(*eap).arg as c_int == NUL {
-            must_redraw.set(UPD_CLEAR as c_int);
+            must_redraw.set(UPD_CLEAR);
             ex_redraw(eap);
         } else {
             emsg(gettext(&raw const e_screenmode as *const c_char));
@@ -540,7 +540,7 @@ pub(crate) unsafe fn back_to_current_window(curwin_save: *mut win_T) {
         if curwin.get() != curwin_save && win_valid(curwin_save) {
             // The preview window is left drawn but not current.
             validate_cursor(curwin.get());
-            redraw_later(curwin.get(), UPD_VALID as c_int);
+            redraw_later(curwin.get(), UPD_VALID);
             win_enter(curwin_save, true);
         }
         g_do_tagpreview.set(0);

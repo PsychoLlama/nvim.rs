@@ -24,7 +24,7 @@ use core::ptr;
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::autocmd::{EVENT_OPTIONSET, apply_autocmds, do_filetype_autocmd};
 use crate::src::nvim::charset::buf_init_chartab;
-use crate::src::nvim::drawscreen::{comp_col, redraw_all_later};
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, comp_col, redraw_all_later};
 use crate::src::nvim::eval::vars::{
     get_vim_var_str, optval_as_tv, reset_v_option_vars, set_vim_var_string, set_vim_var_tv,
 };
@@ -54,7 +54,7 @@ use crate::src::nvim::window::set_winbar;
 
 use super::{
     IOSIZE, MAXCOL, NO_LOCAL_UNDOLEVEL, NUL, NUMBUFLEN, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE,
-    SID_NONE, UPD_NOT_VALID, VV_OPTION_COMMAND, VV_OPTION_NEW, VV_OPTION_OLD, VV_OPTION_OLDGLOBAL,
+    SID_NONE, VV_OPTION_COMMAND, VV_OPTION_NEW, VV_OPTION_OLD, VV_OPTION_OLDGLOBAL,
     VV_OPTION_OLDLOCAL, VV_OPTION_TYPE, check_redraw, do_spelllang_source, do_syntax_autocmd,
     find_tty_option_end, get_varp, get_varp_scope, insecure_flag, is_option_hidden, kFalse, kNone,
     kOptFlagCurswant, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll, kOptFlagSecure,
@@ -548,7 +548,7 @@ pub(crate) unsafe fn did_set_option(
             && (*curwin.get()).w_briopt_list != 0
         {
             // 'formatlistpat' is what 'breakindentopt' list mode indents by.
-            redraw_all_later(UPD_NOT_VALID as c_int);
+            redraw_all_later(UPD_NOT_VALID);
         } else if varp == p_wbr.ptr().cast::<c_void>()
             || varp == (&raw mut (*curwin.get()).w_onebuf_opt.wo_wbr).cast::<c_void>()
         {

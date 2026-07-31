@@ -1,7 +1,7 @@
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::{char2cells, ptr2cells, vim_isprintc, vim_iswordc_tab};
 use crate::src::nvim::cursor::get_cursor_pos_ptr;
-use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::src::nvim::eval::typval::{
     tv_check_for_string_arg, tv_get_string, tv_get_string_buf, tv_list_alloc, tv_list_alloc_ret,
     tv_list_append_list, tv_list_append_number,
@@ -165,13 +165,6 @@ pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_17 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_17 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_17 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_17 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_17 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_17 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_17 = 10;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const MB_MAXCHAR: C2Rust_Unnamed_18 = 6;
 pub const MB_MAXBYTES: C2Rust_Unnamed_18 = 21;
@@ -4860,7 +4853,7 @@ pub unsafe extern "C" fn f_setcellwidths(
     }
     xfree(cw_table_save as *mut ::core::ffi::c_void);
     changed_window_setting_all();
-    redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_all_later(UPD_NOT_VALID);
 }
 pub unsafe extern "C" fn f_getcellwidths(
     mut _argvars: *mut typval_T,

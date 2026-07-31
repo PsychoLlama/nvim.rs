@@ -3,7 +3,7 @@ use crate::src::nvim::arglist::get_arglist_exp;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::buffer::buflist_findname_exp;
 use crate::src::nvim::charset::{getdigits_int, skipdigits, skipwhite};
-use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::src::nvim::fileio::{
     buf_reload, get2c, get3c, get4c, get8ctime, put_bytes, put_time, read_string, vim_fgets,
     vim_tempname,
@@ -758,13 +758,6 @@ pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub const kOptValTypeNil: OptValType = -1;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_15 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_15 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_15 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_15 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_15 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_15 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_15 = 10;
 pub const NUM_EVENTS: auto_event = 145;
 pub const ETYPE_SPELL: etype_T = 9;
 pub const ETYPE_INTERNAL: etype_T = 8;
@@ -2502,7 +2495,7 @@ unsafe extern "C" fn spell_reload_one(mut fname: *mut ::core::ffi::c_char, mut a
             {
                 slang_clear(slang);
             }
-            redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+            redraw_all_later(UPD_SOME_VALID);
             didit = true_0 != 0;
         }
         slang = (*slang).sl_next;
@@ -7720,7 +7713,7 @@ pub unsafe extern "C" fn spell_add_word(
         if !buf.is_null() {
             buf_reload(buf, (*buf).b_orig_mode, false_0 != 0);
         }
-        redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_SOME_VALID);
     }
     xfree(fnamebuf as *mut ::core::ffi::c_void);
 }

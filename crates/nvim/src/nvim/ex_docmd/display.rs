@@ -9,15 +9,13 @@ use crate::src::nvim::buffer::maketitle;
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::digraph::{listdigraphs, putdigraph};
 use crate::src::nvim::drawscreen::{
-    redraw_all_later, redraw_curbuf_later, redraw_statuslines, status_redraw_all,
-    status_redraw_curbuf, update_screen,
+    UPD_INVERTED, UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later, redraw_curbuf_later,
+    redraw_statuslines, status_redraw_all, status_redraw_curbuf, update_screen,
 };
 use crate::src::nvim::eval::eval_to_string;
 use crate::src::nvim::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
 use crate::src::nvim::ex_docmd::argopt::open_exfile;
-use crate::src::nvim::ex_docmd::{
-    FAIL, NUL, OK, UPD_INVERTED, UPD_NOT_VALID, UPD_SOME_VALID, VV_HLSEARCH, ex_pressedreturn,
-};
+use crate::src::nvim::ex_docmd::{FAIL, NUL, OK, VV_HLSEARCH, ex_pressedreturn};
 use crate::src::nvim::highlight_group::{do_highlight, load_colors};
 use crate::src::nvim::main::{
     RedrawingDisabled, State, VIsual_active, cmdpreview, curwin, e_invarg2, emsg_off, msg_col,
@@ -157,10 +155,10 @@ pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
         validate_cursor(curwin.get());
         update_topline(curwin.get());
         if (*eap).forceit != 0 {
-            redraw_all_later(UPD_NOT_VALID as c_int);
+            redraw_all_later(UPD_NOT_VALID);
             redraw_cmdline.set(true);
         } else if VIsual_active.get() {
-            redraw_curbuf_later(UPD_INVERTED as c_int);
+            redraw_curbuf_later(UPD_INVERTED);
         }
         update_screen();
         if need_maketitle.get() {
@@ -192,7 +190,7 @@ pub(crate) unsafe fn ex_redrawstatus(eap: *mut exarg_T) {
             redraw_statuslines();
         } else {
             if VIsual_active.get() {
-                redraw_curbuf_later(UPD_INVERTED as c_int);
+                redraw_curbuf_later(UPD_INVERTED);
             }
             update_screen();
         }
@@ -267,7 +265,7 @@ pub unsafe fn set_no_hlsearch(flag: bool) {
 pub(crate) unsafe fn ex_nohlsearch(_eap: *mut exarg_T) {
     unsafe {
         set_no_hlsearch(true);
-        redraw_all_later(UPD_SOME_VALID as c_int);
+        redraw_all_later(UPD_SOME_VALID);
     }
 }
 

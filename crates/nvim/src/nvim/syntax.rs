@@ -5,7 +5,9 @@ use crate::src::nvim::charset::{
     buf_init_chartab, getdigits_int, getdigits_int32, skiptowhite, skipwhite, str_foldcase,
     vim_isprintc, vim_iswordp_buf,
 };
-use crate::src::nvim::drawscreen::{redraw_curbuf_later, redraw_later};
+use crate::src::nvim::drawscreen::{
+    UPD_NOT_VALID, UPD_SOME_VALID, redraw_curbuf_later, redraw_later,
+};
 use crate::src::nvim::eval::vars::{do_unlet, get_var_value, set_internal_string_var};
 use crate::src::nvim::ex_docmd::{
     check_nextcmd, do_cmdline_cmd, ends_excmd, expand_filename, find_nextcmd, separate_nextcmd,
@@ -879,13 +881,6 @@ pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub const NUM_EVENTS: auto_event = 145;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_19 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_19 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_19 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_19 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_19 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_19 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_19 = 10;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct sp_syn {
@@ -3816,7 +3811,7 @@ unsafe extern "C" fn syn_cmd_spell(mut eap: *mut exarg_T, mut _syncing: ::core::
         );
         return;
     }
-    redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(curwin.get(), UPD_NOT_VALID);
 }
 unsafe extern "C" fn syn_cmd_iskeyword(mut eap: *mut exarg_T, mut _syncing: ::core::ffi::c_int) {
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
@@ -3880,7 +3875,7 @@ unsafe extern "C" fn syn_cmd_iskeyword(mut eap: *mut exarg_T, mut _syncing: ::co
         (*(*curwin.get()).w_s).b_syn_isk = (*curbuf.get()).b_p_isk;
         (*curbuf.get()).b_p_isk = save_isk;
     }
-    redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(curwin.get(), UPD_NOT_VALID);
 }
 pub unsafe extern "C" fn syntax_clear(mut block: *mut synblock_T) {
     (*block).b_syn_error = false_0 != 0;
@@ -4090,7 +4085,7 @@ unsafe extern "C" fn syn_cmd_clear(mut eap: *mut exarg_T, mut syncing: ::core::f
             arg = skipwhite(arg_end);
         }
     }
-    redraw_curbuf_later(UPD_SOME_VALID as ::core::ffi::c_int);
+    redraw_curbuf_later(UPD_SOME_VALID);
     syn_stack_free_all((*curwin.get()).w_s);
 }
 unsafe extern "C" fn syn_clear_one(id: ::core::ffi::c_int, syncing: bool) {
@@ -5542,7 +5537,7 @@ unsafe extern "C" fn syn_cmd_keyword(mut eap: *mut exarg_T, mut _syncing: ::core
             arg,
         );
     }
-    redraw_curbuf_later(UPD_SOME_VALID as ::core::ffi::c_int);
+    redraw_curbuf_later(UPD_SOME_VALID);
     syn_stack_free_all((*curwin.get()).w_s);
 }
 unsafe extern "C" fn syn_cmd_match(mut eap: *mut exarg_T, mut syncing: ::core::ffi::c_int) {
@@ -5658,7 +5653,7 @@ unsafe extern "C" fn syn_cmd_match(mut eap: *mut exarg_T, mut syncing: ::core::f
                 if syn_opt_arg.flags & HL_FOLD as ::core::ffi::c_int != 0 {
                     (*(*curwin.get()).w_s).b_syn_folditems += 1;
                 }
-                redraw_curbuf_later(UPD_SOME_VALID as ::core::ffi::c_int);
+                redraw_curbuf_later(UPD_SOME_VALID);
                 syn_stack_free_all((*curwin.get()).w_s);
                 return;
             }
@@ -5907,7 +5902,7 @@ unsafe extern "C" fn syn_cmd_region(mut eap: *mut exarg_T, mut syncing: ::core::
                     }
                     item += 1;
                 }
-                redraw_curbuf_later(UPD_SOME_VALID as ::core::ffi::c_int);
+                redraw_curbuf_later(UPD_SOME_VALID);
                 syn_stack_free_all((*curwin.get()).w_s);
                 success = true_0 != 0;
             }
@@ -6276,7 +6271,7 @@ unsafe extern "C" fn syn_cmd_cluster(mut eap: *mut exarg_T, mut _syncing: ::core
             }
         }
         if got_clstr {
-            redraw_curbuf_later(UPD_SOME_VALID as ::core::ffi::c_int);
+            redraw_curbuf_later(UPD_SOME_VALID);
             syn_stack_free_all((*curwin.get()).w_s);
         }
     }
@@ -6588,7 +6583,7 @@ unsafe extern "C" fn syn_cmd_sync(mut eap: *mut exarg_T, mut _syncing: ::core::f
         );
     } else if !finished {
         (*eap).nextcmd = check_nextcmd(arg_start);
-        redraw_curbuf_later(UPD_SOME_VALID as ::core::ffi::c_int);
+        redraw_curbuf_later(UPD_SOME_VALID);
         syn_stack_free_all((*curwin.get()).w_s);
     }
 }

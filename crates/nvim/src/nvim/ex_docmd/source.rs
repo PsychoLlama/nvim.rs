@@ -8,12 +8,12 @@ use core::ptr;
 
 use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::clipboard::{end_batch_changes, start_batch_changes};
-use crate::src::nvim::drawscreen::{redraw_all_later, update_screen};
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_all_later, update_screen};
 use crate::src::nvim::eval::vars::{set_vim_var_string, v_exception, v_throwpoint};
 use crate::src::nvim::ex_cmds::print_line_no_prefix;
 use crate::src::nvim::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 use crate::src::nvim::ex_docmd::{
-    ETYPE_EXCEPT, FAIL, HLF_E, IOSIZE, ML_EMPTY, MSG_BUF_LEN, OK, UPD_NOT_VALID, VV_EXITREASON,
+    ETYPE_EXCEPT, FAIL, HLF_E, IOSIZE, ML_EMPTY, MSG_BUF_LEN, OK, VV_EXITREASON,
     cmdline_call_depth, dbg_stuff, ex_error_buf, ex_pressedreturn, loop_cookie, wcmd_T,
 };
 use crate::src::nvim::ex_eval::discard_current_exception;
@@ -162,7 +162,7 @@ pub unsafe fn do_exmode() {
 
         *RedrawingDisabled.ptr() -= 1;
         *no_wait_return.ptr() -= 1;
-        redraw_all_later(UPD_NOT_VALID as c_int);
+        redraw_all_later(UPD_NOT_VALID);
         update_screen();
         need_wait_return.set(false);
         msg_scroll.set(save_msg_scroll);

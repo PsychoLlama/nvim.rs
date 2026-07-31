@@ -17,7 +17,7 @@ use crate::src::nvim::cursor::{
     get_cursor_pos_ptr, inc_cursor,
 };
 use crate::src::nvim::drawscreen::{
-    redraw_later, redrawWinline, setcursor, showmode, update_screen,
+    UPD_VALID, redraw_later, redrawWinline, setcursor, showmode, update_screen,
 };
 use crate::src::nvim::edit::{
     backspace_until_column, get_can_cindent, ins_apply_autocmds, ins_eol, ins_need_undo_get,
@@ -422,13 +422,6 @@ pub const SHM_LINES: C2Rust_Unnamed_20 = 108;
 pub const SHM_MOD: C2Rust_Unnamed_20 = 109;
 pub const SHM_RO: C2Rust_Unnamed_20 = 114;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_21 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_21 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_21 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_21 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_21 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_21 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_21 = 10;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const KEY_COMPLETE: C2Rust_Unnamed_22 = 259;
 pub const KEY_OPEN_BACK: C2Rust_Unnamed_22 = 258;
@@ -3110,7 +3103,7 @@ unsafe extern "C" fn ins_compl_new_leader() {
     compl_used_match.set(false_0 != 0);
     if p_acl.get() > 0 as OptInt {
         pum_undisplay(true_0 != 0);
-        redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+        redraw_later(curwin.get(), UPD_VALID);
         update_screen();
         ui_flush();
     }

@@ -17,7 +17,7 @@ use crate::src::nvim::buffer::maketitle;
 use crate::src::nvim::charset::init_chartab;
 use crate::src::nvim::decoration_provider::get_decor_provider;
 use crate::src::nvim::drawscreen::{
-    redraw_all_later, redraw_buf_later, redraw_later, status_redraw_all,
+    UPD_NOT_VALID, redraw_all_later, redraw_buf_later, redraw_later, status_redraw_all,
 };
 use crate::src::nvim::ex_getln::{check_opt_wim, did_set_cedit};
 use crate::src::nvim::global_cell::GlobalCell;
@@ -45,7 +45,7 @@ use crate::src::nvim::types::{
 };
 
 use super::{
-    HL_GLOBAL, HLATTRS_INIT, NO_SCREEN, NUL, NULL_STRING, OPT_GLOBAL, OPT_LOCAL, UPD_NOT_VALID,
+    HL_GLOBAL, HLATTRS_INIT, NO_SCREEN, NUL, NULL_STRING, OPT_GLOBAL, OPT_LOCAL,
     didset_options_sctx, didset_window_options, get_varp, kFillchars, kListchars, kOptFlagHLOnly,
     kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl,
     kOptFlagRedrWin, kOptValTypeString, option_has_type,
@@ -407,16 +407,16 @@ pub unsafe fn check_redraw_for(buf: *mut buf_T, win: *mut win_T, flags: uint32_t
         }
         if flags & (kOptFlagRedrBuf | kOptFlagRedrWin) != 0 || all {
             if flags & kOptFlagHLOnly != 0 {
-                redraw_later(win, UPD_NOT_VALID as c_int);
+                redraw_later(win, UPD_NOT_VALID);
             } else {
                 changed_window_setting(win);
             }
         }
         if flags & kOptFlagRedrBuf != 0 {
-            redraw_buf_later(buf, UPD_NOT_VALID as c_int);
+            redraw_buf_later(buf, UPD_NOT_VALID);
         }
         if all {
-            redraw_all_later(UPD_NOT_VALID as c_int);
+            redraw_all_later(UPD_NOT_VALID);
         }
     }
 }

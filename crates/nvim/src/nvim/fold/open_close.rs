@@ -2,7 +2,7 @@ use crate::src::nvim::buffer_updates::buf_updates_send_changes;
 use crate::src::nvim::change::changed_lines;
 use crate::src::nvim::cursor::check_cursor_col;
 use crate::src::nvim::diff::diff_lnum_win;
-use crate::src::nvim::drawscreen::{redraw_buf_later, redraw_curbuf_later};
+use crate::src::nvim::drawscreen::{UPD_INVERTED, redraw_buf_later, redraw_curbuf_later};
 use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::main::{curtab, curwin, firstwin, p_fcl};
 use crate::src::nvim::message::emsg;
@@ -65,7 +65,7 @@ pub unsafe extern "C" fn opFoldRange(
         emsg(gettext(e_nofold.get()));
     }
     if had_visual {
-        redraw_curbuf_later(UPD_INVERTED as c_int);
+        redraw_curbuf_later(UPD_INVERTED);
     }
 }
 
@@ -381,7 +381,7 @@ pub unsafe extern "C" fn deleteFold(
     if !did_one {
         emsg(gettext(e_nofold.get()));
         if had_visual {
-            redraw_buf_later((*wp).w_buffer, UPD_INVERTED as c_int);
+            redraw_buf_later((*wp).w_buffer, UPD_INVERTED);
         }
     } else {
         check_cursor_col(wp);

@@ -18,7 +18,7 @@ use crate::src::nvim::buffer::do_autochdir;
 use crate::src::nvim::channel::{channel_from_stdio, channel_init, channel_teardown};
 use crate::src::nvim::diff::diff_win_options;
 use crate::src::nvim::drawscreen::{
-    default_grid_alloc, redraw_all_later, redraw_later, screenclear,
+    UPD_NOT_VALID, UPD_VALID, default_grid_alloc, redraw_all_later, redraw_later, screenclear,
 };
 use crate::src::nvim::eval::typval::tv_list_alloc;
 use crate::src::nvim::eval::vars::{
@@ -52,13 +52,13 @@ use crate::src::nvim::main::remote::remote_request;
 use crate::src::nvim::main::usage::{mainerr, print_mainerr};
 use crate::src::nvim::main::{
     APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, IObuff, KE_NOP, LOGLVL_DBG, LOGLVL_INF,
-    NO_BUFFERS, NUL, RedrawingDisabled, Rows, UPD_NOT_VALID, UPD_VALID, VV_OLDFILES, VV_PROGPATH,
-    VV_STARTTIME, VV_SWAPCOMMAND, VV_VIM_DID_ENTER, VV_VIM_DID_INIT, WRITEBIN, argv0, cb_flags,
-    cmdline_row, curbuf, curtab, curwin, debug_break_level, embedded_mode, err_arg_missing,
-    exmode_active, firstwin, full_screen, global_alist, headless_mode, kCallbackNone,
-    kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout, msg_row, msg_scroll,
-    no_wait_return, p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit,
-    scriptout, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
+    NO_BUFFERS, NUL, RedrawingDisabled, Rows, VV_OLDFILES, VV_PROGPATH, VV_STARTTIME,
+    VV_SWAPCOMMAND, VV_VIM_DID_ENTER, VV_VIM_DID_INIT, WRITEBIN, argv0, cb_flags, cmdline_row,
+    curbuf, curtab, curwin, debug_break_level, embedded_mode, err_arg_missing, exmode_active,
+    firstwin, full_screen, global_alist, headless_mode, kCallbackNone, kOptCbFlagUnnamed,
+    kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout, msg_row, msg_scroll, no_wait_return,
+    p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit, scriptout,
+    silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
     ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::src::nvim::mark::setpcmark;
@@ -459,7 +459,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         }
 
         setmouse();
-        redraw_later(curwin.get(), UPD_VALID as c_int);
+        redraw_later(curwin.get(), UPD_VALID);
         no_wait_return.set(1);
 
         create_windows(&raw mut params);
@@ -514,7 +514,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
         starting.set(0);
         RedrawingDisabled.set(0);
-        redraw_all_later(UPD_NOT_VALID as c_int);
+        redraw_all_later(UPD_NOT_VALID);
         no_wait_return.set(0);
         do_autochdir();
 

@@ -13,7 +13,7 @@ use crate::src::nvim::cursor::{
     gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_ptr, getviscol,
     getviscol2, getvpos, inc_cursor,
 };
-use crate::src::nvim::drawscreen::{redraw_curbuf_later, update_screen};
+use crate::src::nvim::drawscreen::{UPD_INVERTED, redraw_curbuf_later, update_screen};
 use crate::src::nvim::edit::{beginline, display_dollar, edit};
 use crate::src::nvim::eval::typval::{tv_clear, tv_dict_add_nr};
 use crate::src::nvim::eval::{callback_call, set_ref_in_callback};
@@ -232,13 +232,6 @@ pub const YREG_PUT: C2Rust_Unnamed_23 = 2;
 pub const YREG_YANK: C2Rust_Unnamed_23 = 1;
 pub const YREG_PASTE: C2Rust_Unnamed_23 = 0;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_24 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_24 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_24 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_24 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_24 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_24 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_24 = 10;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub const INDENT_DEC: C2Rust_Unnamed_25 = 3;
 pub const INDENT_INC: C2Rust_Unnamed_25 = 2;
@@ -2120,7 +2113,7 @@ pub unsafe extern "C" fn op_tilde(mut oap: *mut oparg_T) {
         }
     }
     if !did_change && (*oap).is_VIsual as ::core::ffi::c_int != 0 {
-        redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+        redraw_curbuf_later(UPD_INVERTED);
     }
     if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int
     {
@@ -2222,7 +2215,7 @@ pub unsafe extern "C" fn op_insert(mut oap: *mut oparg_T, mut count1: ::core::ff
     };
     bd.is_MAX = ((*curwin.get()).w_curswant == MAXCOL as ::core::ffi::c_int) as ::core::ffi::c_int;
     (*curwin.get()).w_cursor.lnum = (*oap).start.lnum;
-    redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+    redraw_curbuf_later(UPD_INVERTED);
     update_screen();
     if (*oap).motion_type as ::core::ffi::c_int == kMTBlockWise as ::core::ffi::c_int {
         if (*curwin.get()).w_cursor.coladd > 0 as ::core::ffi::c_int {
@@ -3228,7 +3221,7 @@ pub unsafe extern "C" fn op_addsub(mut oap: *mut oparg_T, mut Prenum1: linenr_T,
             );
         }
         if change_cnt == 0 && (*oap).is_VIsual as ::core::ffi::c_int != 0 {
-            redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+            redraw_curbuf_later(UPD_INVERTED);
         }
         if change_cnt > 0 as ssize_t
             && (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int
@@ -4882,7 +4875,7 @@ pub unsafe extern "C" fn do_pending_operator(
                     && (*oap).motion_force == NUL
                 {
                     restore_lbr(lbr_saved != 0);
-                    redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+                    redraw_curbuf_later(UPD_INVERTED);
                 }
             }
         }
@@ -4909,7 +4902,7 @@ pub unsafe extern "C" fn do_pending_operator(
                 || (*oap).op_type == OP_FOLD as ::core::ffi::c_int)
         {
             restore_lbr(lbr_saved != 0);
-            redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+            redraw_curbuf_later(UPD_INVERTED);
         }
         if (*oap).motion_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
             && (*oap).inclusive as ::core::ffi::c_int == false_0

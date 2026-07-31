@@ -3,7 +3,7 @@ use crate::src::nvim::api::private::helpers::{
 };
 use crate::src::nvim::api::vim::nvim_create_buf;
 use crate::src::nvim::autocmd::{block_autocmds, unblock_autocmds};
-use crate::src::nvim::drawscreen::{redraw_later, set_must_redraw};
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_later, set_must_redraw};
 use crate::src::nvim::options::kOptBufhidden;
 
 use crate::src::nvim::grid::grid_adjust;
@@ -128,13 +128,6 @@ pub const kOptScopeBuf: OptScope = 2;
 pub const kOptScopeWin: OptScope = 1;
 pub const kOptScopeGlobal: OptScope = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_13 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_13 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_13 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_13 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_13 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_13 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_13 = 10;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const OPT_SKIPRTP: C2Rust_Unnamed_14 = 128;
 pub const OPT_NO_REDRAW: C2Rust_Unnamed_14 = 64;
@@ -344,7 +337,7 @@ pub unsafe extern "C" fn win_new_float(
     (*wp).w_hsep_height = 0 as ::core::ffi::c_int;
     (*wp).w_vsep_width = 0 as ::core::ffi::c_int;
     win_config_float(wp, fconfig);
-    redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
+    redraw_later(wp, UPD_VALID);
     return wp;
 }
 pub unsafe extern "C" fn win_set_minimal_style(mut wp: *mut win_T) {
@@ -510,12 +503,12 @@ pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinCo
         };
     }
     win_set_inner_size(wp, true_0 != 0);
-    set_must_redraw(UPD_VALID as ::core::ffi::c_int);
+    set_must_redraw(UPD_VALID);
     (*wp).w_redr_status = (*wp).w_status_height != 0;
     (*wp).w_pos_changed = true_0 != 0;
     if change_external as ::core::ffi::c_int != 0 || change_border as ::core::ffi::c_int != 0 {
         (*wp).w_hl_needs_update = true_0;
-        redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_later(wp, UPD_NOT_VALID);
     }
     if (*wp).w_config.relative as ::core::ffi::c_uint
         == kFloatRelativeWindow as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -569,7 +562,7 @@ pub unsafe extern "C" fn win_config_float(mut wp: *mut win_T, mut fconfig: WinCo
     }
     if fconfig.border {
         (*wp).w_redr_border = true_0 != 0;
-        redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
+        redraw_later(wp, UPD_VALID);
     }
 }
 unsafe extern "C" fn float_zindex_cmp(

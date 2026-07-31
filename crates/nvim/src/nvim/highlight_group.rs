@@ -4,7 +4,7 @@ use crate::src::nvim::autocmd::{EVENT_COLORSCHEME, EVENT_COLORSCHEMEPRE, apply_a
 use crate::src::nvim::charset::{skiptowhite, skipwhite, vim_isprintc, vim_strsize};
 use crate::src::nvim::cursor_shape::cursor_mode_uses_syn_id;
 use crate::src::nvim::decoration_provider::decor_provider_invalidate_hl;
-use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later};
 use crate::src::nvim::eval::last_set_msg;
 use crate::src::nvim::eval::vars::{do_unlet, get_var_value};
 use crate::src::nvim::ex_docmd::ends_excmd;
@@ -336,13 +336,6 @@ pub const ET_ERROR: except_type_T = 1;
 pub const ET_USER: except_type_T = 0;
 pub const NUM_EVENTS: auto_event = 145;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_18 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_18 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_18 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_18 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_18 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_18 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_18 = 10;
 pub const kUIExtCount: UIExtension = 10;
 pub const kUIFloatDebug: UIExtension = 9;
 pub const kUITermColors: UIExtension = 8;
@@ -1766,7 +1759,7 @@ pub unsafe extern "C" fn set_hl_group(
         ui_mode_info_set();
     }
     if !updating_screen.get() {
-        redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_NOT_VALID);
     }
     need_highlight_changed.set(true_0 != 0);
 }
@@ -1952,7 +1945,7 @@ pub unsafe extern "C" fn do_highlight(
                 .es_lnum;
                 nlua_set_sctx(&raw mut (*hlgroup).sg_script_ctx);
                 (*hlgroup).sg_cleared = false_0 != 0;
-                redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+                redraw_all_later(UPD_SOME_VALID);
                 need_highlight_changed.set(true_0 != 0);
             }
         }
@@ -1974,7 +1967,7 @@ pub unsafe extern "C" fn do_highlight(
             }
             init_highlight(true_0 != 0, true_0 != 0);
             highlight_changed();
-            redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+            redraw_all_later(UPD_NOT_VALID);
             return;
         }
         name_end = skiptowhite(line);
@@ -2671,7 +2664,7 @@ pub unsafe extern "C" fn do_highlight(
             ui_default_colors_set();
         }
         did_highlight_changed = true_0 != 0;
-        redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_NOT_VALID);
     } else {
         set_hl_attr(idx);
     }
@@ -2696,7 +2689,7 @@ pub unsafe extern "C" fn do_highlight(
         && !did_highlight_changed
     {
         if !updating_screen.get() {
-            redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+            redraw_all_later(UPD_NOT_VALID);
         }
         need_highlight_changed.set(true_0 != 0);
     }

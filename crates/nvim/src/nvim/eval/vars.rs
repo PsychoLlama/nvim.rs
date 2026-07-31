@@ -2,7 +2,7 @@ use crate::src::nvim::api::private::helpers::{cstr_as_string, cstr_to_string};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::src::nvim::charset::{getdigits_int, skiptowhite, skipwhite};
-use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::src::nvim::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::src::nvim::eval::funcs::{tv_get_buf, tv_get_buf_from_arg};
 use crate::src::nvim::eval::typval::QUEUE_INIT;
@@ -791,13 +791,6 @@ pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_20 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_20 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_20 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_20 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_20 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_20 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_20 = 10;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;
@@ -7429,7 +7422,7 @@ pub unsafe extern "C" fn before_set_vvar(
         ) == 0 as ::core::ffi::c_int
         {
             no_hlsearch.set((*di).di_tv.vval.v_number == 0);
-            redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+            redraw_all_later(UPD_SOME_VALID);
         }
         if watched {
             tv_dict_watcher_notify(

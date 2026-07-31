@@ -14,7 +14,9 @@ use crate::src::nvim::cursor::{
     adjust_cursor_col, check_cursor, coladvance, gchar_cursor, get_cursor_line_len,
     get_cursor_line_ptr, inc_cursor,
 };
-use crate::src::nvim::drawscreen::{conceal_check_cursor_line, redraw_curbuf_later, showmode};
+use crate::src::nvim::drawscreen::{
+    UPD_INVERTED, UPD_VALID, conceal_check_cursor_line, redraw_curbuf_later, showmode,
+};
 use crate::src::nvim::fold::foldAdjustVisual;
 use crate::src::nvim::getchar::{beep_flush, stuff_empty, typebuf_typed};
 use crate::src::nvim::main::{
@@ -27,9 +29,8 @@ use crate::src::nvim::mbyte::utfc_ptr2len;
 use crate::src::nvim::memline::{ml_get_len, ml_get_pos};
 use crate::src::nvim::mouse::setmouse;
 use crate::src::nvim::normal::{
-    CA_NO_ADJ_OP_END, Ctrl_Q, Ctrl_V, MAXCOL, NUL, OP_NOP, TAB, UPD_INVERTED, UPD_VALID,
-    VIsual_mode_orig, clearopbeep, false_0, may_clear_cmdline, nv_down, nv_g_cmd, nv_operator,
-    nv_right, true_0,
+    CA_NO_ADJ_OP_END, Ctrl_Q, Ctrl_V, MAXCOL, NUL, OP_NOP, TAB, VIsual_mode_orig, clearopbeep,
+    false_0, may_clear_cmdline, nv_down, nv_g_cmd, nv_operator, nv_right, true_0,
 };
 use crate::src::nvim::ops::adjust_cursor_eol;
 use crate::src::nvim::option::get_ve_flags;
@@ -81,7 +82,7 @@ pub(crate) fn reset_VIsual_and_resel() {
     if VIsual_active.get() {
         end_visual_mode();
         // SAFETY: schedules a redraw of the current buffer.
-        unsafe { redraw_curbuf_later(UPD_INVERTED as c_int) };
+        unsafe { redraw_curbuf_later(UPD_INVERTED) };
     }
     VIsual_reselect.set(false_0);
 }
@@ -91,7 +92,7 @@ pub(crate) fn reset_VIsual() {
     if VIsual_active.get() {
         end_visual_mode();
         // SAFETY: schedules a redraw of the current buffer.
-        unsafe { redraw_curbuf_later(UPD_INVERTED as c_int) };
+        unsafe { redraw_curbuf_later(UPD_INVERTED) };
         VIsual_reselect.set(false_0);
     }
 }
@@ -332,7 +333,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
         } else {
             (*curwin.get()).w_set_curswant = true_0;
         }
-        redraw_curbuf_later(UPD_INVERTED as c_int);
+        redraw_curbuf_later(UPD_INVERTED);
     }
 }
 
@@ -366,7 +367,7 @@ pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
                 showmode();
                 may_trigger_modechanged();
             }
-            redraw_curbuf_later(UPD_INVERTED as c_int);
+            redraw_curbuf_later(UPD_INVERTED);
         } else if (*cap).count0 > 0 && resel_VIsual_mode.get() != NUL {
             reselect_scaled(cap);
         } else {
@@ -442,11 +443,11 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
         }
         // Seed the "what was highlighted last time" pair so the first redraw
         // has something to compare against.
-        if (*curwin.get()).w_redr_type < UPD_INVERTED as c_int {
+        if (*curwin.get()).w_redr_type < UPD_INVERTED {
             (*curwin.get()).w_old_cursor_lnum = (*curwin.get()).w_cursor.lnum;
             (*curwin.get()).w_old_visual_lnum = (*curwin.get()).w_cursor.lnum;
         }
-        redraw_curbuf_later(UPD_VALID as c_int);
+        redraw_curbuf_later(UPD_VALID);
     }
 }
 
@@ -501,7 +502,7 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
             may_start_select('c' as c_int);
         }
         setmouse();
-        redraw_curbuf_later(UPD_INVERTED as c_int);
+        redraw_curbuf_later(UPD_INVERTED);
         showmode();
     }
 }

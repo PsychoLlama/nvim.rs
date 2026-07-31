@@ -12,7 +12,7 @@ use crate::src::nvim::change::{change_warning, changed_lines};
 use crate::src::nvim::charset::{getdigits_int, getdigits_int32, skipwhite};
 use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::decoration::decor_conceal_line;
-use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, redraw_later};
 use crate::src::nvim::eval::typval::{tv_get_lnum, tv_get_number};
 use crate::src::nvim::eval::vars::{eval_diff, eval_patch};
 use crate::src::nvim::ex_cmds::{append_redir, ex_file};
@@ -864,7 +864,6 @@ pub const CMOD_ERRSILENT: C2Rust_Unnamed_18 = 4;
 pub const CMOD_SILENT: C2Rust_Unnamed_18 = 2;
 pub const CMOD_SANDBOX: C2Rust_Unnamed_18 = 1;
 pub const NUM_EVENTS: auto_event = 145;
-pub const UPD_VALID: C2Rust_Unnamed_20 = 10;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct diffio_T {
@@ -901,8 +900,6 @@ pub const kShellOptDoOut: C2Rust_Unnamed_22 = 4;
 pub const kShellOptSilent: C2Rust_Unnamed_22 = 8;
 pub const kShellOptFilter: C2Rust_Unnamed_22 = 1;
 pub const MAX_DIFF_ANCHORS: C2Rust_Unnamed_24 = 20;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_20 = 35;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_20 = 40;
 pub const OPT_LOCAL: C2Rust_Unnamed_21 = 2;
 pub const WSP_VERT: C2Rust_Unnamed_23 = 2;
 #[derive(Copy, Clone)]
@@ -913,10 +910,6 @@ pub struct linemap_entry_T {
     pub lineoff: ::core::ffi::c_int,
 }
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_20 = 50;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_20 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_20 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_20 = 20;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const OPT_SKIPRTP: C2Rust_Unnamed_21 = 128;
 pub const OPT_NO_REDRAW: C2Rust_Unnamed_21 = 64;
@@ -998,7 +991,7 @@ pub unsafe extern "C" fn diff_buf_delete(mut buf: *mut buf_T) {
             (*tp).tp_diff_invalid = true_0;
             if tp == curtab.get() {
                 need_diff_redraw.set(true_0 != 0);
-                redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+                redraw_later(curwin.get(), UPD_VALID);
             }
         }
         tp = (*tp).tp_next as *mut tabpage_T;
@@ -1436,7 +1429,7 @@ pub unsafe extern "C" fn diff_redraw(mut dofold: bool) {
     };
     while !wp.is_null() {
         if !((*wp).w_onebuf_opt.wo_diff == 0 || !buf_valid((*wp).w_buffer)) {
-            redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
+            redraw_later(wp, UPD_SOME_VALID);
             if wp != curwin.get() {
                 wp_other = wp;
             }
@@ -2552,7 +2545,7 @@ pub unsafe extern "C" fn diff_win_options(mut wp: *mut win_T, mut addbuf: bool) 
     if addbuf {
         diff_buf_add((*wp).w_buffer);
     }
-    redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(wp, UPD_NOT_VALID);
 }
 pub unsafe fn ex_diffoff(mut eap: *mut exarg_T) {
     let mut diffwin: bool = false_0 != 0;

@@ -8,8 +8,8 @@ use crate::src::nvim::cursor::{
     check_cursor, dec_cursor, get_cursor_line_len, get_cursor_line_ptr, inc_cursor,
 };
 use crate::src::nvim::drawscreen::{
-    redraw_all_later, redraw_curbuf_later, redraw_later, setcursor, show_cursor_info_later,
-    showmode, update_screen,
+    UPD_INVERTED, UPD_SOME_VALID, UPD_VALID, redraw_all_later, redraw_curbuf_later, redraw_later,
+    setcursor, show_cursor_info_later, showmode, update_screen,
 };
 use crate::src::nvim::eval::typval::tv_list_len;
 use crate::src::nvim::eval::typval::{
@@ -304,13 +304,6 @@ pub const HIST_CMD: C2Rust_Unnamed_18 = 0;
 pub const HIST_INVALID: C2Rust_Unnamed_18 = -1;
 pub const HIST_DEFAULT: C2Rust_Unnamed_18 = -2;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_19 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_19 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_19 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_19 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_19 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_19 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_19 = 10;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;
@@ -689,7 +682,7 @@ pub unsafe extern "C" fn save_re_pat(
     (*spats.ptr())[idx as usize].additional_data = ::core::ptr::null_mut::<AdditionalData>();
     last_idx.set(idx);
     if p_hls.get() != 0 {
-        redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_SOME_VALID);
     }
     set_no_hlsearch(false_0 != 0);
 }
@@ -994,7 +987,7 @@ pub unsafe extern "C" fn set_last_search_pat(
         saved_spats_last_idx.set(last_idx.get());
     }
     if p_hls.get() != 0 && idx == last_idx.get() && !no_hlsearch.get() {
-        redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_SOME_VALID);
     }
 }
 pub unsafe extern "C" fn last_pat_prog(mut regmatch: *mut regmmatch_T) {
@@ -1559,7 +1552,7 @@ pub unsafe extern "C" fn do_search(
     if no_hlsearch.get() as ::core::ffi::c_int != 0
         && options & SEARCH_KEEP as ::core::ffi::c_int == 0
     {
-        redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_SOME_VALID);
         set_no_hlsearch(false_0 != 0);
     }
     '_end_do_search: {
@@ -3364,7 +3357,7 @@ pub unsafe extern "C" fn current_search(
     }
     may_start_select('c' as ::core::ffi::c_int);
     setmouse();
-    redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+    redraw_curbuf_later(UPD_INVERTED);
     showmode();
     return OK;
 }
@@ -4771,7 +4764,7 @@ pub unsafe extern "C" fn find_pattern_in_path(
                                         && win_valid(curwin_save) as ::core::ffi::c_int != 0
                                     {
                                         validate_cursor(curwin.get());
-                                        redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+                                        redraw_later(curwin.get(), UPD_VALID);
                                         win_enter(curwin_save, true_0 != 0);
                                     }
                                     break 's_1511;

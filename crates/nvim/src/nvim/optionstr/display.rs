@@ -15,7 +15,7 @@ use crate::src::nvim::charset::{getdigits_int, init_chartab, ptr2cells};
 use crate::src::nvim::cursor::coladvance;
 use crate::src::nvim::cursor_shape::parse_shape_opt;
 use crate::src::nvim::drawscreen::{
-    comp_col, redraw_all_later, redraw_curbuf_later, redrawWinline,
+    UPD_INVERTED, UPD_NOT_VALID, comp_col, redraw_all_later, redraw_curbuf_later, redrawWinline,
 };
 use crate::src::nvim::eval::vars::{do_unlet, get_var_value};
 use crate::src::nvim::ex_getln::check_opt_wim;
@@ -42,12 +42,11 @@ use crate::src::nvim::window::check_colorcolumn;
 use super::frame::{errbuf, invalid, local_window, old_value, varp, win};
 use super::{
     COCU_ALL, FAIL, HIGHLIGHT_INIT, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, NUL, OK,
-    OPT_LOCAL, SCL_NUM, SHAPE_CURSOR, UPD_INVERTED, UPD_NOT_VALID, WW_ALL, check_chars_options,
-    check_signcolumn, check_str_opt, check_string_option, did_set_option_listflag,
-    did_set_statustabline_rulerformat, did_set_str_generic,
-    e_showbreak_contains_unprintable_or_wide_character, free_string_option, kAlignLeft,
-    kErrorTypeNone, kFloatRelativeEditor, kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault,
-    opt_strings_flags, terminal_notify_theme,
+    OPT_LOCAL, SCL_NUM, SHAPE_CURSOR, WW_ALL, check_chars_options, check_signcolumn, check_str_opt,
+    check_string_option, did_set_option_listflag, did_set_statustabline_rulerformat,
+    did_set_str_generic, e_showbreak_contains_unprintable_or_wide_character, free_string_option,
+    kAlignLeft, kErrorTypeNone, kFloatRelativeEditor, kWinSplitLeft, kWinStyleUnused,
+    kZIndexFloatDefault, opt_strings_flags, terminal_notify_theme,
 };
 
 /// 'ambiwidth' decides how wide an ambiguous-width character is drawn, so
@@ -169,7 +168,7 @@ pub unsafe extern "C" fn did_set_breakindentopt(args: *mut optset_T) -> *const c
     // every other window's shared buffer wraps.
     if !for_window.is_null() && unsafe { (*wp).w_briopt_list } != 0 {
         // SAFETY: marks the editor's own windows.
-        unsafe { redraw_all_later(UPD_NOT_VALID as c_int) };
+        unsafe { redraw_all_later(UPD_NOT_VALID) };
     }
     ptr::null()
 }
@@ -361,7 +360,7 @@ pub unsafe extern "C" fn did_set_selection(args: *mut optset_T) -> *const c_char
     // changed.
     if VIsual_active.get() {
         // SAFETY: marks the current buffer's windows.
-        unsafe { redraw_curbuf_later(UPD_INVERTED as c_int) };
+        unsafe { redraw_curbuf_later(UPD_INVERTED) };
     }
     ptr::null()
 }

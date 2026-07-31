@@ -32,7 +32,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use crate::src::nvim::charset::{char2cells, hexhex2nr, ptr2cells};
-use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::src::nvim::grid::{schar_from_char, schar_from_str};
 use crate::src::nvim::main::{
     curtab, curwin, e_invarg, e_leadtab_requires_tab, first_tabpage, firstwin, p_fcs, p_lcs,
@@ -47,7 +47,7 @@ use crate::src::nvim::types::{
 };
 
 use super::{
-    NUL, OPT_GLOBAL, UPD_NOT_VALID, clear_string_option, e_conflicts_with_value_of_fillchars,
+    NUL, OPT_GLOBAL, clear_string_option, e_conflicts_with_value_of_fillchars,
     e_conflicts_with_value_of_listchars, e_wrong_character_width_for_field_str,
     e_wrong_number_of_characters_for_field_str, fcs_chars, kFillchars, kListchars, lcs_chars,
 };
@@ -673,7 +673,7 @@ pub(crate) unsafe fn did_set_global_chars_option(
         })
     };
     // SAFETY: `redraw_all_later` only marks the editor's own windows.
-    unsafe { redraw_all_later(UPD_NOT_VALID as c_int) };
+    unsafe { redraw_all_later(UPD_NOT_VALID) };
     ptr::null()
 }
 

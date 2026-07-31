@@ -121,8 +121,6 @@ const OPT_LOCAL: c_int = 2;
 const TERM_ATTRS_MAX: c_int = 1024;
 /// `State` bit set while terminal mode is running.
 /// `redraw_later` levels.
-const UPD_VALID: c_int = 10;
-const UPD_SOME_VALID: c_int = 35;
 const AUGROUP_ALL: c_int = -3;
 /// `v:termrequest`.
 const VV_TERMREQUEST: VimVarIndex = 10;

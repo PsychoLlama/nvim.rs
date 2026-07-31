@@ -8,7 +8,9 @@ use crate::src::nvim::charset::{
     byte2cells, char2cells, getdigits_int, ptr2cells, skipwhite, transchar_buf, transchar_byte_buf,
     vim_isprintc, vim_strsize,
 };
-use crate::src::nvim::drawscreen::{redraw_all_later, redraw_later, set_must_redraw};
+use crate::src::nvim::drawscreen::{
+    UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_later, set_must_redraw,
+};
 use crate::src::nvim::eval::callback_call;
 use crate::src::nvim::eval::typval::tv_clear;
 use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string, var_redir_str};
@@ -940,13 +942,6 @@ pub const SHM_LINES: C2Rust_Unnamed_34 = 108;
 pub const SHM_MOD: C2Rust_Unnamed_34 = 109;
 pub const SHM_RO: C2Rust_Unnamed_34 = 114;
 pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_35 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_35 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_35 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_35 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_35 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_35 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_35 = 10;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;
@@ -3230,7 +3225,7 @@ pub unsafe extern "C" fn wait_return(mut redraw: ::core::ffi::c_int) {
     let mut had_got_int: ::core::ffi::c_int = 0;
     let mut save_scriptout: *mut FILE = ::core::ptr::null_mut::<FILE>();
     if redraw == true_0 {
-        redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_NOT_VALID);
     }
     if ui_has(kUIMessages) {
         prompt_for_input(
@@ -3437,7 +3432,7 @@ pub unsafe extern "C" fn wait_return(mut redraw: ::core::ffi::c_int) {
         if redraw == true_0
             || msg_scrolled.get() != 0 as ::core::ffi::c_int && redraw != -1 as ::core::ffi::c_int
         {
-            redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+            redraw_later(curwin.get(), UPD_VALID);
         }
     }
 }
@@ -4930,7 +4925,7 @@ unsafe extern "C" fn inc_msg_scrolled() {
         xfree(tofree as *mut ::core::ffi::c_void);
     }
     (*msg_scrolled.ptr()) += 1;
-    set_must_redraw(UPD_VALID as ::core::ffi::c_int);
+    set_must_redraw(UPD_VALID);
 }
 static last_msgchunk: GlobalCell<*mut msgchunk_T> =
     GlobalCell::new(::core::ptr::null_mut::<msgchunk_T>());

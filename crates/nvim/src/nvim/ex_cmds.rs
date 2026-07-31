@@ -33,7 +33,8 @@ use crate::src::nvim::decoration::bufhl_add_hl_pos_offset;
 use crate::src::nvim::diff::{diff_buf_add, diff_invalidate};
 use crate::src::nvim::digraph::{get_digraph_for_char, keymap_init};
 use crate::src::nvim::drawscreen::{
-    number_width, redraw_curbuf_later, redraw_later, show_cursor_info_later, update_screen,
+    UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, number_width, redraw_curbuf_later, redraw_later,
+    show_cursor_info_later, update_screen,
 };
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::typval::tv_list_len;
@@ -1082,13 +1083,6 @@ pub const HIST_CMD: C2Rust_Unnamed_23 = 0;
 pub const HIST_INVALID: C2Rust_Unnamed_23 = -1;
 pub const HIST_DEFAULT: C2Rust_Unnamed_23 = -2;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_24 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_24 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_24 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_24 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_24 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_24 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_24 = 10;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub const BL_FIX: C2Rust_Unnamed_25 = 4;
 pub const BL_SOL: C2Rust_Unnamed_25 = 2;
@@ -2864,7 +2858,7 @@ unsafe extern "C" fn do_filter(
                         xfree(cmd_buf as *mut ::core::ffi::c_void);
                         break '_error;
                     } else {
-                        redraw_curbuf_later(UPD_VALID as ::core::ffi::c_int);
+                        redraw_curbuf_later(UPD_VALID);
                     }
                 }
                 read_linecount = (*curbuf.get()).b_ml.ml_line_count;
@@ -4542,7 +4536,7 @@ pub unsafe extern "C" fn do_ecmd(
                             (*curwin.get()).w_topline,
                         );
                         *so_ptr = n;
-                        redraw_curbuf_later(UPD_NOT_VALID as ::core::ffi::c_int);
+                        redraw_curbuf_later(UPD_NOT_VALID);
                     }
                     do_autochdir();
                 }
@@ -5677,16 +5671,10 @@ unsafe extern "C" fn do_sub(
                                     highlight_match.set(true_0 != 0);
                                     update_topline(curwin.get());
                                     validate_cursor(curwin.get());
-                                    redraw_later(
-                                        curwin.get(),
-                                        UPD_SOME_VALID as ::core::ffi::c_int,
-                                    );
+                                    redraw_later(curwin.get(), UPD_SOME_VALID);
                                     show_cursor_info_later(true_0 != 0);
                                     update_screen();
-                                    redraw_later(
-                                        curwin.get(),
-                                        UPD_SOME_VALID as ::core::ffi::c_int,
-                                    );
+                                    redraw_later(curwin.get(), UPD_SOME_VALID);
                                     (*curwin.get()).w_onebuf_opt.wo_fen = save_p_fen;
                                     let mut p_2: *mut ::core::ffi::c_char = gettext(
                                         b"replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)\0"

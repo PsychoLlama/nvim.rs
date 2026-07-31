@@ -9,7 +9,7 @@ use crate::src::nvim::decoration::{
     decor_range_add_virt, decor_sh_from_inline, decor_to_dict_legacy, hl_group_name,
 };
 use crate::src::nvim::decoration_provider::{decor_provider_clear, get_decor_provider};
-use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::src::nvim::extmark::{
     extmark_clear, extmark_del_id, extmark_from_id, extmark_get, extmark_set,
 };
@@ -185,14 +185,7 @@ pub struct C2Rust_Unnamed_26 {
     pub source: *mut LuaRef,
     pub dest: *mut LuaRef,
 }
-pub const UPD_NOT_VALID: C2Rust_Unnamed_27 = 40;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_27 = 50;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_27 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_27 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_27 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_27 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_27 = 10;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 87] = unsafe {
     ::core::mem::transmute::<
         [u8; 87],
@@ -1796,7 +1789,7 @@ pub unsafe extern "C" fn nvim_set_decoration_provider(
         }
     };
     decor_provider_clear(p);
-    redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_all_later(UPD_NOT_VALID);
     let mut cbs: [C2Rust_Unnamed_26; 10] = [
         C2Rust_Unnamed_26 {
             name: b"on_start\0".as_ptr() as *const ::core::ffi::c_char,

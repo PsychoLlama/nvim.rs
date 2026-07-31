@@ -7,7 +7,7 @@ use crate::src::nvim::cursor::{
     check_cursor, check_cursor_col, coladvance, dec_cursor, gchar_cursor, get_cursor_line_len,
     get_cursor_line_ptr, get_cursor_pos_len, get_cursor_pos_ptr, inc_cursor, pchar_cursor,
 };
-use crate::src::nvim::drawscreen::redraw_curbuf_later;
+use crate::src::nvim::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later};
 use crate::src::nvim::edit::{
     backspace_until_column, beginline, get_nolist_virtcol, insertchar, set_can_cindent,
     undisplay_dollar,
@@ -239,13 +239,6 @@ pub const OPENLINE_KEEPTRAIL: C2Rust_Unnamed_15 = 4;
 pub const OPENLINE_DO_COM: C2Rust_Unnamed_15 = 2;
 pub const OPENLINE_DELSPACES: C2Rust_Unnamed_15 = 1;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_16 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_16 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_16 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_16 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_16 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_16 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_16 = 10;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_17 = 8192;
 pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_17 = 4096;
@@ -816,7 +809,7 @@ pub unsafe extern "C" fn internal_format(
     (*curwin.get()).w_onebuf_opt.wo_lbr = has_lbr;
     if !format_only && haveto_redraw as ::core::ffi::c_int != 0 {
         update_topline(curwin.get());
-        redraw_curbuf_later(UPD_VALID as ::core::ffi::c_int);
+        redraw_curbuf_later(UPD_VALID);
     }
 }
 unsafe extern "C" fn fmt_check_par(
@@ -1137,7 +1130,7 @@ pub unsafe extern "C" fn op_format(mut oap: *mut oparg_T, mut keep_cursor: bool)
     }
     (*curwin.get()).w_cursor = (*oap).start;
     if (*oap).is_VIsual {
-        redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+        redraw_curbuf_later(UPD_INVERTED);
     }
     if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int == 0 as ::core::ffi::c_int
     {
@@ -1184,7 +1177,7 @@ pub unsafe extern "C" fn op_format(mut oap: *mut oparg_T, mut keep_cursor: bool)
 }
 pub unsafe extern "C" fn op_formatexpr(mut oap: *mut oparg_T) {
     if (*oap).is_VIsual {
-        redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+        redraw_curbuf_later(UPD_INVERTED);
     }
     if fex_format(
         (*oap).start.lnum,

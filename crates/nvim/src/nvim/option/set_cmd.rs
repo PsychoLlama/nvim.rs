@@ -21,7 +21,7 @@ use super::{set_op_T, ui_refresh_options};
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::{skiptowhite_esc, skipwhite, trans_characters, vim_str2nr};
-use crate::src::nvim::drawscreen::redraw_all_later;
+use crate::src::nvim::drawscreen::{UPD_CLEAR, redraw_all_later};
 use crate::src::nvim::eval::last_set_msg;
 use crate::src::nvim::ex_getln::gotocmdline;
 use crate::src::nvim::keycodes::find_special_key;
@@ -42,7 +42,7 @@ use crate::src::nvim::types::{
 use super::{
     CMD_setglobal, CMD_setlocal, FAIL, FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, IOSIZE, K_ZERO,
     NUL, OK, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE,
-    OPT_NOWIN, OPT_ONECOLUMN, OPT_WINONLY, STR2NR_ALL, UPD_CLEAR, didset_options, didset_options2,
+    OPT_NOWIN, OPT_ONECOLUMN, OPT_WINONLY, STR2NR_ALL, didset_options, didset_options2,
     get_option_default, get_option_value, get_varp, get_varp_scope, is_tty_option, kFalse, kNone,
     kOptFlagMLE, kOptFlagSecure, kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean, kOptValTypeNil,
     kOptValTypeNumber, kOptValTypeString, kTrue, option_has_scope, option_has_type,
@@ -631,7 +631,7 @@ pub unsafe fn do_set(arg: *mut c_char, opt_flags: c_int) -> c_int {
                     didset_options();
                     didset_options2();
                     ui_refresh_options();
-                    redraw_all_later(UPD_CLEAR as c_int);
+                    redraw_all_later(UPD_CLEAR);
                 } else {
                     showoptions(true, opt_flags);
                     did_show = true;

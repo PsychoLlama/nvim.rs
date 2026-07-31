@@ -2,7 +2,7 @@ use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::cursor::{
     coladvance, dec_cursor, gchar_cursor, get_cursor_line_ptr, get_cursor_pos_ptr, inc_cursor,
 };
-use crate::src::nvim::drawscreen::{redraw_curbuf_later, showmode};
+use crate::src::nvim::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
 use crate::src::nvim::edit::oneleft;
 use crate::src::nvim::eval::funcs::do_searchpair;
 use crate::src::nvim::fold::hasFolding;
@@ -112,13 +112,6 @@ pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_13 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_13 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_13 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_13 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_13 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_13 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_13 = 10;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
@@ -779,7 +772,7 @@ pub unsafe extern "C" fn current_word(
         }
         if VIsual_active.get() {
             VIsual.set(start_pos);
-            redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+            redraw_curbuf_later(UPD_INVERTED);
         } else {
             (*oap).start = start_pos;
             (*oap).motion_type = kMTCharWise;
@@ -929,7 +922,7 @@ pub unsafe extern "C" fn current_sent(
                     VIsual.set(start_pos);
                     VIsual_mode.set('v' as ::core::ffi::c_int);
                     redraw_cmdline.set(true_0 != 0);
-                    redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+                    redraw_curbuf_later(UPD_INVERTED);
                 }
             } else {
                 if incl(&raw mut (*curwin.get()).w_cursor) == -1 as ::core::ffi::c_int {
@@ -1151,7 +1144,7 @@ pub unsafe extern "C" fn current_block(
         }
         VIsual.set(start_pos);
         VIsual_mode.set('v' as ::core::ffi::c_int);
-        redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+        redraw_curbuf_later(UPD_INVERTED);
         showmode();
     } else {
         (*oap).start = start_pos;
@@ -1412,7 +1405,7 @@ pub unsafe extern "C" fn current_tagblock(
             }
             VIsual.set(start_pos);
             VIsual_mode.set('v' as ::core::ffi::c_int);
-            redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+            redraw_curbuf_later(UPD_INVERTED);
             showmode();
         } else {
             (*oap).start = start_pos;
@@ -1522,7 +1515,7 @@ pub unsafe extern "C" fn current_par(
                         (*VIsual.ptr()).col = 0 as ::core::ffi::c_int as colnr_T;
                     }
                     VIsual_mode.set('V' as ::core::ffi::c_int);
-                    redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+                    redraw_curbuf_later(UPD_INVERTED);
                     showmode();
                 }
             } else {
@@ -1913,7 +1906,7 @@ pub unsafe extern "C" fn current_quote(
                                     != quotechar))
             {
                 VIsual.set((*curwin.get()).w_cursor);
-                redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+                redraw_curbuf_later(UPD_INVERTED);
             }
         } else {
             (*oap).start = (*curwin.get()).w_cursor;

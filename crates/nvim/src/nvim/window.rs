@@ -19,7 +19,8 @@ use crate::src::nvim::cursor::{check_cursor, check_cursor_lnum};
 use crate::src::nvim::decoration::{clear_virttext, decor_conceal_line};
 use crate::src::nvim::diff::{diff_clear, diffopt_closeoff};
 use crate::src::nvim::drawscreen::{
-    comp_col, redraw_all_later, redraw_later, redrawWinline, showmode, status_redraw_all,
+    UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, comp_col, redraw_all_later, redraw_later,
+    redrawWinline, showmode, status_redraw_all,
 };
 use crate::src::nvim::edit::{beginline, cursor_down_inner, cursor_up_inner};
 use crate::src::nvim::eval::typval::{
@@ -921,13 +922,6 @@ pub const DOBUF_LAST: dobuf_start_values = 2;
 pub const DOBUF_FIRST: dobuf_start_values = 1;
 pub const DOBUF_CURRENT: dobuf_start_values = 0;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_23 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_23 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_23 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_23 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_23 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_23 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_23 = 10;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub const BL_FIX: C2Rust_Unnamed_24 = 4;
 pub const BL_SOL: C2Rust_Unnamed_24 = 2;
@@ -2372,7 +2366,7 @@ pub unsafe extern "C" fn ui_ext_win_position(mut wp: *mut win_T, mut validate: b
             (*wp).w_grid_alloc.mouse_enabled = (*wp).w_config.mouse;
             if !valid {
                 (*wp).w_grid_alloc.valid = false_0 != 0;
-                redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+                redraw_later(wp, UPD_NOT_VALID);
             }
         } else {
             if ui_has(kUIMultigrid) {
@@ -3077,8 +3071,8 @@ pub unsafe extern "C" fn win_split_ins(
     if toplevel {
         win_comp_pos();
     }
-    redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
-    redraw_later(oldwin, UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(wp, UPD_NOT_VALID);
+    redraw_later(oldwin, UPD_NOT_VALID);
     status_redraw_all();
     if need_status != 0 {
         msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
@@ -3413,8 +3407,8 @@ unsafe extern "C" fn win_exchange(mut Prenum: ::core::ffi::c_int) {
         (*wp).w_cursor = (*curwin.get()).w_cursor;
     }
     win_enter(wp, true_0 != 0);
-    redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
-    redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(curwin.get(), UPD_NOT_VALID);
+    redraw_later(wp, UPD_NOT_VALID);
 }
 unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int) {
     if (*curwin.get()).w_floating {
@@ -3524,7 +3518,7 @@ unsafe extern "C" fn win_rotate(mut upwards: bool, mut count: ::core::ffi::c_int
     }
     (*wp1).w_pos_changed = true_0 != 0;
     (*wp2).w_pos_changed = true_0 != 0;
-    redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_all_later(UPD_NOT_VALID);
 }
 pub unsafe extern "C" fn win_splitmove(
     mut wp: *mut win_T,
@@ -3640,7 +3634,7 @@ pub unsafe extern "C" fn win_move_after(mut win1: *mut win_T, mut win2: *mut win
         win_append(win2, win1, ::core::ptr::null_mut::<tabpage_T>());
         frame_append((*win2).w_frame, (*win1).w_frame);
         win_comp_pos();
-        redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_later(curwin.get(), UPD_NOT_VALID);
     }
     (*win1).w_pos_changed = true_0 != 0;
     (*win2).w_pos_changed = true_0 != 0;
@@ -3734,7 +3728,7 @@ unsafe extern "C" fn win_equal_rec(
             frame_new_height(topfr, height, false_0 != 0, false_0 != 0, false_0 != 0);
             (*(*topfr).fr_win).w_wincol = col;
             frame_new_width(topfr, width, false_0 != 0, false_0 != 0);
-            redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+            redraw_all_later(UPD_NOT_VALID);
         }
     } else if (*topfr).fr_layout as ::core::ffi::c_int == FR_ROW {
         (*topfr).fr_width = width;
@@ -4047,7 +4041,7 @@ pub unsafe extern "C" fn entering_window(win: *mut win_T) {
     }
 }
 pub unsafe extern "C" fn win_init_empty(mut wp: *mut win_T) {
-    redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(wp, UPD_NOT_VALID);
     (*wp).w_lines_valid = 0 as ::core::ffi::c_int;
     (*wp).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
     (*wp).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
@@ -4662,7 +4656,7 @@ pub unsafe extern "C" fn win_close(
     }
     (*curwin.get()).w_pos_changed = true_0 != 0;
     if !was_floating {
-        redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_NOT_VALID);
     }
     return OK;
 }
@@ -6106,7 +6100,7 @@ pub unsafe extern "C" fn win_new_tabpage(
         terminal_check_size((*curbuf.get()).terminal);
     }
     if enter {
-        redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_NOT_VALID);
         tabpage_check_windows(old_curtab);
         lastused_tabpage.set(old_curtab);
         entering_window(curwin.get());
@@ -6456,7 +6450,7 @@ unsafe extern "C" fn enter_tabpage(
             );
         }
     }
-    redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_all_later(UPD_NOT_VALID);
 }
 unsafe extern "C" fn tabpage_check_windows(mut old_curtab: *mut tabpage_T) {
     let mut next_wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
@@ -6943,14 +6937,14 @@ unsafe extern "C" fn win_enter_ext(wp: *mut win_T, flags: ::core::ffi::c_int) {
     (*curwin.get()).w_redr_status = true_0 != 0;
     redraw_tabline.set(true_0 != 0);
     if restart_edit.get() != 0 {
-        redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+        redraw_later(curwin.get(), UPD_VALID);
     }
     if (*curwin.get()).w_hl_attr_normal != (*curwin.get()).w_hl_attr_normalnc {
-        redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_later(curwin.get(), UPD_NOT_VALID);
     }
     if !(*prevwin.ptr()).is_null() {
         if (*prevwin.get()).w_hl_attr_normal != (*prevwin.get()).w_hl_attr_normalnc {
-            redraw_later(prevwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
+            redraw_later(prevwin.get(), UPD_NOT_VALID);
         }
     }
     if ((*curwin.get()).w_height as OptInt) < p_wh.get()
@@ -7997,7 +7991,7 @@ unsafe extern "C" fn frame_comp_pos(
         if (*wp).w_winrow != *row || (*wp).w_wincol != *col {
             (*wp).w_winrow = *row;
             (*wp).w_wincol = *col;
-            redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+            redraw_later(wp, UPD_NOT_VALID);
             (*wp).w_redr_status = true_0 != 0;
             (*wp).w_pos_changed = true_0 != 0;
         }
@@ -8060,7 +8054,7 @@ pub unsafe extern "C" fn win_setheight_win(mut height: ::core::ffi::c_int, mut w
             1 as ::core::ffi::c_int
         };
         win_config_float(win, (*win).w_config);
-        redraw_later(win, UPD_VALID as ::core::ffi::c_int);
+        redraw_later(win, UPD_VALID);
     } else {
         frame_setheight(
             (*win).w_frame,
@@ -8072,7 +8066,7 @@ pub unsafe extern "C" fn win_setheight_win(mut height: ::core::ffi::c_int, mut w
         );
         win_comp_pos();
         win_fix_scroll(true_0 != 0);
-        redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_NOT_VALID);
         redraw_cmdline.set(true_0 != 0);
     };
 }
@@ -8240,11 +8234,11 @@ pub unsafe extern "C" fn win_setwidth_win(mut width: ::core::ffi::c_int, mut wp:
     if (*wp).w_floating {
         (*wp).w_config.width = width;
         win_config_float(wp, (*wp).w_config);
-        redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_later(wp, UPD_NOT_VALID);
     } else {
         frame_setwidth((*wp).w_frame, width + (*wp).w_vsep_width);
         win_comp_pos();
-        redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_NOT_VALID);
     };
 }
 unsafe extern "C" fn frame_setwidth(mut curfrp: *mut frame_T, mut width: ::core::ffi::c_int) {
@@ -8479,7 +8473,7 @@ pub unsafe extern "C" fn win_drag_status_line(
     }
     win_comp_pos();
     win_fix_scroll(true_0 != 0);
-    redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+    redraw_all_later(UPD_SOME_VALID);
     showmode();
 }
 pub unsafe extern "C" fn win_drag_vsep_line(
@@ -8562,7 +8556,7 @@ pub unsafe extern "C" fn win_drag_vsep_line(
         }
     }
     win_comp_pos();
-    redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_all_later(UPD_NOT_VALID);
 }
 pub const FRACTION_MULT: ::core::ffi::c_int = 16384 as ::core::ffi::c_int;
 pub unsafe extern "C" fn set_fraction(mut wp: *mut win_T) {
@@ -8759,7 +8753,7 @@ pub unsafe extern "C" fn scroll_to_fraction(
     if prev_height > 0 as ::core::ffi::c_int {
         (*wp).w_prev_fraction_row = (*wp).w_wrow;
     }
-    redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
+    redraw_later(wp, UPD_SOME_VALID);
     invalidate_botline_win(wp);
 }
 pub unsafe extern "C" fn win_set_inner_size(mut wp: *mut win_T, mut valid_cursor: bool) {
@@ -8801,7 +8795,7 @@ pub unsafe extern "C" fn win_set_inner_size(mut wp: *mut win_T, mut valid_cursor
             (*wp).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
             scroll_to_fraction(wp, prev_height);
         }
-        redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
+        redraw_later(wp, UPD_SOME_VALID);
     }
     if width != (*wp).w_view_width {
         (*wp).w_view_width = width;
@@ -8816,7 +8810,7 @@ pub unsafe extern "C" fn win_set_inner_size(mut wp: *mut win_T, mut valid_cursor
                 curs_columns(wp, true_0);
             }
         }
-        redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_later(wp, UPD_NOT_VALID);
     }
     if !(*(*wp).w_buffer).terminal.is_null() {
         terminal_check_size((*(*wp).w_buffer).terminal);
@@ -9396,7 +9390,7 @@ pub unsafe extern "C" fn restore_snapshot(
         if !wp.is_null() && close_curwin != 0 {
             win_goto(wp);
         }
-        redraw_all_later(UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_NOT_VALID);
     }
     clear_snapshot(curtab.get(), idx);
 }

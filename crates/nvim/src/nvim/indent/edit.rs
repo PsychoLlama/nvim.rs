@@ -7,7 +7,7 @@ use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul
 use crate::src::nvim::change::{changed_lines, ins_bytes, ins_str};
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::cursor::{coladvance, get_cursor_line_len, get_cursor_line_ptr};
-use crate::src::nvim::drawscreen::redraw_curbuf_later;
+use crate::src::nvim::drawscreen::{UPD_INVERTED, UPD_NOT_VALID, redraw_curbuf_later};
 use crate::src::nvim::edit::{backspace_until_column, beginline, replace_join, replace_push_nul};
 use crate::src::nvim::extmark::extmark_splice_cols;
 use crate::src::nvim::indent_c::in_cinkeys;
@@ -134,7 +134,7 @@ pub unsafe extern "C" fn op_reindent(mut oap: *mut oparg_T, mut how: Indenter) {
             true,
         );
     } else if (*oap).is_VIsual {
-        redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+        redraw_curbuf_later(UPD_INVERTED);
     }
     if (*oap).line_count as OptInt > p_report.get() {
         i = ((*oap).line_count - (i as linenr_T + 1 as linenr_T)) as ::core::ffi::c_int;
@@ -755,7 +755,7 @@ pub unsafe fn ex_retab(mut eap: *mut exarg_T) {
         if !(tabstop_count((*curbuf.get()).b_p_vts_array) > 0 as ::core::ffi::c_int
             && tabstop_eq((*curbuf.get()).b_p_vts_array, new_vts_array))
         {
-            redraw_curbuf_later(UPD_NOT_VALID as ::core::ffi::c_int);
+            redraw_curbuf_later(UPD_NOT_VALID);
         }
     }
     if first_line != 0 as linenr_T {

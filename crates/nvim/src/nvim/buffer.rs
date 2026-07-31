@@ -19,7 +19,7 @@ use crate::src::nvim::cmdexpand::cmdline_fuzzy_complete;
 use crate::src::nvim::cursor::{check_cursor_col, check_cursor_lnum};
 use crate::src::nvim::diff::{diff_buf_add, diff_buf_delete, diff_mode_buf, diffopt_hiddenoff};
 use crate::src::nvim::digraph::{keymap_ga_clear, keymap_init};
-use crate::src::nvim::drawscreen::{redraw_later, redrawing, status_redraw_all};
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_later, redrawing, status_redraw_all};
 use crate::src::nvim::eval::typval::tv_dict_is_watched;
 use crate::src::nvim::eval::typval::{
     callback_free, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_copy,
@@ -950,7 +950,6 @@ pub const READ_STDIN: C2Rust_Unnamed_29 = 4;
 pub const READ_NEW: C2Rust_Unnamed_29 = 1;
 pub const READ_FIFO: C2Rust_Unnamed_29 = 64;
 pub const READ_NOFILE: C2Rust_Unnamed_29 = 256;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_26 = 40;
 pub const BCO_NOHELP: C2Rust_Unnamed_32 = 4;
 pub const BCO_ENTER: C2Rust_Unnamed_32 = 1;
 pub const kBffInitChangedtick: C2Rust_Unnamed_35 = 2;
@@ -1018,12 +1017,6 @@ pub const WILD_NO_BEEP: C2Rust_Unnamed_25 = 8;
 pub const WILD_USE_NL: C2Rust_Unnamed_25 = 4;
 pub const WILD_LIST_NOTFOUND: C2Rust_Unnamed_25 = 1;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_26 = 50;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_26 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_26 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_26 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_26 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_26 = 10;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const ECMD_NOWINENTER: C2Rust_Unnamed_27 = 64;
 pub const ECMD_ALTBUF: C2Rust_Unnamed_27 = 32;
@@ -2969,7 +2962,7 @@ unsafe extern "C" fn enter_buffer(mut buf: *mut buf_T) {
     if !(*curbuf.get()).terminal.is_null() {
         terminal_check_size((*curbuf.get()).terminal);
     }
-    redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(curwin.get(), UPD_NOT_VALID);
 }
 pub unsafe extern "C" fn do_autochdir() {
     if p_acd.get() != 0 {

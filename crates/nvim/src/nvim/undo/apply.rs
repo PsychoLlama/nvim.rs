@@ -3,6 +3,7 @@
 
 use super::tree::*;
 use super::*;
+use crate::src::nvim::drawscreen::UPD_NOT_VALID;
 use crate::src::nvim::pos::MAXLNUM;
 
 pub unsafe extern "C" fn u_undo(mut count: c_int) {
@@ -738,7 +739,7 @@ pub(crate) unsafe extern "C" fn u_undo_end(
     };
     while !wp.is_null() {
         if (*wp).w_buffer == curbuf.get() && (*wp).w_onebuf_opt.wo_cole > 0 {
-            redraw_later(wp, UPD_NOT_VALID as c_int);
+            redraw_later(wp, UPD_NOT_VALID);
         }
         wp = (*wp).w_next;
     }

@@ -9,7 +9,7 @@ use crate::src::nvim::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::src::nvim::decoration::decor_redraw_col;
 use crate::src::nvim::decoration::{decor_redraw_line, decor_redraw_reset, decor_state_free};
 use crate::src::nvim::decoration_provider::decor_providers_invoke_spell;
-use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::src::nvim::ex_cmds::do_sub_msg;
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_init};
@@ -848,13 +848,6 @@ pub const SHM_LINES: C2Rust_Unnamed_16 = 108;
 pub const SHM_MOD: C2Rust_Unnamed_16 = 109;
 pub const SHM_RO: C2Rust_Unnamed_16 = 114;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_21 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_21 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_21 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_21 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_21 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_21 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_21 = 10;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const MB_MAXCHAR: C2Rust_Unnamed_22 = 6;
 pub const MB_MAXBYTES: C2Rust_Unnamed_22 = 21;
@@ -4589,7 +4582,7 @@ pub unsafe extern "C" fn parse_spelllang(mut wp: *mut win_T) -> *mut ::core::ffi
             }
             i += 1;
         }
-        redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_later(wp, UPD_NOT_VALID);
     }
     xfree(spl_copy as *mut ::core::ffi::c_void);
     recursive.set(false_0 != 0);
@@ -9860,7 +9853,7 @@ pub unsafe fn ex_spelldump(mut eap: *mut exarg_T) {
     if (*curbuf.get()).b_ml.ml_line_count > 1 as linenr_T {
         ml_delete((*curbuf.get()).b_ml.ml_line_count);
     }
-    redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(curwin.get(), UPD_NOT_VALID);
 }
 pub unsafe extern "C" fn spell_dump_compl(
     mut pat: *mut ::core::ffi::c_char,

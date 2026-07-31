@@ -14,7 +14,9 @@ use crate::src::nvim::autocmd::check_ei;
 use crate::src::nvim::charset::{buf_init_chartab, check_isopt};
 use crate::src::nvim::diff::{diffanchors_changed, diffopt_changed};
 use crate::src::nvim::digraph::keymap_init;
-use crate::src::nvim::drawscreen::{redraw_buf_later, redraw_later, status_redraw_buf};
+use crate::src::nvim::drawscreen::{
+    UPD_NOT_VALID, UPD_VALID, redraw_buf_later, redraw_later, status_redraw_buf,
+};
 use crate::src::nvim::fold::{
     foldUpdateAll, foldmethodIsDiff, foldmethodIsExpr, foldmethodIsIndent, foldmethodIsMarker,
     newFoldLevel,
@@ -50,10 +52,9 @@ use crate::src::nvim::window::global_stl_height;
 use super::frame::{errbuf, invalid, old_value, varp, win};
 use super::{
     B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI, EOL_MAC, FAIL, FO_ALL, NUL,
-    OK, OPT_GLOBAL, OPT_LOCAL, SID_NONE, UPD_NOT_VALID, UPD_VALID, did_set_opt_flags,
-    did_set_optexpr, did_set_option_listflag, did_set_str_generic,
-    e_backupext_and_patchmode_are_equal, e_comma_required, illegal_char, kOptValTypeString,
-    opt_strings_flags, valid_filetype,
+    OK, OPT_GLOBAL, OPT_LOCAL, SID_NONE, did_set_opt_flags, did_set_optexpr,
+    did_set_option_listflag, did_set_str_generic, e_backupext_and_patchmode_are_equal,
+    e_comma_required, illegal_char, kOptValTypeString, opt_strings_flags, valid_filetype,
 };
 use crate::src::nvim::pos::MAXLNUM;
 
@@ -233,7 +234,7 @@ pub unsafe extern "C" fn did_set_buftype(args: *mut optset_T) -> *const c_char {
     unsafe {
         if (*wp).w_status_height != 0 || global_stl_height() != 0 {
             (*wp).w_redr_status = true;
-            redraw_later(wp, UPD_VALID as c_int);
+            redraw_later(wp, UPD_VALID);
         }
         (*buf).b_help = first == b'h' as c_char;
         redraw_titles();
@@ -427,7 +428,7 @@ pub unsafe extern "C" fn did_set_fileformat(args: *mut optset_T) -> *const c_cha
         // Only "mac" is drawn differently, so a redraw is needed when
         // entering or leaving it.
         if get_fileformat(buf) == EOL_MAC || *old_value(args) == b'm' as c_char {
-            redraw_buf_later(buf, UPD_NOT_VALID as c_int);
+            redraw_buf_later(buf, UPD_NOT_VALID);
         }
     }
     ptr::null()

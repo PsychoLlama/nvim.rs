@@ -3,8 +3,9 @@ use crate::src::nvim::cursor::{check_cursor, check_cursor_lnum, coladvance};
 use crate::src::nvim::decoration::{decor_conceal_line, win_lines_concealed};
 use crate::src::nvim::diff::diff_get_corresponding_line;
 use crate::src::nvim::drawscreen::{
-    conceal_cursor_line, number_width, redraw_buf_later, redraw_later, redrawWinline, redrawing,
-    win_cursorline_standout, win_scroll_lines,
+    UPD_INVERTED, UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, conceal_cursor_line, number_width,
+    redraw_buf_later, redraw_later, redrawWinline, redrawing, win_cursorline_standout,
+    win_scroll_lines,
 };
 use crate::src::nvim::edit::{
     beginline, cursor_down, cursor_down_inner, cursor_up, cursor_up_inner,
@@ -129,13 +130,6 @@ pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_14 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_14 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_14 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_14 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_14 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_14 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_14 = 10;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const BL_FIX: C2Rust_Unnamed_15 = 4;
 pub const BL_SOL: C2Rust_Unnamed_15 = 2;
@@ -232,7 +226,7 @@ unsafe extern "C" fn redraw_for_cursorline(mut wp: *mut win_T) {
         return;
     }
     if (*wp).w_onebuf_opt.wo_rnu != 0 || win_cursorline_standout(wp) as ::core::ffi::c_int != 0 {
-        redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
+        redraw_later(wp, UPD_VALID);
     }
 }
 unsafe extern "C" fn redraw_for_cursorcolumn(mut wp: *mut win_T) {
@@ -246,16 +240,16 @@ unsafe extern "C" fn redraw_for_cursorcolumn(mut wp: *mut win_T) {
         return;
     }
     if (*wp).w_onebuf_opt.wo_cuc != 0 {
-        redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
+        redraw_later(wp, UPD_SOME_VALID);
     } else if (*wp).w_onebuf_opt.wo_cul != 0
         && (*wp).w_p_culopt_flags as ::core::ffi::c_int
             & kOptCuloptFlagScreenline as ::core::ffi::c_int
             != 0
     {
-        redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
+        redraw_later(wp, UPD_VALID);
     }
     if VIsual_active.get() as ::core::ffi::c_int != 0 && (*wp).w_buffer == curbuf.get() {
-        redraw_buf_later(curbuf.get(), UPD_INVERTED as ::core::ffi::c_int);
+        redraw_buf_later(curbuf.get(), UPD_INVERTED);
     }
 }
 pub unsafe extern "C" fn set_valid_virtcol(mut wp: *mut win_T, mut vcol: colnr_T) {
@@ -301,7 +295,7 @@ unsafe extern "C" fn reset_skipcol(mut wp: *mut win_T) {
         return;
     }
     (*wp).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
-    redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
+    redraw_later(wp, UPD_SOME_VALID);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
@@ -334,7 +328,7 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
     let mut old_topfill: ::core::ffi::c_int = (*wp).w_topfill;
     if buf_is_empty((*wp).w_buffer) {
         if (*wp).w_topline != 1 as linenr_T {
-            redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+            redraw_later(wp, UPD_NOT_VALID);
         }
         (*wp).w_topline = 1 as ::core::ffi::c_int as linenr_T;
         (*wp).w_botline = 2 as ::core::ffi::c_int as linenr_T;
@@ -516,11 +510,11 @@ pub unsafe extern "C" fn update_topline(mut wp: *mut win_T) {
     win_check_anchored_floats(wp);
     if (*wp).w_topline != old_topline || (*wp).w_topfill != old_topfill {
         dollar_vcol.set(-1 as ::core::ffi::c_int as colnr_T);
-        redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
+        redraw_later(wp, UPD_VALID);
         if (*wp).w_onebuf_opt.wo_sms == 0 {
             reset_skipcol(wp);
         } else if (*wp).w_skipcol != 0 as ::core::ffi::c_int {
-            redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
+            redraw_later(wp, UPD_SOME_VALID);
         }
         if (*wp).w_cursor.lnum == (*wp).w_topline {
             validate_cursor(wp);
@@ -627,7 +621,7 @@ pub unsafe extern "C" fn changed_window_setting(mut wp: *mut win_T) {
     (*wp).w_lines_valid = 0 as ::core::ffi::c_int;
     changed_line_abv_curs_win(wp);
     (*wp).w_valid &= !(VALID_BOTLINE | VALID_BOTLINE_AP | VALID_TOPLINE);
-    redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(wp, UPD_NOT_VALID);
 }
 pub unsafe extern "C" fn changed_window_setting_all() {
     let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
@@ -658,7 +652,7 @@ pub unsafe extern "C" fn set_topline(mut wp: *mut win_T, mut lnum: linenr_T) {
         (*wp).w_topfill = 0 as ::core::ffi::c_int;
     }
     (*wp).w_valid &= !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_TOPLINE);
-    redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
+    redraw_later(wp, UPD_VALID);
 }
 pub unsafe extern "C" fn changed_cline_bef_curs(mut wp: *mut win_T) {
     (*wp).w_valid &=
@@ -979,7 +973,7 @@ pub unsafe extern "C" fn curs_columns(mut wp: *mut win_T, mut may_scroll: ::core
             if new_leftcol != (*wp).w_leftcol {
                 (*wp).w_leftcol = new_leftcol as colnr_T;
                 win_check_anchored_floats(wp);
-                redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+                redraw_later(wp, UPD_NOT_VALID);
             }
         }
         (*wp).w_wcol -= (*wp).w_leftcol as ::core::ffi::c_int;
@@ -1108,7 +1102,7 @@ pub unsafe extern "C" fn curs_columns(mut wp: *mut win_T, mut may_scroll: ::core
         (*wp).w_skipcol = 0 as ::core::ffi::c_int as colnr_T;
     }
     if prev_skipcol != (*wp).w_skipcol {
-        redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
+        redraw_later(wp, UPD_SOME_VALID);
     }
     redraw_for_cursorcolumn(wp);
     (*wp).w_valid_leftcol = (*wp).w_leftcol;
@@ -1489,7 +1483,7 @@ pub unsafe extern "C" fn scroll_redraw(mut up: ::core::ffi::c_int, mut count: li
     if (*curwin.get()).w_cursor.lnum != prev_lnum {
         coladvance(curwin.get(), (*curwin.get()).w_curswant);
     }
-    redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+    redraw_later(curwin.get(), UPD_VALID);
 }
 pub unsafe extern "C" fn scrolldown(
     mut wp: *mut win_T,
@@ -1524,7 +1518,7 @@ pub unsafe extern "C" fn scrolldown(
             } else {
                 (*wp).w_skipcol -= width1;
             }
-            redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+            redraw_later(wp, UPD_NOT_VALID);
             done += 1;
         } else if can_fill {
             (*wp).w_topfill += 1;
@@ -1561,7 +1555,7 @@ pub unsafe extern "C" fn scrolldown(
                 if size > width1 {
                     (*wp).w_skipcol = width1 as colnr_T;
                     size -= width1;
-                    redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+                    redraw_later(wp, UPD_NOT_VALID);
                 }
                 while size > width2 {
                     (*wp).w_skipcol += width2;
@@ -1711,7 +1705,7 @@ pub unsafe extern "C" fn scrollup(
             todo -= 1;
         }
         if prev_skipcol > 0 as ::core::ffi::c_int || (*wp).w_skipcol > 0 as ::core::ffi::c_int {
-            redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+            redraw_later(wp, UPD_NOT_VALID);
         }
     } else {
         (*wp).w_topline += line_count;
@@ -1787,7 +1781,7 @@ pub unsafe extern "C" fn adjust_skipcol() {
     }
     if scrolled {
         validate_virtcol(curwin.get());
-        redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_later(curwin.get(), UPD_NOT_VALID);
         return;
     }
     let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -1815,7 +1809,7 @@ pub unsafe extern "C" fn adjust_skipcol() {
         if row >= (*curwin.get()).w_view_height {
             (*curwin.get()).w_skipcol += (row - (*curwin.get()).w_view_height) * width2;
         }
-        redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_later(curwin.get(), UPD_NOT_VALID);
     }
 }
 pub unsafe extern "C" fn check_topfill(mut wp: *mut win_T, mut down: bool) {
@@ -2159,7 +2153,7 @@ pub unsafe extern "C" fn scroll_cursor_bot(
         {
             (*wp).w_valid &= !(VALID_WROW | VALID_CROW);
             if (*wp).w_skipcol != old_skipcol {
-                redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+                redraw_later(wp, UPD_NOT_VALID);
             } else {
                 reset_skipcol(wp);
             }
@@ -2450,7 +2444,7 @@ pub unsafe extern "C" fn scroll_cursor_halfway(
         (*wp).w_topline = topline;
         if skipcol != 0 as ::core::ffi::c_int {
             (*wp).w_skipcol = skipcol;
-            redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+            redraw_later(wp, UPD_NOT_VALID);
         } else if do_sms {
             reset_skipcol(wp);
         }
@@ -2907,7 +2901,7 @@ pub unsafe extern "C" fn do_check_cursorbind() {
             }
             restart_edit.set(restart_edit_save);
             mb_adjust_cursor();
-            redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+            redraw_later(curwin.get(), UPD_VALID);
             if (*curwin.get()).w_onebuf_opt.wo_scb == 0 {
                 update_topline(curwin.get());
             }

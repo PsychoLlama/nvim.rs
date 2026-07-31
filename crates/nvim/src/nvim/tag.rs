@@ -4,7 +4,7 @@ use crate::src::nvim::buffer::{bt_help, buflist_findname_exp, buflist_findnr, bu
 use crate::src::nvim::charset::{ptr2cells, skipdigits, vim_isblankline};
 use crate::src::nvim::cmdexpand::{ExpandInit, ExpandOne};
 use crate::src::nvim::cursor::check_cursor;
-use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::drawscreen::{UPD_VALID, redraw_later};
 use crate::src::nvim::eval::typval::tv_list_first;
 use crate::src::nvim::eval::typval::{
     callback_copy, callback_free, tv_clear, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
@@ -960,13 +960,6 @@ pub const WILD_USE_NL: C2Rust_Unnamed_23 = 4;
 pub const WILD_HOME_REPLACE: C2Rust_Unnamed_23 = 2;
 pub const WILD_LIST_NOTFOUND: C2Rust_Unnamed_23 = 1;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_24 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_24 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_24 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_24 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_24 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_24 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_24 = 10;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;
@@ -4918,7 +4911,7 @@ unsafe extern "C" fn jumpto_tag(
                         && win_valid(curwin_save) as ::core::ffi::c_int != 0
                     {
                         validate_cursor(curwin.get());
-                        redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+                        redraw_later(curwin.get(), UPD_VALID);
                         win_enter(curwin_save, true_0 != 0);
                     }
                     (*RedrawingDisabled.ptr()) -= 1;

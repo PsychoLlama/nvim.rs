@@ -23,8 +23,9 @@ use crate::src::nvim::cursor::{
 use crate::src::nvim::decoration::{decor_conceal_line, win_lines_concealed};
 use crate::src::nvim::digraph::{digraph_get, do_digraph};
 use crate::src::nvim::drawscreen::{
-    redraw_later, redraw_statuslines, redrawWinline, redrawing, setcursor, show_cursor_info_later,
-    showmode, skip_showmode, status_redraw_curbuf, unshowmode, update_screen,
+    UPD_VALID, redraw_later, redraw_statuslines, redrawWinline, redrawing, setcursor,
+    show_cursor_info_later, showmode, skip_showmode, status_redraw_curbuf, unshowmode,
+    update_screen,
 };
 use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::src::nvim::eval::{invoke_prompt_interrupt, prompt_invoke_callback};
@@ -362,13 +363,6 @@ pub const OPENLINE_KEEPTRAIL: C2Rust_Unnamed_18 = 4;
 pub const OPENLINE_DO_COM: C2Rust_Unnamed_18 = 2;
 pub const OPENLINE_DELSPACES: C2Rust_Unnamed_18 = 1;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_22 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_22 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_22 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_22 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_22 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_22 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_22 = 10;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub const INDENT_DEC: C2Rust_Unnamed_23 = 3;
 pub const INDENT_INC: C2Rust_Unnamed_23 = 2;
@@ -1368,10 +1362,7 @@ unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::core::ffi::
                                                 {
                                                     (*s).c = char_before_cursor();
                                                     if vim_isprintc((*s).c) {
-                                                        redraw_later(
-                                                            curwin.get(),
-                                                            UPD_VALID as ::core::ffi::c_int,
-                                                        );
+                                                        redraw_later(curwin.get(), UPD_VALID);
                                                         update_screen();
                                                         ui_flush();
                                                         ins_compl_enable_autocomplete();
@@ -1408,10 +1399,7 @@ unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::core::ffi::
                                                 {
                                                     (*s).c = char_before_cursor();
                                                     if vim_isprintc((*s).c) {
-                                                        redraw_later(
-                                                            curwin.get(),
-                                                            UPD_VALID as ::core::ffi::c_int,
-                                                        );
+                                                        redraw_later(curwin.get(), UPD_VALID);
                                                         update_screen();
                                                         ui_flush();
                                                         ins_compl_enable_autocomplete();
@@ -1442,10 +1430,7 @@ unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::core::ffi::
                                                     {
                                                         (*s).c = char_before_cursor();
                                                         if vim_isprintc((*s).c) {
-                                                            redraw_later(
-                                                                curwin.get(),
-                                                                UPD_VALID as ::core::ffi::c_int,
-                                                            );
+                                                            redraw_later(curwin.get(), UPD_VALID);
                                                             update_screen();
                                                             ui_flush();
                                                             ins_compl_enable_autocomplete();
@@ -1831,7 +1816,7 @@ unsafe extern "C" fn insert_handle_key(mut s: *mut InsertState) -> ::core::ffi::
             && !char_avail()
             && vim_isprintc((*s).c) as ::core::ffi::c_int != 0
         {
-            redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+            redraw_later(curwin.get(), UPD_VALID);
             update_screen();
             ui_flush();
             ins_compl_enable_autocomplete();
@@ -4280,7 +4265,7 @@ unsafe extern "C" fn ins_up(mut startcol: bool) {
             coladvance(curwin.get(), getvcol_nolist(Insstart.ptr()));
         }
         if old_topline != (*curwin.get()).w_topline || old_topfill != (*curwin.get()).w_topfill {
-            redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+            redraw_later(curwin.get(), UPD_VALID);
         }
         start_arrow(&raw mut tpos);
         can_cindent.set(true_0 != 0);
@@ -4315,7 +4300,7 @@ unsafe extern "C" fn ins_down(mut startcol: bool) {
             coladvance(curwin.get(), getvcol_nolist(Insstart.ptr()));
         }
         if old_topline != (*curwin.get()).w_topline || old_topfill != (*curwin.get()).w_topfill {
-            redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+            redraw_later(curwin.get(), UPD_VALID);
         }
         start_arrow(&raw mut tpos);
         can_cindent.set(true_0 != 0);
@@ -4750,7 +4735,7 @@ unsafe extern "C" fn ins_ctrl_ey(mut tc: ::core::ffi::c_int) -> ::core::ffi::c_i
         } else {
             scrollup_clamp();
         }
-        redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+        redraw_later(curwin.get(), UPD_VALID);
     } else {
         c = ins_copychar(
             (*curwin.get()).w_cursor.lnum

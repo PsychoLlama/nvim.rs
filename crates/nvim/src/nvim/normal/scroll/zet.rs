@@ -7,7 +7,7 @@ use core::ptr;
 
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::cursor::{check_cursor_col, set_leftcol};
-use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_later};
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::fold::{
     clearFolding, closeFold, closeFoldRecurse, deleteFold, foldManualAllowed, foldMoveTo,
@@ -20,9 +20,9 @@ use crate::src::nvim::memline::ml_get_pos;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
     BACKWARD, BL_FIX, BL_WHITE, CAR, FAIL, FIND_IDENT, FORWARD, INT_MAX, K_DEL, K_LEFT, K_RIGHT,
-    KE_KDEL, OK, OP_FOLD, OP_NOP, SMT_ALL, SPELL_ADD_BAD, SPELL_ADD_GOOD, UPD_NOT_VALID, UPD_VALID,
-    checkclearop, clearopbeep, false_0, find_ident_under_cursor, get_visual_text, nv_operator,
-    nv_put, read_command_char, true_0,
+    KE_KDEL, OK, OP_FOLD, OP_NOP, SMT_ALL, SPELL_ADD_BAD, SPELL_ADD_GOOD, checkclearop,
+    clearopbeep, false_0, find_ident_under_cursor, get_visual_text, nv_operator, nv_put,
+    read_command_char, true_0,
 };
 use crate::src::nvim::option::get_sidescrolloff_value;
 use crate::src::nvim::os::libc::gettext;
@@ -247,7 +247,7 @@ unsafe fn scroll_cursor_to_edge(to_left: bool) {
         }
         if (*win).w_leftcol != col {
             (*win).w_leftcol = col;
-            redraw_later(win, UPD_NOT_VALID as c_int);
+            redraw_later(win, UPD_NOT_VALID);
         }
     }
 }
@@ -567,7 +567,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
                 Place::Middle => scroll_cursor_halfway(win, true, false),
                 Place::Bottom => scroll_cursor_bot(win, 0, true),
             }
-            redraw_later(win, UPD_VALID as c_int);
+            redraw_later(win, UPD_VALID);
             set_fraction(win);
         }
 

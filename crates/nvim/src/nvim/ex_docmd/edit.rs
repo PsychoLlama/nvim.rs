@@ -8,7 +8,9 @@ use core::ptr;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::getdigits_int;
 use crate::src::nvim::cursor::{check_cursor, check_cursor_col};
-use crate::src::nvim::drawscreen::{clearmode, redraw_later, setcursor_mayforce, showmode};
+use crate::src::nvim::drawscreen::{
+    UPD_VALID, clearmode, redraw_later, setcursor_mayforce, showmode,
+};
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::event::r#loop::process_events_until;
 use crate::src::nvim::ex_cmds::{
@@ -24,7 +26,7 @@ use crate::src::nvim::ex_docmd::{
     CMD_startreplace, CMD_yank, CPO_EXECBUF, Ctrl_C, Ctrl_O, DOCMD_NOWAIT, DOCMD_VERBOSE,
     EXFLAG_LIST, EXFLAG_NR, FAIL, FORWARD, K_SPECIAL, KE_FILLER, KS_SPECIAL, ML_EMPTY, NUL,
     OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, PUT_CURSLINE,
-    PUT_FIXINDENT, PUT_LINE, REMAP_NONE, REMAP_YES, UPD_VALID, kFalse, kMTLineWise, kNone,
+    PUT_FIXINDENT, PUT_LINE, REMAP_NONE, REMAP_YES, kFalse, kMTLineWise, kNone,
 };
 use crate::src::nvim::ex_getln::getexline;
 use crate::src::nvim::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
@@ -138,7 +140,7 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
                     scrolldown(wp, -(y as linenr_T), 1);
                 }
                 (*wp).w_scbind_pos = vtopline as c_int;
-                redraw_later(wp, UPD_VALID as c_int);
+                redraw_later(wp, UPD_VALID);
                 cursor_correct(wp);
                 (*wp).w_redr_status = true;
             }

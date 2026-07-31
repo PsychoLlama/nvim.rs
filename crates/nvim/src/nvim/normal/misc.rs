@@ -7,7 +7,9 @@ use core::ptr;
 
 use crate::src::nvim::buffer::{buflist_getfile, fileinfo};
 use crate::src::nvim::cursor::check_cursor_col;
-use crate::src::nvim::drawscreen::{redraw_curbuf_later, redraw_later, showmode};
+use crate::src::nvim::drawscreen::{
+    UPD_CLEAR, UPD_INVERTED, redraw_curbuf_later, redraw_later, showmode,
+};
 use crate::src::nvim::ex_docmd::{do_cmdline, do_cmdline_cmd};
 use crate::src::nvim::ex_getln::{compute_cmdrow, getexline};
 use crate::src::nvim::getchar::{
@@ -23,9 +25,8 @@ use crate::src::nvim::memline::ml_get_len;
 use crate::src::nvim::message::{msg, msg_ext_set_trigger};
 use crate::src::nvim::normal::{
     CA_COMMAND_BUSY, Ctrl_C, Ctrl_G, Ctrl_N, DOCMD_KEEPLINE, GETF_ALT, GETF_SETMARK, KE_COMMAND,
-    KE_IGNORE, KE_LUA, NUL, NULL, OP_NOP, UPD_CLEAR, UPD_INVERTED, checkclearop, checkclearopq,
-    clearop, clearopbeep, end_visual_mode, false_0, kMTCharWise, nv_left, nv_operator, nv_pcmark,
-    true_0, v_visop,
+    KE_IGNORE, KE_LUA, NUL, NULL, OP_NOP, checkclearop, checkclearopq, clearop, clearopbeep,
+    end_visual_mode, false_0, kMTCharWise, nv_left, nv_operator, nv_pcmark, true_0, v_visop,
 };
 use crate::src::nvim::options::kOptBoFlagEsc;
 use crate::src::nvim::os::libc::gettext;
@@ -182,7 +183,7 @@ pub(crate) unsafe fn nv_clear(cap: *mut cmdarg_T) {
             (*(*wp).w_s).b_syn_slow = false;
             wp = (*wp).w_next;
         }
-        redraw_later(curwin.get(), UPD_CLEAR as c_int);
+        redraw_later(curwin.get(), UPD_CLEAR);
     }
 }
 
@@ -268,7 +269,7 @@ pub(crate) unsafe fn nv_normal(cap: *mut cmdarg_T) {
         }
         if VIsual_active.get() {
             end_visual_mode();
-            redraw_curbuf_later(UPD_INVERTED as c_int);
+            redraw_curbuf_later(UPD_INVERTED);
         }
     }
 }
@@ -316,7 +317,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
             end_visual_mode();
             check_cursor_col(curwin.get());
             (*curwin.get()).w_set_curswant = true_0;
-            redraw_curbuf_later(UPD_INVERTED as c_int);
+            redraw_curbuf_later(UPD_INVERTED);
         } else if no_reason {
             vim_beep(kOptBoFlagEsc as c_uint);
         }

@@ -10,7 +10,7 @@
 use core::ptr;
 
 use crate::src::nvim::cursor::check_cursor;
-use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::drawscreen::{UPD_SOME_VALID, redraw_later};
 use crate::src::nvim::ex_getln::getcmdline;
 use crate::src::nvim::fold::foldOpenCursor;
 use crate::src::nvim::highlight::win_hl_attr;
@@ -21,7 +21,7 @@ use crate::src::nvim::mark::{get_changelist, get_jumplist, mark_get, mark_move_t
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
     HLF_L, HLF_LC, KMarkNoContext, MOD_MASK_CTRL, OP_NOP, OP_ROT13, SEARCH_ECHO, SEARCH_MARK,
-    SEARCH_MSG, SEARCH_OPT, TAB, UPD_SOME_VALID, checkclearop, checkclearopq, clearop, clearopbeep,
+    SEARCH_MSG, SEARCH_OPT, TAB, checkclearop, checkclearopq, clearop, clearopbeep,
     e_changelist_is_empty, false_0, kMTCharWise, kMTLineWise, kMarkAll, kMarkBeginLine,
     kMarkChangedCursor, kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed,
     kMarkMoveSuccess, kMarkSetView, kMarkSwitchedBuf, nv_operator, true_0,
@@ -117,7 +117,7 @@ pub(crate) unsafe fn nv_next(cap: *mut cmdarg_T) {
             (*cap).count1 -= 1;
         }
         if i > 0 && current_match_is_distinct() {
-            redraw_later(curwin.get(), UPD_SOME_VALID as c_int);
+            redraw_later(curwin.get(), UPD_SOME_VALID);
         }
     }
 }
@@ -177,7 +177,7 @@ pub(crate) unsafe fn normal_search(
             }
         }
         if !equalpos((*curwin.get()).w_cursor, prev_cursor) && current_match_is_distinct() {
-            redraw_later(curwin.get(), UPD_SOME_VALID as c_int);
+            redraw_later(curwin.get(), UPD_SOME_VALID);
         }
         check_cursor(curwin.get());
         i

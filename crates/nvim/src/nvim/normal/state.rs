@@ -21,8 +21,8 @@ use crate::src::nvim::autocmd::{
 use crate::src::nvim::buffer::{buf_get_changedtick, fileinfo};
 use crate::src::nvim::diff::ex_diffupdate;
 use crate::src::nvim::drawscreen::{
-    redraw_curbuf_later, redraw_statuslines, setcursor, show_cursor_info_later, showmode,
-    update_screen,
+    UPD_INVERTED, redraw_curbuf_later, redraw_statuslines, setcursor, show_cursor_info_later,
+    showmode, update_screen,
 };
 use crate::src::nvim::eval::vars::set_vcount;
 use crate::src::nvim::ex_docmd::do_exmode;
@@ -47,9 +47,8 @@ use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::{may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::src::nvim::normal::{
     CA_COMMAND_BUSY, MOD_MASK_SHIFT, NUL, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS,
-    NormalState, OP_NOP, SHM_FILEINFO, UPD_INVERTED, check_scrollbind, clearop, clearopbeep,
-    current_oap, end_visual_mode, false_0, find_command, normal_execute, nv_cmds, true_0,
-    unshift_special,
+    NormalState, OP_NOP, SHM_FILEINFO, check_scrollbind, clearop, clearopbeep, current_oap,
+    end_visual_mode, false_0, find_command, normal_execute, nv_cmds, true_0, unshift_special,
 };
 use crate::src::nvim::option::shortmess;
 use crate::src::nvim::options::kOptFdoFlagAll;
@@ -209,7 +208,7 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
         // "stopsel": an unshifted movement ends the selection.
         if km_stopsel.get() && flags & NV_STS != 0 && mod_mask.get() & MOD_MASK_SHIFT == 0 {
             end_visual_mode();
-            redraw_curbuf_later(UPD_INVERTED as c_int);
+            redraw_curbuf_later(UPD_INVERTED);
         }
         if km_startsel.get() {
             if flags & NV_SS != 0 {

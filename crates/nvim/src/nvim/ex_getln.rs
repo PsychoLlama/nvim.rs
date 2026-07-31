@@ -30,8 +30,9 @@ use crate::src::nvim::cursor::{
 };
 use crate::src::nvim::digraph::{do_digraph, get_digraph};
 use crate::src::nvim::drawscreen::{
-    redraw_all_later, redraw_custom_title_later, redraw_later, redraw_statuslines, set_must_redraw,
-    setcursor, status_redraw_all, status_redraw_curbuf, update_screen,
+    UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, redraw_all_later, redraw_custom_title_later,
+    redraw_later, redraw_statuslines, set_must_redraw, setcursor, status_redraw_all,
+    status_redraw_curbuf, update_screen,
 };
 use crate::src::nvim::edit::get_literal;
 use crate::src::nvim::eval::typval::{
@@ -1095,13 +1096,6 @@ pub const HIST_CMD: HistoryType = 0;
 pub const HIST_INVALID: HistoryType = -1;
 pub const HIST_DEFAULT: HistoryType = -2;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_26 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_26 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_26 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_26 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_26 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_26 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_26 = 10;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const CONV_ICONV: C2Rust_Unnamed_27 = 5;
 pub const CONV_TO_LATIN9: C2Rust_Unnamed_27 = 4;
@@ -2076,7 +2070,7 @@ unsafe extern "C" fn may_do_incsearch_highlighting(
         ui_busy_stop();
     } else {
         set_no_hlsearch(true_0 != 0);
-        redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+        redraw_all_later(UPD_SOME_VALID);
     }
     highlight_match.set(found != 0 as ::core::ffi::c_int);
     restore_viewstate(curwin.get(), &raw mut (*s).old_viewstate);
@@ -2102,7 +2096,7 @@ unsafe extern "C" fn may_do_incsearch_highlighting(
             != 0
             && !no_hlsearch.get()
         {
-            redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+            redraw_all_later(UPD_SOME_VALID);
             set_no_hlsearch(true_0 != 0);
         }
         *(*ccline.ptr()).cmdbuff.offset((skiplen + patlen) as isize) = next_char;
@@ -2114,7 +2108,7 @@ unsafe extern "C" fn may_do_incsearch_highlighting(
     {
         (*curwin.get()).w_redr_status = true_0 != 0;
     }
-    redraw_later(curwin.get(), UPD_SOME_VALID as ::core::ffi::c_int);
+    redraw_later(curwin.get(), UPD_SOME_VALID);
     update_screen();
     highlight_match.set(false_0 != 0);
     restore_last_search_pattern();
@@ -2211,7 +2205,7 @@ unsafe extern "C" fn finish_incsearch_highlighting(
     magic_overruled.set((*s).magic_overruled_save);
     validate_cursor(curwin.get());
     status_redraw_all();
-    redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+    redraw_all_later(UPD_SOME_VALID);
     if call_update_screen {
         update_screen();
     }
@@ -2768,7 +2762,7 @@ unsafe extern "C" fn command_line_enter(
         }
         msg_check();
         if p_ch.get() == 0 as OptInt && !ui_has(kUIMessages) {
-            set_must_redraw(UPD_VALID as ::core::ffi::c_int);
+            set_must_redraw(UPD_VALID);
         }
         msg_scroll.set((*s).save_msg_scroll);
         redir_off.set(false_0 != 0);
@@ -2799,7 +2793,7 @@ unsafe extern "C" fn command_line_enter(
         State.set((*s).save_State);
         if cmdpreview.get() as ::core::ffi::c_int != save_cmdpreview as ::core::ffi::c_int {
             cmdpreview.set(save_cmdpreview);
-            redraw_all_later(UPD_SOME_VALID as ::core::ffi::c_int);
+            redraw_all_later(UPD_SOME_VALID);
         }
         may_trigger_modechanged();
         setmouse();
@@ -3663,7 +3657,7 @@ unsafe extern "C" fn may_do_command_line_next_incsearch(
         validate_cursor(curwin.get());
         highlight_match.set(true_0 != 0);
         save_viewstate(curwin.get(), &raw mut (*s).old_viewstate);
-        redraw_later(curwin.get(), UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_later(curwin.get(), UPD_NOT_VALID);
         update_screen();
         highlight_match.set(false_0 != 0);
         redrawcmdline();
@@ -7677,7 +7671,7 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
     changed_line_abv_curs();
     invalidate_botline_win(curwin.get());
     ui_ext_cmdline_hide(false_0 != 0);
-    redraw_later(curwin.get(), UPD_SOME_VALID as ::core::ffi::c_int);
+    redraw_later(curwin.get(), UPD_SOME_VALID);
     exmode_active.set(false_0 != 0);
     State.set(MODE_NORMAL);
     setmouse();

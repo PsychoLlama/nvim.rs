@@ -16,7 +16,7 @@ use crate::src::nvim::buffer::{buflist_getfile, do_modelines, no_write_message};
 use crate::src::nvim::change::changed_lines;
 use crate::src::nvim::charset::{skipdigits, skipwhite, vim_isprintc};
 use crate::src::nvim::cursor::{check_cursor, coladvance};
-use crate::src::nvim::drawscreen::{redraw_buf_later, redraw_later};
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_buf_later, redraw_later};
 use crate::src::nvim::drawscreen::{redraw_curbuf_later, update_screen};
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::typval::{
@@ -929,13 +929,6 @@ pub const SHM_LINES: C2Rust_Unnamed_20 = 108;
 pub const SHM_MOD: C2Rust_Unnamed_20 = 109;
 pub const SHM_RO: C2Rust_Unnamed_20 = 114;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_21 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_21 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_21 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_21 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_21 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_21 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_21 = 10;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const BL_FIX: C2Rust_Unnamed_22 = 4;
 pub const BL_SOL: C2Rust_Unnamed_22 = 2;
@@ -5340,7 +5333,7 @@ unsafe extern "C" fn qf_win_goto(mut win: *mut win_T, mut lnum: linenr_T) {
     (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
     (*curwin.get()).w_curswant = 0 as ::core::ffi::c_int as colnr_T;
     update_topline(curwin.get());
-    redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+    redraw_later(curwin.get(), UPD_VALID);
     (*curwin.get()).w_redr_status = true_0 != 0;
     curwin.set(old_curwin);
     curbuf.set((*curwin.get()).w_buffer);
@@ -5597,7 +5590,7 @@ unsafe extern "C" fn qf_update_buffer(mut qi: *mut qf_info_T, mut old_last: *mut
     }
     win = qf_find_win(qi);
     if !win.is_null() && old_line_count < (*win).w_botline {
-        redraw_buf_later(buf, UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_buf_later(buf, UPD_NOT_VALID);
     }
     decr_quickfix_busy();
 }
@@ -5900,7 +5893,7 @@ unsafe extern "C" fn qf_fill_buffer(
         );
         (*curbuf.get()).b_keep_filetype = false_0 != 0;
         (*curbuf.get()).b_ro_locked -= 1;
-        redraw_curbuf_later(UPD_NOT_VALID as ::core::ffi::c_int);
+        redraw_curbuf_later(UPD_NOT_VALID);
     }
     KeyTyped.set(old_KeyTyped);
 }

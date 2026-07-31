@@ -1,6 +1,8 @@
 use crate::src::nvim::ascii::ascii_iswhite;
 use crate::src::nvim::charset::{skiptowhite, skipwhite};
-use crate::src::nvim::drawscreen::{redraw_later, redraw_win_range_later};
+use crate::src::nvim::drawscreen::{
+    UPD_SOME_VALID, UPD_VALID, redraw_later, redraw_win_range_later,
+};
 use crate::src::nvim::eval::funcs::get_optional_window;
 use crate::src::nvim::eval::typval::{
     tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find,
@@ -205,13 +207,6 @@ pub const HLF_EOB: C2Rust_Unnamed_13 = 2;
 pub const HLF_8: C2Rust_Unnamed_13 = 1;
 pub const HLF_NONE: C2Rust_Unnamed_13 = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_14 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_14 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_14 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_14 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_14 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_14 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_14 = 10;
 pub const CMD_USER_BUF: CMD_index = -2;
 pub const CMD_USER: CMD_index = -1;
 pub const CMD_SIZE: CMD_index = 557;
@@ -808,7 +803,7 @@ unsafe extern "C" fn match_add(
     let mut prev: *mut matchitem_T = ::core::ptr::null_mut::<matchitem_T>();
     let mut hlg_id: ::core::ffi::c_int = 0;
     let mut regprog: *mut regprog_T = ::core::ptr::null_mut::<regprog_T>();
-    let mut rtype: ::core::ffi::c_int = UPD_SOME_VALID as ::core::ffi::c_int;
+    let mut rtype: ::core::ffi::c_int = UPD_SOME_VALID;
     if *grp as ::core::ffi::c_int == NUL || !pat.is_null() && *pat as ::core::ffi::c_int == NUL {
         return -1 as ::core::ffi::c_int;
     }
@@ -995,7 +990,7 @@ unsafe extern "C" fn match_add(
             redraw_win_range_later(wp, toplnum, botlnum);
             (*m).mit_toplnum = toplnum;
             (*m).mit_botlnum = botlnum;
-            rtype = UPD_VALID as ::core::ffi::c_int;
+            rtype = UPD_VALID;
         }
     }
     cur_0 = (*wp).w_match_head;
@@ -1020,7 +1015,7 @@ unsafe extern "C" fn match_delete(
 ) -> ::core::ffi::c_int {
     let mut cur: *mut matchitem_T = (*wp).w_match_head;
     let mut prev: *mut matchitem_T = cur;
-    let mut rtype: ::core::ffi::c_int = UPD_SOME_VALID as ::core::ffi::c_int;
+    let mut rtype: ::core::ffi::c_int = UPD_SOME_VALID;
     if id < 1 as ::core::ffi::c_int {
         if perr {
             semsg(
@@ -1055,7 +1050,7 @@ unsafe extern "C" fn match_delete(
     xfree((*cur).mit_pattern as *mut ::core::ffi::c_void);
     if (*cur).mit_toplnum != 0 as linenr_T {
         redraw_win_range_later(wp, (*cur).mit_toplnum, (*cur).mit_botlnum);
-        rtype = UPD_VALID as ::core::ffi::c_int;
+        rtype = UPD_VALID;
     }
     xfree((*cur).mit_pos_array as *mut ::core::ffi::c_void);
     xfree(cur as *mut ::core::ffi::c_void);
@@ -1071,7 +1066,7 @@ pub unsafe extern "C" fn clear_matches(mut wp: *mut win_T) {
         xfree((*wp).w_match_head as *mut ::core::ffi::c_void);
         (*wp).w_match_head = m;
     }
-    redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
+    redraw_later(wp, UPD_SOME_VALID);
 }
 unsafe extern "C" fn get_match(mut wp: *mut win_T, mut id: ::core::ffi::c_int) -> *mut matchitem_T {
     let mut cur: *mut matchitem_T = (*wp).w_match_head;

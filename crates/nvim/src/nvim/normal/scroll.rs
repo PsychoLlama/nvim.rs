@@ -9,15 +9,14 @@ use core::ptr;
 
 use crate::src::nvim::cursor::set_leftcol;
 use crate::src::nvim::diff::diff_set_topline;
-use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::drawscreen::{UPD_VALID, redraw_later};
 use crate::src::nvim::ex_docmd::do_cmdline_cmd;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     VIsual_active, VIsual_select, curbuf, curwin, did_syncbind, firstwin, mod_mask, p_sbo,
 };
 use crate::src::nvim::normal::{
-    BACKWARD, Ctrl_D, FORWARD, MOD_MASK_CTRL, UPD_VALID, checkclearop, checkclearopq, clearopbeep,
-    false_0,
+    BACKWARD, Ctrl_D, FORWARD, MOD_MASK_CTRL, checkclearop, checkclearopq, clearopbeep, false_0,
 };
 use crate::src::nvim::plines::plines_m_win_fill;
 use crate::src::nvim::strings::vim_strchr;
@@ -137,7 +136,7 @@ pub unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_int) {
                             scrolldown(wp, -(y as linenr_T), false_0);
                         }
                     }
-                    redraw_later(wp, UPD_VALID as c_int);
+                    redraw_later(wp, UPD_VALID);
                     cursor_correct(wp);
                     (*wp).w_redr_status = true;
                 }

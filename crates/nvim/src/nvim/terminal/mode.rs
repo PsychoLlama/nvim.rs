@@ -29,8 +29,8 @@ use crate::src::nvim::buffer::{buf_get_changedtick, do_buffer};
 use crate::src::nvim::cursor::coladvance;
 use crate::src::nvim::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
 use crate::src::nvim::drawscreen::{
-    redraw_later, redraw_statuslines, setcursor, show_cursor_info_later, showmode, unshowmode,
-    update_screen,
+    UPD_SOME_VALID, UPD_VALID, redraw_later, redraw_statuslines, setcursor, show_cursor_info_later,
+    showmode, unshowmode, update_screen,
 };
 use crate::src::nvim::ex_docmd::do_cmdline;
 use crate::src::nvim::getchar::{getcmdkeycmd, map_execute_lua, merge_modifiers, paste_repeat};
@@ -63,9 +63,7 @@ use super::input::{
 use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
-use super::{
-    UPD_SOME_VALID, UPD_VALID, map_get_int_ptr_t, terminal_check_size, terminal_set_state,
-};
+use super::{map_get_int_ptr_t, terminal_check_size, terminal_set_state};
 
 const DOBUF_WIPE: c_int = 4;
 const DOBUF_FIRST: c_int = 1;

@@ -19,7 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::src::nvim::getchar::{ins_char_typebuf, ungetchars};
 use crate::src::nvim::keycodes::{
     K_BS, K_DEL, K_DOWN, K_END, K_F1, K_F2, K_F3, K_F4, K_F5, K_F6, K_F7, K_F8, K_F9, K_F10, K_F11,
@@ -189,7 +189,6 @@ pub(super) const K_COMMAND: c_int = extra(KE_COMMAND);
 pub(super) const K_LUA: c_int = extra(KE_LUA);
 
 /// `redraw_later` level: the window scrolled, so nothing on it holds.
-const UPD_NOT_VALID: c_int = 40;
 
 /// `do_mousescroll`'s directions.
 const MSCR_DOWN: c_int = 0;

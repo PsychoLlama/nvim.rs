@@ -7,7 +7,9 @@ use crate::src::nvim::autocmd::{block_autocmds, unblock_autocmds};
 use crate::src::nvim::buffer::{bt_nofile, buf_clear};
 use crate::src::nvim::charset::{ptr2cells, transstr, vim_strsize};
 use crate::src::nvim::cmdexpand::{cmdline_compl_is_fuzzy, cmdline_compl_pattern};
-use crate::src::nvim::drawscreen::{redraw_later, setcursor_mayforce, update_screen};
+use crate::src::nvim::drawscreen::{
+    UPD_NOT_VALID, UPD_SOME_VALID, redraw_later, setcursor_mayforce, update_screen,
+};
 use crate::src::nvim::eval::typval::{tv_dict_add_bool, tv_dict_add_float, tv_dict_add_nr};
 use crate::src::nvim::ex_cmds::{do_ecmd, prepare_tagpreview};
 use crate::src::nvim::fuzzy::fuzzy_match_str_with_pos;
@@ -823,13 +825,6 @@ pub const ADDR_ARGUMENTS: cmd_addr_T = 2;
 pub const ADDR_WINDOWS: cmd_addr_T = 1;
 pub const ADDR_LINES: cmd_addr_T = 0;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_18 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_18 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_18 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_18 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_18 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_18 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_18 = 10;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;
 pub const ECMD_ONE: C2Rust_Unnamed_19 = 1;
 pub const ECMD_LAST: C2Rust_Unnamed_19 = -1;
@@ -2400,7 +2395,7 @@ pub unsafe extern "C" fn pum_set_info(
     pum_preview_set_text(wp, info, &raw mut lnum, &raw mut max_info_width);
     (*no_u_sync.ptr()) -= 1;
     (*RedrawingDisabled.ptr()) -= 1;
-    redraw_later(wp, UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(wp, UPD_NOT_VALID);
     if !pum_adjust_info_position(wp, max_info_width) {
         wp = ::core::ptr::null_mut::<win_T>();
     }
@@ -2658,7 +2653,7 @@ unsafe extern "C" fn pum_set_selected(
                             (*curwin.get()).w_redr_status = false_0 != 0;
                         }
                         validate_cursor(curwin.get());
-                        redraw_later(curwin.get(), UPD_SOME_VALID as ::core::ffi::c_int);
+                        redraw_later(curwin.get(), UPD_SOME_VALID);
                         if resized as ::core::ffi::c_int != 0
                             && win_valid(curwin_save) as ::core::ffi::c_int != 0
                         {

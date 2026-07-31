@@ -8,7 +8,7 @@ use crate::src::nvim::charset::{
 };
 use crate::src::nvim::cursor::check_cursor_lnum;
 use crate::src::nvim::decoration::{decor_find_sign, decor_put_sh, sign_item_cmp};
-use crate::src::nvim::drawscreen::redraw_buf_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_buf_later};
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::funcs::get_buf_arg;
 use crate::src::nvim::eval::typval::{
@@ -903,13 +903,6 @@ pub struct C2Rust_Unnamed_20 {
     pub items: *mut DecorSignHighlight,
 }
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_21 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_21 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_21 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_21 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_21 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_21 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_21 = 10;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const BL_FIX: C2Rust_Unnamed_22 = 4;
 pub const BL_SOL: C2Rust_Unnamed_22 = 2;
@@ -1724,7 +1717,7 @@ unsafe extern "C" fn sign_define_by_name(
                     };
                     while !wp.is_null() {
                         if buf_has_signs((*wp).w_buffer) {
-                            redraw_buf_later((*wp).w_buffer, UPD_NOT_VALID as ::core::ffi::c_int);
+                            redraw_buf_later((*wp).w_buffer, UPD_NOT_VALID);
                         }
                         wp = (*wp).w_next;
                     }

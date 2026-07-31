@@ -15,7 +15,7 @@
 //! [`text`], line-number bookkeeping in [`adjust`], `:mkview` output in
 //! [`session`], and the Vimscript builtins in [`builtins`].
 
-use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{State, curwin, disable_fold_update, got_int, need_diff_redraw};
@@ -53,8 +53,6 @@ pub const FAIL: c_int = 0;
 pub const NUL: c_int = 0;
 pub const TAB: c_int = '\t' as c_int;
 pub const FORWARD: c_int = 1;
-pub const UPD_INVERTED: c_uint = 20;
-pub const UPD_NOT_VALID: c_uint = 40;
 pub const VAR_STRING: VarType = 2;
 pub const VIRTTEXT_EMPTY: VirtText = VirtText {
     size: 0,
@@ -429,7 +427,7 @@ pub unsafe extern "C" fn foldUpdateAfterInsert() {
 /// every time a setting is changed or a syntax item is added.
 pub unsafe extern "C" fn foldUpdateAll(mut win: *mut win_T) {
     (*win).w_foldinvalid = true;
-    redraw_later(win, UPD_NOT_VALID as c_int);
+    redraw_later(win, UPD_NOT_VALID);
 }
 /// Init the fold info in a new window.
 pub unsafe extern "C" fn foldInitWin(mut new_win: *mut win_T) {

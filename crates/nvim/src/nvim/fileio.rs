@@ -15,7 +15,7 @@ use crate::src::nvim::buffer_updates::buf_updates_unload;
 use crate::src::nvim::change::{appended_lines_mark, save_file_ff, unchanged};
 use crate::src::nvim::cursor::{check_cursor, check_cursor_lnum};
 use crate::src::nvim::diff::diff_invalidate;
-use crate::src::nvim::drawscreen::{redraw_curbuf_later, status_redraw_all};
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later, status_redraw_all};
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::vars::{eval_charconvert, get_vim_var_str, set_vim_var_string};
 use crate::src::nvim::event::libuv::uv_strerror;
@@ -1045,13 +1045,6 @@ pub const BLN_DUMMY: bln_values = 4;
 pub const BLN_LISTED: bln_values = 2;
 pub const BLN_CURBUF: bln_values = 1;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_24 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_24 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_24 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_24 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_24 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_24 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_24 = 10;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub const BL_FIX: C2Rust_Unnamed_25 = 4;
 pub const BL_SOL: C2Rust_Unnamed_25 = 2;
@@ -3138,7 +3131,7 @@ pub unsafe extern "C" fn readfile(
                     }
                     if newfile as ::core::ffi::c_int != 0 || read_buffer as ::core::ffi::c_int != 0
                     {
-                        redraw_curbuf_later(UPD_NOT_VALID as ::core::ffi::c_int);
+                        redraw_curbuf_later(UPD_NOT_VALID);
                         diff_invalidate(curbuf.get());
                         foldUpdateAll(curwin.get());
                     } else if linecnt != 0 {

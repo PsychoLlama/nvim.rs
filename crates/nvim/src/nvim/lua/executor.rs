@@ -5,7 +5,7 @@ use crate::src::nvim::api::private::helpers::{
 };
 use crate::src::nvim::change::inserted_bytes;
 use crate::src::nvim::cursor::check_cursor;
-use crate::src::nvim::drawscreen::redraw_curbuf_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::src::nvim::eval::funcs::find_internal_func;
 use crate::src::nvim::eval::typval::tv_clear;
 use crate::src::nvim::eval::userfunc::{call_func, register_luafunc};
@@ -295,13 +295,6 @@ pub const kUITabline: UIExtension = 2;
 pub const kUIPopupmenu: UIExtension = 1;
 pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_29 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_29 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_29 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_29 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_29 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_29 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_29 = 10;
 pub const CMD_USER_BUF: CMD_index = -2;
 pub const CMD_USER: CMD_index = -1;
 pub const CMD_SIZE: CMD_index = 557;
@@ -3479,7 +3472,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
     }
     lua_settop(lstate, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
     check_cursor(curwin.get());
-    redraw_curbuf_later(UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_curbuf_later(UPD_NOT_VALID);
 }
 pub const DOSTART: [::core::ffi::c_char; 31] = unsafe {
     ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(

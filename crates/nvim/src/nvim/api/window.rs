@@ -6,7 +6,7 @@ use crate::src::nvim::api::private::helpers::{
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::autocmd::is_aucmd_win;
 use crate::src::nvim::cursor::check_cursor_col;
-use crate::src::nvim::drawscreen::redraw_later;
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_later};
 use crate::src::nvim::eval::window::{
     restore_win, switch_win, win_execute_after, win_execute_before,
 };
@@ -118,18 +118,11 @@ pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
 pub const ET_INTERRUPT: except_type_T = 2;
 pub const ET_ERROR: except_type_T = 1;
 pub const ET_USER: except_type_T = 0;
-pub const UPD_VALID: C2Rust_Unnamed_14 = 10;
 pub const kRetMulti: LuaRetMode = 3;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_14 = 40;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_14 = 50;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_14 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_14 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_14 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_14 = 20;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: Array = Array {
@@ -260,7 +253,7 @@ pub unsafe extern "C" fn nvim_win_set_cursor(mut win: Window, mut pos: Array, mu
     update_topline(curwin.get());
     validate_cursor(curwin.get());
     restore_win(&raw mut switchwin, true_0 != 0);
-    redraw_later(w, UPD_VALID as ::core::ffi::c_int);
+    redraw_later(w, UPD_VALID);
     (*w).w_redr_status = true_0 != 0;
 }
 pub unsafe extern "C" fn nvim_win_get_height(mut win: Window, mut err: *mut Error) -> Integer {
@@ -572,7 +565,7 @@ pub unsafe extern "C" fn nvim_win_set_hl_ns(
     }
     (*w).w_ns_hl = ns_id as NS as ::core::ffi::c_int;
     (*w).w_hl_needs_update = true_0;
-    redraw_later(w, UPD_NOT_VALID as ::core::ffi::c_int);
+    redraw_later(w, UPD_NOT_VALID);
 }
 pub unsafe extern "C" fn nvim_win_text_height(
     mut win: Window,

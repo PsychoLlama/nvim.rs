@@ -11,7 +11,7 @@ use crate::src::nvim::autocmd::{
     EVENT_WINNEW, apply_autocmds, block_autocmds, is_aucmd_win, unblock_autocmds,
 };
 use crate::src::nvim::buffer::{bufref_valid, set_bufref};
-use crate::src::nvim::drawscreen::{redraw_later, set_must_redraw};
+use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
 use crate::src::nvim::eval::window::{
     restore_win, restore_win_noblock, switch_win, switch_win_noblock,
 };
@@ -171,7 +171,6 @@ pub const kUIWildmenu: UIExtension = 3;
 pub const kUITabline: UIExtension = 2;
 pub const kUIPopupmenu: UIExtension = 1;
 pub const kUICmdline: UIExtension = 0;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_16 = 40;
 pub const CMD_USER_BUF: CMD_index = -2;
 pub const CMD_USER: CMD_index = -1;
 pub const CMD_SIZE: CMD_index = 557;
@@ -733,12 +732,6 @@ pub const CMD_abclear: CMD_index = 2;
 pub const CMD_abbreviate: CMD_index = 1;
 pub const CMD_append: CMD_index = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_16 = 50;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_16 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_16 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_16 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_16 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_16 = 10;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const WSP_QUICKFIX: C2Rust_Unnamed_17 = 1024;
 pub const WSP_NEWLOC: C2Rust_Unnamed_17 = 256;
@@ -1736,7 +1729,7 @@ unsafe extern "C" fn win_config_float_tp(
             if win_new_float(win, false_0 != 0, *fconfig, err).is_null() {
                 break '_restore_curwin;
             } else {
-                redraw_later(win, UPD_NOT_VALID as ::core::ffi::c_int);
+                redraw_later(win, UPD_NOT_VALID);
             }
         }
         if win_tp != parent_tp {
@@ -1758,8 +1751,8 @@ unsafe extern "C" fn win_config_float_tp(
                 (*win_tp).tp_curwin = altwin;
             }
             ui_comp_remove_grid(&raw mut (*win).w_grid_alloc);
-            redraw_later(win, UPD_NOT_VALID as ::core::ffi::c_int);
-            set_must_redraw(UPD_NOT_VALID as ::core::ffi::c_int);
+            redraw_later(win, UPD_NOT_VALID);
+            set_must_redraw(UPD_NOT_VALID);
         }
         win_config_float(win, *fconfig);
         return true_0 != 0;

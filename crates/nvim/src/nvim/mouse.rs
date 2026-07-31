@@ -4,7 +4,8 @@ use crate::src::nvim::charset::vim_iswordc;
 use crate::src::nvim::cursor::{coladvance, get_cursor_pos_ptr, set_leftcol};
 use crate::src::nvim::decoration::decor_conceal_line;
 use crate::src::nvim::drawscreen::{
-    redraw_curbuf_later, redraw_later, redraw_statuslines, setcursor, update_screen,
+    UPD_INVERTED, UPD_VALID, redraw_curbuf_later, redraw_later, redraw_statuslines, setcursor,
+    update_screen,
 };
 use crate::src::nvim::edit::{set_can_cindent, start_arrow, undisplay_dollar};
 use crate::src::nvim::eval::typval::{tv_clear, tv_dict_add_nr, tv_dict_alloc_ret};
@@ -152,13 +153,6 @@ pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const UPD_CLEAR: C2Rust_Unnamed_14 = 50;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_14 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_14 = 35;
-pub const UPD_REDRAW_TOP: C2Rust_Unnamed_14 = 30;
-pub const UPD_INVERTED_ALL: C2Rust_Unnamed_14 = 25;
-pub const UPD_INVERTED: C2Rust_Unnamed_14 = 20;
-pub const UPD_VALID: C2Rust_Unnamed_14 = 10;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const KE_WILD: key_extra = 108;
 pub const KE_COMMAND: key_extra = 104;
@@ -653,9 +647,9 @@ unsafe extern "C" fn do_popup(
     if jump_flags != 0 {
         jump_flags = jump_to_mouse(jump_flags, ::core::ptr::null_mut::<bool>(), which_button);
         redraw_curbuf_later(if VIsual_active.get() as ::core::ffi::c_int != 0 {
-            UPD_INVERTED as ::core::ffi::c_int
+            UPD_INVERTED
         } else {
-            UPD_VALID as ::core::ffi::c_int
+            UPD_VALID
         });
         update_screen();
         setcursor();
@@ -1360,7 +1354,7 @@ pub unsafe extern "C" fn do_mouse(
                 (*curwin.get()).w_set_curswant = true_0;
             }
             if is_click {
-                redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+                redraw_curbuf_later(UPD_INVERTED);
             }
         } else if VIsual_active.get() as ::core::ffi::c_int != 0 && old_active == 0 {
             if mod_mask.get() & MOD_MASK_ALT != 0 {
@@ -1762,7 +1756,7 @@ pub unsafe extern "C" fn jump_to_mouse(
                                 && flags & MOUSE_MAY_STOP_VIS as ::core::ffi::c_int != 0)
                     {
                         end_visual_mode();
-                        redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+                        redraw_curbuf_later(UPD_INVERTED);
                     }
                     if cmdwin_type.get() != 0 as ::core::ffi::c_int && wp != cmdwin_win.get() {
                         sep_line_offset.set(0 as ::core::ffi::c_int);
@@ -1828,7 +1822,7 @@ pub unsafe extern "C" fn jump_to_mouse(
             } else {
                 if flags & MOUSE_MAY_STOP_VIS as ::core::ffi::c_int != 0 {
                     end_visual_mode();
-                    redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+                    redraw_curbuf_later(UPD_INVERTED);
                 }
                 if grid == 0 as ::core::ffi::c_int {
                     row -=
@@ -1876,7 +1870,7 @@ pub unsafe extern "C" fn jump_to_mouse(
                     check_topfill(curwin.get(), false_0 != 0);
                     (*curwin.get()).w_valid &=
                         !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
-                    redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+                    redraw_later(curwin.get(), UPD_VALID);
                     row = 0 as ::core::ffi::c_int;
                 } else if row >= (*curwin.get()).w_view_height {
                     count = 0 as ::core::ffi::c_int;
@@ -1914,7 +1908,7 @@ pub unsafe extern "C" fn jump_to_mouse(
                         }
                     }
                     check_topfill(curwin.get(), false_0 != 0);
-                    redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+                    redraw_later(curwin.get(), UPD_VALID);
                     (*curwin.get()).w_valid &=
                         !(VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP);
                     row = (*curwin.get()).w_view_height - 1 as ::core::ffi::c_int;
@@ -1991,7 +1985,7 @@ pub unsafe extern "C" fn jump_to_mouse(
     }
     if flags & MOUSE_MAY_STOP_VIS as ::core::ffi::c_int != 0 {
         end_visual_mode();
-        redraw_curbuf_later(UPD_INVERTED as ::core::ffi::c_int);
+        redraw_curbuf_later(UPD_INVERTED);
     }
     return IN_BUFFER as ::core::ffi::c_int;
 }

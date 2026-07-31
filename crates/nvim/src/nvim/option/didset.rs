@@ -24,7 +24,8 @@ use crate::src::nvim::change::save_file_ff;
 use crate::src::nvim::charset::buf_init_chartab;
 use crate::src::nvim::diff::diff_buf_adjust;
 use crate::src::nvim::drawscreen::{
-    check_screensize, redraw_all_later, screen_resize, showmode, status_redraw_curbuf,
+    UPD_NOT_VALID, UPD_SOME_VALID, check_screensize, redraw_all_later, screen_resize, showmode,
+    status_redraw_curbuf,
 };
 use crate::src::nvim::eval::vars::set_vim_var_string;
 use crate::src::nvim::ex_docmd::set_no_hlsearch;
@@ -67,9 +68,9 @@ use crate::src::nvim::winfloat::win_float_update_statusline;
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, Ctrl_C, DIP_ALL, HLF_W, K_KENTER, NO_SCREEN, NUL,
-    OPT_GLOBAL, OPT_LOCAL, STATUS_HEIGHT, UPD_NOT_VALID, UPD_SOME_VALID, VV_WARNINGMSG,
-    check_blending, did_set_title, kFalse, kOptValTypeNumber, kOptValTypeString, option_was_set,
-    redraw_titles, set_option_value, set_option_varp, set_options_bin,
+    OPT_GLOBAL, OPT_LOCAL, STATUS_HEIGHT, VV_WARNINGMSG, check_blending, did_set_title, kFalse,
+    kOptValTypeNumber, kOptValTypeString, option_was_set, redraw_titles, set_option_value,
+    set_option_varp, set_options_bin,
 };
 
 /// "E590", the one message a callback in this module reports.
@@ -158,7 +159,7 @@ pub unsafe extern "C" fn did_set_arabic(args: *mut optset_T) -> *const c_char {
             }
             if p_arshape.get() == 0 {
                 p_arshape.set(1);
-                redraw_all_later(UPD_NOT_VALID as c_int);
+                redraw_all_later(UPD_NOT_VALID);
             }
         }
         if strcmp(p_enc.get(), c"utf-8".as_ptr()) != 0 {
@@ -331,7 +332,7 @@ pub unsafe extern "C" fn did_set_hlsearch(_args: *mut optset_T) -> *const c_char
 pub unsafe extern "C" fn did_set_ignorecase(_args: *mut optset_T) -> *const c_char {
     if p_hls.get() != 0 {
         // SAFETY: the screen is the editor's own.
-        unsafe { redraw_all_later(UPD_SOME_VALID as c_int) };
+        unsafe { redraw_all_later(UPD_SOME_VALID) };
     }
     ptr::null()
 }
