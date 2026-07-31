@@ -1,6 +1,6 @@
 {
   "internal_exports": 70,
-  "files_without_forbid_unsafe": 483,
+  "files_without_forbid_unsafe": 485,
   "files_without_deny_unsafe_op": 225,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -385,7 +385,9 @@
     "crates/nvim/src/nvim/search.rs": {"lines": 5024, "no_mangle": 3, "unsafe": 57},
     "crates/nvim/src/nvim/shada.rs": {"lines": 6421, "unsafe": 75},
     "crates/nvim/src/nvim/sign.rs": {"lines": 3448, "unsafe": 58},
-    "crates/nvim/src/nvim/spell.rs": {"lines": 4304, "unsafe": 76},
+    "crates/nvim/src/nvim/spell.rs": {"lines": 3505, "unsafe": 59},
+    "crates/nvim/src/nvim/spell/chartab.rs": {"unsafe": 14},
+    "crates/nvim/src/nvim/spell/soundfold.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/spellfile.rs": {"unsafe": 14},
     "crates/nvim/src/nvim/spellfile/add.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/spellfile/aff.rs": {"unsafe": 12},
