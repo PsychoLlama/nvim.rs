@@ -22,9 +22,7 @@ use crate::src::nvim::tui::cursor::{
 use crate::src::nvim::tui::negotiate::{
     MOUSE_ANY_EVENT, MOUSE_BUTTON_EVENT, MOUSE_SGR_EXT, tui_set_term_mode,
 };
-use crate::src::nvim::tui::output::{
-    BUF_SIZE, TERMINFO_SEQ_LIMIT, flush, out, out_raw, terminfo_out,
-};
+use crate::src::nvim::tui::output::{TERMINFO_SEQ_LIMIT, flush, out, out_raw, terminfo_out};
 use crate::src::nvim::tui::paint::invalidate;
 use crate::src::nvim::tui::terminfo::caps::{kTerm_from_status_line, kTerm_to_status_line};
 use crate::src::nvim::tui::terminfo::terminfo_info_msg;
@@ -284,7 +282,7 @@ pub unsafe fn tui_set_title(tui: *mut TUIData, title: String_0) {
             }
             // The title and its brackets have to reach the terminal in one
             // piece, so make room for all of it before starting.
-            if BUF_SIZE - (*tui).bufpos < title.size + 2 * TERMINFO_SEQ_LIMIT {
+            if (*tui).staging.room() < title.size + 2 * TERMINFO_SEQ_LIMIT {
                 flush(&mut *tui);
             }
             terminfo_out(&mut *tui, kTerm_to_status_line);

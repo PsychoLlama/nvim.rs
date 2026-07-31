@@ -64,24 +64,17 @@ fn should_invisible(tui: &TUIData) -> bool {
 /// Stage `bytes` for the next flush.
 ///
 /// A write that does not fit flushes first; one larger than the whole buffer
-/// is handed to the flush directly rather than copied, which is what
-/// `buf_to_flush` exists for.
+/// is written directly rather than copied in, since staging it could never
+/// work however much room were made.
 pub fn out(tui: &mut TUIData, bytes: &[u8]) {
-    let len = bytes.len();
-    if len > BUF_SIZE - tui.bufpos {
+    if bytes.len() > tui.staging.room() {
         flush(tui);
-        if len > BUF_SIZE {
-            // Borrowed for the length of the flush below, which is
-            // synchronous, and cleared again before returning.
-            tui.buf_to_flush = bytes.as_ptr().cast_mut().cast();
-            tui.bufpos = len;
-            flush(tui);
+        if bytes.len() > BUF_SIZE {
+            write_out(tui, Some(bytes));
             return;
         }
     }
-    let end = tui.bufpos + len;
-    tui.buf[tui.bufpos..end].copy_from_slice(bytes);
-    tui.bufpos = end;
+    tui.staging.push(bytes);
 }
 
 /// Stage a NUL-terminated string, doing nothing when there is none.
@@ -161,10 +154,7 @@ pub fn terminfo_out(tui: &mut TUIData, what: TerminfoDef) {
 pub fn out_repeat(tui: &mut TUIData, byte: u8, count: usize) {
     let mut left = count;
     loop {
-        let end = tui.bufpos + left.min(BUF_SIZE - tui.bufpos);
-        tui.buf[tui.bufpos..end].fill(byte);
-        left -= end - tui.bufpos;
-        tui.bufpos = end;
+        left -= tui.staging.fill(byte, left);
         if left == 0 {
             return;
         }
@@ -213,21 +203,22 @@ fn terminfo_print(tui: &mut TUIData, what: TerminfoDef, params: &mut [TPVAR; 9])
             return;
         }
         let expand = |tui: &mut TUIData, params: *mut TPVAR| -> size_t {
-            let base = tui.buf.as_mut_ptr().cast::<c_char>();
-            terminfo_fmt(base.add(tui.bufpos), base.add(BUF_SIZE), str, params)
+            let spare = tui.staging.spare();
+            let start = spare.as_mut_ptr().cast::<c_char>();
+            terminfo_fmt(start, start.add(spare.len()), str, params)
         };
-        if BUF_SIZE - tui.bufpos > TERMINFO_SEQ_LIMIT {
+        if tui.staging.room() > TERMINFO_SEQ_LIMIT {
             let mut copy = *params;
             let len = expand(tui, copy.as_mut_ptr());
             if len > 0 {
-                tui.bufpos += len;
+                tui.staging.commit(len);
                 return;
             }
         }
         flush(tui);
         let len = expand(tui, params.as_mut_ptr());
         if len > 0 {
-            tui.bufpos += len;
+            tui.staging.commit(len);
         }
     }
 }
@@ -308,33 +299,47 @@ unsafe fn flush_buf_end(tui: &mut TUIData, buf: *mut c_char, len: usize) -> size
 /// terminal.
 ///
 pub fn flush(tui: &mut TUIData) {
-    // SAFETY: the handles, staging buffer and screenshot file are this TUI's
-    // own; the two scratch buffers are on this frame and outlive the write.
+    write_out(tui, None);
+}
+
+/// [`flush`], writing `oversized` in place of what is staged.
+///
+/// Nothing is staged when there is an oversized write: it got here through
+/// [`out`], which flushes before handing one over.
+fn write_out(tui: &mut TUIData, oversized: Option<&[u8]>) {
+    // SAFETY: the handles and screenshot file are this TUI's own, the staged
+    // bytes are its buffer's, an oversized write is the caller's slice and
+    // outlives this call, and the two scratch buffers are on this frame.
     unsafe {
-        if tui.bufpos == 0 && tui.is_invisible == should_invisible(tui) {
+        if oversized.is_none()
+            && tui.staging.is_empty()
+            && tui.is_invisible == should_invisible(tui)
+        {
             return;
         }
 
         let mut pre = [0 as c_char; WRAP_BUF];
         let mut post = [0 as c_char; WRAP_BUF];
+        // The wrappers first: both decide what to send from the cursor
+        // state, and both change it.
+        let pre_len = flush_buf_start(tui, pre.as_mut_ptr(), WRAP_BUF);
+        let post_len = flush_buf_end(tui, post.as_mut_ptr(), WRAP_BUF);
+        let (body, body_len) = match oversized {
+            Some(bytes) => (bytes.as_ptr().cast_mut().cast::<c_char>(), bytes.len()),
+            None => tui.staging.staged(),
+        };
         let bufs = [
             uv_buf_t {
                 base: pre.as_mut_ptr(),
-                len: flush_buf_start(tui, pre.as_mut_ptr(), WRAP_BUF),
+                len: pre_len,
             },
             uv_buf_t {
-                // An oversized write was handed straight to us and is not in
-                // the staging buffer at all.
-                base: if tui.buf_to_flush.is_null() {
-                    tui.buf.as_mut_ptr().cast::<c_char>()
-                } else {
-                    tui.buf_to_flush
-                },
-                len: tui.bufpos,
+                base: body,
+                len: body_len,
             },
             uv_buf_t {
                 base: post.as_mut_ptr(),
-                len: flush_buf_end(tui, post.as_mut_ptr(), WRAP_BUF),
+                len: post_len,
             },
         ];
 
@@ -369,8 +374,7 @@ pub fn flush(tui: &mut TUIData) {
             uv_run(&raw mut tui.write_loop, UV_RUN_DEFAULT);
         }
 
-        tui.buf_to_flush = core::ptr::null_mut();
-        tui.bufpos = 0;
+        tui.staging.clear();
     }
 }
 

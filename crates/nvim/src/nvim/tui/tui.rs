@@ -60,8 +60,7 @@ use crate::src::nvim::tui::terminfo::caps::{
 use crate::src::nvim::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
 use crate::src::nvim::types::{
     Arena, FILE, HlAttrs, Integer, Loop, SignalWatcher, String_0, TerminfoEntry, UGrid,
-    cursorentry_T, size_t, uv_file, uv_handle_t, uv_loop_t, uv_pipe_t, uv_timer_t, uv_tty_mode_t,
-    uv_tty_t,
+    cursorentry_T, uv_file, uv_handle_t, uv_loop_t, uv_pipe_t, uv_timer_t, uv_tty_mode_t, uv_tty_t,
 };
 use crate::src::nvim::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -82,21 +81,17 @@ unsafe extern "C" {
 /// loop it registered with is still running.
 ///
 /// Holding a `&mut TUIData` means holding a TUI that [`tui_start`] finished
-/// setting up: the write handles are open, the staging buffer is this
-/// struct's own, and `ti` describes the terminal on the other end. The
-/// modules that only paint (see [`output`](super::output),
-/// [`paint`](super::paint)) are safe on the strength of that, rather than
-/// re-asserting it at every call.
+/// setting up: the write handles are open and `ti` describes the terminal
+/// on the other end. The modules that only paint (see
+/// [`output`](super::output), [`paint`](super::paint)) are safe on the
+/// strength of that, rather than re-asserting it at every call. The half of
+/// that which can be enforced rather than promised -- that what is staged
+/// really is within the buffer -- is [`Staging`]'s doing.
 pub struct TUIData {
     /// The editor's event loop, borrowed. Not the loop writes go out on.
     pub loop_0: *mut Loop,
-    /// Bytes staged for the next flush. Boxed because 64 KiB has no
-    /// business on the stack of whoever builds a TUI.
-    pub buf: Box<[u8; BUF_SIZE]>,
-    /// A single write too large to stage, handed to the flush directly.
-    pub buf_to_flush: *mut c_char,
-    /// How much of `buf` is staged.
-    pub bufpos: size_t,
+    /// Bytes on their way to the terminal.
+    pub staging: Staging,
     pub input: TermInput,
     /// The loop writes run on, private to the TUI so a flush can be
     /// synchronous without pumping the editor's loop.
@@ -184,6 +179,85 @@ pub struct TUIData {
     /// The hyperlink the cells being painted are inside, or -1.
     pub url: c_int,
     pub ti_arena: Arena,
+}
+
+/// The bytes on their way to the terminal.
+///
+/// The fields are private, and that is the point: everything outside knows
+/// only that what is staged is staged and that there is room for what it is
+/// about to add. [`output`](super::output) writes what is here straight to
+/// the terminal without bounds-checking it first, which is sound because
+/// nothing can put more in than fits.
+pub struct Staging {
+    /// Boxed: 64 KiB has no business on the stack of whoever builds a TUI.
+    buf: Box<[u8; BUF_SIZE]>,
+    len: usize,
+}
+
+impl Staging {
+    fn new() -> Self {
+        // A `[0; BUF_SIZE]` literal would be built on the stack and then
+        // copied into the box, which is 64 KiB of pointless memcpy.
+        let buf: Box<[u8; BUF_SIZE]> = vec![0; BUF_SIZE]
+            .into_boxed_slice()
+            .try_into()
+            .expect("a boxed slice of exactly BUF_SIZE bytes");
+        Self { buf, len: 0 }
+    }
+
+    /// How much more will fit before a flush is needed.
+    pub fn room(&self) -> usize {
+        BUF_SIZE - self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Stage `bytes`. The caller flushes first if they do not fit --
+    /// dropping them silently would put half a sequence on the wire.
+    pub fn push(&mut self, bytes: &[u8]) {
+        let end = self.len + bytes.len();
+        assert!(end <= BUF_SIZE, "staged past the end of the buffer");
+        self.buf[self.len..end].copy_from_slice(bytes);
+        self.len = end;
+    }
+
+    /// Stage up to `count` copies of `byte`, returning how many fit.
+    pub fn fill(&mut self, byte: u8, count: usize) -> usize {
+        let taken = count.min(self.room());
+        let end = self.len + taken;
+        self.buf[self.len..end].fill(byte);
+        self.len = end;
+        taken
+    }
+
+    /// The room left, for the one writer that fills it in place: terminfo
+    /// expands a capability straight into the buffer. What it wrote is
+    /// staged by [`Self::commit`].
+    pub fn spare(&mut self) -> &mut [u8] {
+        &mut self.buf[self.len..]
+    }
+
+    /// Stage the `used` bytes [`Self::spare`] was just filled with.
+    pub fn commit(&mut self, used: usize) {
+        assert!(
+            used <= self.room(),
+            "committed more than there was room for"
+        );
+        self.len += used;
+    }
+
+    /// What a flush writes, as libuv wants it. The pointer is this buffer's
+    /// own and stays good until the next call that stages anything.
+    pub fn staged(&mut self) -> (*mut c_char, usize) {
+        (self.buf.as_mut_ptr().cast::<c_char>(), self.len)
+    }
+
+    /// Everything staged has been written.
+    pub fn clear(&mut self) {
+        self.len = 0;
+    }
 }
 
 /// A rectangle of the screen, in half-open rows and columns.
@@ -306,21 +380,13 @@ impl TUIData {
     /// editor's own highlight has to exist before anything can be painted
     /// under it, and no hyperlink is -1 rather than 0.
     fn new() -> Box<Self> {
-        // A `[0; BUF_SIZE]` literal would be built on the stack and then
-        // copied into the box, which is 64 KiB of pointless memcpy.
-        let buf: Box<[u8; BUF_SIZE]> = vec![0; BUF_SIZE]
-            .into_boxed_slice()
-            .try_into()
-            .expect("a boxed slice of exactly BUF_SIZE bytes");
         // SAFETY: the fields left zeroed are C layouts whose owners --
         // libuv, the terminfo reader, the grid -- fill them in before
         // reading them, exactly as they did when this struct was xcalloc'ed.
         unsafe {
             Box::new(Self {
                 loop_0: main_loop.ptr(),
-                buf,
-                buf_to_flush: core::ptr::null_mut(),
-                bufpos: 0,
+                staging: Staging::new(),
                 input: core::mem::zeroed(),
                 write_loop: core::mem::zeroed(),
                 ti: core::mem::zeroed(),
@@ -392,7 +458,7 @@ unsafe fn terminfo_start(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`; the terminfo lookups either
     // borrow from the arena below or from static tables.
     unsafe {
-        (*tui).bufpos = 0;
+        (*tui).staging.clear();
         (*tui).default_attr = false;
         (*tui).can_clear_attr = false;
         (*tui).is_invisible = true;
