@@ -1,6 +1,6 @@
 {
   "internal_exports": 63,
-  "files_without_forbid_unsafe": 497,
+  "files_without_forbid_unsafe": 498,
   "files_without_deny_unsafe_op": 223,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -272,9 +272,10 @@
     "crates/nvim/src/nvim/match.rs": {"lines": 2253, "unsafe": 24},
     "crates/nvim/src/nvim/mbyte.rs": {"lines": 5022, "no_mangle": 11, "unsafe": 96},
     "crates/nvim/src/nvim/memfile.rs": {"unsafe": 25},
-    "crates/nvim/src/nvim/memline.rs": {"unsafe": 38},
+    "crates/nvim/src/nvim/memline.rs": {"unsafe": 16},
     "crates/nvim/src/nvim/memline/block0.rs": {"unsafe": 16},
     "crates/nvim/src/nvim/memline/edit.rs": {"unsafe": 9},
+    "crates/nvim/src/nvim/memline/lines.rs": {"unsafe": 30},
     "crates/nvim/src/nvim/memline/offsets.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/memline/recover.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/memline/swapname.rs": {"unsafe": 12},
@@ -438,7 +439,7 @@
     "crates/nvim/src/nvim/terminal/termrequest.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/testing.rs": {"lines": 1490, "unsafe": 31},
     "crates/nvim/src/nvim/textformat.rs": {"lines": 1468, "unsafe": 13},
-    "crates/nvim/src/nvim/textobject.rs": {"lines": 1963, "unsafe": 27},
+    "crates/nvim/src/nvim/textobject.rs": {"lines": 1961, "unsafe": 25},
     "crates/nvim/src/nvim/tui/attrs.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/tui/cursor.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/tui/events.rs": {"unsafe": 15},

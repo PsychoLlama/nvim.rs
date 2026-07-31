@@ -127,15 +127,13 @@ pub unsafe extern "C" fn findsent(
     let mut startlnum: ::core::ffi::c_int = 0;
     let mut cpo_J: bool = false;
     let mut c: ::core::ffi::c_int = 0;
-    let mut func: Option<unsafe extern "C" fn(*mut pos_T) -> ::core::ffi::c_int> = None;
+    let mut func: Option<unsafe fn(*mut pos_T) -> ::core::ffi::c_int> = None;
     let mut noskip: bool = false_0 != 0;
     let mut pos: pos_T = (*curwin.get()).w_cursor;
     if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
-        func = Some(incl as unsafe extern "C" fn(*mut pos_T) -> ::core::ffi::c_int)
-            as Option<unsafe extern "C" fn(*mut pos_T) -> ::core::ffi::c_int>;
+        func = Some(incl as unsafe fn(*mut pos_T) -> ::core::ffi::c_int);
     } else {
-        func = Some(decl as unsafe extern "C" fn(*mut pos_T) -> ::core::ffi::c_int)
-            as Option<unsafe extern "C" fn(*mut pos_T) -> ::core::ffi::c_int>;
+        func = Some(decl as unsafe fn(*mut pos_T) -> ::core::ffi::c_int);
     }
     loop {
         let c2rust_fresh0 = count;

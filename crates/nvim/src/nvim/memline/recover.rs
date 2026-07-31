@@ -529,7 +529,7 @@ unsafe fn recover_lines(
                         (*pp).pb_count = (*pp).pb_count_max;
                     }
                     if ptr_block_error {
-                        emsg(gettext(e_warning_pointer_block_corrupted.ptr().cast()));
+                        emsg(gettext(c"E1364: Warning: Pointer block corrupted".as_ptr()));
                     }
 
                     // The first time down this block, its entries should
