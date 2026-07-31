@@ -16,9 +16,10 @@
 #![forbid(unsafe_code)]
 
 use super::{
-    Array, Dict, Float, Integer, KeyValuePair, Object, String_0, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, object_data,
+    Array, Buffer, Dict, Float, Integer, KeyValuePair, Object, String_0, Tabpage, Window,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
+    object_data,
 };
 use core::ffi::{CStr, c_char};
 
@@ -99,6 +100,38 @@ impl Object {
         Self {
             type_0: kObjectTypeDict,
             data: object_data { dict: value },
+        }
+    }
+
+    /// A window handle. Distinct from [`Object::integer`] only in the tag:
+    /// the wire encoding gives handles their own msgpack extension type, so
+    /// a handle sent as a plain integer arrives as a plain integer.
+    pub const fn window(value: Window) -> Self {
+        Self {
+            type_0: kObjectTypeWindow,
+            data: object_data {
+                integer: value as Integer,
+            },
+        }
+    }
+
+    /// A buffer handle. See [`Object::window`].
+    pub const fn buffer(value: Buffer) -> Self {
+        Self {
+            type_0: kObjectTypeBuffer,
+            data: object_data {
+                integer: value as Integer,
+            },
+        }
+    }
+
+    /// A tabpage handle. See [`Object::window`].
+    pub const fn tabpage(value: Tabpage) -> Self {
+        Self {
+            type_0: kObjectTypeTabpage,
+            data: object_data {
+                integer: value as Integer,
+            },
         }
     }
 }

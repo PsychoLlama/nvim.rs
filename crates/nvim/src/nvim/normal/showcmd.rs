@@ -65,8 +65,7 @@ fn showcmd_truncate(at: usize) {
 /// buffer; the last screen line gets the ten columns reserved for it.
 #[inline(always)]
 fn showcmd_limit() -> usize {
-    // SAFETY: reads the attached UIs' capability set.
-    if unsafe { ui_has(kUIMessages) } {
+    if ui_has(kUIMessages) {
         SHOWCMD_BUFLEN as usize - 1
     } else {
         SHOWCMD_COLS as usize
@@ -378,8 +377,7 @@ pub(crate) fn display_showcmd() {
         return;
     }
 
-    // SAFETY: reads the attached UIs' capability set.
-    if unsafe { ui_has(kUIMessages) } {
+    if ui_has(kUIMessages) {
         show_through_ui(clear);
         return;
     }
@@ -424,8 +422,7 @@ fn show_through_ui(clear: bool) {
             content.size = 1;
         }
     }
-    // SAFETY: the arrays live until this call returns.
-    unsafe { ui_call_msg_showcmd(content) };
+    ui_call_msg_showcmd(content);
 }
 
 /// A nil `Object`, which is what both arrays start out full of.
