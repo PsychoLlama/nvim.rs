@@ -37,7 +37,7 @@ use crate::src::nvim::drawscreen::{
     show_cursor_info_later, update_screen,
 };
 use crate::src::nvim::edit::beginline;
-use crate::src::nvim::eval::typval::tv_list_len;
+use crate::src::nvim::eval::typval::{kCallbackNone, tv_list_len};
 use crate::src::nvim::eval::typval::{tv_get_string, tv_list_find_str};
 use crate::src::nvim::eval::vars::{get_vim_var_list, get_vim_var_str, set_vim_var_string};
 use crate::src::nvim::ex_cmds2::{
@@ -211,10 +211,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

@@ -61,7 +61,9 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::plines::{getvcol, linetabsize_eol, win_chartabsize};
 use crate::src::nvim::pos::MAXLNUM;
-use crate::src::nvim::search::{check_linecomment, findmatch, linewhite, showmatch};
+use crate::src::nvim::search::{
+    BACKWARD, FORWARD, check_linecomment, findmatch, linewhite, showmatch,
+};
 use crate::src::nvim::spell::spell_check_window;
 use crate::src::nvim::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG, virtual_active};
 use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
@@ -107,10 +109,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -246,10 +244,6 @@ pub const kMTMetaSignHL: MetaIndex = 2;
 pub const kMTMetaLines: MetaIndex = 1;
 pub const kMTMetaInline: MetaIndex = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
-pub const BACKWARD_FILE: C2Rust_Unnamed_16 = -3;
-pub const FORWARD_FILE: C2Rust_Unnamed_16 = 3;
-pub const BACKWARD: C2Rust_Unnamed_16 = -1;
-pub const FORWARD: C2Rust_Unnamed_16 = 1;
 pub const kDirectionNotSet: C2Rust_Unnamed_16 = 0;
 pub const kExtmarkUndoNoRedo: ExtmarkOp = 3;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;

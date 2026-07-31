@@ -10,11 +10,11 @@ use core::{mem, ptr};
 
 use crate::src::nvim::eval::callback_call;
 use crate::src::nvim::eval::encode::encode_list_write;
-use crate::src::nvim::eval::typval::tv_list_ref;
 use crate::src::nvim::eval::typval::{
     callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc, tv_list_append_string,
     tv_list_unref,
 };
+use crate::src::nvim::eval::typval::{kCallbackNone, tv_list_ref};
 use crate::src::nvim::event::r#loop::one_arg_event;
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::garray::{ga_clear, ga_concat_len, ga_init};
@@ -47,7 +47,7 @@ pub unsafe fn callback_reader_free(reader: *mut CallbackReader) {
 
 /// Whether a reader has anywhere to deliver to.
 pub(super) unsafe fn callback_reader_set(reader: CallbackReader) -> bool {
-    reader.cb.type_0 as c_int != kCallbackNone || !reader.self_0.is_null()
+    reader.cb.type_0 != kCallbackNone || !reader.self_0.is_null()
 }
 
 pub unsafe extern "C" fn on_channel_data(

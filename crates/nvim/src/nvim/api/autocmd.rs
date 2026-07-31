@@ -13,7 +13,9 @@ use crate::src::nvim::autocmd::{
     autocmd_register, do_autocmd_event, event_name2nr_str, event_nr2name,
 };
 use crate::src::nvim::buffer::do_modelines;
-use crate::src::nvim::eval::typval::{callback_free, callback_to_string};
+use crate::src::nvim::eval::typval::{
+    callback_free, callback_to_string, kCallbackFuncref, kCallbackLua, kCallbackNone,
+};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{api_new_luaref, nlua_ref_is_function};
@@ -65,10 +67,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

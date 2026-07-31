@@ -16,11 +16,11 @@ use crate::src::nvim::global_cell::GlobalCell;
 // path; it belongs to `main`.
 pub(crate) use crate::src::nvim::main::e_invalblob;
 use crate::src::nvim::types::{
-    Array, BoolVarValue, CMD_index, CallbackType, ChannelStreamType, GRegFlags, ListLenSpecials,
-    LuaRetMode, Map_uint64_t_ptr_t, MapHash, MarkGet, MotionType, Object, OptValType, ScopeType,
-    Set_uint64_t, VarLockStatus, VarType, VimVarIndex, blob_T, dict_T, exprtype_T, funcexe_T,
-    key_extra, linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T, uint32_t,
-    uint64_t, var_flavour_T,
+    Array, BoolVarValue, CMD_index, ChannelStreamType, GRegFlags, ListLenSpecials, LuaRetMode,
+    Map_uint64_t_ptr_t, MapHash, MarkGet, MotionType, Object, OptValType, ScopeType, Set_uint64_t,
+    VarLockStatus, VarType, VimVarIndex, blob_T, dict_T, exprtype_T, funcexe_T, key_extra,
+    linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T, uint32_t, uint64_t,
+    var_flavour_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 
@@ -51,9 +51,6 @@ pub use self::pattern::*;
 mod expr;
 pub(crate) use self::expr::*;
 pub const _ISalnum: c_uint = 8;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_FIXED: VarLockStatus = 2;
 pub const VAR_UNLOCKED: VarLockStatus = 0;

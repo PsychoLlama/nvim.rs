@@ -20,7 +20,7 @@ use crate::src::nvim::diff::diff_win_options;
 use crate::src::nvim::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, default_grid_alloc, redraw_all_later, redraw_later, screenclear,
 };
-use crate::src::nvim::eval::typval::tv_list_alloc;
+use crate::src::nvim::eval::typval::{kCallbackNone, tv_list_alloc};
 use crate::src::nvim::eval::vars::{
     get_vim_var_list, get_vim_var_str, set_reg_var, set_vim_var_list, set_vim_var_nr,
     set_vim_var_string,
@@ -55,11 +55,10 @@ use crate::src::nvim::main::{
     RedrawingDisabled, Rows, VV_OLDFILES, VV_PROGPATH, VV_STARTTIME, VV_SWAPCOMMAND,
     VV_VIM_DID_ENTER, VV_VIM_DID_INIT, WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curtab,
     curwin, debug_break_level, embedded_mode, err_arg_missing, exmode_active, firstwin,
-    full_screen, global_alist, headless_mode, kCallbackNone, kOptCbFlagUnnamed,
-    kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout, msg_row, msg_scroll, no_wait_return,
-    p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit, scriptout,
-    silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
-    ui_client_channel_id, ui_client_forward_stdin,
+    full_screen, global_alist, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop,
+    mparm_T, msg_didout, msg_row, msg_scroll, no_wait_return, p_ch, p_lpl, p_shada, p_uc, p_ut,
+    recoverymode, resize_events, restart_edit, scriptout, silent_mode, starting, stderr_isatty,
+    stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::memline::recover_names;

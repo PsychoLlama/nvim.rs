@@ -10,12 +10,12 @@ use crate::src::nvim::api::ui::{remote_ui_connect, remote_ui_disconnect};
 use crate::src::nvim::api::vim::nvim__chan_set_detach;
 use crate::src::nvim::api::vimscript::nvim_command;
 use crate::src::nvim::channel::{channel_close, channel_job_start, channel_proc, find_channel};
-use crate::src::nvim::eval::typval::{tv_get_string, tv_list_len};
+use crate::src::nvim::eval::typval::{kCallbackNone, tv_get_string, tv_list_len};
 use crate::src::nvim::eval::vars::{get_vim_var_list, get_vim_var_str, set_vim_var_string};
 use crate::src::nvim::event::proc::{proc_stop, proc_wait};
 use crate::src::nvim::ex_docmd::{
-    CMOD_CONFIRM, GA_EMPTY_INIT_VALUE, NUL, VV_ARGV, VV_EXITREASON, VV_PROGPATH, kCallbackNone,
-    kChannelPartAll, kChannelStdinPipe,
+    CMOD_CONFIRM, GA_EMPTY_INIT_VALUE, NUL, VV_ARGV, VV_EXITREASON, VV_PROGPATH, kChannelPartAll,
+    kChannelStdinPipe,
 };
 use crate::src::nvim::log::{LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{cmdmod, current_ui, e_invchan, exiting, getout};

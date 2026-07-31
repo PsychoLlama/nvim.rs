@@ -14,12 +14,13 @@ use core::ptr;
 
 use crate::src::nvim::api::private::helpers::{api_free_object, cstr_as_string};
 use crate::src::nvim::channel::channel_connect;
+use crate::src::nvim::eval::typval::kCallbackNone;
 use crate::src::nvim::event::socket::socket_address_is_tcp;
 use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::exit::os_exit;
 use crate::src::nvim::main::{
-    ARRAY_DICT_INIT, GA_EMPTY_INIT_VALUE, WIN_TABS, kCallbackNone, kFalse, kNone, kRetObject,
-    kTrue, mparm_T, ui_client_channel_id,
+    ARRAY_DICT_INIT, GA_EMPTY_INIT_VALUE, WIN_TABS, kFalse, kNone, kRetObject, kTrue, mparm_T,
+    ui_client_channel_id,
 };
 use crate::src::nvim::memory::{strequal, xfree, xrealloc};
 use crate::src::nvim::os::env::os_getenv_noalloc;

@@ -39,6 +39,7 @@ use crate::src::nvim::os::libc::{
     strcmp, strcpy, strlen, strncmp, strncpy,
 };
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit};
+use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::spell::{
     allcap_copy, byte_in_str, can_compound, captype, check_need_cap, make_case_word,
     match_checkcompoundpattern, match_compoundrule, nofold_len, parse_spelllang, repl_from,
@@ -86,10 +87,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -210,10 +207,6 @@ pub const HLF_EOB: hlf_T = 2;
 pub const HLF_8: hlf_T = 1;
 pub const HLF_NONE: hlf_T = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_int;
-pub const BACKWARD_FILE: C2Rust_Unnamed_12 = -3;
-pub const FORWARD_FILE: C2Rust_Unnamed_12 = 3;
-pub const BACKWARD: C2Rust_Unnamed_12 = -1;
-pub const FORWARD: C2Rust_Unnamed_12 = 1;
 pub const kDirectionNotSet: C2Rust_Unnamed_12 = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const MAXWLEN: C2Rust_Unnamed_14 = 254;

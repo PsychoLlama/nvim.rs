@@ -5,8 +5,7 @@ use super::args::frame;
 use super::{
     C2Rust_Unnamed_16, C2Rust_Unnamed_22, FAIL, GA_EMPTY_INIT_VALUE, NUL, NUMBUFLEN, VAR_BOOL,
     VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, VV_SEND_SERVER, f_environ, false_0,
-    kCallbackNone, kChannelPartRpc, kChannelStdinNull, kChannelStdinPipe, kChannelStreamProc,
-    kProcTypePty,
+    kChannelPartRpc, kChannelStdinNull, kChannelStdinPipe, kChannelStreamProc, kProcTypePty,
 };
 use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string, dict_set_var};
 use crate::src::nvim::autocmd::{EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, apply_autocmds};
@@ -16,9 +15,9 @@ use crate::src::nvim::channel::{
     channel_proc, channel_pty, channel_terminal_alloc, find_channel,
 };
 use crate::src::nvim::eval::typval::{
-    tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_extend, tv_dict_find,
-    tv_dict_free, tv_dict_get_number, tv_dict_get_string, tv_dict_item_remove, tv_list_alloc,
-    tv_list_append_number, tv_list_len, tv_list_ref,
+    kCallbackNone, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_extend,
+    tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_get_string, tv_dict_item_remove,
+    tv_list_alloc, tv_list_append_number, tv_list_len, tv_list_ref,
 };
 use crate::src::nvim::eval::vars::get_vim_var_str;
 use crate::src::nvim::eval::{common_job_callbacks, find_job, tv_to_argv};

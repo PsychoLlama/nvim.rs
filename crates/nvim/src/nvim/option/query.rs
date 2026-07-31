@@ -14,7 +14,9 @@ use core::ptr;
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::buffer::bt_prompt;
 use crate::src::nvim::drawscreen::redraw_buf_status_later;
-use crate::src::nvim::eval::typval::{callback_free, tv_dict_add_tv, tv_dict_alloc, tv_free};
+use crate::src::nvim::eval::typval::{
+    callback_free, kCallbackNone, tv_dict_add_tv, tv_dict_alloc, tv_free,
+};
 use crate::src::nvim::eval::vars::optval_as_tv;
 use crate::src::nvim::eval::{callback_from_typval, eval_expr};
 use crate::src::nvim::main::{
@@ -35,8 +37,8 @@ use crate::src::nvim::types::{
 
 use super::{
     BS_NOSTOP, BS_START, EOL_DOS, EOL_MAC, EOL_UNIX, FAIL, FORCE_BIN, NUL, OK, SHM_LINES, SHM_MOD,
-    SHM_RO, SHM_WRI, VAR_STRING, get_varp, kCallbackNone, kOptFlagWasSet, kOptScopeBuf,
-    kOptScopeWin, kOptValTypeString, option_has_scope, optval_from_varp, set_option_direct,
+    SHM_RO, SHM_WRI, VAR_STRING, get_varp, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin,
+    kOptValTypeString, option_has_scope, optval_from_varp, set_option_direct,
 };
 use crate::src::nvim::state::MODE_TERMINAL;
 

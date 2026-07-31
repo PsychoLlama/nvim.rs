@@ -12,7 +12,7 @@ use crate::src::nvim::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_later, set_must_redraw,
 };
 use crate::src::nvim::eval::callback_call;
-use crate::src::nvim::eval::typval::tv_clear;
+use crate::src::nvim::eval::typval::{kCallbackNone, tv_clear};
 use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string, var_redir_str};
 use crate::src::nvim::event::r#loop::loop_schedule_deferred;
 use crate::src::nvim::event::multiqueue::multiqueue_process_events;
@@ -186,10 +186,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

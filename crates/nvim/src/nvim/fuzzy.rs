@@ -1,13 +1,13 @@
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::charset::{skipwhite, vim_iswordc, vim_iswordp};
 use crate::src::nvim::eval::callback_call;
-use crate::src::nvim::eval::typval::tv_list_len;
 use crate::src::nvim::eval::typval::{
     callback_free, tv_check_for_nonnull_dict_arg, tv_clear, tv_dict_find, tv_dict_get_callback,
     tv_dict_get_string, tv_dict_has_key, tv_dict_unref, tv_get_number_chk, tv_get_string,
     tv_list_alloc, tv_list_alloc_ret, tv_list_append_list, tv_list_append_number,
     tv_list_append_tv, tv_list_find,
 };
+use crate::src::nvim::eval::typval::{kCallbackNone, tv_list_len};
 use crate::src::nvim::pos::equalpos;
 
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
@@ -22,6 +22,7 @@ use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xstrdup};
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::{__assert_fail, ceil, floor, gettext, qsort, strlen, strncmp};
+use crate::src::nvim::search::FORWARD;
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array,
     BoolVarValue, Boolean, BufUpdateCallbacks, Callback, Callback_data as C2Rust_Unnamed_5,
@@ -59,10 +60,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -109,10 +106,6 @@ pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kListLenShouldKnow: ListLenSpecials = -2;
 pub const kListLenUnknown: ListLenSpecials = -1;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
-pub const BACKWARD_FILE: C2Rust_Unnamed_13 = -3;
-pub const FORWARD_FILE: C2Rust_Unnamed_13 = 3;
-pub const BACKWARD: C2Rust_Unnamed_13 = -1;
-pub const FORWARD: C2Rust_Unnamed_13 = 1;
 pub const kDirectionNotSet: C2Rust_Unnamed_13 = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const FUZZY_MATCH_MAX_LEN: C2Rust_Unnamed_14 = 1024;

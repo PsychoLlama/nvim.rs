@@ -16,7 +16,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
-use crate::src::nvim::eval::typval::{callback_free, tv_dict_free};
+use crate::src::nvim::eval::typval::{callback_free, kCallbackNone, tv_dict_free};
 use crate::src::nvim::event::libuv_proc::libuv_proc_init;
 use crate::src::nvim::event::r#loop::one_arg_event;
 use crate::src::nvim::event::multiqueue::{
@@ -799,7 +799,7 @@ unsafe extern "C" fn channel_proc_exit_cb(_proc: *mut Proc, status: c_int, data:
         }
     }
     let exited = status >= 0;
-    if exited && (*chan).on_exit.type_0 as c_int != kCallbackNone {
+    if exited && (*chan).on_exit.type_0 != kCallbackNone {
         schedule_channel_event(chan);
     }
     if exited {

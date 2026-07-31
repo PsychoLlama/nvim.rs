@@ -90,7 +90,7 @@ use crate::src::nvim::regexp::skip_regexp;
 use crate::src::nvim::runtime::{
     ExpandPackAddDir, ExpandRTDir, expand_runtime_cmd, script_items, set_context_in_runtime_cmd,
 };
-use crate::src::nvim::search::{ignorecase, pat_has_uppercase, searchit};
+use crate::src::nvim::search::{BACKWARD, FORWARD, ignorecase, pat_has_uppercase, searchit};
 use crate::src::nvim::sign::{get_sign_name, set_context_in_sign_cmd};
 use crate::src::nvim::statusline::fillchar_status;
 use crate::src::nvim::strings::{
@@ -165,10 +165,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -288,10 +284,6 @@ pub const HLF_TERM: hlf_T = 3;
 pub const HLF_EOB: hlf_T = 2;
 pub const HLF_8: hlf_T = 1;
 pub const HLF_NONE: hlf_T = 0;
-pub const BACKWARD_FILE: Direction = -3;
-pub const FORWARD_FILE: Direction = 3;
-pub const BACKWARD: Direction = -1;
-pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;

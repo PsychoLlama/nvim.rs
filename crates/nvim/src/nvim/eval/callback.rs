@@ -7,12 +7,15 @@ use core::ptr::{null, null_mut};
 
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::eval::collect::set_ref_in_item;
+use crate::src::nvim::eval::typval::{
+    kCallbackFuncref, kCallbackLua, kCallbackNone, kCallbackPartial,
+};
 use crate::src::nvim::eval::userfunc::{call_func, func_ref, get_scriptlocal_funcname};
 use crate::src::nvim::eval::vars::get_vim_var_partial;
 use crate::src::nvim::eval::{
     ARRAY_DICT_INIT, FAIL, FUNCEXE_INIT, NUL, OK, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL,
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_LUA, callback_depth, check_luafunc_name,
-    kCallbackFuncref, kCallbackNone, kCallbackPartial, kRetNilBool, partial_name,
+    kRetNilBool, partial_name,
 };
 use crate::src::nvim::lua::executor::{
     nlua_call_ref, nlua_is_table_from_lua, nlua_register_table_as_callable,
@@ -22,13 +25,12 @@ use crate::src::nvim::memory::xstrdup;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::os::libc::{gettext, memcmp, strlen};
 use crate::src::nvim::types::{
-    Arena, Callback, CallbackReader, CallbackType, Error, Object, OptInt, funcexe_T, ht_stack_T,
+    Arena, Callback, CallbackReader, Error, Object, OptInt, funcexe_T, ht_stack_T,
     kObjectTypeBoolean, list_stack_T, partial_T, size_t, typval_T, typval_vval_union,
 };
 
 /// A Lua reference. Not in the parent's preamble because nothing there
 /// named it; the other three `kCallback*` tags are.
-const kCallbackLua: CallbackType = 3;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {

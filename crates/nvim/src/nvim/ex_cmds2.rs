@@ -39,6 +39,7 @@ use crate::src::nvim::path::vim_FullName;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::src::nvim::runtime::source_runtime_vim_lua;
+use crate::src::nvim::search::FORWARD;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
     Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, DecorExt,
@@ -82,10 +83,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -129,10 +126,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
-pub const BACKWARD_FILE: C2Rust_Unnamed_13 = -3;
-pub const FORWARD_FILE: C2Rust_Unnamed_13 = 3;
-pub const BACKWARD: C2Rust_Unnamed_13 = -1;
-pub const FORWARD: C2Rust_Unnamed_13 = 1;
 pub const kDirectionNotSet: C2Rust_Unnamed_13 = 0;
 pub const CMD_USER_BUF: CMD_index = -2;
 pub const CMD_USER: CMD_index = -1;

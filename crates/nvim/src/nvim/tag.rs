@@ -5,12 +5,12 @@ use crate::src::nvim::charset::{ptr2cells, skipdigits, vim_isblankline};
 use crate::src::nvim::cmdexpand::{ExpandInit, ExpandOne};
 use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::drawscreen::{UPD_VALID, redraw_later};
-use crate::src::nvim::eval::typval::tv_list_first;
 use crate::src::nvim::eval::typval::{
     callback_copy, callback_free, tv_clear, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
     tv_dict_alloc, tv_dict_alloc_lock, tv_dict_find, tv_dict_get_number, tv_dict_get_string,
     tv_get_number, tv_list_alloc, tv_list_append_dict, tv_list_append_number, tv_list_free,
 };
+use crate::src::nvim::eval::typval::{kCallbackNone, tv_list_first};
 use crate::src::nvim::eval::vars::set_vim_var_string;
 use crate::src::nvim::eval::{callback_call, list2fpos, set_ref_in_callback};
 use crate::src::nvim::ex_cmds::{getfile, prepare_tagpreview};
@@ -141,10 +141,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -268,10 +264,6 @@ pub const HLF_TERM: C2Rust_Unnamed_15 = 3;
 pub const HLF_EOB: C2Rust_Unnamed_15 = 2;
 pub const HLF_8: C2Rust_Unnamed_15 = 1;
 pub const HLF_NONE: C2Rust_Unnamed_15 = 0;
-pub const BACKWARD_FILE: Direction = -3;
-pub const FORWARD_FILE: Direction = 3;
-pub const BACKWARD: Direction = -1;
-pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;

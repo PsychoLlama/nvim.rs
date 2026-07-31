@@ -1,6 +1,7 @@
 use crate::src::nvim::ex_getln::getcmdline_prompt;
 use crate::src::nvim::getchar::{fix_input_buffer, merge_modifiers};
 
+use crate::src::nvim::eval::typval::kCallbackNone;
 use crate::src::nvim::main::{
     IObuff, State, allow_keys, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask,
     msg_row, msg_scrolled, need_wait_return, no_mapping, no_wait_return,
@@ -22,10 +23,6 @@ pub use crate::src::nvim::types::{
     typval_T, typval_vval_union, ufunc_S, ufunc_T, uint8_t, uint64_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

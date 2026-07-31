@@ -5,9 +5,8 @@
 use super::args::{Args, frame};
 use super::{
     ARENA_EMPTY, ARRAY_DICT_INIT, C2Rust_Unnamed_16, C2Rust_Unnamed_22, GA_EMPTY_INIT_VALUE,
-    MAX_FUNC_ARGS, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, false_0, kCallbackNone,
-    kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
-    kRetObject,
+    MAX_FUNC_ARGS, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, false_0, kChannelPartAll,
+    kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout, kRetObject,
 };
 use crate::src::nvim::api::private::converter::{object_to_vim, vim_to_object};
 use crate::src::nvim::api::private::helpers::{api_clear_error, arena_array, cstr_as_string};
@@ -16,8 +15,8 @@ use crate::src::nvim::channel::{
 };
 use crate::src::nvim::eval::save_tv_as_string;
 use crate::src::nvim::eval::typval::{
-    tv_blob_len, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number, tv_get_string,
-    tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_string,
+    kCallbackNone, tv_blob_len, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
+    tv_get_string, tv_list_alloc_ret, tv_list_append_allocated_string, tv_list_append_string,
 };
 use crate::src::nvim::eval::userfunc::{restore_funccal, save_funccal, set_current_funccal};
 use crate::src::nvim::event::libuv::uv_strerror;

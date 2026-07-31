@@ -94,6 +94,7 @@ use crate::src::nvim::register::{do_put, finish_yankreg_from_object, prepare_yan
 use crate::src::nvim::runtime::{
     do_in_runtimepath, do_source, get_lib_dir, runtime_get_named, runtime_inspect, script_autoload,
 };
+use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::state::get_mode;
 use crate::src::nvim::statusline::{
     build_stl_str_hl, draw_tabline, fillchar_status, win_redr_status, win_redr_winbar,
@@ -187,10 +188,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -349,10 +346,6 @@ pub const HLF_EOB: hlf_T = 2;
 pub const HLF_8: hlf_T = 1;
 pub const HLF_NONE: hlf_T = 0;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_int;
-pub const BACKWARD_FILE: C2Rust_Unnamed_27 = -3;
-pub const FORWARD_FILE: C2Rust_Unnamed_27 = 3;
-pub const BACKWARD: C2Rust_Unnamed_27 = -1;
-pub const FORWARD: C2Rust_Unnamed_27 = 1;
 pub const kDirectionNotSet: C2Rust_Unnamed_27 = 0;
 pub const kCdScopeGlobal: CdScope = 2;
 pub const kCdScopeTabpage: CdScope = 1;

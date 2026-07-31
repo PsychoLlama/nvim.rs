@@ -62,6 +62,7 @@ use crate::src::nvim::os::libc::{__assert_fail, abs, memcpy, memmove, memset, sn
 use crate::src::nvim::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
 use crate::src::nvim::pos::ltoreq;
 use crate::src::nvim::quickfix::qf_current_entry;
+use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::spell::{
     check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end,
 };
@@ -125,10 +126,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -268,10 +265,6 @@ pub const kMTMetaSignHL: MetaIndex = 2;
 pub const kMTMetaLines: MetaIndex = 1;
 pub const kMTMetaInline: MetaIndex = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
-pub const BACKWARD_FILE: C2Rust_Unnamed_17 = -3;
-pub const FORWARD_FILE: C2Rust_Unnamed_17 = 3;
-pub const BACKWARD: C2Rust_Unnamed_17 = -1;
-pub const FORWARD: C2Rust_Unnamed_17 = 1;
 pub const kDirectionNotSet: C2Rust_Unnamed_17 = 0;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
 pub const FOLD_TEXT_LEN: C2Rust_Unnamed_19 = 51;

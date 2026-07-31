@@ -4,12 +4,12 @@
 use super::args::frame;
 use super::{
     DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, NUL, VAR_DICT, VAR_FUNC,
-    VAR_NUMBER, VAR_STRING, dummy_ap, kCallbackNone,
+    VAR_NUMBER, VAR_STRING, dummy_ap,
 };
 use crate::semsg;
 use crate::src::nvim::eval::typval::{
-    callback_free, tv_dict_watcher_add, tv_dict_watcher_remove, tv_get_string, tv_get_string_chk,
-    tv_islocked,
+    callback_free, kCallbackNone, tv_dict_watcher_add, tv_dict_watcher_remove, tv_get_string,
+    tv_get_string_chk, tv_islocked,
 };
 use crate::src::nvim::eval::vars::find_var;
 use crate::src::nvim::eval::{callback_from_typval, clear_lval, get_lval};

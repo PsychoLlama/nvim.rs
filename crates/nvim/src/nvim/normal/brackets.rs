@@ -14,16 +14,16 @@ use crate::src::nvim::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::src::nvim::memory::{xfree, xmemdupz};
 use crate::src::nvim::mouse::do_mouse;
 use crate::src::nvim::normal::{
-    _ISlower, _ISupper, ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, BACKWARD, BL_FIX, BL_WHITE,
-    FIND_ANY, FIND_DEFINE, FIND_IDENT, FM_BACKWARD, FM_FORWARD, FORWARD, KE_LEFTMOUSE,
-    KE_RIGHTRELEASE, OP_NOP, PUT_FIXINDENT, SMT_ALL, SMT_BAD, SMT_RARE, clearop, clearopbeep,
-    false_0, find_ident_under_cursor, kDirectionNotSet, kMTCharWise, kMarkBeginLine, kMarkContext,
+    _ISlower, _ISupper, ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, BL_FIX, BL_WHITE, FIND_ANY,
+    FIND_DEFINE, FIND_IDENT, FM_BACKWARD, FM_FORWARD, KE_LEFTMOUSE, KE_RIGHTRELEASE, OP_NOP,
+    PUT_FIXINDENT, SMT_ALL, SMT_BAD, SMT_RARE, clearop, clearopbeep, false_0,
+    find_ident_under_cursor, kDirectionNotSet, kMTCharWise, kMarkBeginLine, kMarkContext,
     may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt, true_0,
 };
 use crate::src::nvim::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
 use crate::src::nvim::os::libc::__ctype_b_loc;
 use crate::src::nvim::pos::MAXLNUM;
-use crate::src::nvim::search::{find_pattern_in_path, findmatchlimit};
+use crate::src::nvim::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::src::nvim::spell::spell_move_to;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::textobject::findpar;

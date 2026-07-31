@@ -16,7 +16,7 @@ use crate::src::nvim::main::{
     VIsual_active, VIsual_select, curbuf, curwin, did_syncbind, firstwin, mod_mask, p_sbo,
 };
 use crate::src::nvim::normal::{
-    BACKWARD, Ctrl_D, FORWARD, MOD_MASK_CTRL, checkclearop, checkclearopq, clearopbeep, false_0,
+    Ctrl_D, MOD_MASK_CTRL, checkclearop, checkclearopq, clearopbeep, false_0,
 };
 use crate::src::nvim::plines::plines_m_win_fill;
 use crate::src::nvim::strings::vim_strchr;
@@ -25,6 +25,7 @@ use crate::src::nvim::window::goto_tabpage;
 use core::ffi::c_int;
 
 use crate::src::nvim::r#move::{cursor_correct, pagescroll, scroll_redraw, scrolldown, scrollup};
+use crate::src::nvim::search::{BACKWARD, FORWARD};
 
 mod zet;
 pub(crate) use self::zet::*;

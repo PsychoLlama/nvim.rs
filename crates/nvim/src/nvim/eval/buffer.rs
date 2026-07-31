@@ -80,7 +80,6 @@ pub const VAR_NUMBER: VarType = 1;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_LIST: VarType = 4;
 pub const VAR_DICT: VarType = 5;
-pub const kCallbackNone: CallbackType = 0;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const ML_DEL_MESSAGE: c_uint = 1;

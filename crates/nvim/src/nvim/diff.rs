@@ -60,6 +60,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::shell::call_shell;
 use crate::src::nvim::path::FullName_save;
 use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::search::{BACKWARD, FORWARD};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
@@ -128,10 +129,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -260,10 +257,6 @@ pub const HLF_EOB: hlf_T = 2;
 pub const HLF_8: hlf_T = 1;
 pub const HLF_NONE: hlf_T = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
-pub const BACKWARD_FILE: C2Rust_Unnamed_16 = -3;
-pub const FORWARD_FILE: C2Rust_Unnamed_16 = 3;
-pub const BACKWARD: C2Rust_Unnamed_16 = -1;
-pub const FORWARD: C2Rust_Unnamed_16 = 1;
 pub const kDirectionNotSet: C2Rust_Unnamed_16 = 0;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;

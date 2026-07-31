@@ -64,10 +64,10 @@ use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
 use super::{map_get_int_ptr_t, terminal_check_size, terminal_set_state};
+use crate::src::nvim::search::FORWARD;
 
 const DOBUF_WIPE: c_int = 4;
 const DOBUF_FIRST: c_int = 1;
-const FORWARD: c_int = 1;
 
 /// One terminal-mode session, as the editor's state stack sees it.
 ///

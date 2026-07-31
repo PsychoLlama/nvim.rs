@@ -28,6 +28,7 @@ use crate::src::nvim::api::private::helpers::{
     api_dict_to_keydict, api_free_array, api_metadata, api_set_error, copy_array, cstr_as_string,
 };
 use crate::src::nvim::channel::{channel_connect, channel_job_start};
+use crate::src::nvim::eval::typval::kCallbackNone;
 use crate::src::nvim::event::r#loop::process_events;
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::event::socket::socket_address_is_tcp;
@@ -61,14 +62,13 @@ use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf};
 use crate::src::nvim::types::ui::kLineFlagWrap;
 use crate::src::nvim::types::{
-    Arena, Array, Callback, CallbackReader, CallbackType, ChannelStdinMode, Dict, Error, Event,
-    GridLineEvent, HlAttrs, Integer, KeyDict_highlight, KeySetLink, Object, ObjectType, TUIData,
-    UIClientHandler, dict_T, garray_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeString, proftime_T, sattr_T, schar_T, uint16_t,
+    Arena, Array, Callback, CallbackReader, ChannelStdinMode, Dict, Error, Event, GridLineEvent,
+    HlAttrs, Integer, KeyDict_highlight, KeySetLink, Object, ObjectType, TUIData, UIClientHandler,
+    dict_T, garray_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeString, proftime_T, sattr_T, schar_T, uint16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-const kCallbackNone: CallbackType = 0;
 const kChannelStdinPipe: ChannelStdinMode = 0;
 
 /// The descriptor the client hands the server as `stdin_fd` when the user

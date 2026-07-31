@@ -3,12 +3,12 @@
 
 use super::args::frame;
 use super::{
-    FAIL, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kCallbackNone,
-    kListLenUnknown,
+    FAIL, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, kListLenUnknown,
 };
 use crate::semsg;
 use crate::src::nvim::eval::typval::{
-    tv_check_for_nonnull_dict_arg, tv_check_for_number_arg, tv_check_for_opt_number_arg,
+    kCallbackNone, tv_check_for_nonnull_dict_arg, tv_check_for_number_arg,
+    tv_check_for_opt_number_arg,
 };
 use crate::src::nvim::eval::typval::{
     tv_dict_find, tv_get_number, tv_get_number_chk, tv_list_alloc_ret, tv_list_append_number,

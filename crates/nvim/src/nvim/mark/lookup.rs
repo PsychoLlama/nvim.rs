@@ -13,6 +13,7 @@ use core::ptr;
 
 use super::jumplist::*;
 use super::*;
+use crate::src::nvim::search::{BACKWARD, FORWARD};
 
 pub unsafe extern "C" fn mark_get(
     mut buf: *mut buf_T,

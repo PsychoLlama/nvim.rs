@@ -8,8 +8,8 @@ use crate::src::nvim::buffer::{bt_prompt, buflist_findnr, bufref_valid, do_model
 use crate::src::nvim::charset::{skipdigits, skipwhite};
 use crate::src::nvim::cursor::{check_cursor, check_pos};
 use crate::src::nvim::eval::typval::{
-    callback_copy, callback_free, callback_to_string, tv_clear, tv_dict_add_nr, tv_dict_add_tv,
-    tv_dict_set_keys_readonly,
+    callback_copy, callback_free, callback_to_string, kCallbackLua, kCallbackNone, tv_clear,
+    tv_dict_add_nr, tv_dict_add_tv, tv_dict_set_keys_readonly,
 };
 use crate::src::nvim::eval::userfunc::{restore_funccal, save_funccal};
 use crate::src::nvim::eval::vars::{
@@ -144,10 +144,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -301,10 +297,6 @@ pub const HLF_TERM: C2Rust_Unnamed_27 = 3;
 pub const HLF_EOB: C2Rust_Unnamed_27 = 2;
 pub const HLF_8: C2Rust_Unnamed_27 = 1;
 pub const HLF_NONE: C2Rust_Unnamed_27 = 0;
-pub const BACKWARD_FILE: Direction = -3;
-pub const FORWARD_FILE: Direction = 3;
-pub const BACKWARD: Direction = -1;
-pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;

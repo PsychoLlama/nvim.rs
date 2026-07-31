@@ -22,10 +22,6 @@ pub use crate::src::nvim::types::{
     int32_t, linenr_T, pos_T, proftime_T, ptrdiff_t, scid_T, sctx_T, size_t, uint32_t, uint64_t,
     xp_prefix_T,
 };
-pub const BACKWARD_FILE: Direction = -3;
-pub const FORWARD_FILE: Direction = 3;
-pub const BACKWARD: Direction = -1;
-pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;

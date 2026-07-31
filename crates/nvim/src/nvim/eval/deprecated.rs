@@ -1,7 +1,7 @@
 use crate::src::nvim::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::src::nvim::eval::find_job;
 use crate::src::nvim::eval::funcs::{f_jobstart, f_jobstop};
-use crate::src::nvim::eval::typval::tv_list_len;
+use crate::src::nvim::eval::typval::{kCallbackNone, tv_list_len};
 use crate::src::nvim::eval::typval::{
     tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_get_string,
 };
@@ -110,10 +110,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

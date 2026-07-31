@@ -20,11 +20,12 @@ use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_buf_later, r
 use crate::src::nvim::drawscreen::{redraw_curbuf_later, update_screen};
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::typval::{
-    callback_copy, callback_free, callback_put, tv_clear, tv_copy, tv_dict_add, tv_dict_add_list,
-    tv_dict_add_nr, tv_dict_add_str, tv_dict_add_tv, tv_dict_alloc, tv_dict_alloc_lock,
-    tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_dict_get_number, tv_dict_get_string,
-    tv_dict_get_tv, tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_unref, tv_free,
-    tv_get_number_chk, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict,
+    callback_copy, callback_free, callback_put, kCallbackNone, tv_clear, tv_copy, tv_dict_add,
+    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_tv, tv_dict_alloc,
+    tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_dict_get_number,
+    tv_dict_get_string, tv_dict_get_tv, tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_unref,
+    tv_free, tv_get_number_chk, tv_get_string_chk, tv_list_alloc, tv_list_alloc_ret,
+    tv_list_append_dict,
 };
 use crate::src::nvim::eval::typval::{tv_list_first, tv_list_len, tv_list_ref};
 use crate::src::nvim::eval::vars::set_internal_string_var;
@@ -98,7 +99,9 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::regexp::{vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
-use crate::src::nvim::search::{do_search, last_search_pat};
+use crate::src::nvim::search::{
+    BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE, do_search, last_search_pat,
+};
 use crate::src::nvim::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen, vim_strchr};
 pub use crate::src::nvim::types::{
     __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
@@ -156,10 +159,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -210,10 +209,6 @@ pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kListLenShouldKnow: ListLenSpecials = -2;
 pub const kListLenUnknown: ListLenSpecials = -1;
-pub const BACKWARD_FILE: Direction = -3;
-pub const FORWARD_FILE: Direction = 3;
-pub const BACKWARD: Direction = -1;
-pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
 pub const ET_INTERRUPT: except_type_T = 2;
 pub const ET_ERROR: except_type_T = 1;

@@ -10,6 +10,7 @@ use core::ptr;
 
 use super::open_close::*;
 use super::*;
+use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::state::MODE_INSERT;
 
 ///

@@ -11,8 +11,8 @@ use crate::src::nvim::buffer::bt_prompt;
 use crate::src::nvim::change::appended_lines_mark;
 use crate::src::nvim::channel::{callback_reader_free, channel_proc, find_channel};
 use crate::src::nvim::eval::typval::{
-    callback_free, tv_clear, tv_dict_get_callback, tv_dict_get_number, tv_list_alloc,
-    tv_list_append_string, tv_list_ref, tv_list_unref,
+    callback_free, kCallbackNone, tv_clear, tv_dict_get_callback, tv_dict_get_number,
+    tv_list_alloc, tv_list_append_string, tv_list_ref, tv_list_unref,
 };
 use crate::src::nvim::eval::userfunc::{
     call_func, find_func, get_current_funccal, restore_funccal, save_funccal,
@@ -20,7 +20,7 @@ use crate::src::nvim::eval::userfunc::{
 use crate::src::nvim::eval::vars::eval_variable;
 use crate::src::nvim::eval::{
     FAIL, FUNCEXE_INIT, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED,
-    callback_call, kCallbackNone, kChannelStreamProc,
+    callback_call, kChannelStreamProc,
 };
 use crate::src::nvim::event::proc::proc_is_stopped;
 use crate::src::nvim::ex_cmds::check_secure;

@@ -23,7 +23,6 @@ use crate::src::nvim::edit::{
     backspace_until_column, get_can_cindent, ins_apply_autocmds, ins_eol, ins_need_undo_get,
     ins_redraw, insertchar, start_arrow, stop_arrow,
 };
-use crate::src::nvim::eval::typval::tv_list_first;
 use crate::src::nvim::eval::typval::{
     callback_copy, callback_free, tv_clear, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_list,
     tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len, tv_dict_add_tv, tv_dict_alloc,
@@ -31,6 +30,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_get_tv, tv_dict_set_keys_readonly, tv_dict_unref, tv_get_number_chk, tv_get_string,
     tv_get_string_chk, tv_list_alloc, tv_list_append_dict, tv_list_unref,
 };
+use crate::src::nvim::eval::typval::{kCallbackNone, tv_list_first};
 use crate::src::nvim::eval::userfunc::callback_call_retnr;
 use crate::src::nvim::eval::vars::set_vim_var_dict;
 use crate::src::nvim::eval::{callback_call, get_v_event, restore_v_event, set_ref_in_callback};
@@ -91,7 +91,9 @@ use crate::src::nvim::popupmenu::{
 use crate::src::nvim::pos::{MAXLNUM, equalpos};
 use crate::src::nvim::register::get_register_name;
 use crate::src::nvim::register::{copy_register, free_register, valid_yank_reg};
-use crate::src::nvim::search::{find_pattern_in_path, ignorecase, search_for_exact_line, searchit};
+use crate::src::nvim::search::{
+    BACKWARD, FORWARD, find_pattern_in_path, ignorecase, search_for_exact_line, searchit,
+};
 use crate::src::nvim::spell::{
     expand_spelling, spell_dump_compl, spell_expand_check_cap, spell_move_to, spell_word_start,
 };
@@ -176,10 +178,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -310,10 +308,6 @@ pub const HLF_TERM: hlf_T = 3;
 pub const HLF_EOB: hlf_T = 2;
 pub const HLF_8: hlf_T = 1;
 pub const HLF_NONE: hlf_T = 0;
-pub const BACKWARD_FILE: Direction = -3;
-pub const FORWARD_FILE: Direction = 3;
-pub const BACKWARD: Direction = -1;
-pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;

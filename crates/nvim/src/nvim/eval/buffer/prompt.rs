@@ -1,5 +1,6 @@
 use super::lines::set_buffer_lines;
 use super::*;
+use crate::src::nvim::eval::typval::kCallbackNone;
 
 /// "prompt_appendbuf({buffer}, string/list)" function
 pub unsafe extern "C" fn f_prompt_appendbuf(

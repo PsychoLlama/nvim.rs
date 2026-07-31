@@ -36,8 +36,8 @@ use crate::src::nvim::drawscreen::{
 };
 use crate::src::nvim::edit::get_literal;
 use crate::src::nvim::eval::typval::{
-    callback_free, tv_check_for_opt_number_arg, tv_check_for_string_arg, tv_clear, tv_copy,
-    tv_dict_add_bool, tv_dict_add_nr, tv_dict_add_str, tv_dict_find, tv_dict_get_callback,
+    callback_free, kCallbackNone, tv_check_for_opt_number_arg, tv_check_for_string_arg, tv_clear,
+    tv_copy, tv_dict_add_bool, tv_dict_add_nr, tv_dict_add_str, tv_dict_find, tv_dict_get_callback,
     tv_dict_get_number, tv_dict_get_string_buf_chk, tv_dict_set_keys_readonly, tv_get_number,
     tv_get_number_chk, tv_get_string, tv_get_string_buf_chk, tv_get_string_chk, tv_list_free,
 };
@@ -125,7 +125,7 @@ use crate::src::nvim::register::{
     cmdline_paste_reg, get_expr_line, get_expr_register, get_spec_reg, valid_yank_reg,
 };
 use crate::src::nvim::search::{
-    do_search, last_search_pattern, last_search_pattern_len, pat_has_uppercase,
+    BACKWARD, FORWARD, do_search, last_search_pattern, last_search_pattern_len, pat_has_uppercase,
     restore_last_search_pattern, restore_search_patterns, save_last_search_pattern,
     save_search_patterns, searchit,
 };
@@ -221,10 +221,6 @@ pub const kVPosOverlay: VirtTextPos = 3;
 pub const kVPosInline: VirtTextPos = 2;
 pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
 pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;
@@ -356,10 +352,6 @@ pub const HLF_NONE: C2Rust_Unnamed_16 = 0;
 pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;
-pub const BACKWARD_FILE: Direction = -3;
-pub const FORWARD_FILE: Direction = 3;
-pub const BACKWARD: Direction = -1;
-pub const FORWARD: Direction = 1;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;

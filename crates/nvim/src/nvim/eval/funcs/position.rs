@@ -3,9 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::{Args, frame};
-use super::{
-    BACKWARD, FAIL, FORWARD, MAXCOL, NUL, OK, VALID_VIRTCOL, VAR_LIST, VAR_NUMBER, VAR_STRING,
-};
+use super::{FAIL, MAXCOL, NUL, OK, VALID_VIRTCOL, VAR_LIST, VAR_NUMBER, VAR_STRING};
 use crate::src::nvim::cursor::check_cursor;
 use crate::src::nvim::eval::typval::{
     tv_check_for_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_or_list_arg,
@@ -25,8 +23,8 @@ use crate::src::nvim::r#move::update_curswant;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::plines::{getvvcol, win_chartabsize};
 use crate::src::nvim::search::{
-    last_csearch, last_csearch_forward, last_csearch_until, set_csearch_direction,
-    set_csearch_until, set_last_csearch,
+    BACKWARD, FORWARD, last_csearch, last_csearch_forward, last_csearch_until,
+    set_csearch_direction, set_csearch_until, set_last_csearch,
 };
 use crate::src::nvim::state::virtual_active;
 use crate::src::nvim::types::{
