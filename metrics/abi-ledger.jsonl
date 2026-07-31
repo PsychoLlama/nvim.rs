@@ -106,12 +106,6 @@
 {"symbol":"mem_malloc","kind":"static","file":"crates/nvim/src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"mem_realloc","kind":"static","file":"crates/nvim/src/nvim/memory.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"mergesort_list","kind":"fn","file":"crates/nvim/src/nvim/memory.rs","class":"internal","refs":[]}
-{"symbol":"ml_append_buf","kind":"fn","file":"crates/nvim/src/nvim/memline.rs","class":"internal","refs":[]}
-{"symbol":"ml_delete_buf","kind":"fn","file":"crates/nvim/src/nvim/memline.rs","class":"internal","refs":[]}
-{"symbol":"ml_get_buf","kind":"fn","file":"crates/nvim/src/nvim/memline.rs","class":"internal","refs":[]}
-{"symbol":"ml_get_buf_len","kind":"fn","file":"crates/nvim/src/nvim/memline.rs","class":"internal","refs":[]}
-{"symbol":"ml_open","kind":"fn","file":"crates/nvim/src/nvim/memline.rs","class":"internal","refs":[]}
-{"symbol":"ml_replace_buf","kind":"fn","file":"crates/nvim/src/nvim/memline.rs","class":"internal","refs":[]}
 {"symbol":"mouse_find_win_inner","kind":"fn","file":"crates/nvim/src/nvim/mouse.rs","class":"internal","refs":[]}
 {"symbol":"mpack_pack_number","kind":"fn","file":"crates/nvim/src/mpack/conv.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"msg","kind":"fn","file":"crates/nvim/src/nvim/message.rs","class":"test","refs":["unit-specs"]}
@@ -219,7 +213,6 @@
 {"symbol":"setfname","kind":"fn","file":"crates/nvim/src/nvim/buffer.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"shell_argv_to_str","kind":"fn","file":"crates/nvim/src/nvim/os/shell.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"shell_build_argv","kind":"fn","file":"crates/nvim/src/nvim/os/shell.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"shorten_buf_fname","kind":"fn","file":"crates/nvim/src/nvim/fileio.rs","class":"internal","refs":[]}
 {"symbol":"starting","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs","functional-specs"]}
 {"symbol":"status_redraw_buf","kind":"fn","file":"crates/nvim/src/nvim/drawscreen.rs","class":"internal","refs":[]}
 {"symbol":"terminfo_fmt","kind":"fn","file":"crates/nvim/src/nvim/tui/terminfo.rs","class":"test","refs":["unit-specs"]}

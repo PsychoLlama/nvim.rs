@@ -79,44 +79,19 @@ use crate::src::nvim::search::{
     set_search_pattern, set_substitute_pattern,
 };
 use crate::src::nvim::strings::vim_strchr;
-pub use crate::src::nvim::types::{
-    __compar_fn_t, __gid_t, __time_t, __uid_t, AdditionalData, AdditionalDataBuilder, AlignTextPos,
-    Arena, Array, BoolVarValue, Boolean, BufUpdateCallbacks, Callback,
-    Callback_data as C2Rust_Unnamed_7, CallbackType, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_4, Dict, ExtmarkUndoObject, FieldHashfn, FileDescriptor,
-    FileID, FileInfo, Float, FloatAnchor, FloatRelative, GridView, Integer, Intersection,
-    KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
-    KeyDict__shada_search_pat, KeySetLink, KeyValuePair, ListLenSpecials, LuaRef, MHPutStatus,
-    MTKey, MTNode, MTPos, Map_cstr_t_ptr_t, Map_int64_t_int64_t, Map_int64_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkGet, MarkTree, MotionType, Object,
-    ObjectType, OptInt, OptionalKeys, PackerBuffer, PackerBufferFlush, QUEUE, ScopeDictDictItem,
-    ScopeType, ScreenGrid, SearchOffset, SearchPattern, Set_cstr_t, Set_int64_t, Set_ptr_t,
-    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_14, String_0, StringArray, SubReplacementString,
-    Terminal, Timestamp, VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, bhdr_T, bln_values,
-    blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T, cstr_t, dict_T,
-    dictitem_T, dictvar_S, diff_T, diffblock_S, disptick_T, extmark_undo_vec_t, fcs_chars_T,
-    file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_5,
-    file_buffer_b_wininfo as C2Rust_Unnamed_13, file_buffer_update_callbacks as C2Rust_Unnamed_2,
-    file_buffer_update_channels as C2Rust_Unnamed_3, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
-    funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_8, funccall_T, garray_T, gid_t, handle_T,
-    hash_T, hashitem_T, hashtab_T, ht_stack_S, ht_stack_T, infoptr_T, int16_t, int32_t, int64_t,
-    kObjectTypeInteger, kObjectTypeString, key_value_pair, lcs_chars_T, linenr_T, list_T,
-    list_stack_S, list_stack_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T,
-    llpos_T, lpos_T, mapblock, mapblock_T, match_T, matchitem, matchitem_T, memfile_T, memline_T,
-    mfdirty_T, mtnode_inner_s, mtnode_s, object, object_data as C2Rust_Unnamed_1, packer_buffer_t,
-    partial_S, partial_T, pos_T, pos_save_T, proftime_T, ptr_t, ptrdiff_t, qf_info_S, qf_info_T,
-    queue, reg_extmatch_T, regmmatch_T, regprog, regprog_T, sattr_T, schar_T, scid_T, sctx_T,
-    size_t, ssize_t, syn_state, syn_state_sst_union as C2Rust_Unnamed_6, syn_time_T, synblock_T,
-    synstate_T, tabpage_S, tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union,
-    u_entry, u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_10,
-    u_header_uh_alt_prev as C2Rust_Unnamed_9, u_header_uh_next as C2Rust_Unnamed_12,
-    u_header_uh_prev as C2Rust_Unnamed_11, ufunc_S, ufunc_T, uid_t, uint8_t, uint16_t, uint32_t,
-    uint64_t, uintmax_t, undo_object, uv_gid_t, uv_stat_t, uv_timespec_t, uv_uid_t, var_flavour_T,
-    varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
-    yankreg_T,
+use crate::src::nvim::types::{
+    __uid_t, AdditionalData, AdditionalDataBuilder, Arena, Boolean, Dict, FileDescriptor, FileInfo,
+    Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
+    KeyDict__shada_search_pat, KeySetLink, KeyValuePair, ListLenSpecials, MHPutStatus,
+    Map_cstr_t_ptr_t, MapHash, MarkGet, MotionType, Object, OptInt, OptionalKeys, PackerBuffer,
+    SearchOffset, SearchPattern, Set_cstr_t, Set_ptr_t, String_0, StringArray,
+    SubReplacementString, Timestamp, VarLockStatus, VarType, VimVarIndex, bln_values, buf_T,
+    colnr_T, cstr_t, dict_T, dictitem_T, fmark_T, fmarkv_T, hashitem_T, hashtab_T, ht_stack_T,
+    int32_t, int64_t, kObjectTypeInteger, kObjectTypeString, key_value_pair, linenr_T, list_T,
+    list_stack_T, object, object_data as C2Rust_Unnamed_1, packer_buffer_t, pos_T, ptr_t,
+    ptrdiff_t, size_t, ssize_t, tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t,
+    uint64_t, uintmax_t, uv_gid_t, uv_stat_t, uv_timespec_t, uv_uid_t, var_flavour_T, win_T,
+    xfmark_T, yankreg_T,
 };
 use crate::src::nvim::version::longVersion;
 unsafe extern "C" {
@@ -130,309 +105,40 @@ unsafe extern "C" {
 }
 pub type __uint64_t = u64;
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
-pub const UV_ERRNO_MAX: C2Rust_Unnamed = -4096;
-pub const UV_ENOEXEC: C2Rust_Unnamed = -8;
-pub const UV_EUNATCH: C2Rust_Unnamed = -49;
-pub const UV_ENODATA: C2Rust_Unnamed = -61;
-pub const UV_ESOCKTNOSUPPORT: C2Rust_Unnamed = -94;
-pub const UV_EILSEQ: C2Rust_Unnamed = -84;
-pub const UV_EFTYPE: C2Rust_Unnamed = -4028;
-pub const UV_ENOTTY: C2Rust_Unnamed = -25;
-pub const UV_EREMOTEIO: C2Rust_Unnamed = -121;
-pub const UV_EHOSTDOWN: C2Rust_Unnamed = -112;
-pub const UV_EMLINK: C2Rust_Unnamed = -31;
-pub const UV_ENXIO: C2Rust_Unnamed = -6;
-pub const UV_EOF: C2Rust_Unnamed = -4095;
-pub const UV_UNKNOWN: C2Rust_Unnamed = -4094;
-pub const UV_EXDEV: C2Rust_Unnamed = -18;
-pub const UV_ETXTBSY: C2Rust_Unnamed = -26;
-pub const UV_ETIMEDOUT: C2Rust_Unnamed = -110;
-pub const UV_ESRCH: C2Rust_Unnamed = -3;
-pub const UV_ESPIPE: C2Rust_Unnamed = -29;
-pub const UV_ESHUTDOWN: C2Rust_Unnamed = -108;
-pub const UV_EROFS: C2Rust_Unnamed = -30;
-pub const UV_ERANGE: C2Rust_Unnamed = -34;
-pub const UV_EPROTOTYPE: C2Rust_Unnamed = -91;
-pub const UV_EPROTONOSUPPORT: C2Rust_Unnamed = -93;
-pub const UV_EPROTO: C2Rust_Unnamed = -71;
-pub const UV_EPIPE: C2Rust_Unnamed = -32;
-pub const UV_EPERM: C2Rust_Unnamed = -1;
-pub const UV_EOVERFLOW: C2Rust_Unnamed = -75;
-pub const UV_ENOTSUP: C2Rust_Unnamed = -95;
-pub const UV_ENOTSOCK: C2Rust_Unnamed = -88;
-pub const UV_ENOTEMPTY: C2Rust_Unnamed = -39;
-pub const UV_ENOTDIR: C2Rust_Unnamed = -20;
-pub const UV_ENOTCONN: C2Rust_Unnamed = -107;
-pub const UV_ENOSYS: C2Rust_Unnamed = -38;
-pub const UV_ENOSPC: C2Rust_Unnamed = -28;
-pub const UV_ENOPROTOOPT: C2Rust_Unnamed = -92;
-pub const UV_ENONET: C2Rust_Unnamed = -64;
-pub const UV_ENOMEM: C2Rust_Unnamed = -12;
 pub const UV_ENOENT: C2Rust_Unnamed = -2;
-pub const UV_ENODEV: C2Rust_Unnamed = -19;
-pub const UV_ENOBUFS: C2Rust_Unnamed = -105;
-pub const UV_ENFILE: C2Rust_Unnamed = -23;
-pub const UV_ENETUNREACH: C2Rust_Unnamed = -101;
-pub const UV_ENETDOWN: C2Rust_Unnamed = -100;
-pub const UV_ENAMETOOLONG: C2Rust_Unnamed = -36;
-pub const UV_EMSGSIZE: C2Rust_Unnamed = -90;
-pub const UV_EMFILE: C2Rust_Unnamed = -24;
 pub const UV_ELOOP: C2Rust_Unnamed = -40;
-pub const UV_EISDIR: C2Rust_Unnamed = -21;
-pub const UV_EISCONN: C2Rust_Unnamed = -106;
-pub const UV_EIO: C2Rust_Unnamed = -5;
-pub const UV_EINVAL: C2Rust_Unnamed = -22;
-pub const UV_EINTR: C2Rust_Unnamed = -4;
-pub const UV_EHOSTUNREACH: C2Rust_Unnamed = -113;
-pub const UV_EFBIG: C2Rust_Unnamed = -27;
-pub const UV_EFAULT: C2Rust_Unnamed = -14;
 pub const UV_EEXIST: C2Rust_Unnamed = -17;
-pub const UV_EDESTADDRREQ: C2Rust_Unnamed = -89;
-pub const UV_ECONNRESET: C2Rust_Unnamed = -104;
-pub const UV_ECONNREFUSED: C2Rust_Unnamed = -111;
-pub const UV_ECONNABORTED: C2Rust_Unnamed = -103;
-pub const UV_ECHARSET: C2Rust_Unnamed = -4080;
-pub const UV_ECANCELED: C2Rust_Unnamed = -125;
-pub const UV_EBUSY: C2Rust_Unnamed = -16;
-pub const UV_EBADF: C2Rust_Unnamed = -9;
-pub const UV_EALREADY: C2Rust_Unnamed = -114;
-pub const UV_EAI_SOCKTYPE: C2Rust_Unnamed = -3011;
-pub const UV_EAI_SERVICE: C2Rust_Unnamed = -3010;
-pub const UV_EAI_PROTOCOL: C2Rust_Unnamed = -3014;
-pub const UV_EAI_OVERFLOW: C2Rust_Unnamed = -3009;
-pub const UV_EAI_NONAME: C2Rust_Unnamed = -3008;
-pub const UV_EAI_NODATA: C2Rust_Unnamed = -3007;
-pub const UV_EAI_MEMORY: C2Rust_Unnamed = -3006;
-pub const UV_EAI_FAMILY: C2Rust_Unnamed = -3005;
-pub const UV_EAI_FAIL: C2Rust_Unnamed = -3004;
-pub const UV_EAI_CANCELED: C2Rust_Unnamed = -3003;
-pub const UV_EAI_BADHINTS: C2Rust_Unnamed = -3013;
-pub const UV_EAI_BADFLAGS: C2Rust_Unnamed = -3002;
-pub const UV_EAI_AGAIN: C2Rust_Unnamed = -3001;
-pub const UV_EAI_ADDRFAMILY: C2Rust_Unnamed = -3000;
-pub const UV_EAGAIN: C2Rust_Unnamed = -11;
-pub const UV_EAFNOSUPPORT: C2Rust_Unnamed = -97;
-pub const UV_EADDRNOTAVAIL: C2Rust_Unnamed = -99;
-pub const UV_EADDRINUSE: C2Rust_Unnamed = -98;
-pub const UV_EACCES: C2Rust_Unnamed = -13;
-pub const UV_E2BIG: C2Rust_Unnamed = -7;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const MPACK_ERROR: C2Rust_Unnamed_0 = 2;
-pub const MPACK_EOF: C2Rust_Unnamed_0 = 1;
 pub const MPACK_OK: C2Rust_Unnamed_0 = 0;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
 pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
 pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_14 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_14 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_14 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_14 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
-pub const MF_DIRTY_YES: mfdirty_T = 1;
-pub const MF_DIRTY_NO: mfdirty_T = 0;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const kListLenShouldKnow: ListLenSpecials = -2;
 pub const kListLenUnknown: ListLenSpecials = -1;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const VAR_TYPE_BLOB: C2Rust_Unnamed_16 = 10;
-pub const VAR_TYPE_SPECIAL: C2Rust_Unnamed_16 = 7;
-pub const VAR_TYPE_BOOL: C2Rust_Unnamed_16 = 6;
-pub const VAR_TYPE_FLOAT: C2Rust_Unnamed_16 = 5;
-pub const VAR_TYPE_DICT: C2Rust_Unnamed_16 = 4;
-pub const VAR_TYPE_LIST: C2Rust_Unnamed_16 = 3;
-pub const VAR_TYPE_FUNC: C2Rust_Unnamed_16 = 2;
-pub const VAR_TYPE_STRING: C2Rust_Unnamed_16 = 1;
-pub const VAR_TYPE_NUMBER: C2Rust_Unnamed_16 = 0;
-pub const kMHNewKeyRealloc: MHPutStatus = 2;
-pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;
-pub const kMarkAllNoResolve: MarkGet = 2;
-pub const kMarkAll: MarkGet = 1;
 pub const kMarkBufLocal: MarkGet = 0;
-pub const BLN_NOCURWIN: bln_values = 128;
-pub const BLN_NOOPT: bln_values = 16;
-pub const BLN_NEW: bln_values = 8;
-pub const BLN_DUMMY: bln_values = 4;
 pub const BLN_LISTED: bln_values = 2;
-pub const BLN_CURBUF: bln_values = 1;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
-pub const HIST_DEBUG: C2Rust_Unnamed_17 = 4;
-pub const HIST_INPUT: C2Rust_Unnamed_17 = 3;
-pub const HIST_EXPR: C2Rust_Unnamed_17 = 2;
 pub const HIST_SEARCH: C2Rust_Unnamed_17 = 1;
 pub const HIST_CMD: C2Rust_Unnamed_17 = 0;
-pub const HIST_INVALID: C2Rust_Unnamed_17 = -1;
-pub const HIST_DEFAULT: C2Rust_Unnamed_17 = -2;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const HIST_COUNT: C2Rust_Unnamed_18 = 5;
-pub const VV_EXITREASON: VimVarIndex = 105;
-pub const VV_STARTTIME: VimVarIndex = 104;
-pub const VV_VIRTNUM: VimVarIndex = 103;
-pub const VV_RELNUM: VimVarIndex = 102;
-pub const VV_LUA: VimVarIndex = 101;
-pub const VV__NULL_BLOB: VimVarIndex = 100;
-pub const VV__NULL_DICT: VimVarIndex = 99;
-pub const VV__NULL_LIST: VimVarIndex = 98;
-pub const VV__NULL_STRING: VimVarIndex = 97;
-pub const VV_MSGPACK_TYPES: VimVarIndex = 96;
-pub const VV_STDERR: VimVarIndex = 95;
-pub const VV_VIM_DID_INIT: VimVarIndex = 94;
-pub const VV_STACKTRACE: VimVarIndex = 93;
-pub const VV_MAXCOL: VimVarIndex = 92;
-pub const VV_EXITING: VimVarIndex = 91;
-pub const VV_COLLATE: VimVarIndex = 90;
-pub const VV_ARGV: VimVarIndex = 89;
-pub const VV_ARGF: VimVarIndex = 88;
-pub const VV_ECHOSPACE: VimVarIndex = 87;
-pub const VV_VERSIONLONG: VimVarIndex = 86;
-pub const VV_EVENT: VimVarIndex = 85;
-pub const VV_TYPE_BLOB: VimVarIndex = 84;
-pub const VV_TYPE_BOOL: VimVarIndex = 83;
-pub const VV_TYPE_FLOAT: VimVarIndex = 82;
-pub const VV_TYPE_DICT: VimVarIndex = 81;
-pub const VV_TYPE_LIST: VimVarIndex = 80;
-pub const VV_TYPE_FUNC: VimVarIndex = 79;
-pub const VV_TYPE_STRING: VimVarIndex = 78;
-pub const VV_TYPE_NUMBER: VimVarIndex = 77;
-pub const VV_TESTING: VimVarIndex = 76;
-pub const VV_VIM_DID_ENTER: VimVarIndex = 75;
-pub const VV_NUMBERSIZE: VimVarIndex = 74;
-pub const VV_NUMBERMIN: VimVarIndex = 73;
-pub const VV_NUMBERMAX: VimVarIndex = 72;
-pub const VV_NULL: VimVarIndex = 71;
-pub const VV_TRUE: VimVarIndex = 70;
-pub const VV_FALSE: VimVarIndex = 69;
-pub const VV_ERRORS: VimVarIndex = 68;
-pub const VV_OPTION_TYPE: VimVarIndex = 67;
-pub const VV_OPTION_COMMAND: VimVarIndex = 66;
-pub const VV_OPTION_OLDGLOBAL: VimVarIndex = 65;
-pub const VV_OPTION_OLDLOCAL: VimVarIndex = 64;
-pub const VV_OPTION_OLD: VimVarIndex = 63;
-pub const VV_OPTION_NEW: VimVarIndex = 62;
-pub const VV_COMPLETED_ITEM: VimVarIndex = 61;
-pub const VV_PROGPATH: VimVarIndex = 60;
-pub const VV_WINDOWID: VimVarIndex = 59;
 pub const VV_OLDFILES: VimVarIndex = 58;
-pub const VV_HLSEARCH: VimVarIndex = 57;
-pub const VV_SEARCHFORWARD: VimVarIndex = 56;
-pub const VV_OP: VimVarIndex = 55;
-pub const VV_MOUSE_COL: VimVarIndex = 54;
-pub const VV_MOUSE_LNUM: VimVarIndex = 53;
-pub const VV_MOUSE_WINID: VimVarIndex = 52;
-pub const VV_MOUSE_WIN: VimVarIndex = 51;
-pub const VV_CHAR: VimVarIndex = 50;
-pub const VV_SWAPCOMMAND: VimVarIndex = 49;
-pub const VV_SWAPCHOICE: VimVarIndex = 48;
-pub const VV_SWAPNAME: VimVarIndex = 47;
-pub const VV_SCROLLSTART: VimVarIndex = 46;
-pub const VV_BEVAL_TEXT: VimVarIndex = 45;
-pub const VV_BEVAL_COL: VimVarIndex = 44;
-pub const VV_BEVAL_LNUM: VimVarIndex = 43;
-pub const VV_BEVAL_WINID: VimVarIndex = 42;
-pub const VV_BEVAL_WINNR: VimVarIndex = 41;
-pub const VV_BEVAL_BUFNR: VimVarIndex = 40;
-pub const VV_FCS_CHOICE: VimVarIndex = 39;
-pub const VV_FCS_REASON: VimVarIndex = 38;
-pub const VV_PROFILING: VimVarIndex = 37;
-pub const VV_KEY: VimVarIndex = 36;
-pub const VV_VAL: VimVarIndex = 35;
-pub const VV_INSERTMODE: VimVarIndex = 34;
-pub const VV_CMDBANG: VimVarIndex = 33;
-pub const VV_REG: VimVarIndex = 32;
-pub const VV_THROWPOINT: VimVarIndex = 31;
-pub const VV_EXCEPTION: VimVarIndex = 30;
-pub const VV_DYING: VimVarIndex = 29;
-pub const VV_SEND_SERVER: VimVarIndex = 28;
-pub const VV_PROGNAME: VimVarIndex = 27;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_CMDARG: VimVarIndex = 22;
-pub const VV_FNAME_DIFF: VimVarIndex = 21;
-pub const VV_FNAME_NEW: VimVarIndex = 20;
-pub const VV_FNAME_OUT: VimVarIndex = 19;
-pub const VV_FNAME_IN: VimVarIndex = 18;
-pub const VV_CC_TO: VimVarIndex = 17;
-pub const VV_CC_FROM: VimVarIndex = 16;
-pub const VV_CTYPE: VimVarIndex = 15;
-pub const VV_LC_TIME: VimVarIndex = 14;
-pub const VV_LANG: VimVarIndex = 13;
-pub const VV_FNAME: VimVarIndex = 12;
-pub const VV_TERMRESPONSE: VimVarIndex = 11;
-pub const VV_TERMREQUEST: VimVarIndex = 10;
-pub const VV_LNUM: VimVarIndex = 9;
-pub const VV_VERSION: VimVarIndex = 8;
-pub const VV_THIS_SESSION: VimVarIndex = 7;
-pub const VV_SHELL_ERROR: VimVarIndex = 6;
-pub const VV_STATUSMSG: VimVarIndex = 5;
-pub const VV_WARNINGMSG: VimVarIndex = 4;
-pub const VV_ERRMSG: VimVarIndex = 3;
-pub const VV_PREVCOUNT: VimVarIndex = 2;
-pub const VV_COUNT1: VimVarIndex = 1;
-pub const VV_COUNT: VimVarIndex = 0;
 pub const VAR_FLAVOUR_SHADA: var_flavour_T = 4;
 pub const VAR_FLAVOUR_SESSION: var_flavour_T = 2;
 pub const VAR_FLAVOUR_DEFAULT: var_flavour_T = 1;
-pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kFileMkDir: C2Rust_Unnamed_19 = 256;
-pub const kFileNonBlocking: C2Rust_Unnamed_19 = 128;
-pub const kFileAppend: C2Rust_Unnamed_19 = 64;
 pub const kFileTruncate: C2Rust_Unnamed_19 = 32;
 pub const kFileCreateOnly: C2Rust_Unnamed_19 = 16;
 pub const kFileNoSymlink: C2Rust_Unnamed_19 = 8;
-pub const kFileWriteOnly: C2Rust_Unnamed_19 = 4;
 pub const kFileCreate: C2Rust_Unnamed_19 = 2;
 pub const kFileReadOnly: C2Rust_Unnamed_19 = 1;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const NUM_REGISTERS: C2Rust_Unnamed_20 = 39;
-pub const PLUS_REGISTER: C2Rust_Unnamed_20 = 38;
-pub const STAR_REGISTER: C2Rust_Unnamed_20 = 37;
-pub const NUM_SAVED_REGISTERS: C2Rust_Unnamed_20 = 37;
-pub const DELETION_REGISTER: C2Rust_Unnamed_20 = 36;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const kShaDaMissingError: C2Rust_Unnamed_21 = 16;
 pub const kShaDaGetOldfiles: C2Rust_Unnamed_21 = 8;
@@ -612,7 +318,6 @@ pub type ShaDaReadResult = ::core::ffi::c_uint;
 pub type SearchPatternGetter = Option<unsafe extern "C" fn(*mut SearchPattern) -> ()>;
 pub const kSDReadBufferList: SRNIFlags = 512;
 pub type SRNIFlags = ::core::ffi::c_uint;
-pub const kSDReadHeader: SRNIFlags = 2;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const PTRDIFF_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
