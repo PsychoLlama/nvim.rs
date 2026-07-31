@@ -277,6 +277,18 @@ unsafe fn is_upper(c: c_int) -> bool {
     }
 }
 
+/// The upper-case form of `c`, by the spell table below 128 and the
+/// general rules above it.
+pub(super) unsafe fn spell_toupper(c: c_int) -> c_int {
+    unsafe {
+        if c >= 128 {
+            mb_toupper(c)
+        } else {
+            (*spelltab.ptr()).st_upper[c as usize] as c_int
+        }
+    }
+}
+
 /// Copy `word` into `wcopy`, upper-casing (or folding) the first character.
 /// `wcopy` must hold [`MAXWLEN`] bytes.
 pub unsafe fn onecap_copy(word: *const c_char, wcopy: *mut c_char, upper: bool) {
