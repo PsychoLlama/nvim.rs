@@ -440,7 +440,7 @@
     "crates/nvim/src/nvim/types/vterm.rs": {"unsafe": 42},
     "crates/nvim/src/nvim/types/vterm_internal.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/types/xdiff.rs": {"unsafe": 4},
-    "crates/nvim/src/nvim/ui.rs": {"lines": 2991, "no_mangle": 2, "unsafe": 107},
+    "crates/nvim/src/nvim/ui.rs": {"lines": 2814, "no_mangle": 2, "unsafe": 107},
     "crates/nvim/src/nvim/ui_client.rs": {"lines": 1720, "unsafe": 73},
     "crates/nvim/src/nvim/ui_compositor.rs": {"lines": 1384, "unsafe": 24},
     "crates/nvim/src/nvim/undo.rs": {"unsafe": 19},
