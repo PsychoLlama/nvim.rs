@@ -5,8 +5,7 @@ use crate::src::nvim::buffer::buflist_findname_exp;
 use crate::src::nvim::charset::{getdigits_int, skipdigits, skipwhite};
 use crate::src::nvim::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::src::nvim::fileio::{
-    buf_reload, get2c, get3c, get4c, get8ctime, put_bytes, put_time, read_string, vim_fgets,
-    vim_tempname,
+    buf_reload, get2c, get3c, get4c, get8ctime, read_string, vim_fgets, vim_tempname,
 };
 use crate::src::nvim::garray::{
     ga_append, ga_append_via_ptr, ga_clear, ga_concat, ga_grow, ga_init,
@@ -19,14 +18,14 @@ use crate::src::nvim::hashtab::{
 };
 use crate::src::nvim::main::{
     IObuff, NameBuff, curbuf, curwin, e_bufloaded, e_exists, e_invarg, e_isadir2, e_notopen,
-    e_notset, e_write, got_int, msg_col, msg_didout, p_enc, p_msm, p_verbose,
+    e_notset, got_int, msg_col, msg_didout, p_enc, p_msm, p_verbose,
 };
 use crate::src::nvim::mbyte::{
     convert_setup, enc_canonize, mb_charlen, mb_cptr2char_adv, mb_ptr2char_adv, mb_toupper,
     string_convert, utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len,
     utfc_ptr2len,
 };
-use crate::src::nvim::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len};
+use crate::src::nvim::memline::ml_append_buf;
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup, xstrlcat, xstrlcpy};
 use crate::src::nvim::message::{
     emsg, msg, msg_clr_eos, msg_outtrans_long, msg_start, semsg, smsg, verbose_enter, verbose_leave,
@@ -38,8 +37,8 @@ use crate::src::nvim::os::fs::{os_fopen, os_isdir, os_mkdir, os_mkdir_recurse, o
 use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck};
 use crate::src::nvim::os::libc::{
     __assert_fail, __ctype_b_loc, __errno_location, atoi, fclose, feof, ferror, fprintf, fputc,
-    fread, fseek, ftell, fwrite, getc, gettext, memchr, memcmp, memmove, memset, putc, snprintf,
-    strcat, strcmp, strcpy, strerror, strlen, strncmp, strrchr, strstr, ungetc,
+    fread, fseek, ftell, getc, gettext, memchr, memcmp, memmove, memset, snprintf, strcat, strcmp,
+    strcpy, strerror, strlen, strncmp, strrchr, strstr, ungetc,
 };
 use crate::src::nvim::os::stdpaths::get_xdg_home;
 use crate::src::nvim::os::time::os_time;
@@ -49,10 +48,9 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::runtime::{estack_pop, estack_push};
 use crate::src::nvim::spell::{
-    byte_in_str, clear_spell_chartab, close_spellbuf, count_common_word, did_set_spelltab,
-    e_format, first_lang, init_spell_chartab, init_syl_tab, int_wordlist, onecap_copy,
-    open_spellbuf, parse_spelllang, slang_alloc, slang_clear, slang_clear_sug, slang_free,
-    spell_casefold, spell_enc, spell_soundfold, spelltab,
+    byte_in_str, clear_spell_chartab, count_common_word, did_set_spelltab, e_format, first_lang,
+    init_spell_chartab, init_syl_tab, int_wordlist, onecap_copy, open_spellbuf, parse_spelllang,
+    slang_alloc, slang_clear, slang_clear_sug, slang_free, spell_casefold, spell_enc, spelltab,
 };
 use crate::src::nvim::strings::{has_non_ascii, vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
@@ -95,13 +93,15 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::bufIsChanged;
+mod sugfile;
 mod wordtree;
 mod write;
+use sugfile::spell_make_sugfile;
 use wordtree::{
     MSG_COMPRESSING, SpellArena, set_compression_limits, store_word, tree_add_word,
     valid_spell_word, wordnode_T, wordtree_alloc, wordtree_compress,
 };
-use write::{clear_node, put_node, write_vim_spell};
+use write::write_vim_spell;
 unsafe extern "C" {
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
@@ -4773,388 +4773,6 @@ pub unsafe fn ex_mkspell(mut eap: *mut exarg_T) {
     mkspell(fcount, fnames, ascii, (*eap).forceit != 0, false_0 != 0);
     FreeWild(fcount, fnames);
 }
-unsafe fn spell_make_sugfile(mut spin: *mut spellinfo_T, mut wfname: *mut ::core::ffi::c_char) {
-    let mut len: ::core::ffi::c_int = 0;
-    let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut slang: *mut slang_T = ::core::ptr::null_mut::<slang_T>();
-    let mut free_slang: bool = false_0 != 0;
-    slang = first_lang.get();
-    while !slang.is_null() {
-        if path_full_compare(wfname, (*slang).sl_fname, false_0 != 0, true_0 != 0)
-            as ::core::ffi::c_uint
-            == kEqualFiles as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            break;
-        }
-        slang = (*slang).sl_next;
-    }
-    if slang.is_null() {
-        spell_message(
-            spin,
-            gettext(b"Reading back spell file...\0".as_ptr() as *const ::core::ffi::c_char),
-        );
-        slang = spell_load_file(
-            wfname,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<slang_T>(),
-            false_0 != 0,
-        );
-        if slang.is_null() {
-            return;
-        }
-        free_slang = true_0 != 0;
-    }
-    (*spin).si_arena.block_count = 0 as ::core::ffi::c_int;
-    (*spin).si_compress_cnt = 0 as ::core::ffi::c_int;
-    (*spin).si_free_count = 0 as ::core::ffi::c_int;
-    (*spin).si_first_free = ::core::ptr::null_mut::<wordnode_T>();
-    (*spin).si_foldwcount = 0 as ::core::ffi::c_int;
-    spell_message(
-        spin,
-        gettext(b"Performing soundfolding...\0".as_ptr() as *const ::core::ffi::c_char),
-    );
-    if sug_filltree(spin, slang) != FAIL {
-        if sug_maketable(spin) != FAIL {
-            smsg(
-                0 as ::core::ffi::c_int,
-                gettext(b"Number of words after soundfolding: %ld\0".as_ptr()
-                    as *const ::core::ffi::c_char),
-                (*(*spin).si_spellbuf).b_ml.ml_line_count as int64_t,
-            );
-            spell_message(spin, gettext(MSG_COMPRESSING.as_ptr()));
-            let foldroot = (*spin).si_foldroot;
-            wordtree_compress(&mut *spin, foldroot, c"case-folded");
-            fname = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-            xstrlcpy(fname, wfname, MAXPATHL as size_t);
-            len = strlen(fname) as ::core::ffi::c_int;
-            *fname.offset((len - 2 as ::core::ffi::c_int) as isize) = 'u' as ::core::ffi::c_char;
-            *fname.offset((len - 1 as ::core::ffi::c_int) as isize) = 'g' as ::core::ffi::c_char;
-            sug_write(spin, fname);
-        }
-    }
-    xfree(fname as *mut ::core::ffi::c_void);
-    if free_slang {
-        slang_free(slang);
-    }
-    (*spin).si_arena.clear();
-    close_spellbuf((*spin).si_spellbuf);
-}
-unsafe fn sug_filltree(mut spin: *mut spellinfo_T, mut slang: *mut slang_T) -> ::core::ffi::c_int {
-    let mut arridx: [idx_T; 254] = [0; 254];
-    let mut curi: [::core::ffi::c_int; 254] = [0; 254];
-    let mut tword: [::core::ffi::c_char; 254] = [0; 254];
-    let mut tsalword: [::core::ffi::c_char; 254] = [0; 254];
-    let mut words_done: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
-    let mut wordcount: [::core::ffi::c_int; 254] = [0; 254];
-    (*spin).si_foldroot = wordtree_alloc(&mut *spin);
-    (*spin).si_sugtree = true_0;
-    let mut byts: *mut uint8_t = (*slang).sl_fbyts;
-    let mut idxs: *mut idx_T = (*slang).sl_fidxs;
-    if byts.is_null() || idxs.is_null() {
-        return FAIL;
-    }
-    arridx[0 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_int as idx_T;
-    curi[0 as ::core::ffi::c_int as usize] = 1 as ::core::ffi::c_int;
-    wordcount[0 as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_int;
-    let mut depth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while depth >= 0 as ::core::ffi::c_int && !got_int.get() {
-        if curi[depth as usize]
-            > *byts.offset(arridx[depth as usize] as isize) as ::core::ffi::c_int
-        {
-            *idxs.offset(arridx[depth as usize] as isize) = wordcount[depth as usize] as idx_T;
-            if depth > 0 as ::core::ffi::c_int {
-                wordcount[(depth - 1 as ::core::ffi::c_int) as usize] += wordcount[depth as usize];
-            }
-            depth -= 1;
-            line_breakcheck();
-        } else {
-            let mut n: idx_T = arridx[depth as usize] + curi[depth as usize] as idx_T;
-            curi[depth as usize] += 1;
-            let mut c: ::core::ffi::c_int = *byts.offset(n as isize) as ::core::ffi::c_int;
-            if c == 0 as ::core::ffi::c_int {
-                tword[depth as usize] = NUL as ::core::ffi::c_char;
-                spell_soundfold(
-                    slang,
-                    &raw mut tword as *mut ::core::ffi::c_char,
-                    true_0 != 0,
-                    &raw mut tsalword as *mut ::core::ffi::c_char,
-                );
-                let foldroot = (*spin).si_foldroot;
-                if tree_add_word(
-                    &mut *spin,
-                    &raw mut tsalword as *mut ::core::ffi::c_char,
-                    foldroot,
-                    (words_done >> 16 as ::core::ffi::c_int) as ::core::ffi::c_int,
-                    (words_done & 0xffff as ::core::ffi::c_uint) as ::core::ffi::c_int,
-                    0 as ::core::ffi::c_int,
-                ) == FAIL
-                {
-                    return FAIL;
-                }
-                words_done = words_done.wrapping_add(1);
-                wordcount[depth as usize] += 1;
-                (*spin).si_arena.block_count = 0 as ::core::ffi::c_int;
-                while (n as ::core::ffi::c_int + 1 as ::core::ffi::c_int) < (*slang).sl_fbyts_len
-                    && *byts.offset((n as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize)
-                        as ::core::ffi::c_int
-                        == 0 as ::core::ffi::c_int
-                {
-                    n += 1;
-                    curi[depth as usize] += 1;
-                }
-            } else {
-                let c2rust_fresh27 = depth;
-                depth = depth + 1;
-                tword[c2rust_fresh27 as usize] = c as uint8_t as ::core::ffi::c_char;
-                arridx[depth as usize] = *idxs.offset(n as isize);
-                curi[depth as usize] = 1 as ::core::ffi::c_int;
-                wordcount[depth as usize] = 0 as ::core::ffi::c_int;
-            }
-        }
-    }
-    smsg(
-        0 as ::core::ffi::c_int,
-        gettext(b"Total number of words: %d\0".as_ptr() as *const ::core::ffi::c_char),
-        words_done,
-    );
-    return OK;
-}
-unsafe fn sug_maketable(mut spin: *mut spellinfo_T) -> ::core::ffi::c_int {
-    let mut ga: garray_T = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    };
-    let mut res: ::core::ffi::c_int = OK;
-    (*spin).si_spellbuf = open_spellbuf();
-    ga_init(
-        &raw mut ga,
-        1 as ::core::ffi::c_int,
-        100 as ::core::ffi::c_int,
-    );
-    if sug_filltable(
-        spin,
-        (*(*spin).si_foldroot).wn_sibling,
-        0 as ::core::ffi::c_int,
-        &raw mut ga,
-    ) == -1 as ::core::ffi::c_int
-    {
-        res = FAIL;
-    }
-    ga_clear(&raw mut ga);
-    return res;
-}
-unsafe fn sug_filltable(
-    mut spin: *mut spellinfo_T,
-    mut node: *mut wordnode_T,
-    mut startwordnr: ::core::ffi::c_int,
-    mut gap: *mut garray_T,
-) -> ::core::ffi::c_int {
-    let mut wordnr: ::core::ffi::c_int = startwordnr;
-    let mut p: *mut wordnode_T = node;
-    while !p.is_null() {
-        if (*p).wn_byte as ::core::ffi::c_int == NUL {
-            (*gap).ga_len = 0 as ::core::ffi::c_int;
-            let mut prev_nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            let mut np: *mut wordnode_T = p;
-            while !np.is_null() && (*np).wn_byte as ::core::ffi::c_int == NUL {
-                ga_grow(gap, 10 as ::core::ffi::c_int);
-                let mut nr: ::core::ffi::c_int = (((*np).wn_flags as ::core::ffi::c_int)
-                    << 16 as ::core::ffi::c_int)
-                    + ((*np).wn_region as ::core::ffi::c_int & 0xffff as ::core::ffi::c_int);
-                nr -= prev_nr;
-                prev_nr += nr;
-                (*gap).ga_len += offset2bytes(
-                    nr,
-                    ((*gap).ga_data as *mut ::core::ffi::c_char).offset((*gap).ga_len as isize),
-                );
-                np = (*np).wn_sibling;
-            }
-            let c2rust_fresh26 = (*gap).ga_len;
-            (*gap).ga_len = (*gap).ga_len + 1;
-            *((*gap).ga_data as *mut ::core::ffi::c_char).offset(c2rust_fresh26 as isize) =
-                NUL as ::core::ffi::c_char;
-            if ml_append_buf(
-                (*spin).si_spellbuf,
-                wordnr as linenr_T,
-                (*gap).ga_data as *mut ::core::ffi::c_char,
-                (*gap).ga_len as colnr_T,
-                true_0 != 0,
-            ) == FAIL
-            {
-                return -1 as ::core::ffi::c_int;
-            }
-            wordnr += 1;
-            while !(*p).wn_sibling.is_null()
-                && (*(*p).wn_sibling).wn_byte as ::core::ffi::c_int == NUL
-            {
-                (*p).wn_sibling = (*(*p).wn_sibling).wn_sibling;
-            }
-            (*p).wn_flags = 0 as uint16_t;
-            (*p).wn_region = 0 as int16_t;
-        } else {
-            wordnr = sug_filltable(spin, (*p).wn_child, wordnr, gap);
-            if wordnr == -1 as ::core::ffi::c_int {
-                return -1 as ::core::ffi::c_int;
-            }
-        }
-        p = (*p).wn_sibling;
-    }
-    return wordnr;
-}
-unsafe fn offset2bytes(
-    mut nr: ::core::ffi::c_int,
-    mut buf_in: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut buf: *mut uint8_t = buf_in as *mut uint8_t;
-    let mut b1: ::core::ffi::c_int = nr % 255 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-    let mut rem: ::core::ffi::c_int = nr / 255 as ::core::ffi::c_int;
-    let mut b2: ::core::ffi::c_int = rem % 255 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-    rem = rem / 255 as ::core::ffi::c_int;
-    let mut b3: ::core::ffi::c_int = rem % 255 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-    let mut b4: ::core::ffi::c_int = rem / 255 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-    if b4 > 1 as ::core::ffi::c_int || b3 > 0x1f as ::core::ffi::c_int {
-        *buf.offset(0 as ::core::ffi::c_int as isize) =
-            (0xe0 as ::core::ffi::c_int + b4) as uint8_t;
-        *buf.offset(1 as ::core::ffi::c_int as isize) = b3 as uint8_t;
-        *buf.offset(2 as ::core::ffi::c_int as isize) = b2 as uint8_t;
-        *buf.offset(3 as ::core::ffi::c_int as isize) = b1 as uint8_t;
-        return 4 as ::core::ffi::c_int;
-    }
-    if b3 > 1 as ::core::ffi::c_int || b2 > 0x3f as ::core::ffi::c_int {
-        *buf.offset(0 as ::core::ffi::c_int as isize) =
-            (0xc0 as ::core::ffi::c_int + b3) as uint8_t;
-        *buf.offset(1 as ::core::ffi::c_int as isize) = b2 as uint8_t;
-        *buf.offset(2 as ::core::ffi::c_int as isize) = b1 as uint8_t;
-        return 3 as ::core::ffi::c_int;
-    }
-    if b2 > 1 as ::core::ffi::c_int || b1 > 0x7f as ::core::ffi::c_int {
-        *buf.offset(0 as ::core::ffi::c_int as isize) =
-            (0x80 as ::core::ffi::c_int + b2) as uint8_t;
-        *buf.offset(1 as ::core::ffi::c_int as isize) = b1 as uint8_t;
-        return 2 as ::core::ffi::c_int;
-    }
-    *buf.offset(0 as ::core::ffi::c_int as isize) = b1 as uint8_t;
-    return 1 as ::core::ffi::c_int;
-}
-unsafe fn sug_write(mut spin: *mut spellinfo_T, mut fname: *mut ::core::ffi::c_char) {
-    let mut tree: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
-    let mut nodecount: size_t = 0;
-    let mut wcount: linenr_T = 0;
-    let mut fd: *mut FILE = os_fopen(fname, b"w\0".as_ptr() as *const ::core::ffi::c_char);
-    if fd.is_null() {
-        semsg(
-            gettext(&raw const e_notopen as *const ::core::ffi::c_char),
-            fname,
-        );
-        return;
-    }
-    vim_snprintf(
-        IObuff.ptr() as *mut ::core::ffi::c_char,
-        IOSIZE as size_t,
-        gettext(b"Writing suggestion file %s...\0".as_ptr() as *const ::core::ffi::c_char),
-        fname,
-    );
-    spell_message(spin, IObuff.ptr() as *mut ::core::ffi::c_char);
-    '_theend: {
-        if fwrite(
-            VIMSUGMAGIC.as_ptr() as *const ::core::ffi::c_void,
-            VIMSUGMAGICL as size_t,
-            1 as size_t,
-            fd,
-        ) != 1 as ::core::ffi::c_ulong
-        {
-            emsg(gettext(&raw const e_write as *const ::core::ffi::c_char));
-        } else {
-            putc(VIMSUGVERSION, fd);
-            put_time(fd, (*spin).si_sugtime);
-            (*spin).si_memtot = 0 as ::core::ffi::c_int;
-            tree = (*(*spin).si_foldroot).wn_sibling;
-            clear_node(tree);
-            nodecount = put_node(
-                ::core::ptr::null_mut::<FILE>(),
-                tree,
-                0 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
-                false_0 != 0,
-            ) as size_t;
-            put_bytes(fd, nodecount as uintmax_t, 4 as size_t);
-            '_c2rust_label: {
-                if nodecount.wrapping_add(
-                    nodecount.wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()),
-                ) < 2147483647 as ::core::ffi::c_int as size_t
-                {
-                } else {
-                    __assert_fail(
-                        b"nodecount + nodecount * sizeof(int) < INT_MAX\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                        b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        5135 as ::core::ffi::c_uint,
-                        b"void sug_write(spellinfo_T *, char *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            (*spin).si_memtot += nodecount
-                .wrapping_add(nodecount.wrapping_mul(::core::mem::size_of::<::core::ffi::c_int>()))
-                as ::core::ffi::c_int;
-            put_node(
-                fd,
-                tree,
-                0 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
-                false_0 != 0,
-            );
-            wcount = (*(*spin).si_spellbuf).b_ml.ml_line_count;
-            '_c2rust_label_0: {
-                if wcount >= 0 as linenr_T {
-                } else {
-                    __assert_fail(
-                        b"wcount >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        5143 as ::core::ffi::c_uint,
-                        b"void sug_write(spellinfo_T *, char *)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            put_bytes(fd, wcount as uintmax_t, 4 as size_t);
-            let mut lnum: linenr_T = 1 as linenr_T;
-            while lnum <= wcount {
-                let mut line: *mut ::core::ffi::c_char = ml_get_buf((*spin).si_spellbuf, lnum);
-                let mut len: ::core::ffi::c_int =
-                    ml_get_buf_len((*spin).si_spellbuf, lnum) + 1 as ::core::ffi::c_int;
-                if fwrite(
-                    line as *const ::core::ffi::c_void,
-                    len as size_t,
-                    1 as size_t,
-                    fd,
-                ) == 0 as ::core::ffi::c_ulong
-                {
-                    emsg(gettext(&raw const e_write as *const ::core::ffi::c_char));
-                    break '_theend;
-                } else {
-                    (*spin).si_memtot += len;
-                    lnum += 1;
-                }
-            }
-            if putc(0 as ::core::ffi::c_int, fd) == EOF {
-                emsg(gettext(&raw const e_write as *const ::core::ffi::c_char));
-            }
-            vim_snprintf(
-                IObuff.ptr() as *mut ::core::ffi::c_char,
-                IOSIZE as size_t,
-                gettext(b"Estimated runtime memory use: %d bytes\0".as_ptr()
-                    as *const ::core::ffi::c_char),
-                (*spin).si_memtot,
-            );
-            spell_message(spin, IObuff.ptr() as *mut ::core::ffi::c_char);
-        }
-    }
-    fclose(fd);
-}
 unsafe fn mkspell(
     mut fcount: ::core::ffi::c_int,
     mut fnames: *mut *mut ::core::ffi::c_char,
@@ -5576,7 +5194,7 @@ unsafe fn mkspell(
             }
             spin.si_arena.clear();
             if spin.si_sugtime != 0 as time_t && !error && !got_int.get() {
-                spell_make_sugfile(&raw mut spin, wfname);
+                spell_make_sugfile(&mut spin, wfname);
             }
         }
     }
