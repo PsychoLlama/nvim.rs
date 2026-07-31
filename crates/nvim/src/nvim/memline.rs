@@ -181,30 +181,38 @@ pub const SHM_ATTENTION: C2Rust_Unnamed_25 = 65;
 pub type upd_block0_T = ::core::ffi::c_uint;
 pub const UB_SAME_DIR: upd_block0_T = 1;
 pub const UB_FNAME: upd_block0_T = 0;
-pub const MLCS_MINL: C2Rust_Unnamed_31 = 400;
-pub const ML_FIND: C2Rust_Unnamed_30 = 19;
-pub const ML_INSERT: C2Rust_Unnamed_30 = 18;
-pub const ML_DELETE: C2Rust_Unnamed_30 = 17;
-pub const ML_FLUSH: C2Rust_Unnamed_30 = 2;
-pub const MLCS_MAXL: C2Rust_Unnamed_31 = 800;
-pub const ML_APPEND_MARK: C2Rust_Unnamed_23 = 2;
-pub const ML_APPEND_NEW: C2Rust_Unnamed_23 = 1;
-pub const ML_DEL_MESSAGE: C2Rust_Unnamed_22 = 1;
+/// `action` for [`ml_find_line`]: only release the locked block.
+pub const ML_FLUSH: ::core::ffi::c_int = 2;
+/// `action` for [`ml_find_line`]: a line is about to be deleted here.
+pub const ML_DELETE: ::core::ffi::c_int = 17;
+/// `action` for [`ml_find_line`]: a line is about to be inserted here.
+pub const ML_INSERT: ::core::ffi::c_int = 18;
+/// `action` for [`ml_find_line`]: just look the line up.
+pub const ML_FIND: ::core::ffi::c_int = 19;
+/// Lines below which two neighbouring `ml_chunksize` entries are merged, and
+/// the size a split aims for.
+pub const MLCS_MINL: ::core::ffi::c_int = 400;
+/// Lines above which an `ml_chunksize` entry is split in two.
+pub const MLCS_MAXL: ::core::ffi::c_int = 800;
+/// `flags` for `ml_append_int`: carry the `DB_MARKED` bit onto the new line.
+pub const ML_APPEND_MARK: ::core::ffi::c_int = 2;
+/// `flags` for `ml_append_int`: this is a fresh file being read in, so the
+/// block may be numbered negatively and need not keep its position.
+pub const ML_APPEND_NEW: ::core::ffi::c_int = 1;
+/// `flags` for `ml_delete_int`: say "--No lines in buffer--" if the buffer
+/// ends up empty.
+pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
 pub const OPT_LOCAL: C2Rust_Unnamed_24 = 2;
 pub const kEqualFiles: file_comparison = 1;
 pub const EW_SILENT: C2Rust_Unnamed_26 = 32;
 pub const EW_FILE: C2Rust_Unnamed_26 = 2;
 pub const EW_KEEPALL: C2Rust_Unnamed_26 = 16;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -250,28 +258,6 @@ pub const B0_SAME_DIR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const B0_HAS_FENC: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const STACK_INCR: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 static lowest_marked: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-static e_ml_get_invalid_lnum_nr: GlobalCell<[::core::ffi::c_char; 32]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
-        *b"E315: ml_get: Invalid lnum: %ld\0",
-    )
-});
-static e_ml_get_cannot_find_line_nr_in_buffer_nr_str: GlobalCell<[::core::ffi::c_char; 50]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 50], [::core::ffi::c_char; 50]>(
-            *b"E316: ml_get: Cannot find line %ldin buffer %d %s\0",
-        )
-    });
-static e_pointer_block_id_wrong: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
-        *b"E317: Pointer block id wrong\0",
-    )
-});
-static e_pointer_block_id_wrong_two: GlobalCell<[::core::ffi::c_char; 31]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-            *b"E317: Pointer block id wrong 2\0",
-        )
-    });
 static e_pointer_block_id_wrong_three: GlobalCell<[::core::ffi::c_char; 31]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
@@ -282,18 +268,6 @@ static e_pointer_block_id_wrong_four: GlobalCell<[::core::ffi::c_char; 31]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
             *b"E317: Pointer block id wrong 4\0",
-        )
-    });
-static e_line_number_out_of_range_nr_past_the_end: GlobalCell<[::core::ffi::c_char; 49]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-            *b"E322: Line number out of range: %ld past the end\0",
-        )
-    });
-static e_line_count_wrong_in_block_nr: GlobalCell<[::core::ffi::c_char; 36]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-            *b"E323: Line count wrong in block %ld\0",
         )
     });
 static e_warning_pointer_block_corrupted: GlobalCell<[::core::ffi::c_char; 40]> =
