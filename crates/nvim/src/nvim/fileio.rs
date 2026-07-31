@@ -26,9 +26,9 @@ use crate::src::nvim::getchar::{stuff_empty, typebuf_typed};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::src::nvim::main::{
-    IObuff, NameBuff, State, allbuf_lock, autocmd_busy, cmdmod, curbuf, curtab, curwin,
-    did_check_timestamps, e_interr, e_notopen, emsg_silent, ex_no_reprint, exiting, exmode_active,
-    first_tabpage, firstbuf, firstwin, global_busy, got_int, in_assert_fails, keep_msg, msg_col,
+    IObuff, State, allbuf_lock, autocmd_busy, cmdmod, curbuf, curtab, curwin, did_check_timestamps,
+    e_interr, e_notopen, emsg_silent, ex_no_reprint, exiting, exmode_active, first_tabpage,
+    firstbuf, firstwin, global_busy, got_int, in_assert_fails, keep_msg, msg_col,
     msg_listdo_overwrite, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent,
     need_check_timestamps, need_fileinfo, need_wait_return, no_check_timestamps, no_wait_return,
     p_ar, p_ccv, p_cpo, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose, readonlymode, recoverymode,
@@ -43,8 +43,8 @@ use crate::src::nvim::memline::{
     check_need_swap, ml_append, ml_delete, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len, ml_open,
 };
 use crate::src::nvim::memory::{
-    memchrsub, strequal, time_to_bytes, verbose_try_malloc, xfree, xmalloc, xmallocz, xmemdupz,
-    xstrdup, xstrlcat,
+    memchrsub, time_to_bytes, verbose_try_malloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup,
+    xstrlcat,
 };
 use crate::src::nvim::message::{
     do_dialog, emsg, msg, msg_check_for_delay, msg_clr_eos, msg_delay, msg_end, msg_may_trunc,
@@ -79,16 +79,15 @@ use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::shada::check_marks_read;
 use crate::src::nvim::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
-use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
+use crate::src::nvim::strings::{sort_strings, vim_strchr};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    __mode_t, __off_t, CMD_index, CheckItem, Directory, FILE, FileInfo, OptInt, OptVal, OptValData,
+    __off_t, CMD_index, CheckItem, Directory, FILE, FileInfo, OptInt, OptVal, OptValData,
     OptValType, VimVarIndex, aco_save_T, bln_values, buf_T, bufref_T, cmd_addr_T, colnr_T,
-    cstack_T, exarg_T, garray_T, iconv_t, int32_t, int64_t, linenr_T, mfdirty_T, mode_t, off_T,
-    pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, tabpage_T, time_t, uint8_t,
-    uint64_t, uintmax_t, uv__queue, uv__work, uv_buf_t, uv_dirent_t, uv_dirent_type_t, uv_fs_t,
-    uv_fs_type, uv_gid_t, uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t, uv_uid_t,
-    varnumber_T, vim_acl_T, win_T,
+    cstack_T, exarg_T, garray_T, iconv_t, int64_t, linenr_T, mfdirty_T, off_T, pos_T, ptrdiff_t,
+    regmatch_T, regprog_T, scid_T, size_t, ssize_t, tabpage_T, time_t, uint8_t, uint64_t,
+    uintmax_t, uv_dirent_type_t, uv_fs_type, uv_gid_t, uv_req_type, uv_stat_t, uv_timespec_t,
+    uv_uid_t, vim_acl_T, win_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 use crate::src::nvim::undo::{
@@ -2786,9 +2785,6 @@ pub unsafe extern "C" fn put_time(mut fd: *mut FILE, mut time_: time_t) -> ::cor
     };
 }
 static already_warned: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static vim_tempdir: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-pub static vim_tempdir_dp: GlobalCell<*mut DIR> = GlobalCell::new(::core::ptr::null_mut::<DIR>());
 pub unsafe extern "C" fn read_eintr(
     mut fd: ::core::ffi::c_int,
     mut buf: *mut ::core::ffi::c_void,
@@ -2839,7 +2835,6 @@ pub const EOL_UNIX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CPO_FNAMER: ::core::ffi::c_int = 'f' as ::core::ffi::c_int;
-pub const LOCK_SH: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const EOVERFLOW: ::core::ffi::c_int = 75 as ::core::ffi::c_int;
 pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const EINVAL: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
@@ -2848,13 +2843,6 @@ pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
 pub const NAME_MAX: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const TEMP_DIR_NAMES: [*const ::core::ffi::c_char; 4] = [
-    b"$TMPDIR\0".as_ptr() as *const ::core::ffi::c_char,
-    b"/tmp\0".as_ptr() as *const ::core::ffi::c_char,
-    b".\0".as_ptr() as *const ::core::ffi::c_char,
-    b"~\0".as_ptr() as *const ::core::ffi::c_char,
-];
-pub const TEMP_FILE_PATH_MAXLEN: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
 pub const ICONV_EINVAL: ::core::ffi::c_int = EINVAL;
 pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

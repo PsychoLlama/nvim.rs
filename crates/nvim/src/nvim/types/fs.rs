@@ -4,7 +4,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct Directory {
     pub request: uv_fs_t,

@@ -554,3 +554,75 @@ pub struct uv_write_s {
     pub bufsml: [uv_buf_t; 4],
 }
 pub type uv_write_t = uv_write_s;
+
+// Zero-initialisers for the request types the transpile spelled out in full
+// at every use. Hand-written because the raw-pointer fields have no `Default`
+// of their own.
+
+impl Default for uv__queue {
+    fn default() -> Self {
+        uv__queue {
+            next: ::core::ptr::null_mut(),
+            prev: ::core::ptr::null_mut(),
+        }
+    }
+}
+
+impl Default for uv__work {
+    fn default() -> Self {
+        uv__work {
+            work: None,
+            done: None,
+            loop_0: ::core::ptr::null_mut(),
+            wq: uv__queue::default(),
+        }
+    }
+}
+
+impl Default for uv_buf_t {
+    fn default() -> Self {
+        uv_buf_t {
+            base: ::core::ptr::null_mut(),
+            len: 0,
+        }
+    }
+}
+
+impl Default for uv_dirent_s {
+    fn default() -> Self {
+        uv_dirent_s {
+            name: ::core::ptr::null(),
+            type_0: 0,
+        }
+    }
+}
+
+impl Default for uv_fs_s {
+    fn default() -> Self {
+        uv_fs_s {
+            data: ::core::ptr::null_mut(),
+            type_0: 0,
+            reserved: [::core::ptr::null_mut(); 6],
+            fs_type: 0,
+            loop_0: ::core::ptr::null_mut(),
+            cb: None,
+            result: 0,
+            ptr: ::core::ptr::null_mut(),
+            path: ::core::ptr::null(),
+            statbuf: uv_stat_t::default(),
+            new_path: ::core::ptr::null(),
+            file: 0,
+            flags: 0,
+            mode: 0,
+            nbufs: 0,
+            bufs: ::core::ptr::null_mut(),
+            off: 0,
+            uid: 0,
+            gid: 0,
+            atime: 0.,
+            mtime: 0.,
+            work_req: uv__work::default(),
+            bufsml: [uv_buf_t::default(); 4],
+        }
+    }
+}
