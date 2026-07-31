@@ -1,3 +1,7 @@
+use core::ffi::CStr;
+use std::borrow::Cow;
+use std::ffi::CString;
+
 use crate::src::nvim::autocmd::{
     EVENT_BUFWRITECMD, EVENT_BUFWRITEPOST, EVENT_BUFWRITEPRE, EVENT_FILEAPPENDCMD,
     EVENT_FILEAPPENDPOST, EVENT_FILEAPPENDPRE, EVENT_FILEWRITECMD, EVENT_FILEWRITEPOST,
@@ -28,7 +32,7 @@ use crate::src::nvim::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr
 use crate::src::nvim::memline::{
     get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp,
 };
-use crate::src::nvim::memory::{verbose_try_malloc, xfree, xmalloc, xmemcpyz, xstrlcat};
+use crate::src::nvim::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
 use crate::src::nvim::message::{emsg, msg, msg_progress, msg_puts_hl, semsg, set_keep_msg};
 use crate::src::nvim::option::{copy_option_part, get_bkc_flags, get_fileformat_force, shortmess};
 use crate::src::nvim::options::{
@@ -42,16 +46,14 @@ use crate::src::nvim::os::fs::{
 };
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __errno_location, close, getgid, gettext, getuid, iconv, iconv_close, memmove,
-    snprintf, strlen,
+    __errno_location, close, getgid, gettext, getuid, iconv, iconv_close, memmove, snprintf, strlen,
 };
 use crate::src::nvim::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_add, vim_strchr};
 use crate::src::nvim::types::{
-    FileInfo, aco_save_T, buf_T, bufref_T, colnr_T, exarg_T, iconv_t, int32_t, int64_t, linenr_T,
-    off_T, pos_T, size_t, uint8_t, uint64_t, uv_gid_t, uv_stat_t, uv_timespec_t, uv_uid_t,
-    varnumber_T, vim_acl_T,
+    FileInfo, aco_save_T, buf_T, bufref_T, colnr_T, exarg_T, iconv_t, int64_t, linenr_T, off_T,
+    pos_T, size_t, uint8_t, uint64_t, uv_gid_t, uv_uid_t, varnumber_T, vim_acl_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::{curbufIsChanged, u_unchanged, u_update_save_nr, u_write_undo};
@@ -60,7 +62,7 @@ use crate::src::nvim::undo::{curbufIsChanged, u_unchanged, u_update_save_nr, u_w
 mod convert;
 pub(crate) use self::convert::*;
 mod backup;
-pub use self::backup::*;
+pub(crate) use self::backup::*;
 mod autocmds;
 pub(crate) use self::autocmds::*;
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
@@ -69,14 +71,135 @@ pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const HLF_E: C2Rust_Unnamed_13 = 6;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const CMOD_LOCKMARKS: C2Rust_Unnamed_15 = 2048;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Error_T {
-    pub num: *const ::core::ffi::c_char,
-    pub msg: *mut ::core::ffi::c_char,
-    pub arg: ::core::ffi::c_int,
-    pub alloc: bool,
+/// A write error, held until the cleanup path can report it.
+///
+/// `buf_write` has a single exit that emits the message, because the file
+/// name has to be quoted into `IObuff` first and because every failure
+/// shares the "original file may be lost" handling that follows.
+pub(crate) struct WriteError {
+    /// The `E502`-style code, printed before the quoted file name.
+    num: Option<&'static CStr>,
+    /// The message, already translated. Owned only when it had to be
+    /// formatted; otherwise borrowed from the translation catalog.
+    msg: Cow<'static, CStr>,
+    /// A libuv error code whose text is appended, or 0 for none. Without a
+    /// `num` it is instead the argument of the message's own `%s`.
+    arg: ::core::ffi::c_int,
 }
+
+/// The translated form of a literal message.
+pub(crate) fn translate(msg: &'static CStr) -> &'static CStr {
+    // SAFETY: gettext returns either its own argument or a pointer into the
+    // loaded message catalog. Both outlive the process.
+    unsafe { CStr::from_ptr(gettext(msg.as_ptr())) }
+}
+
+impl WriteError {
+    /// A numbered error: `E502: "name" is a directory`.
+    pub(crate) fn numbered(num: &'static CStr, msg: &'static CStr) -> Self {
+        WriteError {
+            num: Some(num),
+            msg: translate(msg).into(),
+            arg: 0,
+        }
+    }
+
+    /// A message that carries its own error number, if any.
+    pub(crate) fn plain(msg: &'static CStr) -> Self {
+        WriteError {
+            num: None,
+            msg: translate(msg).into(),
+            arg: 0,
+        }
+    }
+
+    /// A message whose single `%s` takes the text of libuv error `arg`.
+    pub(crate) fn errno(msg: &'static CStr, arg: ::core::ffi::c_int) -> Self {
+        WriteError {
+            num: None,
+            msg: translate(msg).into(),
+            arg,
+        }
+    }
+
+    /// A message that had to be formatted at the point of failure.
+    pub(crate) fn formatted(msg: CString) -> Self {
+        WriteError {
+            num: None,
+            msg: msg.into(),
+            arg: 0,
+        }
+    }
+
+    /// A message from one of the shared `e_*` globals rather than from a
+    /// literal here, with `arg` as for [`errno`](Self::errno).
+    ///
+    /// # Safety
+    ///
+    /// `msg` must point at a NUL-terminated string that outlives the error.
+    pub(crate) unsafe fn shared(msg: *const ::core::ffi::c_char, arg: ::core::ffi::c_int) -> Self {
+        WriteError {
+            num: None,
+            msg: unsafe { CStr::from_ptr(gettext(msg)) }.into(),
+            arg,
+        }
+    }
+
+    /// Report the error. The quoted file name is already in `IObuff`.
+    pub(crate) unsafe fn emit(&self) {
+        unsafe {
+            let msg = self.msg.as_ptr();
+            let iobuff = IObuff.ptr() as *mut ::core::ffi::c_char;
+            match (self.num, self.arg) {
+                (Some(num), 0) => {
+                    semsg(c"%s: %s%s".as_ptr(), num.as_ptr(), iobuff, msg);
+                }
+                (Some(num), arg) => {
+                    semsg(
+                        c"%s: %s%s: %s".as_ptr(),
+                        num.as_ptr(),
+                        iobuff,
+                        msg,
+                        uv_strerror(arg),
+                    );
+                }
+                // The message is deliberately its own format string here.
+                (None, arg) if arg != 0 => {
+                    semsg(msg, uv_strerror(arg));
+                }
+                (None, _) => {
+                    emsg(msg);
+                }
+            }
+        }
+    }
+}
+
+/// "conversion failed", naming the line it failed on when one is known.
+///
+/// Upstream allocates 300 bytes for this; a stack buffer plus an owned copy
+/// of what actually landed in it does the same job.
+pub(crate) unsafe fn conversion_failed(lnum: linenr_T) -> WriteError {
+    unsafe {
+        if lnum == 0 {
+            return WriteError::plain(
+                c"E513: Write error, conversion failed (make 'fenc' empty to override)",
+            );
+        }
+        let mut msg = [0 as ::core::ffi::c_char; 300];
+        vim_snprintf(
+            msg.as_mut_ptr(),
+            msg.len() as size_t,
+            translate(
+                c"E513: Write error, conversion failed in line %d (make 'fenc' empty to override)",
+            )
+            .as_ptr(),
+            lnum,
+        );
+        WriteError::formatted(CStr::from_ptr(msg.as_ptr()).to_owned())
+    }
+}
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct bw_info {
@@ -131,105 +254,15 @@ pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 126] = unsafe {
-    ::core::mem::transmute::<
-        [u8; 126],
-        [::core::ffi::c_char; 126],
-    >(
-        *b"int buf_write_make_backup(char *, _Bool, FileInfo *, vim_acl_T, int, unsigned int, _Bool, _Bool, _Bool *, char **, Error_T *)\0",
-    )
-};
-static err_readonly: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
-    b"is read-only (cannot override: \"W\" in 'cpoptions')\0".as_ptr()
-        as *const ::core::ffi::c_char,
-);
+/// `'cpoptions'` "W": refuse to overwrite a read-only file even with `!`.
+pub(crate) const E_READONLY_CPO: &CStr = c"is read-only (cannot override: \"W\" in 'cpoptions')";
 static e_patchmode_cant_touch_empty_original_file: GlobalCell<[::core::ffi::c_char; 49]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
             *b"E206: Patchmode: can't touch empty original file\0",
         )
     });
-static e_write_error_conversion_failed_make_fenc_empty_to_override: GlobalCell<
-    [::core::ffi::c_char; 69],
-> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 69], [::core::ffi::c_char; 69]>(
-        *b"E513: Write error, conversion failed (make 'fenc' empty to override)\0",
-    )
-});
-static e_write_error_conversion_failed_in_line_nr_make_fenc_empty_to_override: GlobalCell<
-    [::core::ffi::c_char; 80],
-> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 80], [::core::ffi::c_char; 80]>(
-        *b"E513: Write error, conversion failed in line %d (make 'fenc' empty to override)\0",
-    )
-});
-static e_write_error_file_system_full: GlobalCell<[::core::ffi::c_char; 38]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 38], [::core::ffi::c_char; 38]>(
-            *b"E514: Write error (file system full?)\0",
-        )
-    });
 pub const SMALLBUFSIZE: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
-#[inline]
-unsafe extern "C" fn set_err_num(
-    mut num: *const ::core::ffi::c_char,
-    mut msg_0: *const ::core::ffi::c_char,
-) -> Error_T {
-    return Error_T {
-        num: num,
-        msg: msg_0 as *mut ::core::ffi::c_char,
-        arg: 0 as ::core::ffi::c_int,
-        alloc: false,
-    };
-}
-#[inline]
-unsafe extern "C" fn set_err(mut msg_0: *const ::core::ffi::c_char) -> Error_T {
-    return Error_T {
-        num: ::core::ptr::null::<::core::ffi::c_char>(),
-        msg: msg_0 as *mut ::core::ffi::c_char,
-        arg: 0 as ::core::ffi::c_int,
-        alloc: false,
-    };
-}
-#[inline]
-unsafe extern "C" fn set_err_arg(
-    mut msg_0: *const ::core::ffi::c_char,
-    mut arg: ::core::ffi::c_int,
-) -> Error_T {
-    return Error_T {
-        num: ::core::ptr::null::<::core::ffi::c_char>(),
-        msg: msg_0 as *mut ::core::ffi::c_char,
-        arg: arg,
-        alloc: false,
-    };
-}
-unsafe extern "C" fn emit_err(mut e: *mut Error_T) {
-    if !(*e).num.is_null() {
-        if (*e).arg != 0 as ::core::ffi::c_int {
-            semsg(
-                b"%s: %s%s: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                (*e).num,
-                IObuff.ptr() as *mut ::core::ffi::c_char,
-                (*e).msg,
-                uv_strerror((*e).arg),
-            );
-        } else {
-            semsg(
-                b"%s: %s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                (*e).num,
-                IObuff.ptr() as *mut ::core::ffi::c_char,
-                (*e).msg,
-            );
-        }
-    } else if (*e).arg != 0 as ::core::ffi::c_int {
-        semsg((*e).msg, uv_strerror((*e).arg));
-    } else {
-        emsg((*e).msg);
-    }
-    if (*e).alloc {
-        xfree((*e).msg as *mut ::core::ffi::c_void);
-    }
-}
 pub unsafe extern "C" fn buf_write(
     mut buf: *mut buf_T,
     mut fname: *mut ::core::ffi::c_char,
@@ -387,66 +420,31 @@ pub unsafe extern "C" fn buf_write(
     } else {
         bufsize = WRITEBUFSIZE as ::core::ffi::c_int;
     }
-    let mut err: Error_T = Error_T {
-        num: ::core::ptr::null::<::core::ffi::c_char>(),
-        msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        arg: 0,
-        alloc: false,
-    };
+    let mut err: Option<WriteError> = None;
     let mut perm: ::core::ffi::c_int = 0;
     let mut newfile: bool = false_0 != 0;
     let mut device: bool = false_0 != 0;
     let mut file_readonly: bool = false_0 != 0;
     let mut backup: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut fenc_tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut file_info_old: FileInfo = FileInfo {
-        stat: uv_stat_t {
-            st_dev: 0,
-            st_mode: 0,
-            st_nlink: 0,
-            st_uid: 0,
-            st_gid: 0,
-            st_rdev: 0,
-            st_ino: 0,
-            st_size: 0,
-            st_blksize: 0,
-            st_blocks: 0,
-            st_flags: 0,
-            st_gen: 0,
-            st_atim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_mtim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_ctim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_birthtim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-        },
-    };
+    let mut file_info_old = FileInfo::default();
     let mut acl: vim_acl_T = NULL;
     '_nofail: {
         '_fail: {
-            if get_fileinfo(
-                buf,
-                fname,
-                overwriting,
-                forceit,
-                &raw mut file_info_old,
-                &raw mut perm,
-                &raw mut device,
-                &raw mut newfile,
-                &raw mut file_readonly,
-                &raw mut err,
-            ) != FAIL
-            {
+            let target =
+                match get_fileinfo(buf, fname, overwriting, forceit, &raw mut file_info_old) {
+                    Ok(target) => Some(target),
+                    // Err(None) is the user declining to overwrite: nothing to say.
+                    Err(reason) => {
+                        err = reason;
+                        None
+                    }
+                };
+            if let Some(target) = target {
+                perm = target.perm;
+                device = target.device;
+                newfile = target.newfile;
+                file_readonly = target.readonly;
                 if !newfile {
                     acl = os_get_acl(fname);
                 }
@@ -467,22 +465,30 @@ pub unsafe extern "C" fn buf_write(
                     && perm >= 0 as ::core::ffi::c_int
                     && dobackup as ::core::ffi::c_int != 0
                 {
-                    if buf_write_make_backup(
+                    let made = buf_write_make_backup(
                         fname,
-                        append,
                         &raw mut file_info_old,
+                        &TargetFile {
+                            perm,
+                            device,
+                            newfile,
+                            readonly: file_readonly,
+                        },
                         acl,
-                        perm,
                         bkc,
-                        file_readonly,
+                        append,
                         forceit,
-                        &raw mut backup_copy,
-                        &raw mut backup,
-                        &raw mut err,
-                    ) == FAIL
-                    {
-                        retval = FAIL;
-                        break '_fail;
+                    );
+                    match made {
+                        Ok(made) => {
+                            backup_copy = made.copy;
+                            backup = made.path;
+                        }
+                        Err(e) => {
+                            err = Some(e);
+                            retval = FAIL;
+                            break '_fail;
+                        }
                     }
                 }
                 made_writable = false_0 != 0;
@@ -529,8 +535,7 @@ pub unsafe extern "C" fn buf_write(
                             } != 0,
                         );
                         if got_int.get() {
-                            err =
-                                set_err(gettext(&raw const e_interr as *const ::core::ffi::c_char));
+                            err = Some(WriteError::shared(e_interr.ptr().cast(), 0));
                             break '_restore_backup;
                         }
                     }
@@ -595,9 +600,8 @@ pub unsafe extern "C" fn buf_write(
                         } else if *p_ccv.get() as ::core::ffi::c_int != NUL {
                             wfname = vim_tempname();
                             if wfname.is_null() {
-                                err = set_err(gettext(
-                                    b"E214: Can't find temp file for writing\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
+                                err = Some(WriteError::plain(
+                                    c"E214: Can't find temp file for writing",
                                 ));
                                 break '_restore_backup;
                             }
@@ -613,10 +617,8 @@ pub unsafe extern "C" fn buf_write(
                         && wfname == fname
                     {
                         if !forceit {
-                            err = set_err(gettext(
-                                b"E213: Cannot convert (add ! to write without conversion)\0"
-                                    .as_ptr()
-                                    as *const ::core::ffi::c_char,
+                            err = Some(WriteError::plain(
+                                c"E213: Cannot convert (add ! to write without conversion)",
                             ));
                             break '_restore_backup;
                         } else {
@@ -657,41 +659,10 @@ pub unsafe extern "C" fn buf_write(
                                 loop {
                                     fd = os_open(wfname, fflags, mode);
                                     if fd < 0 as ::core::ffi::c_int {
-                                        if !err.msg.is_null() {
+                                        if err.is_some() {
                                             break '_restore_backup;
                                         }
-                                        let mut file_info: FileInfo = FileInfo {
-                                            stat: uv_stat_t {
-                                                st_dev: 0,
-                                                st_mode: 0,
-                                                st_nlink: 0,
-                                                st_uid: 0,
-                                                st_gid: 0,
-                                                st_rdev: 0,
-                                                st_ino: 0,
-                                                st_size: 0,
-                                                st_blksize: 0,
-                                                st_blocks: 0,
-                                                st_flags: 0,
-                                                st_gen: 0,
-                                                st_atim: uv_timespec_t {
-                                                    tv_sec: 0,
-                                                    tv_nsec: 0,
-                                                },
-                                                st_mtim: uv_timespec_t {
-                                                    tv_sec: 0,
-                                                    tv_nsec: 0,
-                                                },
-                                                st_ctim: uv_timespec_t {
-                                                    tv_sec: 0,
-                                                    tv_nsec: 0,
-                                                },
-                                                st_birthtim: uv_timespec_t {
-                                                    tv_sec: 0,
-                                                    tv_nsec: 0,
-                                                },
-                                            },
-                                        };
+                                        let mut file_info = FileInfo::default();
                                         if !newfile
                                             && os_fileinfo_hardlinks(&raw mut file_info_old)
                                                 > 1 as uint64_t
@@ -703,21 +674,15 @@ pub unsafe extern "C" fn buf_write(
                                                     &raw mut file_info_old,
                                                 )
                                         {
-                                            err = set_err(gettext(
-                                                b"E166: Can't open linked file for writing\0"
-                                                    .as_ptr()
-                                                    as *const ::core::ffi::c_char,
+                                            err = Some(WriteError::plain(
+                                                c"E166: Can't open linked file for writing",
                                             ));
                                             break '_restore_backup;
                                         } else {
-                                            err = set_err_arg(
-                                                gettext(
-                                                    b"E212: Can't open file for writing: %s\0"
-                                                        .as_ptr()
-                                                        as *const ::core::ffi::c_char,
-                                                ),
+                                            err = Some(WriteError::errno(
+                                                c"E212: Can't open file for writing: %s",
                                                 fd,
-                                            );
+                                            ));
                                             if !(forceit as ::core::ffi::c_int != 0
                                                 && vim_strchr(p_cpo.get(), CPO_FWRITE).is_null()
                                                 && perm >= 0 as ::core::ffi::c_int)
@@ -744,7 +709,7 @@ pub unsafe extern "C" fn buf_write(
                                 }
                             }
                         }
-                        err = set_err(::core::ptr::null::<::core::ffi::c_char>());
+                        err = None;
                         write_info.bw_buf = buffer;
                         nchars = 0 as ::core::ffi::c_int;
                         let mut write_bin: ::core::ffi::c_int = 0;
@@ -909,48 +874,14 @@ pub unsafe extern "C" fn buf_write(
                                     && error != UV_ENOTSUP as ::core::ffi::c_int
                                     && !device
                                 {
-                                    err = set_err_arg(
-                                        &raw const e_fsync as *const ::core::ffi::c_char,
-                                        error,
-                                    );
+                                    err = Some(WriteError::shared(e_fsync.ptr().cast(), error));
                                     end = 0 as ::core::ffi::c_int as linenr_T;
                                 }
                                 if !backup_copy {
                                     os_copy_xattr(backup, wfname);
                                 }
                                 if !backup.is_null() && !backup_copy {
-                                    let mut file_info_0: FileInfo = FileInfo {
-                                        stat: uv_stat_t {
-                                            st_dev: 0,
-                                            st_mode: 0,
-                                            st_nlink: 0,
-                                            st_uid: 0,
-                                            st_gid: 0,
-                                            st_rdev: 0,
-                                            st_ino: 0,
-                                            st_size: 0,
-                                            st_blksize: 0,
-                                            st_blocks: 0,
-                                            st_flags: 0,
-                                            st_gen: 0,
-                                            st_atim: uv_timespec_t {
-                                                tv_sec: 0,
-                                                tv_nsec: 0,
-                                            },
-                                            st_mtim: uv_timespec_t {
-                                                tv_sec: 0,
-                                                tv_nsec: 0,
-                                            },
-                                            st_ctim: uv_timespec_t {
-                                                tv_sec: 0,
-                                                tv_nsec: 0,
-                                            },
-                                            st_birthtim: uv_timespec_t {
-                                                tv_sec: 0,
-                                                tv_nsec: 0,
-                                            },
-                                        },
-                                    };
+                                    let mut file_info_0 = FileInfo::default();
                                     if !os_fileinfo(wfname, &raw mut file_info_0)
                                         || file_info_0.stat.st_uid != file_info_old.stat.st_uid
                                         || file_info_0.stat.st_gid != file_info_old.stat.st_gid
@@ -970,11 +901,7 @@ pub unsafe extern "C" fn buf_write(
                                 }
                                 error = os_close(fd);
                                 if error != 0 as ::core::ffi::c_int {
-                                    err = set_err_arg(
-                                        gettext(b"E512: Close failed: %s\0".as_ptr()
-                                            as *const ::core::ffi::c_char),
-                                        error,
-                                    );
+                                    err = Some(WriteError::errno(c"E512: Close failed: %s", error));
                                     end = 0 as ::core::ffi::c_int as linenr_T;
                                 }
                                 if made_writable {
@@ -1004,39 +931,14 @@ pub unsafe extern "C" fn buf_write(
                                 }
                             }
                             if end == 0 as linenr_T {
-                                if err.msg.is_null() {
-                                    if write_info.bw_conv_error != 0 {
-                                        if write_info.bw_conv_error_lnum == 0 as linenr_T {
-                                            err = set_err(
-                                                gettext(
-                                                    (e_write_error_conversion_failed_make_fenc_empty_to_override.ptr() as *const _)
-                                                        as *const ::core::ffi::c_char,
-                                                ),
-                                            );
-                                        } else {
-                                            err = set_err(xmalloc(300 as size_t)
-                                                as *const ::core::ffi::c_char);
-                                            err.alloc = true_0 != 0;
-                                            vim_snprintf(
-                                                err.msg,
-                                                300 as size_t,
-                                                gettext(
-                                                    (e_write_error_conversion_failed_in_line_nr_make_fenc_empty_to_override.ptr() as *const _)
-                                                        as *const ::core::ffi::c_char,
-                                                ),
-                                                write_info.bw_conv_error_lnum,
-                                            );
-                                        }
+                                if err.is_none() {
+                                    err = Some(if write_info.bw_conv_error != 0 {
+                                        conversion_failed(write_info.bw_conv_error_lnum)
                                     } else if got_int.get() {
-                                        err = set_err(gettext(
-                                            &raw const e_interr as *const ::core::ffi::c_char,
-                                        ));
+                                        WriteError::shared(e_interr.ptr().cast(), 0)
                                     } else {
-                                        err = set_err(gettext(
-                                            (e_write_error_file_system_full.ptr() as *const _)
-                                                as *const ::core::ffi::c_char,
-                                        ));
-                                    }
+                                        WriteError::plain(c"E514: Write error (file system full?)")
+                                    });
                                 }
                                 if !backup.is_null() {
                                     if backup_copy {
@@ -1325,14 +1227,15 @@ pub unsafe extern "C" fn buf_write(
         );
     }
     os_free_acl(acl);
-    if !err.msg.is_null() {
+    if let Some(err) = &err {
+        // -100 to save some space for a further error message.
         add_quoted_fname(
             IObuff.ptr() as *mut ::core::ffi::c_char,
             (IOSIZE - 100 as ::core::ffi::c_int) as size_t,
             buf,
             fname,
         );
-        emit_err(&raw mut err);
+        err.emit();
         retval = FAIL;
         if end == 0 as linenr_T {
             let hl_id: ::core::ffi::c_int = HLF_E as ::core::ffi::c_int;

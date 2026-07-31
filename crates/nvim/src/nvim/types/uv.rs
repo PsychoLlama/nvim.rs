@@ -393,7 +393,7 @@ pub union uv_signal_s_u {
     pub reserved: [*mut ::core::ffi::c_void; 4],
 }
 pub type uv_signal_t = uv_signal_s;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct uv_stat_t {
     pub st_dev: uint64_t,
@@ -529,7 +529,7 @@ pub struct uv_timespec64_t {
     pub tv_nsec: int32_t,
 }
 pub type uv_timer_t = uv_timer_s;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct uv_timespec_t {
     pub tv_sec: ::core::ffi::c_long,
