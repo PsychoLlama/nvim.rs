@@ -1,10 +1,57 @@
+//! Blocks of memory that can be parked in a file — the swap file's
+//! allocator, and the only thing that ever touches a `.swp` page.
+//!
+//! A memfile is a sequence of fixed-size pages. [`memline`] asks for a block
+//! of one or more pages, fills it, and hands it back; the memfile decides
+//! whether that block lives in memory, in the file, or both. Everything
+//! above this file addresses blocks by number and never sees an offset.
+//!
+//! [`memline`]: crate::src::nvim::memline
+//!
+//! # Block numbers
+//!
+//! A non-negative block number *is* the page number in the file: block `n`
+//! starts at `n * mf_page_size`. Negative numbers are blocks that have never
+//! been written, handed out counting down from −1. When such a block finally
+//! reaches the file it gets a fresh non-negative number, and the old-to-new
+//! mapping is remembered in `mf_trans` until its one reader —
+//! [`mf_trans_del`] — collects it. That is why a pointer block on disk can
+//! still name a negative child: the parent was written first.
+//!
+//! # What lives where
+//!
+//! * `mf_used` — every block currently in memory, owned. Blocks are pinned
+//!   ([`Box`]), because callers hold a `*mut bhdr_T` across further memfile
+//!   calls; the table only ever moves the box, never the block.
+//! * `mf_free` — page runs inside the file that no block uses any more, as
+//!   a stack. Upstream threads these through the `bh_data` field of the
+//!   headers it keeps alive; there is nothing in a free block but its
+//!   number and length, so this keeps only that.
+//! * `mf_trans` — the negative-to-positive renumbering above.
+//!
+//! Block *data* is still `xmalloc`ed rather than owned by a Rust container:
+//! [`memline`] reinterprets `bh_data` as its own on-disk structs, which need
+//! more alignment than a byte buffer promises. [`bhdr_T`]'s [`Drop`] is what
+//! guarantees it is released exactly once.
+//!
+//! # Order is load-bearing
+//!
+//! `mf_used` iterates in insertion order and removal swaps the last block
+//! into the hole — the same dense-array behaviour the khash-derived
+//! `PMap(int64_t)` this replaced had. [`mf_sync`] writes blocks in that
+//! order (and the order decides which block's bytes fill a gap in the file,
+//! so it is visible in the swap file), [`mf_get`] re-appends the block it
+//! hands out, and [`mf_release_all`] walks the table by index while removing
+//! from it.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::hash::{BuildHasherDefault, Hasher};
+use std::collections::HashMap;
+
 use crate::src::nvim::fileio::{read_eintr, write_eintr};
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{did_swapwrite_msg, e_swapclose, firstbuf, got_int, main_loop};
-use crate::src::nvim::map::{
-    map_del_int64_t_int64_t, map_del_int64_t_ptr_t, map_put_ref_int64_t_int64_t,
-    map_put_ref_int64_t_ptr_t, map_ref_int64_t_int64_t, mh_get_int64_t,
-};
 use crate::src::nvim::memline::{ml_get_buf, ml_open_file};
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::message::{emsg, iemsg, semsg};
@@ -13,815 +60,840 @@ use crate::src::nvim::os::fs::{
     os_set_cloexec,
 };
 use crate::src::nvim::os::input::{os_breakcheck, os_char_avail};
-use crate::src::nvim::os::libc::{
-    __assert_fail, __errno_location, close, gettext, lseek, memset, strerror,
-};
+use crate::src::nvim::os::libc::{__errno_location, close, gettext, lseek, strerror};
 use crate::src::nvim::path::FullName_save;
-use crate::src::nvim::types::{
-    __off_t, FileInfo, Map_int64_t_int64_t, Map_int64_t_ptr_t, MapHash, Set_int64_t, bhdr_T,
-    blocknr_T, buf_T, int64_t, linenr_T, memfile_T, mfdirty_T, off_T, ptr_t, size_t, uint32_t,
-    uint64_t, uv_stat_t, uv_timespec_t,
-};
-pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
-pub const MF_DIRTY_YES: mfdirty_T = 1;
+use crate::src::nvim::types::{FileInfo, blocknr_T, buf_T, mfdirty_T, off_T};
+
 pub const MF_DIRTY_NO: mfdirty_T = 0;
-pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const MFS_ZERO: C2Rust_Unnamed_26 = 8;
-pub const MFS_FLUSH: C2Rust_Unnamed_26 = 4;
-pub const MFS_STOP: C2Rust_Unnamed_26 = 2;
-pub const MFS_ALL: C2Rust_Unnamed_26 = 1;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const MAX_SWAP_PAGE_SIZE: C2Rust_Unnamed_27 = 50000;
-pub const MIN_SWAP_PAGE_SIZE: C2Rust_Unnamed_27 = 1048;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const O_RDWR: ::core::ffi::c_int = 0o2 as ::core::ffi::c_int;
-pub const O_CREAT: ::core::ffi::c_int = 0o100 as ::core::ffi::c_int;
-pub const O_EXCL: ::core::ffi::c_int = 0o200 as ::core::ffi::c_int;
-pub const O_TRUNC: ::core::ffi::c_int = 0o1000 as ::core::ffi::c_int;
-pub const __O_NOFOLLOW: ::core::ffi::c_int = 0o400000 as ::core::ffi::c_int;
-pub const O_NOFOLLOW: ::core::ffi::c_int = __O_NOFOLLOW;
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const S_IRUSR: ::core::ffi::c_int = __S_IREAD;
-pub const S_IWUSR: ::core::ffi::c_int = __S_IWRITE;
-pub const S_IREAD: ::core::ffi::c_int = S_IRUSR;
-pub const S_IWRITE: ::core::ffi::c_int = S_IWUSR;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
-};
-pub const SET_INIT: Set_int64_t = Set_int64_t {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut::<int64_t>(),
-};
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe extern "C" fn map_put_int64_t_int64_t(
-    mut map: *mut Map_int64_t_int64_t,
-    mut key: int64_t,
-    mut value: int64_t,
-) {
-    let mut val: *mut int64_t = map_put_ref_int64_t_int64_t(
-        map,
-        key,
-        ::core::ptr::null_mut::<*mut int64_t>(),
-        ::core::ptr::null_mut::<bool>(),
-    );
-    *val = value;
+pub const MF_DIRTY_YES: mfdirty_T = 1;
+pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
+
+/// Sync every block, not just the ones with a file block number.
+pub const MFS_ALL: c_int = 1;
+/// Stop as soon as a character is typed (but write at least one block).
+pub const MFS_STOP: c_int = 2;
+/// Push the file to the platter, so it survives a crash.
+pub const MFS_FLUSH: c_int = 4;
+/// Write block zero and nothing else.
+pub const MFS_ZERO: c_int = 8;
+
+/// The block is locked in memory: a caller is holding it.
+pub const BH_LOCKED: c_uint = 2;
+/// The block has changed since it was last written.
+pub const BH_DIRTY: c_uint = 1;
+
+/// Page size to use when the device will not say.
+pub const MEMFILE_PAGE_SIZE: c_uint = 4096;
+/// A device block size outside this range is not believed.
+pub const MIN_SWAP_PAGE_SIZE: u64 = 1048;
+pub const MAX_SWAP_PAGE_SIZE: u64 = 50000;
+
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+const O_RDWR: c_int = 0o2;
+const O_CREAT: c_int = 0o100;
+const O_EXCL: c_int = 0o200;
+const O_TRUNC: c_int = 0o1000;
+const O_NOFOLLOW: c_int = 0o400000;
+const SEEK_SET: c_int = 0;
+const SEEK_END: c_int = 2;
+/// `S_IREAD | S_IWRITE`: the mode a swap file is created with.
+const SWAPFILE_MODE: c_int = 0o400 | 0o200;
+
+/// One block: a run of `bh_page_count` pages, and the memory holding them.
+///
+/// `bh_data` is an `xmalloc`ed buffer of `page_count * mf_page_size` bytes
+/// that [`memline`](crate::src::nvim::memline) casts to its own block
+/// structs. It is released by [`Drop`], so a block is freed by dropping the
+/// box that owns it and no other way.
+pub struct bhdr_T {
+    /// The block number, which is also the key it is filed under.
+    pub bh_bnum: blocknr_T,
+    pub bh_data: *mut c_void,
+    pub bh_page_count: c_uint,
+    /// [`BH_DIRTY`] and/or [`BH_LOCKED`].
+    pub bh_flags: c_uint,
 }
-#[inline]
-unsafe extern "C" fn map_get_int64_t_ptr_t(
-    mut map: *mut Map_int64_t_ptr_t,
-    mut key: int64_t,
-) -> ptr_t {
-    let mut k: uint32_t = mh_get_int64_t(&raw mut (*map).set, key);
-    return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t.get()
-    } else {
-        *(*map).values.offset(k as isize)
-    };
-}
-#[inline]
-unsafe extern "C" fn map_put_int64_t_ptr_t(
-    mut map: *mut Map_int64_t_ptr_t,
-    mut key: int64_t,
-    mut value: ptr_t,
-) {
-    let mut val: *mut ptr_t = map_put_ref_int64_t_ptr_t(
-        map,
-        key,
-        ::core::ptr::null_mut::<*mut int64_t>(),
-        ::core::ptr::null_mut::<bool>(),
-    );
-    *val = value;
-}
-pub const BH_DIRTY: ::core::ffi::c_uint = 1 as ::core::ffi::c_uint;
-pub const BH_LOCKED: ::core::ffi::c_uint = 2 as ::core::ffi::c_uint;
-pub const MEMFILE_PAGE_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-static e_block_was_not_locked: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E293: Block was not locked\0")
-});
-pub unsafe extern "C" fn mf_open(
-    mut fname: *mut ::core::ffi::c_char,
-    mut flags: ::core::ffi::c_int,
-) -> *mut memfile_T {
-    let mut mfp: *mut memfile_T = xmalloc(::core::mem::size_of::<memfile_T>()) as *mut memfile_T;
-    if fname.is_null() {
-        (*mfp).mf_fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        (*mfp).mf_ffname = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        (*mfp).mf_fd = -1 as ::core::ffi::c_int;
-    } else if !mf_do_open(mfp, fname, flags) {
-        xfree(mfp as *mut ::core::ffi::c_void);
-        return ::core::ptr::null_mut::<memfile_T>();
+
+impl bhdr_T {
+    /// A block of `page_count` pages, zeroed.
+    ///
+    /// The zeroing is not just hygiene: a page written to the swap file
+    /// straight from `malloc` would carry whatever the last owner of that
+    /// memory held — up to and including the contents of a file the user
+    /// read earlier in the session.
+    fn new(page_size: c_uint, page_count: c_uint) -> Box<Self> {
+        let bytes = page_size as usize * page_count as usize;
+        // SAFETY: xmalloc either answers `bytes` writable bytes or exits,
+        // and the buffer is untyped, so any bit pattern is valid in it.
+        let data = unsafe {
+            let data = xmalloc(bytes);
+            data.write_bytes(0, bytes);
+            data
+        };
+        Box::new(bhdr_T {
+            bh_bnum: 0,
+            bh_data: data,
+            bh_page_count: page_count,
+            bh_flags: 0,
+        })
     }
-    (*mfp).mf_free_first = ::core::ptr::null_mut::<bhdr_T>();
-    (*mfp).mf_dirty = MF_DIRTY_NO;
-    (*mfp).mf_hash = Map_int64_t_ptr_t {
-        set: SET_INIT,
-        values: ::core::ptr::null_mut::<ptr_t>(),
-    };
-    (*mfp).mf_trans = Map_int64_t_int64_t {
-        set: SET_INIT,
-        values: ::core::ptr::null_mut::<int64_t>(),
-    };
-    (*mfp).mf_page_size = MEMFILE_PAGE_SIZE as ::core::ffi::c_uint;
-    let mut file_info: FileInfo = FileInfo {
-        stat: uv_stat_t {
-            st_dev: 0,
-            st_mode: 0,
-            st_nlink: 0,
-            st_uid: 0,
-            st_gid: 0,
-            st_rdev: 0,
-            st_ino: 0,
-            st_size: 0,
-            st_blksize: 0,
-            st_blocks: 0,
-            st_flags: 0,
-            st_gen: 0,
-            st_atim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_mtim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_ctim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_birthtim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-        },
-    };
-    if (*mfp).mf_fd >= 0 as ::core::ffi::c_int
-        && os_fileinfo_fd((*mfp).mf_fd, &raw mut file_info) as ::core::ffi::c_int != 0
-    {
-        let mut blocksize: uint64_t = os_fileinfo_blocksize(&raw mut file_info);
-        if blocksize >= MIN_SWAP_PAGE_SIZE as ::core::ffi::c_int as uint64_t
-            && blocksize <= MAX_SWAP_PAGE_SIZE as ::core::ffi::c_int as uint64_t
-        {
-            (*mfp).mf_page_size = blocksize as ::core::ffi::c_uint;
+}
+
+impl Drop for bhdr_T {
+    fn drop(&mut self) {
+        // SAFETY: `bh_data` came from `xmalloc` in `new` and nothing else
+        // frees it — the field is never reassigned.
+        unsafe { xfree(self.bh_data) };
+    }
+}
+
+/// A run of pages in the file that no block uses.
+#[derive(Clone, Copy)]
+struct FreeBlock {
+    bnum: blocknr_T,
+    page_count: c_uint,
+}
+
+/// Mixes a block number so the top bits — which the hash table probes
+/// first — depend on all of it. Block numbers are small and consecutive,
+/// which the identity hash spreads badly and SipHash costs too much for.
+#[derive(Default)]
+struct BlockNrHasher(u64);
+
+impl Hasher for BlockNrHasher {
+    fn write_i64(&mut self, n: i64) {
+        // splitmix64's finalizer.
+        let mut z = n as u64;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        self.0 = z ^ (z >> 31);
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.write_i64((self.0 as i64).wrapping_mul(31).wrapping_add(b as i64));
         }
     }
-    let mut size: off_T = 0;
-    if (*mfp).mf_fd < 0 as ::core::ffi::c_int || flags & (O_TRUNC | O_EXCL) != 0 || {
-        size = lseek((*mfp).mf_fd, 0 as __off_t, SEEK_END) as off_T;
-        size <= 0 as off_T
-    } {
-        (*mfp).mf_blocknr_max = 0 as blocknr_T;
-    } else {
-        '_c2rust_label: {
-            if ::core::mem::size_of::<off_T>() <= ::core::mem::size_of::<blocknr_T>()
-                && (*mfp).mf_page_size > 0 as ::core::ffi::c_uint
-                && (*mfp).mf_page_size.wrapping_sub(1 as ::core::ffi::c_uint) as ::core::ffi::c_long
-                    <= 9223372036854775807 as off_T - size
-            {
-            } else {
-                __assert_fail(
-                    b"sizeof(off_T) <= sizeof(blocknr_T) && mfp->mf_page_size > 0 && mfp->mf_page_size - 1 <= INT64_MAX - size\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/memfile.rs\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    133 as ::core::ffi::c_uint,
-                    b"memfile_T *mf_open(char *, int)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
+
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
+/// The blocks that are in memory, in insertion order, found by number.
+///
+/// See the module docs: both the order and the swap-into-the-hole removal
+/// are observable, so this is an index map rather than a plain [`HashMap`].
+#[derive(Default)]
+struct BlockTable {
+    blocks: Vec<Box<bhdr_T>>,
+    index: HashMap<blocknr_T, u32, BuildHasherDefault<BlockNrHasher>>,
+}
+
+impl BlockTable {
+    fn len(&self) -> usize {
+        self.blocks.len()
+    }
+
+    /// The `i`-th block in iteration order. Callers walk by index because
+    /// the table can change under them.
+    #[inline]
+    fn at(&mut self, i: usize) -> *mut bhdr_T {
+        &raw mut *self.blocks[i]
+    }
+
+    #[inline]
+    fn get(&mut self, nr: blocknr_T) -> Option<*mut bhdr_T> {
+        let i = *self.index.get(&nr)? as usize;
+        Some(&raw mut *self.blocks[i])
+    }
+
+    /// File `block` under its own number, at the end of the order.
+    #[inline]
+    fn insert(&mut self, block: Box<bhdr_T>) -> *mut bhdr_T {
+        let nr = block.bh_bnum;
+        self.blocks.push(block);
+        let i = self.blocks.len() - 1;
+        let previous = self.index.insert(nr, i as u32);
+        debug_assert!(previous.is_none(), "memfile: block {nr} filed twice");
+        &raw mut *self.blocks[i]
+    }
+
+    /// Take the block numbered `nr` out, moving the last one into its slot.
+    #[inline]
+    fn remove(&mut self, nr: blocknr_T) -> Option<Box<bhdr_T>> {
+        let i = self.index.remove(&nr)? as usize;
+        let block = self.blocks.swap_remove(i);
+        if let Some(moved) = self.blocks.get(i) {
+            self.index.insert(moved.bh_bnum, i as u32);
+        }
+        Some(block)
+    }
+}
+
+/// A memory file: the blocks of one buffer's swap file, and the file.
+///
+/// `mf_fname`/`mf_ffname` are still C strings because every reader of them
+/// is still transpiled; both are owned and released by [`mf_free_fnames`].
+pub struct memfile_T {
+    /// Name of the swap file, as given.
+    pub mf_fname: *mut c_char,
+    /// The same name, as a full path.
+    pub mf_ffname: *mut c_char,
+    /// Descriptor of the open swap file, or −1 for memory only.
+    pub mf_fd: c_int,
+    /// The flags `mf_fd` was opened with, for reopening it.
+    pub mf_flags: c_int,
+    /// `mf_fd` was lost and should be reopened on the next write.
+    pub mf_reopen: bool,
+    /// Blocks in memory. See the module docs.
+    used: BlockTable,
+    /// Unused page runs in the file, most recently freed last.
+    free: Vec<FreeBlock>,
+    /// Negative block number to the file block number it was given.
+    trans: HashMap<blocknr_T, blocknr_T, BuildHasherDefault<BlockNrHasher>>,
+    /// Highest file block number handed out, plus one.
+    pub mf_blocknr_max: blocknr_T,
+    /// Lowest memory-only block number handed out, minus one.
+    pub mf_blocknr_min: blocknr_T,
+    /// How many memory-only block numbers are outstanding.
+    pub mf_neg_count: blocknr_T,
+    /// How many pages the file holds.
+    pub mf_infile_count: blocknr_T,
+    pub mf_page_size: c_uint,
+    pub mf_dirty: mfdirty_T,
+}
+
+/// Open a new or existing memory file.
+///
+/// `fname` is the swap file to use, or null for memory only. It must be
+/// allocated, and is consumed either way — including when opening fails,
+/// which answers null.
+pub unsafe fn mf_open(fname: *mut c_char, flags: c_int) -> *mut memfile_T {
+    let mfp = Box::into_raw(Box::new(memfile_T {
+        mf_fname: core::ptr::null_mut(),
+        mf_ffname: core::ptr::null_mut(),
+        mf_fd: -1,
+        mf_flags: 0,
+        mf_reopen: false,
+        used: BlockTable::default(),
+        free: Vec::new(),
+        trans: HashMap::default(),
+        mf_blocknr_max: 0,
+        mf_blocknr_min: -1,
+        mf_neg_count: 0,
+        mf_infile_count: 0,
+        mf_page_size: MEMFILE_PAGE_SIZE,
+        mf_dirty: MF_DIRTY_NO,
+    }));
+
+    unsafe {
+        if !fname.is_null() && !mf_do_open(mfp, fname, flags) {
+            drop(Box::from_raw(mfp));
+            return core::ptr::null_mut();
+        }
+
+        // Match the page size to the device's block size when we can: it
+        // makes every read and write a whole number of device blocks.
+        let mut file_info: FileInfo = core::mem::zeroed();
+        if (*mfp).mf_fd >= 0 && os_fileinfo_fd((*mfp).mf_fd, &raw mut file_info) {
+            let blocksize = os_fileinfo_blocksize(&raw mut file_info);
+            if (MIN_SWAP_PAGE_SIZE..=MAX_SWAP_PAGE_SIZE).contains(&blocksize) {
+                (*mfp).mf_page_size = blocksize as c_uint;
             }
+        }
+
+        // When recovering, the real page size comes out of block zero later
+        // (`ml_recover` calls `mf_new_page_size`), so the size used here may
+        // be too small and the block count is rounded up.
+        let size = if (*mfp).mf_fd < 0 || flags & (O_TRUNC | O_EXCL) != 0 {
+            0
+        } else {
+            lseek((*mfp).mf_fd, 0, SEEK_END) as off_T
         };
-        (*mfp).mf_blocknr_max = (size as blocknr_T + (*mfp).mf_page_size as blocknr_T
-            - 1 as blocknr_T)
-            / (*mfp).mf_page_size as blocknr_T;
+        (*mfp).mf_blocknr_max = if size <= 0 {
+            0
+        } else {
+            assert!(
+                (*mfp).mf_page_size > 0 && (*mfp).mf_page_size as off_T - 1 <= off_T::MAX - size,
+                "memfile: swap file too large for its page size"
+            );
+            (size + (*mfp).mf_page_size as blocknr_T - 1) / (*mfp).mf_page_size as blocknr_T
+        };
+        (*mfp).mf_infile_count = (*mfp).mf_blocknr_max;
     }
-    (*mfp).mf_blocknr_min = -1 as blocknr_T;
-    (*mfp).mf_neg_count = 0 as blocknr_T;
-    (*mfp).mf_infile_count = (*mfp).mf_blocknr_max;
-    return mfp;
+
+    mfp
 }
-pub unsafe extern "C" fn mf_open_file(
-    mut mfp: *mut memfile_T,
-    mut fname: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if mf_do_open(mfp, fname, O_RDWR | O_CREAT | O_EXCL) {
-        (*mfp).mf_dirty = MF_DIRTY_YES;
-        return OK;
+
+/// Give an existing memory file a swap file, as `'updatecount'` going from
+/// zero to non-zero does. `fname` is consumed as in [`mf_open`].
+pub unsafe fn mf_open_file(mfp: *mut memfile_T, fname: *mut c_char) -> c_int {
+    unsafe {
+        if mf_do_open(mfp, fname, O_RDWR | O_CREAT | O_EXCL) {
+            (*mfp).mf_dirty = MF_DIRTY_YES;
+            OK
+        } else {
+            FAIL
+        }
     }
-    return FAIL;
 }
-pub unsafe extern "C" fn mf_close(mut mfp: *mut memfile_T, mut del_file: bool) {
+
+/// Close a memory file, releasing every block, and delete the swap file if
+/// `del_file`.
+pub unsafe fn mf_close(mfp: *mut memfile_T, del_file: bool) {
     if mfp.is_null() {
         return;
     }
-    if (*mfp).mf_fd >= 0 as ::core::ffi::c_int && close((*mfp).mf_fd) < 0 as ::core::ffi::c_int {
-        emsg(gettext(
-            &raw const e_swapclose as *const ::core::ffi::c_char,
-        ));
-    }
-    if del_file as ::core::ffi::c_int != 0 && !(*mfp).mf_fname.is_null() {
-        os_remove((*mfp).mf_fname);
-    }
-    let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
-    let mut __i: uint32_t = 0;
-    __i = 0 as uint32_t;
-    while __i < (*mfp).mf_hash.set.h.n_keys {
-        hp = *(*mfp).mf_hash.values.offset(__i as isize) as *mut bhdr_T;
-        mf_free_bhdr(hp);
-        __i = __i.wrapping_add(1);
-    }
-    while !(*mfp).mf_free_first.is_null() {
-        xfree(mf_rem_free(mfp) as *mut ::core::ffi::c_void);
-    }
-    xfree((*mfp).mf_hash.set.keys as *mut ::core::ffi::c_void);
-    xfree((*mfp).mf_hash.set.h.hash as *mut ::core::ffi::c_void);
-    (*mfp).mf_hash.set = SET_INIT;
-    let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut (*mfp).mf_hash.values as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL_0;
-    let _ = *ptr_;
-    xfree((*mfp).mf_trans.set.keys as *mut ::core::ffi::c_void);
-    xfree((*mfp).mf_trans.set.h.hash as *mut ::core::ffi::c_void);
-    (*mfp).mf_trans.set = SET_INIT;
-    let mut ptr__0: *mut *mut ::core::ffi::c_void =
-        &raw mut (*mfp).mf_trans.values as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr__0);
-    *ptr__0 = NULL_0;
-    let _ = *ptr__0;
-    mf_free_fnames(mfp);
-    xfree(mfp as *mut ::core::ffi::c_void);
-}
-pub unsafe extern "C" fn mf_close_file(mut buf: *mut buf_T, mut getlines: bool) {
-    let mut mfp: *mut memfile_T = (*buf).b_ml.ml_mfp;
-    if mfp.is_null() || (*mfp).mf_fd < 0 as ::core::ffi::c_int {
-        return;
-    }
-    if getlines {
-        let mut lnum: linenr_T = 1 as linenr_T;
-        while lnum <= (*buf).b_ml.ml_line_count {
-            ml_get_buf(buf, lnum);
-            lnum += 1;
+    unsafe {
+        if (*mfp).mf_fd >= 0 && close((*mfp).mf_fd) < 0 {
+            emsg(gettext(e_swapclose.ptr().cast::<c_char>()));
         }
-    }
-    if close((*mfp).mf_fd) < 0 as ::core::ffi::c_int {
-        emsg(gettext(
-            &raw const e_swapclose as *const ::core::ffi::c_char,
-        ));
-    }
-    (*mfp).mf_fd = -1 as ::core::ffi::c_int;
-    if !(*mfp).mf_fname.is_null() {
-        os_remove((*mfp).mf_fname);
+        if del_file && !(*mfp).mf_fname.is_null() {
+            os_remove((*mfp).mf_fname);
+        }
         mf_free_fnames(mfp);
+        // Dropping the memfile drops every block it still owns.
+        drop(Box::from_raw(mfp));
     }
 }
-pub unsafe extern "C" fn mf_new_page_size(
-    mut mfp: *mut memfile_T,
-    mut new_size: ::core::ffi::c_uint,
-) {
-    (*mfp).mf_page_size = new_size;
+
+/// Close and delete the swap file of `buf`, keeping the memory file. Used
+/// when `'swapfile'` is reset.
+///
+/// `getlines` first pulls every line into memory — clumsy, but the blocks
+/// still in the file are about to become unreachable.
+pub unsafe fn mf_close_file(buf: *mut buf_T, getlines: bool) {
+    unsafe {
+        let mfp = (*buf).b_ml.ml_mfp;
+        if mfp.is_null() || (*mfp).mf_fd < 0 {
+            return;
+        }
+
+        if getlines {
+            for lnum in 1..=(*buf).b_ml.ml_line_count {
+                ml_get_buf(buf, lnum);
+            }
+        }
+
+        if close((*mfp).mf_fd) < 0 {
+            emsg(gettext(e_swapclose.ptr().cast::<c_char>()));
+        }
+        (*mfp).mf_fd = -1;
+
+        if !(*mfp).mf_fname.is_null() {
+            os_remove((*mfp).mf_fname);
+            mf_free_fnames(mfp);
+        }
+    }
 }
-pub unsafe extern "C" fn mf_new(
-    mut mfp: *mut memfile_T,
-    mut negative: bool,
-    mut page_count: ::core::ffi::c_uint,
-) -> *mut bhdr_T {
-    let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
-    let mut freep: *mut bhdr_T = (*mfp).mf_free_first;
-    if !negative && !freep.is_null() && (*freep).bh_page_count >= page_count {
-        if (*freep).bh_page_count > page_count {
-            hp = mf_alloc_bhdr(mfp, page_count);
-            (*hp).bh_bnum = (*freep).bh_bnum;
-            (*freep).bh_bnum += page_count as blocknr_T;
-            (*freep).bh_page_count = (*freep).bh_page_count.wrapping_sub(page_count);
-        } else {
-            let mut p: *mut ::core::ffi::c_void =
-                xmalloc(((*mfp).mf_page_size as size_t).wrapping_mul(page_count as size_t));
-            hp = mf_rem_free(mfp);
-            (*hp).bh_data = p;
-        }
-    } else {
-        hp = mf_alloc_bhdr(mfp, page_count);
-        if negative {
-            let c2rust_fresh0 = (*mfp).mf_blocknr_min;
-            (*mfp).mf_blocknr_min = (*mfp).mf_blocknr_min - 1;
-            (*hp).bh_bnum = c2rust_fresh0;
-            (*mfp).mf_neg_count += 1;
-        } else {
-            (*hp).bh_bnum = (*mfp).mf_blocknr_max;
-            (*mfp).mf_blocknr_max += page_count as blocknr_T;
-        }
-    }
-    (*hp).bh_flags = BH_LOCKED | BH_DIRTY;
-    (*mfp).mf_dirty = MF_DIRTY_YES;
-    (*hp).bh_page_count = page_count;
-    map_put_int64_t_ptr_t(
-        &raw mut (*mfp).mf_hash,
-        (*hp).bh_bnum as int64_t,
-        hp as ptr_t,
-    );
-    memset(
-        (*hp).bh_data,
-        0 as ::core::ffi::c_int,
-        ((*mfp).mf_page_size as size_t).wrapping_mul(page_count as size_t),
-    );
-    return hp;
+
+/// Set the page size, once block zero of an existing swap file has said what
+/// it really is.
+pub unsafe fn mf_new_page_size(mfp: *mut memfile_T, new_size: c_uint) {
+    unsafe { (*mfp).mf_page_size = new_size };
 }
-pub unsafe extern "C" fn mf_get(
-    mut mfp: *mut memfile_T,
-    mut nr: blocknr_T,
-    mut page_count: ::core::ffi::c_uint,
-) -> *mut bhdr_T {
-    if nr >= (*mfp).mf_blocknr_max || nr <= (*mfp).mf_blocknr_min {
-        return ::core::ptr::null_mut::<bhdr_T>();
-    }
-    let mut hp: *mut bhdr_T =
-        map_get_int64_t_ptr_t(&raw mut (*mfp).mf_hash, nr as int64_t) as *mut bhdr_T;
-    if hp.is_null() {
-        if nr < 0 as blocknr_T || nr >= (*mfp).mf_infile_count {
-            return ::core::ptr::null_mut::<bhdr_T>();
-        }
-        if page_count > 0 as ::core::ffi::c_uint {
-            hp = mf_alloc_bhdr(mfp, page_count);
-        }
-        if hp.is_null() {
-            return ::core::ptr::null_mut::<bhdr_T>();
-        }
-        (*hp).bh_bnum = nr;
-        (*hp).bh_flags = 0 as ::core::ffi::c_uint;
-        (*hp).bh_page_count = page_count;
-        if mf_read(mfp, hp) == FAIL {
-            mf_free_bhdr(hp);
-            return ::core::ptr::null_mut::<bhdr_T>();
-        }
-    } else {
-        map_del_int64_t_ptr_t(
-            &raw mut (*mfp).mf_hash,
-            (*hp).bh_bnum as int64_t,
-            ::core::ptr::null_mut::<int64_t>(),
-        );
-    }
-    (*hp).bh_flags |= BH_LOCKED;
-    map_put_int64_t_ptr_t(
-        &raw mut (*mfp).mf_hash,
-        (*hp).bh_bnum as int64_t,
-        hp as ptr_t,
-    );
-    return hp;
-}
-pub unsafe extern "C" fn mf_put(
-    mut mfp: *mut memfile_T,
-    mut hp: *mut bhdr_T,
-    mut dirty: bool,
-    mut infile: bool,
-) {
-    let mut flags: ::core::ffi::c_uint = (*hp).bh_flags;
-    if flags & BH_LOCKED == 0 as ::core::ffi::c_uint {
-        iemsg(gettext(
-            (e_block_was_not_locked.ptr() as *const _) as *const ::core::ffi::c_char,
-        ));
-    }
-    flags &= !BH_LOCKED;
-    if dirty {
-        flags |= BH_DIRTY;
-        if (*mfp).mf_dirty as ::core::ffi::c_uint
-            != MF_DIRTY_YES_NOSYNC as ::core::ffi::c_int as ::core::ffi::c_uint
+
+/// Allocate a new block of `page_count` pages and lock it.
+///
+/// `negative` asks for a memory-only block number, which is what data
+/// blocks get: they are written last, so their numbers are handed out last.
+pub unsafe fn mf_new(mfp: *mut memfile_T, negative: bool, page_count: c_uint) -> *mut bhdr_T {
+    unsafe {
+        let page_size = (*mfp).mf_page_size;
+        let mut block;
+        // Reuse a free run if one is long enough, otherwise take the next
+        // number from whichever end this block belongs to.
+        if let Some(free) = (*mfp).free.last_mut()
+            && !negative
+            && free.page_count >= page_count
         {
-            (*mfp).mf_dirty = MF_DIRTY_YES;
+            block = bhdr_T::new(page_size, page_count);
+            block.bh_bnum = free.bnum;
+            if free.page_count > page_count {
+                free.bnum += page_count as blocknr_T;
+                free.page_count -= page_count;
+            } else {
+                (*mfp).free.pop();
+            }
+        } else {
+            block = bhdr_T::new(page_size, page_count);
+            if negative {
+                block.bh_bnum = (*mfp).mf_blocknr_min;
+                (*mfp).mf_blocknr_min -= 1;
+                (*mfp).mf_neg_count += 1;
+            } else {
+                block.bh_bnum = (*mfp).mf_blocknr_max;
+                (*mfp).mf_blocknr_max += page_count as blocknr_T;
+            }
         }
-    }
-    (*hp).bh_flags = flags;
-    if infile {
-        mf_trans_add(mfp, hp);
+
+        block.bh_flags = BH_LOCKED | BH_DIRTY; // a new block is always dirty
+        (*mfp).mf_dirty = MF_DIRTY_YES;
+        (*mfp).used.insert(block)
     }
 }
-pub unsafe extern "C" fn mf_free(mut mfp: *mut memfile_T, mut hp: *mut bhdr_T) {
-    xfree((*hp).bh_data);
-    map_del_int64_t_ptr_t(
-        &raw mut (*mfp).mf_hash,
-        (*hp).bh_bnum as int64_t,
-        ::core::ptr::null_mut::<int64_t>(),
-    );
-    if (*hp).bh_bnum < 0 as blocknr_T {
-        xfree(hp as *mut ::core::ffi::c_void);
-        (*mfp).mf_neg_count -= 1;
-    } else {
-        mf_ins_free(mfp, hp);
-    };
-}
-pub unsafe extern "C" fn mf_sync(
-    mut mfp: *mut memfile_T,
-    mut flags: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut got_int_save: ::core::ffi::c_int = got_int.get() as ::core::ffi::c_int;
-    if (*mfp).mf_fd < 0 as ::core::ffi::c_int {
-        (*mfp).mf_dirty = MF_DIRTY_NO;
-        return FAIL;
-    }
-    got_int.set(false_0 != 0);
-    let mut status: ::core::ffi::c_int = OK;
-    let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
-    let mut __i: uint32_t = 0;
-    __i = 0 as uint32_t;
-    while __i < (*mfp).mf_hash.set.h.n_keys {
-        hp = *(*mfp).mf_hash.values.offset(__i as isize) as *mut bhdr_T;
-        if (flags & MFS_ALL as ::core::ffi::c_int != 0 || (*hp).bh_bnum >= 0 as blocknr_T)
-            && (*hp).bh_flags & 1 as ::core::ffi::c_uint != 0
-            && (status == 1 as ::core::ffi::c_int
-                || (*hp).bh_bnum >= 0 as blocknr_T && (*hp).bh_bnum < (*mfp).mf_infile_count)
-        {
-            if !(flags & MFS_ZERO as ::core::ffi::c_int != 0 && (*hp).bh_bnum != 0 as blocknr_T) {
-                if mf_write(mfp, hp) == 0 as ::core::ffi::c_int {
-                    if status == 0 as ::core::ffi::c_int {
-                        break;
-                    }
-                    status = 0 as ::core::ffi::c_int;
+
+/// Find block `nr`, reading it from the file if it is not in memory, and
+/// lock it. Answers null if there is no such block.
+///
+/// A negative `nr` must go through [`mf_trans_del`] first.
+pub unsafe fn mf_get(mfp: *mut memfile_T, nr: blocknr_T, page_count: c_uint) -> *mut bhdr_T {
+    unsafe {
+        if nr >= (*mfp).mf_blocknr_max || nr <= (*mfp).mf_blocknr_min {
+            return core::ptr::null_mut();
+        }
+
+        // Taking it out and putting it back is what moves the block to the
+        // end of the sync order.
+        let mut block = match (*mfp).used.remove(nr) {
+            Some(block) => block,
+            None => {
+                // Not in memory. Only a block the file holds can be read
+                // back; a memory-only one is simply gone.
+                if nr < 0 || nr >= (*mfp).mf_infile_count || page_count == 0 {
+                    return core::ptr::null_mut();
                 }
-                if flags & MFS_STOP as ::core::ffi::c_int != 0 {
+                let mut block = bhdr_T::new((*mfp).mf_page_size, page_count);
+                block.bh_bnum = nr;
+                if mf_read(mfp, &mut block) == FAIL {
+                    return core::ptr::null_mut();
+                }
+                block
+            }
+        };
+
+        block.bh_flags |= BH_LOCKED;
+        (*mfp).used.insert(block)
+    }
+}
+
+/// The block numbered `nr` if it is already in memory, or null.
+///
+/// Unlike [`mf_get`] this neither reads the file, nor locks the block, nor
+/// moves it in the sync order. `ml_setflags` uses it to amend block zero
+/// where it lies.
+pub unsafe fn mf_find(mfp: *mut memfile_T, nr: blocknr_T) -> *mut bhdr_T {
+    unsafe { (*mfp).used.get(nr).unwrap_or(core::ptr::null_mut()) }
+}
+
+/// Release a block held by [`mf_get`] or [`mf_new`].
+///
+/// `dirty` says it was changed and has to reach the file; `infile` asks for
+/// its file block number to be settled now, which recovery needs so that a
+/// block already on disk can name it.
+pub unsafe fn mf_put(mfp: *mut memfile_T, hp: *mut bhdr_T, dirty: bool, infile: bool) {
+    unsafe {
+        let mut flags = (*hp).bh_flags;
+        if flags & BH_LOCKED == 0 {
+            iemsg(gettext(c"E293: Block was not locked".as_ptr()));
+        }
+        flags &= !BH_LOCKED;
+        if dirty {
+            flags |= BH_DIRTY;
+            if (*mfp).mf_dirty != MF_DIRTY_YES_NOSYNC {
+                (*mfp).mf_dirty = MF_DIRTY_YES;
+            }
+        }
+        (*hp).bh_flags = flags;
+        if infile {
+            mf_trans_add(mfp, hp);
+        }
+    }
+}
+
+/// Give up a block for good. Its pages in the file, if it has any, go back
+/// on the free list.
+pub unsafe fn mf_free(mfp: *mut memfile_T, hp: *mut bhdr_T) {
+    unsafe {
+        let bnum = (*hp).bh_bnum;
+        let page_count = (*hp).bh_page_count;
+        // Dropping the block frees its data; `hp` dangles from here on.
+        let block = (*mfp).used.remove(bnum);
+        debug_assert!(block.is_some(), "memfile: freeing a block not in memory");
+        drop(block);
+        if bnum < 0 {
+            // Memory-only numbers are never reused, so they do not belong
+            // on the free list.
+            (*mfp).mf_neg_count -= 1;
+        } else {
+            (*mfp).free.push(FreeBlock { bnum, page_count });
+        }
+    }
+}
+
+/// Write out every dirty block, newest first.
+///
+/// `flags` is a set of [`MFS_ALL`], [`MFS_STOP`], [`MFS_FLUSH`] and
+/// [`MFS_ZERO`]. Answers `FAIL` when there is no file or a write failed —
+/// which on a full disk is the common case, so after the first failure only
+/// blocks that already have a place in the file are attempted.
+pub unsafe fn mf_sync(mfp: *mut memfile_T, flags: c_int) -> c_int {
+    unsafe {
+        let got_int_save = got_int.get();
+
+        if (*mfp).mf_fd < 0 {
+            (*mfp).mf_dirty = MF_DIRTY_NO;
+            return FAIL;
+        }
+
+        // Only a CTRL-C typed *while* writing interrupts this, not one
+        // typed earlier.
+        got_int.set(false);
+
+        // Last to first, which makes a half-written file likelier to be
+        // consistent. The last block is typically early in the table.
+        let mut status = OK;
+        let mut visited = false;
+        let mut i = 0;
+        while i < (*mfp).used.len() {
+            let hp = (*mfp).used.at(i);
+            visited = true;
+            let syncable = (flags & MFS_ALL != 0 || (*hp).bh_bnum >= 0)
+                && (*hp).bh_flags & BH_DIRTY != 0
+                && (status == OK || ((*hp).bh_bnum >= 0 && (*hp).bh_bnum < (*mfp).mf_infile_count));
+            if syncable && !(flags & MFS_ZERO != 0 && (*hp).bh_bnum != 0) {
+                if mf_write(mfp, hp) == FAIL {
+                    if status == FAIL {
+                        break; // a second failure: give up
+                    }
+                    status = FAIL;
+                }
+                if flags & MFS_STOP != 0 {
                     if os_char_avail() {
                         break;
                     }
                 } else if (*main_loop.ptr()).recursive == 0 {
+                    // May be reached on OOM inside a libuv callback, where
+                    // the event loop must not be re-entered.
                     os_breakcheck();
                 }
                 if got_int.get() {
                     break;
                 }
             }
+            i += 1;
         }
-        __i = __i.wrapping_add(1);
-    }
-    if hp.is_null() || status == FAIL {
-        (*mfp).mf_dirty = MF_DIRTY_NO;
-    }
-    if flags & MFS_FLUSH as ::core::ffi::c_int != 0 {
-        if os_fsync((*mfp).mf_fd) != 0 {
+
+        // Everything written means nothing is dirty. So does a failure: the
+        // flag is cleared to stop us retrying on every keystroke.
+        if !visited || status == FAIL {
+            (*mfp).mf_dirty = MF_DIRTY_NO;
+        }
+
+        if flags & MFS_FLUSH != 0 && os_fsync((*mfp).mf_fd) != 0 {
             status = FAIL;
         }
+
+        got_int.set(got_int.get() || got_int_save);
+        status
     }
-    got_int.set(got_int.get() as ::core::ffi::c_int | got_int_save != 0);
-    return status;
 }
-pub unsafe extern "C" fn mf_set_dirty(mut mfp: *mut memfile_T) {
-    let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
-    let mut __i: uint32_t = 0;
-    __i = 0 as uint32_t;
-    while __i < (*mfp).mf_hash.set.h.n_keys {
-        hp = *(*mfp).mf_hash.values.offset(__i as isize) as *mut bhdr_T;
-        if (*hp).bh_bnum > 0 as blocknr_T {
-            (*hp).bh_flags |= 1 as ::core::ffi::c_uint;
-        }
-        __i = __i.wrapping_add(1);
-    }
-    (*mfp).mf_dirty = MF_DIRTY_YES;
-}
-pub unsafe extern "C" fn mf_release_all() -> bool {
-    let mut retval: bool = false_0 != 0;
-    let mut buf: *mut buf_T = firstbuf.get();
-    while !buf.is_null() {
-        let mut mfp: *mut memfile_T = (*buf).b_ml.ml_mfp;
-        if !mfp.is_null() {
-            if (*mfp).mf_fd < 0 as ::core::ffi::c_int
-                && (*buf).b_may_swap as ::core::ffi::c_int != 0
-            {
-                ml_open_file(buf);
+
+/// Mark every block that has a place in the file dirty, so a freshly
+/// created swap file gets all of them.
+pub unsafe fn mf_set_dirty(mfp: *mut memfile_T) {
+    unsafe {
+        for i in 0..(*mfp).used.len() {
+            let hp = (*mfp).used.at(i);
+            if (*hp).bh_bnum > 0 {
+                (*hp).bh_flags |= BH_DIRTY;
             }
-            if (*mfp).mf_fd >= 0 as ::core::ffi::c_int {
-                let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while i < (*mfp).mf_hash.set.h.size as ::core::ffi::c_int {
-                    let mut hp: *mut bhdr_T =
-                        *(*mfp).mf_hash.values.offset(i as isize) as *mut bhdr_T;
-                    if (*hp).bh_flags & BH_LOCKED == 0
-                        && ((*hp).bh_flags & BH_DIRTY == 0 || mf_write(mfp, hp) != FAIL)
-                    {
-                        map_del_int64_t_ptr_t(
-                            &raw mut (*mfp).mf_hash,
-                            (*hp).bh_bnum as int64_t,
-                            ::core::ptr::null_mut::<int64_t>(),
-                        );
-                        mf_free_bhdr(hp);
-                        retval = true_0 != 0;
-                    } else {
-                        i += 1;
+        }
+        (*mfp).mf_dirty = MF_DIRTY_YES;
+    }
+}
+
+/// Drop as many cached blocks as possible, for when memory has run out.
+/// Answers whether anything was released.
+pub unsafe fn mf_release_all() -> bool {
+    unsafe {
+        let mut released = false;
+        let mut buf = firstbuf.get();
+        while !buf.is_null() {
+            let mfp = (*buf).b_ml.ml_mfp;
+            if !mfp.is_null() {
+                // Nothing can be released without somewhere to put it.
+                if (*mfp).mf_fd < 0 && (*buf).b_may_swap {
+                    ml_open_file(buf);
+                }
+
+                if (*mfp).mf_fd >= 0 {
+                    let mut i = 0;
+                    while i < (*mfp).used.len() {
+                        let hp = (*mfp).used.at(i);
+                        if (*hp).bh_flags & BH_LOCKED == 0
+                            && ((*hp).bh_flags & BH_DIRTY == 0 || mf_write(mfp, hp) != FAIL)
+                        {
+                            // Dropping it releases the block's pages.
+                            drop((*mfp).used.remove((*hp).bh_bnum));
+                            released = true;
+                            // Stay at `i`: removal moved another block into
+                            // this slot (or that was the last one).
+                        } else {
+                            i += 1;
+                        }
                     }
                 }
             }
+            buf = (*buf).b_next;
         }
-        buf = (*buf).b_next;
+        released
     }
-    return retval;
 }
-unsafe extern "C" fn mf_alloc_bhdr(
-    mut mfp: *mut memfile_T,
-    mut page_count: ::core::ffi::c_uint,
-) -> *mut bhdr_T {
-    let mut hp: *mut bhdr_T = xmalloc(::core::mem::size_of::<bhdr_T>()) as *mut bhdr_T;
-    (*hp).bh_data = xmalloc(((*mfp).mf_page_size as size_t).wrapping_mul(page_count as size_t));
-    (*hp).bh_page_count = page_count;
-    return hp;
-}
-unsafe extern "C" fn mf_free_bhdr(mut hp: *mut bhdr_T) {
-    xfree((*hp).bh_data);
-    xfree(hp as *mut ::core::ffi::c_void);
-}
-unsafe extern "C" fn mf_ins_free(mut mfp: *mut memfile_T, mut hp: *mut bhdr_T) {
-    (*hp).bh_data = (*mfp).mf_free_first as *mut ::core::ffi::c_void;
-    (*mfp).mf_free_first = hp;
-}
-unsafe extern "C" fn mf_rem_free(mut mfp: *mut memfile_T) -> *mut bhdr_T {
-    let mut hp: *mut bhdr_T = (*mfp).mf_free_first;
-    (*mfp).mf_free_first = (*hp).bh_data as *mut bhdr_T;
-    return hp;
-}
-unsafe extern "C" fn mf_read(mut mfp: *mut memfile_T, mut hp: *mut bhdr_T) -> ::core::ffi::c_int {
-    if (*mfp).mf_fd < 0 as ::core::ffi::c_int {
-        return FAIL;
-    }
-    let mut page_size: ::core::ffi::c_uint = (*mfp).mf_page_size;
-    let mut offset: off_T = (page_size as blocknr_T * (*hp).bh_bnum) as off_T;
-    if lseek((*mfp).mf_fd, offset as __off_t, SEEK_SET) != offset {
-        semsg(
-            b"%s: %s\0".as_ptr() as *const ::core::ffi::c_char,
-            gettext(b"E294: Seek error in swap file read\0".as_ptr() as *const ::core::ffi::c_char),
-            strerror(*__errno_location()),
-        );
-        return FAIL;
-    }
-    '_c2rust_label: {
-        if (*hp).bh_page_count
-            <= (2147483647 as ::core::ffi::c_int as ::core::ffi::c_uint)
-                .wrapping_mul(2 as ::core::ffi::c_uint)
-                .wrapping_add(1 as ::core::ffi::c_uint)
-                .wrapping_div(page_size)
-        {
-        } else {
-            __assert_fail(
-                b"hp->bh_page_count <= UINT_MAX / page_size\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/memfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                545 as ::core::ffi::c_uint,
-                b"int mf_read(memfile_T *, bhdr_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+
+/// Read a block's pages from the file.
+unsafe fn mf_read(mfp: *mut memfile_T, hp: &mut bhdr_T) -> c_int {
+    unsafe {
+        if (*mfp).mf_fd < 0 {
+            return FAIL; // there is no file to read
         }
-    };
-    let mut size: ::core::ffi::c_uint = page_size.wrapping_mul((*hp).bh_page_count);
-    if read_eintr((*mfp).mf_fd, (*hp).bh_data, size as size_t) as ::core::ffi::c_uint != size {
-        semsg(
-            b"%s: %s\0".as_ptr() as *const ::core::ffi::c_char,
-            gettext(b"E295: Read error in swap file\0".as_ptr() as *const ::core::ffi::c_char),
-            strerror(*__errno_location()),
-        );
-        return FAIL;
-    }
-    return OK;
-}
-unsafe extern "C" fn mf_write(mut mfp: *mut memfile_T, mut hp: *mut bhdr_T) -> ::core::ffi::c_int {
-    let mut hp2: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
-    let mut page_count: ::core::ffi::c_uint = 0;
-    if (*mfp).mf_fd < 0 as ::core::ffi::c_int && !(*mfp).mf_reopen {
-        return FAIL;
-    }
-    if (*hp).bh_bnum < 0 as blocknr_T {
-        if mf_trans_add(mfp, hp) == FAIL {
+
+        let page_size = (*mfp).mf_page_size;
+        let offset = (page_size as blocknr_T * hp.bh_bnum) as off_T;
+        if lseek((*mfp).mf_fd, offset, SEEK_SET) != offset {
+            perror_msg(c"E294: Seek error in swap file read");
             return FAIL;
         }
+        assert!(
+            hp.bh_page_count <= c_uint::MAX / page_size,
+            "memfile: block longer than the address space"
+        );
+        let size = page_size * hp.bh_page_count;
+        if read_eintr((*mfp).mf_fd, hp.bh_data, size as usize) as c_uint != size {
+            perror_msg(c"E295: Read error in swap file");
+            return FAIL;
+        }
+
+        OK
     }
-    let mut page_size: ::core::ffi::c_uint = (*mfp).mf_page_size;
-    loop {
-        let mut nr: blocknr_T = (*hp).bh_bnum;
-        if nr > (*mfp).mf_infile_count {
-            nr = (*mfp).mf_infile_count;
-            hp2 = map_get_int64_t_ptr_t(&raw mut (*mfp).mf_hash, nr as int64_t) as *mut bhdr_T;
-        } else {
-            hp2 = hp;
+}
+
+/// Write a block's pages to the file, extending it as needed.
+///
+/// The file must have no holes, so writing a block past the end first fills
+/// the space in front of it — with the blocks that belong there, or, where
+/// one of those has been freed, with a copy of this block's bytes as
+/// filler.
+unsafe fn mf_write(mfp: *mut memfile_T, hp: *mut bhdr_T) -> c_int {
+    unsafe {
+        if (*mfp).mf_fd < 0 && !(*mfp).mf_reopen {
+            return FAIL; // there is no file and there never was
         }
-        let mut offset: off_T = (page_size as blocknr_T * nr) as off_T;
-        if hp2.is_null() {
-            page_count = 1 as ::core::ffi::c_uint;
-        } else {
-            page_count = (*hp2).bh_page_count;
+
+        // A memory-only block must be given its place in the file first.
+        if (*hp).bh_bnum < 0 && mf_trans_add(mfp, hp) == FAIL {
+            return FAIL;
         }
-        let mut size: ::core::ffi::c_uint = page_size.wrapping_mul(page_count);
-        let mut attempt: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        while attempt <= 2 as ::core::ffi::c_int {
-            if (*mfp).mf_fd >= 0 as ::core::ffi::c_int {
-                if lseek((*mfp).mf_fd, offset as __off_t, SEEK_SET) != offset {
-                    semsg(
-                        b"%s: %s\0".as_ptr() as *const ::core::ffi::c_char,
-                        gettext(b"E296: Seek error in swap file write\0".as_ptr()
-                            as *const ::core::ffi::c_char),
-                        strerror(*__errno_location()),
-                    );
+
+        let page_size = (*mfp).mf_page_size;
+        loop {
+            let mut nr = (*hp).bh_bnum;
+            let hp2 = if nr > (*mfp).mf_infile_count {
+                nr = (*mfp).mf_infile_count;
+                // Null when the block that belongs here was freed.
+                (*mfp).used.get(nr).unwrap_or(core::ptr::null_mut())
+            } else {
+                hp
+            };
+
+            let offset = (page_size as blocknr_T * nr) as off_T;
+            let page_count = if hp2.is_null() {
+                1
+            } else {
+                (*hp2).bh_page_count
+            };
+            // Upstream lets this wrap, and a line long enough to overflow it
+            // would have overflowed `ml_append_int`'s arithmetic first.
+            let size = page_size.wrapping_mul(page_count);
+
+            for attempt in 1..=2 {
+                if (*mfp).mf_fd >= 0 {
+                    if lseek((*mfp).mf_fd, offset, SEEK_SET) != offset {
+                        perror_msg(c"E296: Seek error in swap file write");
+                        return FAIL;
+                    }
+                    let data = if hp2.is_null() {
+                        (*hp).bh_data
+                    } else {
+                        (*hp2).bh_data
+                    };
+                    if write_eintr((*mfp).mf_fd, data, size as usize) as c_uint == size {
+                        break;
+                    }
+                }
+
+                if attempt == 1 {
+                    // A swap file on a network drive survives the
+                    // connection dropping if we reopen it.
+                    if (*mfp).mf_fd >= 0 {
+                        close((*mfp).mf_fd);
+                    }
+                    (*mfp).mf_fd = os_open((*mfp).mf_fname, (*mfp).mf_flags, SWAPFILE_MODE);
+                    (*mfp).mf_reopen = (*mfp).mf_fd < 0;
+                }
+                if attempt == 2 || (*mfp).mf_fd < 0 {
+                    // Usually a full disk. Keep trying in case space turns
+                    // up, but say so only once, until a write succeeds or
+                    // the user hits a key.
+                    if !did_swapwrite_msg.get() {
+                        emsg(gettext(c"E297: Write error in swap file".as_ptr()));
+                    }
+                    did_swapwrite_msg.set(true);
                     return FAIL;
                 }
-                let mut data: *mut ::core::ffi::c_void = if hp2.is_null() {
-                    (*hp).bh_data
-                } else {
-                    (*hp2).bh_data
-                };
-                if write_eintr((*mfp).mf_fd, data, size as size_t) as ::core::ffi::c_uint == size {
-                    break;
-                }
             }
-            if attempt == 1 as ::core::ffi::c_int {
-                if (*mfp).mf_fd >= 0 as ::core::ffi::c_int {
-                    close((*mfp).mf_fd);
-                }
-                (*mfp).mf_fd = os_open((*mfp).mf_fname, (*mfp).mf_flags, S_IREAD | S_IWRITE);
-                (*mfp).mf_reopen = (*mfp).mf_fd < 0 as ::core::ffi::c_int;
+
+            did_swapwrite_msg.set(false);
+            if !hp2.is_null() {
+                (*hp2).bh_flags &= !BH_DIRTY; // wrote a real block, not filler
             }
-            if attempt == 2 as ::core::ffi::c_int || (*mfp).mf_fd < 0 as ::core::ffi::c_int {
-                if !did_swapwrite_msg.get() {
-                    emsg(gettext(
-                        b"E297: Write error in swap file\0".as_ptr() as *const ::core::ffi::c_char
-                    ));
-                }
-                did_swapwrite_msg.set(true_0 != 0);
-                return FAIL;
+            if nr + page_count as blocknr_T > (*mfp).mf_infile_count {
+                (*mfp).mf_infile_count = nr + page_count as blocknr_T;
             }
-            attempt += 1;
+            if nr == (*hp).bh_bnum {
+                break; // wrote the block we came for
+            }
         }
-        did_swapwrite_msg.set(false_0 != 0);
-        if !hp2.is_null() {
-            (*hp2).bh_flags &= !BH_DIRTY;
-        }
-        if nr + page_count as blocknr_T > (*mfp).mf_infile_count {
-            (*mfp).mf_infile_count = nr + page_count as blocknr_T;
-        }
-        if nr == (*hp).bh_bnum {
-            break;
-        }
+
+        OK
     }
-    return OK;
 }
-unsafe extern "C" fn mf_trans_add(
-    mut mfp: *mut memfile_T,
-    mut hp: *mut bhdr_T,
-) -> ::core::ffi::c_int {
-    if (*hp).bh_bnum >= 0 as blocknr_T {
-        return OK;
-    }
-    let mut new_bnum: blocknr_T = 0;
-    let mut freep: *mut bhdr_T = (*mfp).mf_free_first;
-    let mut page_count: ::core::ffi::c_uint = (*hp).bh_page_count;
-    if !freep.is_null() && (*freep).bh_page_count >= page_count {
-        new_bnum = (*freep).bh_bnum;
-        if (*freep).bh_page_count > page_count {
-            (*freep).bh_bnum += page_count as blocknr_T;
-            (*freep).bh_page_count = (*freep).bh_page_count.wrapping_sub(page_count);
+
+/// Give a memory-only block a place in the file, and remember the
+/// renumbering for [`mf_trans_del`].
+unsafe fn mf_trans_add(mfp: *mut memfile_T, hp: *mut bhdr_T) -> c_int {
+    unsafe {
+        if (*hp).bh_bnum >= 0 {
+            return OK; // already has one
+        }
+
+        // Reuse a free run if one is long enough, as `mf_new` does.
+        let page_count = (*hp).bh_page_count;
+        let new_bnum;
+        if let Some(free) = (*mfp).free.last_mut()
+            && free.page_count >= page_count
+        {
+            new_bnum = free.bnum;
+            if free.page_count > page_count {
+                free.bnum += page_count as blocknr_T;
+                free.page_count -= page_count;
+            } else {
+                (*mfp).free.pop();
+            }
         } else {
-            freep = mf_rem_free(mfp);
-            xfree(freep as *mut ::core::ffi::c_void);
+            new_bnum = (*mfp).mf_blocknr_max;
+            (*mfp).mf_blocknr_max += page_count as blocknr_T;
         }
-    } else {
-        new_bnum = (*mfp).mf_blocknr_max;
-        (*mfp).mf_blocknr_max += page_count as blocknr_T;
+
+        let old_bnum = (*hp).bh_bnum;
+        // Refiling moves the box, never the block, so `hp` stays good.
+        let mut block = (*mfp)
+            .used
+            .remove(old_bnum)
+            .expect("memfile: renumbering a block that is not in memory");
+        block.bh_bnum = new_bnum;
+        (*mfp).used.insert(block);
+        (*mfp).trans.insert(old_bnum, new_bnum);
+
+        OK
     }
-    let mut old_bnum: blocknr_T = (*hp).bh_bnum;
-    map_del_int64_t_ptr_t(
-        &raw mut (*mfp).mf_hash,
-        (*hp).bh_bnum as int64_t,
-        ::core::ptr::null_mut::<int64_t>(),
-    );
-    (*hp).bh_bnum = new_bnum;
-    map_put_int64_t_ptr_t(&raw mut (*mfp).mf_hash, new_bnum as int64_t, hp as ptr_t);
-    map_put_int64_t_int64_t(
-        &raw mut (*mfp).mf_trans,
-        old_bnum as int64_t,
-        new_bnum as int64_t,
-    );
-    return OK;
 }
-pub unsafe extern "C" fn mf_trans_del(mut mfp: *mut memfile_T, mut old_nr: blocknr_T) -> blocknr_T {
-    let mut num: *mut blocknr_T = map_ref_int64_t_int64_t(
-        &raw mut (*mfp).mf_trans,
-        old_nr as int64_t,
-        ::core::ptr::null_mut::<*mut int64_t>(),
-    ) as *mut blocknr_T;
-    if num.is_null() {
-        return old_nr;
+
+/// The file block number a memory-only block was given, consuming the
+/// record of it. Answers `old_nr` unchanged if there is none.
+pub unsafe fn mf_trans_del(mfp: *mut memfile_T, old_nr: blocknr_T) -> blocknr_T {
+    unsafe {
+        match (*mfp).trans.remove(&old_nr) {
+            Some(new_bnum) => {
+                (*mfp).mf_neg_count -= 1;
+                new_bnum
+            }
+            None => old_nr,
+        }
     }
-    (*mfp).mf_neg_count -= 1;
-    let mut new_bnum: blocknr_T = *num;
-    map_del_int64_t_int64_t(
-        &raw mut (*mfp).mf_trans,
-        old_nr as int64_t,
-        ::core::ptr::null_mut::<int64_t>(),
-    );
-    return new_bnum;
 }
-pub unsafe extern "C" fn mf_free_fnames(mut mfp: *mut memfile_T) {
-    let mut ptr_: *mut *mut ::core::ffi::c_void =
-        &raw mut (*mfp).mf_fname as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL_0;
-    let _ = *ptr_;
-    let mut ptr__0: *mut *mut ::core::ffi::c_void =
-        &raw mut (*mfp).mf_ffname as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr__0);
-    *ptr__0 = NULL_0;
-    let _ = *ptr__0;
-}
-pub unsafe extern "C" fn mf_set_fnames(
-    mut mfp: *mut memfile_T,
-    mut fname: *mut ::core::ffi::c_char,
-) {
-    (*mfp).mf_fname = fname;
-    (*mfp).mf_ffname = FullName_save((*mfp).mf_fname, false_0 != 0);
-}
-pub unsafe extern "C" fn mf_fullname(mut mfp: *mut memfile_T) {
-    if mfp.is_null() || (*mfp).mf_fname.is_null() || (*mfp).mf_ffname.is_null() {
-        return;
+
+/// Release the swap file's names.
+pub unsafe fn mf_free_fnames(mfp: *mut memfile_T) {
+    unsafe {
+        xfree((*mfp).mf_fname.cast::<c_void>());
+        (*mfp).mf_fname = core::ptr::null_mut();
+        xfree((*mfp).mf_ffname.cast::<c_void>());
+        (*mfp).mf_ffname = core::ptr::null_mut();
     }
-    xfree((*mfp).mf_fname as *mut ::core::ffi::c_void);
-    (*mfp).mf_fname = (*mfp).mf_ffname;
-    (*mfp).mf_ffname = ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-pub unsafe extern "C" fn mf_need_trans(mut mfp: *mut memfile_T) -> bool {
-    return !(*mfp).mf_fname.is_null() && (*mfp).mf_neg_count > 0 as blocknr_T;
+
+/// Name the swap file. `fname` must be allocated, and is consumed.
+///
+/// Only called when creating or renaming it, so the full path is always
+/// worked out afresh.
+pub unsafe fn mf_set_fnames(mfp: *mut memfile_T, fname: *mut c_char) {
+    unsafe {
+        (*mfp).mf_fname = fname;
+        (*mfp).mf_ffname = FullName_save((*mfp).mf_fname, false);
+    }
 }
-unsafe extern "C" fn mf_do_open(
-    mut mfp: *mut memfile_T,
-    mut fname: *mut ::core::ffi::c_char,
-    mut flags: ::core::ffi::c_int,
-) -> bool {
-    mf_set_fnames(mfp, fname);
-    '_c2rust_label: {
-        if !(*mfp).mf_fname.is_null() {
+
+/// Make the swap file's name absolute — before a `:cd` makes the relative
+/// one mean something else.
+pub unsafe fn mf_fullname(mfp: *mut memfile_T) {
+    unsafe {
+        if mfp.is_null() || (*mfp).mf_fname.is_null() || (*mfp).mf_ffname.is_null() {
+            return;
+        }
+        xfree((*mfp).mf_fname.cast::<c_void>());
+        (*mfp).mf_fname = (*mfp).mf_ffname;
+        (*mfp).mf_ffname = core::ptr::null_mut();
+    }
+}
+
+/// Whether any block still owes the file a number.
+pub unsafe fn mf_need_trans(mfp: *mut memfile_T) -> bool {
+    unsafe { !(*mfp).mf_fname.is_null() && (*mfp).mf_neg_count > 0 }
+}
+
+/// Open the swap file. `fname` must be allocated, and is consumed — also
+/// when this fails, in which case the memfile stays memory-only.
+unsafe fn mf_do_open(mfp: *mut memfile_T, fname: *mut c_char, mut flags: c_int) -> bool {
+    unsafe {
+        // `fname` cannot be NameBuff: it has to have been allocated.
+        mf_set_fnames(mfp, fname);
+        assert!(!(*mfp).mf_fname.is_null());
+
+        // A swap file being created really should not exist yet. If it does
+        // and it is a symlink, this is most likely an attack.
+        let mut file_info: FileInfo = core::mem::zeroed();
+        if flags & O_CREAT != 0 && os_fileinfo_link((*mfp).mf_fname, &raw mut file_info) {
+            (*mfp).mf_fd = -1;
+            emsg(gettext(
+                c"E300: Swap file already exists (symlink attack?)".as_ptr(),
+            ));
         } else {
-            __assert_fail(
-                b"mfp->mf_fname != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/memfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                763 as ::core::ffi::c_uint,
-                b"_Bool mf_do_open(memfile_T *, char *, int)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
+            flags |= O_NOFOLLOW;
+            (*mfp).mf_flags = flags;
+            (*mfp).mf_fd = os_open((*mfp).mf_fname, flags, SWAPFILE_MODE);
         }
-    };
-    let mut file_info: FileInfo = FileInfo {
-        stat: uv_stat_t {
-            st_dev: 0,
-            st_mode: 0,
-            st_nlink: 0,
-            st_uid: 0,
-            st_gid: 0,
-            st_rdev: 0,
-            st_ino: 0,
-            st_size: 0,
-            st_blksize: 0,
-            st_blocks: 0,
-            st_flags: 0,
-            st_gen: 0,
-            st_atim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_mtim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_ctim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            st_birthtim: uv_timespec_t {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-        },
-    };
-    if flags & O_CREAT != 0
-        && os_fileinfo_link((*mfp).mf_fname, &raw mut file_info) as ::core::ffi::c_int != 0
-    {
-        (*mfp).mf_fd = -1 as ::core::ffi::c_int;
-        emsg(gettext(
-            b"E300: Swap file already exists (symlink attack?)\0".as_ptr()
-                as *const ::core::ffi::c_char,
-        ));
-    } else {
-        flags |= O_NOFOLLOW;
-        (*mfp).mf_flags = flags;
-        (*mfp).mf_fd = os_open((*mfp).mf_fname, flags, S_IREAD | S_IWRITE);
+
+        if (*mfp).mf_fd < 0 {
+            mf_free_fnames(mfp);
+            return false;
+        }
+
+        os_set_cloexec((*mfp).mf_fd);
+        true
     }
-    if (*mfp).mf_fd < 0 as ::core::ffi::c_int {
-        mf_free_fnames(mfp);
-        return false_0 != 0;
-    }
-    os_set_cloexec((*mfp).mf_fd);
-    return true_0 != 0;
 }
-pub const __S_IREAD: ::core::ffi::c_int = 0o400 as ::core::ffi::c_int;
-pub const __S_IWRITE: ::core::ffi::c_int = 0o200 as ::core::ffi::c_int;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+/// `PERROR`: an error message with the failing call's `strerror` after it.
+unsafe fn perror_msg(message: &core::ffi::CStr) {
+    unsafe {
+        semsg(
+            c"%s: %s".as_ptr(),
+            gettext(message.as_ptr()),
+            strerror(*__errno_location()),
+        );
+    }
+}

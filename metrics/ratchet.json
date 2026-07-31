@@ -1,7 +1,7 @@
 {
   "internal_exports": 63,
   "files_without_forbid_unsafe": 491,
-  "files_without_deny_unsafe_op": 224,
+  "files_without_deny_unsafe_op": 223,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -271,8 +271,8 @@
     "crates/nvim/src/nvim/marktree/splice.rs": {"no_mangle": 1, "unsafe": 4},
     "crates/nvim/src/nvim/match.rs": {"lines": 2253, "unsafe": 24},
     "crates/nvim/src/nvim/mbyte.rs": {"lines": 5022, "no_mangle": 11, "unsafe": 96},
-    "crates/nvim/src/nvim/memfile.rs": {"unsafe": 29},
-    "crates/nvim/src/nvim/memline.rs": {"lines": 5714, "unsafe": 88},
+    "crates/nvim/src/nvim/memfile.rs": {"unsafe": 25},
+    "crates/nvim/src/nvim/memline.rs": {"lines": 5713, "unsafe": 88},
     "crates/nvim/src/nvim/memory.rs": {"no_mangle": 11, "unsafe": 45},
     "crates/nvim/src/nvim/menu.rs": {"lines": 3281, "unsafe": 45},
     "crates/nvim/src/nvim/message.rs": {"lines": 6290, "no_mangle": 4, "unsafe": 138, "variadic": 8},

@@ -29,7 +29,7 @@ use crate::src::nvim::mbyte::{
     mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len,
 };
 use crate::src::nvim::memfile::{
-    mf_close, mf_close_file, mf_free, mf_free_fnames, mf_get, mf_need_trans, mf_new,
+    mf_close, mf_close_file, mf_find, mf_free, mf_free_fnames, mf_get, mf_need_trans, mf_new,
     mf_new_page_size, mf_open, mf_open_file, mf_put, mf_set_dirty, mf_set_fnames, mf_sync,
     mf_trans_del,
 };
@@ -5193,8 +5193,7 @@ pub unsafe extern "C" fn ml_setflags(mut buf: *mut buf_T) {
     if (*buf).b_ml.ml_mfp.is_null() {
         return;
     }
-    let mut hp: *mut bhdr_T =
-        map_get_int64_t_ptr_t(&raw mut (*(*buf).b_ml.ml_mfp).mf_hash, 0 as int64_t) as *mut bhdr_T;
+    let mut hp: *mut bhdr_T = mf_find((*buf).b_ml.ml_mfp, 0 as blocknr_T);
     if !hp.is_null() {
         let mut b0p: *mut ZeroBlock = (*hp).bh_data as *mut ZeroBlock;
         (*b0p).b0_fname
