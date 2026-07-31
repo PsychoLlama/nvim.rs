@@ -17,24 +17,17 @@ use crate::src::nvim::vterm::state::{
 use crate::src::nvim::vterm::text::save_cursor;
 use crate::src::nvim::vterm::vterm::{
     MOUSE_RXVT, MOUSE_SGR, MOUSE_UTF8, MOUSE_X10, VTERM_PROP_ALTSCREEN, VTERM_PROP_CURSORBLINK,
-    VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORVISIBLE, VTERM_PROP_FOCUSREPORT, VTERM_PROP_MOUSE,
-    VTERM_PROP_REVERSE, VTERM_PROP_SYNCOUTPUT, VTERM_PROP_THEMEUPDATES,
+    VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORSHAPE_BLOCK, VTERM_PROP_CURSORVISIBLE,
+    VTERM_PROP_FOCUSREPORT, VTERM_PROP_MOUSE, VTERM_PROP_MOUSE_CLICK, VTERM_PROP_MOUSE_DRAG,
+    VTERM_PROP_MOUSE_MOVE, VTERM_PROP_MOUSE_NONE, VTERM_PROP_REVERSE, VTERM_PROP_SYNCOUTPUT,
+    VTERM_PROP_THEMEUPDATES, VTERM_VERSION_MAJOR, VTERM_VERSION_MINOR,
 };
 
 /// The version this terminal claims to be, for XTVERSION.
-const VTERM_VERSION_MAJOR: c_int = 0;
-const VTERM_VERSION_MINOR: c_int = 3;
 
 /// The shapes `VTERM_PROP_CURSORSHAPE` can take.
-pub const VTERM_PROP_CURSORSHAPE_BLOCK: c_int = 1;
-pub const VTERM_PROP_CURSORSHAPE_UNDERLINE: c_int = 2;
-pub const VTERM_PROP_CURSORSHAPE_BAR_LEFT: c_int = 3;
 
 /// The pointer-tracking levels `VTERM_PROP_MOUSE` can take.
-pub const VTERM_PROP_MOUSE_NONE: c_int = 0;
-pub const VTERM_PROP_MOUSE_CLICK: c_int = 1;
-pub const VTERM_PROP_MOUSE_DRAG: c_int = 2;
-pub const VTERM_PROP_MOUSE_MOVE: c_int = 3;
 
 /// The progressive-enhancement bits of the kitty keyboard protocol.
 /// <https://sw.kovidgoyal.net/kitty/keyboard-protocol/#progressive-enhancement>

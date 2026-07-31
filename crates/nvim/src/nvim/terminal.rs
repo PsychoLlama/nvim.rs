@@ -68,11 +68,10 @@ use crate::src::nvim::types::builders::{DictBuf, static_cstring};
 use crate::src::nvim::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::src::nvim::types::{
     Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode, Object, OptVal,
-    OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermAttr, VTermColor,
-    VTermColor_rgb, VTermDamageSize, VTermScreenCell, VTermScreenCellAttrs, VTermState,
-    VTermTerminator, VTermValue, VTermValueType, VimVarIndex, aco_save_T, buf_T, colnr_T, exarg_T,
-    handle_T, int16_t, kObjectTypeNil, kObjectTypeString, linenr_T, pos_T, ptr_t, save_v_event_T,
-    size_t, tabpage_T, uint8_t, varnumber_T, win_T,
+    OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
+    VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, VimVarIndex, aco_save_T, buf_T,
+    colnr_T, exarg_T, handle_T, int16_t, kObjectTypeNil, kObjectTypeString, linenr_T, pos_T, ptr_t,
+    save_v_event_T, size_t, tabpage_T, uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::vterm::parser::vterm_input_write;
 use crate::src::nvim::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -85,10 +84,13 @@ use crate::src::nvim::vterm::state::{
     vterm_obtain_state, vterm_state_set_selection_callbacks, vterm_state_set_termprop,
 };
 use crate::src::nvim::vterm::vterm::{
-    VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE, vterm_free, vterm_get_size, vterm_new,
+    VTERM_COLOR_DEFAULT_BG, VTERM_COLOR_DEFAULT_FG, VTERM_COLOR_INDEXED, VTERM_COLOR_RGB,
+    VTERM_COLOR_TYPE_MASK, VTERM_DAMAGE_SCROLL, VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE,
+    VTERM_PROP_CURSORSHAPE_BAR_LEFT, VTERM_PROP_CURSORSHAPE_BLOCK,
+    VTERM_PROP_CURSORSHAPE_UNDERLINE, vterm_free, vterm_get_size, vterm_new,
     vterm_output_set_callback, vterm_set_size, vterm_set_utf8,
 };
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
 
@@ -126,22 +128,9 @@ const AUGROUP_ALL: c_int = -3;
 const VV_TERMREQUEST: VimVarIndex = 10;
 
 /// vterm's cursor shapes, which are DECSCUSR's rather than the editor's.
-const VTERM_PROP_CURSORSHAPE_BLOCK: c_int = 1;
-const VTERM_PROP_CURSORSHAPE_UNDERLINE: c_int = 2;
-const VTERM_PROP_CURSORSHAPE_BAR_LEFT: c_int = 3;
-const VTERM_VALUETYPE_INT: VTermValueType = 2;
-const VTERM_ATTR_URI: VTermAttr = 13;
 /// Merge damage reports up to a whole scrolled region before delivering
 /// them; the refresh works in row ranges anyway.
-const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
 /// An escape sequence ended with BEL rather than ST.
-const VTERM_TERMINATOR_BEL: VTermTerminator = 0;
-
-const VTERM_COLOR_TYPE_MASK: c_int = 1;
-const VTERM_COLOR_RGB: c_int = 0;
-const VTERM_COLOR_INDEXED: c_int = 1;
-const VTERM_COLOR_DEFAULT_FG: c_int = 2;
-const VTERM_COLOR_DEFAULT_BG: c_int = 4;
 
 /// One entry of an `int -> ptr` map, or null.
 ///
@@ -678,10 +667,14 @@ pub unsafe fn terminal_get_line_attributes(
             // False for a scrollback cell past the end of a row stored while
             // the terminal was narrower; such a cell has no colours at all.
             let color_valid = fetch_cell(term, row, col, &raw mut cell);
-            let fg_default = !color_valid || cell.fg.type_0 as c_int & VTERM_COLOR_DEFAULT_FG != 0;
-            let bg_default = !color_valid || cell.bg.type_0 as c_int & VTERM_COLOR_DEFAULT_BG != 0;
-            let fg_indexed = cell.fg.type_0 as c_int & VTERM_COLOR_TYPE_MASK == VTERM_COLOR_INDEXED;
-            let bg_indexed = cell.bg.type_0 as c_int & VTERM_COLOR_TYPE_MASK == VTERM_COLOR_INDEXED;
+            let fg_default =
+                !color_valid || c_uint::from(cell.fg.type_0) & VTERM_COLOR_DEFAULT_FG != 0;
+            let bg_default =
+                !color_valid || c_uint::from(cell.bg.type_0) & VTERM_COLOR_DEFAULT_BG != 0;
+            let fg_indexed =
+                c_uint::from(cell.fg.type_0) & VTERM_COLOR_TYPE_MASK == VTERM_COLOR_INDEXED;
+            let bg_indexed =
+                c_uint::from(cell.bg.type_0) & VTERM_COLOR_TYPE_MASK == VTERM_COLOR_INDEXED;
 
             // The cterm colour is one-based so that zero can mean "unset".
             let vt_fg_idx: int16_t = if !fg_default && fg_indexed {

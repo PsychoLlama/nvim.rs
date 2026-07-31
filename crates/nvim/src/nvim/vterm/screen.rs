@@ -23,28 +23,23 @@ use crate::src::nvim::types::{
 use crate::src::nvim::vterm::cell::{
     SCHAR_CONTINUATION, blank_cells, erased_pen, export_pen, import_row,
 };
-use crate::src::nvim::vterm::damage::{
-    Damage, NO_RECT, VTERM_DAMAGE_CELL, VTERM_DAMAGE_SCROLL, follow_scroll, intersects,
-    merge_damage,
-};
-use crate::src::nvim::vterm::pen::{
-    VTERM_ATTR_BACKGROUND, VTERM_ATTR_BASELINE, VTERM_ATTR_BLINK, VTERM_ATTR_BOLD,
-    VTERM_ATTR_CONCEAL, VTERM_ATTR_DIM, VTERM_ATTR_FONT, VTERM_ATTR_FOREGROUND, VTERM_ATTR_ITALIC,
-    VTERM_ATTR_OVERLINE, VTERM_ATTR_REVERSE, VTERM_ATTR_SMALL, VTERM_ATTR_STRIKE,
-    VTERM_ATTR_UNDERLINE, VTERM_ATTR_URI, convert_color_to_rgb,
-};
+use crate::src::nvim::vterm::damage::{Damage, NO_RECT, follow_scroll, intersects, merge_damage};
+use crate::src::nvim::vterm::pen::convert_color_to_rgb;
 use crate::src::nvim::vterm::state::{
     vterm_obtain_state, vterm_state_get_lineinfo, vterm_state_reset, vterm_state_set_callbacks,
     vterm_state_set_unrecognised_fallbacks,
 };
 use crate::src::nvim::vterm::vterm::{
-    vterm_alloc, vterm_dealloc, vterm_get_size, vterm_scroll_rect,
+    VTERM_ATTR_BACKGROUND, VTERM_ATTR_BASELINE, VTERM_ATTR_BLINK, VTERM_ATTR_BOLD,
+    VTERM_ATTR_CONCEAL, VTERM_ATTR_DIM, VTERM_ATTR_FONT, VTERM_ATTR_FOREGROUND, VTERM_ATTR_ITALIC,
+    VTERM_ATTR_OVERLINE, VTERM_ATTR_REVERSE, VTERM_ATTR_SMALL, VTERM_ATTR_STRIKE,
+    VTERM_ATTR_UNDERLINE, VTERM_ATTR_URI, VTERM_DAMAGE_CELL, VTERM_DAMAGE_SCROLL,
+    VTERM_PROP_ALTSCREEN, VTERM_PROP_REVERSE, vterm_alloc, vterm_dealloc, vterm_get_size,
+    vterm_scroll_rect,
 };
 
 /// The terminal property that swaps the alternate screen buffer in and out.
-const VTERM_PROP_ALTSCREEN: VTermProp = 3;
 /// The terminal property that reverses the whole screen at once.
-const VTERM_PROP_REVERSE: VTermProp = 6;
 pub const BUFIDX_PRIMARY: usize = 0;
 pub const BUFIDX_ALTSCREEN: usize = 1;
 

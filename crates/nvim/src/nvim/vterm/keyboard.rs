@@ -13,22 +13,13 @@ use crate::src::nvim::types::{
     VTerm, VTermKey, VTermKeyEncodingFlags, VTermModifier, VTermState, uint32_t,
 };
 use crate::src::nvim::vterm::output::EscapeSeq;
-use crate::src::nvim::vterm::vterm::vterm_push_output_bytes;
+use crate::src::nvim::vterm::vterm::{
+    VTERM_KEY_BACKSPACE, VTERM_KEY_ENTER, VTERM_KEY_FUNCTION_0, VTERM_KEY_FUNCTION_MAX,
+    VTERM_KEY_KP_0, VTERM_KEY_NONE, VTERM_KEY_TAB, VTERM_MOD_ALT, VTERM_MOD_CTRL, VTERM_MOD_NONE,
+    VTERM_MOD_SHIFT, vterm_push_output_bytes,
+};
 use core::ffi::{c_char, c_int};
 use core::fmt::Write;
-
-const VTERM_MOD_NONE: VTermModifier = 0;
-const VTERM_MOD_SHIFT: VTermModifier = 1;
-const VTERM_MOD_ALT: VTermModifier = 2;
-const VTERM_MOD_CTRL: VTermModifier = 4;
-
-const VTERM_KEY_NONE: VTermKey = 0;
-const VTERM_KEY_ENTER: VTermKey = 1;
-const VTERM_KEY_TAB: VTermKey = 2;
-const VTERM_KEY_BACKSPACE: VTermKey = 3;
-const VTERM_KEY_FUNCTION_0: VTermKey = 256;
-const VTERM_KEY_FUNCTION_MAX: VTermKey = 511;
-const VTERM_KEY_KP_0: VTermKey = 512;
 
 /// How a special key is spelled on the wire.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

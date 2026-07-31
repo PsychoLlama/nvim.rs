@@ -17,7 +17,15 @@ use crate::src::nvim::types::{
     VTermValueType,
 };
 use crate::src::nvim::vterm::color::{ColorValue, ansi_default, fixed_palette};
-use crate::src::nvim::vterm::vterm::vterm_get_attr_type;
+use crate::src::nvim::vterm::vterm::{
+    VTERM_ATTR_BACKGROUND, VTERM_ATTR_BASELINE, VTERM_ATTR_BLINK, VTERM_ATTR_BOLD,
+    VTERM_ATTR_CONCEAL, VTERM_ATTR_DIM, VTERM_ATTR_FONT, VTERM_ATTR_FOREGROUND, VTERM_ATTR_ITALIC,
+    VTERM_ATTR_OVERLINE, VTERM_ATTR_REVERSE, VTERM_ATTR_SMALL, VTERM_ATTR_STRIKE,
+    VTERM_ATTR_UNDERLINE, VTERM_ATTR_URI, VTERM_BASELINE_LOWER, VTERM_BASELINE_NORMAL,
+    VTERM_BASELINE_RAISE, VTERM_COLOR_DEFAULT_BG, VTERM_COLOR_DEFAULT_FG, VTERM_COLOR_DEFAULT_MASK,
+    VTERM_COLOR_INDEXED, VTERM_COLOR_RGB, VTERM_COLOR_TYPE_MASK, VTERM_UNDERLINE_CURLY,
+    VTERM_UNDERLINE_DOUBLE, VTERM_UNDERLINE_OFF, VTERM_UNDERLINE_SINGLE, vterm_get_attr_type,
+};
 
 /// Set on a control-sequence parameter that is followed by a sub-parameter,
 /// i.e. one written `38:5:1` rather than `38;5;1`.
@@ -27,40 +35,9 @@ pub const CSI_ARG_MASK: c_uint = !((1 as c_uint) << 31);
 /// The value the parser leaves for an omitted parameter.
 pub const CSI_ARG_MISSING: c_long = 2147483647;
 
-pub const VTERM_ATTR_BOLD: VTermAttr = 1;
-pub const VTERM_ATTR_UNDERLINE: VTermAttr = 2;
-pub const VTERM_ATTR_ITALIC: VTermAttr = 3;
-pub const VTERM_ATTR_BLINK: VTermAttr = 4;
-pub const VTERM_ATTR_REVERSE: VTermAttr = 5;
-pub const VTERM_ATTR_CONCEAL: VTermAttr = 6;
-pub const VTERM_ATTR_STRIKE: VTermAttr = 7;
-pub const VTERM_ATTR_FONT: VTermAttr = 8;
-pub const VTERM_ATTR_FOREGROUND: VTermAttr = 9;
-pub const VTERM_ATTR_BACKGROUND: VTermAttr = 10;
-pub const VTERM_ATTR_SMALL: VTermAttr = 11;
-pub const VTERM_ATTR_BASELINE: VTermAttr = 12;
-pub const VTERM_ATTR_URI: VTermAttr = 13;
-pub const VTERM_ATTR_DIM: VTermAttr = 14;
-pub const VTERM_ATTR_OVERLINE: VTermAttr = 15;
-
-pub const VTERM_UNDERLINE_OFF: c_uint = 0;
-pub const VTERM_UNDERLINE_SINGLE: c_uint = 1;
-pub const VTERM_UNDERLINE_DOUBLE: c_uint = 2;
-pub const VTERM_UNDERLINE_CURLY: c_uint = 3;
-
-pub const VTERM_BASELINE_NORMAL: c_uint = 0;
-pub const VTERM_BASELINE_RAISE: c_uint = 1;
-pub const VTERM_BASELINE_LOWER: c_uint = 2;
-
 /// Bit 0 of a colour's type byte says which representation is live.
-pub const VTERM_COLOR_TYPE_MASK: c_uint = 1;
-pub const VTERM_COLOR_RGB: c_uint = 0;
-pub const VTERM_COLOR_INDEXED: c_uint = 1;
 /// Bits 1-2 mark a colour as *being* the terminal's default foreground or
 /// background, which keeps it out of an SGR report entirely.
-pub const VTERM_COLOR_DEFAULT_FG: c_uint = 2;
-pub const VTERM_COLOR_DEFAULT_BG: c_uint = 4;
-pub const VTERM_COLOR_DEFAULT_MASK: c_uint = 6;
 
 // ---------------------------------------------------------------- colours
 

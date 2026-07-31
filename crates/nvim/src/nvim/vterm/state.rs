@@ -37,8 +37,9 @@ use crate::src::nvim::vterm::screen::{BUFIDX_ALTSCREEN, BUFIDX_PRIMARY};
 use crate::src::nvim::vterm::vterm::{
     MOUSE_X10, VTERM_PROP_ALTSCREEN, VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE,
     VTERM_PROP_CURSORVISIBLE, VTERM_PROP_FOCUSREPORT, VTERM_PROP_ICONNAME, VTERM_PROP_MOUSE,
-    VTERM_PROP_REVERSE, VTERM_PROP_SYNCOUTPUT, VTERM_PROP_THEMEUPDATES, VTERM_PROP_TITLE,
-    vterm_alloc, vterm_dealloc, vterm_push_output_bytes, vterm_scroll_rect,
+    VTERM_PROP_MOUSE_DRAG, VTERM_PROP_MOUSE_MOVE, VTERM_PROP_REVERSE, VTERM_PROP_SYNCOUTPUT,
+    VTERM_PROP_THEMEUPDATES, VTERM_PROP_TITLE, vterm_alloc, vterm_dealloc, vterm_push_output_bytes,
+    vterm_scroll_rect,
 };
 use crate::src::nvim::vterm::{csi, dcs, mode, selection, text};
 
@@ -915,10 +916,10 @@ pub unsafe extern "C" fn vterm_state_set_termprop(
             if level != 0 {
                 state.mouse_flags |= MOUSE_WANT_CLICK;
             }
-            if level == mode::VTERM_PROP_MOUSE_DRAG {
+            if level == VTERM_PROP_MOUSE_DRAG {
                 state.mouse_flags |= MOUSE_WANT_DRAG;
             }
-            if level == mode::VTERM_PROP_MOUSE_MOVE {
+            if level == VTERM_PROP_MOUSE_MOVE {
                 state.mouse_flags |= MOUSE_WANT_MOVE;
             }
         }

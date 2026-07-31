@@ -12,13 +12,13 @@ use core::fmt::Write;
 use crate::src::nvim::types::{VTermRect, VTermState};
 use crate::src::nvim::vterm::geometry::{DHL_OFF, DWL_OFF};
 use crate::src::nvim::vterm::mode;
-use crate::src::nvim::vterm::mode::{
-    VTERM_PROP_CURSORSHAPE_BAR_LEFT, VTERM_PROP_CURSORSHAPE_BLOCK, VTERM_PROP_CURSORSHAPE_UNDERLINE,
-};
 use crate::src::nvim::vterm::output::EscapeSeq;
 use crate::src::nvim::vterm::pen::{CSI_ARG_MASK, CSI_ARG_MISSING};
 use crate::src::nvim::vterm::state::{PenChange, vterm_primary_device_attr};
-use crate::src::nvim::vterm::vterm::{VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE};
+use crate::src::nvim::vterm::vterm::{
+    VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE, VTERM_PROP_CURSORSHAPE_BAR_LEFT,
+    VTERM_PROP_CURSORSHAPE_BLOCK, VTERM_PROP_CURSORSHAPE_UNDERLINE,
+};
 
 /// What became of a control sequence.
 pub(super) enum Outcome {

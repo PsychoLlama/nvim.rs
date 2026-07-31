@@ -11,12 +11,12 @@ use core::ffi::{c_char, c_int, c_long};
 use core::fmt::Write;
 
 use crate::src::nvim::types::{VTermState, VTermStringFragment};
-use crate::src::nvim::vterm::mode::{
-    VTERM_PROP_CURSORSHAPE_BAR_LEFT, VTERM_PROP_CURSORSHAPE_BLOCK, VTERM_PROP_CURSORSHAPE_UNDERLINE,
-};
 use crate::src::nvim::vterm::output::EscapeSeq;
 use crate::src::nvim::vterm::pen::{CSI_ARG_FLAG_MORE, CSI_ARG_MASK, pen_sgr_params};
 use crate::src::nvim::vterm::state::fragment_bytes;
+use crate::src::nvim::vterm::vterm::{
+    VTERM_PROP_CURSORSHAPE_BAR_LEFT, VTERM_PROP_CURSORSHAPE_BLOCK, VTERM_PROP_CURSORSHAPE_UNDERLINE,
+};
 
 /// Handles a device control string, reporting whether it was recognised.
 pub(super) fn device_control(

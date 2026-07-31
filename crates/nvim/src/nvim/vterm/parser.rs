@@ -10,11 +10,9 @@
 use crate::src::nvim::types::{
     VTerm, VTermParserCallbacks, VTermParserState, VTermStringFragment, VTermTerminator, size_t,
 };
+use crate::src::nvim::vterm::vterm::{VTERM_TERMINATOR_BEL, VTERM_TERMINATOR_ST};
 use core::ffi::{c_char, c_int, c_long, c_void};
 use core::slice;
-
-const VTERM_TERMINATOR_BEL: VTermTerminator = 0;
-const VTERM_TERMINATOR_ST: VTermTerminator = 1;
 
 /// Intermediate bytes held for an escape or control sequence.
 const INTERMED_MAX: usize = 16;

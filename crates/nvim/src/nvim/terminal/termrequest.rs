@@ -32,10 +32,8 @@ use crate::src::nvim::vterm::pen::set_pen_attr;
 use crate::src::nvim::vterm::state::vterm_obtain_state;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-use super::{
-    AUGROUP_ALL, VTERM_ATTR_URI, VTERM_TERMINATOR_BEL, VTERM_VALUETYPE_INT, VV_TERMREQUEST,
-    buf_for_handle, row_to_linenr, terminal_send,
-};
+use super::{AUGROUP_ALL, VV_TERMREQUEST, buf_for_handle, row_to_linenr, terminal_send};
+use crate::src::nvim::vterm::vterm::{VTERM_ATTR_URI, VTERM_TERMINATOR_BEL, VTERM_VALUETYPE_INT};
 
 /// The sequences vterm hands over rather than acting on itself.
 ///

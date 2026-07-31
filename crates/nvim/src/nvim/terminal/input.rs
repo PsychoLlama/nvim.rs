@@ -64,47 +64,19 @@ use core::ffi::{c_char, c_int};
 
 use super::refresh::invalidate_terminal;
 use super::terminal_send;
+use crate::src::nvim::vterm::vterm::{
+    VTERM_KEY_BACKSPACE, VTERM_KEY_DEL, VTERM_KEY_DOWN, VTERM_KEY_END, VTERM_KEY_ENTER,
+    VTERM_KEY_ESCAPE, VTERM_KEY_FUNCTION_0, VTERM_KEY_HOME, VTERM_KEY_INS, VTERM_KEY_KP_0,
+    VTERM_KEY_KP_1, VTERM_KEY_KP_2, VTERM_KEY_KP_3, VTERM_KEY_KP_4, VTERM_KEY_KP_5, VTERM_KEY_KP_6,
+    VTERM_KEY_KP_7, VTERM_KEY_KP_8, VTERM_KEY_KP_9, VTERM_KEY_KP_DIVIDE, VTERM_KEY_KP_ENTER,
+    VTERM_KEY_KP_MINUS, VTERM_KEY_KP_MULT, VTERM_KEY_KP_PERIOD, VTERM_KEY_KP_PLUS, VTERM_KEY_LEFT,
+    VTERM_KEY_NONE, VTERM_KEY_PAGEDOWN, VTERM_KEY_PAGEUP, VTERM_KEY_RIGHT, VTERM_KEY_TAB,
+    VTERM_KEY_UP, VTERM_MOD_ALT, VTERM_MOD_CTRL, VTERM_MOD_NONE, VTERM_MOD_SHIFT,
+};
 
 // vterm's key names, from libvterm's `VTermKey`. Copies, as everything the
 // vendored emulator exports is: `vterm/keyboard.rs` keeps its own set.
-const VTERM_KEY_NONE: VTermKey = 0;
-const VTERM_KEY_ENTER: VTermKey = 1;
-const VTERM_KEY_TAB: VTermKey = 2;
-const VTERM_KEY_BACKSPACE: VTermKey = 3;
-const VTERM_KEY_ESCAPE: VTermKey = 4;
-const VTERM_KEY_UP: VTermKey = 5;
-const VTERM_KEY_DOWN: VTermKey = 6;
-const VTERM_KEY_LEFT: VTermKey = 7;
-const VTERM_KEY_RIGHT: VTermKey = 8;
-const VTERM_KEY_INS: VTermKey = 9;
-const VTERM_KEY_DEL: VTermKey = 10;
-const VTERM_KEY_HOME: VTermKey = 11;
-const VTERM_KEY_END: VTermKey = 12;
-const VTERM_KEY_PAGEUP: VTermKey = 13;
-const VTERM_KEY_PAGEDOWN: VTermKey = 14;
 /// Function keys are `FUNCTION_0 + n`; see [`function_key`].
-const VTERM_KEY_FUNCTION_0: VTermKey = 256;
-const VTERM_KEY_KP_0: VTermKey = 512;
-const VTERM_KEY_KP_1: VTermKey = 513;
-const VTERM_KEY_KP_2: VTermKey = 514;
-const VTERM_KEY_KP_3: VTermKey = 515;
-const VTERM_KEY_KP_4: VTermKey = 516;
-const VTERM_KEY_KP_5: VTermKey = 517;
-const VTERM_KEY_KP_6: VTermKey = 518;
-const VTERM_KEY_KP_7: VTermKey = 519;
-const VTERM_KEY_KP_8: VTermKey = 520;
-const VTERM_KEY_KP_9: VTermKey = 521;
-const VTERM_KEY_KP_MULT: VTermKey = 522;
-const VTERM_KEY_KP_PLUS: VTermKey = 523;
-const VTERM_KEY_KP_MINUS: VTermKey = 525;
-const VTERM_KEY_KP_PERIOD: VTermKey = 526;
-const VTERM_KEY_KP_DIVIDE: VTermKey = 527;
-const VTERM_KEY_KP_ENTER: VTermKey = 528;
-
-const VTERM_MOD_NONE: VTermModifier = 0;
-const VTERM_MOD_SHIFT: VTermModifier = 1;
-const VTERM_MOD_ALT: VTermModifier = 2;
-const VTERM_MOD_CTRL: VTermModifier = 4;
 
 const MOD_MASK_SHIFT: c_int = 0x2;
 const MOD_MASK_CTRL: c_int = 0x4;

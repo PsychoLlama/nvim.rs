@@ -10,16 +10,14 @@
 use core::ffi::c_int;
 
 use crate::src::nvim::types::{VTermDamageSize, VTermRect};
+use crate::src::nvim::vterm::vterm::{
+    VTERM_DAMAGE_CELL, VTERM_DAMAGE_ROW, VTERM_DAMAGE_SCREEN, VTERM_DAMAGE_SCROLL,
+};
 
 /// The `start_row` a screen's pending rectangle carries when there is none.
 pub const NO_RECT: c_int = -1;
 
 /// How much the screen batches up before telling the host.
-pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
-pub const VTERM_DAMAGE_ROW: VTermDamageSize = 1;
-pub const VTERM_DAMAGE_SCREEN: VTermDamageSize = 2;
-pub const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
-pub const VTERM_N_DAMAGES: VTermDamageSize = 4;
 
 /// What a freshly damaged rectangle means for the host.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

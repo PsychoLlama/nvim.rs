@@ -9,9 +9,9 @@ use core::ffi::{c_char, c_int, c_uint, c_void};
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::os::libc::memset;
 use crate::src::nvim::types::{
-    VTerm, VTermAttr, VTermDamageSize, VTermOutputCallback, VTermParserState, VTermProp, VTermRect,
-    VTermSelectionMask, VTermState_mouse_protocol, VTermState_tmp_selection_state, VTermTerminator,
-    VTermValueType, size_t,
+    VTerm, VTermAttr, VTermDamageSize, VTermKey, VTermModifier, VTermOutputCallback,
+    VTermParserState, VTermProp, VTermRect, VTermSelectionMask, VTermState_mouse_protocol,
+    VTermState_tmp_selection_state, VTermTerminator, VTermValueType, size_t,
 };
 use crate::src::nvim::vterm::screen::vterm_screen_free;
 use crate::src::nvim::vterm::state::vterm_state_free;
@@ -102,6 +102,72 @@ pub const VTERM_VALUETYPE_INT: VTermValueType = 2;
 pub const VTERM_VALUETYPE_STRING: VTermValueType = 3;
 pub const VTERM_VALUETYPE_COLOR: VTermValueType = 4;
 pub const VTERM_N_VALUETYPES: VTermValueType = 5;
+/// The libvterm version this emulator was ported from.
+pub const VTERM_VERSION_MAJOR: c_int = 0;
+pub const VTERM_VERSION_MINOR: c_int = 3;
+/// The emulator's key names, from libvterm's `VTermKey`.
+pub const VTERM_KEY_NONE: VTermKey = 0;
+pub const VTERM_KEY_ENTER: VTermKey = 1;
+pub const VTERM_KEY_TAB: VTermKey = 2;
+pub const VTERM_KEY_BACKSPACE: VTermKey = 3;
+pub const VTERM_KEY_ESCAPE: VTermKey = 4;
+pub const VTERM_KEY_UP: VTermKey = 5;
+pub const VTERM_KEY_DOWN: VTermKey = 6;
+pub const VTERM_KEY_LEFT: VTermKey = 7;
+pub const VTERM_KEY_RIGHT: VTermKey = 8;
+pub const VTERM_KEY_INS: VTermKey = 9;
+pub const VTERM_KEY_DEL: VTermKey = 10;
+pub const VTERM_KEY_HOME: VTermKey = 11;
+pub const VTERM_KEY_END: VTermKey = 12;
+pub const VTERM_KEY_PAGEUP: VTermKey = 13;
+pub const VTERM_KEY_PAGEDOWN: VTermKey = 14;
+pub const VTERM_KEY_FUNCTION_0: VTermKey = 256;
+pub const VTERM_KEY_FUNCTION_MAX: VTermKey = 511;
+pub const VTERM_KEY_KP_0: VTermKey = 512;
+pub const VTERM_KEY_KP_1: VTermKey = 513;
+pub const VTERM_KEY_KP_2: VTermKey = 514;
+pub const VTERM_KEY_KP_3: VTermKey = 515;
+pub const VTERM_KEY_KP_4: VTermKey = 516;
+pub const VTERM_KEY_KP_5: VTermKey = 517;
+pub const VTERM_KEY_KP_6: VTermKey = 518;
+pub const VTERM_KEY_KP_7: VTermKey = 519;
+pub const VTERM_KEY_KP_8: VTermKey = 520;
+pub const VTERM_KEY_KP_9: VTermKey = 521;
+pub const VTERM_KEY_KP_MULT: VTermKey = 522;
+pub const VTERM_KEY_KP_PLUS: VTermKey = 523;
+pub const VTERM_KEY_KP_MINUS: VTermKey = 525;
+pub const VTERM_KEY_KP_PERIOD: VTermKey = 526;
+pub const VTERM_KEY_KP_DIVIDE: VTermKey = 527;
+pub const VTERM_KEY_KP_ENTER: VTermKey = 528;
+/// The modifier bits a key or mouse event carries.
+pub const VTERM_MOD_NONE: VTermModifier = 0;
+pub const VTERM_MOD_SHIFT: VTermModifier = 1;
+pub const VTERM_MOD_ALT: VTermModifier = 2;
+pub const VTERM_MOD_CTRL: VTermModifier = 4;
+/// How a `VTermColor` is to be read, and which default it stands for.
+pub const VTERM_COLOR_RGB: ::core::ffi::c_uint = 0;
+pub const VTERM_COLOR_INDEXED: ::core::ffi::c_uint = 1;
+pub const VTERM_COLOR_TYPE_MASK: ::core::ffi::c_uint = 1;
+pub const VTERM_COLOR_DEFAULT_FG: ::core::ffi::c_uint = 2;
+pub const VTERM_COLOR_DEFAULT_BG: ::core::ffi::c_uint = 4;
+pub const VTERM_COLOR_DEFAULT_MASK: c_uint = 6;
+/// The underline styles a cell's pen can ask for.
+pub const VTERM_UNDERLINE_OFF: c_uint = 0;
+pub const VTERM_UNDERLINE_SINGLE: c_uint = 1;
+pub const VTERM_UNDERLINE_DOUBLE: c_uint = 2;
+pub const VTERM_UNDERLINE_CURLY: c_uint = 3;
+/// Superscript/subscript positioning of a cell's glyph.
+pub const VTERM_BASELINE_NORMAL: c_uint = 0;
+pub const VTERM_BASELINE_RAISE: c_uint = 1;
+pub const VTERM_BASELINE_LOWER: c_uint = 2;
+/// The values the cursor-shape and mouse termprops take.
+pub const VTERM_PROP_MOUSE_NONE: c_int = 0;
+pub const VTERM_PROP_CURSORSHAPE_BLOCK: c_int = 1;
+pub const VTERM_PROP_MOUSE_CLICK: c_int = 1;
+pub const VTERM_PROP_CURSORSHAPE_UNDERLINE: c_int = 2;
+pub const VTERM_PROP_MOUSE_DRAG: c_int = 2;
+pub const VTERM_PROP_CURSORSHAPE_BAR_LEFT: c_int = 3;
+pub const VTERM_PROP_MOUSE_MOVE: c_int = 3;
 
 /// How much room the reply buffer and the text decoder's scratch get.
 const VTERM_BUFFER_SIZE: size_t = 4096;
