@@ -1,7 +1,11 @@
-//! The backup file, and deciding whether the write may happen at all.
+//! The file being written over: checking it, backing it up, opening it, and
+//! putting it back when the write goes wrong.
 //!
 //! [`get_fileinfo`] is the pre-flight: does the target exist, is it a regular
 //! file, is it writable, and has it changed on disk since we read it.
+//! [`open_write_file`] and [`finish_write`] bracket the write itself, the
+//! second putting the original's ownership, permissions and ACL onto what
+//! replaced it.
 //! [`buf_write_make_backup`] then makes the backup that `'backup'`,
 //! `'writebackup'` and `'patchmode'` ask for — either by copying the original
 //! aside or by renaming it out of the way, which `'backupcopy'` chooses
@@ -32,6 +36,9 @@ pub(crate) struct TargetFile {
     /// The target exists and is not writable. Only reachable with `!`,
     /// which is what makes it worth remembering.
     pub readonly: bool,
+    /// `!` made the file writable for the write; the 'w' bit has to come
+    /// back off afterwards.
+    pub made_writable: bool,
 }
 
 /// The backup a write left behind, if any.
@@ -100,6 +107,7 @@ unsafe fn get_fileinfo_os(
             device,
             newfile,
             readonly: false,
+            made_writable: false,
         })
     }
 }
@@ -499,5 +507,270 @@ unsafe fn backup_by_rename(
             ));
         }
         Ok(backup)
+    }
+}
+
+/// Put the original file back after failing to open it for writing.
+///
+/// The backup is not needed then, so it is thrown away — but if the original
+/// was moved or removed to make it, it goes back first. Returns false when
+/// the original is gone anyway, which makes the write a total loss.
+pub(crate) unsafe fn restore_backup(
+    backup: &Backup,
+    fname: *mut c_char,
+    wfname: *mut c_char,
+    newfile: bool,
+) -> bool {
+    unsafe {
+        if !backup.path.is_null() && wfname == fname {
+            if backup.copy {
+                // There is a small chance the original was removed; try to
+                // move the copy into its place. That may fail, in which case
+                // the copy is left where it is.
+                if !os_path_exists(fname) {
+                    vim_rename(backup.path, fname);
+                }
+                // If the original does exist, throw the copy away.
+                if os_path_exists(fname) {
+                    os_remove(backup.path);
+                }
+            } else {
+                vim_rename(backup.path, fname);
+            }
+        }
+        newfile || os_path_exists(fname)
+    }
+}
+
+/// Put the backup back over the file a failed write left behind.
+///
+/// The new file is probably corrupt, and writing again would otherwise make
+/// a backup *of the corrupt file* and lose the original for good. True when
+/// the original is back, which spares the user the extra warning.
+pub(crate) unsafe fn recover_from_backup(backup: &Backup, fname: *mut c_char) -> bool {
+    unsafe {
+        if backup.path.is_null() {
+            return false;
+        }
+        if !backup.copy {
+            return vim_rename(backup.path, fname) == 0;
+        }
+        // Copying may take a while; if we were interrupted, let the user
+        // know the message arrived.
+        if got_int.get() {
+            msg(gettext(e_interr.ptr().cast()), 0);
+            ui_flush();
+        }
+        os_copy(backup.path, fname, UV_FS_COPYFILE_FICLONE) == 0
+    }
+}
+
+/// `'patchmode'`: keep the file as it was before the write, under a name of
+/// its own, so that a patch can be generated later.
+///
+/// The backup already *is* the original, so it only has to be renamed. With
+/// no backup — the file did not exist — an empty file records that.
+pub(crate) unsafe fn apply_patchmode(
+    fname: *mut c_char,
+    backup: &mut Backup,
+    perm: c_int,
+    file_info_old: &FileInfo,
+) {
+    unsafe {
+        let org = modname(fname, p_pm.get(), false);
+        if !backup.path.is_null() {
+            if org.is_null() {
+                emsg(translate(c"E205: Patchmode: can't save original file").as_ptr());
+            } else if !os_path_exists(org) {
+                vim_rename(backup.path, org);
+                xfree(backup.path.cast()); // don't delete the file
+                backup.path = core::ptr::null_mut();
+                os_file_settime(
+                    org,
+                    file_info_old.stat.st_atim.tv_sec as f64,
+                    file_info_old.stat.st_mtim.tv_sec as f64,
+                );
+            }
+        } else {
+            // No backup, so remember that a (new) file was created.
+            let empty_fd = if org.is_null() {
+                -1
+            } else {
+                os_open(
+                    org,
+                    O_CREAT | O_EXCL | O_NOFOLLOW,
+                    if perm < 0 { 0o666 } else { perm & 0o777 },
+                )
+            };
+            if empty_fd < 0 {
+                emsg(translate(c"E206: Patchmode: can't touch empty original file").as_ptr());
+            } else {
+                close(empty_fd);
+            }
+        }
+        if !org.is_null() {
+            os_setperm(org, os_getperm(fname) as c_int & 0o777);
+            xfree(org.cast());
+        }
+    }
+}
+
+/// Open the file to write to.
+///
+/// It may be opened twice: if the file cannot be written and `!` was given,
+/// the existing one is removed and a new one created. Should that fail too,
+/// the original may be lost — which happens when the user has reached their
+/// file quota. Appending fails if the file does not exist and `!` was not
+/// given.
+///
+/// `None` means giving up, with the reason in `err`.
+pub(crate) unsafe fn open_write_file(
+    wfname: *mut c_char,
+    fname: *mut c_char,
+    target: &mut TargetFile,
+    file_info_old: *mut FileInfo,
+    req: WriteRequest,
+    err: &mut Option<WriteError>,
+) -> Option<c_int> {
+    unsafe {
+        let fflags = O_WRONLY
+            | if req.append {
+                if req.forceit {
+                    O_APPEND | O_CREAT
+                } else {
+                    O_APPEND
+                }
+            } else {
+                O_CREAT | O_TRUNC
+            };
+        // Deliberately computed once: the retry below raises `target.perm`
+        // for the later chmod, not for this open.
+        let mode = if target.perm < 0 {
+            0o666
+        } else {
+            target.perm & 0o777
+        };
+        loop {
+            let fd = os_open(wfname, fflags, mode);
+            if fd >= 0 {
+                return Some(fd);
+            }
+            if err.is_some() {
+                // The retry failed as well; report why the first try did.
+                return None;
+            }
+
+            let mut file_info = FileInfo::default();
+            // Don't delete the file when it is a hard or symbolic link.
+            if (!target.newfile && os_fileinfo_hardlinks(file_info_old) > 1)
+                || (os_fileinfo_link(fname, &raw mut file_info)
+                    && !os_fileinfo_id_equal(&raw mut file_info, file_info_old))
+            {
+                *err = Some(WriteError::plain(
+                    c"E166: Can't open linked file for writing",
+                ));
+                return None;
+            }
+            // A failed os_open returns the negated errno.
+            *err = Some(WriteError::errno(
+                c"E212: Can't open file for writing: %s",
+                fd,
+            ));
+            if !(req.forceit && vim_strchr(p_cpo.get(), CPO_FWRITE).is_null() && target.perm >= 0) {
+                return None;
+            }
+            // We are going to write to the file after all, so it should be
+            // marked writable.
+            if target.perm & 0o200 == 0 {
+                target.made_writable = true;
+            }
+            target.perm |= 0o200;
+            if (*file_info_old).stat.st_uid != getuid() as uint64_t
+                || (*file_info_old).stat.st_gid != getgid() as uint64_t
+            {
+                target.perm &= 0o777;
+            }
+            if !req.append {
+                os_remove(wfname); // don't remove when appending
+            }
+        }
+    }
+}
+
+/// Sync and close the file just written, and give it the original's
+/// ownership, permissions and ACL.
+pub(crate) unsafe fn finish_write(
+    buf: *mut buf_T,
+    fd: c_int,
+    wfname: *mut c_char,
+    target: &TargetFile,
+    backup: &Backup,
+    acl: vim_acl_T,
+    file_info_old: *mut FileInfo,
+) -> Option<WriteError> {
+    unsafe {
+        let mut err = None;
+        // Many journalling file systems lose both the original and the
+        // backup when the system halts right after a write, because only the
+        // meta-data is journalled. Syncing slows the system down but assures
+        // the data reached the disk. For a device the fsync is attempted but
+        // not complained about; it could be a pipe.
+        let fsync = if (*buf).b_p_fs >= 0 {
+            (*buf).b_p_fs
+        } else {
+            p_fs.get()
+        };
+        if fsync != 0 {
+            let error = os_fsync(fd);
+            // UV_ENOTSUP is "this storage does not do fsync".
+            if error != 0 && error != UV_ENOTSUP && !target.device {
+                err = Some(WriteError::shared(e_fsync.ptr().cast(), error));
+            }
+        }
+
+        if !backup.copy {
+            os_copy_xattr(backup.path, wfname);
+        }
+        if !backup.path.is_null() && !backup.copy {
+            // The original was renamed away, so this is a new file: give it
+            // the original's owner and group. Not when they are already
+            // right — some systems drop permission or ACL data over it.
+            let mut file_info = FileInfo::default();
+            if !os_fileinfo(wfname, &raw mut file_info)
+                || file_info.stat.st_uid != (*file_info_old).stat.st_uid
+                || file_info.stat.st_gid != (*file_info_old).stat.st_gid
+            {
+                os_fchown(
+                    fd,
+                    (*file_info_old).stat.st_uid as uv_uid_t,
+                    (*file_info_old).stat.st_gid as uv_gid_t,
+                );
+                if target.perm >= 0 {
+                    os_setperm(wfname, target.perm); // may have changed
+                }
+            }
+            buf_set_file_id(buf);
+        } else if !(*buf).file_id_valid {
+            buf_set_file_id(buf); // the file is new
+        }
+
+        let error = os_close(fd);
+        if error != 0 {
+            err = Some(WriteError::errno(c"E512: Close failed: %s", error));
+        }
+
+        let mut perm = target.perm;
+        if target.made_writable {
+            perm &= !0o200; // reset the 'w' bit for security reasons
+        }
+        if perm >= 0 {
+            os_setperm(wfname, perm); // same permissions as the old file
+        }
+        // The ACL goes on before the user changes: an ACL cannot be set on a
+        // file the user does not own.
+        if !backup.copy {
+            os_set_acl(wfname, acl);
+        }
+        err
     }
 }

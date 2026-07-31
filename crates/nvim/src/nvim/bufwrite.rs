@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use core::ffi::CStr;
 use std::borrow::Cow;
 use std::ffi::CString;
@@ -21,7 +23,6 @@ use crate::src::nvim::fileio::{
     msg_add_fileformat, msg_add_lines, need_conversion, set_rw_fname, time_differs, vim_rename,
     vim_tempname, write_eintr,
 };
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::input::ask_yesno;
 use crate::src::nvim::main::{
     IObuff, cmdmod, curbuf, e_empty_buffer, e_fsync, e_interr, e_longname, ex_no_reprint, exiting,
@@ -46,14 +47,14 @@ use crate::src::nvim::os::fs::{
 };
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{
-    __errno_location, close, getgid, gettext, getuid, iconv, iconv_close, memmove, snprintf, strlen,
+    __errno_location, close, getgid, gettext, getuid, iconv, iconv_close, snprintf, strlen,
 };
 use crate::src::nvim::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_add, vim_strchr};
 use crate::src::nvim::types::{
-    FileInfo, aco_save_T, buf_T, bufref_T, colnr_T, exarg_T, iconv_t, int64_t, linenr_T, off_T,
-    pos_T, size_t, uint8_t, uint64_t, uv_gid_t, uv_uid_t, varnumber_T, vim_acl_T,
+    FileInfo, aco_save_T, buf_T, bufref_T, exarg_T, iconv_t, int64_t, linenr_T, off_T, pos_T,
+    size_t, uint64_t, uv_gid_t, uv_uid_t, vim_acl_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::{curbufIsChanged, u_unchanged, u_update_save_nr, u_write_undo};
@@ -65,6 +66,8 @@ mod backup;
 pub(crate) use self::backup::*;
 mod autocmds;
 pub(crate) use self::autocmds::*;
+mod lines;
+pub(crate) use self::lines::*;
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ENOTSUP: C2Rust_Unnamed = -95;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
@@ -256,1031 +259,638 @@ pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 /// `'cpoptions'` "W": refuse to overwrite a read-only file even with `!`.
 pub(crate) const E_READONLY_CPO: &CStr = c"is read-only (cannot override: \"W\" in 'cpoptions')";
-static e_patchmode_cant_touch_empty_original_file: GlobalCell<[::core::ffi::c_char; 49]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-            *b"E206: Patchmode: can't touch empty original file\0",
-        )
-    });
-pub const SMALLBUFSIZE: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
-pub unsafe extern "C" fn buf_write(
-    mut buf: *mut buf_T,
-    mut fname: *mut ::core::ffi::c_char,
-    mut sfname: *mut ::core::ffi::c_char,
-    mut start: linenr_T,
-    mut end: linenr_T,
-    mut eap: *mut exarg_T,
-    mut append: bool,
-    mut forceit: bool,
-    mut reset_changed: bool,
-    mut filtering: bool,
+pub const SMALLBUFSIZE: usize = 256;
+
+/// What the caller is asking a write to be.
+#[derive(Copy, Clone)]
+pub struct WriteRequest {
+    /// Append to the file instead of replacing it.
+    pub append: bool,
+    /// `!` was given: a failure to make a backup is not worth stopping for,
+    /// and a read-only file may be written over.
+    pub forceit: bool,
+    /// Reset 'modified' when the write succeeds.
+    pub reset_changed: bool,
+    /// The write is the input side of a filter command (`:%!cmd`).
+    pub filtering: bool,
+}
+
+impl WriteRequest {
+    /// Writing a filter command's input, or a temporary file `:diffpatch`
+    /// and friends hand to an external program: none of the buffer's own
+    /// bookkeeping applies.
+    pub const fn filter() -> Self {
+        WriteRequest {
+            append: false,
+            forceit: false,
+            reset_changed: false,
+            filtering: true,
+        }
+    }
+}
+
+/// Write lines `start` through `end` of `buf` to `fname`.
+///
+/// Nvim does its own buffering because `fwrite()` is so slow. In case of an
+/// error everything possible is done to restore the original file — but with
+/// `req.forceit` we risk losing it, because that is what `!` asks for.
+///
+/// When `req.reset_changed` is set and the whole buffer is being written,
+/// `b_changed` is reset.
+///
+/// This function must NOT use `NameBuff`: `autowrite()` calls it.
+///
+/// `eap` may be null; it carries a forced `'ff'`/`'fenc'`.
+pub unsafe fn buf_write(
+    buf: *mut buf_T,
+    fname: *mut ::core::ffi::c_char,
+    sfname: *mut ::core::ffi::c_char,
+    start: linenr_T,
+    end: linenr_T,
+    eap: *mut exarg_T,
+    req: WriteRequest,
 ) -> ::core::ffi::c_int {
-    let mut fenc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut converted: bool = false;
-    let mut wb_flags: ::core::ffi::c_int = 0;
-    let mut notconverted: bool = false;
-    let mut no_eol: bool = false;
-    let mut nchars: ::core::ffi::c_int = 0;
-    let mut lnum: linenr_T = 0;
-    let mut fileformat: ::core::ffi::c_int = 0;
-    let mut checking_conversion: bool = false;
-    let mut fd: ::core::ffi::c_int = 0;
-    let mut fflags: ::core::ffi::c_int = 0;
-    let mut mode: ::core::ffi::c_int = 0;
-    let mut dobackup: bool = false;
-    let mut backup_copy: bool = false;
-    let mut made_writable: bool = false;
-    let mut wfname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut retval: ::core::ffi::c_int = OK;
-    let mut msg_save: ::core::ffi::c_int = msg_scroll.get();
-    let mut prev_got_int: bool = got_int.get();
-    let mut whole: bool = start == 1 as linenr_T && end == (*buf).b_ml.ml_line_count;
-    let mut write_undo_file: bool = false_0 != 0;
-    let mut sha_ctx = Sha256::new();
-    let mut bkc: ::core::ffi::c_uint = get_bkc_flags(buf);
-    if fname.is_null() || *fname as ::core::ffi::c_int == NUL {
-        return FAIL;
-    }
-    if (*buf).b_ml.ml_mfp.is_null() {
-        emsg(gettext(
-            &raw const e_empty_buffer as *const ::core::ffi::c_char,
-        ));
-        return FAIL;
-    }
-    if check_secure() {
-        return FAIL;
-    }
-    if strlen(fname) >= MAXPATHL as size_t {
-        emsg(gettext(&raw const e_longname as *const ::core::ffi::c_char));
-        return FAIL;
-    }
-    let mut write_info: bw_info = bw_info {
-        bw_fd: 0,
-        bw_buf: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        bw_len: 0,
-        bw_flags: 0,
-        bw_first: 0,
-        bw_conv_buf: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        bw_conv_buflen: 0,
-        bw_conv_error: 0,
-        bw_conv_error_lnum: 0,
-        bw_start_lnum: 0,
-        bw_iconv_fd: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    };
-    write_info.bw_conv_buf = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    write_info.bw_conv_error = false_0;
-    write_info.bw_conv_error_lnum = 0 as ::core::ffi::c_int as linenr_T;
-    write_info.bw_iconv_fd = ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-        -1 as ::core::ffi::c_int as usize,
-    );
-    ex_no_reprint.set(true_0 != 0);
-    if (*buf).b_ffname.is_null()
-        && reset_changed as ::core::ffi::c_int != 0
-        && whole as ::core::ffi::c_int != 0
-        && buf == curbuf.get()
-        && !bt_nofilename(buf)
-        && !filtering
-        && (!append || !vim_strchr(p_cpo.get(), CPO_FNAMEAPP).is_null())
-        && !vim_strchr(p_cpo.get(), CPO_FNAMEW).is_null()
-    {
-        if set_rw_fname(fname, sfname) == FAIL {
+    unsafe {
+        let (mut buf, mut start, mut end) = (buf, start, end);
+        let mut retval = OK;
+        let msg_save = msg_scroll.get();
+        let mut prev_got_int = got_int.get();
+        let whole = start == 1 && end == (*buf).b_ml.ml_line_count;
+        let mut write_undo_file = false;
+        let mut sha_ctx = Sha256::new();
+        let bkc = get_bkc_flags(buf);
+
+        if fname.is_null() || *fname == 0 {
+            return FAIL; // safety check
+        }
+        if (*buf).b_ml.ml_mfp.is_null() {
+            // Can happen during startup, from a stray "w" in the vimrc.
+            emsg(gettext(e_empty_buffer.ptr().cast()));
             return FAIL;
         }
-        buf = curbuf.get();
-    }
-    if sfname.is_null() {
-        sfname = fname;
-    }
-    let mut ffname: *mut ::core::ffi::c_char = fname;
-    fname = sfname;
-    let mut overwriting: bool = !(*buf).b_ffname.is_null()
-        && path_fnamecmp(ffname, (*buf).b_ffname) == 0 as ::core::ffi::c_int;
-    (*no_wait_return.ptr()) += 1;
-    let orig_start: pos_T = (*buf).b_op_start;
-    let orig_end: pos_T = (*buf).b_op_end;
-    (*buf).b_op_start.lnum = start;
-    (*buf).b_op_start.col = 0 as ::core::ffi::c_int as colnr_T;
-    (*buf).b_op_end.lnum = end;
-    (*buf).b_op_end.col = 0 as ::core::ffi::c_int as colnr_T;
-    let write_mode = WriteMode {
-        append,
-        filtering,
-        reset_changed,
-        whole,
-        overwriting,
-    };
-    let mut names = WriteNames {
-        fname,
-        sfname,
-        ffname,
-    };
-    let pre = buf_write_do_autocmds(
-        buf,
-        &mut names,
-        start,
-        &mut end,
-        eap,
-        write_mode,
-        OpMarks {
-            start: orig_start,
-            end: orig_end,
-        },
-    );
-    fname = names.fname;
-    sfname = names.sfname;
-    ffname = names.ffname;
-    if let PreWrite::Finished(res) = pre {
-        return res;
-    }
-    if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
-        (*buf).b_op_start = orig_start;
-        (*buf).b_op_end = orig_end;
-    }
-    if shortmess(SHM_OVER as ::core::ffi::c_int) as ::core::ffi::c_int != 0 && !exiting.get() {
-        msg_scroll.set(false_0);
-    } else {
-        msg_scroll.set(true_0);
-    }
-    if !filtering {
-        filemess(
-            buf,
+        if check_secure() {
+            return FAIL; // writing is disallowed in secure mode
+        }
+        if strlen(fname) >= MAXPATHL as size_t {
+            emsg(gettext(e_longname.ptr().cast())); // avoid a crash for a long name
+            return FAIL;
+        }
+
+        // After writing, changedtick changes; don't display the line.
+        ex_no_reprint.set(true);
+
+        let (mut fname, mut sfname) = (fname, sfname);
+        // With no file name yet, take the one being written to. BF_NOTEDITED
+        // records that, in case the write fails. Not for a filter command,
+        // not when appending, and only when 'cpoptions' contains "F".
+        if (*buf).b_ffname.is_null()
+            && req.reset_changed
+            && whole
+            && buf == curbuf.get()
+            && !bt_nofilename(buf)
+            && !req.filtering
+            && (!req.append || !vim_strchr(p_cpo.get(), CPO_FNAMEAPP).is_null())
+            && !vim_strchr(p_cpo.get(), CPO_FNAMEW).is_null()
+        {
+            if set_rw_fname(fname, sfname) == FAIL {
+                return FAIL;
+            }
+            buf = curbuf.get(); // just in case autocmds made "buf" invalid
+        }
+        if sfname.is_null() {
+            sfname = fname;
+        }
+        // Unix: use the short file name whenever possible. It avoids
+        // problems with networks and with directories that get renamed.
+        let ffname = fname; // remember the full fname
+        fname = sfname;
+
+        // Writing over the file the buffer came from?
+        let overwriting = !(*buf).b_ffname.is_null() && path_fnamecmp(ffname, (*buf).b_ffname) == 0;
+        no_wait_return.set(no_wait_return.get() + 1); // don't wait for return yet
+
+        let orig = OpMarks {
+            start: (*buf).b_op_start,
+            end: (*buf).b_op_end,
+        };
+        // Set '[ and '] to the lines to be written.
+        (*buf).b_op_start.lnum = start;
+        (*buf).b_op_start.col = 0;
+        (*buf).b_op_end.lnum = end;
+        (*buf).b_op_end.col = 0;
+
+        let mode = WriteMode {
+            req,
+            whole,
+            overwriting,
+        };
+        let mut names = WriteNames {
             fname,
-            b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+            sfname,
+            ffname,
+        };
+        let pre = buf_write_do_autocmds(buf, &mut names, start, &mut end, eap, mode, orig);
+        // The autocommands may have renamed the buffer out from under them.
+        let WriteNames {
+            fname,
+            sfname,
+            ffname,
+        } = names;
+        if let PreWrite::Finished(res) = pre {
+            return res;
+        }
+
+        if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
+            // Restore the original '[ and '] positions.
+            (*buf).b_op_start = orig.start;
+            (*buf).b_op_end = orig.end;
+        }
+        // Overwrite the previous file message, or don't.
+        msg_scroll.set(
+            if shortmess(SHM_OVER as ::core::ffi::c_int) && !exiting.get() {
+                0
+            } else {
+                1
+            },
         );
-    }
-    msg_scroll.set(false_0);
-    let mut buffer: *mut ::core::ffi::c_char =
-        verbose_try_malloc(WRITEBUFSIZE as ::core::ffi::c_int as size_t)
-            as *mut ::core::ffi::c_char;
-    let mut bufsize: ::core::ffi::c_int = 0;
-    let mut smallbuf: [::core::ffi::c_char; 256] = [0; 256];
-    if buffer.is_null() {
-        buffer = &raw mut smallbuf as *mut ::core::ffi::c_char;
-        bufsize = SMALLBUFSIZE;
-    } else {
-        bufsize = WRITEBUFSIZE as ::core::ffi::c_int;
-    }
-    let mut err: Option<WriteError> = None;
-    let mut perm: ::core::ffi::c_int = 0;
-    let mut newfile: bool = false_0 != 0;
-    let mut device: bool = false_0 != 0;
-    let mut file_readonly: bool = false_0 != 0;
-    let mut backup: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut fenc_tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut file_info_old = FileInfo::default();
-    let mut acl: vim_acl_T = NULL;
-    '_nofail: {
-        '_fail: {
-            let target =
-                match get_fileinfo(buf, fname, overwriting, forceit, &raw mut file_info_old) {
-                    Ok(target) => Some(target),
-                    // Err(None) is the user declining to overwrite: nothing to say.
+        if !req.filtering {
+            filemess(buf, fname, c"".as_ptr().cast_mut()); // show that we are busy
+        }
+        msg_scroll.set(0); // always overwrite the file message now
+
+        // The staging buffer. When the big one cannot be had, a small one on
+        // the stack, so that writing still works when out of memory.
+        let big = verbose_try_malloc(WRITEBUFSIZE as usize);
+        let mut smallbuf = [0 as ::core::ffi::c_char; SMALLBUFSIZE];
+        let staging: &mut [::core::ffi::c_char] = if big.is_null() {
+            &mut smallbuf
+        } else {
+            core::slice::from_raw_parts_mut(big.cast(), WRITEBUFSIZE as usize)
+        };
+        let mut writer = ByteWriter::new(staging);
+
+        let mut err: Option<WriteError> = None;
+        let mut backup = Backup {
+            copy: false,
+            path: core::ptr::null_mut(),
+        };
+        let mut fenc_tofree: *mut ::core::ffi::c_char = core::ptr::null_mut();
+        let mut file_info_old = FileInfo::default();
+        // ACL copied from the original file to the backup or the new file.
+        let mut acl: vim_acl_T = NULL;
+        let mut target = TargetFile {
+            perm: -1,
+            device: false,
+            newfile: false,
+            readonly: false,
+            made_writable: false,
+        };
+        let mut dobackup = false;
+        let mut wfname: *mut ::core::ffi::c_char = core::ptr::null_mut();
+
+        'cleanup: {
+            'failed: {
+                match get_fileinfo(buf, fname, overwriting, req.forceit, &raw mut file_info_old) {
+                    Ok(found) => target = found,
+                    // Err(None): the user declined; nothing to report.
                     Err(reason) => {
                         err = reason;
-                        None
+                        break 'failed;
                     }
-                };
-            if let Some(target) = target {
-                perm = target.perm;
-                device = target.device;
-                newfile = target.newfile;
-                file_readonly = target.readonly;
-                if !newfile {
+                }
+                // For systems that support ACL: take the original's.
+                if !target.newfile {
                     acl = os_get_acl(fname);
                 }
-                dobackup =
-                    p_wb.get() != 0 || p_bk.get() != 0 || *p_pm.get() as ::core::ffi::c_int != NUL;
-                if dobackup as ::core::ffi::c_int != 0
-                    && *p_bsk.get() as ::core::ffi::c_int != NUL
-                    && match_file_list(p_bsk.get(), sfname, ffname) as ::core::ffi::c_int != 0
-                {
-                    dobackup = false_0 != 0;
+
+                // 'backupskip' names files that get no backup.
+                dobackup = p_wb.get() != 0 || p_bk.get() != 0 || *p_pm.get() != 0;
+                if dobackup && *p_bsk.get() != 0 && match_file_list(p_bsk.get(), sfname, ffname) {
+                    dobackup = false;
                 }
-                backup_copy = false_0 != 0;
+
+                // Save got_int and reset it: an earlier interruption must not
+                // cancel this write, only CTRL-C during it.
                 prev_got_int = got_int.get();
-                got_int.set(false_0 != 0);
-                (*buf).b_saving = true_0 != 0;
-                if !(append as ::core::ffi::c_int != 0 && *p_pm.get() as ::core::ffi::c_int == NUL)
-                    && !filtering
-                    && perm >= 0 as ::core::ffi::c_int
-                    && dobackup as ::core::ffi::c_int != 0
+                got_int.set(false);
+                // Mark the buffer as being saved, to suppress changed-buffer
+                // warnings.
+                (*buf).b_saving = true;
+
+                // Back up when the file exists and 'writebackup', 'backup' or
+                // 'patchmode' asks for it; appending only backs up for
+                // 'patchmode'. With 'writebackup' and 'backup' both off there
+                // is no backup at all, which helps on almost-full disks.
+                if !(req.append && *p_pm.get() == 0)
+                    && !req.filtering
+                    && target.perm >= 0
+                    && dobackup
                 {
-                    let made = buf_write_make_backup(
+                    match buf_write_make_backup(
                         fname,
                         &raw mut file_info_old,
-                        &TargetFile {
-                            perm,
-                            device,
-                            newfile,
-                            readonly: file_readonly,
-                        },
+                        &target,
                         acl,
                         bkc,
-                        append,
-                        forceit,
-                    );
-                    match made {
-                        Ok(made) => {
-                            backup_copy = made.copy;
-                            backup = made.path;
-                        }
+                        req.append,
+                        req.forceit,
+                    ) {
+                        Ok(made) => backup = made,
                         Err(e) => {
                             err = Some(e);
                             retval = FAIL;
-                            break '_fail;
+                            break 'failed;
                         }
                     }
                 }
-                made_writable = false_0 != 0;
-                if forceit as ::core::ffi::c_int != 0
-                    && perm >= 0 as ::core::ffi::c_int
-                    && perm & 0o200 as ::core::ffi::c_int == 0
+
+                // With ":w!" on a read-only file of our own, make it writable.
+                if req.forceit
+                    && target.perm >= 0
+                    && target.perm & 0o200 == 0
                     && file_info_old.stat.st_uid == getuid() as uint64_t
                     && vim_strchr(p_cpo.get(), CPO_FWRITE).is_null()
                 {
-                    perm |= 0o200 as ::core::ffi::c_int;
-                    os_setperm(fname, perm);
-                    made_writable = true_0 != 0;
+                    target.perm |= 0o200;
+                    os_setperm(fname, target.perm);
+                    target.made_writable = true;
                 }
-                if forceit as ::core::ffi::c_int != 0
-                    && overwriting as ::core::ffi::c_int != 0
-                    && vim_strchr(p_cpo.get(), CPO_KEEPRO).is_null()
-                {
-                    (*buf).b_p_ro = false_0;
-                    need_maketitle.set(true_0 != 0);
-                    status_redraw_all();
+                // With ":w!" over the current file, 'readonly' makes no
+                // sense; reset it unless 'cpoptions' contains "Z".
+                if req.forceit && overwriting && vim_strchr(p_cpo.get(), CPO_KEEPRO).is_null() {
+                    (*buf).b_p_ro = 0;
+                    need_maketitle.set(true); // set the window title later
+                    status_redraw_all(); // redraw status lines later
                 }
-                end = if end < (*buf).b_ml.ml_line_count {
-                    end
-                } else {
-                    (*buf).b_ml.ml_line_count
-                };
+
+                end = end.min((*buf).b_ml.ml_line_count);
                 if (*buf).b_ml.ml_flags & ML_EMPTY != 0 {
-                    start = end + 1 as linenr_T;
+                    start = end + 1;
                 }
-                wfname = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                '_restore_backup: {
-                    if reset_changed as ::core::ffi::c_int != 0
-                        && !newfile
-                        && overwriting as ::core::ffi::c_int != 0
-                        && !(exiting.get() as ::core::ffi::c_int != 0 && !backup.is_null())
+
+                'restore_backup: {
+                    // Overwriting the original risks crashing in the middle
+                    // of the write, so preserve the buffer now: that makes
+                    // every block number positive, so recovery will not need
+                    // the original file. Not when there is a backup and we
+                    // are exiting anyway.
+                    if req.reset_changed
+                        && !target.newfile
+                        && overwriting
+                        && !(exiting.get() && !backup.path.is_null())
                     {
-                        ml_preserve(
-                            buf,
-                            false_0 != 0,
-                            if (*buf).b_p_fs >= 0 as ::core::ffi::c_int {
-                                (*buf).b_p_fs
-                            } else {
-                                p_fs.get()
-                            } != 0,
-                        );
+                        let fsync = if (*buf).b_p_fs >= 0 {
+                            (*buf).b_p_fs
+                        } else {
+                            p_fs.get()
+                        };
+                        ml_preserve(buf, false, fsync != 0);
                         if got_int.get() {
                             err = Some(WriteError::shared(e_interr.ptr().cast(), 0));
-                            break '_restore_backup;
+                            break 'restore_backup;
                         }
                     }
+
+                    // Write the file directly, unless a conversion sends it
+                    // through a temp file first.
                     wfname = fname;
-                    fenc = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                    if !eap.is_null() && (*eap).force_enc != 0 as ::core::ffi::c_int {
-                        fenc = (*eap).cmd.offset((*eap).force_enc as isize);
-                        fenc = enc_canonize(fenc);
-                        fenc_tofree = fenc;
+
+                    // A forced 'fileencoding' from a "++opt=val" argument.
+                    let fenc = if !eap.is_null() && (*eap).force_enc != 0 {
+                        fenc_tofree = enc_canonize((*eap).cmd.offset((*eap).force_enc as isize));
+                        fenc_tofree
                     } else {
-                        fenc = (*buf).b_p_fenc;
-                    }
-                    converted = need_conversion(fenc);
-                    wb_flags = 0 as ::core::ffi::c_int;
+                        (*buf).b_p_fenc
+                    };
+                    let converted = need_conversion(fenc);
+
+                    // UTF-8 to UCS-2/UCS-4/UTF-16/Latin1 (and back) is a
+                    // conversion the ByteWriter does itself, given the flags
+                    // and a buffer to translate into.
+                    let mut wb_flags = 0;
                     if converted {
                         wb_flags = get_fio_flags(fenc);
-                        if wb_flags
-                            & (FIO_UCS2 as ::core::ffi::c_int
-                                | FIO_UCS4 as ::core::ffi::c_int
-                                | FIO_UTF16 as ::core::ffi::c_int
-                                | FIO_UTF8 as ::core::ffi::c_int)
-                            != 0
-                        {
-                            if wb_flags
-                                & (FIO_UCS2 as ::core::ffi::c_int
-                                    | FIO_UTF16 as ::core::ffi::c_int
-                                    | FIO_UTF8 as ::core::ffi::c_int)
-                                != 0
-                            {
-                                write_info.bw_conv_buflen =
-                                    (bufsize as size_t).wrapping_mul(2 as size_t);
+                        if wb_flags & (FIO_UCS2 | FIO_UCS4 | FIO_UTF16 | FIO_UTF8) != 0 {
+                            let mult = if wb_flags & (FIO_UCS2 | FIO_UTF16 | FIO_UTF8) != 0 {
+                                2
                             } else {
-                                write_info.bw_conv_buflen =
-                                    (bufsize as size_t).wrapping_mul(4 as size_t);
-                            }
-                            write_info.bw_conv_buf = verbose_try_malloc(write_info.bw_conv_buflen)
-                                as *mut ::core::ffi::c_char;
-                            if write_info.bw_conv_buf.is_null() {
-                                end = 0 as ::core::ffi::c_int as linenr_T;
+                                4 // FIO_UCS4
+                            };
+                            if !writer.reserve_conv_buf(mult) {
+                                end = 0;
                             }
                         }
                     }
-                    if converted as ::core::ffi::c_int != 0 && wb_flags == 0 as ::core::ffi::c_int {
-                        write_info.bw_iconv_fd = my_iconv_open(
-                            fenc,
-                            b"utf-8\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                        );
-                        if write_info.bw_iconv_fd
-                            != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                                -1 as ::core::ffi::c_int as usize,
-                            )
-                        {
-                            write_info.bw_conv_buflen = (bufsize as size_t)
-                                .wrapping_mul(ICONV_MULT as ::core::ffi::c_int as size_t);
-                            write_info.bw_conv_buf = verbose_try_malloc(write_info.bw_conv_buflen)
-                                as *mut ::core::ffi::c_char;
-                            if write_info.bw_conv_buf.is_null() {
-                                end = 0 as ::core::ffi::c_int as linenr_T;
+                    if converted && wb_flags == 0 {
+                        // Not one of ours: iconv, or failing that a
+                        // 'charconvert' pass over a temp file afterwards.
+                        if writer.open_iconv(fenc) {
+                            if !writer.reserve_conv_buf(ICONV_MULT as usize) {
+                                end = 0;
                             }
-                            write_info.bw_first = true_0;
-                        } else if *p_ccv.get() as ::core::ffi::c_int != NUL {
+                        } else if *p_ccv.get() != 0 {
                             wfname = vim_tempname();
                             if wfname.is_null() {
+                                // Can't write without a temp file!
                                 err = Some(WriteError::plain(
                                     c"E214: Can't find temp file for writing",
                                 ));
-                                break '_restore_backup;
+                                break 'restore_backup;
                             }
                         }
                     }
-                    notconverted = false_0 != 0;
-                    if converted as ::core::ffi::c_int != 0
-                        && wb_flags == 0 as ::core::ffi::c_int
-                        && write_info.bw_iconv_fd
-                            == ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                                -1 as ::core::ffi::c_int as usize,
-                            )
-                        && wfname == fname
-                    {
-                        if !forceit {
+                    let mut notconverted = false;
+                    if converted && wb_flags == 0 && !writer.has_iconv() && wfname == fname {
+                        if !req.forceit {
                             err = Some(WriteError::plain(
                                 c"E213: Cannot convert (add ! to write without conversion)",
                             ));
-                            break '_restore_backup;
-                        } else {
-                            notconverted = true_0 != 0;
+                            break 'restore_backup;
                         }
+                        notconverted = true;
                     }
-                    no_eol = false_0 != 0;
-                    nchars = 0;
-                    lnum = 0;
-                    fileformat = 0;
-                    checking_conversion = false;
-                    fd = 0;
-                    checking_conversion = true_0 != 0;
+
+                    // When converting, first pretend to write and check for
+                    // conversion errors, then go round again and write for
+                    // real. With no conversion this writes for real straight
+                    // away.
+                    let mut checking_conversion = true;
+                    let mut fd = -1;
+                    let mut fileformat = 0;
+                    let mut written = Written::default();
                     loop {
-                        if !converted || dobackup as ::core::ffi::c_int != 0 {
-                            checking_conversion = false_0 != 0;
+                        // No need to check when there is no conversion, or
+                        // when a backup exists that a conversion failure can
+                        // be restored from.
+                        if !converted || dobackup {
+                            checking_conversion = false;
                         }
-                        's_777: {
-                            if checking_conversion {
-                                fd = -1 as ::core::ffi::c_int;
-                                write_info.bw_fd = fd;
-                            } else {
-                                fflags = O_WRONLY
-                                    | (if append as ::core::ffi::c_int != 0 {
-                                        if forceit as ::core::ffi::c_int != 0 {
-                                            O_APPEND | O_CREAT
-                                        } else {
-                                            O_APPEND
-                                        }
-                                    } else {
-                                        O_CREAT | O_TRUNC
-                                    });
-                                mode = if perm < 0 as ::core::ffi::c_int {
-                                    0o666 as ::core::ffi::c_int
-                                } else {
-                                    perm & 0o777 as ::core::ffi::c_int
-                                };
-                                loop {
-                                    fd = os_open(wfname, fflags, mode);
-                                    if fd < 0 as ::core::ffi::c_int {
-                                        if err.is_some() {
-                                            break '_restore_backup;
-                                        }
-                                        let mut file_info = FileInfo::default();
-                                        if !newfile
-                                            && os_fileinfo_hardlinks(&raw mut file_info_old)
-                                                > 1 as uint64_t
-                                            || os_fileinfo_link(fname, &raw mut file_info)
-                                                as ::core::ffi::c_int
-                                                != 0
-                                                && !os_fileinfo_id_equal(
-                                                    &raw mut file_info,
-                                                    &raw mut file_info_old,
-                                                )
-                                        {
-                                            err = Some(WriteError::plain(
-                                                c"E166: Can't open linked file for writing",
-                                            ));
-                                            break '_restore_backup;
-                                        } else {
-                                            err = Some(WriteError::errno(
-                                                c"E212: Can't open file for writing: %s",
-                                                fd,
-                                            ));
-                                            if !(forceit as ::core::ffi::c_int != 0
-                                                && vim_strchr(p_cpo.get(), CPO_FWRITE).is_null()
-                                                && perm >= 0 as ::core::ffi::c_int)
-                                            {
-                                                break '_restore_backup;
-                                            }
-                                            if perm & 0o200 as ::core::ffi::c_int == 0 {
-                                                made_writable = true_0 != 0;
-                                            }
-                                            perm |= 0o200 as ::core::ffi::c_int;
-                                            if file_info_old.stat.st_uid != getuid() as uint64_t
-                                                || file_info_old.stat.st_gid != getgid() as uint64_t
-                                            {
-                                                perm &= 0o777 as ::core::ffi::c_int;
-                                            }
-                                            if !append {
-                                                os_remove(wfname);
-                                            }
-                                        }
-                                    } else {
-                                        write_info.bw_fd = fd;
-                                        break 's_777;
-                                    }
-                                }
-                            }
-                        }
-                        err = None;
-                        write_info.bw_buf = buffer;
-                        nchars = 0 as ::core::ffi::c_int;
-                        let mut write_bin: ::core::ffi::c_int = 0;
-                        if !eap.is_null() && (*eap).force_bin != 0 as ::core::ffi::c_int {
-                            write_bin = ((*eap).force_bin == FORCE_BIN) as ::core::ffi::c_int;
+                        if checking_conversion {
+                            fd = -1; // make sure nothing is written
                         } else {
-                            write_bin = (*buf).b_p_bin;
+                            match open_write_file(
+                                wfname,
+                                fname,
+                                &mut target,
+                                &raw mut file_info_old,
+                                req,
+                                &mut err,
+                            ) {
+                                Some(opened) => fd = opened,
+                                None => break 'restore_backup,
+                            }
                         }
-                        if (*buf).b_p_bomb != 0
-                            && write_bin == 0
-                            && (!append || perm < 0 as ::core::ffi::c_int)
-                        {
-                            write_info.bw_len = make_bom(buffer, fenc);
-                            if write_info.bw_len > 0 as ::core::ffi::c_int {
-                                write_info.bw_flags =
-                                    FIO_NOCONVERT as ::core::ffi::c_int | wb_flags;
-                                if buf_write_bytes(&raw mut write_info) == FAIL {
-                                    end = 0 as ::core::ffi::c_int as linenr_T;
+                        writer.fd = fd;
+                        err = None;
+
+                        // use "++bin", "++nobin" or 'binary'
+                        let write_bin = if !eap.is_null() && (*eap).force_bin != 0 {
+                            (*eap).force_bin == FORCE_BIN
+                        } else {
+                            (*buf).b_p_bin != 0
+                        };
+
+                        let mut bom_chars = 0;
+                        // Skip the BOM when appending to a file that already
+                        // existed: it only means anything at the start.
+                        if (*buf).b_p_bomb != 0 && !write_bin && (!req.append || target.perm < 0) {
+                            if writer.stage_bom(fenc) > 0 {
+                                writer.flags = FIO_NOCONVERT | wb_flags; // don't convert
+                                if !writer.flush() {
+                                    end = 0;
                                 } else {
-                                    nchars += write_info.bw_len;
+                                    // Upstream reads the staged length back
+                                    // *after* the flush, where it is zero:
+                                    // the BOM does not count towards the
+                                    // character total.
+                                    bom_chars += writer.staged() as ::core::ffi::c_int;
                                 }
                             }
                         }
-                        write_info.bw_start_lnum = start;
+
                         write_undo_file = (*buf).b_p_udf != 0
-                            && overwriting as ::core::ffi::c_int != 0
-                            && !append
-                            && !filtering
-                            && reset_changed as ::core::ffi::c_int != 0
+                            && overwriting
+                            && !req.append
+                            && !req.filtering
+                            && req.reset_changed
                             && !checking_conversion;
                         if write_undo_file {
-                            sha_ctx = Sha256::new();
+                            sha_ctx = Sha256::new(); // hash the text as it goes
                         }
-                        write_info.bw_len = 0 as ::core::ffi::c_int;
-                        write_info.bw_flags = wb_flags;
+
+                        writer.clear();
+                        writer.flags = wb_flags;
                         fileformat = get_fileformat_force(buf, eap);
-                        let mut s: *mut ::core::ffi::c_char = buffer;
-                        lnum = start;
-                        while lnum <= end {
-                            let mut ptr: *mut ::core::ffi::c_char =
-                                ml_get_buf(buf, lnum).offset(-(1 as ::core::ffi::c_int as isize));
-                            if write_undo_file {
-                                let line = ptr.offset(1 as ::core::ffi::c_int as isize);
-                                // Include the terminating NUL as a line separator.
-                                sha_ctx.update(::core::slice::from_raw_parts(
-                                    line as *const u8,
-                                    strlen(line) + 1,
-                                ));
-                            }
-                            let mut c: ::core::ffi::c_char = 0;
-                            loop {
-                                ptr = ptr.offset(1);
-                                c = *ptr;
-                                if c as ::core::ffi::c_int == NUL {
-                                    break;
-                                }
-                                if c as ::core::ffi::c_int == NL {
-                                    *s = NUL as ::core::ffi::c_char;
-                                } else if c as ::core::ffi::c_int == CAR && fileformat == EOL_MAC {
-                                    *s = NL as ::core::ffi::c_char;
-                                } else {
-                                    *s = c;
-                                }
-                                s = s.offset(1);
-                                write_info.bw_len += 1;
-                                if write_info.bw_len != bufsize {
-                                    continue;
-                                }
-                                if buf_write_bytes(&raw mut write_info) == FAIL {
-                                    end = 0 as ::core::ffi::c_int as linenr_T;
-                                    break;
-                                } else {
-                                    nchars += bufsize - write_info.bw_len;
-                                    s = buffer.offset(write_info.bw_len as isize);
-                                    write_info.bw_start_lnum = lnum;
-                                }
-                            }
-                            if end == 0 as linenr_T
-                                || lnum == end
-                                    && (write_bin != 0 || (*buf).b_p_fixeol == 0)
-                                    && (write_bin != 0 && lnum == (*buf).b_no_eol_lnum
-                                        || lnum == (*buf).b_ml.ml_line_count && (*buf).b_p_eol == 0)
+                        written = write_lines(
+                            buf,
+                            (start, end),
+                            &mut writer,
+                            fileformat,
+                            write_bin,
+                            write_undo_file.then_some(&mut sha_ctx),
+                        );
+                        written.nchars += bom_chars;
+                        if written.failed {
+                            end = 0;
+                        }
+
+                        // Stop when the writing is done or an error happened.
+                        if !checking_conversion || end == 0 {
+                            break;
+                        }
+                        // Nothing went wrong, so writing should be fine: go
+                        // round again and do it for real.
+                        checking_conversion = false;
+                    }
+
+                    // If we started writing, finish writing — also when an
+                    // error was encountered.
+                    if !checking_conversion {
+                        if let Some(e) = finish_write(
+                            buf,
+                            fd,
+                            wfname,
+                            &target,
+                            &backup,
+                            acl,
+                            &raw mut file_info_old,
+                        ) {
+                            err = Some(e);
+                            end = 0;
+                        }
+                        if wfname != fname {
+                            // The file went to a temp file; 'charconvert'
+                            // turns that into the output file.
+                            if end != 0
+                                && eval_charconvert(c"utf-8".as_ptr(), fenc, wfname, fname) == FAIL
                             {
-                                lnum += 1;
-                                no_eol = true_0 != 0;
-                                break;
+                                writer.conv_error = true;
+                                end = 0;
+                            }
+                            os_remove(wfname);
+                            xfree(wfname.cast());
+                        }
+                    }
+
+                    if end == 0 {
+                        if err.is_none() {
+                            err = Some(if writer.conv_error {
+                                conversion_failed(writer.conv_error_lnum)
+                            } else if got_int.get() {
+                                WriteError::shared(e_interr.ptr().cast(), 0)
                             } else {
-                                if fileformat == EOL_UNIX {
-                                    let c2rust_fresh0 = s;
-                                    s = s.offset(1);
-                                    *c2rust_fresh0 = NL as ::core::ffi::c_char;
-                                } else {
-                                    let c2rust_fresh1 = s;
-                                    s = s.offset(1);
-                                    *c2rust_fresh1 = CAR as ::core::ffi::c_char;
-                                    if fileformat == EOL_DOS {
-                                        write_info.bw_len += 1;
-                                        if write_info.bw_len == bufsize {
-                                            if buf_write_bytes(&raw mut write_info) == FAIL {
-                                                end = 0 as ::core::ffi::c_int as linenr_T;
-                                                break;
-                                            } else {
-                                                nchars += bufsize - write_info.bw_len;
-                                                s = buffer.offset(write_info.bw_len as isize);
-                                            }
-                                        }
-                                        let c2rust_fresh2 = s;
-                                        s = s.offset(1);
-                                        *c2rust_fresh2 = NL as ::core::ffi::c_char;
-                                    }
-                                }
-                                write_info.bw_len += 1;
-                                if write_info.bw_len == bufsize {
-                                    if buf_write_bytes(&raw mut write_info) == FAIL {
-                                        end = 0 as ::core::ffi::c_int as linenr_T;
-                                        break;
-                                    } else {
-                                        nchars += bufsize - write_info.bw_len;
-                                        s = buffer.offset(write_info.bw_len as isize);
-                                        os_breakcheck();
-                                        if got_int.get() {
-                                            end = 0 as ::core::ffi::c_int as linenr_T;
-                                            break;
-                                        }
-                                    }
-                                }
-                                lnum += 1;
-                            }
+                                WriteError::plain(c"E514: Write error (file system full?)")
+                            });
                         }
-                        if write_info.bw_len > 0 as ::core::ffi::c_int && end > 0 as linenr_T {
-                            let mut remaining: ::core::ffi::c_int = write_info.bw_len;
-                            if buf_write_bytes(&raw mut write_info) == FAIL {
-                                end = 0 as ::core::ffi::c_int as linenr_T;
-                            }
-                            nchars += remaining - write_info.bw_len;
+                        if recover_from_backup(&backup, fname) {
+                            end = 1; // the original is back; no extra warning
                         }
-                        if end != 0 as linenr_T && write_info.bw_len > 0 as ::core::ffi::c_int {
-                            write_info.bw_conv_error = true_0;
-                            write_info.bw_conv_error_lnum = end;
-                            end = 0 as ::core::ffi::c_int as linenr_T;
+                        break 'failed;
+                    }
+
+                    written.lnum -= start; // the number of lines written
+                    no_wait_return.set(no_wait_return.get() - 1); // may wait now
+
+                    if !req.filtering {
+                        report_written(
+                            buf,
+                            fname,
+                            &written,
+                            &WriteNotes {
+                                conv_error: writer.conv_error,
+                                conv_error_lnum: writer.conv_error_lnum,
+                                notconverted,
+                                converted,
+                                device: target.device,
+                                newfile: target.newfile,
+                                fileformat,
+                            },
+                            req.append,
+                        );
+                    }
+
+                    // Everything went out correctly: reset 'modified'. Unless
+                    // this was not the original file and 'cpoptions' has no
+                    // "+".
+                    if req.reset_changed
+                        && whole
+                        && !req.append
+                        && !writer.conv_error
+                        && (overwriting || !vim_strchr(p_cpo.get(), CPO_PLUS).is_null())
+                    {
+                        unchanged(buf, true, false);
+                        let changedtick = buf_get_changedtick(buf);
+                        if (*buf).b_last_changedtick + 1 == changedtick {
+                            // b:changedtick may have been incremented in
+                            // unchanged(), but that must not fire TextChanged.
+                            (*buf).b_last_changedtick = changedtick;
                         }
-                        if (*buf).b_p_fixeol == 0 && (*buf).b_p_eof != 0 {
-                            write_eintr(
-                                write_info.bw_fd,
-                                b"\x1A\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_void,
-                                1 as size_t,
-                            );
-                        }
-                        if !checking_conversion || end == 0 as linenr_T {
-                            if !checking_conversion {
-                                let mut error: ::core::ffi::c_int = 0;
-                                if (if (*buf).b_p_fs >= 0 as ::core::ffi::c_int {
-                                    (*buf).b_p_fs
-                                } else {
-                                    p_fs.get()
-                                }) != 0
-                                    && {
-                                        error = os_fsync(fd);
-                                        error != 0 as ::core::ffi::c_int
-                                    }
-                                    && error != UV_ENOTSUP as ::core::ffi::c_int
-                                    && !device
-                                {
-                                    err = Some(WriteError::shared(e_fsync.ptr().cast(), error));
-                                    end = 0 as ::core::ffi::c_int as linenr_T;
-                                }
-                                if !backup_copy {
-                                    os_copy_xattr(backup, wfname);
-                                }
-                                if !backup.is_null() && !backup_copy {
-                                    let mut file_info_0 = FileInfo::default();
-                                    if !os_fileinfo(wfname, &raw mut file_info_0)
-                                        || file_info_0.stat.st_uid != file_info_old.stat.st_uid
-                                        || file_info_0.stat.st_gid != file_info_old.stat.st_gid
-                                    {
-                                        os_fchown(
-                                            fd,
-                                            file_info_old.stat.st_uid as uv_uid_t,
-                                            file_info_old.stat.st_gid as uv_gid_t,
-                                        );
-                                        if perm >= 0 as ::core::ffi::c_int {
-                                            os_setperm(wfname, perm);
-                                        }
-                                    }
-                                    buf_set_file_id(buf);
-                                } else if !(*buf).file_id_valid {
-                                    buf_set_file_id(buf);
-                                }
-                                error = os_close(fd);
-                                if error != 0 as ::core::ffi::c_int {
-                                    err = Some(WriteError::errno(c"E512: Close failed: %s", error));
-                                    end = 0 as ::core::ffi::c_int as linenr_T;
-                                }
-                                if made_writable {
-                                    perm &= !(0o200 as ::core::ffi::c_int);
-                                }
-                                if perm >= 0 as ::core::ffi::c_int {
-                                    os_setperm(wfname, perm);
-                                }
-                                if !backup_copy {
-                                    os_set_acl(wfname, acl);
-                                }
-                                if wfname != fname {
-                                    if end != 0 as linenr_T {
-                                        if eval_charconvert(
-                                            b"utf-8\0".as_ptr() as *const ::core::ffi::c_char,
-                                            fenc,
-                                            wfname,
-                                            fname,
-                                        ) == FAIL
-                                        {
-                                            write_info.bw_conv_error = true_0;
-                                            end = 0 as ::core::ffi::c_int as linenr_T;
-                                        }
-                                    }
-                                    os_remove(wfname);
-                                    xfree(wfname as *mut ::core::ffi::c_void);
-                                }
-                            }
-                            if end == 0 as linenr_T {
-                                if err.is_none() {
-                                    err = Some(if write_info.bw_conv_error != 0 {
-                                        conversion_failed(write_info.bw_conv_error_lnum)
-                                    } else if got_int.get() {
-                                        WriteError::shared(e_interr.ptr().cast(), 0)
-                                    } else {
-                                        WriteError::plain(c"E514: Write error (file system full?)")
-                                    });
-                                }
-                                if !backup.is_null() {
-                                    if backup_copy {
-                                        if got_int.get() {
-                                            msg(
-                                                gettext(
-                                                    &raw const e_interr
-                                                        as *const ::core::ffi::c_char,
-                                                ),
-                                                0 as ::core::ffi::c_int,
-                                            );
-                                            ui_flush();
-                                        }
-                                        if os_copy(backup, fname, UV_FS_COPYFILE_FICLONE)
-                                            == 0 as ::core::ffi::c_int
-                                        {
-                                            end = 1 as ::core::ffi::c_int as linenr_T;
-                                        }
-                                    } else if vim_rename(backup, fname) == 0 as ::core::ffi::c_int {
-                                        end = 1 as ::core::ffi::c_int as linenr_T;
-                                    }
-                                }
-                                break '_fail;
-                            } else {
-                                lnum -= start;
-                                (*no_wait_return.ptr()) -= 1;
-                                if !filtering {
-                                    add_quoted_fname(
-                                        IObuff.ptr() as *mut ::core::ffi::c_char,
-                                        IOSIZE as size_t,
-                                        buf,
-                                        fname,
-                                    );
-                                    let mut insert_space: bool = false_0 != 0;
-                                    if write_info.bw_conv_error != 0 {
-                                        xstrlcat(
-                                            IObuff.ptr() as *mut ::core::ffi::c_char,
-                                            gettext(b" CONVERSION ERROR\0".as_ptr()
-                                                as *const ::core::ffi::c_char),
-                                            IOSIZE as size_t,
-                                        );
-                                        insert_space = true_0 != 0;
-                                        if write_info.bw_conv_error_lnum != 0 as linenr_T {
-                                            vim_snprintf_add(
-                                                IObuff.ptr() as *mut ::core::ffi::c_char,
-                                                IOSIZE as size_t,
-                                                gettext(b" in line %ld;\0".as_ptr()
-                                                    as *const ::core::ffi::c_char),
-                                                write_info.bw_conv_error_lnum as int64_t,
-                                            );
-                                        }
-                                    } else if notconverted {
-                                        xstrlcat(
-                                            IObuff.ptr() as *mut ::core::ffi::c_char,
-                                            gettext(b"[NOT converted]\0".as_ptr()
-                                                as *const ::core::ffi::c_char),
-                                            IOSIZE as size_t,
-                                        );
-                                        insert_space = true_0 != 0;
-                                    } else if converted {
-                                        xstrlcat(
-                                            IObuff.ptr() as *mut ::core::ffi::c_char,
-                                            gettext(b"[converted]\0".as_ptr()
-                                                as *const ::core::ffi::c_char),
-                                            IOSIZE as size_t,
-                                        );
-                                        insert_space = true_0 != 0;
-                                    }
-                                    if device {
-                                        xstrlcat(
-                                            IObuff.ptr() as *mut ::core::ffi::c_char,
-                                            gettext(b"[Device]\0".as_ptr()
-                                                as *const ::core::ffi::c_char),
-                                            IOSIZE as size_t,
-                                        );
-                                        insert_space = true_0 != 0;
-                                    } else if newfile {
-                                        xstrlcat(
-                                            IObuff.ptr() as *mut ::core::ffi::c_char,
-                                            gettext(
-                                                b"[New]\0".as_ptr() as *const ::core::ffi::c_char
-                                            ),
-                                            IOSIZE as size_t,
-                                        );
-                                        insert_space = true_0 != 0;
-                                    }
-                                    if no_eol {
-                                        xstrlcat(
-                                            IObuff.ptr() as *mut ::core::ffi::c_char,
-                                            gettext(
-                                                b"[noeol]\0".as_ptr() as *const ::core::ffi::c_char
-                                            ),
-                                            IOSIZE as size_t,
-                                        );
-                                        insert_space = true_0 != 0;
-                                    }
-                                    if msg_add_fileformat(fileformat) {
-                                        insert_space = true_0 != 0;
-                                    }
-                                    msg_add_lines(
-                                        insert_space as ::core::ffi::c_int,
-                                        lnum,
-                                        nchars as off_T,
-                                    );
-                                    if !shortmess(SHM_WRITE as ::core::ffi::c_int) {
-                                        if append {
-                                            xstrlcat(
-                                                IObuff.ptr() as *mut ::core::ffi::c_char,
-                                                if shortmess(SHM_WRI as ::core::ffi::c_int)
-                                                    as ::core::ffi::c_int
-                                                    != 0
-                                                {
-                                                    gettext(b" [a]\0".as_ptr()
-                                                        as *const ::core::ffi::c_char)
-                                                } else {
-                                                    gettext(b" appended\0".as_ptr()
-                                                        as *const ::core::ffi::c_char)
-                                                },
-                                                IOSIZE as size_t,
-                                            );
-                                        } else {
-                                            xstrlcat(
-                                                IObuff.ptr() as *mut ::core::ffi::c_char,
-                                                if shortmess(SHM_WRI as ::core::ffi::c_int)
-                                                    as ::core::ffi::c_int
-                                                    != 0
-                                                {
-                                                    gettext(b" [w]\0".as_ptr()
-                                                        as *const ::core::ffi::c_char)
-                                                } else {
-                                                    gettext(b" written\0".as_ptr()
-                                                        as *const ::core::ffi::c_char)
-                                                },
-                                                IOSIZE as size_t,
-                                            );
-                                        }
-                                    }
-                                    set_keep_msg(
-                                        msg_progress(
-                                            IObuff.ptr() as *mut ::core::ffi::c_char,
-                                            b"bufwrite\0".as_ptr() as *const ::core::ffi::c_char
-                                                as *mut ::core::ffi::c_char,
-                                            b"success\0".as_ptr() as *const ::core::ffi::c_char
-                                                as *mut ::core::ffi::c_char,
-                                            0 as ::core::ffi::c_int,
-                                            true_0 != 0,
-                                            true_0 != 0,
-                                        ),
-                                        0 as ::core::ffi::c_int,
-                                    );
-                                }
-                                if reset_changed as ::core::ffi::c_int != 0
-                                    && whole as ::core::ffi::c_int != 0
-                                    && !append
-                                    && write_info.bw_conv_error == 0
-                                    && (overwriting as ::core::ffi::c_int != 0
-                                        || !vim_strchr(p_cpo.get(), CPO_PLUS).is_null())
-                                {
-                                    unchanged(buf, true_0 != 0, false_0 != 0);
-                                    let changedtick: varnumber_T = buf_get_changedtick(buf);
-                                    if (*buf).b_last_changedtick + 1 as varnumber_T == changedtick {
-                                        (*buf).b_last_changedtick = changedtick;
-                                    }
-                                    u_unchanged(buf);
-                                    u_update_save_nr(buf);
-                                }
-                                if overwriting {
-                                    ml_timestamp(buf);
-                                    if append {
-                                        (*buf).b_flags &= !BF_NEW;
-                                    } else {
-                                        (*buf).b_flags &= !BF_WRITE_MASK;
-                                    }
-                                }
-                                if *p_pm.get() as ::core::ffi::c_int != 0
-                                    && dobackup as ::core::ffi::c_int != 0
-                                {
-                                    let org: *mut ::core::ffi::c_char =
-                                        modname(fname, p_pm.get(), false_0 != 0);
-                                    if !backup.is_null() {
-                                        if org.is_null() {
-                                            emsg(gettext(
-                                                b"E205: Patchmode: can't save original file\0"
-                                                    .as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ));
-                                        } else if !os_path_exists(org) {
-                                            vim_rename(backup, org);
-                                            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                                                &raw mut backup as *mut *mut ::core::ffi::c_void;
-                                            xfree(*ptr_);
-                                            *ptr_ = NULL;
-                                            let _ = *ptr_;
-                                            os_file_settime(
-                                                org,
-                                                file_info_old.stat.st_atim.tv_sec
-                                                    as ::core::ffi::c_double,
-                                                file_info_old.stat.st_mtim.tv_sec
-                                                    as ::core::ffi::c_double,
-                                            );
-                                        }
-                                    } else {
-                                        let mut empty_fd: ::core::ffi::c_int = 0;
-                                        if org.is_null() || {
-                                            empty_fd = os_open(
-                                                org,
-                                                O_CREAT | O_EXCL | O_NOFOLLOW,
-                                                if perm < 0 as ::core::ffi::c_int {
-                                                    0o666 as ::core::ffi::c_int
-                                                } else {
-                                                    perm & 0o777 as ::core::ffi::c_int
-                                                },
-                                            );
-                                            empty_fd < 0 as ::core::ffi::c_int
-                                        } {
-                                            emsg(gettext(
-                                                (e_patchmode_cant_touch_empty_original_file.ptr()
-                                                    as *const _)
-                                                    as *const ::core::ffi::c_char,
-                                            ));
-                                        } else {
-                                            close(empty_fd);
-                                        }
-                                    }
-                                    if !org.is_null() {
-                                        os_setperm(
-                                            org,
-                                            os_getperm(fname) as ::core::ffi::c_int
-                                                & 0o777 as ::core::ffi::c_int,
-                                        );
-                                        xfree(org as *mut ::core::ffi::c_void);
-                                    }
-                                }
-                                if p_bk.get() == 0
-                                    && !backup.is_null()
-                                    && write_info.bw_conv_error == 0
-                                    && os_remove(backup) != 0 as ::core::ffi::c_int
-                                {
-                                    emsg(gettext(b"E207: Can't delete backup file\0".as_ptr()
-                                        as *const ::core::ffi::c_char));
-                                }
-                                break '_nofail;
-                            }
+                        u_unchanged(buf);
+                        u_update_save_nr(buf);
+                    }
+
+                    // Written to the current file: update the swap file's
+                    // timestamp (which also sets b_mtime) and reset the
+                    // BF_WRITE_MASK flags.
+                    if overwriting {
+                        ml_timestamp(buf);
+                        if req.append {
+                            (*buf).b_flags &= !BF_NEW;
                         } else {
-                            checking_conversion = false_0 != 0;
+                            (*buf).b_flags &= !BF_WRITE_MASK;
                         }
                     }
-                }
-                if !backup.is_null() && wfname == fname {
-                    if backup_copy {
-                        if !os_path_exists(fname) {
-                            vim_rename(backup, fname);
-                        }
-                        if os_path_exists(fname) {
-                            os_remove(backup);
-                        }
-                    } else {
-                        vim_rename(backup, fname);
+
+                    if *p_pm.get() != 0 && dobackup {
+                        apply_patchmode(fname, &mut backup, target.perm, &file_info_old);
                     }
+
+                    // Remove the backup unless 'backup' is set.
+                    if p_bk.get() == 0
+                        && !backup.path.is_null()
+                        && !writer.conv_error
+                        && os_remove(backup.path) != 0
+                    {
+                        emsg(translate(c"E207: Can't delete backup file").as_ptr());
+                    }
+                    break 'cleanup;
                 }
-                if !newfile && !os_path_exists(fname) {
-                    end = 0 as ::core::ffi::c_int as linenr_T;
+
+                // Reached by giving up on the write: throw the backup away,
+                // and put the original back if it was moved out of the way.
+                if !restore_backup(&backup, fname, wfname, target.newfile) {
+                    end = 0; // the original no longer exists either
                 }
                 if wfname != fname {
-                    xfree(wfname as *mut ::core::ffi::c_void);
+                    xfree(wfname.cast());
+                }
+            }
+            no_wait_return.set(no_wait_return.get() - 1); // may wait for return now
+        }
+
+        // Done saving; accept changed-buffer warnings again.
+        (*buf).b_saving = false;
+
+        xfree(backup.path.cast());
+        xfree(fenc_tofree.cast());
+        drop(writer); // frees the conversion buffer and closes iconv
+        if !big.is_null() {
+            xfree(big);
+        }
+        os_free_acl(acl);
+
+        if let Some(err) = &err {
+            // -100 to save some space for a further error message.
+            add_quoted_fname(
+                IObuff.ptr() as *mut ::core::ffi::c_char,
+                (IOSIZE - 100) as size_t,
+                buf,
+                fname,
+            );
+            err.emit();
+            retval = FAIL;
+            if end == 0 {
+                let hl_id = HLF_E as ::core::ffi::c_int;
+                msg_puts_hl(
+                    translate(c"\nWARNING: Original file may be lost or damaged\n").as_ptr(),
+                    hl_id,
+                    true,
+                );
+                msg_puts_hl(
+                    translate(c"don't quit the editor until the file is successfully written!")
+                        .as_ptr(),
+                    hl_id,
+                    true,
+                );
+                // Update the timestamp to avoid an "overwrite changed file"
+                // prompt when writing again.
+                if os_fileinfo(fname, &raw mut file_info_old) {
+                    buf_store_file_info(buf, &raw mut file_info_old);
+                    (*buf).b_mtime_read = (*buf).b_mtime;
+                    (*buf).b_mtime_read_ns = (*buf).b_mtime_ns;
                 }
             }
         }
-        (*no_wait_return.ptr()) -= 1;
-    }
-    (*buf).b_saving = false_0 != 0;
-    xfree(backup as *mut ::core::ffi::c_void);
-    if buffer != &raw mut smallbuf as *mut ::core::ffi::c_char {
-        xfree(buffer as *mut ::core::ffi::c_void);
-    }
-    xfree(fenc_tofree as *mut ::core::ffi::c_void);
-    xfree(write_info.bw_conv_buf as *mut ::core::ffi::c_void);
-    if write_info.bw_iconv_fd
-        != ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-            -1 as ::core::ffi::c_int as usize,
-        )
-    {
-        iconv_close(write_info.bw_iconv_fd);
-        write_info.bw_iconv_fd = ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-            -1 as ::core::ffi::c_int as usize,
-        );
-    }
-    os_free_acl(acl);
-    if let Some(err) = &err {
-        // -100 to save some space for a further error message.
-        add_quoted_fname(
-            IObuff.ptr() as *mut ::core::ffi::c_char,
-            (IOSIZE - 100 as ::core::ffi::c_int) as size_t,
-            buf,
-            fname,
-        );
-        err.emit();
-        retval = FAIL;
-        if end == 0 as linenr_T {
-            let hl_id: ::core::ffi::c_int = HLF_E as ::core::ffi::c_int;
-            msg_puts_hl(
-                gettext(
-                    b"\nWARNING: Original file may be lost or damaged\n\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-                hl_id,
-                true_0 != 0,
-            );
-            msg_puts_hl(
-                gettext(
-                    b"don't quit the editor until the file is successfully written!\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
-                hl_id,
-                true_0 != 0,
-            );
-            if os_fileinfo(fname, &raw mut file_info_old) {
-                buf_store_file_info(buf, &raw mut file_info_old);
-                (*buf).b_mtime_read = (*buf).b_mtime;
-                (*buf).b_mtime_read_ns = (*buf).b_mtime_ns;
+        msg_scroll.set(msg_save);
+
+        // Writing the whole file with 'undofile' set writes the undo file too.
+        if retval == OK && write_undo_file {
+            let mut hash = sha_ctx.finish();
+            u_write_undo(core::ptr::null(), false, buf, hash.as_mut_ptr());
+        }
+
+        if !should_abort(retval) {
+            buf_write_do_post_autocmds(buf, fname, eap, mode);
+            if aborting() {
+                retval = FAIL; // autocmds may abort script processing
             }
         }
+
+        got_int.set(got_int.get() | prev_got_int);
+        retval
     }
-    msg_scroll.set(msg_save);
-    if retval == OK && write_undo_file as ::core::ffi::c_int != 0 {
-        let mut hash: [uint8_t; 32] = sha_ctx.finish();
-        u_write_undo(
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            false_0 != 0,
-            buf,
-            &raw mut hash as *mut uint8_t,
-        );
-    }
-    if !should_abort(retval) {
-        buf_write_do_post_autocmds(buf, fname, eap, write_mode);
-        if aborting() {
-            retval = false_0;
-        }
-    }
-    got_int.set(got_int.get() as ::core::ffi::c_int | prev_got_int as ::core::ffi::c_int != 0);
-    return retval;
 }
+
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const FORCE_BIN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const EOL_UNIX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

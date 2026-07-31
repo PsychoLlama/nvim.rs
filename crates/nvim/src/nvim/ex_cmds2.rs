@@ -6,7 +6,7 @@ use crate::src::nvim::buffer::{
     bt_dontwrite, buf_hide, buf_set_name, buf_spname, buflist_findnr, bufref_valid, goto_buffer,
     no_write_message, no_write_message_nobang, set_bufref, set_curbuf,
 };
-use crate::src::nvim::bufwrite::buf_write;
+use crate::src::nvim::bufwrite::{WriteRequest, buf_write};
 use crate::src::nvim::change::unchanged;
 use crate::src::nvim::channel::channel_job_running;
 use crate::src::nvim::eval::eval_call_provider;
@@ -1481,10 +1481,12 @@ pub unsafe extern "C" fn buf_write_all(
         1 as linenr_T,
         (*buf).b_ml.ml_line_count,
         ::core::ptr::null_mut::<exarg_T>(),
-        false_0 != 0,
-        forceit,
-        true_0 != 0,
-        false_0 != 0,
+        WriteRequest {
+            append: false,
+            forceit,
+            reset_changed: true,
+            filtering: false,
+        },
     );
     if curbuf.get() != old_curbuf {
         msg_source(HLF_W as ::core::ffi::c_int);

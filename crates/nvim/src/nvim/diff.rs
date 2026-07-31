@@ -7,7 +7,7 @@ use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::{
     bt_prompt, buf_is_empty, buf_valid, buflist_findnr, buflist_findpat, bufref_valid, set_bufref,
 };
-use crate::src::nvim::bufwrite::buf_write;
+use crate::src::nvim::bufwrite::{WriteRequest, buf_write};
 use crate::src::nvim::change::{change_warning, changed_lines};
 use crate::src::nvim::charset::{getdigits_int, getdigits_int32, skipwhite};
 use crate::src::nvim::cursor::check_cursor;
@@ -1596,10 +1596,7 @@ unsafe extern "C" fn diff_write(
         start,
         end,
         ::core::ptr::null_mut::<exarg_T>(),
-        false_0 != 0,
-        false_0 != 0,
-        false_0 != 0,
-        true_0 != 0,
+        WriteRequest::filter(),
     );
     (*cmdmod.ptr()).cmod_flags = save_cmod_flags as ::core::ffi::c_int;
     free_string_option((*buf).b_p_ff);
@@ -2222,10 +2219,7 @@ pub unsafe fn ex_diffpatch(mut eap: *mut exarg_T) {
             1 as linenr_T,
             (*curbuf.get()).b_ml.ml_line_count,
             ::core::ptr::null_mut::<exarg_T>(),
-            false_0 != 0,
-            false_0 != 0,
-            false_0 != 0,
-            true_0 != 0,
+            WriteRequest::filter(),
         ) != FAIL
         {
             fullname = FullName_save((*eap).arg, false_0 != 0);

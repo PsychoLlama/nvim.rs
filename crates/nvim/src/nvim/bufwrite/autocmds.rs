@@ -23,12 +23,8 @@ use super::*;
 /// carried through `buf_write` because most of its decisions turn on these.
 #[derive(Copy, Clone)]
 pub(crate) struct WriteMode {
-    /// Append to the file instead of replacing it.
-    pub append: bool,
-    /// The write is the input side of a filter command (`:%!cmd`).
-    pub filtering: bool,
-    /// Reset 'modified' when the write succeeds.
-    pub reset_changed: bool,
+    /// What the caller asked for.
+    pub req: WriteRequest,
     /// The whole buffer is being written, not just a line range.
     pub whole: bool,
     /// The target is the file the buffer itself was read from.
@@ -124,7 +120,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
         // Did a "Cmd" autocommand write the file itself?
         let mut did_cmd = false;
         let mut nofile_err = false;
-        if mode.append {
+        if mode.req.append {
             did_cmd = apply_autocmds_exarg(
                 EVENT_FILEAPPENDCMD,
                 sfname,
@@ -136,7 +132,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
             if !did_cmd {
                 nofile_err = apply_pre(EVENT_FILEAPPENDPRE, sfname, eap, mode.overwriting);
             }
-        } else if mode.filtering {
+        } else if mode.req.filtering {
             // No <afile>: the filter's output file is not what the event is
             // about.
             apply_autocmds_exarg(
@@ -147,7 +143,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
                 curbuf.get(),
                 eap,
             );
-        } else if mode.reset_changed && mode.whole {
+        } else if mode.req.reset_changed && mode.whole {
             let was_changed = curbufIsChanged();
             did_cmd =
                 apply_autocmds_exarg(EVENT_BUFWRITECMD, sfname, sfname, false, curbuf.get(), eap);
@@ -215,15 +211,15 @@ pub(crate) unsafe fn buf_write_do_autocmds(
                 if mode.overwriting {
                     // Assume the buffer was written; update the timestamp.
                     ml_timestamp(buf);
-                    if mode.append {
+                    if mode.req.append {
                         (*buf).b_flags &= !BF_NEW;
                     } else {
                         (*buf).b_flags &= !BF_WRITE_MASK;
                     }
                 }
-                if mode.reset_changed
+                if mode.req.reset_changed
                     && (*buf).b_changed != 0
-                    && !mode.append
+                    && !mode.req.append
                     && (mode.overwriting || !vim_strchr(p_cpo.get(), CPO_PLUS).is_null())
                 {
                     // Buffer still changed: the autocommands didn't work
@@ -296,17 +292,17 @@ pub(crate) unsafe fn buf_write_do_post_autocmds(
         let mut aco = aco_save_T::default();
         aucmd_prepbuf(&raw mut aco, buf);
 
-        let event = if mode.append {
+        let event = if mode.req.append {
             EVENT_FILEAPPENDPOST
-        } else if mode.filtering {
+        } else if mode.req.filtering {
             EVENT_FILTERWRITEPOST
-        } else if mode.reset_changed && mode.whole {
+        } else if mode.req.reset_changed && mode.whole {
             EVENT_BUFWRITEPOST
         } else {
             EVENT_FILEWRITEPOST
         };
         // As for FilterWritePre, the filter's file is not the <afile>.
-        let afile = if mode.filtering {
+        let afile = if mode.req.filtering {
             core::ptr::null_mut()
         } else {
             fname

@@ -14,7 +14,7 @@ use crate::src::nvim::buffer::{
     no_write_message_buf, open_buffer, otherfile, set_buflisted, set_bufref, setaltfname, setfname,
 };
 use crate::src::nvim::buffer_updates::buf_updates_send_changes;
-use crate::src::nvim::bufwrite::buf_write;
+use crate::src::nvim::bufwrite::{WriteRequest, buf_write};
 use crate::src::nvim::change::{
     appended_lines, appended_lines_mark, changed_bytes, changed_lines, del_lines, deleted_lines,
     deleted_lines_mark,
@@ -2813,10 +2813,7 @@ unsafe extern "C" fn do_filter(
                 line1,
                 line2,
                 eap,
-                false_0 != 0,
-                false_0 != 0,
-                false_0 != 0,
-                true_0 != 0,
+                WriteRequest::filter(),
             ) == FAIL
         {
             if !ui_has(kUIMessages) {
@@ -3528,10 +3525,12 @@ pub unsafe extern "C" fn do_write(mut eap: *mut exarg_T) -> ::core::ffi::c_int {
                         (*eap).line1,
                         (*eap).line2,
                         eap,
-                        (*eap).append != 0,
-                        (*eap).forceit != 0,
-                        true_0 != 0,
-                        false_0 != 0,
+                        WriteRequest {
+                            append: (*eap).append != 0,
+                            forceit: (*eap).forceit != 0,
+                            reset_changed: true,
+                            filtering: false,
+                        },
                     );
                     if (*eap).cmdidx as ::core::ffi::c_int == CMD_saveas as ::core::ffi::c_int {
                         if retval == OK {
