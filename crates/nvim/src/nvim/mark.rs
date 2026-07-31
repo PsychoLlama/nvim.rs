@@ -14,7 +14,7 @@
 
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::ascii::ascii_isdigit;
-use crate::src::nvim::autocmd::{aucmd_defer, has_event};
+use crate::src::nvim::autocmd::{EVENT_MARKSET, aucmd_defer, has_event};
 use crate::src::nvim::buffer::{bt_prompt, buflist_findnr, buflist_new};
 use crate::src::nvim::charset::{ptr2cells, vim_isprintc};
 use crate::src::nvim::fold::hasFolding;
@@ -73,7 +73,6 @@ pub const BL_WHITE: c_uint = 1;
 pub const BL_FIX: c_uint = 4;
 pub const GETF_SETMARK: getf_values = 1;
 pub const AUGROUP_ALL: c_int = -3;
-pub const EVENT_MARKSET: auto_event = 82;
 pub const CMOD_KEEPJUMPS: c_int = 1024;
 pub const CMOD_LOCKMARKS: c_int = 2048;
 pub const BUF_HAS_QF_ENTRY: c_int = 1;

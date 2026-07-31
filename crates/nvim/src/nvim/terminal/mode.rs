@@ -22,7 +22,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::autocmd::{apply_autocmds, has_event};
+use crate::src::nvim::autocmd::{
+    EVENT_TERMENTER, EVENT_TERMLEAVE, EVENT_TEXTCHANGEDT, apply_autocmds, has_event,
+};
 use crate::src::nvim::buffer::{buf_get_changedtick, do_buffer};
 use crate::src::nvim::cursor::coladvance;
 use crate::src::nvim::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
@@ -60,8 +62,8 @@ use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
 use super::{
-    EVENT_TERMENTER, EVENT_TERMLEAVE, EVENT_TEXTCHANGEDT, MODE_TERMINAL, UPD_SOME_VALID, UPD_VALID,
-    map_get_int_ptr_t, terminal_check_size, terminal_set_state,
+    MODE_TERMINAL, UPD_SOME_VALID, UPD_VALID, map_get_int_ptr_t, terminal_check_size,
+    terminal_set_state,
 };
 
 const DOBUF_WIPE: c_int = 4;

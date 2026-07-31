@@ -13,7 +13,9 @@
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use crate::src::nvim::autocmd::{apply_autocmds, is_aucmd_win, may_trigger_vim_suspend_resume};
+use crate::src::nvim::autocmd::{
+    EVENT_EXITPRE, EVENT_QUITPRE, apply_autocmds, is_aucmd_win, may_trigger_vim_suspend_resume,
+};
 use crate::src::nvim::buffer::{buf_hide, bufref_valid, do_bufdel, no_write_message, set_bufref};
 use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::src::nvim::ex_cmds::do_write;
@@ -23,8 +25,7 @@ use crate::src::nvim::ex_docmd::source::not_exiting;
 use crate::src::nvim::ex_docmd::{
     CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide,
     CMD_only, CMD_tabclose, CMD_tabonly, CMD_wq, CMOD_CONFIRM, Ctrl_C, DOBUF_DEL, DOBUF_UNLOAD,
-    DOBUF_WIPE, EVENT_EXITPRE, EVENT_QUITPRE, EXIT_FAILURE, FAIL, KE_IGNORE, KE_XF1, KE_XF2, NUL,
-    OK, VV_EXITREASON,
+    DOBUF_WIPE, EXIT_FAILURE, FAIL, KE_IGNORE, KE_XF1, KE_XF2, NUL, OK, VV_EXITREASON,
 };
 use crate::src::nvim::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::src::nvim::getchar::beep_flush;

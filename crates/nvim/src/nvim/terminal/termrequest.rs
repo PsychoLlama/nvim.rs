@@ -18,7 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::autocmd::{apply_autocmds_group, has_event};
+use crate::src::nvim::autocmd::{EVENT_TERMREQUEST, apply_autocmds_group, has_event};
 use crate::src::nvim::eval::vars::set_vim_var_string;
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::highlight::hl_add_url;
@@ -33,8 +33,8 @@ use crate::src::nvim::vterm::state::vterm_obtain_state;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::{
-    AUGROUP_ALL, EVENT_TERMREQUEST, VTERM_ATTR_URI, VTERM_TERMINATOR_BEL, VTERM_VALUETYPE_INT,
-    VV_TERMREQUEST, buf_for_handle, row_to_linenr, terminal_send,
+    AUGROUP_ALL, VTERM_ATTR_URI, VTERM_TERMINATOR_BEL, VTERM_VALUETYPE_INT, VV_TERMREQUEST,
+    buf_for_handle, row_to_linenr, terminal_send,
 };
 
 /// The sequences vterm hands over rather than acting on itself.

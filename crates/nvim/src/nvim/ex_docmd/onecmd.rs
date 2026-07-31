@@ -15,7 +15,7 @@
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::src::nvim::autocmd::{apply_autocmds, getnextac, has_event};
+use crate::src::nvim::autocmd::{EVENT_CMDUNDEFINED, apply_autocmds, getnextac, has_event};
 use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::debugger::dbg_check_breakpoint;
 use crate::src::nvim::edit::beginline;
@@ -50,11 +50,11 @@ use crate::src::nvim::ex_docmd::{
     CMD_rshift, CMD_ruby, CMD_silent, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_syntax,
     CMD_tab, CMD_tcl, CMD_terminal, CMD_throw, CMD_tilde, CMD_topleft, CMD_try, CMD_unlet,
     CMD_unlockvar, CMD_update, CMD_verbose, CMD_vertical, CMD_vglobal, CMD_while, CMD_wincmd,
-    CMD_write, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DOCMD_VERBOSE, EVENT_CMDUNDEFINED,
-    EX_ARGOPT, EX_BANG, EX_CMDARG, EX_CMDWIN, EX_COUNT, EX_DFLALL, EX_EXTRA, EX_FLAGS, EX_LOCK_OK,
-    EX_MODIFY, EX_NEEDARG, EX_RANGE, EX_SBOXOK, EX_TRLBAR, EX_WHOLEFOLD, FAIL, IOSIZE, NUL,
-    PROF_YES, cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command,
-    ex_func_T, exmode_plus, quitmore,
+    CMD_write, CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DOCMD_VERBOSE, EX_ARGOPT, EX_BANG,
+    EX_CMDARG, EX_CMDWIN, EX_COUNT, EX_DFLALL, EX_EXTRA, EX_FLAGS, EX_LOCK_OK, EX_MODIFY,
+    EX_NEEDARG, EX_RANGE, EX_SBOXOK, EX_TRLBAR, EX_WHOLEFOLD, FAIL, IOSIZE, NUL, PROF_YES,
+    cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T,
+    exmode_plus, quitmore,
 };
 use crate::src::nvim::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
 use crate::src::nvim::ex_getln::{curbuf_locked, get_text_locked_msg, script_get, text_locked};

@@ -22,7 +22,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::src::nvim::api::private::helpers::cstr_as_string;
-use crate::src::nvim::autocmd::{apply_autocmds, do_filetype_autocmd};
+use crate::src::nvim::autocmd::{EVENT_OPTIONSET, apply_autocmds, do_filetype_autocmd};
 use crate::src::nvim::charset::buf_init_chartab;
 use crate::src::nvim::drawscreen::{comp_col, redraw_all_later};
 use crate::src::nvim::eval::vars::{
@@ -53,15 +53,15 @@ use crate::src::nvim::ui::ui_call_option_set;
 use crate::src::nvim::window::set_winbar;
 
 use super::{
-    EVENT_OPTIONSET, IOSIZE, MAXCOL, NO_LOCAL_UNDOLEVEL, NUL, NUMBUFLEN, OPT_GLOBAL, OPT_LOCAL,
-    OPT_MODELINE, SID_NONE, UPD_NOT_VALID, VV_OPTION_COMMAND, VV_OPTION_NEW, VV_OPTION_OLD,
-    VV_OPTION_OLDGLOBAL, VV_OPTION_OLDLOCAL, VV_OPTION_TYPE, check_redraw, do_spelllang_source,
-    do_syntax_autocmd, find_tty_option_end, get_varp, get_varp_scope, insecure_flag,
-    is_option_hidden, kFalse, kNone, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagInsecure,
-    kOptFlagRedrAll, kOptFlagSecure, kOptFlagUIOption, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin,
-    kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber, kOptValTypeString, option_has_scope,
-    option_has_type, option_is_global_local, option_is_global_only, option_scope_idx, optval_copy,
-    optval_equal, optval_free, optval_from_varp, set_option_varp, validate_option_value,
+    IOSIZE, MAXCOL, NO_LOCAL_UNDOLEVEL, NUL, NUMBUFLEN, OPT_GLOBAL, OPT_LOCAL, OPT_MODELINE,
+    SID_NONE, UPD_NOT_VALID, VV_OPTION_COMMAND, VV_OPTION_NEW, VV_OPTION_OLD, VV_OPTION_OLDGLOBAL,
+    VV_OPTION_OLDLOCAL, VV_OPTION_TYPE, check_redraw, do_spelllang_source, do_syntax_autocmd,
+    find_tty_option_end, get_varp, get_varp_scope, insecure_flag, is_option_hidden, kFalse, kNone,
+    kOptFlagCurswant, kOptFlagHLOnly, kOptFlagInsecure, kOptFlagRedrAll, kOptFlagSecure,
+    kOptFlagUIOption, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean,
+    kOptValTypeNil, kOptValTypeNumber, kOptValTypeString, option_has_scope, option_has_type,
+    option_is_global_local, option_is_global_only, option_scope_idx, optval_copy, optval_equal,
+    optval_free, optval_from_varp, set_option_varp, validate_option_value,
 };
 
 /// The message buffer the callbacks format into. `set_option` hands its

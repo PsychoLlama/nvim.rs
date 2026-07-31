@@ -5,7 +5,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::src::nvim::ascii::ascii_isdigit;
-use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::autocmd::{EVENT_TABNEWENTERED, apply_autocmds};
 use crate::src::nvim::buffer::{bt_quickfix, buf_spname};
 use crate::src::nvim::charset::{getdigits, getdigits_int, skipwhite};
 use crate::src::nvim::drawscreen::{redraw_later, screen_resize};
@@ -21,8 +21,7 @@ use crate::src::nvim::ex_docmd::tags::ex_findpat;
 use crate::src::nvim::ex_docmd::{
     CMD_new, CMD_sfind, CMD_split, CMD_tabNext, CMD_tabedit, CMD_tabfind, CMD_tabfirst,
     CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, CMOD_KEEPALT,
-    Ctrl_G, EVENT_TABNEWENTERED, FAIL, FNAME_MESS, HLF_T, IOSIZE, NUL, UPD_CLEAR, UPD_VALID,
-    WSP_VERT,
+    Ctrl_G, FAIL, FNAME_MESS, HLF_T, IOSIZE, NUL, UPD_CLEAR, UPD_VALID, WSP_VERT,
 };
 use crate::src::nvim::file_search::{find_file_in_path, vim_findfile_cleanup};
 use crate::src::nvim::main::{

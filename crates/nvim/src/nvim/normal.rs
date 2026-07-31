@@ -15,8 +15,8 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::mouse::{nv_mouse, nv_mousescroll};
 use crate::src::nvim::types::{
     Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, Object, SpellAddType,
-    UIExtension, VimState, VimVarIndex, auto_event, cmdarg_T, getf_values, hlf_T, int16_t,
-    key_extra, oparg_T, pos_T, size_t, smt_T, uint16_t,
+    UIExtension, VimState, VimVarIndex, cmdarg_T, getf_values, hlf_T, int16_t, key_extra, oparg_T,
+    pos_T, size_t, smt_T, uint16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
@@ -66,9 +66,6 @@ pub const KMarkNoContext: MarkMove = 4;
 pub const kMarkContext: MarkMove = 2;
 pub const kMarkBeginLine: MarkMove = 1;
 pub const kMarkAll: MarkGet = 1;
-pub const EVENT_TEXTCHANGED: auto_event = 124;
-pub const EVENT_CURSORMOVED: auto_event = 39;
-pub const EVENT_BUFMODIFIEDSET: auto_event = 8;
 pub const GETF_ALT: getf_values = 2;
 pub const GETF_SETMARK: getf_values = 1;
 pub const OPENLINE_DO_COM: c_uint = 2;

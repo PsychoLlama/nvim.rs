@@ -13,7 +13,7 @@ use core::ptr;
 
 use crate::src::nvim::api::ui::remote_ui_wait_for_attach;
 use crate::src::nvim::arglist::alist_init;
-use crate::src::nvim::autocmd::{apply_autocmds, autocmd_init};
+use crate::src::nvim::autocmd::{EVENT_BUFENTER, EVENT_VIMENTER, apply_autocmds, autocmd_init};
 use crate::src::nvim::buffer::do_autochdir;
 use crate::src::nvim::channel::{channel_from_stdio, channel_init, channel_teardown};
 use crate::src::nvim::diff::diff_win_options;
@@ -51,16 +51,15 @@ use crate::src::nvim::main::exit::{getout, os_exit};
 use crate::src::nvim::main::remote::remote_request;
 use crate::src::nvim::main::usage::{mainerr, print_mainerr};
 use crate::src::nvim::main::{
-    APPENDBIN, EDIT_QF, EDIT_STDIN, EVENT_BUFENTER, EVENT_VIMENTER, GA_EMPTY_INIT_VALUE, IObuff,
-    KE_NOP, LOGLVL_DBG, LOGLVL_INF, NO_BUFFERS, NUL, RedrawingDisabled, Rows, UPD_NOT_VALID,
-    UPD_VALID, VV_OLDFILES, VV_PROGPATH, VV_STARTTIME, VV_SWAPCOMMAND, VV_VIM_DID_ENTER,
-    VV_VIM_DID_INIT, WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curtab, curwin,
-    debug_break_level, embedded_mode, err_arg_missing, exmode_active, firstwin, full_screen,
-    global_alist, headless_mode, kCallbackNone, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus,
-    main_loop, mparm_T, msg_didout, msg_row, msg_scroll, no_wait_return, p_ch, p_lpl, p_shada,
-    p_uc, p_ut, recoverymode, resize_events, restart_edit, scriptout, silent_mode, starting,
-    stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id,
-    ui_client_forward_stdin,
+    APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, IObuff, KE_NOP, LOGLVL_DBG, LOGLVL_INF,
+    NO_BUFFERS, NUL, RedrawingDisabled, Rows, UPD_NOT_VALID, UPD_VALID, VV_OLDFILES, VV_PROGPATH,
+    VV_STARTTIME, VV_SWAPCOMMAND, VV_VIM_DID_ENTER, VV_VIM_DID_INIT, WRITEBIN, argv0, cb_flags,
+    cmdline_row, curbuf, curtab, curwin, debug_break_level, embedded_mode, err_arg_missing,
+    exmode_active, firstwin, full_screen, global_alist, headless_mode, kCallbackNone,
+    kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout, msg_row, msg_scroll,
+    no_wait_return, p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit,
+    scriptout, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
+    ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::memline::recover_names;

@@ -3,13 +3,13 @@
 
 use super::args::frame;
 use super::{
-    C2Rust_Unnamed_16, C2Rust_Unnamed_22, EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, FAIL,
-    GA_EMPTY_INIT_VALUE, NUL, NUMBUFLEN, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN,
-    VAR_UNLOCKED, VV_SEND_SERVER, f_environ, false_0, kCallbackNone, kChannelPartRpc,
-    kChannelStdinNull, kChannelStdinPipe, kChannelStreamProc, kErrorTypeNone, kProcTypePty,
+    C2Rust_Unnamed_16, C2Rust_Unnamed_22, FAIL, GA_EMPTY_INIT_VALUE, NUL, NUMBUFLEN, VAR_BOOL,
+    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VAR_UNLOCKED, VV_SEND_SERVER, f_environ, false_0,
+    kCallbackNone, kChannelPartRpc, kChannelStdinNull, kChannelStdinPipe, kChannelStreamProc,
+    kErrorTypeNone, kProcTypePty,
 };
 use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string, dict_set_var};
-use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::autocmd::{EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, apply_autocmds};
 use crate::src::nvim::buffer::{buf_close_terminal, setfname};
 use crate::src::nvim::channel::{
     channel_close, channel_create_event, channel_decref, channel_incref, channel_job_start,

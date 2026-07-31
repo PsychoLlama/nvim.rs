@@ -7,7 +7,7 @@
 //! signal-handler context, so they may touch editor state freely.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::autocmd::{EVENT_SIGNAL, apply_autocmds};
 use crate::src::nvim::eval::vars::set_vim_var_nr;
 use crate::src::nvim::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
@@ -60,7 +60,6 @@ const LOGLVL_INF: c_int = 2;
 const LOGLVL_ERR: c_int = 4;
 const IOSIZE: usize = 1025;
 const VV_DYING: VimVarIndex = 29;
-const EVENT_SIGNAL: auto_event = 102;
 
 /// The signals the editor watches, in the order upstream registered them.
 /// `WATCHERS[i]` is the watcher for `WATCHED[i]`.

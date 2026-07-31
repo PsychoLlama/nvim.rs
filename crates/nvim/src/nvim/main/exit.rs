@@ -13,7 +13,8 @@ use core::ptr;
 
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::autocmd::{
-    apply_autocmds, block_autocmds, is_autocmd_blocked, unblock_autocmds,
+    EVENT_BUFUNLOAD, EVENT_BUFWINLEAVE, EVENT_VIMLEAVE, EVENT_VIMLEAVEPRE, apply_autocmds,
+    block_autocmds, is_autocmd_blocked, unblock_autocmds,
 };
 use crate::src::nvim::buffer::{
     buf_get_changedtick, buf_set_changedtick, buf_valid, bufref_valid, set_bufref,
@@ -28,11 +29,10 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::entry::event_teardown;
 use crate::src::nvim::main::{
-    EVENT_BUFUNLOAD, EVENT_BUFWINLEAVE, EVENT_VIMLEAVE, EVENT_VIMLEAVEPRE, LOGLVL_INF, NUL,
-    STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO, VAR_NUMBER, VV_EXITING, VV_EXITREASON, curbuf,
-    curtab, did_emsg, ex_exitval, exiting, exmode_active, first_tabpage, firstbuf, firstwin,
-    garbage_collect_at_exit, no_wait_return, p_shada, p_title, p_titleold, stderr_isatty,
-    stdout_isatty, ui_client_channel_id, ui_client_exit_status, used_stdin, v_dying,
+    LOGLVL_INF, NUL, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO, VAR_NUMBER, VV_EXITING,
+    VV_EXITREASON, curbuf, curtab, did_emsg, ex_exitval, exiting, exmode_active, first_tabpage,
+    firstbuf, firstwin, garbage_collect_at_exit, no_wait_return, p_shada, p_title, p_titleold,
+    stderr_isatty, stdout_isatty, ui_client_channel_id, ui_client_exit_status, used_stdin, v_dying,
 };
 use crate::src::nvim::memline::{ml_close_all, ml_close_notmod, ml_sync_all};
 use crate::src::nvim::message::wait_return;

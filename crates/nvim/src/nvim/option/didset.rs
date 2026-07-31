@@ -18,7 +18,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::src::nvim::ascii::ascii_isdigit;
-use crate::src::nvim::autocmd::apply_autocmds;
+use crate::src::nvim::autocmd::{EVENT_BUFADD, EVENT_BUFDELETE, EVENT_SYNTAX, apply_autocmds};
 use crate::src::nvim::buffer::do_autochdir;
 use crate::src::nvim::change::save_file_ff;
 use crate::src::nvim::charset::buf_init_chartab;
@@ -66,11 +66,10 @@ use crate::src::nvim::window::{
 use crate::src::nvim::winfloat::win_float_update_statusline;
 
 use super::{
-    B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, Ctrl_C, DIP_ALL, EVENT_BUFADD, EVENT_BUFDELETE,
-    EVENT_SYNTAX, HLF_W, K_KENTER, NO_SCREEN, NUL, OPT_GLOBAL, OPT_LOCAL, STATUS_HEIGHT,
-    UPD_NOT_VALID, UPD_SOME_VALID, VV_WARNINGMSG, check_blending, did_set_title, kFalse,
-    kOptValTypeNumber, kOptValTypeString, option_was_set, redraw_titles, set_option_value,
-    set_option_varp, set_options_bin,
+    B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, Ctrl_C, DIP_ALL, HLF_W, K_KENTER, NO_SCREEN, NUL,
+    OPT_GLOBAL, OPT_LOCAL, STATUS_HEIGHT, UPD_NOT_VALID, UPD_SOME_VALID, VV_WARNINGMSG,
+    check_blending, did_set_title, kFalse, kOptValTypeNumber, kOptValTypeString, option_was_set,
+    redraw_titles, set_option_value, set_option_varp, set_options_bin,
 };
 
 /// "E590", the one message a callback in this module reports.

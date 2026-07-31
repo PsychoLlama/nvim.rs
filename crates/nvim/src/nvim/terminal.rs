@@ -38,8 +38,8 @@ use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_object, cstr_as_string, dict_get_value,
 };
 use crate::src::nvim::autocmd::{
-    apply_autocmds, apply_autocmds_group, aucmd_prepbuf, aucmd_restbuf, block_autocmds,
-    is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
+    EVENT_TERMCLOSE, EVENT_TERMOPEN, apply_autocmds, apply_autocmds_group, aucmd_prepbuf,
+    aucmd_restbuf, block_autocmds, is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
 };
 use crate::src::nvim::change::deleted_lines_buf;
 use crate::src::nvim::cursor_shape::{SHAPE_IDX_TERM, shape_table};
@@ -70,9 +70,9 @@ use crate::src::nvim::types::{
     Arena, Buffer, Error, ErrorType, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode,
     Object, OptVal, OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermAttr,
     VTermColor, VTermColor_rgb, VTermDamageSize, VTermScreenCell, VTermScreenCellAttrs, VTermState,
-    VTermTerminator, VTermValue, VTermValueType, VimVarIndex, aco_save_T, auto_event, buf_T,
-    colnr_T, exarg_T, handle_T, int16_t, kObjectTypeNil, kObjectTypeString, linenr_T, pos_T, ptr_t,
-    save_v_event_T, size_t, tabpage_T, uint8_t, varnumber_T, win_T,
+    VTermTerminator, VTermValue, VTermValueType, VimVarIndex, aco_save_T, buf_T, colnr_T, exarg_T,
+    handle_T, int16_t, kObjectTypeNil, kObjectTypeString, linenr_T, pos_T, ptr_t, save_v_event_T,
+    size_t, tabpage_T, uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::vterm::parser::vterm_input_write;
 use crate::src::nvim::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -124,12 +124,6 @@ const MODE_TERMINAL: c_int = 128;
 const UPD_VALID: c_int = 10;
 const UPD_SOME_VALID: c_int = 35;
 const AUGROUP_ALL: c_int = -3;
-const EVENT_TERMCLOSE: auto_event = 118;
-const EVENT_TERMENTER: auto_event = 119;
-const EVENT_TERMLEAVE: auto_event = 120;
-const EVENT_TERMOPEN: auto_event = 121;
-const EVENT_TERMREQUEST: auto_event = 122;
-const EVENT_TEXTCHANGEDT: auto_event = 127;
 /// `v:termrequest`.
 const VV_TERMREQUEST: VimVarIndex = 10;
 

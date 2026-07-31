@@ -15,7 +15,9 @@
 
 use core::ptr;
 
-use crate::src::nvim::autocmd::{apply_autocmds, has_event};
+use crate::src::nvim::autocmd::{
+    EVENT_BUFMODIFIEDSET, EVENT_CURSORMOVED, EVENT_TEXTCHANGED, apply_autocmds, has_event,
+};
 use crate::src::nvim::buffer::{buf_get_changedtick, fileinfo};
 use crate::src::nvim::diff::ex_diffupdate;
 use crate::src::nvim::drawscreen::{
@@ -44,11 +46,10 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::{may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::src::nvim::normal::{
-    CA_COMMAND_BUSY, EVENT_BUFMODIFIEDSET, EVENT_CURSORMOVED, EVENT_TEXTCHANGED, MOD_MASK_SHIFT,
-    MODE_INSERT, MODE_NORMAL, MODE_NORMAL_BUSY, NUL, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS,
-    NV_STS, NormalState, OP_NOP, SHM_FILEINFO, UPD_INVERTED, check_scrollbind, clearop,
-    clearopbeep, current_oap, end_visual_mode, false_0, find_command, normal_execute, nv_cmds,
-    true_0, unshift_special,
+    CA_COMMAND_BUSY, MOD_MASK_SHIFT, MODE_INSERT, MODE_NORMAL, MODE_NORMAL_BUSY, NUL, NV_NCH,
+    NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS, NormalState, OP_NOP, SHM_FILEINFO, UPD_INVERTED,
+    check_scrollbind, clearop, clearopbeep, current_oap, end_visual_mode, false_0, find_command,
+    normal_execute, nv_cmds, true_0, unshift_special,
 };
 use crate::src::nvim::option::shortmess;
 use crate::src::nvim::options::kOptFdoFlagAll;

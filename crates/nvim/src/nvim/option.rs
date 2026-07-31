@@ -38,7 +38,7 @@ use crate::src::nvim::main::empty_string_option;
 use crate::src::nvim::optionstr::set_chars_option;
 use crate::src::nvim::types::{
     CMD_index, CallbackType, CharsOption, ErrorType, HlAttrs, OptScope, OptValType, RgbValue,
-    String_0, TriState, VarType, VimVarIndex, auto_event, int16_t, int32_t, size_t, xp_prefix_T,
+    String_0, TriState, VarType, VimVarIndex, int16_t, int32_t, size_t, xp_prefix_T,
 };
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -148,10 +148,6 @@ pub const OP_NONE: set_op_T = 0;
 pub const CMD_setlocal: CMD_index = 402;
 pub const CMD_setglobal: CMD_index = 401;
 pub const CMOD_NOSWAPFILE: c_uint = 8192;
-pub const EVENT_SYNTAX: auto_event = 110;
-pub const EVENT_OPTIONSET: auto_event = 85;
-pub const EVENT_BUFDELETE: auto_event = 2;
-pub const EVENT_BUFADD: auto_event = 0;
 pub const SHM_WRI: c_uint = 119;
 pub const SHM_LINES: c_uint = 108;
 pub const SHM_MOD: c_uint = 109;
