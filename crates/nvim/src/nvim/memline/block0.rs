@@ -12,251 +12,199 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int, c_long};
+
 #[allow(unused_imports)]
 use super::*;
 
-pub unsafe extern "C" fn ml_timestamp(mut buf: *mut buf_T) {
-    unsafe {
-        ml_upd_block0(buf, UB_FNAME);
+impl ZeroBlock {
+    /// Upstream keeps two more fields in the last two bytes of the name:
+    /// `#define b0_dirty b0_fname[B0_FNAME_SIZE_ORG - 1]` and
+    /// `#define b0_flags b0_fname[B0_FNAME_SIZE_ORG - 2]`. That is why the
+    /// name itself is only ever written up to `B0_FNAME_SIZE_NOCRYPT`.
+    const DIRTY: usize = B0_FNAME_SIZE_ORG as usize - 1;
+    const FLAGS: usize = B0_FNAME_SIZE_ORG as usize - 2;
+
+    /// [`B0_SAME_DIR`], [`B0_HAS_FENC`] and the `'fileformat'` in
+    /// [`B0_FF_MASK`].
+    fn flags(&self) -> c_int {
+        self.b0_fname[Self::FLAGS] as c_int
+    }
+
+    fn set_flags(&mut self, flags: c_int) {
+        self.b0_fname[Self::FLAGS] = flags as c_char;
+    }
+
+    fn set_flag(&mut self, flag: c_int, on: bool) {
+        let flags = self.flags();
+        self.set_flags(if on { flags | flag } else { flags & !flag });
+    }
+
+    /// Whether the buffer had unsaved changes when this was last written.
+    /// It is what makes `:recover` worth offering.
+    fn set_dirty(&mut self, dirty: bool) {
+        self.b0_fname[Self::DIRTY] = if dirty { B0_DIRTY } else { 0 } as c_char;
     }
 }
 
-pub(crate) unsafe extern "C" fn ml_check_b0_id(mut b0p: *mut ZeroBlock) -> bool {
+/// Record the file's timestamp in the swap file, after it has been written.
+pub unsafe fn ml_timestamp(buf: *mut buf_T) {
+    unsafe { ml_upd_block0(buf, UB_FNAME) }
+}
+
+/// Whether the two bytes that identify a swap file are at the head of this
+/// block. They are the first thing read back, and a mismatch means the file
+/// is not a swap file at all.
+pub(crate) unsafe fn ml_check_b0_id(b0p: *mut ZeroBlock) -> bool {
     unsafe {
-        return (*b0p).b0_id[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-            == BLOCK0_ID0 as ::core::ffi::c_int
-            && (*b0p).b0_id[1 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-                == BLOCK0_ID1 as ::core::ffi::c_int;
+        (*b0p).b0_id[0] as c_int == BLOCK0_ID0 as c_int
+            && (*b0p).b0_id[1] as c_int == BLOCK0_ID1 as c_int
     }
 }
 
-pub(crate) unsafe extern "C" fn ml_check_b0_strings(mut b0p: *mut ZeroBlock) -> bool {
+/// Whether every string in the block is terminated inside its own field.
+/// A swap file is read from disk, so nothing may be assumed about it: an
+/// unterminated name would be read past by everything downstream.
+pub(crate) unsafe fn ml_check_b0_strings(b0p: *mut ZeroBlock) -> bool {
     unsafe {
-        return !memchr(
-            &raw mut (*b0p).b0_version as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
-            NUL,
-            10 as size_t,
-        )
-        .is_null()
-            && !memchr(
-                &raw mut (*b0p).b0_uname as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
-                NUL,
-                B0_UNAME_SIZE as ::core::ffi::c_int as size_t,
-            )
-            .is_null()
-            && !memchr(
-                &raw mut (*b0p).b0_hname as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
-                NUL,
-                B0_HNAME_SIZE as ::core::ffi::c_int as size_t,
-            )
-            .is_null()
-            && !memchr(
-                &raw mut (*b0p).b0_fname as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
-                NUL,
-                B0_FNAME_SIZE_CRYPT as ::core::ffi::c_int as size_t,
-            )
-            .is_null();
+        let b0 = &*b0p;
+        b0.b0_version.contains(&0)
+            && b0.b0_uname.contains(&0)
+            && b0.b0_hname.contains(&0)
+            && b0.b0_fname[..B0_FNAME_SIZE_CRYPT as usize].contains(&0)
     }
 }
 
-pub(crate) unsafe extern "C" fn ml_upd_block0(mut buf: *mut buf_T, mut what: upd_block0_T) {
+/// Bring block zero up to date with the buffer: either the file name and
+/// timestamp ([`UB_FNAME`]), or the "swap file is beside the file" flag
+/// ([`UB_SAME_DIR`]).
+pub(crate) unsafe fn ml_upd_block0(buf: *mut buf_T, what: upd_block0_T) {
     unsafe {
-        let mut hp: *mut bhdr_T = ::core::ptr::null_mut::<bhdr_T>();
-        let mut mfp: *mut memfile_T = (*buf).b_ml.ml_mfp;
-        if mfp.is_null() || {
-            hp = mf_get(mfp, 0 as blocknr_T, 1 as ::core::ffi::c_uint);
-            hp.is_null()
-        } {
+        let mfp = (*buf).b_ml.ml_mfp;
+        if mfp.is_null() {
             return;
         }
-        let mut b0p: *mut ZeroBlock = (*hp).bh_data as *mut ZeroBlock;
-        if ml_check_b0_id(b0p) as ::core::ffi::c_int == FAIL {
+        let hp = mf_get(mfp, 0, 1);
+        if hp.is_null() {
+            return;
+        }
+
+        let b0p = (*hp).bh_data as *mut ZeroBlock;
+        if !ml_check_b0_id(b0p) {
             iemsg(gettext(
-                b"E304: ml_upd_block0(): Didn't get block 0??\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+                c"E304: ml_upd_block0(): Didn't get block 0??".as_ptr(),
             ));
-        } else if what as ::core::ffi::c_uint
-            == UB_FNAME as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        } else if what == UB_FNAME {
             set_b0_fname(b0p, buf);
         } else {
             set_b0_dir_flag(b0p, buf);
         }
-        mf_put(mfp, hp, true_0 != 0, false_0 != 0);
+        mf_put(mfp, hp, true, false);
     }
 }
 
-pub(crate) unsafe extern "C" fn set_b0_fname(mut b0p: *mut ZeroBlock, mut buf: *mut buf_T) {
+/// Write the file's name, timestamp and inode into block zero, and set
+/// `buf->b_mtime` from the same `stat`.
+///
+/// Must not use `NameBuff`: it is in use by some of the callers.
+pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buf: *mut buf_T) {
     unsafe {
         if (*buf).b_ffname.is_null() {
-            (*b0p).b0_fname[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
+            (*b0p).b0_fname[0] = NUL as c_char;
         } else {
-            let mut uname: [::core::ffi::c_char; 40] = [0; 40];
+            // A file under the current user's home directory is recorded as
+            // "~user/...", so that the same file opened from another machine
+            // over a network is still recognised as the same file.
+            // `home_replace` writes "~/", and the user name is spliced in
+            // after the tilde.
+            let name = &mut (*b0p).b0_fname;
             home_replace(
-                ::core::ptr::null::<buf_T>(),
+                core::ptr::null::<buf_T>(),
                 (*buf).b_ffname,
-                &raw mut (*b0p).b0_fname as *mut ::core::ffi::c_char,
-                B0_FNAME_SIZE_CRYPT as ::core::ffi::c_int as size_t,
-                true_0 != 0,
+                name.as_mut_ptr(),
+                B0_FNAME_SIZE_CRYPT as size_t,
+                true,
             );
-            if (*b0p).b0_fname[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-                == '~' as ::core::ffi::c_int
-            {
-                let mut retval: ::core::ffi::c_int = os_get_username(
-                    &raw mut uname as *mut ::core::ffi::c_char,
-                    B0_UNAME_SIZE as ::core::ffi::c_int as size_t,
-                );
-                let mut ulen: size_t = strlen(&raw mut uname as *mut ::core::ffi::c_char);
-                let mut flen: size_t = strlen(&raw mut (*b0p).b0_fname as *mut ::core::ffi::c_char);
-                if retval == FAIL
-                    || ulen.wrapping_add(flen)
-                        > (B0_FNAME_SIZE_CRYPT as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                            as size_t
-                {
+            if name[0] as c_int == '~' as c_int {
+                let mut uname: [c_char; B0_UNAME_SIZE as usize] = [0; B0_UNAME_SIZE as usize];
+                let named = os_get_username(uname.as_mut_ptr(), B0_UNAME_SIZE as size_t);
+                let ulen = strlen(uname.as_ptr()) as usize;
+                // `flen` counts the bytes after the tilde *including* the
+                // terminator, which is exactly what has to shift right.
+                let flen = strlen(name.as_ptr()) as usize;
+                if named == FAIL || ulen + flen > B0_FNAME_SIZE_CRYPT as usize - 1 {
+                    // No user name, or no room for one: keep the path as it
+                    // was given.
                     xstrlcpy(
-                        &raw mut (*b0p).b0_fname as *mut ::core::ffi::c_char,
+                        name.as_mut_ptr(),
                         (*buf).b_ffname,
-                        B0_FNAME_SIZE_CRYPT as ::core::ffi::c_int as size_t,
+                        B0_FNAME_SIZE_CRYPT as size_t,
                     );
                 } else {
-                    memmove(
-                        (&raw mut (*b0p).b0_fname as *mut ::core::ffi::c_char)
-                            .offset(ulen as isize)
-                            .offset(1 as ::core::ffi::c_int as isize)
-                            as *mut ::core::ffi::c_void,
-                        (&raw mut (*b0p).b0_fname as *mut ::core::ffi::c_char)
-                            .offset(1 as ::core::ffi::c_int as isize)
-                            as *const ::core::ffi::c_void,
-                        flen,
-                    );
-                    memmove(
-                        (&raw mut (*b0p).b0_fname as *mut ::core::ffi::c_char)
-                            .offset(1 as ::core::ffi::c_int as isize)
-                            as *mut ::core::ffi::c_void,
-                        &raw mut uname as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
-                        ulen,
-                    );
+                    name.copy_within(1..1 + flen, 1 + ulen);
+                    name[1..1 + ulen].copy_from_slice(&uname[..ulen]);
                 }
             }
-            let mut file_info: FileInfo = FileInfo {
-                stat: uv_stat_t {
-                    st_dev: 0,
-                    st_mode: 0,
-                    st_nlink: 0,
-                    st_uid: 0,
-                    st_gid: 0,
-                    st_rdev: 0,
-                    st_ino: 0,
-                    st_size: 0,
-                    st_blksize: 0,
-                    st_blocks: 0,
-                    st_flags: 0,
-                    st_gen: 0,
-                    st_atim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_mtim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_ctim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_birthtim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                },
-            };
+
+            let mut file_info: FileInfo = core::mem::zeroed();
             if os_fileinfo((*buf).b_ffname, &raw mut file_info) {
-                long_to_char(
+                b0_store_number(
                     file_info.stat.st_mtim.tv_sec,
-                    &raw mut (*b0p).b0_mtime as *mut ::core::ffi::c_char,
+                    (&raw mut (*b0p).b0_mtime).cast::<c_char>(),
                 );
-                long_to_char(
-                    os_fileinfo_inode(&raw mut file_info) as ::core::ffi::c_long,
-                    &raw mut (*b0p).b0_ino as *mut ::core::ffi::c_char,
+                b0_store_number(
+                    os_fileinfo_inode(&raw mut file_info) as c_long,
+                    (&raw mut (*b0p).b0_ino).cast::<c_char>(),
                 );
                 buf_store_file_info(buf, &raw mut file_info);
                 (*buf).b_mtime_read = (*buf).b_mtime;
                 (*buf).b_mtime_read_ns = (*buf).b_mtime_ns;
             } else {
-                long_to_char(
-                    0 as ::core::ffi::c_long,
-                    &raw mut (*b0p).b0_mtime as *mut ::core::ffi::c_char,
-                );
-                long_to_char(
-                    0 as ::core::ffi::c_long,
-                    &raw mut (*b0p).b0_ino as *mut ::core::ffi::c_char,
-                );
-                (*buf).b_mtime = 0 as int64_t;
-                (*buf).b_mtime_ns = 0 as int64_t;
-                (*buf).b_mtime_read = 0 as int64_t;
-                (*buf).b_mtime_read_ns = 0 as int64_t;
-                (*buf).b_orig_size = 0 as uint64_t;
-                (*buf).b_orig_mode = 0 as ::core::ffi::c_int;
+                b0_store_number(0, (&raw mut (*b0p).b0_mtime).cast::<c_char>());
+                b0_store_number(0, (&raw mut (*b0p).b0_ino).cast::<c_char>());
+                (*buf).b_mtime = 0;
+                (*buf).b_mtime_ns = 0;
+                (*buf).b_mtime_read = 0;
+                (*buf).b_mtime_read_ns = 0;
+                (*buf).b_orig_size = 0;
+                (*buf).b_orig_mode = 0;
             }
         }
+
+        // Upstream passes `curbuf` here, not `buf`. Preserved: the two are
+        // the same for every reachable caller.
         add_b0_fenc(b0p, curbuf.get());
     }
 }
 
-pub(crate) unsafe extern "C" fn set_b0_dir_flag(mut b0p: *mut ZeroBlock, mut buf: *mut buf_T) {
+/// Record whether the file and its swap file are in the same directory.
+///
+/// Fail safe: anything short of proof leaves the flag clear.
+pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buf: *mut buf_T) {
     unsafe {
-        if same_directory((*(*buf).b_ml.ml_mfp).mf_fname, (*buf).b_ffname) {
-            (*b0p).b0_fname
-                [(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 2 as ::core::ffi::c_int) as usize] =
-                ((*b0p).b0_fname
-                    [(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 2 as ::core::ffi::c_int) as usize]
-                    as ::core::ffi::c_int
-                    | B0_SAME_DIR) as ::core::ffi::c_char;
-        } else {
-            (*b0p).b0_fname
-                [(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 2 as ::core::ffi::c_int) as usize] =
-                ((*b0p).b0_fname
-                    [(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 2 as ::core::ffi::c_int) as usize]
-                    as ::core::ffi::c_int
-                    & !B0_SAME_DIR) as ::core::ffi::c_char;
-        };
+        let same = same_directory((*(*buf).b_ml.ml_mfp).mf_fname, (*buf).b_ffname);
+        (*b0p).set_flag(B0_SAME_DIR, same);
     }
 }
 
-pub(crate) unsafe extern "C" fn add_b0_fenc(mut b0p: *mut ZeroBlock, mut buf: *mut buf_T) {
+/// Append the buffer's `'fileencoding'` to block zero, if it fits.
+///
+/// It goes at the *end* of the name field with a NUL in front of it, so a
+/// reader that does not know about [`B0_HAS_FENC`] still sees a terminated
+/// name and never reaches the encoding.
+pub(crate) unsafe fn add_b0_fenc(b0p: *mut ZeroBlock, buf: *mut buf_T) {
     unsafe {
-        let size: ::core::ffi::c_int = B0_FNAME_SIZE_NOCRYPT as ::core::ffi::c_int;
-        let mut n: ::core::ffi::c_int = strlen((*buf).b_p_fenc) as ::core::ffi::c_int;
-        if strlen(&raw mut (*b0p).b0_fname as *mut ::core::ffi::c_char) as ::core::ffi::c_int
-            + n
-            + 1 as ::core::ffi::c_int
-            > size
-        {
-            (*b0p).b0_fname
-                [(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 2 as ::core::ffi::c_int) as usize] =
-                ((*b0p).b0_fname
-                    [(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 2 as ::core::ffi::c_int) as usize]
-                    as ::core::ffi::c_int
-                    & !B0_HAS_FENC) as ::core::ffi::c_char;
-        } else {
-            memmove(
-                (&raw mut (*b0p).b0_fname as *mut ::core::ffi::c_char)
-                    .offset(size as isize)
-                    .offset(-(n as isize)) as *mut ::core::ffi::c_void,
-                (*buf).b_p_fenc as *const ::core::ffi::c_void,
-                n as size_t,
-            );
-            *(&raw mut (*b0p).b0_fname as *mut ::core::ffi::c_char)
-                .offset(size as isize)
-                .offset(-(n as isize))
-                .offset(-(1 as ::core::ffi::c_int as isize)) = NUL as ::core::ffi::c_char;
-            (*b0p).b0_fname
-                [(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 2 as ::core::ffi::c_int) as usize] =
-                ((*b0p).b0_fname
-                    [(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 2 as ::core::ffi::c_int) as usize]
-                    as ::core::ffi::c_int
-                    | B0_HAS_FENC) as ::core::ffi::c_char;
-        };
+        let size = B0_FNAME_SIZE_NOCRYPT as usize;
+        let fenc = (*buf).b_p_fenc;
+        let n = strlen(fenc) as usize;
+        let name = &mut (*b0p).b0_fname;
+        let fits = strlen(name.as_ptr()) as usize + n + 1 <= size;
+        if fits {
+            let at = size - n;
+            core::ptr::copy_nonoverlapping(fenc, name[at..].as_mut_ptr(), n);
+            name[at - 1] = NUL as c_char;
+        }
+        (*b0p).set_flag(B0_HAS_FENC, fits);
     }
 }
 
@@ -305,7 +253,7 @@ pub(crate) unsafe extern "C" fn swapfile_proc_running(
             return 0 as ::core::ffi::c_int;
         }
         let mut pid: ::core::ffi::c_int =
-            char_to_long(&raw const (*b0p).b0_pid as *const ::core::ffi::c_char)
+            b0_read_number(&raw const (*b0p).b0_pid as *const ::core::ffi::c_char)
                 as ::core::ffi::c_int;
         return if os_proc_running(pid) as ::core::ffi::c_int != 0 {
             pid
@@ -350,7 +298,7 @@ pub unsafe extern "C" fn swapfile_dict(mut fname: *const ::core::ffi::c_char, mu
                             .wrapping_sub(1 as size_t),
                         b"Not a swap file\0".as_ptr() as *const ::core::ffi::c_char,
                     );
-                } else if b0_magic_wrong(&raw mut b0) != 0 {
+                } else if b0_magic_wrong(&raw mut b0) {
                     tv_dict_add_str(
                         d,
                         b"error\0".as_ptr() as *const ::core::ffi::c_char,
@@ -403,7 +351,7 @@ pub unsafe extern "C" fn swapfile_dict(mut fname: *const ::core::ffi::c_char, mu
                         b"mtime\0".as_ptr() as *const ::core::ffi::c_char,
                         ::core::mem::size_of::<[::core::ffi::c_char; 6]>()
                             .wrapping_sub(1 as size_t),
-                        char_to_long(&raw mut b0.b0_mtime as *mut ::core::ffi::c_char)
+                        b0_read_number(&raw mut b0.b0_mtime as *mut ::core::ffi::c_char)
                             as varnumber_T,
                     );
                     tv_dict_add_nr(
@@ -426,7 +374,8 @@ pub unsafe extern "C" fn swapfile_dict(mut fname: *const ::core::ffi::c_char, mu
                         b"inode\0".as_ptr() as *const ::core::ffi::c_char,
                         ::core::mem::size_of::<[::core::ffi::c_char; 6]>()
                             .wrapping_sub(1 as size_t),
-                        char_to_long(&raw mut b0.b0_ino as *mut ::core::ffi::c_char) as varnumber_T,
+                        b0_read_number(&raw mut b0.b0_ino as *mut ::core::ffi::c_char)
+                            as varnumber_T,
                     );
                 }
             } else {
@@ -651,7 +600,7 @@ pub(crate) unsafe extern "C" fn swapfile_info(
                             &raw mut b0.b0_hname as *mut ::core::ffi::c_char,
                         );
                     }
-                    if char_to_long(&raw mut b0.b0_pid as *mut ::core::ffi::c_char)
+                    if b0_read_number(&raw mut b0.b0_pid as *mut ::core::ffi::c_char)
                         != 0 as ::core::ffi::c_long
                     {
                         kv_do_printf(
@@ -663,7 +612,7 @@ pub(crate) unsafe extern "C" fn swapfile_info(
                         kv_do_printf(
                             msg_0,
                             b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-                            char_to_long(&raw mut b0.b0_pid as *mut ::core::ffi::c_char)
+                            b0_read_number(&raw mut b0.b0_pid as *mut ::core::ffi::c_char)
                                 as ::core::ffi::c_int,
                         );
                         proc_running.set(swapfile_proc_running(&raw mut b0, fname));
@@ -676,7 +625,7 @@ pub(crate) unsafe extern "C" fn swapfile_info(
                             );
                         }
                     }
-                    if b0_magic_wrong(&raw mut b0) != 0 {
+                    if b0_magic_wrong(&raw mut b0) {
                         kv_do_printf(
                             msg_0,
                             gettext(b"\n         [not usable on this computer]\0".as_ptr()
@@ -737,8 +686,7 @@ pub(crate) unsafe extern "C" fn swapfile_unchanged(mut fname: *mut ::core::ffi::
             return false_0 != 0;
         }
         let mut ret: bool = true_0 != 0;
-        if ml_check_b0_id(&raw mut b0) as ::core::ffi::c_int == FAIL
-            || b0_magic_wrong(&raw mut b0) != 0
+        if ml_check_b0_id(&raw mut b0) as ::core::ffi::c_int == FAIL || b0_magic_wrong(&raw mut b0)
         {
             ret = false_0 != 0;
         }
@@ -767,7 +715,8 @@ pub(crate) unsafe extern "C" fn swapfile_unchanged(mut fname: *mut ::core::ffi::
                 ret = false_0 != 0;
             }
         }
-        if char_to_long(&raw mut b0.b0_pid as *mut ::core::ffi::c_char) == 0 as ::core::ffi::c_long
+        if b0_read_number(&raw mut b0.b0_pid as *mut ::core::ffi::c_char)
+            == 0 as ::core::ffi::c_long
             || swapfile_proc_running(&raw mut b0, fname) != 0
         {
             ret = false_0 != 0;
@@ -777,14 +726,16 @@ pub(crate) unsafe extern "C" fn swapfile_unchanged(mut fname: *mut ::core::ffi::
     }
 }
 
-pub(crate) unsafe extern "C" fn b0_magic_wrong(mut b0p: *mut ZeroBlock) -> ::core::ffi::c_int {
+/// Whether the four magic numbers say this swap file was written by a
+/// different build: they are one value per width, so a change of
+/// endianness or of a type's size shows up as a mismatch.
+pub(crate) unsafe fn b0_magic_wrong(b0p: *mut ZeroBlock) -> bool {
     unsafe {
-        return ((*b0p).b0_magic_long != B0_MAGIC_LONG as ::core::ffi::c_int as ::core::ffi::c_long
-            || (*b0p).b0_magic_int != B0_MAGIC_INT as ::core::ffi::c_int
-            || (*b0p).b0_magic_short as ::core::ffi::c_int
-                != B0_MAGIC_SHORT as ::core::ffi::c_int as int16_t as ::core::ffi::c_int
-            || (*b0p).b0_magic_char as ::core::ffi::c_int != B0_MAGIC_CHAR as ::core::ffi::c_int)
-            as ::core::ffi::c_int;
+        (*b0p).b0_magic_long != B0_MAGIC_LONG as c_long
+            || (*b0p).b0_magic_int != B0_MAGIC_INT as c_int
+            // Truncated to 16 bits on the way in, so compare it truncated.
+            || (*b0p).b0_magic_short != B0_MAGIC_SHORT as int16_t
+            || (*b0p).b0_magic_char as c_int != B0_MAGIC_CHAR as c_int
     }
 }
 
@@ -869,65 +820,49 @@ pub(crate) unsafe extern "C" fn fnamecmp_ino(
     }
 }
 
-pub(crate) unsafe extern "C" fn long_to_char(
-    mut n: ::core::ffi::c_long,
-    mut s_in: *mut ::core::ffi::c_char,
-) {
-    unsafe {
-        let mut s: *mut uint8_t = s_in as *mut uint8_t;
-        *s.offset(0 as ::core::ffi::c_int as isize) = (n & 0xff as ::core::ffi::c_long) as uint8_t;
-        n = (n as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int) as ::core::ffi::c_long;
-        *s.offset(1 as ::core::ffi::c_int as isize) = (n & 0xff as ::core::ffi::c_long) as uint8_t;
-        n = (n as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int) as ::core::ffi::c_long;
-        *s.offset(2 as ::core::ffi::c_int as isize) = (n & 0xff as ::core::ffi::c_long) as uint8_t;
-        n = (n as ::core::ffi::c_uint >> 8 as ::core::ffi::c_int) as ::core::ffi::c_long;
-        *s.offset(3 as ::core::ffi::c_int as isize) = (n & 0xff as ::core::ffi::c_long) as uint8_t;
-    }
+/// Store a number in block zero: four bytes, little-endian.
+///
+/// Only the low 32 bits survive — the format has no room for more, and a
+/// timestamp or inode wider than that is simply truncated, as upstream's
+/// `(unsigned)n >> 8` stepping did.
+pub(crate) unsafe fn b0_store_number(n: c_long, dest: *mut c_char) {
+    let bytes = (n as u32).to_le_bytes();
+    // SAFETY: every field written through here is four bytes wide, and the
+    // block is a byte array, so alignment is not in question.
+    unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), dest, 4) };
 }
 
-pub(crate) unsafe extern "C" fn char_to_long(
-    mut s_in: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_long {
-    unsafe {
-        let mut s: *const uint8_t = s_in as *mut uint8_t;
-        let mut retval: ::core::ffi::c_long =
-            *s.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_long;
-        retval <<= 8 as ::core::ffi::c_int;
-        retval |= *s.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_long;
-        retval <<= 8 as ::core::ffi::c_int;
-        retval |= *s.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_long;
-        retval <<= 8 as ::core::ffi::c_int;
-        retval |= *s.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_long;
-        return retval;
-    }
+/// Read back a number stored by [`b0_store_number`]. The result is the
+/// unsigned 32-bit value widened, never negative.
+pub(crate) unsafe fn b0_read_number(src: *const c_char) -> c_long {
+    let mut bytes = [0u8; 4];
+    // SAFETY: as [`b0_store_number`].
+    unsafe { core::ptr::copy_nonoverlapping(src.cast::<u8>(), bytes.as_mut_ptr(), 4) };
+    u32::from_le_bytes(bytes) as c_long
 }
 
-pub unsafe extern "C" fn ml_setflags(mut buf: *mut buf_T) {
+/// Update the flags block zero carries about the buffer — whether it has
+/// unsaved changes, its `'fileformat'` and its `'fileencoding'` — and push
+/// block zero alone to disk.
+pub unsafe fn ml_setflags(buf: *mut buf_T) {
     unsafe {
-        if (*buf).b_ml.ml_mfp.is_null() {
+        let mfp = (*buf).b_ml.ml_mfp;
+        if mfp.is_null() {
             return;
         }
-        let mut hp: *mut bhdr_T = mf_find((*buf).b_ml.ml_mfp, 0 as blocknr_T);
-        if !hp.is_null() {
-            let mut b0p: *mut ZeroBlock = (*hp).bh_data as *mut ZeroBlock;
-            (*b0p).b0_fname
-                [(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize] =
-                (if (*buf).b_changed != 0 {
-                    B0_DIRTY
-                } else {
-                    0 as ::core::ffi::c_int
-                }) as ::core::ffi::c_char;
-            (*b0p).b0_fname
-                [(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 2 as ::core::ffi::c_int) as usize] =
-                ((*b0p).b0_fname
-                    [(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 2 as ::core::ffi::c_int) as usize]
-                    as ::core::ffi::c_int
-                    & !B0_FF_MASK
-                    | (get_fileformat(buf) + 1 as ::core::ffi::c_int) as uint8_t
-                        as ::core::ffi::c_int) as ::core::ffi::c_char;
-            add_b0_fenc(b0p, buf);
-            (*hp).bh_flags |= BH_DIRTY;
-            mf_sync((*buf).b_ml.ml_mfp, MFS_ZERO as ::core::ffi::c_int);
+        // Only if block zero is already in memory; there is nothing here
+        // worth a read for.
+        let hp = mf_find(mfp, 0);
+        if hp.is_null() {
+            return;
         }
+
+        let b0p = (*hp).bh_data as *mut ZeroBlock;
+        (*b0p).set_dirty((*buf).b_changed != 0);
+        let fileformat = (get_fileformat(buf) + 1) as uint8_t as c_int;
+        (*b0p).set_flags((*b0p).flags() & !B0_FF_MASK | fileformat);
+        add_b0_fenc(b0p, buf);
+        (*hp).bh_flags |= BH_DIRTY;
+        mf_sync(mfp, MFS_ZERO as c_int);
     }
 }

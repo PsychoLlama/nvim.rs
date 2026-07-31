@@ -51,8 +51,8 @@ use crate::src::nvim::os::fs::{
 };
 use crate::src::nvim::os::input::{line_breakcheck, os_char_avail};
 use crate::src::nvim::os::libc::{
-    __assert_fail, __errno_location, close, gettext, lseek, memchr, memmove, readlink, strcasecmp,
-    strcmp, strcpy, strlen, strncasecmp, strncmp,
+    __assert_fail, __errno_location, close, gettext, lseek, memmove, readlink, strcasecmp, strcmp,
+    strcpy, strlen, strncasecmp, strncmp,
 };
 use crate::src::nvim::os::proc::os_proc_running;
 use crate::src::nvim::os::time::{os_ctime_r, os_time};
@@ -356,7 +356,7 @@ pub unsafe fn ml_open(mut buf: *mut buf_T) -> ::core::ffi::c_int {
                     .offset(0 as ::core::ffi::c_int as isize),
                 6 as size_t,
             );
-            long_to_char(
+            b0_store_number(
                 (*mfp).mf_page_size as ::core::ffi::c_long,
                 &raw mut (*b0p).b0_page_size as *mut ::core::ffi::c_char,
             );
@@ -385,7 +385,7 @@ pub unsafe fn ml_open(mut buf: *mut buf_T) -> ::core::ffi::c_int {
                 (*b0p).b0_hname
                     [(B0_HNAME_SIZE as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize] =
                     NUL as ::core::ffi::c_char;
-                long_to_char(
+                b0_store_number(
                     os_get_pid() as ::core::ffi::c_long,
                     &raw mut (*b0p).b0_pid as *mut ::core::ffi::c_char,
                 );
@@ -836,7 +836,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                                 as *const ::core::ffi::c_char),
                             (*mfp).mf_fname,
                         );
-                    } else if b0_magic_wrong(b0p) != 0 {
+                    } else if b0_magic_wrong(b0p) {
                         msg_start();
                         msg_outtrans((*mfp).mf_fname, hl_id, true_0 != 0);
                         msg_puts_hl(
@@ -867,14 +867,14 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                         msg_end();
                     } else {
                         if (*mfp).mf_page_size
-                            != char_to_long(
+                            != b0_read_number(
                                 &raw mut (*b0p).b0_page_size as *mut ::core::ffi::c_char,
                             ) as ::core::ffi::c_uint
                         {
                             let mut previous_page_size: ::core::ffi::c_uint = (*mfp).mf_page_size;
                             mf_new_page_size(
                                 mfp,
-                                char_to_long(
+                                b0_read_number(
                                     &raw mut (*b0p).b0_page_size as *mut ::core::ffi::c_char,
                                 ) as ::core::ffi::c_uint,
                             );
@@ -1033,7 +1033,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                                 },
                             },
                         };
-                        mtime = char_to_long(&raw mut (*b0p).b0_mtime as *mut ::core::ffi::c_char)
+                        mtime = b0_read_number(&raw mut (*b0p).b0_mtime as *mut ::core::ffi::c_char)
                             as ::core::ffi::c_int;
                         if !(*curbuf.get()).b_ffname.is_null()
                             && os_fileinfo((*curbuf.get()).b_ffname, &raw mut org_file_info)
@@ -1587,7 +1587,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                             if swapfile_proc_running(b0p, fname_used) != 0 {
                                 msg_puts(gettext(b"\nNote: process STILL RUNNING: \0".as_ptr()
                                     as *const ::core::ffi::c_char));
-                                msg_outnum(char_to_long(
+                                msg_outnum(b0_read_number(
                                     &raw mut (*b0p).b0_pid as *mut ::core::ffi::c_char,
                                 ) as ::core::ffi::c_int);
                             }

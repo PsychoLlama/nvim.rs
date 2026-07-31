@@ -575,7 +575,7 @@ pub(crate) unsafe extern "C" fn findswapname(
                                         if fnamecmp_ino(
                                             (*buf).b_ffname,
                                             NameBuff.ptr() as *mut ::core::ffi::c_char,
-                                            char_to_long(
+                                            b0_read_number(
                                                 &raw mut b0.b0_ino as *mut ::core::ffi::c_char,
                                             ),
                                         ) {
@@ -591,7 +591,7 @@ pub(crate) unsafe extern "C" fn findswapname(
                                     if fnamecmp_ino(
                                         (*buf).b_ffname,
                                         NameBuff.ptr() as *mut ::core::ffi::c_char,
-                                        char_to_long(
+                                        b0_read_number(
                                             &raw mut b0.b0_ino as *mut ::core::ffi::c_char,
                                         ),
                                     ) {
