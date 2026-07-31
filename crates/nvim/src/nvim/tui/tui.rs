@@ -670,7 +670,7 @@ const DA1_TIMEOUT_MS: i64 = 1000;
 ///
 /// # Safety
 /// Called by the input layer with the TUI it belongs to.
-unsafe extern "C" fn tui_stop_cb(tui: *mut TUIData) {
+unsafe fn tui_stop_cb(tui: *mut TUIData) {
     // SAFETY: the input layer holds this TUI's own pointer.
     unsafe { (*tui).stopped = true };
 }
@@ -718,7 +718,7 @@ pub unsafe fn tui_suspend(tui: *mut TUIData) {
 ///
 /// # Safety
 /// Called by the input layer with the TUI it belongs to.
-unsafe extern "C" fn tui_suspend_cb(tui: *mut TUIData) {
+unsafe fn tui_suspend_cb(tui: *mut TUIData) {
     // SAFETY: the input layer holds this TUI's own pointer.
     unsafe {
         tui_terminal_stop(tui);

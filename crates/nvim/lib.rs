@@ -199,6 +199,7 @@ pub mod src {
             pub mod cursor;
             pub mod events;
             pub mod input;
+            pub mod keys;
             pub mod negotiate;
             pub mod output;
             pub mod paint;

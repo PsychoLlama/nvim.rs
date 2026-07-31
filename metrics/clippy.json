@@ -140,7 +140,6 @@
     "crates/nvim/src/nvim/testing.rs": 45,
     "crates/nvim/src/nvim/textformat.rs": 2,
     "crates/nvim/src/nvim/textobject.rs": 16,
-    "crates/nvim/src/nvim/tui/input.rs": 210,
     "crates/nvim/src/nvim/tui/terminfo.rs": 1,
     "crates/nvim/src/nvim/tui/unibi.rs": 3,
     "crates/nvim/src/nvim/ui.rs": 184,

@@ -171,7 +171,7 @@ pub(crate) unsafe fn tui_query_kitty_keyboard(tui: *mut TUIData) {
 ///
 /// # Safety
 /// Called by the input layer with the TUI it belongs to.
-pub unsafe extern "C" fn tui_set_key_encoding(tui: *mut TUIData) {
+pub unsafe fn tui_set_key_encoding(tui: *mut TUIData) {
     // SAFETY: the input layer holds this TUI's own pointer.
     unsafe {
         match (*tui).input.key_encoding {
