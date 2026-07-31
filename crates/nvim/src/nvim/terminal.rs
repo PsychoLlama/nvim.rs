@@ -1,7 +1,10 @@
+pub mod callbacks;
+pub mod refresh;
 pub mod scrollback;
+pub mod termrequest;
 
 use crate::src::nvim::api::private::helpers::{
-    api_clear_error, api_free_object, cstr_as_string, dict_get_value, dict_set_var,
+    api_clear_error, api_free_object, cstr_as_string, dict_get_value,
 };
 use crate::src::nvim::autocmd::{
     apply_autocmds, apply_autocmds_group, aucmd_prepbuf, aucmd_restbuf, is_aucmd_win,
@@ -9,59 +12,47 @@ use crate::src::nvim::autocmd::{
 use crate::src::nvim::autocmd::{block_autocmds, has_event, is_autocmd_blocked, unblock_autocmds};
 use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::do_buffer;
-use crate::src::nvim::change::{changed_lines, deleted_lines_buf};
+use crate::src::nvim::change::deleted_lines_buf;
 use crate::src::nvim::cursor::coladvance;
 use crate::src::nvim::cursor_shape::{parse_shape_opt, shape_table};
-use crate::src::nvim::drawscreen::{redraw_buf_line_later, redraw_later, status_redraw_buf};
+use crate::src::nvim::drawscreen::{redraw_buf_line_later, redraw_later};
 use crate::src::nvim::drawscreen::{
     redraw_statuslines, setcursor, show_cursor_info_later, showmode, unshowmode, update_screen,
 };
-use crate::src::nvim::eval::typval::{
-    tv_dict_add_nr, tv_dict_set_keys_readonly, tv_list_alloc, tv_list_append_allocated_string,
-    tv_list_append_list, tv_list_append_string,
-};
-use crate::src::nvim::eval::vars::{get_globvar_dict, set_vim_var_string};
-use crate::src::nvim::eval::{eval_call_provider, get_v_event, restore_v_event};
-use crate::src::nvim::event::multiqueue::{
-    multiqueue_free, multiqueue_move_events, multiqueue_new, multiqueue_new_child,
-    multiqueue_process_events, multiqueue_put_event,
-};
-use crate::src::nvim::event::time::{
-    time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
-};
+use crate::src::nvim::eval::typval::{tv_dict_add_nr, tv_dict_set_keys_readonly};
+use crate::src::nvim::eval::vars::get_globvar_dict;
+use crate::src::nvim::eval::{get_v_event, restore_v_event};
+use crate::src::nvim::event::multiqueue::{multiqueue_free, multiqueue_new, multiqueue_put_event};
 use crate::src::nvim::ex_docmd::do_cmdline;
 use crate::src::nvim::getchar::{
     getcmdkeycmd, ins_char_typebuf, map_execute_lua, merge_modifiers, paste_repeat, ungetchars,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::highlight::{hl_add_url, hl_combine_attr, hl_get_term_attr};
+use crate::src::nvim::highlight::{hl_combine_attr, hl_get_term_attr};
 use crate::src::nvim::highlight_group::name_to_color;
 use crate::src::nvim::main::{
     KeyTyped, RedrawingDisabled, State, buffer_handles, clear_cmdline, exiting, got_int, main_loop,
-    mapped_ctrl_c, mod_mask, mouse_col, mouse_grid, mouse_row, must_redraw, p_bg, redraw_cmdline,
+    mapped_ctrl_c, mod_mask, mouse_col, mouse_grid, mouse_row, must_redraw, redraw_cmdline,
     redraw_mode, restart_edit, stop_insert_mode, tpf_flags, vgetc_char, vgetc_mod_mask,
     window_handles,
 };
 use crate::src::nvim::main::{curbuf, curtab, curwin, first_tabpage, firstwin};
-use crate::src::nvim::map::{mh_delete_ptr_t, mh_get_int, mh_get_ptr_t, mh_put_ptr_t};
-use crate::src::nvim::mbyte::{mb_check_adjust_col, utf_ptr2char, utf_ptr2len};
-use crate::src::nvim::memline::{ml_append_buf, ml_delete_buf, ml_replace_buf};
-use crate::src::nvim::memory::{
-    strequal, xcalloc, xfree, xmalloc, xmemdup, xmemdupz, xrealloc, xstrdup,
-};
+use crate::src::nvim::map::mh_get_int;
+use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len};
+use crate::src::nvim::memline::ml_delete_buf;
+use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc, xstrdup};
 use crate::src::nvim::mouse::do_mousescroll;
 use crate::src::nvim::mouse::mouse_find_win_inner;
-use crate::src::nvim::r#move::{curs_columns, set_topline, validate_cursor, win_col_off};
+use crate::src::nvim::r#move::{set_topline, validate_cursor, win_col_off};
 use crate::src::nvim::ops::clear_oparg;
 use crate::src::nvim::option::set_option_value;
 use crate::src::nvim::options::{
-    kOptBoFlagTerm, kOptBuftype, kOptCuloptFlagNumber, kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1,
-    kOptTpfFlagDEL, kOptTpfFlagESC, kOptTpfFlagFF, kOptTpfFlagHT,
+    kOptBuftype, kOptCuloptFlagNumber, kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1, kOptTpfFlagDEL,
+    kOptTpfFlagESC, kOptTpfFlagFF, kOptTpfFlagHT,
 };
 use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memset, snprintf, strlen};
 use crate::src::nvim::state::{may_trigger_modechanged, state_enter, state_handle_k_event};
-use crate::src::nvim::strings::kv_do_printf;
 pub use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
@@ -124,16 +115,14 @@ pub use crate::src::nvim::types::{
     varnumber_T, vim_state, virt_line, visualinfo_T, window_S, wininfo_S, winopt_T, wline_T,
     xfmark_T,
 };
-use crate::src::nvim::ui::{
-    ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_mode_info_set, vim_beep,
-};
+use crate::src::nvim::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::src::nvim::vterm::keyboard::{
     vterm_keyboard_end_paste, vterm_keyboard_key, vterm_keyboard_start_paste,
     vterm_keyboard_unichar,
 };
 use crate::src::nvim::vterm::mouse::{vterm_mouse_button, vterm_mouse_move};
 use crate::src::nvim::vterm::parser::vterm_input_write;
-use crate::src::nvim::vterm::pen::{convert_color_to_rgb, set_palette_color, set_pen_attr};
+use crate::src::nvim::vterm::pen::{convert_color_to_rgb, set_palette_color};
 use crate::src::nvim::vterm::screen::{
     vterm_obtain_screen, vterm_screen_enable_altscreen, vterm_screen_enable_reflow,
     vterm_screen_flush_damage, vterm_screen_reset, vterm_screen_set_callbacks,
@@ -149,7 +138,11 @@ use crate::src::nvim::vterm::vterm::{
 };
 use crate::src::nvim::window::may_trigger_win_scrolled_resized;
 use crate::src::nvim::window::win_valid;
-use scrollback::{fetch_cell, fetch_row, refresh_scrollback, term_may_alloc_scrollback};
+use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
+
+pub use refresh::{
+    on_scrollback_option_changed, terminal_check_refresh, terminal_init, terminal_teardown,
+};
 
 pub const kErrorTypeNone: ErrorType = -1;
 pub const VTERM_TERMINATOR_BEL: VTermTerminator = 0;
@@ -304,29 +297,6 @@ pub const SET_INIT: Set_ptr_t = Set_ptr_t {
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
-unsafe fn set_put_ptr_t(
-    mut set: *mut Set_ptr_t,
-    mut key: ptr_t,
-    mut key_alloc: *mut *mut ptr_t,
-) -> bool {
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = mh_put_ptr_t(set, key, &raw mut status);
-    if !key_alloc.is_null() {
-        *key_alloc = (*set).keys.offset(k as isize);
-    }
-    return status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
-}
-#[inline]
-unsafe fn set_del_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> ptr_t {
-    mh_delete_ptr_t(set, &raw mut key);
-    return key;
-}
-#[inline]
-unsafe fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
-    return mh_get_ptr_t(set, key) != MH_TOMBSTONE as uint32_t;
-}
-#[inline]
 unsafe fn map_get_int_ptr_t(mut map: *mut Map_int_ptr_t, mut key: ::core::ffi::c_int) -> ptr_t {
     let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
@@ -346,668 +316,9 @@ pub const Ctrl_O: ::core::ffi::c_int = 15;
 pub const Ctrl_BSL: ::core::ffi::c_int = 28 as ::core::ffi::c_int;
 pub const REFRESH_DELAY: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
 pub const SELECTIONBUF_SIZE: ::core::ffi::c_int = 0x400 as ::core::ffi::c_int;
-static refresh_timer: GlobalCell<TimeWatcher> = GlobalCell::new(TimeWatcher {
-    uv: uv_timer_t {
-        data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
-        type_0: UV_UNKNOWN_HANDLE,
-        close_cb: None,
-        handle_queue: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        u: C2Rust_Unnamed_24 { fd: 0 },
-        next_closing: ::core::ptr::null_mut::<uv_handle_t>(),
-        flags: 0,
-        timer_cb: None,
-        node: C2Rust_Unnamed_23 {
-            heap: [::core::ptr::null_mut::<::core::ffi::c_void>(); 3],
-        },
-        timeout: 0,
-        repeat: 0,
-        start_id: 0,
-    },
-    data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    cb: None,
-    close_cb: None,
-    events: ::core::ptr::null_mut::<MultiQueue>(),
-    blockable: false,
-});
-static refresh_pending: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static vterm_screen_callbacks: GlobalCell<VTermScreenCallbacks> =
-    GlobalCell::new(VTermScreenCallbacks {
-        damage: Some(
-            term_damage
-                as unsafe extern "C" fn(VTermRect, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-        ),
-        moverect: Some(
-            term_moverect
-                as unsafe extern "C" fn(
-                    VTermRect,
-                    VTermRect,
-                    *mut ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
-        ),
-        movecursor: Some(
-            term_movecursor
-                as unsafe extern "C" fn(
-                    VTermPos,
-                    VTermPos,
-                    ::core::ffi::c_int,
-                    *mut ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
-        ),
-        settermprop: Some(
-            term_settermprop
-                as unsafe extern "C" fn(
-                    VTermProp,
-                    *mut VTermValue,
-                    *mut ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
-        ),
-        bell: Some(
-            term_bell as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-        ),
-        resize: None,
-        theme: Some(
-            term_theme
-                as unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-        ),
-        sb_pushline: Some(
-            scrollback::term_sb_push
-                as unsafe extern "C" fn(
-                    ::core::ffi::c_int,
-                    *const VTermScreenCell,
-                    *mut ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
-        ),
-        sb_popline: Some(
-            scrollback::term_sb_pop
-                as unsafe extern "C" fn(
-                    ::core::ffi::c_int,
-                    *mut VTermScreenCell,
-                    *mut ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
-        ),
-        sb_clear: Some(
-            scrollback::term_sb_clear
-                as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
-        ),
-    });
-static vterm_selection_callbacks: GlobalCell<VTermSelectionCallbacks> =
-    GlobalCell::new(VTermSelectionCallbacks {
-        set: Some(
-            term_selection_set
-                as unsafe extern "C" fn(
-                    VTermSelectionMask,
-                    VTermStringFragment,
-                    *mut ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
-        ),
-        query: None,
-    });
-static invalidated_terminals: GlobalCell<Set_ptr_t> = GlobalCell::new(SET_INIT);
-unsafe extern "C" fn emit_termrequest(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut buf_handle: handle_T = (*argv.offset(0 as ::core::ffi::c_int as isize))
-        .expose_provenance() as intptr_t as handle_T;
-    let mut sequence: *mut ::core::ffi::c_char =
-        *argv.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
-    let mut sequence_length: size_t =
-        (*argv.offset(2 as ::core::ffi::c_int as isize)).expose_provenance() as size_t;
-    let mut pending_send: *mut StringBuilder =
-        *argv.offset(3 as ::core::ffi::c_int as isize) as *mut StringBuilder;
-    let mut row: ::core::ffi::c_int = (*argv.offset(4 as ::core::ffi::c_int as isize))
-        .expose_provenance() as intptr_t
-        as ::core::ffi::c_int;
-    let mut col: ::core::ffi::c_int = (*argv.offset(5 as ::core::ffi::c_int as isize))
-        .expose_provenance() as intptr_t
-        as ::core::ffi::c_int;
-    let mut sb_deleted: size_t =
-        (*argv.offset(6 as ::core::ffi::c_int as isize)).expose_provenance() as intptr_t as size_t;
-    let mut terminator: VTermTerminator = (*argv.offset(7 as ::core::ffi::c_int as isize))
-        .expose_provenance() as intptr_t
-        as VTermTerminator;
-    let mut buf: *mut buf_T =
-        map_get_int_ptr_t(buffer_handles.ptr(), buf_handle as ::core::ffi::c_int) as *mut buf_T;
-    if buf.is_null() || (*buf).terminal.is_null() {
-        xfree(sequence as *mut ::core::ffi::c_void);
-        xfree((*pending_send).items as *mut ::core::ffi::c_void);
-        (*pending_send).capacity = 0 as size_t;
-        (*pending_send).size = (*pending_send).capacity;
-        (*pending_send).items = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        xfree(pending_send as *mut ::core::ffi::c_void);
-        return;
-    }
-    let mut term: *mut Terminal = (*buf).terminal;
-    if (*term).sb.pending() > 0 {
-        multiqueue_put_event(
-            (*term).pending.events,
-            Event {
-                handler: Some(
-                    emit_termrequest as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-                ),
-                argv: [
-                    *argv.offset(0 as ::core::ffi::c_int as isize),
-                    *argv.offset(1 as ::core::ffi::c_int as isize),
-                    *argv.offset(2 as ::core::ffi::c_int as isize),
-                    *argv.offset(3 as ::core::ffi::c_int as isize),
-                    *argv.offset(4 as ::core::ffi::c_int as isize),
-                    *argv.offset(5 as ::core::ffi::c_int as isize),
-                    *argv.offset(6 as ::core::ffi::c_int as isize),
-                    *argv.offset(7 as ::core::ffi::c_int as isize),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ],
-            },
-        );
-        return;
-    }
-    set_vim_var_string(VV_TERMREQUEST, sequence, sequence_length as ptrdiff_t);
-    let mut cursor: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    let mut cursor__items: [Object; 2] = [Object {
-        type_0: kObjectTypeNil,
-        data: C2Rust_Unnamed { boolean: false },
-    }; 2];
-    cursor.capacity = 2 as size_t;
-    cursor.items = &raw mut cursor__items as *mut Object;
-    let c2rust_fresh0 = cursor.size;
-    cursor.size = cursor.size.wrapping_add(1);
-    *cursor.items.offset(c2rust_fresh0 as isize) = object {
-        type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed {
-            integer: row as int64_t - ((*term).sb.deleted() - sb_deleted) as int64_t,
-        },
-    };
-    let c2rust_fresh1 = cursor.size;
-    cursor.size = cursor.size.wrapping_add(1);
-    *cursor.items.offset(c2rust_fresh1 as isize) = object {
-        type_0: kObjectTypeInteger,
-        data: C2Rust_Unnamed {
-            integer: col as Integer,
-        },
-    };
-    let mut data: Dict = Dict {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<KeyValuePair>(),
-    };
-    let mut data__items: [KeyValuePair; 3] = [KeyValuePair {
-        key: String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0,
-        },
-        value: Object {
-            type_0: kObjectTypeNil,
-            data: C2Rust_Unnamed { boolean: false },
-        },
-    }; 3];
-    data.capacity = 3 as size_t;
-    data.items = &raw mut data__items as *mut KeyValuePair;
-    let mut termrequest: String_0 = String_0 {
-        data: sequence,
-        size: sequence_length,
-    };
-    let c2rust_fresh2 = data.size;
-    data.size = data.size.wrapping_add(1);
-    *data.items.offset(c2rust_fresh2 as isize) = key_value_pair {
-        key: cstr_as_string(b"sequence\0".as_ptr() as *const ::core::ffi::c_char),
-        value: object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed {
-                string: termrequest,
-            },
-        },
-    };
-    let c2rust_fresh3 = data.size;
-    data.size = data.size.wrapping_add(1);
-    *data.items.offset(c2rust_fresh3 as isize) = key_value_pair {
-        key: cstr_as_string(b"cursor\0".as_ptr() as *const ::core::ffi::c_char),
-        value: object {
-            type_0: kObjectTypeArray,
-            data: C2Rust_Unnamed { array: cursor },
-        },
-    };
-    let c2rust_fresh4 = data.size;
-    data.size = data.size.wrapping_add(1);
-    *data.items.offset(c2rust_fresh4 as isize) = key_value_pair {
-        key: cstr_as_string(b"terminator\0".as_ptr() as *const ::core::ffi::c_char),
-        value: if terminator as ::core::ffi::c_uint
-            == VTERM_TERMINATOR_BEL as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: String_0 {
-                        data: b"\x07\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                            .wrapping_sub(1 as size_t),
-                    },
-                },
-            }
-        } else {
-            object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed {
-                    string: String_0 {
-                        data: b"\x1B\\\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                            .wrapping_sub(1 as size_t),
-                    },
-                },
-            }
-        },
-    };
-    (*term).refcount = (*term).refcount.wrapping_add(1);
-    let mut c2rust_lvalue: Object = object {
-        type_0: kObjectTypeDict,
-        data: C2Rust_Unnamed { dict: data },
-    };
-    apply_autocmds_group(
-        EVENT_TERMREQUEST,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        true_0 != 0,
-        AUGROUP_ALL as ::core::ffi::c_int,
-        buf,
-        ::core::ptr::null_mut::<exarg_T>(),
-        &raw mut c2rust_lvalue,
-    );
-    (*term).refcount = (*term).refcount.wrapping_sub(1);
-    xfree(sequence as *mut ::core::ffi::c_void);
-    let mut term_pending_send: *mut StringBuilder = (*term).pending.send;
-    (*term).pending.send = ::core::ptr::null_mut::<StringBuilder>();
-    if (*pending_send).size != 0 {
-        terminal_send(term, (*pending_send).items, (*pending_send).size);
-        xfree((*pending_send).items as *mut ::core::ffi::c_void);
-        (*pending_send).capacity = 0 as size_t;
-        (*pending_send).size = (*pending_send).capacity;
-        (*pending_send).items = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    }
-    if term_pending_send != pending_send {
-        (*term).pending.send = term_pending_send;
-    }
-    xfree(pending_send as *mut ::core::ffi::c_void);
-    if (*term).buf_handle == 0 as ::core::ffi::c_int && (*term).refcount == 0 {
-        (*term).destroy = true_0 != 0;
-        (*term).opts.close_cb.expect("non-null function pointer")((*term).opts.data);
-    }
-}
-unsafe fn schedule_termrequest(mut term: *mut Terminal) {
-    (*term).pending.send = xmalloc(::core::mem::size_of::<StringBuilder>()) as *mut StringBuilder;
-    (*(*term).pending.send).capacity = 0 as size_t;
-    (*(*term).pending.send).size = (*(*term).pending.send).capacity;
-    (*(*term).pending.send).items = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut line: ::core::ffi::c_int = row_to_linenr(term, (*term).cursor.row);
-    multiqueue_put_event(
-        (*main_loop.ptr()).events,
-        Event {
-            handler: Some(
-                emit_termrequest as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-            ),
-            argv: [
-                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                    (*term).buf_handle as intptr_t as usize,
-                ),
-                xmemdup(
-                    (*term).termrequest_buffer.items as *const ::core::ffi::c_void,
-                    (*term).termrequest_buffer.size,
-                ),
-                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                    (*term).termrequest_buffer.size as intptr_t as usize,
-                ),
-                (*term).pending.send as *mut ::core::ffi::c_void,
-                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                    line as intptr_t as usize,
-                ),
-                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                    (*term).cursor.col as intptr_t as usize,
-                ),
-                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                    (*term).sb.deleted() as intptr_t as usize,
-                ),
-                ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                    (*term).termrequest_terminator as intptr_t as usize,
-                ),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            ],
-        },
-    );
-}
-unsafe fn parse_osc8(
-    mut str: *const ::core::ffi::c_char,
-    mut attr: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut i: size_t = 0 as size_t;
-    while *str.offset(i as isize) as ::core::ffi::c_int != NUL {
-        if *str.offset(i as isize) as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
-            break;
-        }
-        i = i.wrapping_add(1);
-    }
-    if *str.offset(i as isize) as ::core::ffi::c_int != ';' as ::core::ffi::c_int {
-        return 0 as ::core::ffi::c_int;
-    }
-    i = i.wrapping_add(1);
-    if *str.offset(i as isize) as ::core::ffi::c_int == NUL {
-        *attr = 0 as ::core::ffi::c_int;
-        return 1 as ::core::ffi::c_int;
-    }
-    *attr = hl_add_url(0 as ::core::ffi::c_int, str.offset(i as isize));
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn on_osc(
-    mut command: ::core::ffi::c_int,
-    mut frag: VTermStringFragment,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut term: *mut Terminal = user as *mut Terminal;
-    if frag.str.is_null() || frag.len() as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-        return 0 as ::core::ffi::c_int;
-    }
-    if command != 8 as ::core::ffi::c_int && !has_event(EVENT_TERMREQUEST) {
-        return 1 as ::core::ffi::c_int;
-    }
-    if frag.initial() {
-        (*term).termrequest_buffer.size = 0 as size_t;
-        kv_do_printf(
-            &raw mut (*term).termrequest_buffer,
-            b"\x1B]%d;\0".as_ptr() as *const ::core::ffi::c_char,
-            command,
-        );
-    }
-    if frag.len() as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
-        if (*term).termrequest_buffer.capacity
-            < (*term).termrequest_buffer.size.wrapping_add(frag.len())
-        {
-            (*term).termrequest_buffer.capacity =
-                (*term).termrequest_buffer.size.wrapping_add(frag.len());
-            (*term).termrequest_buffer.capacity =
-                (*term).termrequest_buffer.capacity.wrapping_sub(1);
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 1 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 2 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 4 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 8 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity =
-                (*term).termrequest_buffer.capacity.wrapping_add(1);
-            (*term).termrequest_buffer.items = xrealloc(
-                (*term).termrequest_buffer.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul((*term).termrequest_buffer.capacity),
-            ) as *mut ::core::ffi::c_char;
-        }
-        '_c2rust_label: {
-            if !(*term).termrequest_buffer.items.is_null() {
-            } else {
-                __assert_fail(
-                    b"(term->termrequest_buffer).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    366 as ::core::ffi::c_uint,
-                    b"int on_osc(int, VTermStringFragment, void *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        memcpy(
-            (*term)
-                .termrequest_buffer
-                .items
-                .offset((*term).termrequest_buffer.size as isize)
-                as *mut ::core::ffi::c_void,
-            frag.str as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(frag.len()),
-        );
-        (*term).termrequest_buffer.size = (*term).termrequest_buffer.size.wrapping_add(frag.len());
-    }
-    if frag.final_0() {
-        (*term).termrequest_terminator = frag.terminator;
-        if has_event(EVENT_TERMREQUEST) {
-            schedule_termrequest(term);
-        }
-        if command == 8 as ::core::ffi::c_int {
-            if (*term).termrequest_buffer.size == (*term).termrequest_buffer.capacity {
-                (*term).termrequest_buffer.capacity = if (*term).termrequest_buffer.capacity != 0 {
-                    (*term).termrequest_buffer.capacity << 1 as ::core::ffi::c_int
-                } else {
-                    8 as size_t
-                };
-                (*term).termrequest_buffer.items = xrealloc(
-                    (*term).termrequest_buffer.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul((*term).termrequest_buffer.capacity),
-                ) as *mut ::core::ffi::c_char;
-            } else {
-            };
-            let c2rust_fresh5 = (*term).termrequest_buffer.size;
-            (*term).termrequest_buffer.size = (*term).termrequest_buffer.size.wrapping_add(1);
-            *(*term)
-                .termrequest_buffer
-                .items
-                .offset(c2rust_fresh5 as isize) = '\0' as ::core::ffi::c_char;
-            let off: size_t =
-                ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t);
-            let mut attr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            if parse_osc8(
-                (*term).termrequest_buffer.items.offset(off as isize),
-                &raw mut attr,
-            ) != 0
-            {
-                let mut state: *mut VTermState = vterm_obtain_state((*term).vt);
-                let mut value: VTermValue = VTermValue { number: attr };
-                set_pen_attr(&mut *state, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &value);
-            }
-        }
-    }
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn on_dcs(
-    mut command: *const ::core::ffi::c_char,
-    mut commandlen: size_t,
-    mut frag: VTermStringFragment,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut term: *mut Terminal = user as *mut Terminal;
-    if command.is_null() || frag.str.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    if !has_event(EVENT_TERMREQUEST) {
-        return 1 as ::core::ffi::c_int;
-    }
-    if frag.initial() {
-        (*term).termrequest_buffer.size = 0 as size_t;
-        kv_do_printf(
-            &raw mut (*term).termrequest_buffer,
-            b"\x1BP%.*s\0".as_ptr() as *const ::core::ffi::c_char,
-            commandlen as ::core::ffi::c_int,
-            command,
-        );
-    }
-    if frag.len() as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
-        if (*term).termrequest_buffer.capacity
-            < (*term).termrequest_buffer.size.wrapping_add(frag.len())
-        {
-            (*term).termrequest_buffer.capacity =
-                (*term).termrequest_buffer.size.wrapping_add(frag.len());
-            (*term).termrequest_buffer.capacity =
-                (*term).termrequest_buffer.capacity.wrapping_sub(1);
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 1 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 2 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 4 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 8 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity =
-                (*term).termrequest_buffer.capacity.wrapping_add(1);
-            (*term).termrequest_buffer.items = xrealloc(
-                (*term).termrequest_buffer.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul((*term).termrequest_buffer.capacity),
-            ) as *mut ::core::ffi::c_char;
-        }
-        '_c2rust_label: {
-            if !(*term).termrequest_buffer.items.is_null() {
-            } else {
-                __assert_fail(
-                    b"(term->termrequest_buffer).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    401 as ::core::ffi::c_uint,
-                    b"int on_dcs(const char *, size_t, VTermStringFragment, void *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        memcpy(
-            (*term)
-                .termrequest_buffer
-                .items
-                .offset((*term).termrequest_buffer.size as isize)
-                as *mut ::core::ffi::c_void,
-            frag.str as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(frag.len()),
-        );
-        (*term).termrequest_buffer.size = (*term).termrequest_buffer.size.wrapping_add(frag.len());
-    }
-    if frag.final_0() {
-        (*term).termrequest_terminator = frag.terminator;
-        schedule_termrequest(term);
-    }
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn on_apc(
-    mut frag: VTermStringFragment,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut term: *mut Terminal = user as *mut Terminal;
-    if frag.str.is_null() || frag.len() as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-        return 0 as ::core::ffi::c_int;
-    }
-    if !has_event(EVENT_TERMREQUEST) {
-        return 1 as ::core::ffi::c_int;
-    }
-    if frag.initial() {
-        (*term).termrequest_buffer.size = 0 as size_t;
-        kv_do_printf(
-            &raw mut (*term).termrequest_buffer,
-            b"\x1B_\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-    }
-    if frag.len() as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
-        if (*term).termrequest_buffer.capacity
-            < (*term).termrequest_buffer.size.wrapping_add(frag.len())
-        {
-            (*term).termrequest_buffer.capacity =
-                (*term).termrequest_buffer.size.wrapping_add(frag.len());
-            (*term).termrequest_buffer.capacity =
-                (*term).termrequest_buffer.capacity.wrapping_sub(1);
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 1 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 2 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 4 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 8 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity |=
-                (*term).termrequest_buffer.capacity >> 16 as ::core::ffi::c_int;
-            (*term).termrequest_buffer.capacity =
-                (*term).termrequest_buffer.capacity.wrapping_add(1);
-            (*term).termrequest_buffer.items = xrealloc(
-                (*term).termrequest_buffer.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul((*term).termrequest_buffer.capacity),
-            ) as *mut ::core::ffi::c_char;
-        }
-        '_c2rust_label: {
-            if !(*term).termrequest_buffer.items.is_null() {
-            } else {
-                __assert_fail(
-                    b"(term->termrequest_buffer).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    424 as ::core::ffi::c_uint,
-                    b"int on_apc(VTermStringFragment, void *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        memcpy(
-            (*term)
-                .termrequest_buffer
-                .items
-                .offset((*term).termrequest_buffer.size as isize)
-                as *mut ::core::ffi::c_void,
-            frag.str as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(frag.len()),
-        );
-        (*term).termrequest_buffer.size = (*term).termrequest_buffer.size.wrapping_add(frag.len());
-    }
-    if frag.final_0() {
-        (*term).termrequest_terminator = frag.terminator;
-        schedule_termrequest(term);
-    }
-    return 1 as ::core::ffi::c_int;
-}
-static vterm_fallbacks: GlobalCell<VTermStateFallbacks> = GlobalCell::new(VTermStateFallbacks {
-    control: None,
-    csi: None,
-    osc: Some(
-        on_osc
-            as unsafe extern "C" fn(
-                ::core::ffi::c_int,
-                VTermStringFragment,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    dcs: Some(
-        on_dcs
-            as unsafe extern "C" fn(
-                *const ::core::ffi::c_char,
-                size_t,
-                VTermStringFragment,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    apc: Some(
-        on_apc
-            as unsafe extern "C" fn(
-                VTermStringFragment,
-                *mut ::core::ffi::c_void,
-            ) -> ::core::ffi::c_int,
-    ),
-    pm: None,
-    sos: None,
-});
 /// The buffer a handle names, or null once it has been wiped.
 unsafe fn buf_for_handle(handle: handle_T) -> *mut buf_T {
     map_get_int_ptr_t(buffer_handles.ptr(), handle as ::core::ffi::c_int) as *mut buf_T
-}
-pub unsafe fn terminal_init() {
-    time_watcher_init(main_loop.ptr(), refresh_timer.ptr(), NULL_0);
-    (*refresh_timer.ptr()).events = multiqueue_new_child((*main_loop.ptr()).events);
-}
-pub unsafe fn terminal_teardown() {
-    time_watcher_stop(refresh_timer.ptr());
-    multiqueue_free((*refresh_timer.ptr()).events);
-    time_watcher_close(refresh_timer.ptr(), None);
-    xfree((*invalidated_terminals.ptr()).keys as *mut ::core::ffi::c_void);
-    xfree((*invalidated_terminals.ptr()).h.hash as *mut ::core::ffi::c_void);
-    invalidated_terminals.set(SET_INIT);
-    invalidated_terminals.set(SET_INIT);
 }
 unsafe extern "C" fn term_output_callback(
     mut s: *const ::core::ffi::c_char,
@@ -1032,12 +343,12 @@ pub unsafe fn terminal_alloc(mut buf: *mut buf_T, mut opts: TerminalOptions) -> 
     vterm_screen_enable_reflow((*term).vts, true_0 != 0);
     vterm_screen_set_callbacks(
         (*term).vts,
-        vterm_screen_callbacks.ptr(),
+        &raw const callbacks::SCREEN_CALLBACKS,
         term as *mut ::core::ffi::c_void,
     );
     vterm_screen_set_unrecognised_fallbacks(
         (*term).vts,
-        vterm_fallbacks.ptr(),
+        &raw const termrequest::FALLBACKS,
         term as *mut ::core::ffi::c_void,
     );
     vterm_screen_set_damage_merge((*term).vts, VTERM_DAMAGE_SCROLL);
@@ -1054,13 +365,11 @@ pub unsafe fn terminal_alloc(mut buf: *mut buf_T, mut opts: TerminalOptions) -> 
         ),
         term as *mut ::core::ffi::c_void,
     );
-    (*term).selection_buffer =
-        xcalloc(SELECTIONBUF_SIZE as size_t, 1 as size_t) as *mut ::core::ffi::c_char;
     vterm_state_set_selection_callbacks(
         state,
-        vterm_selection_callbacks.ptr(),
+        &raw const callbacks::SELECTION_CALLBACKS,
         term as *mut ::core::ffi::c_void,
-        (*term).selection_buffer,
+        (*term).selection_buffer.as_mut_ptr(),
         SELECTIONBUF_SIZE as size_t,
     );
     let mut cursor_shape: VTermValue = VTermValue { boolean: 0 };
@@ -1151,7 +460,7 @@ pub unsafe fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: *mut buf_T)
             }
         };
     }
-    refresh_screen(term, buf);
+    refresh::refresh_screen(term, buf);
     (*buf).b_locked += 1;
     set_option_value(
         kOptBuftype,
@@ -1170,7 +479,10 @@ pub unsafe fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: *mut buf_T)
     );
     (*buf).b_locked -= 1;
     if !(*buf).b_ffname.is_null() {
-        buf_set_term_title(buf, (*buf).b_ffname, strlen((*buf).b_ffname));
+        callbacks::buf_set_term_title(
+            buf,
+            ::core::slice::from_raw_parts((*buf).b_ffname.cast::<u8>(), strlen((*buf).b_ffname)),
+        );
     }
     (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
     (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
@@ -1238,7 +550,7 @@ pub unsafe fn terminal_close(mut termpp: *mut *mut Terminal, mut status: ::core:
     } else {
         if !exiting.get() {
             block_autocmds();
-            refresh_terminal(term);
+            refresh::refresh_terminal(term);
             unblock_autocmds();
         }
         (*term).closed = true_0 != 0;
@@ -1359,7 +671,7 @@ unsafe extern "C" fn terminal_state_change_event(mut argv: *mut *mut ::core::ffi
 pub unsafe fn terminal_set_state(mut term: *mut Terminal, mut suspended: bool) {
     if (*term).suspended as ::core::ffi::c_int != suspended as ::core::ffi::c_int {
         multiqueue_put_event(
-            (*refresh_timer.ptr()).events,
+            refresh::refresh_queue(),
             Event {
                 handler: Some(
                     terminal_state_change_event
@@ -1438,7 +750,7 @@ pub unsafe fn terminal_check_size(mut term: *mut Terminal) {
     );
     vterm_screen_flush_damage((*term).vts);
     (*term).pending.resize = true_0 != 0;
-    invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
+    refresh::invalidate_terminal(term, None);
 }
 unsafe fn set_terminal_winopts(s: *mut TerminalState) {
     '_c2rust_label: {
@@ -1605,7 +917,7 @@ pub unsafe fn terminal_enter() -> bool {
     RedrawingDisabled.set(false_0);
     set_terminal_winopts(&raw mut s as *mut TerminalState);
     (*(*(&raw mut s as *mut TerminalState)).term).pending.cursor = true_0 != 0;
-    adjust_topline_cursor(
+    refresh::adjust_topline_cursor(
         (*(&raw mut s as *mut TerminalState)).term,
         buf,
         0 as ::core::ffi::c_int,
@@ -1771,11 +1083,7 @@ unsafe fn terminal_check_focus(s: *mut TerminalState) -> bool {
         }
         (*s).term = (*curbuf.get()).terminal;
         (*(*s).term).pending.cursor = true_0 != 0;
-        invalidate_terminal(
-            (*s).term,
-            -1 as ::core::ffi::c_int,
-            -1 as ::core::ffi::c_int,
-        );
+        refresh::invalidate_terminal((*s).term, None);
         terminal_focus((*s).term, true_0 != 0);
     }
     return true_0 != 0;
@@ -1800,7 +1108,7 @@ unsafe extern "C" fn terminal_check(mut state: *mut VimState) -> ::core::ffi::c_
     if stop_insert_mode.get() as ::core::ffi::c_int != 0 || !terminal_check_focus(s) {
         return 0 as ::core::ffi::c_int;
     }
-    terminal_check_refresh();
+    refresh::terminal_check_refresh();
     terminal_check_cursor();
     validate_cursor(curwin.get());
     (*(*s).term).refcount = (*(*s).term).refcount.wrapping_add(1);
@@ -1839,7 +1147,7 @@ unsafe extern "C" fn terminal_check(mut state: *mut VimState) -> ::core::ffi::c_
         }
     }
     setcursor();
-    refresh_cursor((*s).term, &raw mut (*s).cursor_visible);
+    refresh::refresh_cursor((*s).term, &mut (*s).cursor_visible);
     ui_flush();
     return 1 as ::core::ffi::c_int;
 }
@@ -1949,83 +1257,28 @@ pub unsafe fn terminal_destroy(mut termpp: *mut *mut Terminal) {
         (*buf).terminal = ::core::ptr::null_mut::<Terminal>();
     }
     if (*term).refcount == 0 {
-        if set_has_ptr_t(invalidated_terminals.ptr(), term as ptr_t) {
-            block_autocmds();
-            refresh_terminal(term);
-            unblock_autocmds();
-            set_del_ptr_t(invalidated_terminals.ptr(), term as ptr_t);
-        }
-        xfree((*term).title as *mut ::core::ffi::c_void);
-        xfree((*term).selection_buffer as *mut ::core::ffi::c_void);
-        xfree((*term).selection.items as *mut ::core::ffi::c_void);
-        (*term).selection.capacity = 0 as size_t;
-        (*term).selection.size = (*term).selection.capacity;
-        (*term).selection.items = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        xfree((*term).termrequest_buffer.items as *mut ::core::ffi::c_void);
-        (*term).termrequest_buffer.capacity = 0 as size_t;
-        (*term).termrequest_buffer.size = (*term).termrequest_buffer.capacity;
-        (*term).termrequest_buffer.items = ::core::ptr::null_mut::<::core::ffi::c_char>();
+        refresh::refresh_before_destroy(term);
         vterm_free((*term).vt);
         multiqueue_free((*term).pending.events);
         drop(Box::from_raw(term));
         *termpp = ::core::ptr::null_mut::<Terminal>();
     }
 }
-unsafe fn terminal_send(
-    mut term: *mut Terminal,
-    mut data: *const ::core::ffi::c_char,
-    mut size: size_t,
-) {
-    if (*term).closed {
-        return;
-    }
-    if !(*term).pending.send.is_null() {
-        if size > 0 as size_t {
-            if (*(*term).pending.send).capacity < (*(*term).pending.send).size.wrapping_add(size) {
-                (*(*term).pending.send).capacity = (*(*term).pending.send).size.wrapping_add(size);
-                (*(*term).pending.send).capacity = (*(*term).pending.send).capacity.wrapping_sub(1);
-                (*(*term).pending.send).capacity |=
-                    (*(*term).pending.send).capacity >> 1 as ::core::ffi::c_int;
-                (*(*term).pending.send).capacity |=
-                    (*(*term).pending.send).capacity >> 2 as ::core::ffi::c_int;
-                (*(*term).pending.send).capacity |=
-                    (*(*term).pending.send).capacity >> 4 as ::core::ffi::c_int;
-                (*(*term).pending.send).capacity |=
-                    (*(*term).pending.send).capacity >> 8 as ::core::ffi::c_int;
-                (*(*term).pending.send).capacity |=
-                    (*(*term).pending.send).capacity >> 16 as ::core::ffi::c_int;
-                (*(*term).pending.send).capacity = (*(*term).pending.send).capacity.wrapping_add(1);
-                (*(*term).pending.send).items = xrealloc(
-                    (*(*term).pending.send).items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_mul((*(*term).pending.send).capacity),
-                ) as *mut ::core::ffi::c_char;
-            }
-            '_c2rust_label: {
-                if !(*(*term).pending.send).items.is_null() {
-                } else {
-                    __assert_fail(
-                        b"(*term->pending.send).items\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1249 as ::core::ffi::c_uint,
-                        b"void terminal_send(Terminal *, const char *, size_t)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            memcpy(
-                (*(*term).pending.send)
-                    .items
-                    .offset((*(*term).pending.send).size as isize)
-                    as *mut ::core::ffi::c_void,
-                data as *const ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(size),
-            );
-            (*(*term).pending.send).size = (*(*term).pending.send).size.wrapping_add(size);
+/// Write `data` to the child, or hold it if a `TermRequest` handler is
+/// running. See [`TerminalPending::send`].
+unsafe fn terminal_send(term: *mut Terminal, data: *const ::core::ffi::c_char, size: size_t) {
+    unsafe {
+        if (*term).closed {
+            return;
         }
-        return;
+        if let Some(held) = (*term).pending.send.as_mut() {
+            if size > 0 {
+                held.extend_from_slice(::core::slice::from_raw_parts(data.cast::<u8>(), size));
+            }
+            return;
+        }
+        (*term).opts.write_cb.expect("non-null function pointer")(data, size, (*term).opts.data);
     }
-    (*term).opts.write_cb.expect("non-null function pointer")(data, size, (*term).opts.data);
 }
 unsafe fn is_filter_char(mut c: ::core::ffi::c_int) -> bool {
     let mut flag: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
@@ -2148,7 +1401,7 @@ unsafe extern "C" fn on_sync_flush(mut argv: *mut *mut ::core::ffi::c_void) {
         return;
     }
     block_autocmds();
-    refresh_terminal((*buf).terminal);
+    refresh::refresh_terminal((*buf).terminal);
     unblock_autocmds();
 }
 pub unsafe fn terminal_receive(
@@ -2482,285 +1735,6 @@ unsafe fn terminal_focus(mut term: *const Terminal, mut focus: bool) {
     } else {
         vterm_state_focus_out(state);
     };
-}
-unsafe extern "C" fn term_damage(
-    mut rect: VTermRect,
-    mut data: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    invalidate_terminal(data as *mut Terminal, rect.start_row, rect.end_row);
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn term_moverect(
-    mut dest: VTermRect,
-    mut src: VTermRect,
-    mut data: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    invalidate_terminal(
-        data as *mut Terminal,
-        if dest.start_row < src.start_row {
-            dest.start_row
-        } else {
-            src.start_row
-        },
-        if dest.end_row > src.end_row {
-            dest.end_row
-        } else {
-            src.end_row
-        },
-    );
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn term_movecursor(
-    mut new_pos: VTermPos,
-    mut _old_pos: VTermPos,
-    mut _visible: ::core::ffi::c_int,
-    mut data: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut term: *mut Terminal = data as *mut Terminal;
-    (*term).cursor.row = new_pos.row;
-    (*term).cursor.col = new_pos.col;
-    invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
-    return 1 as ::core::ffi::c_int;
-}
-unsafe fn buf_set_term_title(
-    mut buf: *mut buf_T,
-    mut title: *const ::core::ffi::c_char,
-    mut len: size_t,
-) {
-    if buf.is_null() {
-        return;
-    }
-    let mut err: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
-    (*buf).b_locked += 1;
-    dict_set_var(
-        (*buf).b_vars,
-        String_0 {
-            data: b"term_title\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            size: ::core::mem::size_of::<[::core::ffi::c_char; 11]>().wrapping_sub(1 as size_t),
-        },
-        object {
-            type_0: kObjectTypeString,
-            data: C2Rust_Unnamed {
-                string: String_0 {
-                    data: title as *mut ::core::ffi::c_char,
-                    size: len,
-                },
-            },
-        },
-        false_0 != 0,
-        false_0 != 0,
-        ::core::ptr::null_mut::<Arena>(),
-        &raw mut err,
-    );
-    (*buf).b_locked -= 1;
-    api_clear_error(&raw mut err);
-    status_redraw_buf(buf);
-}
-unsafe extern "C" fn term_settermprop(
-    mut prop: VTermProp,
-    mut val: *mut VTermValue,
-    mut data: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut term: *mut Terminal = data as *mut Terminal;
-    match prop as ::core::ffi::c_uint {
-        3 => {
-            (*term).in_altscreen = (*val).boolean != 0;
-        }
-        1 => {
-            (*term).cursor.visible = (*val).boolean != 0;
-            invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
-        }
-        4 => {
-            let mut buf: *mut buf_T = map_get_int_ptr_t(
-                buffer_handles.ptr(),
-                (*term).buf_handle as ::core::ffi::c_int,
-            ) as *mut buf_T;
-            let mut frag: VTermStringFragment = (*val).string;
-            if frag.initial() as ::core::ffi::c_int != 0
-                && frag.final_0() as ::core::ffi::c_int != 0
-            {
-                buf_set_term_title(buf, frag.str, frag.len());
-            } else {
-                if frag.initial() {
-                    (*term).title_len = 0 as size_t;
-                    (*term).title_size =
-                        (if frag.len() as ::core::ffi::c_int > 1024 as ::core::ffi::c_int {
-                            frag.len() as ::core::ffi::c_int
-                        } else {
-                            1024 as ::core::ffi::c_int
-                        }) as size_t;
-                    (*term).title = xmalloc(
-                        ::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                            .wrapping_mul((*term).title_size),
-                    ) as *mut ::core::ffi::c_char;
-                } else if (*term).title_len.wrapping_add(frag.len()) > (*term).title_size {
-                    (*term).title_size = (*term).title_size.wrapping_mul(2 as size_t);
-                    (*term).title = xrealloc(
-                        (*term).title as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<*mut ::core::ffi::c_char>()
-                            .wrapping_mul((*term).title_size),
-                    ) as *mut ::core::ffi::c_char;
-                }
-                memcpy(
-                    (*term).title.offset((*term).title_len as isize) as *mut ::core::ffi::c_void,
-                    frag.str as *const ::core::ffi::c_void,
-                    frag.len(),
-                );
-                (*term).title_len = (*term).title_len.wrapping_add(frag.len());
-                if frag.final_0() {
-                    buf_set_term_title(buf, (*term).title, (*term).title_len);
-                    xfree((*term).title as *mut ::core::ffi::c_void);
-                    (*term).title = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-            }
-        }
-        8 => {
-            (*term).forward_mouse = (*val).number != 0;
-        }
-        2 => {
-            (*term).cursor.blink = (*val).boolean != 0;
-            (*term).pending.cursor = true_0 != 0;
-            invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
-        }
-        7 => {
-            (*term).cursor.shape = (*val).number;
-            (*term).pending.cursor = true_0 != 0;
-            invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
-        }
-        10 => {
-            (*term).theme_updates = (*val).boolean != 0;
-        }
-        11 => {
-            (*term).synchronized_output = (*val).boolean != 0;
-            if (*val).boolean == 0 {
-                (*term).sync_flush_pending = true_0 != 0;
-            }
-        }
-        _ => return 0 as ::core::ffi::c_int,
-    }
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn term_bell(mut _data: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
-    vim_beep(kOptBoFlagTerm as ::core::ffi::c_int as ::core::ffi::c_uint);
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn term_theme(
-    mut dark: *mut bool,
-    mut _data: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    *dark = *p_bg.get() as ::core::ffi::c_int == 'd' as ::core::ffi::c_int;
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn term_clipboard_set(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut mask: VTermSelectionMask = (*argv.offset(0 as ::core::ffi::c_int as isize))
-        .expose_provenance() as ::core::ffi::c_long
-        as VTermSelectionMask;
-    let mut data: *mut ::core::ffi::c_char =
-        *argv.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char;
-    let mut regname: ::core::ffi::c_char = 0;
-    match mask as ::core::ffi::c_uint {
-        1 => {
-            regname = '+' as ::core::ffi::c_char;
-        }
-        2 => {
-            regname = '*' as ::core::ffi::c_char;
-        }
-        _ => {
-            regname = '+' as ::core::ffi::c_char;
-        }
-    }
-    let mut lines: *mut list_T = tv_list_alloc(1 as ptrdiff_t);
-    tv_list_append_allocated_string(lines, data);
-    let mut args: *mut list_T = tv_list_alloc(3 as ptrdiff_t);
-    tv_list_append_list(args, lines);
-    let regtype: ::core::ffi::c_char = 'v' as ::core::ffi::c_char;
-    tv_list_append_string(args, &raw const regtype, 1 as ssize_t);
-    tv_list_append_string(args, &raw mut regname, 1 as ssize_t);
-    eval_call_provider(
-        b"clipboard\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        b"set\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        args,
-        true_0 != 0,
-    );
-}
-unsafe extern "C" fn term_selection_set(
-    mut mask: VTermSelectionMask,
-    mut frag: VTermStringFragment,
-    mut user: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut term: *mut Terminal = user as *mut Terminal;
-    if frag.initial() {
-        (*term).selection.size = 0 as size_t;
-    }
-    if frag.len() as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
-        if (*term).selection.capacity < (*term).selection.size.wrapping_add(frag.len()) {
-            (*term).selection.capacity = (*term).selection.size.wrapping_add(frag.len());
-            (*term).selection.capacity = (*term).selection.capacity.wrapping_sub(1);
-            (*term).selection.capacity |= (*term).selection.capacity >> 1 as ::core::ffi::c_int;
-            (*term).selection.capacity |= (*term).selection.capacity >> 2 as ::core::ffi::c_int;
-            (*term).selection.capacity |= (*term).selection.capacity >> 4 as ::core::ffi::c_int;
-            (*term).selection.capacity |= (*term).selection.capacity >> 8 as ::core::ffi::c_int;
-            (*term).selection.capacity |= (*term).selection.capacity >> 16 as ::core::ffi::c_int;
-            (*term).selection.capacity = (*term).selection.capacity.wrapping_add(1);
-            (*term).selection.items = xrealloc(
-                (*term).selection.items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_mul((*term).selection.capacity),
-            ) as *mut ::core::ffi::c_char;
-        }
-        '_c2rust_label: {
-            if !(*term).selection.items.is_null() {
-            } else {
-                __assert_fail(
-                    b"(term->selection).items\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    1851 as ::core::ffi::c_uint,
-                    b"int term_selection_set(VTermSelectionMask, VTermStringFragment, void *)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        memcpy(
-            (*term)
-                .selection
-                .items
-                .offset((*term).selection.size as isize) as *mut ::core::ffi::c_void,
-            frag.str as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(frag.len()),
-        );
-        (*term).selection.size = (*term).selection.size.wrapping_add(frag.len());
-    }
-    if frag.final_0() {
-        let mut data: *mut ::core::ffi::c_char = xmemdupz(
-            (*term).selection.items as *const ::core::ffi::c_void,
-            (*term).selection.size,
-        ) as *mut ::core::ffi::c_char;
-        multiqueue_put_event(
-            (*main_loop.ptr()).events,
-            Event {
-                handler: Some(
-                    term_clipboard_set as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-                ),
-                argv: [
-                    ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(mask as usize),
-                    data as *mut ::core::ffi::c_void,
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ],
-            },
-        );
-    }
-    return 1 as ::core::ffi::c_int;
 }
 unsafe fn convert_modifiers(mut key: *mut ::core::ffi::c_int, mut statep: *mut VTermModifier) {
     if mod_mask.get() & MOD_MASK_SHIFT != 0 {
@@ -3299,7 +2273,7 @@ unsafe fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ffi::c_int) -
             curwin.set(save_curwin);
             curbuf.set((*curwin.get()).w_buffer);
             redraw_later(mouse_win, UPD_NOT_VALID as ::core::ffi::c_int);
-            invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
+            refresh::invalidate_terminal(term, None);
             return mouse_win == curwin.get();
         }
     }
@@ -3319,289 +2293,10 @@ unsafe fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ffi::c_int) -
     }
     return true_0 != 0;
 }
-unsafe fn invalidate_terminal(
-    mut term: *mut Terminal,
-    mut start_row: ::core::ffi::c_int,
-    mut end_row: ::core::ffi::c_int,
-) {
-    if start_row != -1 as ::core::ffi::c_int && end_row != -1 as ::core::ffi::c_int {
-        (*term).invalid_start = if (*term).invalid_start < start_row {
-            (*term).invalid_start
-        } else {
-            start_row
-        };
-        (*term).invalid_end = if (*term).invalid_end > end_row {
-            (*term).invalid_end
-        } else {
-            end_row
-        };
-    }
-    if (*term).synchronized_output {
-        return;
-    }
-    set_put_ptr_t(
-        invalidated_terminals.ptr(),
-        term as ptr_t,
-        ::core::ptr::null_mut::<*mut ptr_t>(),
-    );
-    if !refresh_pending.get() {
-        time_watcher_start(
-            refresh_timer.ptr(),
-            Some(
-                refresh_timer_cb
-                    as unsafe extern "C" fn(*mut TimeWatcher, *mut ::core::ffi::c_void) -> (),
-            ),
-            REFRESH_DELAY as uint64_t,
-            0 as uint64_t,
-        );
-        refresh_pending.set(true_0 != 0);
-    }
-}
-pub unsafe fn terminal_check_refresh() {
-    multiqueue_process_events((*refresh_timer.ptr()).events);
-}
-unsafe fn refresh_terminal(mut term: *mut Terminal) {
-    let mut buf: *mut buf_T = map_get_int_ptr_t(
-        buffer_handles.ptr(),
-        (*term).buf_handle as ::core::ffi::c_int,
-    ) as *mut buf_T;
-    if buf.is_null() {
-        return;
-    }
-    let mut ml_before: linenr_T = (*buf).b_ml.ml_line_count;
-    let mut resized: bool = refresh_size(term, buf);
-    refresh_scrollback(term, buf);
-    refresh_screen(term, buf);
-    let mut ml_added: ::core::ffi::c_int =
-        (*buf).b_ml.ml_line_count as ::core::ffi::c_int - ml_before as ::core::ffi::c_int;
-    adjust_topline_cursor(term, buf, ml_added);
-    if resized {
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp.is_null() {
-            let mut wp: *mut win_T = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp.is_null() {
-                if (*wp).w_buffer == buf && (*wp).w_leftcol != 0 as ::core::ffi::c_int {
-                    (*wp).w_leftcol = 0 as ::core::ffi::c_int as colnr_T;
-                    curs_columns(wp, true_0);
-                }
-                wp = (*wp).w_next;
-            }
-            tp = (*tp).tp_next as *mut tabpage_T;
-        }
-    }
-    multiqueue_move_events((*main_loop.ptr()).events, (*term).pending.events);
-}
-unsafe fn refresh_cursor(mut term: *mut Terminal, mut cursor_visible: *mut bool) {
-    if !is_focused(term) {
-        return;
-    }
-    if (*term).cursor.visible as ::core::ffi::c_int != *cursor_visible as ::core::ffi::c_int {
-        *cursor_visible = (*term).cursor.visible;
-        if *cursor_visible {
-            ui_busy_stop();
-        } else {
-            ui_busy_start();
-        }
-    }
-    if !(*term).pending.cursor {
-        return;
-    }
-    (*term).pending.cursor = false_0 != 0;
-    if (*term).cursor.blink {
-        (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon =
-            500 as ::core::ffi::c_int;
-        (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff =
-            500 as ::core::ffi::c_int;
-    } else {
-        (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon =
-            0 as ::core::ffi::c_int;
-        (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff =
-            0 as ::core::ffi::c_int;
-    }
-    match (*term).cursor.shape {
-        1 => {
-            (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape = SHAPE_BLOCK;
-        }
-        2 => {
-            (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape = SHAPE_HOR;
-            (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].percentage =
-                20 as ::core::ffi::c_int;
-        }
-        3 => {
-            (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape = SHAPE_VER;
-            (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].percentage =
-                25 as ::core::ffi::c_int;
-        }
-        _ => {}
-    }
-    ui_mode_info_set();
-}
-unsafe extern "C" fn refresh_timer_cb(
-    mut _watcher: *mut TimeWatcher,
-    mut _data: *mut ::core::ffi::c_void,
-) {
-    refresh_pending.set(false_0 != 0);
-    if exiting.get() {
-        return;
-    }
-    block_autocmds();
-    let mut to_refresh: Set_ptr_t = invalidated_terminals.get();
-    invalidated_terminals.set(SET_INIT);
-    let mut term: *mut Terminal = ::core::ptr::null_mut::<Terminal>();
-    let mut __i: uint32_t = 0;
-    __i = 0 as uint32_t;
-    while __i < to_refresh.h.n_keys {
-        term = *to_refresh.keys.offset(__i as isize) as *mut Terminal;
-        if !(*term).synchronized_output {
-            refresh_terminal(term);
-        }
-        __i = __i.wrapping_add(1);
-    }
-    xfree(to_refresh.keys as *mut ::core::ffi::c_void);
-    xfree(to_refresh.h.hash as *mut ::core::ffi::c_void);
-    to_refresh = SET_INIT;
-    unblock_autocmds();
-}
-unsafe fn refresh_size(mut term: *mut Terminal, mut _buf: *mut buf_T) -> bool {
-    if !(*term).pending.resize || (*term).closed as ::core::ffi::c_int != 0 {
-        return false_0 != 0;
-    }
-    (*term).pending.resize = false_0 != 0;
-    let mut width: ::core::ffi::c_int = 0;
-    let mut height: ::core::ffi::c_int = 0;
-    vterm_get_size((*term).vt, &raw mut height, &raw mut width);
-    (*term).invalid_start = 0 as ::core::ffi::c_int;
-    (*term).invalid_end = height;
-    (*term).opts.resize_cb.expect("non-null function pointer")(
-        width as uint16_t,
-        height as uint16_t,
-        (*term).opts.data,
-    );
-    return true_0 != 0;
-}
-pub unsafe fn on_scrollback_option_changed(mut term: *mut Terminal) {
-    if (*term).sb.is_sized() {
-        refresh_terminal(term);
-    }
-}
-unsafe fn refresh_screen(mut term: *mut Terminal, mut buf: *mut buf_T) {
-    let mut changed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut added: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut height: ::core::ffi::c_int = 0;
-    let mut width: ::core::ffi::c_int = 0;
-    vterm_get_size((*term).vt, &raw mut height, &raw mut width);
-    (*term).invalid_end = if (*term).invalid_end < height {
-        (*term).invalid_end
-    } else {
-        height
-    };
-    if (*term).invalid_start >= (*term).invalid_end {
-        (*term).invalid_start = INT_MAX;
-        (*term).invalid_end = -1 as ::core::ffi::c_int;
-        return;
-    }
-    let mut r: ::core::ffi::c_int = (*term).invalid_start;
-    let mut linenr: ::core::ffi::c_int = row_to_linenr(term, r);
-    while r < (*term).invalid_end {
-        fetch_row(term, r, width);
-        if linenr as linenr_T <= (*buf).b_ml.ml_line_count {
-            ml_replace_buf(
-                buf,
-                linenr as linenr_T,
-                &raw mut (*term).textbuf as *mut ::core::ffi::c_char,
-                true_0 != 0,
-                false_0 != 0,
-            );
-            changed += 1;
-        } else {
-            ml_append_buf(
-                buf,
-                linenr as linenr_T - 1 as linenr_T,
-                &raw mut (*term).textbuf as *mut ::core::ffi::c_char,
-                0 as colnr_T,
-                false_0 != 0,
-            );
-            added += 1;
-        }
-        r += 1;
-        linenr += 1;
-    }
-    (*term).old_height = height;
-    let mut change_start: ::core::ffi::c_int = row_to_linenr(term, (*term).invalid_start);
-    let mut change_end: ::core::ffi::c_int = change_start + changed;
-    (*term).invalid_start = INT_MAX;
-    (*term).invalid_end = -1 as ::core::ffi::c_int;
-    changed_lines(
-        buf,
-        change_start as linenr_T,
-        0 as colnr_T,
-        change_end as linenr_T,
-        added as linenr_T,
-        true_0 != 0,
-    );
-}
-unsafe fn adjust_topline_cursor(
-    mut term: *mut Terminal,
-    mut buf: *mut buf_T,
-    mut added: ::core::ffi::c_int,
-) {
-    let mut ml_end: linenr_T = (*buf).b_ml.ml_line_count;
-    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-    while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab.get() {
-            firstwin.get()
-        } else {
-            (*tp).tp_firstwin
-        };
-        while !wp.is_null() {
-            if (*wp).w_buffer == buf {
-                if wp == curwin.get() && is_focused(term) as ::core::ffi::c_int != 0 {
-                    terminal_check_cursor();
-                } else {
-                    let mut following: bool = ml_end == (*wp).w_cursor.lnum + added as linenr_T;
-                    if following {
-                        (*wp).w_cursor.lnum = ml_end;
-                        set_topline(
-                            wp,
-                            if (*wp).w_cursor.lnum - (*wp).w_view_height as linenr_T + 1 as linenr_T
-                                > 1 as linenr_T
-                            {
-                                (*wp).w_cursor.lnum - (*wp).w_view_height as linenr_T
-                                    + 1 as linenr_T
-                            } else {
-                                1 as linenr_T
-                            },
-                        );
-                    } else {
-                        (*wp).w_cursor.lnum = if (*wp).w_cursor.lnum < ml_end {
-                            (*wp).w_cursor.lnum
-                        } else {
-                            ml_end
-                        };
-                    }
-                    mb_check_adjust_col(wp as *mut ::core::ffi::c_void);
-                }
-            }
-            wp = (*wp).w_next;
-        }
-        tp = (*tp).tp_next as *mut tabpage_T;
-    }
-    if ml_end == (*buf).b_last_cursor.mark.lnum + added as linenr_T {
-        (*buf).b_last_cursor.mark.lnum = ml_end;
-    }
-    let mut i: size_t = 0 as size_t;
-    while i < (*buf).b_wininfo.size {
-        let mut wip: *mut WinInfo = *(*buf).b_wininfo.items.offset(i as isize);
-        if ml_end == (*wip).wi_mark.mark.lnum + added as linenr_T {
-            (*wip).wi_mark.mark.lnum = ml_end;
-        }
-        i = i.wrapping_add(1);
-    }
-}
+/// Mark `rows` as needing a redraw and schedule one.
+///
+/// `None` means nothing changed on screen but the terminal still needs to
+/// be looked at — the cursor moved, or a row left the scrollback.
 unsafe fn row_to_linenr(
     mut term: *mut Terminal,
     mut row: ::core::ffi::c_int,

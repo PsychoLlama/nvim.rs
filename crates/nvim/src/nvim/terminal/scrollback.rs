@@ -25,9 +25,8 @@ use crate::src::nvim::types::{
 use crate::src::nvim::vterm::screen::vterm_screen_get_cell;
 use crate::src::nvim::vterm::vterm::vterm_get_size;
 
-use super::{
-    MAXLNUM, NUL, SB_MAX, buf_for_handle, invalidate_terminal, kExtmarkUndo, kMarkAdjustTerm,
-};
+use super::refresh::invalidate_terminal;
+use super::{MAXLNUM, NUL, SB_MAX, buf_for_handle, kExtmarkUndo, kMarkAdjustTerm};
 
 /// A cell holding nothing. vterm reports an empty cell as a zero `schar`;
 /// the width still has to be 1 or the row scan below would not advance.
@@ -92,7 +91,7 @@ pub unsafe extern "C" fn term_sb_push(
             .sb
             .push(::core::slice::from_raw_parts(cells, cols as usize));
         if !(*term).synchronized_output {
-            invalidate_terminal(term, -1, -1);
+            invalidate_terminal(term, None);
         }
         1
     }
@@ -111,7 +110,7 @@ pub unsafe extern "C" fn term_sb_pop(
             return 0;
         }
         if !(*term).synchronized_output {
-            invalidate_terminal(term, -1, -1);
+            invalidate_terminal(term, None);
         }
         1
     }
@@ -127,7 +126,7 @@ pub unsafe extern "C" fn term_sb_clear(data: *mut ::core::ffi::c_void) -> ::core
             return 1;
         }
         (*term).sb.clear();
-        invalidate_terminal(term, -1, -1);
+        invalidate_terminal(term, None);
         1
     }
 }

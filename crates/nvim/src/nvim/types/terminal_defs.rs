@@ -6,6 +6,10 @@ use std::collections::VecDeque;
 
 use super::*;
 
+/// How much of a selection sequence vterm can reassemble before it gives up
+/// and reports the write truncated.
+pub const SELECTIONBUF_SIZE: usize = 0x400;
+
 /// One `:terminal` buffer's emulator state.
 ///
 /// Owned by the buffer it draws into: `terminal_alloc` leaks a `Box` and
@@ -24,9 +28,9 @@ pub struct terminal {
     pub sb: Scrollback,
     pub old_sb_deleted: usize,
     pub old_height: ::core::ffi::c_int,
-    pub title: *mut ::core::ffi::c_char,
-    pub title_len: size_t,
-    pub title_size: size_t,
+    /// The window title being reassembled from the fragments vterm hands
+    /// over. Empty between titles.
+    pub title: Vec<u8>,
     pub buf_handle: handle_T,
     pub in_altscreen: bool,
     pub suspended: bool,
@@ -42,9 +46,15 @@ pub struct terminal {
     pub synchronized_output: bool,
     pub sync_flush_pending: bool,
     pub color_set: [bool; 16],
-    pub selection_buffer: *mut ::core::ffi::c_char,
-    pub selection: StringBuilder,
-    pub termrequest_buffer: StringBuilder,
+    /// Scratch space vterm reassembles selection sequences in. Handed over
+    /// as a raw pointer when the callbacks are installed and held by vterm
+    /// for as long as the terminal lives, so it is never resized.
+    pub selection_buffer: Box<[::core::ffi::c_char; SELECTIONBUF_SIZE]>,
+    /// The clipboard write being reassembled. Empty between writes.
+    pub selection: Vec<u8>,
+    /// The escape sequence currently being reassembled from the fragments
+    /// vterm hands over, terminator excluded.
+    pub termrequest_buffer: Vec<u8>,
     pub termrequest_terminator: VTermTerminator,
     pub refcount: size_t,
 }
@@ -64,9 +74,7 @@ impl terminal {
             sb: Scrollback::default(),
             old_sb_deleted: 0,
             old_height: 0,
-            title: ::core::ptr::null_mut(),
-            title_len: 0,
-            title_size: 0,
+            title: Vec::new(),
             in_altscreen: false,
             suspended: false,
             closed: false,
@@ -92,17 +100,12 @@ impl terminal {
             synchronized_output: false,
             sync_flush_pending: false,
             color_set: [false; 16],
-            selection_buffer: ::core::ptr::null_mut(),
-            selection: StringBuilder {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut(),
-            },
-            termrequest_buffer: StringBuilder {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut(),
-            },
+            selection_buffer: vec![0; SELECTIONBUF_SIZE]
+                .into_boxed_slice()
+                .try_into()
+                .expect("sized to SELECTIONBUF_SIZE"),
+            selection: Vec::new(),
+            termrequest_buffer: Vec::new(),
             termrequest_terminator: 0,
             refcount: 0,
         }
@@ -244,7 +247,11 @@ impl Scrollback {
 pub struct TerminalPending {
     pub resize: bool,
     pub cursor: bool,
-    pub send: *mut StringBuilder,
+    /// Where writes to the child go while a `TermRequest` autocommand is
+    /// running, so that a handler's reply lands after the request has been
+    /// fully reported. Null the rest of the time, meaning "write through".
+    /// Borrowed from the in-flight request, which outlives the borrow.
+    pub send: *mut Vec<u8>,
     pub events: *mut MultiQueue,
 }
 #[derive(Copy, Clone)]
