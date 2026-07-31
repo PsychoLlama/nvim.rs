@@ -1,671 +1,568 @@
 //! Turning one file name into another.
 //!
-//! `modname` builds the "same name with a different extension" that backups,
-//! swap files and `:make` want, honouring `'shortname'` and the 8.3-ish limits
-//! that `BASENAMELEN` still encodes. `vim_rename` and `vim_copyfile` move a
-//! file, falling back from `rename` to a copy when the two paths are on
-//! different filesystems. `file_pat_to_reg_pat` compiles a shell-style file
-//! pattern into a regexp, which `match_file_pat`/`match_file_list` then run
-//! against a name — that is how `'wildignore'`, `'backupskip'` and autocommand
-//! patterns are matched.
+//! [`modname`] builds the "same name with a different extension" that backups,
+//! swap files and `:make` want, honouring the `BASENAMELEN` limit on how long
+//! a basename may get. [`vim_rename`] and [`vim_copyfile`] move a file,
+//! falling back from `rename` to a copy when the two paths turn out to be on
+//! different filesystems. [`file_pat_to_reg_pat`] compiles a shell-style file
+//! pattern into a regexp, which [`match_file_pat`]/[`match_file_list`] then
+//! run against a name — that is how `'wildignore'`, `'backupskip'` and
+//! autocommand patterns are matched.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{c_char, c_int, c_void};
+use std::ffi::CStr;
 
 #[allow(unused_imports)]
 use super::*;
 
-pub unsafe fn shorten_buf_fname(
-    mut buf: *mut buf_T,
-    mut dirname: *mut ::core::ffi::c_char,
-    mut force: ::core::ffi::c_int,
-) {
+/// `S_IFLNK`: the file type bits of a symbolic link.
+const S_IFLNK: u64 = 0o120000;
+
+/// Where the last component of `name` starts, as `path_tail` finds it.
+///
+/// Upstream steps through the name a character at a time, but a `/` byte can
+/// never be part of a multibyte character — `utf_ptr2len` only steps over a
+/// lead byte when every byte after it is a continuation byte, and `/` is not
+/// one — so scanning bytes finds the same separator.
+fn tail_index(name: &[u8]) -> usize {
+    // Leading separators belong to the head, not to a component.
+    let head = name.iter().position(|&b| b != b'/').unwrap_or(name.len());
+    name[head..]
+        .iter()
+        .rposition(|&b| b == b'/')
+        .map_or(head, |at| head + at + 1)
+}
+
+/// Shorten `buf`'s displayed file name to be relative to `dirname`.
+pub unsafe fn shorten_buf_fname(buf: *mut buf_T, dirname: *mut c_char, force: c_int) {
     unsafe {
-        if !(*buf).b_fname.is_null()
-            && !bt_nofilename(buf)
-            && path_with_url((*buf).b_fname) == 0
-            && (force != 0
-                || (*buf).b_sfname.is_null()
-                || path_is_absolute((*buf).b_sfname) as ::core::ffi::c_int != 0)
+        if (*buf).b_fname.is_null()
+            || bt_nofilename(buf)
+            || path_with_url((*buf).b_fname) != 0
+            || !(force != 0 || (*buf).b_sfname.is_null() || path_is_absolute((*buf).b_sfname))
         {
-            if (*buf).b_sfname != (*buf).b_ffname {
-                let mut ptr_: *mut *mut ::core::ffi::c_void =
-                    &raw mut (*buf).b_sfname as *mut *mut ::core::ffi::c_void;
-                xfree(*ptr_);
-                *ptr_ = NULL;
-                let _ = *ptr_;
-            }
-            let mut p: *mut ::core::ffi::c_char = path_shorten_fname((*buf).b_ffname, dirname);
-            if !p.is_null() {
-                (*buf).b_sfname = xstrdup(p);
-                (*buf).b_fname = (*buf).b_sfname;
-            }
-            if p.is_null() {
-                (*buf).b_fname = (*buf).b_ffname;
-            }
+            return;
+        }
+        if (*buf).b_sfname != (*buf).b_ffname {
+            xfree((*buf).b_sfname.cast());
+            (*buf).b_sfname = core::ptr::null_mut();
+        }
+        let p = path_shorten_fname((*buf).b_ffname, dirname);
+        if p.is_null() {
+            (*buf).b_fname = (*buf).b_ffname;
+        } else {
+            (*buf).b_sfname = xstrdup(p);
+            (*buf).b_fname = (*buf).b_sfname;
         }
     }
 }
 
-pub unsafe extern "C" fn shorten_fnames(mut force: ::core::ffi::c_int) {
+/// Shorten file names for all buffers.
+pub unsafe extern "C" fn shorten_fnames(force: c_int) {
     unsafe {
-        let mut dirname: [::core::ffi::c_char; 4096] = [0; 4096];
-        os_dirname(
-            &raw mut dirname as *mut ::core::ffi::c_char,
-            MAXPATHL as size_t,
-        );
-        let mut buf: *mut buf_T = firstbuf.get();
+        let mut dirname = [0 as c_char; MAXPATHL as usize];
+        os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t);
+        let mut buf = firstbuf.get();
         while !buf.is_null() {
-            shorten_buf_fname(buf, &raw mut dirname as *mut ::core::ffi::c_char, force);
+            shorten_buf_fname(buf, dirname.as_mut_ptr(), force);
+            // Always make the swap file name a full path; a "nofile" buffer
+            // may also have a swap file.
             mf_fullname((*buf).b_ml.ml_mfp);
             buf = (*buf).b_next;
         }
         status_redraw_all();
-        redraw_tabline.set(true_0 != 0);
+        redraw_tabline.set(true);
     }
 }
 
+/// Get a new file name ended by the given extension.
+///
+/// @param fname        The original file name. If NULL or empty, the current
+///                     directory name is used instead.
+/// @param ext          The extension to add. 4 characters max if it starts
+///                     with a dot, 3 otherwise.
+/// @param prepend_dot  Prefix the basename with a dot. Does nothing if it
+///                     already starts with one, or if `fname` was empty.
+///
+/// @return [allocated] The new name, guaranteed to end with `ext`, to have a
+///                     basename of at most `BASENAMELEN` characters, and to
+///                     differ from `fname` — basename characters are replaced
+///                     with `_` if that is what it takes, and if the whole
+///                     truncated basename was already underscores, the first
+///                     becomes a `v`. NULL only when `fname` was empty and
+///                     the current directory could not be read.
 pub unsafe extern "C" fn modname(
-    mut fname: *const ::core::ffi::c_char,
-    mut ext: *const ::core::ffi::c_char,
-    mut prepend_dot: bool,
-) -> *mut ::core::ffi::c_char {
+    fname: *const c_char,
+    ext: *const c_char,
+    prepend_dot: bool,
+) -> *mut c_char {
     unsafe {
-        let mut retval: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut fnamelen: size_t = 0;
-        let mut extlen: size_t = strlen(ext);
-        if fname.is_null() || *fname as ::core::ffi::c_int == NUL {
-            retval = xmalloc(
-                (MAXPATHL as size_t)
-                    .wrapping_add(extlen)
-                    .wrapping_add(3 as size_t),
-            ) as *mut ::core::ffi::c_char;
-            if os_dirname(retval, MAXPATHL as size_t) == FAIL || strlen(retval) == 0 as size_t {
-                xfree(retval as *mut ::core::ffi::c_void);
-                return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let ext = CStr::from_ptr(ext).to_bytes();
+        let mut prepend_dot = prepend_dot;
+        // Room for `os_dirname`'s MAXPATHL plus the separator below.
+        let mut cwd = [0 as c_char; MAXPATHL as usize + 2];
+
+        let name: &[u8] = if fname.is_null() || *fname == 0 {
+            // With no file name we need the name of the current directory —
+            // in full, in case `:cd` is used.
+            if os_dirname(cwd.as_mut_ptr(), MAXPATHL as size_t) == FAIL
+                || CStr::from_ptr(cwd.as_ptr()).is_empty()
+            {
+                return core::ptr::null_mut();
             }
-            add_pathsep(retval);
-            fnamelen = strlen(retval);
-            prepend_dot = false_0 != 0;
+            add_pathsep(cwd.as_mut_ptr());
+            prepend_dot = false; // nothing to prepend a dot to
+            CStr::from_ptr(cwd.as_ptr()).to_bytes()
         } else {
-            fnamelen = strlen(fname);
-            retval = xmalloc(fnamelen.wrapping_add(extlen).wrapping_add(3 as size_t))
-                as *mut ::core::ffi::c_char;
-            strcpy(retval, fname);
-        }
-        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        ptr = retval.offset(fnamelen as isize);
-        while ptr > retval {
-            if vim_ispathsep(*ptr as ::core::ffi::c_int) {
-                ptr = ptr.offset(1);
-                break;
-            } else {
-                ptr = ptr.offset(
-                    -((utf_head_off(retval, ptr.offset(-(1 as ::core::ffi::c_int as isize)))
-                        + 1 as ::core::ffi::c_int) as isize),
-                );
+            CStr::from_ptr(fname).to_bytes()
+        };
+
+        // Everything after the last path separator is the basename, and it
+        // may keep at most BASENAMELEN characters. Upstream's backwards walk
+        // stops before the first byte, so a name that *is* a separator there
+        // ("/foo") keeps it as part of the basename.
+        let start = name[1..]
+            .iter()
+            .rposition(|&b| b == b'/')
+            .map_or(0, |at| at + 2);
+        let ptrlen = (name.len() - start).min(BASENAMELEN as usize);
+
+        let mut out = Vec::with_capacity(start + ptrlen + ext.len() + 2);
+        out.extend_from_slice(&name[..start + ptrlen]);
+        // The extension starts here, and this is where the search for a
+        // character to replace below starts from.
+        let ext_at = out.len();
+        out.extend_from_slice(ext);
+
+        if prepend_dot {
+            let e = tail_index(&out);
+            if out.get(e) != Some(&b'.') {
+                out.insert(e, b'.');
             }
         }
-        let mut ptrlen: size_t = fnamelen.wrapping_sub(ptr.offset_from(retval) as size_t);
-        if ptrlen > BASENAMELEN as ::core::ffi::c_uint as size_t {
-            ptrlen = BASENAMELEN as size_t;
-            *ptr.offset(ptrlen as isize) = NUL as ::core::ffi::c_char;
-        }
-        let mut s: *mut ::core::ffi::c_char = ptr.offset(ptrlen as isize);
-        strcpy(s, ext);
-        let mut e: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if prepend_dot as ::core::ffi::c_int != 0 && {
-            e = path_tail(retval);
-            *e as ::core::ffi::c_int != '.' as ::core::ffi::c_int
-        } {
-            memmove(
-                e.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-                e as *const ::core::ffi::c_void,
-                fnamelen
-                    .wrapping_add(extlen)
-                    .wrapping_sub(e.offset_from(retval) as size_t)
-                    .wrapping_add(1 as size_t),
-            );
-            *e = '.' as ::core::ffi::c_char;
-        }
-        if !fname.is_null() && strcmp(fname, retval) == 0 as ::core::ffi::c_int {
-            loop {
-                s = s.offset(-1);
-                if s < ptr {
+
+        // Check that, after appending the extension, the file name really is
+        // different.
+        if !fname.is_null() && CStr::from_ptr(fname).to_bytes() == out {
+            // Look backwards through the basename for a character that can be
+            // replaced by '_'.
+            let mut at = ext_at;
+            let mut replaced = false;
+            while at > start {
+                at -= 1;
+                if out[at] != b'_' {
+                    out[at] = b'_';
+                    replaced = true;
                     break;
                 }
-                if *s as ::core::ffi::c_int == '_' as ::core::ffi::c_int {
-                    continue;
-                }
-                *s = '_' as ::core::ffi::c_char;
-                break;
             }
-            if s < ptr {
-                *ptr = 'v' as ::core::ffi::c_char;
+            if !replaced {
+                // fname was "________.<ext>", how tricky!
+                match out.get_mut(start) {
+                    Some(slot) => *slot = b'v',
+                    None => out.push(b'v'),
+                }
             }
         }
-        return retval;
+
+        xmemdupz(out.as_ptr().cast(), out.len()).cast()
     }
 }
 
-pub(crate) unsafe extern "C" fn rename_with_tmp(
-    from: *const ::core::ffi::c_char,
-    to: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// Rename `from` to `to` via a third name in the same directory.
+///
+/// Needed when the two names refer to the same file but are spelled
+/// differently, which a plain rename would treat as a no-op.
+unsafe fn rename_with_tmp(from: *const c_char, to: *const c_char) -> c_int {
     unsafe {
-        if strlen(from) >= (MAXPATHL - 5 as ::core::ffi::c_int) as size_t {
-            return -1 as ::core::ffi::c_int;
+        let from_len = CStr::from_ptr(from).to_bytes().len();
+        if from_len >= MAXPATHL as usize - 5 {
+            return -1;
         }
-        let mut tempname: [::core::ffi::c_char; 4097] = [0; 4097];
-        strcpy(
-            &raw mut tempname as *mut ::core::ffi::c_char,
-            from as *mut ::core::ffi::c_char,
-        );
-        let mut n: ::core::ffi::c_int = 123 as ::core::ffi::c_int;
-        while n < 99999 as ::core::ffi::c_int {
-            let mut tail: *mut ::core::ffi::c_char =
-                path_tail(&raw mut tempname as *mut ::core::ffi::c_char);
-            snprintf(
-                tail,
-                ((MAXPATHL + 1 as ::core::ffi::c_int) as isize
-                    - tail.offset_from(&raw mut tempname as *mut ::core::ffi::c_char))
-                    as size_t,
-                b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-                n,
-            );
-            if !os_path_exists(&raw mut tempname as *mut ::core::ffi::c_char) {
-                if os_rename(from, &raw mut tempname as *mut ::core::ffi::c_char) == OK {
-                    if os_rename(&raw mut tempname as *mut ::core::ffi::c_char, to) == OK {
-                        return 0 as ::core::ffi::c_int;
-                    }
-                    os_rename(&raw mut tempname as *mut ::core::ffi::c_char, from);
-                    return -1 as ::core::ffi::c_int;
-                }
-                return -1 as ::core::ffi::c_int;
+
+        let mut tempname = [0 as c_char; MAXPATHL as usize + 1];
+        core::ptr::copy_nonoverlapping(from, tempname.as_mut_ptr(), from_len + 1);
+        // Everything up to the tail stays put; only the last component is
+        // replaced with a number.
+        let tail = tail_index(CStr::from_ptr(tempname.as_ptr()).to_bytes());
+
+        for n in 123..99999 {
+            let digits = n.to_string();
+            let end = tail + digits.len();
+            tempname[tail..end].copy_from_slice(core::slice::from_raw_parts(
+                digits.as_ptr().cast::<c_char>(),
+                digits.len(),
+            ));
+            tempname[end] = 0;
+
+            if os_path_exists(tempname.as_ptr()) {
+                continue;
             }
-            n += 1;
+            if os_rename(from, tempname.as_ptr()) != OK {
+                // If it fails for one temp name it will most likely fail for
+                // any temp name, so give up.
+                return -1;
+            }
+            if os_rename(tempname.as_ptr(), to) == OK {
+                return 0;
+            }
+            // Strange, the second step failed. Try moving the file back and
+            // report the failure.
+            os_rename(tempname.as_ptr(), from);
+            return -1;
         }
-        return -1 as ::core::ffi::c_int;
+        -1
     }
 }
 
-pub unsafe extern "C" fn vim_rename(
-    mut from: *const ::core::ffi::c_char,
-    mut to: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// Rename `from` to `to`, copying the file across if a rename cannot do it.
+///
+/// `os_rename` only works when both names are on the same file system.
+///
+/// @return  -1 for failure, 0 for success
+pub unsafe extern "C" fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
     unsafe {
-        let mut use_tmp_file: bool = false_0 != 0;
-        if path_fnamecmp(from, to) == 0 as ::core::ffi::c_int {
-            if p_fic.get() != 0 && strcmp(path_tail(from), path_tail(to)) != 0 as ::core::ffi::c_int
-            {
-                use_tmp_file = true_0 != 0;
+        let mut use_tmp_file = false;
+
+        // When the names are identical there is nothing to do. When they refer
+        // to the same file but the spelling differs we have to go through a
+        // temp file.
+        if path_fnamecmp(from, to) == 0 {
+            if p_fic.get() != 0 && strcmp(path_tail(from), path_tail(to)) != 0 {
+                use_tmp_file = true;
             } else {
-                return 0 as ::core::ffi::c_int;
+                return 0;
             }
         }
-        let mut from_info: FileInfo = FileInfo {
-            stat: uv_stat_t {
-                st_dev: 0,
-                st_mode: 0,
-                st_nlink: 0,
-                st_uid: 0,
-                st_gid: 0,
-                st_rdev: 0,
-                st_ino: 0,
-                st_size: 0,
-                st_blksize: 0,
-                st_blocks: 0,
-                st_flags: 0,
-                st_gen: 0,
-                st_atim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_mtim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_ctim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_birthtim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-            },
-        };
+
+        // Fail if the "from" file doesn't exist. Avoids that "to" is deleted.
+        let mut from_info = FileInfo::default();
         if !os_fileinfo(from, &raw mut from_info) {
-            return -1 as ::core::ffi::c_int;
+            return -1;
         }
-        let mut to_info: FileInfo = FileInfo {
-            stat: uv_stat_t {
-                st_dev: 0,
-                st_mode: 0,
-                st_nlink: 0,
-                st_uid: 0,
-                st_gid: 0,
-                st_rdev: 0,
-                st_ino: 0,
-                st_size: 0,
-                st_blksize: 0,
-                st_blocks: 0,
-                st_flags: 0,
-                st_gen: 0,
-                st_atim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_mtim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_ctim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_birthtim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-            },
-        };
-        if os_fileinfo(to, &raw mut to_info) as ::core::ffi::c_int != 0
-            && os_fileinfo_id_equal(&raw mut from_info, &raw mut to_info) as ::core::ffi::c_int != 0
+
+        // It's possible for the source and destination to be the same file.
+        // This happens when "from" and "to" differ in case and are on a FAT32
+        // filesystem. In that case go through a temp file name.
+        let mut to_info = FileInfo::default();
+        if os_fileinfo(to, &raw mut to_info)
+            && os_fileinfo_id_equal(&raw mut from_info, &raw mut to_info)
         {
-            use_tmp_file = true_0 != 0;
+            use_tmp_file = true;
         }
+
         if use_tmp_file {
             return rename_with_tmp(from, to);
         }
+
+        // Delete the "to" file. This is required on some systems to make the
+        // rename work, and on others it makes sure we don't end up with two
+        // files when the rename fails.
         os_remove(to);
+
+        // First try a normal rename, and return if it works.
         if os_rename(from, to) == OK {
-            return 0 as ::core::ffi::c_int;
+            return 0;
         }
-        let mut ret: ::core::ffi::c_int = vim_copyfile(from, to);
-        if ret != OK {
-            return -1 as ::core::ffi::c_int;
+
+        // The rename failed, try copying the file.
+        if vim_copyfile(from, to) != OK {
+            return -1;
         }
         if os_fileinfo(from, &raw mut from_info) {
             os_remove(from);
         }
-        return 0 as ::core::ffi::c_int;
+        0
     }
 }
 
-pub unsafe extern "C" fn vim_copyfile(
-    mut from: *const ::core::ffi::c_char,
-    mut to: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// Copy `from` to `to`, with the same permissions and ACL.
+///
+/// A symbolic link is copied as a link, not as its target.
+///
+/// @return  FAIL for failure, OK for success
+pub unsafe extern "C" fn vim_copyfile(from: *const c_char, to: *const c_char) -> c_int {
     unsafe {
-        let mut errmsg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut from_info: FileInfo = FileInfo {
-            stat: uv_stat_t {
-                st_dev: 0,
-                st_mode: 0,
-                st_nlink: 0,
-                st_uid: 0,
-                st_gid: 0,
-                st_rdev: 0,
-                st_ino: 0,
-                st_size: 0,
-                st_blksize: 0,
-                st_blocks: 0,
-                st_flags: 0,
-                st_gen: 0,
-                st_atim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_mtim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_ctim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_birthtim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-            },
-        };
-        if os_fileinfo_link(from, &raw mut from_info) as ::core::ffi::c_int != 0
-            && from_info.stat.st_mode & __S_IFMT as uint64_t == 0o120000 as uint64_t
+        let mut from_info = FileInfo::default();
+        if os_fileinfo_link(from, &raw mut from_info)
+            && from_info.stat.st_mode & __S_IFMT as u64 == S_IFLNK
         {
-            let mut ret: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-            let mut linkbuf: [::core::ffi::c_char; 4097] = [0; 4097];
-            let mut len: ssize_t = readlink(
-                from,
-                &raw mut linkbuf as *mut ::core::ffi::c_char,
-                MAXPATHL as size_t,
-            );
-            if len > 0 as ssize_t {
-                linkbuf[len as usize] = NUL as ::core::ffi::c_char;
-                ret = symlink(&raw mut linkbuf as *mut ::core::ffi::c_char, to);
+            let mut linkbuf = [0 as c_char; MAXPATHL as usize + 1];
+            let len = readlink(from, linkbuf.as_mut_ptr(), MAXPATHL as size_t);
+            if len <= 0 {
+                return FAIL;
             }
-            return if ret == 0 as ::core::ffi::c_int {
+            linkbuf[len as usize] = 0;
+            return if symlink(linkbuf.as_ptr(), to) == 0 {
                 OK
             } else {
                 FAIL
             };
         }
-        let mut acl: vim_acl_T = os_get_acl(from);
-        if os_copy(from, to, UV_FS_COPYFILE_EXCL) != 0 as ::core::ffi::c_int {
+
+        // For systems that support ACL: get the ACL from the original file.
+        let acl = os_get_acl(from);
+        if os_copy(from, to, UV_FS_COPYFILE_EXCL) != 0 {
             os_free_acl(acl);
             return FAIL;
         }
         os_set_acl(to, acl);
         os_free_acl(acl);
-        if !errmsg.is_null() {
-            semsg(errmsg, to);
-            return FAIL;
-        }
-        return OK;
+        OK
     }
 }
 
+/// Try matching a file name with `pattern`, or with the pre-compiled `prog`
+/// when that avoids recompiling the same pattern over and over.
+///
+/// Used for autocommands and `'wildignore'`.
+///
+/// @param pattern    pattern to match with, when `prog` is NULL
+/// @param prog       pre-compiled regprog, or NULL
+/// @param fname      full path of the file name
+/// @param sfname     short file name, or NULL
+/// @param tail       tail of the path
+/// @param allow_dirs the pattern may match a directory
 pub unsafe extern "C" fn match_file_pat(
-    mut pattern: *mut ::core::ffi::c_char,
-    mut prog: *mut *mut regprog_T,
-    mut fname: *mut ::core::ffi::c_char,
-    mut sfname: *mut ::core::ffi::c_char,
-    mut tail: *mut ::core::ffi::c_char,
-    mut allow_dirs: ::core::ffi::c_int,
+    pattern: *mut c_char,
+    prog: *mut *mut regprog_T,
+    fname: *mut c_char,
+    sfname: *mut c_char,
+    tail: *mut c_char,
+    allow_dirs: c_int,
 ) -> bool {
     unsafe {
-        let mut regmatch: regmatch_T = regmatch_T {
-            regprog: ::core::ptr::null_mut::<regprog_T>(),
-            startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            rm_matchcol: 0,
-            rm_ic: false,
+        let mut regmatch = regmatch_T {
+            rm_ic: p_fic.get() != 0, // ignore case if 'fileignorecase' is set
+            regprog: if prog.is_null() {
+                vim_regcomp(pattern, RE_MAGIC)
+            } else {
+                *prog
+            },
+            ..Default::default()
         };
-        let mut result: bool = false_0 != 0;
-        regmatch.rm_ic = p_fic.get() != 0;
-        regmatch.regprog = if !prog.is_null() {
-            *prog
-        } else {
-            vim_regcomp(pattern, RE_MAGIC)
-        };
-        if !regmatch.regprog.is_null()
-            && (allow_dirs != 0
-                && (vim_regexec(&raw mut regmatch, fname, 0 as colnr_T) as ::core::ffi::c_int != 0
-                    || !sfname.is_null()
-                        && vim_regexec(&raw mut regmatch, sfname, 0 as colnr_T)
-                            as ::core::ffi::c_int
-                            != 0)
-                || allow_dirs == 0
-                    && vim_regexec(&raw mut regmatch, tail, 0 as colnr_T) as ::core::ffi::c_int
-                        != 0)
-        {
-            result = true_0 != 0;
-        }
-        if !prog.is_null() {
-            *prog = regmatch.regprog;
-        } else {
+
+        // Try for a match with the pattern with:
+        // 1. the full file name, when the pattern has a '/'.
+        // 2. the short file name, when the pattern has a '/'.
+        // 3. the tail of the file name, when the pattern has no '/'.
+        let result = !regmatch.regprog.is_null()
+            && if allow_dirs != 0 {
+                vim_regexec(&raw mut regmatch, fname, 0)
+                    || (!sfname.is_null() && vim_regexec(&raw mut regmatch, sfname, 0))
+            } else {
+                vim_regexec(&raw mut regmatch, tail, 0)
+            };
+
+        if prog.is_null() {
             vim_regfree(regmatch.regprog);
+        } else {
+            *prog = regmatch.regprog;
         }
-        return result;
+        result
     }
 }
 
+/// Check whether a file matches any pattern in `list`.
+///
+/// @param list    comma-separated list of patterns, like `'wildignore'`
+/// @param sfname  short file name
+/// @param ffname  full file name
 pub unsafe extern "C" fn match_file_list(
-    mut list: *mut ::core::ffi::c_char,
-    mut sfname: *mut ::core::ffi::c_char,
-    mut ffname: *mut ::core::ffi::c_char,
+    list: *mut c_char,
+    sfname: *mut c_char,
+    ffname: *mut c_char,
 ) -> bool {
     unsafe {
-        let mut tail: *mut ::core::ffi::c_char = path_tail(sfname);
-        let mut p: *mut ::core::ffi::c_char = list;
+        let tail = path_tail(sfname);
+        let mut p = list;
         while *p != 0 {
-            let mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
+            let mut buf = [0 as c_char; MAXPATHL as usize];
             copy_option_part(
                 &raw mut p,
-                &raw mut buf as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 4096]>()
-                    .wrapping_div(::core::mem::size_of::<::core::ffi::c_char>())
-                    .wrapping_div(
-                        (::core::mem::size_of::<[::core::ffi::c_char; 4096]>()
-                            .wrapping_rem(::core::mem::size_of::<::core::ffi::c_char>())
-                            == 0) as ::core::ffi::c_int as size_t,
-                    ),
-                b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                buf.as_mut_ptr(),
+                buf.len(),
+                c",".as_ptr().cast_mut(),
             );
-            let mut allow_dirs: ::core::ffi::c_char = 0;
-            let mut regpat: *mut ::core::ffi::c_char = file_pat_to_reg_pat(
-                &raw mut buf as *mut ::core::ffi::c_char,
-                ::core::ptr::null::<::core::ffi::c_char>(),
+            let mut allow_dirs: c_char = 0;
+            let regpat = file_pat_to_reg_pat(
+                buf.as_ptr(),
+                core::ptr::null(),
                 &raw mut allow_dirs,
-                false_0,
+                false as c_int,
             );
             if regpat.is_null() {
                 break;
             }
-            let mut match_0: bool = match_file_pat(
+            let matched = match_file_pat(
                 regpat,
-                ::core::ptr::null_mut::<*mut regprog_T>(),
+                core::ptr::null_mut(),
                 ffname,
                 sfname,
                 tail,
-                allow_dirs as ::core::ffi::c_int,
+                allow_dirs as c_int,
             );
-            xfree(regpat as *mut ::core::ffi::c_void);
-            if match_0 {
-                return true_0 != 0;
+            xfree(regpat.cast());
+            if matched {
+                return true;
             }
         }
-        return false_0 != 0;
+        false
     }
 }
 
+/// Convert `pat`, which has shell-style wildcards in it, into a regular
+/// expression. Backslashes before special characters, like `\*` and `\ `, are
+/// handled -- webb.
+///
+/// # Safety
+///
+/// `pat` must be NUL-terminated at or after `pat_end`: upstream reads up to
+/// two bytes past `pat_end`, each guarded by the one before it not being NUL.
+///
+/// @param pat_end     first char after the pattern, or NULL for its end
+/// @param allow_dirs  set when a directory path separator has to be matched
+/// @param no_bslash   don't use a backward slash as a path separator (only
+///                    makes a difference on Windows, so never here)
+///
+/// @return            [allocated] the regexp, or NULL when the braces in the
+///                    pattern do not balance.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn file_pat_to_reg_pat(
-    mut pat: *const ::core::ffi::c_char,
-    mut pat_end: *const ::core::ffi::c_char,
-    mut allow_dirs: *mut ::core::ffi::c_char,
-    mut no_bslash: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+    pat: *const c_char,
+    pat_end: *const c_char,
+    allow_dirs: *mut c_char,
+    _no_bslash: c_int,
+) -> *mut c_char {
     unsafe {
         if !allow_dirs.is_null() {
-            *allow_dirs = false_0 as ::core::ffi::c_char;
+            *allow_dirs = false as c_char;
         }
-        if pat_end.is_null() {
-            pat_end = pat.offset(strlen(pat) as isize);
-        }
-        if pat_end == pat {
-            return xstrdup(b"^$\0".as_ptr() as *const ::core::ffi::c_char);
-        }
-        let mut size: size_t = 2 as size_t;
-        let mut p: *const ::core::ffi::c_char = pat;
-        while p < pat_end {
-            match *p as ::core::ffi::c_int {
-                42 | 46 | 44 | 123 | 125 | 126 => {
-                    size = size.wrapping_add(2 as size_t);
-                }
-                _ => {
-                    size = size.wrapping_add(1);
-                }
+        let note_dir = |c: u8| {
+            if c == b'/' && !allow_dirs.is_null() {
+                *allow_dirs = true as c_char;
             }
-            p = p.offset(1);
+        };
+
+        let end = if pat_end.is_null() {
+            CStr::from_ptr(pat).to_bytes().len()
+        } else {
+            pat_end.offset_from(pat) as usize
+        };
+        if end == 0 {
+            return xstrdup(c"^$".as_ptr());
         }
-        let mut reg_pat: *mut ::core::ffi::c_char =
-            xmalloc(size.wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
-        let mut i: size_t = 0 as size_t;
-        if *pat.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '*' as ::core::ffi::c_int
-        {
-            while *pat.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '*' as ::core::ffi::c_int
-                && pat < pat_end.offset(-(1 as ::core::ffi::c_int as isize))
-            {
-                pat = pat.offset(1);
+        let at = |i: usize| *pat.add(i) as u8;
+
+        let mut reg = Vec::<u8>::with_capacity(end * 2 + 3);
+
+        // A pattern that starts with stars matches anywhere, so it needs
+        // neither the leading '^' nor all of the stars.
+        let mut start = 0;
+        if at(0) == b'*' {
+            while at(start) == b'*' && start < end - 1 {
+                start += 1;
             }
         } else {
-            let c2rust_fresh10 = i;
-            i = i.wrapping_add(1);
-            *reg_pat.offset(c2rust_fresh10 as isize) = '^' as ::core::ffi::c_char;
+            reg.push(b'^');
         }
-        let mut endp: *const ::core::ffi::c_char =
-            pat_end.offset(-(1 as ::core::ffi::c_int as isize));
-        let mut add_dollar: bool = true_0 != 0;
-        if endp >= pat && *endp as ::core::ffi::c_int == '*' as ::core::ffi::c_int {
-            while endp.offset_from(pat) > 0 as isize
-                && *endp as ::core::ffi::c_int == '*' as ::core::ffi::c_int
-            {
-                endp = endp.offset(-1);
+
+        // Likewise, trailing stars make the '$' pointless.
+        let mut last = end - 1;
+        let mut add_dollar = true;
+        if last >= start && at(last) == b'*' {
+            while last > start && at(last) == b'*' {
+                last -= 1;
             }
-            add_dollar = false_0 != 0;
+            add_dollar = false;
         }
-        let mut nested: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut p_0: *const ::core::ffi::c_char = pat;
-        while *p_0 as ::core::ffi::c_int != 0 && nested >= 0 as ::core::ffi::c_int && p_0 <= endp {
-            match *p_0 as ::core::ffi::c_int {
-                42 => {
-                    let c2rust_fresh11 = i;
-                    i = i.wrapping_add(1);
-                    *reg_pat.offset(c2rust_fresh11 as isize) = '.' as ::core::ffi::c_char;
-                    let c2rust_fresh12 = i;
-                    i = i.wrapping_add(1);
-                    *reg_pat.offset(c2rust_fresh12 as isize) = '*' as ::core::ffi::c_char;
-                    while *p_0.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '*' as ::core::ffi::c_int
+
+        let mut nested = 0;
+        let mut p = start;
+        while p <= last && at(p) != 0 && nested >= 0 {
+            match at(p) {
+                b'*' => {
+                    reg.extend_from_slice(b".*");
+                    while at(p + 1) == b'*' {
+                        // "**" matches like "*".
+                        p += 1;
+                    }
+                }
+                c @ (b'.' | b'~') => {
+                    reg.push(b'\\');
+                    reg.push(c);
+                }
+                b'?' => reg.push(b'.'),
+                b'\\' => {
+                    if at(p + 1) == 0 {
+                        break;
+                    }
+                    p += 1;
+                    // Undo the escaping ExpandEscape() added:
+                    //   foo\?bar -> foo?bar
+                    //   foo\%bar -> foo%bar
+                    //   foo\,bar -> foo,bar
+                    //   foo\ bar -> foo bar
+                    // Don't unescape '\', '*' and the others that are also
+                    // special in a regexp. An escaped '{' must be unescaped
+                    // since we use magic, not verymagic: "\\\{n,m\}" is how
+                    // you get "\{n,m}".
+                    let c = at(p);
+                    if c == b'?' {
+                        reg.push(b'?');
+                    } else if c == b','
+                        || c == b'%'
+                        || c == b'#'
+                        || ascii_isspace(c as c_int)
+                        || c == b'{'
+                        || c == b'}'
                     {
-                        p_0 = p_0.offset(1);
+                        reg.push(c);
+                    } else if c == b'\\' && at(p + 1) == b'\\' && at(p + 2) == b'{' {
+                        reg.extend_from_slice(b"\\{");
+                        p += 2;
+                    } else {
+                        note_dir(c);
+                        reg.push(b'\\');
+                        reg.push(c);
                     }
                 }
-                46 | 126 => {
-                    let c2rust_fresh13 = i;
-                    i = i.wrapping_add(1);
-                    *reg_pat.offset(c2rust_fresh13 as isize) = '\\' as ::core::ffi::c_char;
-                    let c2rust_fresh14 = i;
-                    i = i.wrapping_add(1);
-                    *reg_pat.offset(c2rust_fresh14 as isize) = *p_0;
-                }
-                63 => {
-                    let c2rust_fresh15 = i;
-                    i = i.wrapping_add(1);
-                    *reg_pat.offset(c2rust_fresh15 as isize) = '.' as ::core::ffi::c_char;
-                }
-                92 => {
-                    if *p_0.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL {
-                        p_0 = p_0.offset(1);
-                        if *p_0 as ::core::ffi::c_int == '?' as ::core::ffi::c_int
-                            && (BACKSLASH_IN_FILENAME_BOOL == 0 || no_bslash != 0)
-                        {
-                            let c2rust_fresh16 = i;
-                            i = i.wrapping_add(1);
-                            *reg_pat.offset(c2rust_fresh16 as isize) = '?' as ::core::ffi::c_char;
-                        } else if *p_0 as ::core::ffi::c_int == ',' as ::core::ffi::c_int
-                            || *p_0 as ::core::ffi::c_int == '%' as ::core::ffi::c_int
-                            || *p_0 as ::core::ffi::c_int == '#' as ::core::ffi::c_int
-                            || ascii_isspace(*p_0 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-                            || *p_0 as ::core::ffi::c_int == '{' as ::core::ffi::c_int
-                            || *p_0 as ::core::ffi::c_int == '}' as ::core::ffi::c_int
-                        {
-                            let c2rust_fresh17 = i;
-                            i = i.wrapping_add(1);
-                            *reg_pat.offset(c2rust_fresh17 as isize) = *p_0;
-                        } else if *p_0 as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                            && *p_0.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                                == '\\' as ::core::ffi::c_int
-                            && *p_0.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                                == '{' as ::core::ffi::c_int
-                        {
-                            let c2rust_fresh18 = i;
-                            i = i.wrapping_add(1);
-                            *reg_pat.offset(c2rust_fresh18 as isize) = '\\' as ::core::ffi::c_char;
-                            let c2rust_fresh19 = i;
-                            i = i.wrapping_add(1);
-                            *reg_pat.offset(c2rust_fresh19 as isize) = '{' as ::core::ffi::c_char;
-                            p_0 = p_0.offset(2 as ::core::ffi::c_int as isize);
-                        } else {
-                            if !allow_dirs.is_null()
-                                && vim_ispathsep(*p_0 as ::core::ffi::c_int) as ::core::ffi::c_int
-                                    != 0
-                                && (BACKSLASH_IN_FILENAME_BOOL == 0
-                                    || (no_bslash == 0
-                                        || *p_0 as ::core::ffi::c_int
-                                            != '\\' as ::core::ffi::c_int))
-                            {
-                                *allow_dirs = true_0 as ::core::ffi::c_char;
-                            }
-                            let c2rust_fresh20 = i;
-                            i = i.wrapping_add(1);
-                            *reg_pat.offset(c2rust_fresh20 as isize) = '\\' as ::core::ffi::c_char;
-                            let c2rust_fresh21 = i;
-                            i = i.wrapping_add(1);
-                            *reg_pat.offset(c2rust_fresh21 as isize) = *p_0;
-                        }
-                    }
-                }
-                123 => {
-                    let c2rust_fresh22 = i;
-                    i = i.wrapping_add(1);
-                    *reg_pat.offset(c2rust_fresh22 as isize) = '\\' as ::core::ffi::c_char;
-                    let c2rust_fresh23 = i;
-                    i = i.wrapping_add(1);
-                    *reg_pat.offset(c2rust_fresh23 as isize) = '(' as ::core::ffi::c_char;
+                b'{' => {
+                    reg.extend_from_slice(b"\\(");
                     nested += 1;
                 }
-                125 => {
-                    let c2rust_fresh24 = i;
-                    i = i.wrapping_add(1);
-                    *reg_pat.offset(c2rust_fresh24 as isize) = '\\' as ::core::ffi::c_char;
-                    let c2rust_fresh25 = i;
-                    i = i.wrapping_add(1);
-                    *reg_pat.offset(c2rust_fresh25 as isize) = ')' as ::core::ffi::c_char;
+                b'}' => {
+                    reg.extend_from_slice(b"\\)");
                     nested -= 1;
                 }
-                44 => {
+                b',' => {
                     if nested != 0 {
-                        let c2rust_fresh26 = i;
-                        i = i.wrapping_add(1);
-                        *reg_pat.offset(c2rust_fresh26 as isize) = '\\' as ::core::ffi::c_char;
-                        let c2rust_fresh27 = i;
-                        i = i.wrapping_add(1);
-                        *reg_pat.offset(c2rust_fresh27 as isize) = '|' as ::core::ffi::c_char;
+                        reg.extend_from_slice(b"\\|");
                     } else {
-                        let c2rust_fresh28 = i;
-                        i = i.wrapping_add(1);
-                        *reg_pat.offset(c2rust_fresh28 as isize) = ',' as ::core::ffi::c_char;
+                        reg.push(b',');
                     }
                 }
-                _ => {
-                    if !allow_dirs.is_null()
-                        && vim_ispathsep(*p_0 as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-                    {
-                        *allow_dirs = true_0 as ::core::ffi::c_char;
-                    }
-                    let c2rust_fresh29 = i;
-                    i = i.wrapping_add(1);
-                    *reg_pat.offset(c2rust_fresh29 as isize) = *p_0;
+                c => {
+                    note_dir(c);
+                    reg.push(c);
                 }
             }
-            p_0 = p_0.offset(1);
+            p += 1;
         }
         if add_dollar {
-            let c2rust_fresh30 = i;
-            i = i.wrapping_add(1);
-            *reg_pat.offset(c2rust_fresh30 as isize) = '$' as ::core::ffi::c_char;
+            reg.push(b'$');
         }
-        *reg_pat.offset(i as isize) = NUL as ::core::ffi::c_char;
-        if nested != 0 as ::core::ffi::c_int {
-            if nested < 0 as ::core::ffi::c_int {
-                emsg(gettext(
-                    b"E219: Missing {.\0".as_ptr() as *const ::core::ffi::c_char
-                ));
+
+        if nested != 0 {
+            emsg(gettext(if nested < 0 {
+                c"E219: Missing {.".as_ptr()
             } else {
-                emsg(gettext(
-                    b"E220: Missing }.\0".as_ptr() as *const ::core::ffi::c_char
-                ));
-            }
-            let mut ptr_: *mut *mut ::core::ffi::c_void =
-                &raw mut reg_pat as *mut *mut ::core::ffi::c_void;
-            xfree(*ptr_);
-            *ptr_ = NULL;
-            let _ = *ptr_;
+                c"E220: Missing }.".as_ptr()
+            }));
+            return core::ptr::null_mut();
         }
-        return reg_pat;
+        xmemdupz(reg.as_ptr().cast::<c_void>(), reg.len()).cast()
     }
 }

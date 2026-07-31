@@ -72,7 +72,6 @@
     "crates/nvim/src/nvim/file_search.rs": 141,
     "crates/nvim/src/nvim/fileio.rs": 73,
     "crates/nvim/src/nvim/fileio/convert.rs": 13,
-    "crates/nvim/src/nvim/fileio/names.rs": 32,
     "crates/nvim/src/nvim/fileio/timestamp.rs": 32,
     "crates/nvim/src/nvim/fuzzy.rs": 26,
     "crates/nvim/src/nvim/garray.rs": 7,

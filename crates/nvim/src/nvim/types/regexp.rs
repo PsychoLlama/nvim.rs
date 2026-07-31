@@ -64,3 +64,15 @@ pub struct regmmatch_T {
     pub rmm_ic: ::core::ffi::c_int,
     pub rmm_maxcol: colnr_T,
 }
+
+impl Default for regmatch_T {
+    fn default() -> Self {
+        regmatch_T {
+            regprog: ::core::ptr::null_mut(),
+            startp: [::core::ptr::null_mut(); 10],
+            endp: [::core::ptr::null_mut(); 10],
+            rm_matchcol: 0,
+            rm_ic: false,
+        }
+    }
+}

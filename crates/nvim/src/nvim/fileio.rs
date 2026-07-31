@@ -68,12 +68,12 @@ use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{
     __assert_fail, __errno_location, close, dup, feof, ferror, fgets, flock, fwrite, getc, gettext,
     iconv, iconv_close, lseek, memchr, memcpy, memmove, memset, ngettext, putc, read, readlink,
-    snprintf, strcmp, strcpy, strlen, symlink, umask, write,
+    snprintf, strcmp, strlen, symlink, umask, write,
 };
 use crate::src::nvim::os::users::os_get_username;
 use crate::src::nvim::path::{
     add_pathsep, after_pathsep, dir_of_file_exists, path_fnamecmp, path_is_absolute,
-    path_shorten_fname, path_tail, path_with_url, vim_FullName, vim_ispathsep,
+    path_shorten_fname, path_tail, path_with_url, vim_FullName,
 };
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::sha256::Sha256;
@@ -87,7 +87,7 @@ use crate::src::nvim::types::{
     cstack_T, exarg_T, garray_T, iconv_t, int64_t, linenr_T, mfdirty_T, off_T, pos_T, ptrdiff_t,
     regmatch_T, regprog_T, scid_T, size_t, ssize_t, tabpage_T, time_t, uint8_t, uint64_t,
     uintmax_t, uv_dirent_type_t, uv_fs_type, uv_gid_t, uv_req_type, uv_stat_t, uv_timespec_t,
-    uv_uid_t, vim_acl_T, win_T,
+    uv_uid_t, win_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 use crate::src::nvim::undo::{
