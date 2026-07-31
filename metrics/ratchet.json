@@ -395,7 +395,7 @@
     "crates/nvim/src/nvim/spell/slang.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/spell/soundfold.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/spellfile.rs": {"unsafe": 14},
-    "crates/nvim/src/nvim/spellfile/add.rs": {"unsafe": 2},
+    "crates/nvim/src/nvim/spellfile/add.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/spellfile/aff.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/spellfile/affix.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/spellfile/dic.rs": {"unsafe": 7},

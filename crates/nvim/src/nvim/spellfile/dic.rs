@@ -103,7 +103,7 @@ pub unsafe fn spell_read_dic(
             semsg(gettext(c"E760: No word count in %s".as_ptr()), fname);
         }
 
-        let mut store_afflist: [c_char; MAXWLEN as usize] = [0; MAXWLEN as usize];
+        let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];
         let mut message: [c_char; 754] = [0; 754];
         let mut lnum: c_int = 1;
         let mut non_ascii = 0;
@@ -469,9 +469,9 @@ pub unsafe fn store_aff_word(
     // MAXWLEN and every write to it goes through xstrlcpy/xstrlcat with
     // that bound.
     unsafe {
-        let mut newword: [c_char; MAXWLEN as usize] = [0; MAXWLEN as usize];
-        let mut store_afflist: [c_char; MAXWLEN as usize] = [0; MAXWLEN as usize];
-        let mut pfx_pfxlist: [c_char; MAXWLEN as usize] = [0; MAXWLEN as usize];
+        let mut newword: [c_char; MAXWLEN] = [0; MAXWLEN];
+        let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];
+        let mut pfx_pfxlist: [c_char; MAXWLEN] = [0; MAXWLEN];
         let mut retval = OK;
         let wordlen = strlen(word);
 
@@ -739,7 +739,7 @@ unsafe fn affix_applies(
 ///
 /// `word` must be NUL-terminated and `ae` a live entry.
 unsafe fn build_affixed_word(
-    newword: &mut [c_char; MAXWLEN as usize],
+    newword: &mut [c_char; MAXWLEN],
     word: *mut c_char,
     ae: *mut affentry_T,
     xht: *mut hashtab_T,

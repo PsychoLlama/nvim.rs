@@ -159,7 +159,7 @@ pub unsafe fn read_prefcond_section(fd: *mut FILE, lp: *mut slang_T) -> c_int {
             if n == 0 {
                 continue;
             }
-            let mut buf: [c_char; MAXWLEN as usize + 1] = [0; MAXWLEN as usize + 1];
+            let mut buf: [c_char; MAXWLEN + 1] = [0; MAXWLEN + 1];
             buf[0] = b'^' as c_char;
             if let Err(e) = read_nonnul_bytes(fd, buf.as_mut_ptr().add(1), n as usize) {
                 return e;
@@ -384,7 +384,7 @@ pub unsafe fn read_sal_section(fd: *mut FILE, slang: *mut slang_T) -> c_int {
 pub unsafe fn read_words_section(fd: *mut FILE, lp: *mut slang_T, len: c_int) -> c_int {
     // SAFETY: `word` is MAXWLEN and the loop refuses to fill its last slot.
     unsafe {
-        let mut word: [uint8_t; MAXWLEN as usize] = [0; MAXWLEN as usize];
+        let mut word: [uint8_t; MAXWLEN] = [0; MAXWLEN];
         let mut done = 0;
         while done < len {
             let mut i = 0;

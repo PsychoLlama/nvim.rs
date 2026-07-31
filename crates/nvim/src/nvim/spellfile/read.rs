@@ -506,7 +506,7 @@ pub unsafe fn suggest_load_files() {
 unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
     // SAFETY: the caller promises the file and the language.
     unsafe {
-        let mut buf: [c_char; MAXWLEN as usize] = [0; MAXWLEN as usize];
+        let mut buf: [c_char; MAXWLEN] = [0; MAXWLEN];
         for b in buf.iter_mut().take(VIMSUGMAGICL as usize) {
             *b = getc(fd) as c_char;
         }
@@ -649,9 +649,9 @@ unsafe fn tree_count_words(byts: *const uint8_t, byts_len: c_int, idxs: *mut idx
     // SAFETY: the caller promises a well-formed tree; every index used
     // below was checked against `byts_len` when the tree was read.
     unsafe {
-        let mut arridx = [0 as idx_T; MAXWLEN as usize + 1];
-        let mut curi = [0 as c_int; MAXWLEN as usize + 1];
-        let mut wordcount = [0 as c_int; MAXWLEN as usize + 1];
+        let mut arridx = [0 as idx_T; MAXWLEN + 1];
+        let mut curi = [0 as c_int; MAXWLEN + 1];
+        let mut wordcount = [0 as c_int; MAXWLEN + 1];
 
         arridx[0] = 0;
         curi[0] = 1;

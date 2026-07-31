@@ -80,7 +80,7 @@ use core::{mem, ptr};
 
 /// The longest word the spell code handles, and so the size of every word
 /// buffer in this module tree.
-pub const MAXWLEN: usize = 254;
+pub use crate::src::nvim::spell::MAXWLEN;
 
 /// The string terminator, as an `int` so that it can be compared against a
 /// widened byte.

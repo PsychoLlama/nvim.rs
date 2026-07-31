@@ -104,7 +104,7 @@ pub const OPT_LOCAL: C2Rust_Unnamed_18 = 2;
 pub const kXDGDataHome: XDGVarType = 1;
 pub const kEqualFiles: file_comparison = 1;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const MAXWLEN: C2Rust_Unnamed_19 = 254;
+pub use crate::src::nvim::spell::MAXWLEN;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const MAXREGIONS: C2Rust_Unnamed_20 = 8;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;

@@ -146,11 +146,11 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> c_int {
     // the byte counts the tree itself carries, and depth by MAXWLEN, which
     // is the longest word the tree can hold.
     unsafe {
-        let mut arridx: [idx_T; MAXWLEN as usize] = [0; MAXWLEN as usize];
-        let mut curi: [c_int; MAXWLEN as usize] = [0; MAXWLEN as usize];
-        let mut tword: [c_char; MAXWLEN as usize] = [0; MAXWLEN as usize];
-        let mut tsalword: [c_char; MAXWLEN as usize] = [0; MAXWLEN as usize];
-        let mut wordcount: [c_int; MAXWLEN as usize] = [0; MAXWLEN as usize];
+        let mut arridx: [idx_T; MAXWLEN] = [0; MAXWLEN];
+        let mut curi: [c_int; MAXWLEN] = [0; MAXWLEN];
+        let mut tword: [c_char; MAXWLEN] = [0; MAXWLEN];
+        let mut tsalword: [c_char; MAXWLEN] = [0; MAXWLEN];
+        let mut wordcount: [c_int; MAXWLEN] = [0; MAXWLEN];
         let mut words_done: c_uint = 0;
 
         spin.si_foldroot = wordtree_alloc(spin);

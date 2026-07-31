@@ -220,7 +220,7 @@ pub unsafe fn add_fromto(
     // SAFETY: `word` is MAXWLEN, the bound spell_casefold is given.
     unsafe {
         let ftp = ga_append_via_ptr(gap, core::mem::size_of::<fromto_T>()).cast::<fromto_T>();
-        let mut word: [c_char; MAXWLEN as usize] = [0; MAXWLEN as usize];
+        let mut word: [c_char; MAXWLEN] = [0; MAXWLEN];
 
         spell_casefold(
             curwin.get(),

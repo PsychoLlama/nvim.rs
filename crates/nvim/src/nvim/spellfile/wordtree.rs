@@ -265,7 +265,7 @@ pub unsafe fn store_word(
     unsafe {
         let len = strlen(word) as c_int;
         let ct = captype(word, word.offset(len as isize));
-        let mut foldword: [c_char; MAXWLEN as usize] = [0; MAXWLEN as usize];
+        let mut foldword: [c_char; MAXWLEN] = [0; MAXWLEN];
         let mut res = OK;
 
         if !valid_spell_word(word, word.offset(len as isize)) {
