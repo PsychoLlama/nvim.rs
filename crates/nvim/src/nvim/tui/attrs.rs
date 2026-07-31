@@ -20,7 +20,7 @@ use crate::src::nvim::highlight::{
     HL_UNDERDOTTED, HL_UNDERDOUBLE, HL_UNDERLINE, HL_UNDERLINE_MASK,
 };
 use crate::src::nvim::map::mh_put_cstr_t;
-use crate::src::nvim::memory::{xrealloc, xstrdup};
+use crate::src::nvim::memory::xstrdup;
 use crate::src::nvim::tui::output::{out, out_cstr, out_fmt, terminfo_out, terminfo_print_nums};
 use crate::src::nvim::tui::paint::invalidate;
 use crate::src::nvim::tui::terminfo::caps::{
@@ -30,10 +30,8 @@ use crate::src::nvim::tui::terminfo::caps::{
     kTerm_set_a_background, kTerm_set_a_foreground, kTerm_set_attributes, kTerm_set_rgb_background,
     kTerm_set_rgb_foreground, kTerm_set_underline_style,
 };
-use crate::src::nvim::tui::tui::TUIData;
-use crate::src::nvim::types::{
-    Array, HlAttrs, Integer, MHPutStatus, Set_cstr_t, cstr_t, int32_t, size_t,
-};
+use crate::src::nvim::tui::tui::{DEFAULT_ATTRS, TUIData};
+use crate::src::nvim::types::{Array, HlAttrs, Integer, MHPutStatus, Set_cstr_t, cstr_t, int32_t};
 use core::ffi::{CStr, c_char, c_int};
 
 /// The underline style parameter each `HL_UNDER*` bit asks the terminal for,
@@ -103,37 +101,28 @@ pub unsafe fn tui_hl_attr_define(
     attrs.cterm_bg_color = cterm_attrs.cterm_bg_color;
     let id = id as usize;
     reserve_attr(tui, id);
-    // SAFETY: `reserve_attr` made `id` an initialised slot.
-    unsafe { *tui.attrs.items.add(id) = attrs };
+    tui.attrs[id] = attrs;
 }
 
 /// Make `id` a valid index into the attribute table, growing it if needed.
+///
+/// Ids the editor skipped over on the way to this one are the default
+/// highlight: the table is indexed by id, so they have to be something, and
+/// painting under an undefined id is a bug the editor is not to be crashed
+/// for.
 pub(crate) fn reserve_attr(tui: &mut TUIData, id: usize) {
-    if tui.attrs.capacity <= id {
-        tui.attrs.size = id + 1;
-        tui.attrs.capacity = tui.attrs.size.next_power_of_two();
-        // SAFETY: reallocating the table to a size that fits `capacity`
-        // entries; `items` is null on the first call, which xrealloc takes.
-        tui.attrs.items = unsafe {
-            xrealloc(
-                tui.attrs.items.cast(),
-                size_of::<HlAttrs>() * tui.attrs.capacity,
-            )
-        }
-        .cast();
-    } else if tui.attrs.size <= id {
-        tui.attrs.size = id + 1;
+    if tui.attrs.len() <= id {
+        tui.attrs.resize(id + 1, DEFAULT_ATTRS);
     }
 }
 
 /// Highlight `id`'s definition.
 pub(crate) fn attr(tui: &TUIData, id: c_int) -> HlAttrs {
     assert!(
-        (id as size_t) < tui.attrs.size,
+        (id as usize) < tui.attrs.len(),
         "attribute {id} not defined"
     );
-    // SAFETY: the table holds `size` initialised entries and `id` is one.
-    unsafe { *tui.attrs.items.add(id as usize) }
+    tui.attrs[id as usize]
 }
 
 /// Would painting under `id1` look any different from painting under `id2`?

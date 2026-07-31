@@ -18,7 +18,6 @@ use crate::src::nvim::event::r#loop::{loop_purge, loop_size};
 use crate::src::nvim::grid::{schar_cache_clear_if_full, schar_get, schar_get_ascii};
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::mbyte::{utf_ambiguous_width, utf_char2cells, utf_ptr2char};
-use crate::src::nvim::memory::xrealloc;
 use crate::src::nvim::os::libc::{fclose, fopen, fprintf};
 use crate::src::nvim::tui::attrs::{attrs_differ, update_attrs};
 use crate::src::nvim::tui::events::tui_busy_stop;
@@ -357,7 +356,8 @@ fn reset_scroll_region(tui: &mut TUIData, fullwidth: bool) {
 /// Overlapping damage is merged into one rectangle rather than kept apart:
 /// repainting a little extra is cheaper than tracking the exact shape.
 pub(crate) fn invalidate(tui: &mut TUIData, top: c_int, bot: c_int, left: c_int, right: c_int) {
-    if let Some(r) = pending_damage(tui)
+    if let Some(r) = tui
+        .invalid_regions
         .iter_mut()
         .find(|r| top <= r.bot && bot >= r.top && left <= r.right && right >= r.left)
     {
@@ -367,43 +367,12 @@ pub(crate) fn invalidate(tui: &mut TUIData, top: c_int, bot: c_int, left: c_int,
         r.right = r.right.max(right);
         return;
     }
-    if tui.invalid_regions.size == tui.invalid_regions.capacity {
-        tui.invalid_regions.capacity = if tui.invalid_regions.capacity != 0 {
-            tui.invalid_regions.capacity * 2
-        } else {
-            8
-        };
-        // SAFETY: growing the array to hold `capacity` rectangles; `items`
-        // is null before the first growth, which xrealloc accepts.
-        tui.invalid_regions.items = unsafe {
-            xrealloc(
-                tui.invalid_regions.items.cast(),
-                size_of::<Rect>() * tui.invalid_regions.capacity,
-            )
-        }
-        .cast();
-    }
-    // SAFETY: the slot exists after the growth above.
-    unsafe {
-        *tui.invalid_regions.items.add(tui.invalid_regions.size) = Rect {
-            top,
-            bot,
-            left,
-            right,
-        };
-    }
-    tui.invalid_regions.size += 1;
-}
-
-/// Every rectangle waiting to be repainted.
-fn pending_damage(tui: &mut TUIData) -> &mut [Rect] {
-    // Nothing has been invalidated yet, so there is no array to point at —
-    // and a null pointer is not a valid empty slice.
-    if tui.invalid_regions.items.is_null() {
-        return &mut [];
-    }
-    // SAFETY: `invalid_regions` holds `size` initialised rectangles.
-    unsafe { core::slice::from_raw_parts_mut(tui.invalid_regions.items, tui.invalid_regions.size) }
+    tui.invalid_regions.push(Rect {
+        top,
+        bot,
+        left,
+        right,
+    });
 }
 
 // ------------------------------------------------------------- the UI sinks
@@ -417,7 +386,7 @@ pub unsafe fn tui_grid_resize(tui: *mut TUIData, _grid: Integer, width: Integer,
     let tui = unsafe { &mut *tui };
     tui.grid.resize(width as c_int, height as c_int);
     let (grid_width, grid_height) = (tui.grid.width, tui.grid.height);
-    for r in pending_damage(tui) {
+    for r in &mut tui.invalid_regions {
         r.bot = r.bot.min(grid_height);
         r.right = r.right.min(grid_width);
     }
@@ -442,7 +411,7 @@ pub unsafe fn tui_grid_clear(tui: *mut TUIData, _grid: Integer) {
     // SAFETY: no grapheme handle is held across this call.
     unsafe { schar_cache_clear_if_full() };
     // Nothing that was damaged matters once everything is repainted.
-    tui.invalid_regions.size = 0;
+    tui.invalid_regions.clear();
     clear_region(tui, 0, tui.height, 0, tui.width, 0);
 }
 
@@ -564,7 +533,7 @@ pub unsafe fn tui_raw_line(
     let row = linerow as c_int;
     for (i, (&data, &attr)) in chunk.iter().zip(attrs).enumerate() {
         assert!(
-            (attr as usize) < tui.attrs.size,
+            (attr as usize) < tui.attrs.len(),
             "undefined attribute {attr}"
         );
         let col = startcol as c_int + i as c_int;
@@ -642,10 +611,7 @@ pub unsafe fn tui_flush(tui: *mut TUIData) {
 
     // Taken from the back, and taken off the list before it is painted:
     // painting must not see damage it is in the middle of repairing.
-    while tui.invalid_regions.size != 0 {
-        let last = tui.invalid_regions.size - 1;
-        let r = pending_damage(tui)[last];
-        tui.invalid_regions.size = last;
+    while let Some(r) = tui.invalid_regions.pop() {
         assert!(
             r.bot <= tui.grid.height && r.right <= tui.grid.width,
             "damage outside the grid"

@@ -145,7 +145,7 @@ pub fn set_mode(tui: &mut TUIData, mode: usize) {
 /// sensible to send it from a palette index.
 ///
 fn apply_color(tui: &mut TUIData, entry: &cursorentry_T) {
-    let in_range = entry.id != 0 && entry.id < tui.attrs.size as c_int && tui.rgb;
+    let in_range = entry.id != 0 && (entry.id as usize) < tui.attrs.len() && tui.rgb;
     if !in_range {
         // Attribute 0 means "no special cursor". Only bother resetting if a
         // previous mode actually changed something.
@@ -157,9 +157,7 @@ fn apply_color(tui: &mut TUIData, entry: &cursorentry_T) {
         return;
     }
 
-    // SAFETY: the highlight table holds `size` initialised entries, and
-    // `in_range` put `entry.id` inside it.
-    let aep: HlAttrs = unsafe { *tui.attrs.items.add(entry.id as usize) };
+    let aep: HlAttrs = tui.attrs[entry.id as usize];
     tui.want_invisible = aep.hl_blend == BLEND_INVISIBLE;
     if tui.want_invisible {
         return;

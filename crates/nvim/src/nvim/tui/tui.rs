@@ -33,13 +33,10 @@ use crate::src::nvim::event::signal::{
 use crate::src::nvim::event::stream::stream_set_blocking;
 use crate::src::nvim::log::logmsg;
 use crate::src::nvim::main::{main_loop, t_colors, ui_client_error_exit, ui_client_exit_status};
-use crate::src::nvim::memory::{
-    ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, xcalloc, xfree,
-};
+use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, xfree};
 use crate::src::nvim::os::env::{os_getenv, os_getenv_noalloc};
 use crate::src::nvim::os::input::os_isatty;
 use crate::src::nvim::os::libc::{abort, kill, sscanf};
-use crate::src::nvim::tui::attrs::reserve_attr;
 use crate::src::nvim::tui::events::{tui_mode_change, tui_mouse_off, tui_mouse_on, tui_set_title};
 use crate::src::nvim::tui::input::{
     TermInput, tinput_destroy, tinput_init, tinput_start, tinput_stop,
@@ -79,9 +76,10 @@ unsafe extern "C" {
 
 /// Everything the TUI knows about the terminal it is driving.
 ///
-/// One of these exists per UI process. It is allocated zeroed and torn down
-/// by [`tui_start`]/[`tui_stop`]; libuv handles and the input layer hold
-/// pointers into it, which is why it never moves.
+/// One of these exists per UI process. It is built by [`tui_start`] and
+/// lives as long as the process does: libuv handles and the input layer
+/// hold pointers into it, so it can neither move nor be freed while the
+/// loop it registered with is still running.
 ///
 /// Holding a `&mut TUIData` means holding a TUI that [`tui_start`] finished
 /// setting up: the write handles are open, the staging buffer is this
@@ -92,8 +90,9 @@ unsafe extern "C" {
 pub struct TUIData {
     /// The editor's event loop, borrowed. Not the loop writes go out on.
     pub loop_0: *mut Loop,
-    /// Bytes staged for the next flush.
-    pub buf: [u8; BUF_SIZE],
+    /// Bytes staged for the next flush. Boxed because 64 KiB has no
+    /// business on the stack of whoever builds a TUI.
+    pub buf: Box<[u8; BUF_SIZE]>,
     /// A single write too large to stage, handed to the flush directly.
     pub buf_to_flush: *mut c_char,
     /// How much of `buf` is staged.
@@ -115,7 +114,7 @@ pub struct TUIData {
     /// What the TUI believes is on the screen.
     pub grid: UGrid,
     /// Rectangles waiting to be repainted at the next flush.
-    pub invalid_regions: DamageList,
+    pub invalid_regions: Vec<Rect>,
     /// Where the editor last asked for the cursor, as opposed to where the
     /// terminal's cursor actually is (`grid.row`/`grid.col`).
     pub row: c_int,
@@ -159,8 +158,9 @@ pub struct TUIData {
     pub cursor_shapes: [cursorentry_T; 18],
     /// The colours unset colours fall back to.
     pub clear_attrs: HlAttrs,
-    /// Every highlight the editor has defined, indexed by id.
-    pub attrs: AttrTable,
+    /// Every highlight the editor has defined, indexed by id. Ids the
+    /// editor has not defined read as the default highlight.
+    pub attrs: Vec<HlAttrs>,
     /// The attribute id the terminal is currently dressed for, or -1.
     pub print_attr_id: c_int,
     /// Is the terminal back at its own default attributes?
@@ -186,14 +186,6 @@ pub struct TUIData {
     pub ti_arena: Arena,
 }
 
-/// The highlight table: `size` definitions in an array of `capacity`.
-#[derive(Copy, Clone)]
-pub struct AttrTable {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut HlAttrs,
-}
-
 /// A rectangle of the screen, in half-open rows and columns.
 #[derive(Copy, Clone)]
 pub struct Rect {
@@ -201,14 +193,6 @@ pub struct Rect {
     pub bot: c_int,
     pub left: c_int,
     pub right: c_int,
-}
-
-/// The damage list: `size` rectangles in an array of `capacity`.
-#[derive(Copy, Clone)]
-pub struct DamageList {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut Rect,
 }
 
 /// Terminal modes the TUI turned on, packed so the whole set can be reset.
@@ -251,7 +235,7 @@ const DFLT_COLS: c_int = 80;
 const DFLT_ROWS: c_int = 24;
 
 /// The first entry in the highlight table: the editor's default highlight.
-const DEFAULT_ATTRS: HlAttrs = HlAttrs {
+pub(crate) const DEFAULT_ATTRS: HlAttrs = HlAttrs {
     rgb_ae_attr: 0,
     cterm_ae_attr: 0,
     rgb_fg_color: -1,
@@ -281,11 +265,9 @@ pub unsafe fn tui_start(
     term: *mut *mut c_char,
     rgb: *mut bool,
 ) {
-    // SAFETY: a zeroed TUIData is a valid one, and the out-parameters are
-    // the caller's.
+    // SAFETY: the out-parameters are the caller's.
     unsafe {
-        let tui: *mut TUIData = xcalloc(1, size_of::<TUIData>()).cast();
-        init_state(&mut *tui);
+        let tui: *mut TUIData = Box::into_raw(TUIData::new());
         signal_watcher_init((*tui).loop_0, &raw mut (*tui).winch_handle, tui.cast());
         signal_watcher_start(&raw mut (*tui).winch_handle, Some(sigwinch_cb), SIGWINCH);
         (*tui).input.tk_ti_hook_fn = Some(tui_tk_ti_getstr);
@@ -316,14 +298,89 @@ pub unsafe fn tui_start(
 /// terminal's own startup.
 const STARTUP_DELAY_MS: u64 = 100;
 
-/// The fields a zeroed [`TUIData`] does not already have right.
-fn init_state(tui: &mut TUIData) {
-    tui.is_starting = true;
-    tui.loop_0 = main_loop.ptr();
-    tui.url = -1;
-    reserve_attr(tui, 0);
-    // SAFETY: `reserve_attr` made slot 0 exist.
-    unsafe { *tui.attrs.items = DEFAULT_ATTRS };
+impl TUIData {
+    /// A TUI that has not been started yet: no terminal, no handles, and
+    /// nothing on the screen.
+    ///
+    /// What is not zero here is what a zeroed C struct got wrong: the
+    /// editor's own highlight has to exist before anything can be painted
+    /// under it, and no hyperlink is -1 rather than 0.
+    fn new() -> Box<Self> {
+        // A `[0; BUF_SIZE]` literal would be built on the stack and then
+        // copied into the box, which is 64 KiB of pointless memcpy.
+        let buf: Box<[u8; BUF_SIZE]> = vec![0; BUF_SIZE]
+            .into_boxed_slice()
+            .try_into()
+            .expect("a boxed slice of exactly BUF_SIZE bytes");
+        // SAFETY: the fields left zeroed are C layouts whose owners --
+        // libuv, the terminfo reader, the grid -- fill them in before
+        // reading them, exactly as they did when this struct was xcalloc'ed.
+        unsafe {
+            Box::new(Self {
+                loop_0: main_loop.ptr(),
+                buf,
+                buf_to_flush: core::ptr::null_mut(),
+                bufpos: 0,
+                input: core::mem::zeroed(),
+                write_loop: core::mem::zeroed(),
+                ti: core::mem::zeroed(),
+                term: core::ptr::null_mut(),
+                output_handle: core::mem::zeroed(),
+                out_isatty: false,
+                winch_handle: core::mem::zeroed(),
+                startup_delay_timer: core::mem::zeroed(),
+                grid: core::mem::zeroed(),
+                invalid_regions: Vec::new(),
+                row: 0,
+                col: 0,
+                out_fd: 0,
+                pending_resize_events: 0,
+                terminfo_found_in_db: false,
+                can_change_scroll_region: false,
+                has_left_and_right_margin_mode: false,
+                has_sync_mode: false,
+                can_set_lr_margin: false,
+                can_scroll: false,
+                can_erase_chars: false,
+                immediate_wrap_after_last_column: false,
+                bce: false,
+                mouse_enabled: false,
+                mouse_move_enabled: false,
+                mouse_enabled_save: false,
+                title_enabled: false,
+                sync_output: false,
+                busy: false,
+                is_invisible: false,
+                want_invisible: false,
+                set_cursor_color_as_str: false,
+                cursor_has_color: false,
+                is_starting: true,
+                resize_events_enabled: false,
+                modes: core::mem::zeroed(),
+                screenshot: core::ptr::null_mut(),
+                cursor_shapes: core::mem::zeroed(),
+                clear_attrs: core::mem::zeroed(),
+                attrs: vec![DEFAULT_ATTRS],
+                print_attr_id: 0,
+                default_attr: false,
+                set_default_colors: false,
+                can_clear_attr: false,
+                showing_mode: 0,
+                verbose: 0,
+                terminfo_ext: TerminfoExt::default(),
+                can_set_title: false,
+                can_set_underline_color: false,
+                can_resize_screen: false,
+                stopped: false,
+                width: 0,
+                height: 0,
+                rgb: false,
+                screen_or_tmux: false,
+                url: -1,
+                ti_arena: ARENA_EMPTY,
+            })
+        }
+    }
 }
 
 /// Bring the terminal up: resolve its terminfo, negotiate what it can do,
