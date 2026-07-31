@@ -69,17 +69,6 @@ unsafe extern "C" {
         col: colnr_T,
     ) -> bool;
 }
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

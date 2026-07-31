@@ -53,7 +53,8 @@ pub use crate::src::nvim::types::{
     file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, handle_T, hash_T,
-    hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, key_value_pair, lcs_chars_T,
+    hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString, key_value_pair, lcs_chars_T,
     linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, lpos_T,
     mapblock, mapblock_T, match_T, matchitem, matchitem_T, memfile_T, memline_T, mfdirty_T,
     mtnode_inner_s, mtnode_s, object, object_data as C2Rust_Unnamed_14, partial_S, partial_T,
@@ -135,17 +136,6 @@ pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;

@@ -65,7 +65,6 @@ use crate::src::nvim::types::{
 /// Values these belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
-    use crate::src::nvim::types::ObjectType;
 
     use super::{ChannelPart, ChannelStdinMode, ChannelStreamType, auto_event};
     use core::ffi::c_int;
@@ -83,13 +82,6 @@ mod known {
     pub const kChannelPartAll: ChannelPart = 4;
 
     pub const kChannelStdinPipe: ChannelStdinMode = 0;
-
-    pub const kObjectTypeBoolean: ObjectType = 1;
-    pub const kObjectTypeInteger: ObjectType = 2;
-    pub const kObjectTypeString: ObjectType = 4;
-    pub const kObjectTypeArray: ObjectType = 5;
-    pub const kObjectTypeDict: ObjectType = 6;
-    pub const kObjectTypeBuffer: ObjectType = 8;
 
     pub const kProcTypePty: c_int = 1;
     pub const kCallbackNone: c_int = 0;

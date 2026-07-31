@@ -19,15 +19,14 @@ use crate::src::nvim::memory::{strnequal, xmalloc, xstrdup};
 use crate::src::nvim::options::options;
 use crate::src::nvim::os::libc::snprintf;
 use crate::src::nvim::types::{
-    Arena, Object, OptIndex, OptInt, OptVal, OptValData, OptValType, TriState, object, object_data,
-    size_t,
+    Arena, Object, OptIndex, OptInt, OptVal, OptValData, OptValType, TriState, kObjectTypeBoolean,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, object, object_data, size_t,
 };
 use crate::src::nvim::undo::curbufIsChanged;
 
 use super::{
-    NUMBUFLEN, is_option_hidden, kFalse, kNone, kObjectTypeBoolean, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
-    kOptValTypeString, kTrue, option_has_type,
+    NUMBUFLEN, is_option_hidden, kFalse, kNone, kOptValTypeBoolean, kOptValTypeNil,
+    kOptValTypeNumber, kOptValTypeString, kTrue, option_has_type,
 };
 
 /// What `:set` and `nvim_get_option_info` call each value type.

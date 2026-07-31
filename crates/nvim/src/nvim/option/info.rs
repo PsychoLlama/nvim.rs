@@ -15,13 +15,13 @@ use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::options::*;
 use crate::src::nvim::types::{
     Arena, Dict, Error, Integer, KeyValuePair, Object, OptIndex, String_0, buf_T, int64_t,
-    key_value_pair, object, object_data, scid_T, sctx_T, size_t, vimoption_T, win_T,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, key_value_pair,
+    object, object_data, scid_T, sctx_T, size_t, vimoption_T, win_T,
 };
 
 use super::{
-    OPT_GLOBAL, OPT_LOCAL, find_option_len, get_opt_idx, kObjectTypeBoolean, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeString, kOptFlagComma, kOptFlagFlagList, kOptFlagNoDup,
-    kOptFlagWasSet, kOptScopeBuf, kOptScopeWin, option_get_type, option_has_scope,
+    OPT_GLOBAL, OPT_LOCAL, find_option_len, get_opt_idx, kOptFlagComma, kOptFlagFlagList,
+    kOptFlagNoDup, kOptFlagWasSet, kOptScopeBuf, kOptScopeWin, option_get_type, option_has_scope,
     option_is_global_local, optval_as_object, optval_type_name,
 };
 

@@ -171,22 +171,22 @@ pub use crate::src::nvim::types::{
     file_buffer_update_callbacks as C2Rust_Unnamed_0,
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, handle_T, hash_T,
-    hashitem_T, hashtab_T, iconv_t, infoptr_T, int16_t, int32_t, int64_t, key_extra,
-    key_value_pair, lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
-    listwatch_T, llpos_T, lpos_T, magic_T, mapblock, mapblock_T, match_T, matchitem, matchitem_T,
-    memfile_T, memline_T, mfdirty_T, msglist, msglist_T, mtnode_inner_s, mtnode_s, object,
-    object_data as C2Rust_Unnamed, oparg_T, optmagic_T, optset_T, partial_S, partial_T, pos_T,
-    pos_save_T, proftime_T, ptr_t, ptrdiff_t, qf_info_S, qf_info_T, queue, reg_extmatch_T,
-    regmatch_T, regmmatch_T, regprog, regprog_T, sattr_T, save_v_event_T, schar_T, scid_T, sctx_T,
-    searchit_arg_T, size_t, state_check_callback, state_execute_callback, syn_state,
-    syn_state_sst_union as C2Rust_Unnamed_4, syn_time_T, synblock_T, synstate_T, tabpage_S,
-    tabpage_T, taggy_T, terminal, time_t, typebuf_T, typval_T, typval_vval_union, u_entry,
-    u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_9,
-    u_header_uh_alt_prev as C2Rust_Unnamed_8, u_header_uh_next as C2Rust_Unnamed_11,
-    u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
-    undo_object, undo_object_data as C2Rust_Unnamed_7, uvarnumber_T, varnumber_T, vim_exception,
-    vim_state, vimconv_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T,
-    xfmark_T, xp_prefix_T,
+    hashitem_T, hashtab_T, iconv_t, infoptr_T, int16_t, int32_t, int64_t, kObjectTypeArray,
+    kObjectTypeInteger, kObjectTypeString, key_extra, key_value_pair, lcs_chars_T, linenr_T,
+    list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, lpos_T, magic_T,
+    mapblock, mapblock_T, match_T, matchitem, matchitem_T, memfile_T, memline_T, mfdirty_T,
+    msglist, msglist_T, mtnode_inner_s, mtnode_s, object, object_data as C2Rust_Unnamed, oparg_T,
+    optmagic_T, optset_T, partial_S, partial_T, pos_T, pos_save_T, proftime_T, ptr_t, ptrdiff_t,
+    qf_info_S, qf_info_T, queue, reg_extmatch_T, regmatch_T, regmmatch_T, regprog, regprog_T,
+    sattr_T, save_v_event_T, schar_T, scid_T, sctx_T, searchit_arg_T, size_t, state_check_callback,
+    state_execute_callback, syn_state, syn_state_sst_union as C2Rust_Unnamed_4, syn_time_T,
+    synblock_T, synstate_T, tabpage_S, tabpage_T, taggy_T, terminal, time_t, typebuf_T, typval_T,
+    typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
+    u_header_uh_alt_next as C2Rust_Unnamed_9, u_header_uh_alt_prev as C2Rust_Unnamed_8,
+    u_header_uh_next as C2Rust_Unnamed_11, u_header_uh_prev as C2Rust_Unnamed_10, ufunc_S, ufunc_T,
+    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, undo_object_data as C2Rust_Unnamed_7,
+    uvarnumber_T, varnumber_T, vim_exception, vim_state, vimconv_T, virt_line, visualinfo_T, win_T,
+    window_S, wininfo_S, winopt_T, wline_T, xfmark_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -209,17 +209,6 @@ unsafe extern "C" {
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

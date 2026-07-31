@@ -1356,6 +1356,13 @@ fn generate(
         if !referenced.contains(*name) {
             continue;
         }
+        if name.starts_with("kObjectType") {
+            // These have one definition, in `types`. Re-export rather than
+            // repeat it -- a `use` is not a constant, so it still stays out
+            // of what the unit-test header generator collects.
+            known.push_str(&format!("    pub use crate::src::nvim::types::{name};\n"));
+            continue;
+        }
         if *ty != "c_int" {
             known_types.insert(ty);
         }

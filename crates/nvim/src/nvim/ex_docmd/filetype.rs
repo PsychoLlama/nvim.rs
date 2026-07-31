@@ -12,7 +12,7 @@ use crate::src::nvim::charset::skipwhite;
 use crate::src::nvim::ex_docmd::{
     CMD_autocmd, DIP_ALL, FILETYPE_FILE, FTOFF_FILE, FTPLUGIN_FILE, FTPLUGOF_FILE, INDENT_FILE,
     INDOFF_FILE, NUL, OPT_LOCAL, filetype_detect, filetype_indent, filetype_plugin, kErrorTypeNone,
-    kFalse, kNone, kObjectTypeString, kOptValTypeString, kRetNilBool, kTrue,
+    kFalse, kNone, kOptValTypeString, kRetNilBool, kTrue,
 };
 use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::{cmdmod, curbuf, e_curdir, e_invarg2, p_rtp, secure};
@@ -23,7 +23,7 @@ use crate::src::nvim::os::env::os_getenv_noalloc;
 use crate::src::nvim::os::libc::{gettext, strcmp, strncmp, strstr};
 use crate::src::nvim::runtime::source_runtime;
 use crate::src::nvim::types::{
-    Array, Error, Object, OptVal, OptValData, String_0, exarg_T, size_t,
+    Array, Error, Object, OptVal, OptValData, String_0, exarg_T, kObjectTypeString, size_t,
 };
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 

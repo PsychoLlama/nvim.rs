@@ -6,23 +6,12 @@ use crate::src::nvim::log::logmsg;
 use crate::src::nvim::memory::strequal;
 pub use crate::src::nvim::types::{
     Array, Boolean, Dict, Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, Object,
-    ObjectType, String_0, VimVarIndex, int64_t, key_value_pair, object,
+    ObjectType, String_0, VimVarIndex, int64_t, kObjectTypeString, key_value_pair, object,
     object_data as C2Rust_Unnamed, ptrdiff_t, size_t, uint64_t,
 };
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;

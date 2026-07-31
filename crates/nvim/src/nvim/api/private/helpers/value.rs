@@ -10,9 +10,7 @@
 
 use super::{
     EMPTY_HL_MESSAGE, HLF_E, NIL, STRING_INIT, api_set_error, cstr_as_string, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
-    kObjectTypeTabpage, kObjectTypeWindow,
+    kErrorTypeValidation,
 };
 use crate::src::nvim::api::private::metadata::PACKED_API_METADATA;
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
@@ -28,7 +26,10 @@ use crate::src::nvim::msgpack_rpc::unpacker::unpack;
 use crate::src::nvim::os::libc::{abort, memcpy};
 use crate::src::nvim::types::{
     Arena, ArenaMem, Array, ArrayBuilder, Dict, Error, HlMessage, HlMessageChunk, KeyValuePair,
-    Object, ObjectType, String_0, consumed_blk, key_value_pair, object, object_data, size_t,
+    Object, ObjectType, String_0, consumed_blk, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
+    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, key_value_pair,
+    object, object_data, size_t,
 };
 use core::ffi::{c_char, c_int};
 use core::{mem, ptr};

@@ -14,26 +14,15 @@ use crate::src::nvim::os::libc::{memcpy, memset};
 pub use crate::src::nvim::types::{
     Arena, Array, Boolean, Dict, Error, ErrorType, FieldHashfn, Float, Integer, KeyDict_xdl_diff,
     KeySetLink, KeyValuePair, LuaRef, Object, ObjectType, OptionalKeys, String_0, find_func_t,
-    int32_t, int64_t, key_value_pair, linenr_T, lua_Integer, lua_Number, lua_State, luaL_Buffer,
-    mmbuffer_t, mmfile_t, object, object_data as C2Rust_Unnamed, ptrdiff_t, s_mmbuffer, s_mmfile,
-    s_xdemitcb, s_xdemitconf, s_xpparam, size_t, uint64_t, xdemitcb_t, xdemitconf_t,
-    xdl_emit_hunk_consume_func_t, xpparam_t,
+    int32_t, int64_t, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, key_value_pair,
+    linenr_T, lua_Integer, lua_Number, lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, object,
+    object_data as C2Rust_Unnamed, ptrdiff_t, s_mmbuffer, s_mmfile, s_xdemitcb, s_xdemitconf,
+    s_xpparam, size_t, uint64_t, xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t, xpparam_t,
 };
 use crate::src::xdiff::xdiffi::xdl_diff;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const kNluaXdiffModeLocations: NluaXdiffMode = 2;
 pub type NluaXdiffMode = ::core::ffi::c_uint;
 pub const kNluaXdiffModeOnHunkCB: NluaXdiffMode = 1;

@@ -37,9 +37,8 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::empty_string_option;
 use crate::src::nvim::optionstr::set_chars_option;
 use crate::src::nvim::types::{
-    CMD_index, CallbackType, CharsOption, ErrorType, HlAttrs, ObjectType, OptScope, OptValType,
-    RgbValue, String_0, TriState, VarType, VimVarIndex, auto_event, int16_t, int32_t, size_t,
-    xp_prefix_T,
+    CMD_index, CallbackType, CharsOption, ErrorType, HlAttrs, OptScope, OptValType, RgbValue,
+    String_0, TriState, VarType, VimVarIndex, auto_event, int16_t, int32_t, size_t, xp_prefix_T,
 };
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -78,11 +77,6 @@ pub(crate) use self::validate::*;
 pub use self::value::*;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

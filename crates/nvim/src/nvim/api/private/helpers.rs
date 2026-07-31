@@ -37,10 +37,10 @@ use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::os::libc::vsnprintf;
 use crate::src::nvim::runtime::script_is_lua;
 use crate::src::nvim::types::{
-    Buffer, Dict, Error, ErrorType, HlMessage, Integer, Map_int_ptr_t, Object, ObjectType,
-    String_0, Tabpage, TryState, VarLockStatus, VarType, Window, buf_T, colnr_T, except_type_T,
-    fmarkv_T, int64_t, linenr_T, msglist_T, object, object_data, pos_T, ptr_t, scid_T, sctx_T,
-    size_t, tabpage_T, uint32_t, uint64_t, win_T,
+    Buffer, Dict, Error, ErrorType, HlMessage, Integer, Map_int_ptr_t, Object, String_0, Tabpage,
+    TryState, VarLockStatus, VarType, Window, buf_T, colnr_T, except_type_T, fmarkv_T, int64_t,
+    kObjectTypeNil, linenr_T, msglist_T, object, object_data, pos_T, ptr_t, scid_T, sctx_T, size_t,
+    tabpage_T, uint32_t, uint64_t, win_T,
 };
 
 mod keydict;
@@ -56,18 +56,6 @@ pub(crate) use self::vimdict::*;
 const kErrorTypeNone: ErrorType = -1;
 const kErrorTypeException: ErrorType = 0;
 const kErrorTypeValidation: ErrorType = 1;
-
-const kObjectTypeNil: ObjectType = 0;
-const kObjectTypeBoolean: ObjectType = 1;
-const kObjectTypeInteger: ObjectType = 2;
-const kObjectTypeFloat: ObjectType = 3;
-const kObjectTypeString: ObjectType = 4;
-const kObjectTypeArray: ObjectType = 5;
-const kObjectTypeDict: ObjectType = 6;
-const kObjectTypeLuaRef: ObjectType = 7;
-const kObjectTypeBuffer: ObjectType = 8;
-const kObjectTypeWindow: ObjectType = 9;
-const kObjectTypeTabpage: ObjectType = 10;
 
 const VAR_UNKNOWN: VarType = 0;
 const VAR_UNLOCKED: VarLockStatus = 0;

@@ -31,7 +31,9 @@ pub use crate::src::nvim::types::{
     AdditionalData, AdditionalDataBuilder, Arena, Array, Boolean, Dict, Error, ErrorType,
     FieldHashfn, GridLineEvent, Integer, KeySetLink, KeyValuePair, MessageType,
     MsgpackRpcRequestHandler, Object, ObjectType, OptKeySet, String_0, StringArray,
-    UIClientHandler, Unpacker, mpack_node_t, mpack_parser_t, mpack_tokbuf_t, mpack_token_t,
+    UIClientHandler, Unpacker, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer,
+    kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    kObjectTypeTabpage, mpack_node_t, mpack_parser_t, mpack_tokbuf_t, mpack_token_t,
     mpack_uint32_t, object, object_data, schar_T, size_t, ssize_t, uint32_t,
 };
 use crate::src::nvim::ui_client::{
@@ -49,16 +51,6 @@ use protocol::{
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const kMessageTypeRedrawEvent: MessageType = 3;
 pub const kMessageTypeNotification: MessageType = 2;
 pub const kMessageTypeResponse: MessageType = 1;

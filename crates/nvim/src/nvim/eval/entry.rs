@@ -32,7 +32,7 @@ use crate::src::nvim::eval::{
     EVAL_EVALUATE, FAIL, FUNCEXE_INIT, NL, NOTDONE, NUL, OK, OPT_LOCAL, VAR_DICT, VAR_FIXED,
     VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VV_ARGV,
     VV_EVENT, VV_LUA, check_luafunc_name, clear_evalarg, eval0, eval0_simple_funccal, eval1,
-    kObjectTypeString, kWinOptFoldexpr, may_call_simple_func, partial_name,
+    kWinOptFoldexpr, may_call_simple_func, partial_name,
 };
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::garray::{ga_append, ga_init};
@@ -49,8 +49,8 @@ use crate::src::nvim::os::libc::{atol, gettext, memcmp, memset, strlen};
 use crate::src::nvim::runtime::sourcing_a_script;
 use crate::src::nvim::types::{
     Arena, Object, String_0, dict_T, evalarg_T, exarg_T, funccal_entry_T, funcexe_T, garray_T,
-    list_T, object_data, partial_T, ptrdiff_t, save_v_event_T, sctx_T, size_t, ssize_t, typval_T,
-    typval_vval_union, uint8_t, varnumber_T, win_T,
+    kObjectTypeString, list_T, object_data, partial_T, ptrdiff_t, save_v_event_T, sctx_T, size_t,
+    ssize_t, typval_T, typval_vval_union, uint8_t, varnumber_T, win_T,
 };
 
 /// A freshly declared typval.

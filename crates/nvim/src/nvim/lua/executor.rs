@@ -95,7 +95,8 @@ pub use crate::src::nvim::types::{
     file_buffer_update_channels as C2Rust_Unnamed_13, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
     funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_18, funccall_T, funcexe_T, garray_T,
     handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t,
-    internal_proc_cb, intptr_t, key_value_pair, lcs_chars_T, linenr_T, list_T, listitem_S,
+    internal_proc_cb, intptr_t, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeLuaRef,
+    kObjectTypeNil, kObjectTypeString, key_value_pair, lcs_chars_T, linenr_T, list_T, listitem_S,
     listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, loop_0, lpos_T, lua_CFunction,
     lua_Integer, lua_Number, lua_State, mapblock, mapblock_T, match_T, matchitem, matchitem_T,
     memfile_T, memline_T, mfdirty_T, mod_entry_T, msg_data, msglist, msglist_T, mtnode_inner_s,
@@ -215,17 +216,6 @@ pub type luv_release_vm = Option<unsafe extern "C-unwind" fn(*mut lua_State) -> 
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

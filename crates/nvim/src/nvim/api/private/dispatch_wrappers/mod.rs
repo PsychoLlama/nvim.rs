@@ -164,21 +164,21 @@ use core::ffi::{CStr, c_int};
 /// Values that belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
-    use super::{ErrorType, ObjectType};
+    use super::ErrorType;
     use core::ffi::c_int;
 
     pub const kErrorTypeNone: ErrorType = -1;
     pub const kErrorTypeException: ErrorType = 0;
-    pub const kObjectTypeNil: ObjectType = 0;
-    pub const kObjectTypeBoolean: ObjectType = 1;
-    pub const kObjectTypeInteger: ObjectType = 2;
-    pub const kObjectTypeFloat: ObjectType = 3;
-    pub const kObjectTypeString: ObjectType = 4;
-    pub const kObjectTypeArray: ObjectType = 5;
-    pub const kObjectTypeDict: ObjectType = 6;
-    pub const kObjectTypeBuffer: ObjectType = 8;
-    pub const kObjectTypeWindow: ObjectType = 9;
-    pub const kObjectTypeTabpage: ObjectType = 10;
+    pub use crate::src::nvim::types::kObjectTypeArray;
+    pub use crate::src::nvim::types::kObjectTypeBoolean;
+    pub use crate::src::nvim::types::kObjectTypeBuffer;
+    pub use crate::src::nvim::types::kObjectTypeDict;
+    pub use crate::src::nvim::types::kObjectTypeFloat;
+    pub use crate::src::nvim::types::kObjectTypeInteger;
+    pub use crate::src::nvim::types::kObjectTypeNil;
+    pub use crate::src::nvim::types::kObjectTypeString;
+    pub use crate::src::nvim::types::kObjectTypeTabpage;
+    pub use crate::src::nvim::types::kObjectTypeWindow;
     pub const LOGLVL_DBG: c_int = 1;
 }
 

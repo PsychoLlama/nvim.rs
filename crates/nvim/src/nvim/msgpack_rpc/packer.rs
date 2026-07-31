@@ -15,22 +15,14 @@ use crate::src::nvim::lua::executor::api_free_luaref;
 use crate::src::nvim::memory::{xmalloc, xrealloc};
 pub use crate::src::nvim::types::{
     Array, Dict, Integer, KeyValuePair, LuaRef, Object, ObjectType, PackerBuffer,
-    PackerBufferFlush, String_0, handle_T, int8_t, packer_buffer_t, size_t, uint32_t, uint64_t,
+    PackerBufferFlush, String_0, handle_T, int8_t, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
+    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, packer_buffer_t,
+    size_t, uint32_t, uint64_t,
 };
 
 pub mod format;
 
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const LUA_NOREF: c_int = -2;
 
 /// The most bytes one msgpack item's tag and inline payload can take.

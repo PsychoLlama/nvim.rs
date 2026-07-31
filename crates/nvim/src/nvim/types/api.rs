@@ -90,6 +90,22 @@ pub type LuaRef = ::core::ffi::c_int;
 pub type MessageType = ::core::ffi::c_int;
 pub type Object = object;
 pub type ObjectType = ::core::ffi::c_uint;
+/// The tags an [`Object`]'s union is read through. Every module that builds
+/// or inspects an `Object` needs them, which is why c2rust emitted a copy
+/// into each of the sixty-five that do; this is the one definition.
+pub const kObjectTypeNil: ObjectType = 0;
+pub const kObjectTypeBoolean: ObjectType = 1;
+pub const kObjectTypeInteger: ObjectType = 2;
+pub const kObjectTypeFloat: ObjectType = 3;
+pub const kObjectTypeString: ObjectType = 4;
+pub const kObjectTypeArray: ObjectType = 5;
+pub const kObjectTypeDict: ObjectType = 6;
+pub const kObjectTypeLuaRef: ObjectType = 7;
+/// The three the API uses for handles, which never appear in a value the
+/// msgpack layer serialises.
+pub const kObjectTypeBuffer: ObjectType = 8;
+pub const kObjectTypeWindow: ObjectType = 9;
+pub const kObjectTypeTabpage: ObjectType = 10;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct OptKeySet {

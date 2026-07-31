@@ -24,10 +24,10 @@ pub use crate::src::nvim::types::{
     OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, String_0,
     TriState, VarLockStatus, VarType, blob_T, blobvar_S, dict_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed, funccall_T, garray_T, hash_T, hashitem_T, hashtab_T,
-    int32_t, int64_t, key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
-    listwatch_S, listwatch_T, object, object_data as C2Rust_Unnamed_0, partial_S, partial_T,
-    proftime_T, queue, scid_T, sctx_T, size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T,
-    uint8_t, uint64_t, varnumber_T,
+    int32_t, int64_t, kObjectTypeArray, kObjectTypeString, key_value_pair, linenr_T, list_T,
+    listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, object,
+    object_data as C2Rust_Unnamed_0, partial_S, partial_T, proftime_T, queue, scid_T, sctx_T,
+    size_t, typval_T, typval_vval_union, ufunc_S, ufunc_T, uint8_t, uint64_t, varnumber_T,
 };
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
@@ -55,17 +55,6 @@ pub const VAR_UNKNOWN: VarType = 0;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;

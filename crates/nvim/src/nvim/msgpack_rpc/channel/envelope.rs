@@ -18,7 +18,7 @@ use crate::src::nvim::msgpack_rpc::packer::{
 };
 use crate::src::nvim::types::{
     Arena, Array, Channel, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object,
-    PackerBuffer, size_t, uint32_t, uint64_t,
+    PackerBuffer, kObjectTypeInteger, kObjectTypeString, size_t, uint32_t, uint64_t,
 };
 
 use super::known::*;

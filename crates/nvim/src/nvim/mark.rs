@@ -82,10 +82,6 @@ pub const BUF_HAS_LL_ENTRY: c_int = 2;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kMTCharWise: MotionType = 0;
-pub const kObjectTypeNil: ObjectType = 0;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeDict: ObjectType = 6;
 pub const ARRAY_DICT_INIT: Dict = Dict {
     size: 0,
     capacity: 0,

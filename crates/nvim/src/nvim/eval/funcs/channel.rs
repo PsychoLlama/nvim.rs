@@ -7,7 +7,7 @@ use super::{
     ARENA_EMPTY, ARRAY_DICT_INIT, C2Rust_Unnamed_16, C2Rust_Unnamed_22, GA_EMPTY_INIT_VALUE,
     LOGLVL_ERR, MAX_FUNC_ARGS, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, false_0, kCallbackNone,
     kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
-    kErrorTypeNone, kObjectTypeArray, kObjectTypeNil, kObjectTypeString, kRetObject,
+    kErrorTypeNone, kRetObject,
 };
 use crate::src::nvim::api::private::converter::{object_to_vim, vim_to_object};
 use crate::src::nvim::api::private::helpers::{api_clear_error, arena_array, cstr_as_string};
@@ -39,8 +39,8 @@ use crate::src::nvim::os::libc::{gettext, strcmp};
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::types::{
     Arena, ArenaMem, Array, Callback, CallbackReader, ChannelPart, Error, EvalFuncData, Object,
-    String_0, blob_T, dict_T, estack_T, funccal_entry_T, funccall_T, object, sctx_T, typval_T,
-    uint64_t, varnumber_T,
+    String_0, blob_T, dict_T, estack_T, funccal_entry_T, funccall_T, kObjectTypeArray,
+    kObjectTypeNil, kObjectTypeString, object, sctx_T, typval_T, uint64_t, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;

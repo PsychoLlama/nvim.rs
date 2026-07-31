@@ -10,21 +10,10 @@ use crate::src::nvim::os::libc::{strlen, strncasecmp};
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     Arena, Array, Boolean, CursorShape, Dict, Float, Integer, KeyValuePair, LuaRef, Object,
-    ObjectType, String_0, cursorentry_T, int64_t, key_value_pair, object,
-    object_data as C2Rust_Unnamed, size_t, uint8_t,
+    ObjectType, String_0, cursorentry_T, int64_t, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeString, key_value_pair, object, object_data as C2Rust_Unnamed, size_t, uint8_t,
 };
 use crate::src::nvim::ui::ui_mode_info_set;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
 pub const SHAPE_IDX_COUNT: C2Rust_Unnamed_0 = 18;
 pub const SHAPE_IDX_TERM: C2Rust_Unnamed_0 = 17;

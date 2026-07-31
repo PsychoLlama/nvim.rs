@@ -37,18 +37,19 @@ pub use crate::src::nvim::types::{
     String_0, Terminal, UIExtension, Unpacker, VarLockStatus, VarType, WBuffer, Window, blob_T,
     blobvar_S, consumed_blk, dict_T, dictvar_S, float_T, funccall_S,
     funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t, handle_T, hash_T,
-    hashitem_T, hashtab_T, int16_t, int32_t, int64_t, internal_proc_cb, key_value_pair, linenr_T,
-    list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0, multiqueue,
-    object, object_data as C2Rust_Unnamed, packer_buffer_t, partial_S, partial_T, proc,
-    proc_exit_cb, proc_state_cb, proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, queue,
-    rstream, sattr_T, schar_T, scid_T, sctx_T, size_t, ssize_t, stream, stream_close_cb,
-    stream_read_cb, stream_uv as C2Rust_Unnamed_12, stream_write_cb, terminal, typval_T,
-    typval_vval_union, ufunc_S, ufunc_T, uid_t, uint8_t, uint16_t, uint32_t, uint64_t, uv__io_cb,
-    uv__io_s, uv__io_t, uv__queue, uv_alloc_cb, uv_async_cb, uv_async_s,
-    uv_async_s_u as C2Rust_Unnamed_7, uv_async_t, uv_buf_t, uv_close_cb, uv_connect_cb,
-    uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb, uv_file, uv_gid_t, uv_handle_s,
-    uv_handle_s_u as C2Rust_Unnamed_2, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
-    uv_idle_s_u as C2Rust_Unnamed_13, uv_idle_t, uv_loop_s,
+    hashitem_T, hashtab_T, int16_t, int32_t, int64_t, internal_proc_cb, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    kObjectTypeWindow, key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
+    listwatch_S, listwatch_T, loop_0, multiqueue, object, object_data as C2Rust_Unnamed,
+    packer_buffer_t, partial_S, partial_T, proc, proc_exit_cb, proc_state_cb, proftime_T,
+    pthread_mutex_t, pthread_rwlock_t, ptr_t, queue, rstream, sattr_T, schar_T, scid_T, sctx_T,
+    size_t, ssize_t, stream, stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_12,
+    stream_write_cb, terminal, typval_T, typval_vval_union, ufunc_S, ufunc_T, uid_t, uint8_t,
+    uint16_t, uint32_t, uint64_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb,
+    uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_7, uv_async_t, uv_buf_t, uv_close_cb,
+    uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb, uv_file, uv_gid_t,
+    uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_2, uv_handle_t, uv_handle_type, uv_idle_cb,
+    uv_idle_s, uv_idle_s_u as C2Rust_Unnamed_13, uv_idle_t, uv_loop_s,
     uv_loop_s_active_reqs as C2Rust_Unnamed_6, uv_loop_s_timer_heap as C2Rust_Unnamed_5, uv_loop_t,
     uv_mutex_t, uv_pipe_s, uv_pipe_s_u as C2Rust_Unnamed_15, uv_pipe_t, uv_process_options_s,
     uv_process_options_t, uv_process_s, uv_process_s_u as C2Rust_Unnamed_17, uv_process_t,
@@ -68,17 +69,6 @@ use crate::src::nvim::ui::{
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const kCallbackLua: CallbackType = 3;
 pub const kCallbackPartial: CallbackType = 2;
 pub const kCallbackFuncref: CallbackType = 1;

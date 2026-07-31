@@ -134,10 +134,12 @@ pub use crate::src::nvim::types::{
     file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, foldinfo_T,
     frame_S, frame_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T,
     gid_t, handle_T, hash_T, hashitem_T, hashtab_T, hlf_T, infoptr_T, int16_t, int32_t, int64_t,
-    internal_proc_cb, key_extra, key_value_pair, lcs_chars_T, linenr_T, list_T, listitem_S,
-    listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, loop_0, lpos_T, mapblock, mapblock_T,
-    match_T, matchitem, matchitem_T, memfile_T, memline_T, mfdirty_T, mpack_data_t, mpack_node_s,
-    mpack_node_t, mpack_parser_t, mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s,
+    internal_proc_cb, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
+    key_extra, key_value_pair, lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
+    listwatch_S, listwatch_T, llpos_T, loop_0, lpos_T, mapblock, mapblock_T, match_T, matchitem,
+    matchitem_T, memfile_T, memline_T, mfdirty_T, mpack_data_t, mpack_node_s, mpack_node_t,
+    mpack_parser_t, mpack_sintmax_t, mpack_tokbuf_s, mpack_tokbuf_t, mpack_token_s,
     mpack_token_s_data as C2Rust_Unnamed_31, mpack_token_t, mpack_token_type_t, mpack_uint32_t,
     mpack_uintmax_t, mpack_value_s, mpack_value_t, msg_data, msglist, msglist_T, mtnode_inner_s,
     mtnode_s, multiqueue, nvim_stats_s, object, object_data as C2Rust_Unnamed, packer_buffer_t,
@@ -177,17 +179,6 @@ use crate::src::nvim::window::{
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

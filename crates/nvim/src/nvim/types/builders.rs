@@ -15,19 +15,12 @@
 
 #![forbid(unsafe_code)]
 
-use super::{Array, Dict, Float, Integer, KeyValuePair, Object, ObjectType, String_0, object_data};
+use super::{
+    Array, Dict, Float, Integer, KeyValuePair, Object, String_0, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil,
+    kObjectTypeString, object_data,
+};
 use core::ffi::c_char;
-
-// Private copies of the ObjectType discriminants: this module tags unions
-// and every other module carries its own transpiled copy of these, so
-// exporting them here would collide on glob import.
-const TYPE_NIL: ObjectType = 0;
-const TYPE_BOOLEAN: ObjectType = 1;
-const TYPE_INTEGER: ObjectType = 2;
-const TYPE_FLOAT: ObjectType = 3;
-const TYPE_STRING: ObjectType = 4;
-const TYPE_ARRAY: ObjectType = 5;
-const TYPE_DICT: ObjectType = 6;
 
 /// `text`'s bytes viewed as an API string. Borrowed, never freed — the
 /// bytes are in the binary's read-only data.
@@ -40,27 +33,27 @@ pub const fn static_string(text: &'static str) -> String_0 {
 
 impl Object {
     pub const NIL: Self = Self {
-        type_0: TYPE_NIL,
+        type_0: kObjectTypeNil,
         data: object_data { boolean: false },
     };
 
     pub const fn boolean(value: bool) -> Self {
         Self {
-            type_0: TYPE_BOOLEAN,
+            type_0: kObjectTypeBoolean,
             data: object_data { boolean: value },
         }
     }
 
     pub const fn integer(value: Integer) -> Self {
         Self {
-            type_0: TYPE_INTEGER,
+            type_0: kObjectTypeInteger,
             data: object_data { integer: value },
         }
     }
 
     pub const fn float(value: Float) -> Self {
         Self {
-            type_0: TYPE_FLOAT,
+            type_0: kObjectTypeFloat,
             data: object_data { floating: value },
         }
     }
@@ -68,7 +61,7 @@ impl Object {
     /// An API string, keeping whatever ownership `value` already had.
     pub const fn string(value: String_0) -> Self {
         Self {
-            type_0: TYPE_STRING,
+            type_0: kObjectTypeString,
             data: object_data { string: value },
         }
     }
@@ -80,14 +73,14 @@ impl Object {
 
     pub const fn array(value: Array) -> Self {
         Self {
-            type_0: TYPE_ARRAY,
+            type_0: kObjectTypeArray,
             data: object_data { array: value },
         }
     }
 
     pub const fn dict(value: Dict) -> Self {
         Self {
-            type_0: TYPE_DICT,
+            type_0: kObjectTypeDict,
             data: object_data { dict: value },
         }
     }
@@ -209,9 +202,9 @@ mod tests {
         let mut buf = ArrayBuf::<4>::new();
         buf.push(Object::integer(7));
         buf.push(Object::boolean(true));
-        assert_eq!(buf.items[0].type_0, TYPE_INTEGER);
-        assert_eq!(buf.items[1].type_0, TYPE_BOOLEAN);
-        assert_eq!(buf.items[2].type_0, TYPE_NIL);
+        assert_eq!(buf.items[0].type_0, kObjectTypeInteger);
+        assert_eq!(buf.items[1].type_0, kObjectTypeBoolean);
+        assert_eq!(buf.items[2].type_0, kObjectTypeNil);
         let expected = buf.items.as_mut_ptr();
         let array = buf.array();
         assert_eq!((array.size, array.capacity), (2, 4));
@@ -223,14 +216,14 @@ mod tests {
         let mut opts = DictBuf::<1>::new();
         opts.insert("verbose", Object::boolean(true));
         assert_eq!(opts.items[0].key.size, "verbose".len());
-        assert_eq!(opts.items[0].value.type_0, TYPE_BOOLEAN);
+        assert_eq!(opts.items[0].value.type_0, kObjectTypeBoolean);
 
         let entry = opts.object();
         let mut args = ArrayBuf::<2>::new();
         args.push(Object::literal("hello"));
         args.push(entry);
-        assert_eq!(args.items[0].type_0, TYPE_STRING);
-        assert_eq!(args.items[1].type_0, TYPE_DICT);
+        assert_eq!(args.items[0].type_0, kObjectTypeString);
+        assert_eq!(args.items[1].type_0, kObjectTypeDict);
         assert_eq!(args.array().size, 2);
     }
 

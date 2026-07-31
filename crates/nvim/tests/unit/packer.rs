@@ -11,12 +11,13 @@ use std::ffi::c_char;
 use c2rust_neovim::src::nvim::memory::xfree;
 use c2rust_neovim::src::nvim::msgpack_rpc::packer::format;
 use c2rust_neovim::src::nvim::msgpack_rpc::packer::{
-    Array, Dict, KeyValuePair, Object, PackerBuffer, String_0, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, kObjectTypeWindow, mpack_object, packer_string_buffer,
+    Array, Dict, KeyValuePair, Object, PackerBuffer, String_0, mpack_object, packer_string_buffer,
     packer_take_string,
 };
-use c2rust_neovim::src::nvim::types::object_data;
+use c2rust_neovim::src::nvim::types::{
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeWindow, object_data,
+};
 
 #[test]
 fn booleans_are_one_byte() {

@@ -25,8 +25,9 @@ use crate::src::nvim::os::libc::qsort;
 use crate::src::nvim::os::pty_proc_unix::pty_proc_tty_name;
 use crate::src::nvim::terminal::terminal_buf;
 use crate::src::nvim::types::{
-    Arena, Array, Channel, Dict, Integer, Object, event_T, hashtab_T, int64_t, key_value_pair,
-    object_data, save_v_event_T, size_t, typval_T, typval_vval_union, uint64_t,
+    Arena, Array, Channel, Dict, Integer, Object, event_T, hashtab_T, int64_t, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    key_value_pair, object_data, save_v_event_T, size_t, typval_T, typval_vval_union, uint64_t,
 };
 
 use super::known::*;

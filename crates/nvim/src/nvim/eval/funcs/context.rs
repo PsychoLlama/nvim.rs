@@ -4,7 +4,7 @@
 use super::args::frame;
 use super::{
     CONTEXT_INIT, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kCtxBufs, kCtxFuncs,
-    kCtxGVars, kCtxJumps, kCtxRegs, kCtxSFuncs, kErrorTypeNone, kObjectTypeDict,
+    kCtxGVars, kCtxJumps, kCtxRegs, kCtxSFuncs, kErrorTypeNone,
 };
 use crate::semsg;
 use crate::src::nvim::api::private::converter::{object_to_vim, vim_to_object};
@@ -17,7 +17,7 @@ use crate::src::nvim::main::did_emsg;
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::types::{
-    Context, Error, EvalFuncData, object, object_data, typval_T, varnumber_T,
+    Context, Error, EvalFuncData, kObjectTypeDict, object, object_data, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_int};
 use core::ptr;

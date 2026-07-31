@@ -4,22 +4,12 @@ use crate::src::nvim::main::IObuff;
 use crate::src::nvim::os::libc::{memchr, snprintf, strchr};
 pub use crate::src::nvim::types::{
     Array, Boolean, Dict, Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, Object,
-    ObjectType, String_0, int64_t, key_value_pair, object, object_data as C2Rust_Unnamed, size_t,
+    ObjectType, String_0, int64_t, kObjectTypeString, key_value_pair, object,
+    object_data as C2Rust_Unnamed, size_t,
 };
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kObjectTypeTabpage: ObjectType = 10;
-pub const kObjectTypeWindow: ObjectType = 9;
-pub const kObjectTypeBuffer: ObjectType = 8;
-pub const kObjectTypeLuaRef: ObjectType = 7;
-pub const kObjectTypeDict: ObjectType = 6;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeFloat: ObjectType = 3;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeBoolean: ObjectType = 1;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub unsafe extern "C" fn api_err_invalid(
     mut err: *mut Error,

@@ -12,7 +12,7 @@ use super::{
     ARENA_EMPTY, ARRAY_DICT_INIT, BASE_LAST, BASE_NONE, C2Rust_Unnamed_16, FCERR_NONE,
     FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS, NUL, VAR_BOOL,
     VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VAR_UNLOCKED, VIML_INTERNAL_CALL, false_0,
-    kBoolVarTrue, kErrorTypeNone, kObjectTypeNil, true_0,
+    kBoolVarTrue, kErrorTypeNone, true_0,
 };
 use crate::src::nvim::api::private::converter::{object_to_vim_take_luaref, vim_to_object};
 use crate::src::nvim::api::private::helpers::{api_clear_error, api_free_object};
@@ -33,7 +33,7 @@ use crate::src::nvim::message::{emsg, semsg, semsg_multiline};
 use crate::src::nvim::os::libc::{gettext, strlen, strncmp};
 use crate::src::nvim::types::{
     Arena, Array, Error, EvalFuncData, EvalFuncDef, MsgpackRpcRequestHandler, Object, buf_T,
-    expand_T, float_T, typval_T, typval_vval_union, win_T,
+    expand_T, float_T, kObjectTypeNil, typval_T, typval_vval_union, win_T,
 };
 use core::ffi::{c_char, c_int};
 use core::ptr;

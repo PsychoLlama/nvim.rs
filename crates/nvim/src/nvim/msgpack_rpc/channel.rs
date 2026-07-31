@@ -46,8 +46,9 @@ use crate::src::nvim::msgpack_rpc::unpacker::{unpacker_advance, unpacker_init, u
 use crate::src::nvim::os::input::input_blocking;
 use crate::src::nvim::types::{
     Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ChannelStreamType, ClientType,
-    Dict, Error, ErrorType, Integer, MessageType, MsgpackRpcRequestHandler, Object, ObjectType,
-    RStream, Unpacker, WBuffer, size_t, uint32_t, uint64_t,
+    Dict, Error, ErrorType, Integer, MessageType, MsgpackRpcRequestHandler, Object, RStream,
+    Unpacker, WBuffer, kObjectTypeArray, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    size_t, uint32_t, uint64_t,
 };
 use crate::src::nvim::ui_client::{ui_client_attach_to_restarted_server, ui_client_event_raw_line};
 
@@ -63,17 +64,12 @@ use envelope::{serialize_request, serialize_response};
 /// Values these belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
-    use super::{ChannelPart, ChannelStreamType, ClientType, ErrorType, MessageType, ObjectType};
+    use super::{ChannelPart, ChannelStreamType, ClientType, ErrorType, MessageType};
     use core::ffi::c_int;
 
     pub const kErrorTypeNone: ErrorType = -1;
     pub const kErrorTypeException: ErrorType = 0;
     pub const kErrorTypeValidation: ErrorType = 1;
-
-    pub const kObjectTypeNil: ObjectType = 0;
-    pub const kObjectTypeInteger: ObjectType = 2;
-    pub const kObjectTypeString: ObjectType = 4;
-    pub const kObjectTypeArray: ObjectType = 5;
 
     pub const kMessageTypeRequest: MessageType = 0;
     pub const kMessageTypeResponse: MessageType = 1;

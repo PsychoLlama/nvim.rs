@@ -14,7 +14,7 @@
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::mouse::{nv_mouse, nv_mousescroll};
 use crate::src::nvim::types::{
-    Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, Object, ObjectType, SpellAddType,
+    Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, Object, SpellAddType,
     UIExtension, VimState, VimVarIndex, auto_event, cmdarg_T, getf_values, hlf_T, int16_t,
     key_extra, oparg_T, pos_T, size_t, smt_T, uint16_t,
 };
@@ -48,10 +48,6 @@ mod misc;
 pub(crate) use self::misc::*;
 pub const _ISlower: c_uint = 512;
 pub const _ISupper: c_uint = 256;
-pub const kObjectTypeArray: ObjectType = 5;
-pub const kObjectTypeString: ObjectType = 4;
-pub const kObjectTypeInteger: ObjectType = 2;
-pub const kObjectTypeNil: ObjectType = 0;
 pub const MAXLNUM: c_uint = 2147483647;
 pub const MAXCOL: c_uint = 2147483647;
 pub const HLF_MSG: hlf_T = 63;
