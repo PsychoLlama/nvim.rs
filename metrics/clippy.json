@@ -135,7 +135,7 @@
     "crates/nvim/src/nvim/sign.rs": 132,
     "crates/nvim/src/nvim/spell.rs": 59,
     "crates/nvim/src/nvim/spellfile.rs": 282,
-    "crates/nvim/src/nvim/spellsuggest.rs": 43,
+    "crates/nvim/src/nvim/spellsuggest.rs": 41,
     "crates/nvim/src/nvim/state.rs": 12,
     "crates/nvim/src/nvim/statusline.rs": 73,
     "crates/nvim/src/nvim/strings.rs": 94,
