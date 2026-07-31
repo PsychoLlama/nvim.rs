@@ -67,8 +67,8 @@ use crate::src::nvim::os::fs::{
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{
     __assert_fail, __errno_location, close, dup, feof, ferror, fgets, flock, fwrite, getc, gettext,
-    iconv, iconv_close, lseek, memchr, memcpy, memmove, memset, ngettext, putc, read, readlink,
-    snprintf, strcmp, strlen, symlink, umask, write,
+    iconv, iconv_close, lseek, memchr, memcpy, memmove, ngettext, putc, read, readlink, snprintf,
+    strcmp, strlen, symlink, umask, write,
 };
 use crate::src::nvim::os::users::os_get_username;
 use crate::src::nvim::path::{
@@ -83,11 +83,10 @@ use crate::src::nvim::strings::{sort_strings, vim_strchr};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     __off_t, CMD_index, CheckItem, Directory, FILE, FileInfo, OptInt, OptVal, OptValData,
-    OptValType, VimVarIndex, aco_save_T, bln_values, buf_T, bufref_T, cmd_addr_T, colnr_T,
-    cstack_T, exarg_T, garray_T, iconv_t, int64_t, linenr_T, mfdirty_T, off_T, pos_T, ptrdiff_t,
-    regmatch_T, regprog_T, scid_T, size_t, ssize_t, tabpage_T, time_t, uint8_t, uint64_t,
-    uintmax_t, uv_dirent_type_t, uv_fs_type, uv_gid_t, uv_req_type, uv_stat_t, uv_timespec_t,
-    uv_uid_t, win_T,
+    OptValType, VimVarIndex, aco_save_T, bln_values, buf_T, bufref_T, cmd_addr_T, colnr_T, exarg_T,
+    garray_T, iconv_t, int64_t, linenr_T, mfdirty_T, off_T, pos_T, ptrdiff_t, regmatch_T,
+    regprog_T, scid_T, size_t, ssize_t, time_t, uint8_t, uint64_t, uintmax_t, uv_dirent_type_t,
+    uv_fs_type, uv_gid_t, uv_req_type, uv_stat_t, uv_timespec_t, uv_uid_t,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 use crate::src::nvim::undo::{

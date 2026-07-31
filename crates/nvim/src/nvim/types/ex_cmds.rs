@@ -88,3 +88,45 @@ pub struct exarg {
     pub cstack: *mut cstack_T,
 }
 pub type exarg_T = exarg;
+
+impl Default for exarg {
+    /// The all-zero `exarg_T` that `CLEAR_FIELD(ea)` produces upstream.
+    fn default() -> Self {
+        exarg {
+            arg: ::core::ptr::null_mut(),
+            args: ::core::ptr::null_mut(),
+            arglens: ::core::ptr::null_mut(),
+            argc: 0,
+            nextcmd: ::core::ptr::null_mut(),
+            cmd: ::core::ptr::null_mut(),
+            cmdlinep: ::core::ptr::null_mut(),
+            cmdline_tofree: ::core::ptr::null_mut(),
+            cmdidx: 0,
+            argt: 0,
+            skip: 0,
+            forceit: 0,
+            addr_count: 0,
+            line1: 0,
+            line2: 0,
+            addr_type: 0,
+            flags: 0,
+            do_ecmd_cmd: ::core::ptr::null_mut(),
+            do_ecmd_lnum: 0,
+            append: 0,
+            usefilter: 0,
+            amount: 0,
+            regname: 0,
+            force_bin: 0,
+            read_edit: 0,
+            mkdir_p: 0,
+            force_ff: 0,
+            force_enc: 0,
+            bad_char: 0,
+            useridx: 0,
+            errmsg: ::core::ptr::null_mut(),
+            ea_getline: None,
+            cookie: ::core::ptr::null_mut(),
+            cstack: ::core::ptr::null_mut(),
+        }
+    }
+}

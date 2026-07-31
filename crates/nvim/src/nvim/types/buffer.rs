@@ -843,3 +843,15 @@ pub struct wline_T {
     pub wl_foldend: linenr_T,
     pub wl_lastlnum: linenr_T,
 }
+
+impl Default for bufref_T {
+    /// The zeroed state `set_bufref` expects to be handed. Every caller
+    /// declares one of these as a local and immediately fills it in.
+    fn default() -> Self {
+        bufref_T {
+            br_buf: ::core::ptr::null_mut(),
+            br_fnum: 0,
+            br_buf_free_count: 0,
+        }
+    }
+}

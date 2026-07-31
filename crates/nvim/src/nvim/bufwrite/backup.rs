@@ -59,7 +59,7 @@ pub(crate) struct Backup {
 unsafe fn check_mtime(buf: *mut buf_T, file_info: *mut FileInfo) -> bool {
     unsafe {
         if (*buf).b_mtime_read == 0
-            || !time_differs(file_info, (*buf).b_mtime_read, (*buf).b_mtime_read_ns)
+            || !time_differs(&*file_info, (*buf).b_mtime_read, (*buf).b_mtime_read_ns)
         {
             return true;
         }

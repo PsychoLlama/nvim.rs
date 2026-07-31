@@ -1,554 +1,577 @@
 //! Noticing that a file changed underneath us.
 //!
-//! `check_timestamps` sweeps every buffer whenever Nvim regains focus or
-//! returns to the main loop; `buf_check_timestamp` is the per-buffer test that
-//! compares the file's mtime, size and mode against what was recorded when it
-//! was read, asks the user (or `FileChangedShell`) what to do about it, and
-//! `buf_reload` carries out a reload — re-reading into a scratch buffer and
-//! moving the lines across so that marks, folds and undo survive.
+//! [`check_timestamps`] sweeps every buffer whenever Nvim regains focus or
+//! returns to the main loop; [`buf_check_timestamp`] is the per-buffer test
+//! that compares the file's mtime, size and mode against what was recorded
+//! when it was read, asks the user (or `FileChangedShell`) what to do about
+//! it, and [`buf_reload`] carries out a reload — moving the old lines into a
+//! scratch buffer first, so that they can be put back if the re-read fails.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+
+use crate::src::nvim::undo::UNDO_HASH_SIZE;
+use core::ffi::{c_char, c_int};
+use std::ffi::CStr;
 
 #[allow(unused_imports)]
 use super::*;
 
-pub unsafe extern "C" fn time_differs(
-    mut file_info: *const FileInfo,
-    mut mtime: int64_t,
-    mut mtime_ns: int64_t,
-) -> bool {
-    unsafe {
-        return (*file_info).stat.st_mtim.tv_nsec as int64_t != mtime_ns
-            || (*file_info).stat.st_mtim.tv_sec as int64_t - mtime > 1 as int64_t
-            || mtime - (*file_info).stat.st_mtim.tv_sec as int64_t > 1 as int64_t;
+/// Has a warning already been shown this sweep? Only one is worth reading.
+static ALREADY_WARNED: GlobalCell<bool> = GlobalCell::new(false);
+
+/// Set while `FileChangedShell` runs, so that `buf_check_timestamp` does not
+/// re-enter itself from an autocommand.
+static BUSY: GlobalCell<bool> = GlobalCell::new(false);
+
+/// `gettext` on a literal, keeping the result a `&'static CStr`.
+///
+/// It returns either its argument or a string from the message catalogue,
+/// both of which live as long as the process.
+macro_rules! translate {
+    ($msg:literal $(,)?) => {
+        CStr::from_ptr(gettext($msg.as_ptr()))
+    };
+}
+
+/// Why a buffer's file no longer matches what was read from it.
+///
+/// Upstream carries the name as a string and dispatches on its characters —
+/// `reason[2] == 'n'` for "conflict", `reason[1] == 'h'` for "changed" — which
+/// picks out exactly these five.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Reason {
+    /// The file is gone.
+    Deleted,
+    /// It changed on disk, and the buffer was changed here too.
+    Conflict,
+    /// Its contents changed on disk.
+    Changed,
+    /// Only its mode changed.
+    Mode,
+    /// Only its timestamp changed.
+    Time,
+}
+
+impl Reason {
+    /// What `v:fcs_reason` is set to.
+    fn name(self) -> &'static CStr {
+        match self {
+            Reason::Deleted => c"deleted",
+            Reason::Conflict => c"conflict",
+            Reason::Changed => c"changed",
+            Reason::Mode => c"mode",
+            Reason::Time => c"time",
+        }
     }
 }
 
-pub unsafe extern "C" fn check_timestamps(mut focus: ::core::ffi::c_int) -> ::core::ffi::c_int {
+/// Whether, and how, to re-read the file.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Reload {
+    No,
+    /// Re-read the text, keeping the buffer's options.
+    Text,
+    /// Re-read the file as if it were being edited afresh, so that
+    /// `'fileformat'`, `'fileencoding'` and `'filetype'` are detected again.
+    Detect,
+}
+
+/// What `FileChangedShell` decided.
+enum Fcs {
+    /// Nothing handled it, or something asked for the usual prompt.
+    Ask,
+    /// It said to reload, and said so in `v:fcs_choice`.
+    Reload(Reload),
+    /// It handled the event itself; upstream counts that as a message shown.
+    Handled,
+}
+
+/// Has the file's modification time moved since it was read?
+///
+/// On a FAT filesystem, especially under Linux, there are only 5 bits to
+/// store the seconds; the round-off happens when the inode is flushed, so
+/// the time can change unexpectedly by one second.
+pub fn time_differs(file_info: &FileInfo, mtime: i64, mtime_ns: i64) -> bool {
+    file_info.stat.st_mtim.tv_nsec != mtime_ns
+        || file_info.stat.st_mtim.tv_sec - mtime > 1
+        || mtime - file_info.stat.st_mtim.tv_sec > 1
+}
+
+/// Check whether any non-hidden buffer has been changed.
+///
+/// The check is postponed if there are characters in the stuff buffer, a
+/// global command is being executed, a mapping is being executed, or an
+/// autocommand is busy.
+///
+/// @param focus  called for a GUI focus event
+///
+/// @return  true if a message was written, so the screen should be redrawn
+///          and the cursor positioned.
+pub unsafe extern "C" fn check_timestamps(focus: c_int) -> c_int {
     unsafe {
-        if no_check_timestamps.get() > 0 as ::core::ffi::c_int {
-            return false_0;
+        // Don't check timestamps while system() or another low-level function
+        // may cause us to lose and gain focus.
+        if no_check_timestamps.get() > 0 {
+            return false as c_int;
         }
-        if focus != 0 && did_check_timestamps.get() as ::core::ffi::c_int != 0 {
-            need_check_timestamps.set(true_0 != 0);
-            return false_0;
+
+        // Avoid doing a check twice. The OK/Reload dialog can cause a focus
+        // event, and we would keep on checking if the file were steadily
+        // growing. Do check again after typing something.
+        if focus != 0 && did_check_timestamps.get() {
+            need_check_timestamps.set(true);
+            return false as c_int;
         }
-        let mut didit: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
         if !stuff_empty()
             || global_busy.get() != 0
             || typebuf_typed() == 0
-            || autocmd_busy.get() as ::core::ffi::c_int != 0
-            || (*curbuf.get()).b_ro_locked > 0 as ::core::ffi::c_int
-            || allbuf_lock.get() > 0 as ::core::ffi::c_int
+            || autocmd_busy.get()
+            || (*curbuf.get()).b_ro_locked > 0
+            || allbuf_lock.get() > 0
         {
-            need_check_timestamps.set(true_0 != 0);
-        } else {
-            (*no_wait_return.ptr()) += 1;
-            did_check_timestamps.set(true_0 != 0);
-            already_warned.set(false_0 != 0);
-            let mut buf: *mut buf_T = firstbuf.get();
-            while !buf.is_null() {
-                if (*buf).b_nwindows > 0 as ::core::ffi::c_int {
-                    let mut bufref: bufref_T = bufref_T {
-                        br_buf: ::core::ptr::null_mut::<buf_T>(),
-                        br_fnum: 0,
-                        br_buf_free_count: 0,
-                    };
-                    set_bufref(&raw mut bufref, buf);
-                    let n: ::core::ffi::c_int = buf_check_timestamp(buf);
-                    didit = if didit > n { didit } else { n };
-                    if n > 0 as ::core::ffi::c_int && !bufref_valid(&raw mut bufref) {
-                        buf = firstbuf.get();
-                    }
-                }
-                buf = (*buf).b_next;
-            }
-            (*no_wait_return.ptr()) -= 1;
-            need_check_timestamps.set(false_0 != 0);
-            if need_wait_return.get() as ::core::ffi::c_int != 0 && didit == 2 as ::core::ffi::c_int
-            {
-                msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-                ui_flush();
-            }
+            need_check_timestamps.set(true); // check later
+            return 0;
         }
-        return didit;
+
+        let mut didit = 0;
+        (*no_wait_return.ptr()) += 1;
+        did_check_timestamps.set(true);
+        ALREADY_WARNED.set(false);
+
+        let mut buf = firstbuf.get();
+        while !buf.is_null() {
+            // Only check buffers in a window.
+            if (*buf).b_nwindows > 0 {
+                let mut bufref = bufref_T::default();
+                set_bufref(&raw mut bufref, buf);
+                let n = buf_check_timestamp(buf);
+                didit = didit.max(n);
+                if n > 0 && !bufref_valid(&raw mut bufref) {
+                    // Autocommands have removed the buffer. Upstream's
+                    // `buf = firstbuf; continue;` still runs the loop's own
+                    // step, so this restarts at the *second* buffer.
+                    buf = firstbuf.get();
+                }
+            }
+            buf = (*buf).b_next;
+        }
+
+        (*no_wait_return.ptr()) -= 1;
+        need_check_timestamps.set(false);
+        if need_wait_return.get() && didit == 2 {
+            // Make sure the message isn't overwritten.
+            msg_puts(c"\n".as_ptr());
+            ui_flush();
+        }
+        didit
     }
 }
 
-pub(crate) unsafe extern "C" fn move_lines(
-    mut frombuf: *mut buf_T,
-    mut tobuf: *mut buf_T,
-) -> ::core::ffi::c_int {
+/// Move all the lines from buffer `frombuf` to buffer `tobuf`.
+///
+/// @return  OK or FAIL. On FAIL `tobuf` is incomplete and/or `frombuf` is not
+///          empty.
+unsafe fn move_lines(frombuf: *mut buf_T, tobuf: *mut buf_T) -> c_int {
     unsafe {
-        let mut tbuf: *mut buf_T = curbuf.get();
-        let mut retval: ::core::ffi::c_int = OK;
+        let tbuf = curbuf.get();
+        let mut retval = OK;
+
+        // Copy the lines in "frombuf" to "tobuf".
         curbuf.set(tobuf);
-        let mut lnum: linenr_T = 1 as linenr_T;
+        let mut lnum = 1;
         while lnum <= (*frombuf).b_ml.ml_line_count {
-            let mut p: *mut ::core::ffi::c_char = xmemdupz(
-                ml_get_buf(frombuf, lnum) as *const ::core::ffi::c_void,
+            let p = xmemdupz(
+                ml_get_buf(frombuf, lnum).cast(),
                 ml_get_buf_len(frombuf, lnum) as size_t,
-            ) as *mut ::core::ffi::c_char;
-            if ml_append(lnum - 1 as linenr_T, p, 0 as colnr_T, false_0 != 0) == FAIL {
-                xfree(p as *mut ::core::ffi::c_void);
+            )
+            .cast::<c_char>();
+            let appended = ml_append(lnum - 1, p, 0, false);
+            xfree(p.cast());
+            if appended == FAIL {
                 retval = FAIL;
                 break;
-            } else {
-                xfree(p as *mut ::core::ffi::c_void);
-                lnum += 1;
             }
+            lnum += 1;
         }
+
+        // Delete all the lines in "frombuf".
         if retval != FAIL {
             curbuf.set(frombuf);
-            let mut lnum_0: linenr_T = (*curbuf.get()).b_ml.ml_line_count;
-            while lnum_0 > 0 as linenr_T {
-                if ml_delete(lnum_0) == FAIL {
+            let mut lnum = (*curbuf.get()).b_ml.ml_line_count;
+            while lnum > 0 {
+                if ml_delete(lnum) == FAIL {
+                    // Oops! We could try putting back the saved lines, but
+                    // that might fail again...
                     retval = FAIL;
                     break;
-                } else {
-                    lnum_0 -= 1;
                 }
+                lnum -= 1;
             }
         }
+
         curbuf.set(tbuf);
-        return retval;
+        retval
     }
 }
 
-pub unsafe extern "C" fn buf_check_timestamp(mut buf: *mut buf_T) -> ::core::ffi::c_int {
+/// Give `FileChangedShell` the chance to handle the change itself.
+///
+/// Sets `v:fcs_reason` and clears `v:fcs_choice` first, and reads the latter
+/// back afterwards.
+unsafe fn file_changed_shell(buf: *mut buf_T, bufref: *mut bufref_T, reason: Reason) -> Fcs {
     unsafe {
-        let mut retval: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut mesg: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut mesg2: *mut ::core::ffi::c_char =
-            b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        let mut helpmesg: bool = false_0 != 0;
-        let mut reload: C2Rust_Unnamed_31 = RELOAD_NONE;
-        let mut can_reload: bool = false_0 != 0;
-        let mut orig_size: uint64_t = (*buf).b_orig_size;
-        let mut orig_mode: ::core::ffi::c_int = (*buf).b_orig_mode;
-        static busy: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-        let mut bufref: bufref_T = bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
+        let name = reason.name();
+        BUSY.set(true);
+        set_vim_var_string(
+            VV_FCS_REASON,
+            name.as_ptr(),
+            name.count_bytes() as ptrdiff_t,
+        );
+        set_vim_var_string(VV_FCS_CHOICE, c"".as_ptr(), 0);
+        (*allbuf_lock.ptr()) += 1;
+        let handled = apply_autocmds(
+            EVENT_FILECHANGEDSHELL,
+            (*buf).b_fname,
+            (*buf).b_fname,
+            false,
+            buf,
+        );
+        (*allbuf_lock.ptr()) -= 1;
+        BUSY.set(false);
+
+        if !handled {
+            return Fcs::Ask;
+        }
+        if !bufref_valid(bufref) {
+            emsg(gettext(
+                c"E246: FileChangedShell autocommand deleted buffer".as_ptr(),
+            ));
+        }
+        match CStr::from_ptr(get_vim_var_str(VV_FCS_CHOICE)).to_bytes() {
+            b"reload" if reason != Reason::Deleted => Fcs::Reload(Reload::Text),
+            b"edit" => Fcs::Reload(Reload::Detect),
+            b"ask" => Fcs::Ask,
+            // Note that "reload" on a deleted file lands here, not on `ask`.
+            _ => Fcs::Handled,
+        }
+    }
+}
+
+/// Tell the user their file changed, and possibly offer to reload it.
+///
+/// `mesg` is a format string taking the file name; `mesg2` is the "see
+/// `:help`" note the warnings carry, appended to it. Returns what the user
+/// chose, and whether a message was displayed (which is `buf_check_timestamp`
+/// returning 2).
+unsafe fn warn_changed(
+    buf: *mut buf_T,
+    mesg: &CStr,
+    mesg2: &CStr,
+    can_reload: bool,
+) -> (Reload, bool) {
+    unsafe {
+        let path = home_replace_save(buf, (*buf).b_fname);
+        // +2 for either '\n' or "; " and +1 for NUL.
+        let size = strlen(path) + mesg.count_bytes() + mesg2.count_bytes() + 3;
+        let mut tbuf = vec![0 as c_char; size];
+        let at = snprintf(tbuf.as_mut_ptr(), size, mesg.as_ptr(), path) as usize;
+        xfree(path.cast());
+        // Set v:warningmsg here, before the unimportant and output-specific
+        // `mesg2` has been appended.
+        set_vim_var_string(VV_WARNINGMSG, tbuf.as_ptr(), at as ptrdiff_t);
+        let mut append = |sep: &CStr| {
+            if !mesg2.is_empty() {
+                snprintf(
+                    tbuf.as_mut_ptr().add(at),
+                    size - at,
+                    sep.as_ptr(),
+                    mesg2.as_ptr(),
+                );
+            }
         };
+
+        if can_reload {
+            append(c"\n%s");
+            return (
+                match do_dialog(
+                    VIM_WARNING as c_int,
+                    gettext(c"Warning".as_ptr()),
+                    tbuf.as_ptr(),
+                    gettext(c"&OK\n&Load File\nLoad File &and Options".as_ptr()),
+                    1,
+                    core::ptr::null(),
+                    true as c_int,
+                ) {
+                    2 => Reload::Text,
+                    3 => Reload::Detect,
+                    _ => Reload::No,
+                },
+                false,
+            );
+        }
+
+        if State.get() > MODE_NORMAL_BUSY || State.get() & MODE_CMDLINE != 0 || ALREADY_WARNED.get()
+        {
+            append(c"; %s");
+            emsg(tbuf.as_ptr());
+            return (Reload::No, true);
+        }
+
+        if !autocmd_busy.get() {
+            msg_start();
+            msg_puts_hl(tbuf.as_ptr(), HLF_E as c_int, true);
+            if !mesg2.is_empty() {
+                msg_puts_hl(mesg2.as_ptr(), HLF_W as c_int, true);
+            }
+            msg_clr_eos();
+            msg_end();
+            if emsg_silent.get() == 0 && !in_assert_fails.get() && !ui_has(kUIMessages) {
+                msg_delay(1004, true); // give the user some time to think about it
+                redraw_cmdline.set(false); // don't redraw and erase the message
+            }
+        }
+        ALREADY_WARNED.set(true);
+        (Reload::No, false)
+    }
+}
+
+/// Check whether buffer `buf` has been changed, or whether the file for a new
+/// buffer unexpectedly appeared.
+///
+/// @return  1 if a changed buffer was found, 2 if a message has been
+///          displayed, 0 otherwise.
+pub unsafe extern "C" fn buf_check_timestamp(buf: *mut buf_T) -> c_int {
+    unsafe {
+        let orig_size = (*buf).b_orig_size;
+        let orig_mode = (*buf).b_orig_mode;
+
+        let mut bufref = bufref_T::default();
         set_bufref(&raw mut bufref, buf);
+
+        // If it's a terminal, there is no file name, the buffer is not
+        // loaded, 'buftype' is set, we are in the middle of a save, or we are
+        // being called recursively: ignore this buffer.
         if !(*buf).terminal.is_null()
             || (*buf).b_ffname.is_null()
             || (*buf).b_ml.ml_mfp.is_null()
             || !bt_normal(buf)
-            || (*buf).b_saving as ::core::ffi::c_int != 0
-            || busy.get() as ::core::ffi::c_int != 0
+            || (*buf).b_saving
+            || BUSY.get()
         {
-            return 0 as ::core::ffi::c_int;
+            return 0;
         }
-        let mut file_info: FileInfo = FileInfo {
-            stat: uv_stat_t {
-                st_dev: 0,
-                st_mode: 0,
-                st_nlink: 0,
-                st_uid: 0,
-                st_gid: 0,
-                st_rdev: 0,
-                st_ino: 0,
-                st_size: 0,
-                st_blksize: 0,
-                st_blocks: 0,
-                st_flags: 0,
-                st_gen: 0,
-                st_atim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_mtim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_ctim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_birthtim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-            },
-        };
-        let mut file_info_ok: bool = false;
-        if (*buf).b_flags & BF_NOTEDITED == 0 && (*buf).b_mtime != 0 as int64_t && {
+
+        let mut retval = 0;
+        let mut reload = Reload::No;
+        let mut can_reload = false;
+        // The message to show, as a format string taking the file name, plus
+        // the "see :help Wnn" note that only the warnings carry.
+        let mut mesg: Option<&CStr> = None;
+        let mut mesg2 = c"";
+
+        let mut file_info = FileInfo::default();
+        let mut file_info_ok = false;
+        let differs = (*buf).b_flags & BF_NOTEDITED == 0 && (*buf).b_mtime != 0 && {
             file_info_ok = os_fileinfo((*buf).b_ffname, &raw mut file_info);
             !file_info_ok
-                || time_differs(&raw mut file_info, (*buf).b_mtime, (*buf).b_mtime_ns)
-                    as ::core::ffi::c_int
-                    != 0
-                || file_info.stat.st_mode as ::core::ffi::c_int != (*buf).b_orig_mode
-        } {
-            let prev_b_mtime: int64_t = (*buf).b_mtime;
-            retval = 1 as ::core::ffi::c_int;
-            if !file_info_ok {
-                (*buf).b_mtime = -1 as int64_t;
-                (*buf).b_orig_size = 0 as uint64_t;
-                (*buf).b_orig_mode = 0 as ::core::ffi::c_int;
-            } else {
+                || time_differs(&file_info, (*buf).b_mtime, (*buf).b_mtime_ns)
+                || file_info.stat.st_mode as c_int != (*buf).b_orig_mode
+        };
+
+        if differs {
+            let prev_b_mtime = (*buf).b_mtime;
+            retval = 1;
+
+            // Set b_mtime to stop further warnings, e.g. while executing a
+            // FileChangedShell autocommand.
+            if file_info_ok {
                 buf_store_file_info(buf, &raw mut file_info);
+            } else {
+                // Check the file again later to see if it re-appears.
+                (*buf).b_mtime = -1;
+                (*buf).b_orig_size = 0;
+                (*buf).b_orig_mode = 0;
             }
-            if !os_isdir((*buf).b_fname) {
-                if (if (*buf).b_p_ar >= 0 as ::core::ffi::c_int {
-                    (*buf).b_p_ar
+
+            // Don't do anything for a directory. It might contain the file
+            // explorer.
+            if os_isdir((*buf).b_fname) {
+                // Nothing to do.
+            } else if (if (*buf).b_p_ar >= 0 {
+                (*buf).b_p_ar
+            } else {
+                p_ar.get()
+            }) != 0
+                && !bufIsChanged(buf)
+                && file_info_ok
+            {
+                // If 'autoread' is set, the buffer has no changes and the file
+                // still exists, reload the buffer. Use the buffer-local option
+                // value if it was set, the global value otherwise.
+                reload = Reload::Text;
+            } else {
+                let reason = if !file_info_ok {
+                    Reason::Deleted
+                } else if bufIsChanged(buf) {
+                    Reason::Conflict
+                } else if orig_size != (*buf).b_orig_size || buf_contents_changed(buf) {
+                    Reason::Changed
+                } else if orig_mode != (*buf).b_orig_mode {
+                    Reason::Mode
                 } else {
-                    p_ar.get()
-                }) != 0
-                    && !bufIsChanged(buf)
-                    && file_info_ok as ::core::ffi::c_int != 0
-                {
-                    reload = RELOAD_NORMAL;
-                } else {
-                    let mut reason: *mut ::core::ffi::c_char =
-                        ::core::ptr::null_mut::<::core::ffi::c_char>();
-                    let mut reasonlen: size_t = 0;
-                    if !file_info_ok {
-                        reason = b"deleted\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char;
-                        reasonlen = ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                            .wrapping_sub(1 as usize) as size_t;
-                    } else if bufIsChanged(buf) {
-                        reason = b"conflict\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char;
-                        reasonlen = ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                            .wrapping_sub(1 as usize) as size_t;
-                    } else if orig_size != (*buf).b_orig_size
-                        || buf_contents_changed(buf) as ::core::ffi::c_int != 0
-                    {
-                        reason = b"changed\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char;
-                        reasonlen = ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                            .wrapping_sub(1 as usize) as size_t;
-                    } else if orig_mode != (*buf).b_orig_mode {
-                        reason = b"mode\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char;
-                        reasonlen = ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                            .wrapping_sub(1 as usize) as size_t;
-                    } else {
-                        reason = b"time\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char;
-                        reasonlen = ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                            .wrapping_sub(1 as usize) as size_t;
-                    }
-                    busy.set(true_0 != 0);
-                    set_vim_var_string(
-                        VV_FCS_REASON,
-                        reason,
-                        reasonlen as ::core::ffi::c_int as ptrdiff_t,
-                    );
-                    set_vim_var_string(
-                        VV_FCS_CHOICE,
-                        b"\0".as_ptr() as *const ::core::ffi::c_char,
-                        0 as ptrdiff_t,
-                    );
-                    (*allbuf_lock.ptr()) += 1;
-                    let mut n: bool = apply_autocmds(
-                        EVENT_FILECHANGEDSHELL,
-                        (*buf).b_fname,
-                        (*buf).b_fname,
-                        false_0 != 0,
-                        buf,
-                    );
-                    (*allbuf_lock.ptr()) -= 1;
-                    busy.set(false_0 != 0);
-                    if n {
-                        if !bufref_valid(&raw mut bufref) {
-                            emsg(gettext(
-                                b"E246: FileChangedShell autocommand deleted buffer\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                            ));
-                        }
-                        let mut s: *mut ::core::ffi::c_char = get_vim_var_str(VV_FCS_CHOICE);
-                        if strcmp(s, b"reload\0".as_ptr() as *const ::core::ffi::c_char)
-                            == 0 as ::core::ffi::c_int
-                            && *reason as ::core::ffi::c_int != 'd' as ::core::ffi::c_int
-                        {
-                            reload = RELOAD_NORMAL;
-                        } else if strcmp(s, b"edit\0".as_ptr() as *const ::core::ffi::c_char)
-                            == 0 as ::core::ffi::c_int
-                        {
-                            reload = RELOAD_DETECT;
-                        } else if strcmp(s, b"ask\0".as_ptr() as *const ::core::ffi::c_char)
-                            == 0 as ::core::ffi::c_int
-                        {
-                            n = false_0 != 0;
-                        } else {
-                            return 2 as ::core::ffi::c_int;
-                        }
-                    }
-                    if !n {
-                        if *reason as ::core::ffi::c_int == 'd' as ::core::ffi::c_int {
-                            if prev_b_mtime != -1 as int64_t {
-                                mesg = gettext(b"E211: File \"%s\" no longer available\0".as_ptr()
-                                    as *const ::core::ffi::c_char);
-                            }
-                        } else {
-                            helpmesg = true_0 != 0;
-                            can_reload = true_0 != 0;
-                            if *reason.offset(2 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
-                                == 'n' as ::core::ffi::c_int
-                            {
-                                mesg = gettext(
-                                b"W12: Warning: File \"%s\" has changed and the buffer was changed in Vim as well\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                            );
-                                mesg2 = gettext(b"See \":help W12\" for more info.\0".as_ptr()
-                                    as *const ::core::ffi::c_char);
-                            } else if *reason.offset(1 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
-                                == 'h' as ::core::ffi::c_int
-                            {
-                                mesg = gettext(
-                                    b"W11: Warning: File \"%s\" has changed since editing started\0"
-                                        .as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                );
-                                mesg2 = gettext(b"See \":help W11\" for more info.\0".as_ptr()
-                                    as *const ::core::ffi::c_char);
-                            } else if *reason as ::core::ffi::c_int == 'm' as ::core::ffi::c_int {
-                                mesg = gettext(
-                                b"W16: Warning: Mode of file \"%s\" has changed since editing started\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                            );
-                                mesg2 = gettext(b"See \":help W16\" for more info.\0".as_ptr()
-                                    as *const ::core::ffi::c_char);
-                            } else {
-                                (*buf).b_mtime_read = (*buf).b_mtime;
-                                (*buf).b_mtime_read_ns = (*buf).b_mtime_ns;
+                    Reason::Time
+                };
+
+                // Only warn if no FileChangedShell autocommand handled it.
+                match file_changed_shell(buf, &raw mut bufref, reason) {
+                    Fcs::Handled => return 2,
+                    Fcs::Reload(what) => reload = what,
+                    Fcs::Ask => match reason {
+                        Reason::Deleted => {
+                            // Only give the message once.
+                            if prev_b_mtime != -1 {
+                                mesg = Some(translate!(c"E211: File \"%s\" no longer available"));
                             }
                         }
-                    }
+                        _ => {
+                            can_reload = true;
+                            // Check whether the file contents really changed,
+                            // to avoid warning when only the timestamp was set
+                            // (e.g. checked out of CVS). Always warn when the
+                            // buffer was changed too.
+                            match reason {
+                                Reason::Conflict => {
+                                    mesg = Some(translate!(c"W12: Warning: File \"%s\" has changed and the buffer was changed in Vim as well"));
+                                    mesg2 = translate!(c"See \":help W12\" for more info.");
+                                }
+                                Reason::Changed => {
+                                    mesg = Some(translate!(c"W11: Warning: File \"%s\" has changed since editing started"));
+                                    mesg2 = translate!(c"See \":help W11\" for more info.");
+                                }
+                                Reason::Mode => {
+                                    mesg = Some(translate!(c"W16: Warning: Mode of file \"%s\" has changed since editing started"));
+                                    mesg2 = translate!(c"See \":help W16\" for more info.");
+                                }
+                                _ => {
+                                    // Only the timestamp changed. Store it, to
+                                    // avoid a warning in check_mtime() later.
+                                    (*buf).b_mtime_read = (*buf).b_mtime;
+                                    (*buf).b_mtime_read_ns = (*buf).b_mtime_ns;
+                                }
+                            }
+                        }
+                    },
                 }
             }
         } else if (*buf).b_flags & BF_NEW != 0
             && (*buf).b_flags & BF_NEW_W == 0
-            && os_path_exists((*buf).b_ffname) as ::core::ffi::c_int != 0
+            && os_path_exists((*buf).b_ffname)
         {
-            retval = 1 as ::core::ffi::c_int;
-            mesg = gettext(
-                b"W13: Warning: File \"%s\" has been created after editing started\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
+            retval = 1;
+            mesg = Some(translate!(
+                c"W13: Warning: File \"%s\" has been created after editing started",
+            ));
             (*buf).b_flags |= BF_NEW_W;
-            can_reload = true_0 != 0;
+            can_reload = true;
         }
-        if !mesg.is_null() {
-            let mut path: *mut ::core::ffi::c_char = home_replace_save(buf, (*buf).b_fname);
-            if !helpmesg {
-                mesg2 = b"\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
+
+        if let Some(mesg) = mesg {
+            let (chose, displayed) = warn_changed(buf, mesg, mesg2, can_reload);
+            if chose != Reload::No {
+                reload = chose;
             }
-            let tbufsize: size_t = strlen(path)
-                .wrapping_add(strlen(mesg))
-                .wrapping_add(strlen(mesg2))
-                .wrapping_add(3 as size_t);
-            let tbuf: *mut ::core::ffi::c_char = xmalloc(tbufsize) as *mut ::core::ffi::c_char;
-            let mut tbuflen: ::core::ffi::c_int = snprintf(tbuf, tbufsize, mesg, path);
-            set_vim_var_string(VV_WARNINGMSG, tbuf, tbuflen as ptrdiff_t);
-            if can_reload {
-                if *mesg2 as ::core::ffi::c_int != NUL {
-                    snprintf(
-                        tbuf.offset(tbuflen as isize),
-                        tbufsize.wrapping_sub(tbuflen as size_t),
-                        b"\n%s\0".as_ptr() as *const ::core::ffi::c_char,
-                        mesg2,
-                    );
-                }
-                match do_dialog(
-                    VIM_WARNING as ::core::ffi::c_int,
-                    gettext(b"Warning\0".as_ptr() as *const ::core::ffi::c_char),
-                    tbuf,
-                    gettext(b"&OK\n&Load File\nLoad File &and Options\0".as_ptr()
-                        as *const ::core::ffi::c_char),
-                    1 as ::core::ffi::c_int,
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    true_0,
-                ) {
-                    2 => {
-                        reload = RELOAD_NORMAL;
-                    }
-                    3 => {
-                        reload = RELOAD_DETECT;
-                    }
-                    _ => {}
-                }
-            } else if State.get() > MODE_NORMAL_BUSY
-                || State.get() & MODE_CMDLINE != 0
-                || already_warned.get() as ::core::ffi::c_int != 0
-            {
-                if *mesg2 as ::core::ffi::c_int != NUL {
-                    snprintf(
-                        tbuf.offset(tbuflen as isize),
-                        tbufsize.wrapping_sub(tbuflen as size_t),
-                        b"; %s\0".as_ptr() as *const ::core::ffi::c_char,
-                        mesg2,
-                    );
-                }
-                emsg(tbuf);
-                retval = 2 as ::core::ffi::c_int;
-            } else {
-                if !autocmd_busy.get() {
-                    msg_start();
-                    msg_puts_hl(tbuf, HLF_E as ::core::ffi::c_int, true_0 != 0);
-                    if *mesg2 as ::core::ffi::c_int != NUL {
-                        msg_puts_hl(mesg2, HLF_W as ::core::ffi::c_int, true_0 != 0);
-                    }
-                    msg_clr_eos();
-                    msg_end();
-                    if emsg_silent.get() == 0 as ::core::ffi::c_int
-                        && !in_assert_fails.get()
-                        && !ui_has(kUIMessages)
-                    {
-                        msg_delay(1004 as uint64_t, true_0 != 0);
-                        redraw_cmdline.set(false_0 != 0);
-                    }
-                }
-                already_warned.set(true_0 != 0);
-            }
-            xfree(tbuf as *mut ::core::ffi::c_void);
-            xfree(path as *mut ::core::ffi::c_void);
-        }
-        if reload as ::core::ffi::c_uint != RELOAD_NONE as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            buf_reload(
-                buf,
-                orig_mode,
-                reload as ::core::ffi::c_uint
-                    == RELOAD_DETECT as ::core::ffi::c_int as ::core::ffi::c_uint,
-            );
-            if bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
-                && (*buf).b_p_udf != 0
-                && !(*buf).b_ffname.is_null()
-            {
-                let mut hash: [uint8_t; 32] = [0; 32];
-                u_compute_hash(buf, &raw mut hash as *mut uint8_t);
-                u_write_undo(
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    false_0 != 0,
-                    buf,
-                    &raw mut hash as *mut uint8_t,
-                );
+            if displayed {
+                retval = 2;
             }
         }
-        if bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
-            && retval != 0 as ::core::ffi::c_int
-        {
+
+        if reload != Reload::No {
+            buf_reload(buf, orig_mode, reload == Reload::Detect);
+            if bufref_valid(&raw mut bufref) && (*buf).b_p_udf != 0 && !(*buf).b_ffname.is_null() {
+                // Any existing undo file is unusable, write it now.
+                let mut hash = [0u8; UNDO_HASH_SIZE as usize];
+                u_compute_hash(buf, hash.as_mut_ptr());
+                u_write_undo(core::ptr::null(), false, buf, hash.as_mut_ptr());
+            }
+        }
+
+        // Trigger FileChangedShellPost when the file was changed in any way.
+        if bufref_valid(&raw mut bufref) && retval != 0 {
             apply_autocmds(
                 EVENT_FILECHANGEDSHELLPOST,
                 (*buf).b_fname,
                 (*buf).b_fname,
-                false_0 != 0,
+                false,
                 buf,
             );
         }
-        return retval;
+        retval
     }
 }
 
-pub unsafe extern "C" fn buf_reload(
-    mut buf: *mut buf_T,
-    mut orig_mode: ::core::ffi::c_int,
-    mut reload_options: bool,
-) {
+/// Reload a buffer that is already loaded, because the file changed outside
+/// of Nvim.
+///
+/// @param orig_mode       `buf->b_orig_mode` from before the need for
+///                        reloading was detected; it may have been reset by
+///                        now.
+/// @param reload_options  re-detect `'fileformat'`, `'fileencoding'` and
+///                        `'filetype'`, rather than forcing the ones the
+///                        buffer already has.
+pub unsafe extern "C" fn buf_reload(buf: *mut buf_T, orig_mode: c_int, reload_options: bool) {
     unsafe {
-        let mut ea: exarg_T = exarg_T {
-            arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            arglens: ::core::ptr::null_mut::<size_t>(),
-            argc: 0,
-            nextcmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            cmdidx: CMD_append,
-            argt: 0,
-            skip: 0,
-            forceit: 0,
-            addr_count: 0,
-            line1: 0,
-            line2: 0,
-            addr_type: ADDR_LINES,
-            flags: 0,
-            do_ecmd_cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            do_ecmd_lnum: 0,
-            append: 0,
-            usefilter: 0,
-            amount: 0,
-            regname: 0,
-            force_bin: 0,
-            read_edit: 0,
-            mkdir_p: 0,
-            force_ff: 0,
-            force_enc: 0,
-            bad_char: 0,
-            useridx: 0,
-            errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ea_getline: None,
-            cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            cstack: ::core::ptr::null_mut::<cstack_T>(),
-        };
-        let mut old_ro: ::core::ffi::c_int = (*buf).b_p_ro;
-        let mut savebuf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-        let mut bufref: bufref_T = bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        };
-        let mut saved: ::core::ffi::c_int = OK;
-        let mut aco: aco_save_T = aco_save_T {
-            use_aucmd_win_idx: 0,
-            save_curwin_handle: 0,
-            new_curwin_handle: 0,
-            save_prevwin_handle: 0,
-            new_curbuf: bufref_T {
-                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            },
-            tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            save_VIsual_active: false,
-            save_prompt_insert: 0,
-        };
-        let mut flags: ::core::ffi::c_int = READ_NEW as ::core::ffi::c_int;
+        let old_ro = (*buf).b_p_ro;
+        let mut saved = OK;
+        let mut flags = READ_NEW as c_int;
+
+        // Set curwin/curbuf for "buf" and save some things.
+        let mut aco = aco_save_T::default();
         aucmd_prepbuf(&raw mut aco, buf);
-        if reload_options {
-            memset(
-                &raw mut ea as *mut ::core::ffi::c_void,
-                0 as ::core::ffi::c_int,
-                ::core::mem::size_of::<exarg_T>(),
-            );
-        } else {
+
+        // Unless reload_options is set we only want to read the text from the
+        // file, not reset the syntax highlighting, clear marks, diff status
+        // and so on. Force the fileformat and encoding to be the same.
+        let mut ea = exarg_T::default();
+        if !reload_options {
             prep_exarg(&raw mut ea, buf);
         }
-        let mut old_cursor: pos_T = (*curwin.get()).w_cursor;
-        let mut old_topline: linenr_T = (*curwin.get()).w_topline;
-        if p_ur.get() < 0 as OptInt || (*curbuf.get()).b_ml.ml_line_count as OptInt <= p_ur.get() {
-            u_sync(false_0 != 0);
+
+        let old_cursor = (*curwin.get()).w_cursor;
+        let old_topline = (*curwin.get()).w_topline;
+
+        if p_ur.get() < 0 || (*curbuf.get()).b_ml.ml_line_count as OptInt <= p_ur.get() {
+            // Save all the text, so that the reload can be undone. Sync first
+            // so that this is a separate undo-able action.
+            u_sync(false);
             saved = u_savecommon(
                 curbuf.get(),
-                0 as linenr_T,
-                (*curbuf.get()).b_ml.ml_line_count + 1 as linenr_T,
-                0 as linenr_T,
-                true_0 != 0,
+                0,
+                (*curbuf.get()).b_ml.ml_line_count + 1,
+                0,
+                true,
             );
-            flags |= READ_KEEP_UNDO as ::core::ffi::c_int;
+            flags |= READ_KEEP_UNDO as c_int;
         }
-        if buf_is_empty(curbuf.get()) as ::core::ffi::c_int != 0 || saved == FAIL {
-            savebuf = ::core::ptr::null_mut::<buf_T>();
-        } else {
+
+        // To behave like when a new file is edited (which matters for
+        // BufReadPost autocommands) we first need to delete the current buffer
+        // contents. But if reading the file fails we should keep the old
+        // contents. Memory alone will not do, the file might be too big, so
+        // move the buffer contents to a hidden buffer.
+        let mut savebuf = core::ptr::null_mut::<buf_T>();
+        let mut bufref = bufref_T::default();
+        if !(buf_is_empty(curbuf.get()) || saved == FAIL) {
+            // Allocate a buffer without putting it in the buffer list.
             savebuf = buflist_new(
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                1 as linenr_T,
-                BLN_DUMMY as ::core::ffi::c_int,
+                core::ptr::null_mut(),
+                core::ptr::null_mut(),
+                1,
+                BLN_DUMMY as c_int,
             );
             set_bufref(&raw mut bufref, savebuf);
             if !savebuf.is_null() && buf == curbuf.get() {
+                // Open the memline.
                 curbuf.set(savebuf);
                 (*curwin.get()).w_buffer = savebuf;
                 saved = ml_open(curbuf.get());
@@ -561,38 +584,36 @@ pub unsafe extern "C" fn buf_reload(
                 || move_lines(buf, savebuf) == FAIL
             {
                 semsg(
-                    gettext(b"E462: Could not prepare for reloading \"%s\"\0".as_ptr()
-                        as *const ::core::ffi::c_char),
+                    gettext(c"E462: Could not prepare for reloading \"%s\"".as_ptr()),
                     (*buf).b_fname,
                 );
                 saved = FAIL;
             }
         }
+
         if saved == OK {
-            (*curbuf.get()).b_flags |= BF_CHECK_RO;
-            (*curbuf.get()).b_keep_filetype = true_0 != 0;
+            (*curbuf.get()).b_flags |= BF_CHECK_RO; // check for RO again
+            (*curbuf.get()).b_keep_filetype = true; // don't detect 'filetype'
             if readfile(
                 (*buf).b_ffname,
                 (*buf).b_fname,
-                0 as linenr_T,
-                0 as linenr_T,
-                MAXLNUM as ::core::ffi::c_int as linenr_T,
+                0,
+                0,
+                MAXLNUM as linenr_T,
                 &raw mut ea,
                 flags,
-                shortmess(SHM_FILEINFO as ::core::ffi::c_int),
+                shortmess(SHM_FILEINFO as c_int),
             ) != OK
             {
                 if !aborting() {
                     semsg(
-                        gettext(b"E321: Could not reload \"%s\"\0".as_ptr()
-                            as *const ::core::ffi::c_char),
+                        gettext(c"E321: Could not reload \"%s\"".as_ptr()),
                         (*buf).b_fname,
                     );
                 }
-                if !savebuf.is_null()
-                    && bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
-                    && buf == curbuf.get()
-                {
+                if !savebuf.is_null() && bufref_valid(&raw mut bufref) && buf == curbuf.get() {
+                    // Put the text back from the save buffer. First delete any
+                    // lines that readfile() added.
                     while !buf_is_empty(curbuf.get()) {
                         if ml_delete((*buf).b_ml.ml_line_count) == FAIL {
                             break;
@@ -601,33 +622,40 @@ pub unsafe extern "C" fn buf_reload(
                     move_lines(savebuf, buf);
                 }
             } else if buf == curbuf.get() {
-                unchanged(buf, true_0 != 0, true_0 != 0);
-                if flags & READ_KEEP_UNDO as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+                // "buf" is still valid. Mark the buffer as unmodified and free
+                // the undo info.
+                unchanged(buf, true, true);
+                if flags & READ_KEEP_UNDO as c_int == 0 {
                     u_clearallandblockfree(buf);
                 } else {
+                    // Mark all undo states as changed.
                     u_unchanged(curbuf.get());
                 }
-                buf_updates_unload(curbuf.get(), true_0 != 0);
-                (*curbuf.get()).b_mod_set = true_0 != 0;
+                buf_updates_unload(curbuf.get(), true);
+                (*curbuf.get()).b_mod_set = true;
             }
         }
-        xfree(ea.cmd as *mut ::core::ffi::c_void);
-        if !savebuf.is_null() && bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0 {
-            wipe_buffer(savebuf, false_0 != 0);
+        xfree(ea.cmd.cast());
+
+        if !savebuf.is_null() && bufref_valid(&raw mut bufref) {
+            wipe_buffer(savebuf, false);
         }
+
+        // Invalidate diff info if necessary.
         diff_invalidate(curbuf.get());
-        (*curwin.get()).w_topline = if old_topline < (*curbuf.get()).b_ml.ml_line_count {
-            old_topline
-        } else {
-            (*curbuf.get()).b_ml.ml_line_count
-        };
+
+        // Restore the topline and cursor position and check them; lines may
+        // have been removed.
+        (*curwin.get()).w_topline = old_topline.min((*curbuf.get()).b_ml.ml_line_count);
         (*curwin.get()).w_cursor = old_cursor;
         check_cursor(curwin.get());
         update_topline(curwin.get());
-        (*curbuf.get()).b_keep_filetype = false_0 != 0;
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
+        (*curbuf.get()).b_keep_filetype = false;
+
+        // Update folds unless they are defined manually.
+        let mut tp = first_tabpage.get();
         while !tp.is_null() {
-            let mut wp: *mut win_T = if tp == curtab.get() {
+            let mut wp = if tp == curtab.get() {
                 firstwin.get()
             } else {
                 (*tp).tp_firstwin
@@ -638,28 +666,43 @@ pub unsafe extern "C" fn buf_reload(
                 }
                 wp = (*wp).w_next;
             }
-            tp = (*tp).tp_next as *mut tabpage_T;
+            tp = (*tp).tp_next;
         }
+
+        // If the mode didn't change and 'readonly' was set, keep the old
+        // value; the user probably used the ":view" command. But don't reset
+        // it, there might have been a read error.
         if orig_mode == (*curbuf.get()).b_orig_mode {
             (*curbuf.get()).b_p_ro |= old_ro;
         }
-        do_modelines(0 as ::core::ffi::c_int);
+
+        // Modelines must override settings done by autocommands.
+        do_modelines(0);
+
+        // Restore curwin/curbuf and a few other things. Careful: autocommands
+        // may have made "buf" invalid!
         aucmd_restbuf(&raw mut aco);
     }
 }
 
-pub unsafe extern "C" fn buf_store_file_info(mut buf: *mut buf_T, mut file_info: *mut FileInfo) {
+/// Record the file's size, mode and modification time on the buffer, so that
+/// a later change to any of them can be noticed.
+pub unsafe extern "C" fn buf_store_file_info(buf: *mut buf_T, file_info: *mut FileInfo) {
     unsafe {
         (*buf).b_mtime = (*file_info).stat.st_mtim.tv_sec as int64_t;
         (*buf).b_mtime_ns = (*file_info).stat.st_mtim.tv_nsec as int64_t;
         (*buf).b_orig_size = os_fileinfo_size(file_info);
-        (*buf).b_orig_mode = (*file_info).stat.st_mode as ::core::ffi::c_int;
+        (*buf).b_orig_mode = (*file_info).stat.st_mode as c_int;
     }
 }
 
-pub unsafe extern "C" fn write_lnum_adjust(mut offset: linenr_T) {
+/// Adjust the line with a missing end-of-line, used for the next write.
+///
+/// Needed by `do_filter()`, where the input lines for the filter are deleted.
+pub unsafe extern "C" fn write_lnum_adjust(offset: linenr_T) {
     unsafe {
-        if (*curbuf.get()).b_no_eol_lnum != 0 as linenr_T {
+        if (*curbuf.get()).b_no_eol_lnum != 0 {
+            // Only if there is a missing end-of-line.
             (*curbuf.get()).b_no_eol_lnum += offset;
         }
     }
