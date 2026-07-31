@@ -90,7 +90,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
         let byts;
         let idxs;
         let mut wlen = 0;
-        if mode == FIND_KEEPWORD as c_int || mode == FIND_KEEPCOMPOUND as c_int {
+        if mode == FIND_KEEPWORD || mode == FIND_KEEPCOMPOUND {
             // The keep-case tree is matched against the word as written, so
             // no folding is needed and there are always enough bytes.
             ptr = (*mip).mi_word;
@@ -98,7 +98,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
             byts = (*slang).sl_kbyts;
             idxs = (*slang).sl_kidxs;
 
-            if mode == FIND_KEEPCOMPOUND as c_int {
+            if mode == FIND_KEEPCOMPOUND {
                 wlen += (*mip).mi_compoff;
             }
         } else {
@@ -107,10 +107,10 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
             byts = (*slang).sl_fbyts;
             idxs = (*slang).sl_fidxs;
 
-            if mode == FIND_PREFIX as c_int {
+            if mode == FIND_PREFIX {
                 wlen = (*mip).mi_prefixlen;
                 flen -= (*mip).mi_prefixlen;
-            } else if mode == FIND_COMPOUND as c_int {
+            } else if mode == FIND_COMPOUND {
                 wlen = (*mip).mi_compoff;
                 flen -= (*mip).mi_compoff;
             }
@@ -239,7 +239,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
             // prefix has been found the rest are tried as compound flags.
             let mut prefix_found = false;
 
-            if mode != FIND_KEEPWORD as c_int {
+            if mode != FIND_KEEPWORD {
                 // Translate the length back into the unfolded word, since
                 // folding can change how many bytes a character takes. The
                 // comparison is a shortcut for the common case where it did
@@ -265,7 +265,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                 'variant: {
                     let mut flags = *idxs.offset(arridx as isize) as uint32_t;
 
-                    if mode == FIND_FOLDWORD as c_int {
+                    if mode == FIND_FOLDWORD {
                         // The fold-case tree records what case the word must be
                         // written in; the keep-case tree is right by
                         // construction, and prefixes are not worth checking.
@@ -279,7 +279,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                         {
                             break 'variant;
                         }
-                    } else if mode == FIND_PREFIX as c_int && !prefix_found {
+                    } else if mode == FIND_PREFIX && !prefix_found {
                         // The word has to accept one of the prefixes
                         // find_prefix() left at mi_prefarridx.
                         let c = valid_word_prefix(
@@ -300,7 +300,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                     }
 
                     if (*slang).sl_nobreak {
-                        if (mode == FIND_COMPOUND as c_int || mode == FIND_KEEPCOMPOUND as c_int)
+                        if (mode == FIND_COMPOUND || mode == FIND_KEEPCOMPOUND)
                             && flags & WF_BANNED == 0
                         {
                             // NOBREAK: a valid word follows, which is all the
@@ -308,10 +308,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                             (*mip).mi_result = SP_OK;
                             break 'variants;
                         }
-                    } else if mode == FIND_COMPOUND as c_int
-                        || mode == FIND_KEEPCOMPOUND as c_int
-                        || !word_ends
-                    {
+                    } else if mode == FIND_COMPOUND || mode == FIND_KEEPCOMPOUND || !word_ends {
                         if !compound_part_allowed(
                             mip,
                             ptr,
@@ -344,7 +341,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                         }
 
                         (*mip).mi_compoff = endlen[endidxcnt];
-                        if mode == FIND_KEEPWORD as c_int {
+                        if mode == FIND_KEEPWORD {
                             // Translate the keep-case length into a case-folded
                             // one, again short-cutting when folding changed
                             // nothing.
@@ -379,14 +376,14 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                                 }
                             }
 
-                            find_word(mip, FIND_COMPOUND as c_int);
+                            find_word(mip, FIND_COMPOUND);
 
                             // Under NOBREAK any match will do; otherwise the
                             // longest one is wanted, so the keep-case tree is
                             // tried as well.
                             if !(*slang).sl_nobreak || (*mip).mi_result == SP_BAD {
                                 (*mip).mi_compoff = wlen;
-                                find_word(mip, FIND_KEEPCOMPOUND as c_int);
+                                find_word(mip, FIND_KEEPCOMPOUND);
                             }
 
                             if !(*slang).sl_nobreak {
@@ -523,7 +520,7 @@ unsafe fn compound_part_allowed(
             return false;
         }
 
-        if mode == FIND_COMPOUND as c_int {
+        if mode == FIND_COMPOUND {
             // Check the capitalisation of the part being appended.
             let mut p;
             if strncmp(ptr, (*mip).mi_word, (*mip).mi_compoff as usize) != 0 {
@@ -784,7 +781,7 @@ pub(super) unsafe fn find_prefix(mip: *mut matchinf_T, mode: c_int) {
         // Prefixes are always stored case-folded.
         let mut ptr = &raw mut (*mip).mi_fword as *mut c_char;
         let mut flen = (*mip).mi_fwordlen;
-        if mode == FIND_COMPOUND as c_int {
+        if mode == FIND_COMPOUND {
             ptr = ptr.offset((*mip).mi_compoff as isize);
             flen -= (*mip).mi_compoff;
         }
@@ -813,7 +810,7 @@ pub(super) unsafe fn find_prefix(mip: *mut matchinf_T, mode: c_int) {
                 (*mip).mi_prefcnt -= len;
 
                 (*mip).mi_prefixlen = wlen;
-                if mode == FIND_COMPOUND as c_int {
+                if mode == FIND_COMPOUND {
                     (*mip).mi_prefixlen += (*mip).mi_compoff;
                 }
 
@@ -823,7 +820,7 @@ pub(super) unsafe fn find_prefix(mip: *mut matchinf_T, mode: c_int) {
                     (*mip).mi_prefixlen,
                     (*mip).mi_word,
                 );
-                find_word(mip, FIND_PREFIX as c_int);
+                find_word(mip, FIND_PREFIX);
 
                 if len == 0 {
                     break; // no children, the prefix must end here

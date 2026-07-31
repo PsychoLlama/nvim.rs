@@ -192,9 +192,9 @@ pub unsafe fn spell_check(
                 continue;
             }
 
-            find_word(&raw mut mi, FIND_FOLDWORD as c_int);
-            find_word(&raw mut mi, FIND_KEEPWORD as c_int);
-            find_prefix(&raw mut mi, FIND_FOLDWORD as c_int);
+            find_word(&raw mut mi, FIND_FOLDWORD);
+            find_word(&raw mut mi, FIND_KEEPWORD);
+            find_prefix(&raw mut mi, FIND_FOLDWORD);
 
             // A NOBREAK language may fall back on a word with nothing valid
             // after it.
@@ -260,7 +260,7 @@ pub unsafe fn spell_check(
                             break;
                         }
                         mi.mi_compoff = fp.offset_from(fword) as c_int;
-                        find_word(&raw mut mi, FIND_COMPOUND as c_int);
+                        find_word(&raw mut mi, FIND_COMPOUND);
                         if mi.mi_result != SP_BAD {
                             mi.mi_end = p;
                             break;
@@ -292,12 +292,12 @@ pub unsafe fn spell_check(
 /// Classify `c` for the camel-case split.
 fn get_char_type(c: c_int) -> c_int {
     if crate::src::nvim::ascii::ascii_isdigit(c) {
-        return CHAR_DIGIT as c_int;
+        return CHAR_DIGIT;
     }
     if is_upper(c) {
-        return CHAR_UPPER as c_int;
+        return CHAR_UPPER;
     }
-    CHAR_OTHER as c_int
+    CHAR_OTHER
 }
 
 /// The end of the word starting at `str`, splitting camel-case words into
@@ -329,17 +329,13 @@ unsafe fn advance_camelcase_word(
         while *end != 0 && spell_iswordp(end, wp) {
             let this_type = get_char_type(utf_ptr2char(end));
 
-            if last_last_type == CHAR_UPPER as c_int
-                && last_type == CHAR_UPPER as c_int
-                && this_type == CHAR_OTHER as c_int
-            {
+            if last_last_type == CHAR_UPPER && last_type == CHAR_UPPER && this_type == CHAR_OTHER {
                 // UpperUpperLower: the word ends one character back.
                 *is_camel_case = true;
                 end = end.offset(-(utf_head_off(str, end.offset(-1)) as isize + 1));
                 break;
-            } else if (this_type == CHAR_UPPER as c_int && last_type == CHAR_OTHER as c_int)
-                || (this_type != last_type
-                    && (this_type == CHAR_DIGIT as c_int || last_type == CHAR_DIGIT as c_int))
+            } else if (this_type == CHAR_UPPER && last_type == CHAR_OTHER)
+                || (this_type != last_type && (this_type == CHAR_DIGIT || last_type == CHAR_DIGIT))
             {
                 // LowerUpper LowerDigit UpperDigit DigitUpper DigitLower
                 *is_camel_case = true;

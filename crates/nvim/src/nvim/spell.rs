@@ -1,3 +1,37 @@
+//! Spell checking.
+//!
+//! The subsystem is three files' worth of work, split across three
+//! directories:
+//!
+//! * `spellfile` reads and writes the on-disk formats — `.aff`/`.dic`
+//!   sources, the compiled `.spl` word trees, and the `.sug` soundalike
+//!   companion.
+//! * `spell` (here) uses them: deciding whether a word is spelled right,
+//!   finding the next word that is not, and dumping what a language knows.
+//! * `spellsuggest` proposes replacements for a word that is not.
+//!
+//! What this module owns, in dependency order:
+//!
+//! * [`chartab`] — which characters are letters and what case they are in,
+//!   from the table a `.spl` file installs.
+//! * [`soundfold`] — turning a word into how it sounds. Shared with both
+//!   sibling directories.
+//! * [`lookup`] — walking a language's word tree, the innermost loop.
+//! * [`check`] — [`spell_check`], the per-word entry point.
+//! * [`navigate`] — [`spell_move_to`], scanning the buffer for the next
+//!   bad word.
+//! * [`slang`] — the lifetime of one loaded language.
+//! * [`lang`] — turning `'spelllang'` into a list of loaded languages.
+//! * [`dump`] — walking a whole tree, for `:spelldump` and completion.
+//!
+//! The parent keeps only the shared constants and globals, and
+//! [`ex_spellrepall`], which belongs to neither half: it is the `z=`
+//! replacement applied to the rest of the buffer.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{c_char, c_int, c_uint, c_void};
+
 use crate::src::nvim::change::inserted_bytes;
 use crate::src::nvim::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::src::nvim::ex_cmds::do_sub_msg;
@@ -9,42 +43,8 @@ use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{gettext, memmove, snprintf, strcat, strcpy, strlen, strncmp};
 use crate::src::nvim::search::do_search;
 pub use crate::src::nvim::types::{
-    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
-    Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorPriorityInternal, DecorRange,
-    DecorRange_data as C2Rust_Unnamed_17, DecorRange_data_ui as C2Rust_Unnamed_18, DecorRangeKind,
-    DecorRangeSlot, DecorSignHighlight, DecorState, DecorState_ranges_i as C2Rust_Unnamed_19,
-    DecorState_slots as C2Rust_Unnamed_20, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1,
-    Direction, DoInRuntimepathCB, ExtmarkUndoObject, FileComparison, FileID, FloatAnchor,
-    FloatRelative, GridView, Intersection, LineGetter, LuaRef, MTKey, MTNode, MTPos,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
-    MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_13, MotionType, OptIndex, OptInt,
-    OptVal, OptValData, OptValType, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t,
-    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_11, String_0, Terminal, Timestamp, TriState,
-    VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
-    WinSplit, WinStyle, Window, alist_T, auto_event, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T,
-    bufref_T, bufstate_T, chunksize_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T,
-    cstack_T_cs_pend as C2Rust_Unnamed_14, dict_T, dictvar_S, diff_T, diffblock_S, disptick_T,
-    eslist_T, eslist_elem, event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_10,
-    file_buffer_update_callbacks as C2Rust_Unnamed,
-    file_buffer_update_channels as C2Rust_Unnamed_0, file_comparison, float_T, fmark_T, fmarkv_T,
-    frame_S, frame_T, fromto_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_5, funccall_T,
-    garray_T, handle_T, hash_T, hashitem_T, hashtab_T, hlf_T, idx_T, infoptr_T, int16_t, int32_t,
-    int64_t, intptr_t, langp_T, lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
-    listwatch_S, listwatch_T, llpos_T, lpos_T, mapblock, mapblock_T, match_T, matchitem,
-    matchitem_T, memfile_T, memline_T, mfdirty_T, mtnode_inner_s, mtnode_s, oparg_T, partial_S,
-    partial_T, pos_T, pos_save_T, proftime_T, ptr_t, ptrdiff_t, qf_info_S, qf_info_T, queue,
-    reg_extmatch_T, regmatch_T, regmmatch_T, regprog, regprog_T, salfirst_T, salitem_T, sattr_T,
-    schar_T, scid_T, sctx_T, searchit_arg_T, size_t, slang_S, slang_T, smt_T, spelltab_T,
-    syn_state, syn_state_sst_union as C2Rust_Unnamed_3, syn_time_T, synblock_T, synstate_T,
-    tabpage_S, tabpage_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry,
-    u_entry_T, u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_7,
-    u_header_uh_alt_prev as C2Rust_Unnamed_6, u_header_uh_next as C2Rust_Unnamed_9,
-    u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T, uint8_t, uint16_t, uint32_t, uint64_t,
-    undo_object, varnumber_T, virt_line, visualinfo_T, win_T, window_S, wininfo_S, winopt_T,
-    wline_T, wordcount_T, xfmark_T,
+    colnr_T, exarg_T, file_comparison, hlf_T, langp_T, linenr_T, oparg_T, pos_T, regmatch_T,
+    regprog_T, searchit_arg_T, size_t, slang_T, smt_T, spelltab_T, uint8_t, win_T,
 };
 use crate::src::nvim::undo::u_save_cursor;
 
@@ -78,250 +78,291 @@ pub use slang::{
     slang_clear_sug, slang_free,
 };
 pub use soundfold::{eval_soundfold, spell_soundfold};
-unsafe extern "C" {
-    fn vim_regcomp(
-        expr_arg: *const ::core::ffi::c_char,
-        re_flags: ::core::ffi::c_int,
-    ) -> *mut regprog_T;
-    fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec_prog(
-        prog: *mut *mut regprog_T,
-        ignore_case: bool,
-        line: *const ::core::ffi::c_char,
-        col: colnr_T,
-    ) -> bool;
-    fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-}
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_12 = 2147483647;
+
+pub const kTrue: crate::src::nvim::types::TriState = 1;
+pub const kFalse: crate::src::nvim::types::TriState = 0;
+pub const MAXCOL: c_uint = 2147483647;
+
 pub const HLF_COUNT: hlf_T = 76;
 pub const HLF_SPL: hlf_T = 40;
 pub const HLF_SPR: hlf_T = 39;
 pub const HLF_SPC: hlf_T = 38;
 pub const HLF_SPB: hlf_T = 37;
-pub const kOptValTypeBoolean: OptValType = 0;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const SHM_SEARCH: C2Rust_Unnamed_16 = 115;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const MB_MAXBYTES: C2Rust_Unnamed_22 = 21;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const OPT_LOCAL: C2Rust_Unnamed_23 = 2;
+
+pub const kOptValTypeBoolean: crate::src::nvim::types::OptValType = 0;
+pub const SHM_SEARCH: c_uint = 115;
+pub const OPT_LOCAL: c_uint = 2;
 pub const kEqualFiles: file_comparison = 1;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const DIP_ALL: C2Rust_Unnamed_24 = 1;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
-pub const SEARCH_KEEP: C2Rust_Unnamed_25 = 1024;
+pub const DIP_ALL: c_uint = 1;
+pub const SEARCH_KEEP: c_int = 1024;
+
+/// The longest word, in bytes, that any of this can handle. Every word
+/// buffer in the subsystem is this size.
 pub const MAXWLEN: usize = 254;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const WF_CAPMASK: C2Rust_Unnamed_27 = 198;
-pub const WF_KEEPCAP: C2Rust_Unnamed_27 = 128;
-pub const WF_FIXCAP: C2Rust_Unnamed_27 = 64;
-pub const WF_BANNED: C2Rust_Unnamed_27 = 16;
-pub const WF_RARE: C2Rust_Unnamed_27 = 8;
-pub const WF_ALLCAP: C2Rust_Unnamed_27 = 4;
-pub const WF_ONECAP: C2Rust_Unnamed_27 = 2;
-pub const WF_REGION: C2Rust_Unnamed_27 = 1;
-pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
-pub const WF_NOCOMPAFT: C2Rust_Unnamed_28 = 8192;
-pub const WF_NOCOMPBEF: C2Rust_Unnamed_28 = 4096;
-pub const WF_COMPROOT: C2Rust_Unnamed_28 = 2048;
-pub const WF_NEEDCOMP: C2Rust_Unnamed_28 = 512;
-pub const WF_HAS_AFF: C2Rust_Unnamed_28 = 256;
-pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub const WF_PFX_NC: C2Rust_Unnamed_29 = 33554432;
-pub const WF_RAREPFX: C2Rust_Unnamed_29 = 16777216;
-pub type C2Rust_Unnamed_30 = ::core::ffi::c_int;
-pub const SP_FORMERROR: C2Rust_Unnamed_30 = -2;
-pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
-pub const REGION_ALL: C2Rust_Unnamed_31 = 255;
-pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub const MAXWORDCOUNT: C2Rust_Unnamed_32 = 65535;
+
+/// Flags stored with a word in the tree, in the low bits of its `sl_fidxs`
+/// entry. The region mask sits at bit 16 and the affix ID at bit 24.
+pub type WordFlags = c_uint;
+/// Every capitalisation flag, for masking them off together.
+pub const WF_CAPMASK: WordFlags = 198;
+/// Capitalisation cannot be described by a flag; the word is in the
+/// keep-case tree as written.
+pub const WF_KEEPCAP: WordFlags = 128;
+/// Do not accept the word spelled in all capitals.
+pub const WF_FIXCAP: WordFlags = 64;
+/// The word is explicitly wrong.
+pub const WF_BANNED: WordFlags = 16;
+/// The word is real but unusual.
+pub const WF_RARE: WordFlags = 8;
+pub const WF_ALLCAP: WordFlags = 4;
+pub const WF_ONECAP: WordFlags = 2;
+/// The word is limited to the regions in bits 16 and up.
+pub const WF_REGION: WordFlags = 1;
+/// No compounding after this word.
+pub const WF_NOCOMPAFT: WordFlags = 8192;
+/// No compounding before this word.
+pub const WF_NOCOMPBEF: WordFlags = 4096;
+/// COMPOUNDROOT: the word counts as a root, not a part.
+pub const WF_COMPROOT: WordFlags = 2048;
+/// The word is only valid inside a compound.
+pub const WF_NEEDCOMP: WordFlags = 512;
+/// An affix was applied to reach this word.
+pub const WF_HAS_AFF: WordFlags = 256;
+/// A prefix that does not combine with a suffix.
+pub const WF_PFX_NC: WordFlags = 33554432;
+/// A prefix that makes the word rare.
+pub const WF_RAREPFX: WordFlags = 16777216;
+
+/// A `.spl` file is malformed.
+pub const SP_FORMERROR: c_int = -2;
+/// A word with no region restriction, and the "no such region" answer.
+pub const REGION_ALL: c_int = 255;
+/// The saturation point of a `COMMON` word count.
+pub const MAXWORDCOUNT: c_uint = 65535;
+
 pub const SMT_RARE: smt_T = 2;
 pub const SMT_BAD: smt_T = 1;
 pub const SMT_ALL: smt_T = 0;
+
+/// How badly, or not, a word is spelled. Lower is worse, so that a lookup
+/// can keep the best answer by comparison.
+pub type SpellResult = c_int;
+/// Explicitly wrong.
+pub const SP_BANNED: SpellResult = -1;
+/// Real but unusual.
+pub const SP_RARE: SpellResult = 0;
+/// Fine.
+pub const SP_OK: SpellResult = 1;
+/// Real, but not in the regions in use.
+pub const SP_LOCAL: SpellResult = 2;
+/// Not a word.
+pub const SP_BAD: SpellResult = 3;
+
+/// Which tree [`lookup::find_word`] should walk, and where in the word to
+/// start.
+pub type FindMode = c_int;
+/// The case-folded tree, from the start of the word.
+pub const FIND_FOLDWORD: FindMode = 0;
+/// The keep-case tree, from the start of the word.
+pub const FIND_KEEPWORD: FindMode = 1;
+/// The case-folded tree, after a prefix that already matched.
+pub const FIND_PREFIX: FindMode = 2;
+/// The case-folded tree, after the compound parts found so far.
+pub const FIND_COMPOUND: FindMode = 3;
+/// The keep-case tree, after the compound parts found so far.
+pub const FIND_KEEPCOMPOUND: FindMode = 4;
+
+/// What kind of character a camel-case split looks at.
+pub type CharType = c_int;
+pub const CHAR_OTHER: CharType = 0;
+pub const CHAR_UPPER: CharType = 1;
+pub const CHAR_DIGIT: CharType = 2;
+
+pub const MAXPATHL: c_int = 4096;
+pub const NUL: c_int = 0;
+pub const TAB: c_int = '\t' as c_int;
+pub const OK: c_int = 1;
+pub const FAIL: c_int = 0;
+pub const IOSIZE: c_int = 1025;
+pub const RE_MAGIC: c_int = 1;
+
+/// The longest `SYLLABLE` item.
+pub const SY_MAXLEN: c_int = 30;
+/// `int_wordlist`'s compiled name, as a `vim_snprintf` template.
+pub const SPL_FNAME_TMPL: [c_char; 10] =
+    unsafe { ::core::mem::transmute::<[u8; 10], [c_char; 10]>(*b"%s.%s.spl\0") };
+/// A `wordcount_T`'s key starts this far into it, so a hash item's key
+/// pointer can be walked back to the struct.
+pub const WC_KEY_OFF: ::core::ffi::c_ulong = 2;
+
+/// State threaded through one word's lookup, so that the tree walk and the
+/// compound recursion can pass it around in one piece rather than a dozen
+/// arguments.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct matchinf_T {
+    /// The language being tried.
     pub mi_lp: *mut langp_T,
-    pub mi_word: *mut ::core::ffi::c_char,
-    pub mi_end: *mut ::core::ffi::c_char,
-    pub mi_fend: *mut ::core::ffi::c_char,
-    pub mi_cend: *mut ::core::ffi::c_char,
-    pub mi_fword: [::core::ffi::c_char; 255],
-    pub mi_fwordlen: ::core::ffi::c_int,
-    pub mi_prefarridx: ::core::ffi::c_int,
-    pub mi_prefcnt: ::core::ffi::c_int,
-    pub mi_prefixlen: ::core::ffi::c_int,
-    pub mi_cprefixlen: ::core::ffi::c_int,
-    pub mi_compoff: ::core::ffi::c_int,
-    pub mi_compflags: [uint8_t; 254],
-    pub mi_complen: ::core::ffi::c_int,
-    pub mi_compextra: ::core::ffi::c_int,
-    pub mi_result: ::core::ffi::c_int,
-    pub mi_capflags: ::core::ffi::c_int,
+    /// The word as written, at its first character.
+    pub mi_word: *mut c_char,
+    /// One past the last character accepted so far.
+    pub mi_end: *mut c_char,
+    /// How far the case folding into `mi_fword` has reached.
+    pub mi_fend: *mut c_char,
+    /// The word length `mi_capflags` was computed for.
+    pub mi_cend: *mut c_char,
+    /// The case-folded word.
+    pub mi_fword: [c_char; MAXWLEN + 1],
+    pub mi_fwordlen: c_int,
+    /// Where in `sl_pidxs` the candidate prefixes start,
+    pub mi_prefarridx: c_int,
+    /// and how many there are.
+    pub mi_prefcnt: c_int,
+    /// The prefix's length, folded and as written.
+    pub mi_prefixlen: c_int,
+    pub mi_cprefixlen: c_int,
+    /// Where the next compound part begins.
+    pub mi_compoff: c_int,
+    /// The flag of each compound part used so far.
+    pub mi_compflags: [uint8_t; MAXWLEN],
+    pub mi_complen: c_int,
+    /// How many of those parts were COMPOUNDROOT.
+    pub mi_compextra: c_int,
+    /// The best result so far, and the capitalisation it assumed.
+    pub mi_result: SpellResult,
+    pub mi_capflags: c_int,
     pub mi_win: *mut win_T,
-    pub mi_result2: ::core::ffi::c_int,
-    pub mi_end2: *mut ::core::ffi::c_char,
+    /// For NOBREAK: the best result reached *without* a good word
+    /// following, kept as a fall-back.
+    pub mi_result2: SpellResult,
+    pub mi_end2: *mut c_char,
 }
-pub const SP_RARE: C2Rust_Unnamed_33 = 0;
-pub const SP_OK: C2Rust_Unnamed_33 = 1;
-pub const SP_BANNED: C2Rust_Unnamed_33 = -1;
-pub const SP_BAD: C2Rust_Unnamed_33 = 3;
-pub const FIND_COMPOUND: C2Rust_Unnamed_34 = 3;
-pub const SP_LOCAL: C2Rust_Unnamed_33 = 2;
-pub const FIND_KEEPCOMPOUND: C2Rust_Unnamed_34 = 4;
-pub const FIND_KEEPWORD: C2Rust_Unnamed_34 = 1;
+
+/// One `SYLLABLE` item: a short sequence of characters counting as one
+/// syllable.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct syl_item_T {
-    pub sy_chars: [::core::ffi::c_char; 30],
-    pub sy_len: ::core::ffi::c_int,
+    pub sy_chars: [c_char; SY_MAXLEN as usize],
+    pub sy_len: c_int,
 }
-pub const FIND_PREFIX: C2Rust_Unnamed_34 = 2;
-pub const FIND_FOLDWORD: C2Rust_Unnamed_34 = 0;
-pub const CHAR_OTHER: C2Rust_Unnamed_35 = 0;
-pub const CHAR_UPPER: C2Rust_Unnamed_35 = 1;
-pub const CHAR_DIGIT: C2Rust_Unnamed_35 = 2;
+
+/// The cookie `do_in_runtimepath` carries while loading a language.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct spelload_T {
-    pub sl_lang: [::core::ffi::c_char; 255],
+    /// The language name, truncated when an error is found.
+    pub sl_lang: [c_char; MAXWLEN + 1],
+    /// The last file loaded.
     pub sl_slang: *mut slang_T,
-    pub sl_nobreak: ::core::ffi::c_int,
+    /// Whether any file so far declared NOBREAK.
+    pub sl_nobreak: c_int,
 }
-pub type C2Rust_Unnamed_33 = ::core::ffi::c_int;
-pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub static first_lang: GlobalCell<*mut slang_T> =
-    GlobalCell::new(::core::ptr::null_mut::<slang_T>());
-pub static int_wordlist: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-pub const SY_MAXLEN: ::core::ffi::c_int = 30 as ::core::ffi::c_int;
+
+/// Every language loaded, chained on `sl_next`.
+pub static first_lang: GlobalCell<*mut slang_T> = GlobalCell::new(::core::ptr::null_mut());
+/// The word list `zg` appends to when `'spellfile'` is empty.
+pub static int_wordlist: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut());
+
+/// The character table currently in force.
 pub static spelltab: GlobalCell<spelltab_T> = GlobalCell::new(spelltab_T {
     st_isw: [false; 256],
     st_isu: [false; 256],
     st_fold: [0; 256],
     st_upper: [0; 256],
 });
+/// Whether a `.spl` file replaced [`spelltab`], rather than the encoding.
 pub static did_set_spelltab: GlobalCell<bool> = GlobalCell::new(false);
-pub static e_format: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
-    b"E759: Format error in spell file\0".as_ptr() as *const ::core::ffi::c_char
-        as *mut ::core::ffi::c_char,
-);
-pub static repl_from: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-pub static repl_to: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-pub unsafe fn ex_spellrepall(mut _eap: *mut exarg_T) {
-    let mut pos: pos_T = (*curwin.get()).w_cursor;
-    let mut save_ws: bool = p_ws.get() != 0;
-    let mut prev_lnum: linenr_T = 0 as linenr_T;
-    if (*repl_from.ptr()).is_null() || (*repl_to.ptr()).is_null() {
-        emsg(gettext(
-            b"E752: No previous spell replacement\0".as_ptr() as *const ::core::ffi::c_char
-        ));
-        return;
-    }
-    let repl_from_len: size_t = strlen(repl_from.get());
-    let repl_to_len: size_t = strlen(repl_to.get());
-    let addlen: int64_t = repl_to_len as int64_t - repl_from_len as int64_t;
-    let frompatsize: size_t = repl_from_len.wrapping_add(7 as size_t);
-    let mut frompat: *mut ::core::ffi::c_char = xmalloc(frompatsize) as *mut ::core::ffi::c_char;
-    let mut frompatlen: size_t = snprintf(
-        frompat,
-        frompatsize,
-        b"\\V\\<%s\\>\0".as_ptr() as *const ::core::ffi::c_char,
-        repl_from.get(),
-    ) as size_t;
-    p_ws.set(false_0);
-    sub_nsubs.set(0 as ::core::ffi::c_int);
-    sub_nlines.set(0 as ::core::ffi::c_int as linenr_T);
-    (*curwin.get()).w_cursor.lnum = 0 as ::core::ffi::c_int as linenr_T;
-    while !got_int.get() {
-        if do_search(
-            ::core::ptr::null_mut::<oparg_T>(),
-            '/' as ::core::ffi::c_int,
-            '/' as ::core::ffi::c_int,
+
+pub static e_format: GlobalCell<*mut c_char> =
+    GlobalCell::new(c"E759: Format error in spell file".as_ptr() as *mut c_char);
+
+/// What `z=` last replaced, and with what, for [`ex_spellrepall`].
+pub static repl_from: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut());
+pub static repl_to: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut());
+
+/// `:spellrepall` — repeat the last `z=` replacement everywhere else in
+/// the buffer.
+pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
+    unsafe {
+        let pos: pos_T = (*curwin.get()).w_cursor;
+        // Round-tripped through a bool, as in C: any non-zero 'wrapscan'
+        // comes back as 1.
+        let save_ws = p_ws.get() != 0;
+        let mut prev_lnum: linenr_T = 0;
+
+        if (*repl_from.ptr()).is_null() || (*repl_to.ptr()).is_null() {
+            emsg(gettext(c"E752: No previous spell replacement".as_ptr()));
+            return;
+        }
+        let repl_from_len = strlen(repl_from.get());
+        let repl_to_len = strlen(repl_to.get());
+        let addlen = repl_to_len as i64 - repl_from_len as i64;
+
+        let frompatsize = repl_from_len + 7;
+        let frompat = xmalloc(frompatsize) as *mut c_char;
+        let frompatlen = snprintf(
             frompat,
-            frompatlen,
-            1 as ::core::ffi::c_int,
-            SEARCH_KEEP as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<searchit_arg_T>(),
-        ) == 0 as ::core::ffi::c_int
-            || u_save_cursor() == FAIL
-        {
-            break;
-        }
-        let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-        if addlen <= 0 as int64_t
-            || strncmp(
-                line.offset((*curwin.get()).w_cursor.col as isize),
-                repl_to.get(),
-                repl_to_len,
-            ) != 0 as ::core::ffi::c_int
-        {
-            let mut p: *mut ::core::ffi::c_char = xmalloc(
-                ((get_cursor_line_len() as int64_t + addlen) as size_t).wrapping_add(1 as size_t),
-            ) as *mut ::core::ffi::c_char;
-            memmove(
-                p as *mut ::core::ffi::c_void,
-                line as *const ::core::ffi::c_void,
-                (*curwin.get()).w_cursor.col as size_t,
-            );
-            strcpy(
-                p.offset((*curwin.get()).w_cursor.col as isize),
-                repl_to.get(),
-            );
-            strcat(
-                p,
-                line.offset((*curwin.get()).w_cursor.col as isize)
-                    .offset(repl_from_len as isize),
-            );
-            ml_replace((*curwin.get()).w_cursor.lnum, p, false_0 != 0);
-            inserted_bytes(
-                (*curwin.get()).w_cursor.lnum,
-                (*curwin.get()).w_cursor.col,
-                repl_from_len as ::core::ffi::c_int,
-                repl_to_len as ::core::ffi::c_int,
-            );
-            if (*curwin.get()).w_cursor.lnum != prev_lnum {
-                (*sub_nlines.ptr()) += 1;
-                prev_lnum = (*curwin.get()).w_cursor.lnum;
-            }
-            (*sub_nsubs.ptr()) += 1;
-        }
-        (*curwin.get()).w_cursor.col += repl_to_len as colnr_T;
-    }
-    p_ws.set(save_ws as ::core::ffi::c_int);
-    (*curwin.get()).w_cursor = pos;
-    xfree(frompat as *mut ::core::ffi::c_void);
-    if sub_nsubs.get() == 0 as ::core::ffi::c_int {
-        semsg(
-            gettext(b"E753: Not found: %s\0".as_ptr() as *const ::core::ffi::c_char),
+            frompatsize,
+            c"\\V\\<%s\\>".as_ptr(),
             repl_from.get(),
-        );
-    } else {
-        do_sub_msg(false_0 != 0);
-    };
+        ) as size_t;
+        p_ws.set(0);
+
+        sub_nsubs.set(0);
+        sub_nlines.set(0);
+        (*curwin.get()).w_cursor.lnum = 0;
+        while !got_int.get() {
+            if do_search(
+                ::core::ptr::null_mut::<oparg_T>(),
+                '/' as c_int,
+                '/' as c_int,
+                frompat,
+                frompatlen,
+                1,
+                SEARCH_KEEP,
+                ::core::ptr::null_mut::<searchit_arg_T>(),
+            ) == 0
+                || u_save_cursor() == FAIL
+            {
+                break;
+            }
+
+            // Only replace where the replacement is not already there. That
+            // happens when changing "etc" to "etc.".
+            let line = get_cursor_line_ptr();
+            let col = (*curwin.get()).w_cursor.col;
+            if addlen <= 0 || strncmp(line.offset(col as isize), repl_to.get(), repl_to_len) != 0 {
+                let p =
+                    xmalloc((get_cursor_line_len() as i64 + addlen) as size_t + 1) as *mut c_char;
+                memmove(p as *mut c_void, line as *const c_void, col as size_t);
+                strcpy(p.offset(col as isize), repl_to.get());
+                strcat(p, line.offset(col as isize).add(repl_from_len));
+                ml_replace((*curwin.get()).w_cursor.lnum, p, false);
+                inserted_bytes(
+                    (*curwin.get()).w_cursor.lnum,
+                    col,
+                    repl_from_len as c_int,
+                    repl_to_len as c_int,
+                );
+
+                if (*curwin.get()).w_cursor.lnum != prev_lnum {
+                    *sub_nlines.ptr() += 1;
+                    prev_lnum = (*curwin.get()).w_cursor.lnum;
+                }
+                *sub_nsubs.ptr() += 1;
+            }
+            (*curwin.get()).w_cursor.col += repl_to_len as colnr_T;
+        }
+
+        p_ws.set(save_ws as c_int);
+        (*curwin.get()).w_cursor = pos;
+        xfree(frompat as *mut c_void);
+
+        if sub_nsubs.get() == 0 {
+            semsg(gettext(c"E753: Not found: %s".as_ptr()), repl_from.get());
+        } else {
+            do_sub_msg(false);
+        }
+    }
 }
-pub const DUMPFLAG_KEEPCASE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const DUMPFLAG_COUNT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const DUMPFLAG_ICASE: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const DUMPFLAG_ONECAP: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-pub const DUMPFLAG_ALLCAP: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-pub const SPL_FNAME_TMPL: [::core::ffi::c_char; 10] =
-    unsafe { ::core::mem::transmute::<[u8; 10], [::core::ffi::c_char; 10]>(*b"%s.%s.spl\0") };
-pub const WC_KEY_OFF: ::core::ffi::c_ulong = 2 as ::core::ffi::c_ulong;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

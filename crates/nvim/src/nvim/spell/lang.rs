@@ -392,10 +392,10 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
                     strcasecmp(lang.as_ptr(), (*slang).sl_name) == 0
                 };
                 if matches {
-                    let mut region_mask = REGION_ALL as c_int;
+                    let mut region_mask = REGION_ALL;
                     if !filename && !region.is_null() {
                         let c = find_region((*slang).sl_regions.as_ptr(), region);
-                        if c == REGION_ALL as c_int {
+                        if c == REGION_ALL {
                             if (*slang).sl_add {
                                 if (*slang).sl_regions[0] != 0 {
                                     // This addition file covers other regions.
@@ -512,10 +512,10 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
                 }
 
                 if !slang.is_null() {
-                    let mut region_mask = REGION_ALL as c_int;
+                    let mut region_mask = REGION_ALL;
                     if !use_region.is_null() && !dont_use_region {
                         let c = find_region((*slang).sl_regions.as_ptr(), use_region);
-                        if c != REGION_ALL as c_int {
+                        if c != REGION_ALL {
                             region_mask = 1 << c;
                         } else if (*slang).sl_regions[0] != 0 {
                             // This spell file covers other regions.
@@ -603,7 +603,7 @@ unsafe fn find_region(rp: *const c_char, region: *const c_char) -> c_int {
         let mut i = 0;
         loop {
             if *rp.offset(i as isize) == 0 {
-                return REGION_ALL as c_int;
+                return REGION_ALL;
             }
             if *rp.offset(i as isize) == *region && *rp.offset(i as isize + 1) == *region.offset(1)
             {
