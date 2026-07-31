@@ -104,6 +104,7 @@ use crate::src::nvim::statusline::stl_clear_click_defs;
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::syntax::reset_synblock;
 use crate::src::nvim::tag::tagstack_clear_entry;
+use crate::src::nvim::terminal::terminal_check_size;
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, BoolVarValue, Boolean,
     BufUpdateCallbacks, CMD_index, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType,
@@ -157,7 +158,6 @@ unsafe extern "C" {
     static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_20>;
     fn qf_free_all(wp: *mut win_T);
     fn copy_loclist_stack(from: *mut win_T, to: *mut win_T);
-    fn terminal_check_size(term: *mut Terminal);
 }
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;

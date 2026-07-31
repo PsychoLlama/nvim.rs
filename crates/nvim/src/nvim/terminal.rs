@@ -304,7 +304,7 @@ pub const SET_INIT: Set_ptr_t = Set_ptr_t {
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
-unsafe extern "C" fn set_put_ptr_t(
+unsafe fn set_put_ptr_t(
     mut set: *mut Set_ptr_t,
     mut key: ptr_t,
     mut key_alloc: *mut *mut ptr_t,
@@ -318,19 +318,16 @@ unsafe extern "C" fn set_put_ptr_t(
         != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
 }
 #[inline]
-unsafe extern "C" fn set_del_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> ptr_t {
+unsafe fn set_del_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> ptr_t {
     mh_delete_ptr_t(set, &raw mut key);
     return key;
 }
 #[inline]
-unsafe extern "C" fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
+unsafe fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
     return mh_get_ptr_t(set, key) != MH_TOMBSTONE as uint32_t;
 }
 #[inline]
-unsafe extern "C" fn map_get_int_ptr_t(
-    mut map: *mut Map_int_ptr_t,
-    mut key: ::core::ffi::c_int,
-) -> ptr_t {
+unsafe fn map_get_int_ptr_t(mut map: *mut Map_int_ptr_t, mut key: ::core::ffi::c_int) -> ptr_t {
     let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
     return if k == MH_TOMBSTONE as uint32_t {
         value_init_ptr_t.get()
@@ -640,7 +637,7 @@ unsafe extern "C" fn emit_termrequest(mut argv: *mut *mut ::core::ffi::c_void) {
         (*term).opts.close_cb.expect("non-null function pointer")((*term).opts.data);
     }
 }
-unsafe extern "C" fn schedule_termrequest(mut term: *mut Terminal) {
+unsafe fn schedule_termrequest(mut term: *mut Terminal) {
     (*term).pending.send = xmalloc(::core::mem::size_of::<StringBuilder>()) as *mut StringBuilder;
     (*(*term).pending.send).capacity = 0 as size_t;
     (*(*term).pending.send).size = (*(*term).pending.send).capacity;
@@ -682,7 +679,7 @@ unsafe extern "C" fn schedule_termrequest(mut term: *mut Terminal) {
         },
     );
 }
-unsafe extern "C" fn parse_osc8(
+unsafe fn parse_osc8(
     mut str: *const ::core::ffi::c_char,
     mut attr: *mut ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -994,11 +991,11 @@ static vterm_fallbacks: GlobalCell<VTermStateFallbacks> = GlobalCell::new(VTermS
     pm: None,
     sos: None,
 });
-pub unsafe extern "C" fn terminal_init() {
+pub unsafe fn terminal_init() {
     time_watcher_init(main_loop.ptr(), refresh_timer.ptr(), NULL_0);
     (*refresh_timer.ptr()).events = multiqueue_new_child((*main_loop.ptr()).events);
 }
-pub unsafe extern "C" fn terminal_teardown() {
+pub unsafe fn terminal_teardown() {
     time_watcher_stop(refresh_timer.ptr());
     multiqueue_free((*refresh_timer.ptr()).events);
     time_watcher_close(refresh_timer.ptr(), None);
@@ -1014,10 +1011,7 @@ unsafe extern "C" fn term_output_callback(
 ) {
     terminal_send(user_data as *mut Terminal, s, len);
 }
-unsafe extern "C" fn term_may_alloc_scrollback(
-    mut term: *mut Terminal,
-    mut buf: *mut buf_T,
-) -> bool {
+unsafe fn term_may_alloc_scrollback(mut term: *mut Terminal, mut buf: *mut buf_T) -> bool {
     if !(*term).sb_buffer.is_null() {
         return true_0 != 0;
     }
@@ -1039,11 +1033,7 @@ unsafe extern "C" fn term_may_alloc_scrollback(
             as *mut *mut ScrollbackLine;
     return true_0 != 0;
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_alloc(
-    mut buf: *mut buf_T,
-    mut opts: TerminalOptions,
-) -> *mut Terminal {
+pub unsafe fn terminal_alloc(mut buf: *mut buf_T, mut opts: TerminalOptions) -> *mut Terminal {
     let mut term: *mut Terminal =
         xcalloc(1 as size_t, ::core::mem::size_of::<Terminal>()) as *mut Terminal;
     (*term).opts = opts;
@@ -1133,8 +1123,7 @@ pub unsafe extern "C" fn terminal_alloc(
     (*term).old_height = 1 as ::core::ffi::c_int;
     return term;
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: *mut buf_T) {
+pub unsafe fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: *mut buf_T) {
     let mut term: *mut Terminal = *termpp;
     '_c2rust_label: {
         if !term.is_null() {
@@ -1252,11 +1241,7 @@ pub unsafe extern "C" fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: 
         i += 1;
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_close(
-    mut termpp: *mut *mut Terminal,
-    mut status: ::core::ffi::c_int,
-) {
+pub unsafe fn terminal_close(mut termpp: *mut *mut Terminal, mut status: ::core::ffi::c_int) {
     let mut term: *mut Terminal = *termpp;
     if (*term).destroy {
         return;
@@ -1389,8 +1374,7 @@ unsafe extern "C" fn terminal_state_change_event(mut argv: *mut *mut ::core::ffi
         redraw_buf_line_later(buf, (*buf).b_ml.ml_line_count, false_0 != 0);
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_set_state(mut term: *mut Terminal, mut suspended: bool) {
+pub unsafe fn terminal_set_state(mut term: *mut Terminal, mut suspended: bool) {
     if (*term).suspended as ::core::ffi::c_int != suspended as ::core::ffi::c_int {
         multiqueue_put_event(
             (*refresh_timer.ptr()).events,
@@ -1418,8 +1402,7 @@ pub unsafe extern "C" fn terminal_set_state(mut term: *mut Terminal, mut suspend
     }
     (*term).suspended = suspended;
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_check_size(mut term: *mut Terminal) {
+pub unsafe fn terminal_check_size(mut term: *mut Terminal) {
     if (*term).closed {
         return;
     }
@@ -1475,7 +1458,7 @@ pub unsafe extern "C" fn terminal_check_size(mut term: *mut Terminal) {
     (*term).pending.resize = true_0 != 0;
     invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn set_terminal_winopts(s: *mut TerminalState) {
+unsafe fn set_terminal_winopts(s: *mut TerminalState) {
     '_c2rust_label: {
         if (*s).save_curwin_handle == 0 as ::core::ffi::c_int {
         } else {
@@ -1525,7 +1508,7 @@ unsafe extern "C" fn set_terminal_winopts(s: *mut TerminalState) {
         redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
     }
 }
-unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
+unsafe fn unset_terminal_winopts(s: *mut TerminalState) {
     let mut winopts: *mut winopt_T = ::core::ptr::null_mut::<winopt_T>();
     '_c2rust_label: {
         if (*s).save_curwin_handle != 0 as ::core::ffi::c_int {
@@ -1597,7 +1580,7 @@ unsafe extern "C" fn unset_terminal_winopts(s: *mut TerminalState) {
     free_string_option((*s).save_w_p_culopt);
     (*s).save_curwin_handle = 0 as ::core::ffi::c_int as handle_T;
 }
-pub unsafe extern "C" fn terminal_enter() -> bool {
+pub unsafe fn terminal_enter() -> bool {
     let mut buf: *mut buf_T = curbuf.get();
     '_c2rust_label: {
         if !(*buf).terminal.is_null() {
@@ -1737,7 +1720,7 @@ pub unsafe extern "C" fn terminal_enter() -> bool {
     }
     return (*(&raw mut s as *mut TerminalState)).got_bsl_o;
 }
-unsafe extern "C" fn terminal_check_cursor() {
+unsafe fn terminal_check_cursor() {
     let mut term: *mut Terminal = (*curbuf.get()).terminal;
     (*curwin.get()).w_cursor.lnum = if (*curbuf.get()).b_ml.ml_line_count
         < row_to_linenr(term, (*term).cursor.row) as linenr_T
@@ -1786,7 +1769,7 @@ unsafe extern "C" fn terminal_check_cursor() {
         );
     };
 }
-unsafe extern "C" fn terminal_check_focus(s: *mut TerminalState) -> bool {
+unsafe fn terminal_check_focus(s: *mut TerminalState) -> bool {
     if (*curbuf.get()).terminal.is_null() {
         return false_0 != 0;
     }
@@ -1973,8 +1956,7 @@ unsafe extern "C" fn terminal_execute(
     }
     return 1 as ::core::ffi::c_int;
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_destroy(mut termpp: *mut *mut Terminal) {
+pub unsafe fn terminal_destroy(mut termpp: *mut *mut Terminal) {
     let mut term: *mut Terminal = *termpp;
     let mut buf: *mut buf_T = map_get_int_ptr_t(
         buffer_handles.ptr(),
@@ -2013,7 +1995,7 @@ pub unsafe extern "C" fn terminal_destroy(mut termpp: *mut *mut Terminal) {
         *termpp = ::core::ptr::null_mut::<Terminal>();
     }
 }
-unsafe extern "C" fn terminal_send(
+unsafe fn terminal_send(
     mut term: *mut Terminal,
     mut data: *const ::core::ffi::c_char,
     mut size: size_t,
@@ -2069,7 +2051,7 @@ unsafe extern "C" fn terminal_send(
     }
     (*term).opts.write_cb.expect("non-null function pointer")(data, size, (*term).opts.data);
 }
-unsafe extern "C" fn is_filter_char(mut c: ::core::ffi::c_int) -> bool {
+unsafe fn is_filter_char(mut c: ::core::ffi::c_int) -> bool {
     let mut flag: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
     match c {
         8 => {
@@ -2098,8 +2080,7 @@ unsafe extern "C" fn is_filter_char(mut c: ::core::ffi::c_int) -> bool {
     }
     return tpf_flags.get() & flag != 0;
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_set_streamed_paste(mut term: *mut Terminal, mut streamed: bool) {
+pub unsafe fn terminal_set_streamed_paste(mut term: *mut Terminal, mut streamed: bool) {
     if (*term).streamed_paste as ::core::ffi::c_int != streamed as ::core::ffi::c_int {
         if streamed {
             vterm_keyboard_start_paste((*(*curbuf.get()).terminal).vt);
@@ -2109,7 +2090,7 @@ pub unsafe extern "C" fn terminal_set_streamed_paste(mut term: *mut Terminal, mu
     }
     (*term).streamed_paste = streamed;
 }
-pub unsafe extern "C" fn terminal_paste(
+pub unsafe fn terminal_paste(
     mut count: ::core::ffi::c_int,
     mut y_array: *mut String_0,
     mut y_size: size_t,
@@ -2167,7 +2148,7 @@ pub unsafe extern "C" fn terminal_paste(
         vterm_keyboard_end_paste((*(*curbuf.get()).terminal).vt);
     }
 }
-unsafe extern "C" fn terminal_send_key(mut term: *mut Terminal, mut c: ::core::ffi::c_int) {
+unsafe fn terminal_send_key(mut term: *mut Terminal, mut c: ::core::ffi::c_int) {
     let mut mod_0: VTermModifier = VTERM_MOD_NONE;
     if c == K_ZERO {
         c = Ctrl_AT;
@@ -2194,8 +2175,7 @@ unsafe extern "C" fn on_sync_flush(mut argv: *mut *mut ::core::ffi::c_void) {
     refresh_terminal((*buf).terminal);
     unblock_autocmds();
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_receive(
+pub unsafe fn terminal_receive(
     mut term: *mut Terminal,
     mut data: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2294,16 +2274,13 @@ pub unsafe extern "C" fn terminal_receive(
         );
     }
 }
-unsafe extern "C" fn get_rgb(
-    mut state: *mut VTermState,
-    mut color: VTermColor,
-) -> ::core::ffi::c_int {
+unsafe fn get_rgb(mut state: *mut VTermState, mut color: VTermColor) -> ::core::ffi::c_int {
     convert_color_to_rgb(&*state, &mut color);
     return (color.rgb.red as ::core::ffi::c_int) << 16 as ::core::ffi::c_int
         | (color.rgb.green as ::core::ffi::c_int) << 8 as ::core::ffi::c_int
         | color.rgb.blue as ::core::ffi::c_int;
 }
-unsafe extern "C" fn get_underline_hl_flag(mut attrs: VTermScreenCellAttrs) -> ::core::ffi::c_int {
+unsafe fn get_underline_hl_flag(mut attrs: VTermScreenCellAttrs) -> ::core::ffi::c_int {
     match attrs.underline() as ::core::ffi::c_int {
         0 => return 0 as ::core::ffi::c_int,
         1 => return HL_UNDERLINE as ::core::ffi::c_int,
@@ -2312,8 +2289,7 @@ unsafe extern "C" fn get_underline_hl_flag(mut attrs: VTermScreenCellAttrs) -> :
         _ => return HL_UNDERLINE as ::core::ffi::c_int,
     };
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_get_line_attributes(
+pub unsafe fn terminal_get_line_attributes(
     mut term: *mut Terminal,
     mut _wp: *mut win_T,
     mut linenr: ::core::ffi::c_int,
@@ -2469,20 +2445,16 @@ pub unsafe extern "C" fn terminal_get_line_attributes(
         col += 1;
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_buf(mut term: *const Terminal) -> Buffer {
+pub unsafe fn terminal_buf(mut term: *const Terminal) -> Buffer {
     return (*term).buf_handle as Buffer;
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_running(mut term: *const Terminal) -> bool {
+pub unsafe fn terminal_running(mut term: *const Terminal) -> bool {
     return !(*term).closed;
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_suspended(mut term: *const Terminal) -> bool {
+pub unsafe fn terminal_suspended(mut term: *const Terminal) -> bool {
     return (*term).suspended;
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn terminal_notify_theme(mut term: *mut Terminal, mut dark: bool) {
+pub unsafe fn terminal_notify_theme(mut term: *mut Terminal, mut dark: bool) {
     if !(*term).theme_updates {
         return;
     }
@@ -2527,7 +2499,7 @@ pub unsafe extern "C" fn terminal_notify_theme(mut term: *mut Terminal, mut dark
         ret as size_t,
     );
 }
-unsafe extern "C" fn terminal_focus(mut term: *const Terminal, mut focus: bool) {
+unsafe fn terminal_focus(mut term: *const Terminal, mut focus: bool) {
     let mut state: *mut VTermState = vterm_obtain_state((*term).vt);
     if focus {
         vterm_state_focus_in(state);
@@ -2574,7 +2546,7 @@ unsafe extern "C" fn term_movecursor(
     invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn buf_set_term_title(
+unsafe fn buf_set_term_title(
     mut buf: *mut buf_T,
     mut title: *const ::core::ffi::c_char,
     mut len: size_t,
@@ -2964,10 +2936,7 @@ unsafe extern "C" fn term_selection_set(
     }
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn convert_modifiers(
-    mut key: *mut ::core::ffi::c_int,
-    mut statep: *mut VTermModifier,
-) {
+unsafe fn convert_modifiers(mut key: *mut ::core::ffi::c_int, mut statep: *mut VTermModifier) {
     if mod_mask.get() & MOD_MASK_SHIFT != 0 {
         *statep = (*statep as ::core::ffi::c_uint
             | VTERM_MOD_SHIFT as ::core::ffi::c_int as ::core::ffi::c_uint)
@@ -3005,7 +2974,7 @@ unsafe extern "C" fn convert_modifiers(
         _ => {}
     };
 }
-unsafe extern "C" fn convert_key(
+unsafe fn convert_key(
     mut key: *mut ::core::ffi::c_int,
     mut statep: *mut VTermModifier,
 ) -> VTermKey {
@@ -3296,7 +3265,7 @@ unsafe extern "C" fn convert_key(
         _ => return VTERM_KEY_NONE,
     };
 }
-unsafe extern "C" fn mouse_action(
+unsafe fn mouse_action(
     mut term: *mut Terminal,
     mut button: ::core::ffi::c_int,
     mut row: ::core::ffi::c_int,
@@ -3309,7 +3278,7 @@ unsafe extern "C" fn mouse_action(
         vterm_mouse_button((*term).vt, button, pressed, mod_0);
     }
 }
-unsafe extern "C" fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ffi::c_int) -> bool {
+unsafe fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ffi::c_int) -> bool {
     let mut offset: ::core::ffi::c_int = 0;
     let mut row: ::core::ffi::c_int = mouse_row.get();
     let mut col: ::core::ffi::c_int = mouse_col.get();
@@ -3524,7 +3493,7 @@ unsafe extern "C" fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ff
     }
     return true_0 != 0;
 }
-unsafe extern "C" fn fetch_row(
+unsafe fn fetch_row(
     mut term: *mut Terminal,
     mut row: ::core::ffi::c_int,
     mut end_col: ::core::ffi::c_int,
@@ -3558,7 +3527,7 @@ unsafe extern "C" fn fetch_row(
     }
     (*term).textbuf[line_len as usize] = NUL as ::core::ffi::c_char;
 }
-unsafe extern "C" fn fetch_cell(
+unsafe fn fetch_cell(
     mut term: *mut Terminal,
     mut row: ::core::ffi::c_int,
     mut col: ::core::ffi::c_int,
@@ -3589,7 +3558,7 @@ unsafe extern "C" fn fetch_cell(
     }
     return true_0 != 0;
 }
-unsafe extern "C" fn invalidate_terminal(
+unsafe fn invalidate_terminal(
     mut term: *mut Terminal,
     mut start_row: ::core::ffi::c_int,
     mut end_row: ::core::ffi::c_int,
@@ -3627,10 +3596,10 @@ unsafe extern "C" fn invalidate_terminal(
         refresh_pending.set(true_0 != 0);
     }
 }
-pub unsafe extern "C" fn terminal_check_refresh() {
+pub unsafe fn terminal_check_refresh() {
     multiqueue_process_events((*refresh_timer.ptr()).events);
 }
-unsafe extern "C" fn refresh_terminal(mut term: *mut Terminal) {
+unsafe fn refresh_terminal(mut term: *mut Terminal) {
     let mut buf: *mut buf_T = map_get_int_ptr_t(
         buffer_handles.ptr(),
         (*term).buf_handle as ::core::ffi::c_int,
@@ -3665,7 +3634,7 @@ unsafe extern "C" fn refresh_terminal(mut term: *mut Terminal) {
     }
     multiqueue_move_events((*main_loop.ptr()).events, (*term).pending.events);
 }
-unsafe extern "C" fn refresh_cursor(mut term: *mut Terminal, mut cursor_visible: *mut bool) {
+unsafe fn refresh_cursor(mut term: *mut Terminal, mut cursor_visible: *mut bool) {
     if !is_focused(term) {
         return;
     }
@@ -3736,7 +3705,7 @@ unsafe extern "C" fn refresh_timer_cb(
     to_refresh = SET_INIT;
     unblock_autocmds();
 }
-unsafe extern "C" fn refresh_size(mut term: *mut Terminal, mut _buf: *mut buf_T) -> bool {
+unsafe fn refresh_size(mut term: *mut Terminal, mut _buf: *mut buf_T) -> bool {
     if !(*term).pending.resize || (*term).closed as ::core::ffi::c_int != 0 {
         return false_0 != 0;
     }
@@ -3753,13 +3722,12 @@ unsafe extern "C" fn refresh_size(mut term: *mut Terminal, mut _buf: *mut buf_T)
     );
     return true_0 != 0;
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn on_scrollback_option_changed(mut term: *mut Terminal) {
+pub unsafe fn on_scrollback_option_changed(mut term: *mut Terminal) {
     if !(*term).sb_buffer.is_null() {
         refresh_terminal(term);
     }
 }
-unsafe extern "C" fn adjust_scrollback(mut term: *mut Terminal, mut buf: *mut buf_T) {
+unsafe fn adjust_scrollback(mut term: *mut Terminal, mut buf: *mut buf_T) {
     if (*buf).b_p_scbk < 1 as OptInt {
         (*buf).b_p_scbk = SB_MAX as OptInt;
     }
@@ -3809,7 +3777,7 @@ unsafe extern "C" fn adjust_scrollback(mut term: *mut Terminal, mut buf: *mut bu
     }
     (*term).sb_size = scbk;
 }
-unsafe extern "C" fn refresh_scrollback(mut term: *mut Terminal, mut buf: *mut buf_T) {
+unsafe fn refresh_scrollback(mut term: *mut Terminal, mut buf: *mut buf_T) {
     (*term)
         .opts
         .read_pause_cb
@@ -3872,7 +3840,7 @@ unsafe extern "C" fn refresh_scrollback(mut term: *mut Terminal, mut buf: *mut b
         .read_pause_cb
         .expect("non-null function pointer")(false_0 != 0, (*term).opts.data);
 }
-unsafe extern "C" fn refresh_screen(mut term: *mut Terminal, mut buf: *mut buf_T) {
+unsafe fn refresh_screen(mut term: *mut Terminal, mut buf: *mut buf_T) {
     let mut changed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut added: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut height: ::core::ffi::c_int = 0;
@@ -3928,7 +3896,7 @@ unsafe extern "C" fn refresh_screen(mut term: *mut Terminal, mut buf: *mut buf_T
         true_0 != 0,
     );
 }
-unsafe extern "C" fn adjust_topline_cursor(
+unsafe fn adjust_topline_cursor(
     mut term: *mut Terminal,
     mut buf: *mut buf_T,
     mut added: ::core::ffi::c_int,
@@ -3986,7 +3954,7 @@ unsafe extern "C" fn adjust_topline_cursor(
         i = i.wrapping_add(1);
     }
 }
-unsafe extern "C" fn row_to_linenr(
+unsafe fn row_to_linenr(
     mut term: *mut Terminal,
     mut row: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -3996,17 +3964,17 @@ unsafe extern "C" fn row_to_linenr(
         INT_MAX
     };
 }
-unsafe extern "C" fn linenr_to_row(
+unsafe fn linenr_to_row(
     mut term: *mut Terminal,
     mut linenr: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     return linenr - (*term).sb_current as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn is_focused(mut term: *mut Terminal) -> bool {
+unsafe fn is_focused(mut term: *mut Terminal) -> bool {
     return State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
         && (*curbuf.get()).terminal == term;
 }
-unsafe extern "C" fn get_config_string(
+unsafe fn get_config_string(
     mut buf: *mut buf_T,
     mut key: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -4195,7 +4163,7 @@ pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 #[inline]
-unsafe extern "C" fn vterm_color_rgb(
+unsafe fn vterm_color_rgb(
     mut col: *mut VTermColor,
     mut red: uint8_t,
     mut green: uint8_t,

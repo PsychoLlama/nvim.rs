@@ -101,6 +101,7 @@ use crate::src::nvim::spell::parse_spelllang;
 use crate::src::nvim::statusline::build_stl_str_hl;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, xstrnsave};
 use crate::src::nvim::syntax::{reset_synblock, syntax_clear};
+use crate::src::nvim::terminal::{terminal_check_size, terminal_close, terminal_running};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, Array, AutoPat, AutoPatCmd,
     AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback,
@@ -164,9 +165,6 @@ unsafe extern "C" {
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-    fn terminal_close(termpp: *mut *mut Terminal, status: ::core::ffi::c_int);
-    fn terminal_check_size(term: *mut Terminal);
-    fn terminal_running(term: *const Terminal) -> bool;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;

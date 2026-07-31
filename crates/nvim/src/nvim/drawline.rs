@@ -70,6 +70,7 @@ use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::syntax::{
     get_syntax_attr, get_syntax_info, syn_get_sub_char, syntax_present, syntax_start,
 };
+use crate::src::nvim::terminal::terminal_get_line_attributes;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CSType, Callback,
     Callback_data as C2Rust_Unnamed_6, CallbackType, ChangedtickDictItem, CharInfo, CharSize,
@@ -110,12 +111,6 @@ use crate::src::nvim::ui::ui_rgb_attached;
 unsafe extern "C" {
     static win_extmark_arr: GlobalCell<C2Rust_Unnamed_30>;
     fn qf_current_entry(wp: *mut win_T) -> linenr_T;
-    fn terminal_get_line_attributes(
-        term: *mut Terminal,
-        wp: *mut win_T,
-        linenr: ::core::ffi::c_int,
-        term_attrs: *mut ::core::ffi::c_int,
-    );
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;

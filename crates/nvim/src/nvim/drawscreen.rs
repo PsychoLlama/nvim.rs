@@ -85,6 +85,7 @@ use crate::src::nvim::syntax::{
     syn_set_timeout, syn_stack_apply_changes, syntax_check_changed, syntax_end_parsing,
     syntax_present,
 };
+use crate::src::nvim::terminal::{terminal_check_size, terminal_suspended};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
     Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, CmdRedraw,
@@ -135,8 +136,6 @@ unsafe extern "C" {
     static win_extmark_arr: GlobalCell<C2Rust_Unnamed_23>;
     fn re_multiline(prog: *const regprog_T) -> ::core::ffi::c_int;
     fn vim_regfree(prog: *mut regprog_T);
-    fn terminal_check_size(term: *mut Terminal);
-    fn terminal_suspended(term: *const Terminal) -> bool;
 }
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;

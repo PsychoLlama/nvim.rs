@@ -129,6 +129,7 @@ use crate::src::nvim::strings::{
     concat_str, vim_snprintf, vim_snprintf_add, vim_snprintf_safelen, vim_strchr,
     vim_strsave_escaped, xstrnsave,
 };
+use crate::src::nvim::terminal::{terminal_check_size, terminal_running};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks,
     CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem,
@@ -190,8 +191,6 @@ unsafe extern "C" {
         tm: *mut proftime_T,
         timed_out: *mut ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    fn terminal_check_size(term: *mut Terminal);
-    fn terminal_running(term: *const Terminal) -> bool;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;
