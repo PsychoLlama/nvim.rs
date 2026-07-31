@@ -745,8 +745,7 @@ static kitty_key_map_entry: GlobalCell<[kitty_key_map_entry; 77]> = GlobalCell::
     },
 ]);
 static kitty_key_map: GlobalCell<Map_int_ptr_t> = GlobalCell::new(MAP_INIT);
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tinput_init(
+pub unsafe fn tinput_init(
     mut input: *mut TermInput,
     mut loop_0: *mut Loop,
     mut ti: *mut TerminfoEntry,
@@ -808,8 +807,7 @@ pub unsafe extern "C" fn tinput_init(
     uv_timer_init(&raw mut (*loop_0).uv, &raw mut (*input).bg_query_timer);
     (*input).bg_query_timer.data = input as *mut ::core::ffi::c_void;
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tinput_destroy(mut input: *mut TermInput) {
+pub unsafe fn tinput_destroy(mut input: *mut TermInput) {
     xfree((*kitty_key_map.ptr()).set.keys as *mut ::core::ffi::c_void);
     xfree((*kitty_key_map.ptr()).set.h.hash as *mut ::core::ffi::c_void);
     (*kitty_key_map.ptr()).set = SET_INIT;
@@ -824,8 +822,7 @@ pub unsafe extern "C" fn tinput_destroy(mut input: *mut TermInput) {
     termkey_destroy((*input).tk);
     (*input).loop_0 = ::core::ptr::null_mut::<Loop>();
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tinput_start(mut input: *mut TermInput) {
+pub unsafe fn tinput_start(mut input: *mut TermInput) {
     rstream_start(
         &raw mut (*input).read_stream,
         Some(
@@ -841,8 +838,7 @@ pub unsafe extern "C" fn tinput_start(mut input: *mut TermInput) {
         input as *mut ::core::ffi::c_void,
     );
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tinput_stop(mut input: *mut TermInput) {
+pub unsafe fn tinput_stop(mut input: *mut TermInput) {
     rstream_stop(&raw mut (*input).read_stream);
     uv_timer_stop(&raw mut (*input).timer_handle);
     uv_timer_stop(&raw mut (*input).bg_query_timer);

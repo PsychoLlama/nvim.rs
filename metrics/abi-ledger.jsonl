@@ -260,10 +260,6 @@
 {"symbol":"termkey_stop","kind":"fn","file":"crates/nvim/src/nvim/tui/termkey/termkey.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"termkey_strfkey","kind":"fn","file":"crates/nvim/src/nvim/tui/termkey/termkey.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"test_disable_char_avail","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["functional-specs"]}
-{"symbol":"tinput_destroy","kind":"fn","file":"crates/nvim/src/nvim/tui/input.rs","class":"internal","refs":[]}
-{"symbol":"tinput_init","kind":"fn","file":"crates/nvim/src/nvim/tui/input.rs","class":"internal","refs":[]}
-{"symbol":"tinput_start","kind":"fn","file":"crates/nvim/src/nvim/tui/input.rs","class":"internal","refs":[]}
-{"symbol":"tinput_stop","kind":"fn","file":"crates/nvim/src/nvim/tui/input.rs","class":"internal","refs":[]}
 {"symbol":"trunc_string","kind":"fn","file":"crates/nvim/src/nvim/message.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"tv_check_lock","kind":"fn","file":"crates/nvim/src/nvim/eval/typval.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"tv_check_num","kind":"fn","file":"crates/nvim/src/nvim/eval/typval.rs","class":"test","refs":["unit-specs"]}

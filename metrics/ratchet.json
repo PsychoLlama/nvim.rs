@@ -1,5 +1,5 @@
 {
-  "internal_exports": 88,
+  "internal_exports": 84,
   "files_without_forbid_unsafe": 447,
   "files_without_deny_unsafe_op": 231,
   "files": {
@@ -396,7 +396,7 @@
     "crates/nvim/src/nvim/tui/attrs.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/tui/cursor.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/tui/events.rs": {"unsafe": 15},
-    "crates/nvim/src/nvim/tui/input.rs": {"lines": 2156, "no_mangle": 4, "unsafe": 38},
+    "crates/nvim/src/nvim/tui/input.rs": {"lines": 2152, "unsafe": 38},
     "crates/nvim/src/nvim/tui/negotiate.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/tui/output.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/tui/paint.rs": {"unsafe": 18},
