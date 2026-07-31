@@ -102,7 +102,6 @@
     "crates/nvim/src/nvim/memline/block0.rs": 1,
     "crates/nvim/src/nvim/memline/edit.rs": 5,
     "crates/nvim/src/nvim/memline/recover.rs": 23,
-    "crates/nvim/src/nvim/memline/swapname.rs": 46,
     "crates/nvim/src/nvim/memline/tree.rs": 10,
     "crates/nvim/src/nvim/memory.rs": 4,
     "crates/nvim/src/nvim/menu.rs": 114,

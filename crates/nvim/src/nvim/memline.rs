@@ -68,11 +68,11 @@ use crate::src::nvim::statusline::get_trans_bufname;
 use crate::src::nvim::strings::{kv_do_printf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    __off_t, FileInfo, OptInt, OptVal, OptValData, OptValType, String_0, StringBuilder, Timestamp,
+    __off_t, FileInfo, OptVal, OptValData, OptValType, String_0, StringBuilder, Timestamp,
     VimVarIndex, bhdr_T, blocknr_T, buf_T, chunksize_T, colnr_T, dict_T, exarg_T, file_comparison,
-    flush_buffers_T, infoptr_T, int16_t, int32_t, int64_t, linenr_T, list_T, memfile_T, mfdirty_T,
-    off_T, pos_T, ptrdiff_t, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_stat_t,
-    uv_timespec_t, uv_uid_t, varnumber_T,
+    flush_buffers_T, infoptr_T, int16_t, int64_t, linenr_T, list_T, memfile_T, mfdirty_T, off_T,
+    pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_stat_t, uv_timespec_t,
+    uv_uid_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 use crate::src::nvim::undo::bufIsChanged;

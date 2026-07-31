@@ -17,6 +17,12 @@ use core::ffi::{CStr, c_char, c_double, c_int, c_long};
 #[allow(unused_imports)]
 use super::*;
 
+/// Why a swap file yielded no block zero.
+pub(crate) enum NoBlock {
+    CannotOpen,
+    CannotRead,
+}
+
 impl ZeroBlock {
     /// Upstream keeps two more fields in the last two bytes of the name:
     /// `#define b0_dirty b0_fname[B0_FNAME_SIZE_ORG - 1]` and
@@ -55,18 +61,28 @@ impl ZeroBlock {
         b0_read_number(&self.b0_pid)
     }
 
-    /// Read one back off disk. A short read leaves nothing usable, which is
-    /// why this reports it rather than returning a half-filled block.
-    fn read(fd: c_int) -> Option<Self> {
-        // SAFETY: this is a plain-old-data struct, so zero is a valid value
-        // and so is whatever `read_eintr` puts in its `size_of::<Self>()`
-        // bytes.
-        let (b0, got) = unsafe {
+    /// Read the block zero of the swap file `path`. A short read leaves
+    /// nothing usable, which is why that is reported rather than returning a
+    /// half-filled block; the two failures are told apart because
+    /// `swapinfo()` and the ATTENTION message report them differently.
+    pub(crate) unsafe fn read(path: *const c_char) -> Result<Self, NoBlock> {
+        // SAFETY: `path` is a NUL-terminated path, and this is a
+        // plain-old-data struct, so zero is a valid value for it and so is
+        // whatever `read_eintr` puts in its `size_of::<Self>()` bytes.
+        unsafe {
+            let fd = os_open(path, O_RDONLY, 0);
+            if fd < 0 {
+                return Err(NoBlock::CannotOpen);
+            }
             let mut b0: Self = core::mem::zeroed();
             let got = read_eintr(fd, (&raw mut b0).cast(), size_of::<Self>());
-            (b0, got)
-        };
-        (got as usize == size_of::<Self>()).then_some(b0)
+            close(fd);
+            if got as usize == size_of::<Self>() {
+                Ok(b0)
+            } else {
+                Err(NoBlock::CannotRead)
+            }
+        }
     }
 }
 
@@ -253,16 +269,12 @@ pub(crate) fn swapfile_proc_running(b0: &ZeroBlock, swap_fname: *const c_char) -
 pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut dict_T) {
     unsafe {
         let error = |text: &CStr| dict_add_str(d, c"error", text.as_ptr(), -1);
-        let fd = os_open(fname, O_RDONLY, 0);
-        if fd < 0 {
-            error(c"Cannot open file");
-            return;
-        }
-        match ZeroBlock::read(fd) {
-            None => error(c"Cannot read file"),
-            Some(b0) if !ml_check_b0_id(&b0) => error(c"Not a swap file"),
-            Some(b0) if b0_magic_wrong(&b0) => error(c"Magic number mismatch"),
-            Some(b0) => {
+        match ZeroBlock::read(fname) {
+            Err(NoBlock::CannotOpen) => error(c"Cannot open file"),
+            Err(NoBlock::CannotRead) => error(c"Cannot read file"),
+            Ok(b0) if !ml_check_b0_id(&b0) => error(c"Not a swap file"),
+            Ok(b0) if b0_magic_wrong(&b0) => error(c"Magic number mismatch"),
+            Ok(b0) => {
                 // The strings are reported at their full field width rather
                 // than up to the NUL: this is the raw block, and a caller
                 // inspecting a damaged swap file wants what is really there.
@@ -281,7 +293,6 @@ pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut dict_T) {
                 dict_add_nr(d, c"inode", b0_read_number(&b0.b0_ino) as varnumber_T);
             }
         }
-        close(fd);
     }
 }
 
@@ -330,64 +341,59 @@ pub(crate) unsafe fn swapfile_info(fname: *const c_char, msg: *mut StringBuilder
         }
 
         // What the swap file says about the file it belongs to.
-        let fd = os_open(fname, O_RDONLY, 0);
-        if fd < 0 {
-            kv_puts(msg, c"         [cannot be opened]");
-        } else {
-            match ZeroBlock::read(fd) {
-                None => kv_puts(msg, c"         [cannot be read]"),
-                Some(b0) if strncmp(b0.b0_version.as_ptr(), c"VIM 3.0".as_ptr(), 7) == 0 => {
-                    kv_puts(msg, c"         [from Vim version 3.0]");
+        match ZeroBlock::read(fname) {
+            Err(NoBlock::CannotOpen) => kv_puts(msg, c"         [cannot be opened]"),
+            Err(NoBlock::CannotRead) => kv_puts(msg, c"         [cannot be read]"),
+            Ok(b0) if strncmp(b0.b0_version.as_ptr(), c"VIM 3.0".as_ptr(), 7) == 0 => {
+                kv_puts(msg, c"         [from Vim version 3.0]");
+            }
+            Ok(b0) if !ml_check_b0_id(&b0) => {
+                kv_puts(msg, c"         [does not look like a Nvim swap file]");
+            }
+            Ok(b0) if !ml_check_b0_strings(&b0) => {
+                kv_puts(msg, c"         [garbled strings (not nul terminated)]");
+            }
+            Ok(b0) => {
+                kv_puts(msg, c"         file name: ");
+                if b0.b0_fname[0] as c_int == NUL {
+                    kv_puts(msg, c"[No Name]");
+                } else {
+                    kv_do_printf(msg, c"%s".as_ptr(), b0.b0_fname.as_ptr());
                 }
-                Some(b0) if !ml_check_b0_id(&b0) => {
-                    kv_puts(msg, c"         [does not look like a Nvim swap file]");
-                }
-                Some(b0) if !ml_check_b0_strings(&b0) => {
-                    kv_puts(msg, c"         [garbled strings (not nul terminated)]");
-                }
-                Some(b0) => {
-                    kv_puts(msg, c"         file name: ");
-                    if b0.b0_fname[0] as c_int == NUL {
-                        kv_puts(msg, c"[No Name]");
-                    } else {
-                        kv_do_printf(msg, c"%s".as_ptr(), b0.b0_fname.as_ptr());
-                    }
 
-                    kv_puts(msg, c"\n          modified: ");
-                    kv_puts(msg, if b0.dirty() { c"YES" } else { c"no" });
+                kv_puts(msg, c"\n          modified: ");
+                kv_puts(msg, if b0.dirty() { c"YES" } else { c"no" });
 
+                if b0.b0_uname[0] as c_int != NUL {
+                    kv_puts(msg, c"\n         user name: ");
+                    kv_do_printf(msg, c"%s".as_ptr(), b0.b0_uname.as_ptr());
+                }
+
+                if b0.b0_hname[0] as c_int != NUL {
+                    // Only the second of the two gets a line of its own.
                     if b0.b0_uname[0] as c_int != NUL {
-                        kv_puts(msg, c"\n         user name: ");
-                        kv_do_printf(msg, c"%s".as_ptr(), b0.b0_uname.as_ptr());
+                        kv_puts(msg, c"   host name: ");
+                    } else {
+                        kv_puts(msg, c"\n         host name: ");
                     }
+                    kv_do_printf(msg, c"%s".as_ptr(), b0.b0_hname.as_ptr());
+                }
 
-                    if b0.b0_hname[0] as c_int != NUL {
-                        // Only the second of the two gets a line of its own.
-                        if b0.b0_uname[0] as c_int != NUL {
-                            kv_puts(msg, c"   host name: ");
-                        } else {
-                            kv_puts(msg, c"\n         host name: ");
-                        }
-                        kv_do_printf(msg, c"%s".as_ptr(), b0.b0_hname.as_ptr());
+                if b0.pid() != 0 {
+                    kv_puts(msg, c"\n        process ID: ");
+                    kv_do_printf(msg, c"%d".as_ptr(), b0.pid() as c_int);
+                    // Read back by `findswapname` to decide whether this
+                    // is a crash to recover from or a live second editor.
+                    proc_running.set(swapfile_proc_running(&b0, fname));
+                    if proc_running.get() != 0 {
+                        kv_puts(msg, c" (STILL RUNNING)");
                     }
+                }
 
-                    if b0.pid() != 0 {
-                        kv_puts(msg, c"\n        process ID: ");
-                        kv_do_printf(msg, c"%d".as_ptr(), b0.pid() as c_int);
-                        // Read back by `findswapname` to decide whether this
-                        // is a crash to recover from or a live second editor.
-                        proc_running.set(swapfile_proc_running(&b0, fname));
-                        if proc_running.get() != 0 {
-                            kv_puts(msg, c" (STILL RUNNING)");
-                        }
-                    }
-
-                    if b0_magic_wrong(&b0) {
-                        kv_puts(msg, c"\n         [not usable on this computer]");
-                    }
+                if b0_magic_wrong(&b0) {
+                    kv_puts(msg, c"\n         [not usable on this computer]");
                 }
             }
-            close(fd);
         }
         kv_puts(msg, c"\n");
         x
@@ -397,7 +403,7 @@ pub(crate) unsafe fn swapfile_info(fname: *const c_char, msg: *mut StringBuilder
 /// Append a translated message. Upstream hands it to `kv_printf` as the
 /// format string, so a `%` in a translation is a directive there too;
 /// preserved.
-unsafe fn kv_puts(msg: *mut StringBuilder, text: &CStr) {
+pub(crate) unsafe fn kv_puts(msg: *mut StringBuilder, text: &CStr) {
     unsafe { kv_do_printf(msg, gettext(text.as_ptr())) };
 }
 
@@ -409,12 +415,7 @@ pub(crate) unsafe fn swapfile_unchanged(fname: *const c_char) -> bool {
         if !os_path_exists(fname) {
             return false;
         }
-        let fd = os_open(fname, O_RDONLY, 0);
-        if fd < 0 {
-            return false;
-        }
-        let Some(mut b0) = ZeroBlock::read(fd) else {
-            close(fd);
+        let Ok(mut b0) = ZeroBlock::read(fname) else {
             return false;
         };
 
@@ -445,8 +446,40 @@ pub(crate) unsafe fn swapfile_unchanged(fname: *const c_char) -> bool {
         // The user is deliberately not checked: it has no bearing on whether
         // the swap file is still worth anything.
 
-        close(fd);
         ret
+    }
+}
+
+/// Whether the swap file `fname` was left behind for a file *other* than the
+/// one `buf` is editing — the common case when `'directory'` gathers every
+/// swap file into one place.
+///
+/// Also publishes [`proc_running`], which the dialog below reads.
+pub(crate) unsafe fn swapfile_is_for_other_file(buf: *mut buf_T, fname: *mut c_char) -> bool {
+    unsafe {
+        let mut differ = false;
+        if let Ok(mut b0) = ZeroBlock::read(fname) {
+            proc_running.set(swapfile_proc_running(&b0, fname));
+
+            // When the swap file sits in the same directory as the file, the
+            // directory names need not agree — they can be reached through
+            // different mount points — so only the tails are compared.
+            if b0.flags() & B0_SAME_DIR == 0
+                || path_fnamecmp(path_tail((*buf).b_ffname), path_tail(b0.b0_fname.as_ptr())) != 0
+                || !same_directory(fname, (*buf).b_ffname)
+            {
+                // The name in the swap file may be "~user/path/file".
+                // Symlinks can point at the same file under two names, so the
+                // inode has the last word.
+                expand_env(b0.b0_fname.as_mut_ptr(), NameBuff.ptr().cast(), MAXPATHL);
+                differ = files_differ(
+                    (*buf).b_ffname,
+                    NameBuff.ptr().cast(),
+                    b0_read_number(&b0.b0_ino),
+                );
+            }
+        }
+        differ
     }
 }
 
