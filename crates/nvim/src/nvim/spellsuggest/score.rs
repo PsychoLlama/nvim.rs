@@ -47,17 +47,21 @@ use crate::src::nvim::os::libc::{strcpy, strlen};
 use crate::src::nvim::spell::{spell_casefold, spell_soundfold, spelltab};
 use crate::src::nvim::spellsuggest::{
     MAXWLEN, NUL, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
-    SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, WC_KEY_OFF,
-    suggest_T, suginfo_T,
+    SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, suggest_T,
+    suginfo_T,
 };
 use crate::src::nvim::types::{hashitem_T, size_t, slang_T, wordcount_T};
 use core::ffi::{c_char, c_int};
 
+/// Where the inline word sits inside a `wordcount_T`; the word-count table
+/// keys on that field, so the record is recovered by stepping back.
+const WC_KEY_OFF: usize = core::mem::offset_of!(wordcount_T, wc_word);
+
 /// A sound-folded word and the room around it, as the callers keep it.
-pub type SoundBuf = [c_char; MAXWLEN as usize];
+pub type SoundBuf = [c_char; MAXWLEN];
 
 /// An empty sound-fold buffer, ready to be filled by `spell_soundfold`.
-pub const EMPTY_SOUND: SoundBuf = [0; MAXWLEN as usize];
+pub const EMPTY_SOUND: SoundBuf = [0; MAXWLEN];
 
 /// The character that sound-folding puts at the front of a word starting
 /// with a vowel. Adding or dropping one is cheaper than a real edit.
@@ -102,7 +106,7 @@ pub fn spell_isupper(c: c_int) -> bool {
 ///
 /// `word` must point at a NUL-terminated string of at most `MAXWLEN - 1`
 /// characters.
-unsafe fn word_chars(word: *const c_char, out: &mut [c_int; MAXWLEN as usize]) -> usize {
+unsafe fn word_chars(word: *const c_char, out: &mut [c_int; MAXWLEN]) -> usize {
     let mut len = 0;
     let mut p = word;
     // SAFETY: the caller guarantees a NUL-terminated string that fits.
@@ -170,16 +174,16 @@ pub unsafe fn score_wordcount_adj(
         if key.is_null() || key == &raw const hash_removed as *mut c_char {
             return score;
         }
-        let wc = key.sub(WC_KEY_OFF as usize) as *mut wordcount_T;
+        let wc = key.sub(WC_KEY_OFF) as *mut wordcount_T;
         (*wc).wc_count as c_int
     };
 
-    let bonus = if count < SCORE_THRES2 as c_int {
-        SCORE_COMMON1 as c_int
-    } else if count < SCORE_THRES3 as c_int {
-        SCORE_COMMON2 as c_int
+    let bonus = if count < SCORE_THRES2 {
+        SCORE_COMMON1
+    } else if count < SCORE_THRES3 {
+        SCORE_COMMON2
     } else {
-        SCORE_COMMON3 as c_int
+        SCORE_COMMON3
     };
 
     // Halve the bonus for a word that only makes up part of the
@@ -270,18 +274,18 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
             || (at(goodstart, 0) == 0 && at(badstart, 1) == 0)
         {
             // Changing a word with a vowel to a word without a sound.
-            return SCORE_DEL as c_int;
+            return SCORE_DEL;
         }
         if at(badstart, 0) == 0 || at(goodstart, 0) == 0 {
             // More than two changes.
-            return SCORE_MAXMAX as c_int;
+            return SCORE_MAXMAX;
         }
         let like_substitute = at(badstart, 1) == at(goodstart, 1)
             || (at(badstart, 1) != 0
                 && at(goodstart, 1) != 0
                 && at(badstart, 2) == at(goodstart, 2));
         if !like_substitute {
-            score = 2 * SCORE_DEL as c_int / 3;
+            score = 2 * SCORE_DEL / 3;
             if at(badstart, 0) == SOUND_VOWEL {
                 bi += 1;
             } else {
@@ -296,7 +300,7 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
     // Too different in length to be fixed by two changes.
     let n = goodlen - badlen;
     if !(-2..=2).contains(&n) {
-        return SCORE_MAXMAX as c_int;
+        return SCORE_MAXMAX;
     }
 
     // "pl" walks the longer word, "ps" the shorter one.
@@ -316,7 +320,7 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
             skip_equal_unchecked(pl, &mut li, ps, &mut si);
             // The rest must match after the second delete.
             if tails_equal(pl, li + 1, ps, si) {
-                return score + SCORE_DEL as c_int * 2;
+                return score + SCORE_DEL * 2;
             }
         }
         -1 | 1 => {
@@ -330,7 +334,7 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
                     break;
                 }
                 if at(pl, li2) == 0 {
-                    return score + SCORE_DEL as c_int;
+                    return score + SCORE_DEL;
                 }
                 li2 += 1;
                 si2 += 1;
@@ -341,12 +345,12 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
                 && at(pl, li2 + 1) == at(ps, si2)
                 && tails_equal(pl, li2 + 2, ps, si2 + 2)
             {
-                return score + SCORE_DEL as c_int + SCORE_SWAP as c_int;
+                return score + SCORE_DEL + SCORE_SWAP;
             }
 
             // 3: delete, then substitute, then the rest must be equal
             if tails_equal(pl, li2 + 1, ps, si2 + 1) {
-                return score + SCORE_DEL as c_int + SCORE_SUBST as c_int;
+                return score + SCORE_DEL + SCORE_SUBST;
             }
 
             // 4: swap first, then delete
@@ -355,7 +359,7 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
                 let mut si3 = si + 2;
                 skip_equal_unchecked(pl, &mut li3, ps, &mut si3);
                 if tails_equal(pl, li3 + 1, ps, si3) {
-                    return score + SCORE_SWAP as c_int + SCORE_DEL as c_int;
+                    return score + SCORE_SWAP + SCORE_DEL;
                 }
             }
 
@@ -364,7 +368,7 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
             let mut si4 = si + 1;
             skip_equal_unchecked(pl, &mut li4, ps, &mut si4);
             if tails_equal(pl, li4 + 1, ps, si4) {
-                return score + SCORE_SUBST as c_int + SCORE_DEL as c_int;
+                return score + SCORE_SUBST + SCORE_DEL;
             }
         }
         _ => {
@@ -385,7 +389,7 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
                         break;
                     }
                     if at(pl, li2) == 0 {
-                        return score + SCORE_SWAP as c_int;
+                        return score + SCORE_SWAP;
                     }
                     li2 += 1;
                     si2 += 1;
@@ -396,12 +400,12 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
                     && at(pl, li2 + 1) == at(ps, si2)
                     && tails_equal(pl, li2 + 2, ps, si2 + 2)
                 {
-                    return score + SCORE_SWAP as c_int + SCORE_SWAP as c_int;
+                    return score + SCORE_SWAP + SCORE_SWAP;
                 }
 
                 // 4: swap and substitute
                 if tails_equal(pl, li2 + 1, ps, si2 + 1) {
-                    return score + SCORE_SWAP as c_int + SCORE_SUBST as c_int;
+                    return score + SCORE_SWAP + SCORE_SUBST;
                 }
             }
 
@@ -413,7 +417,7 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
                     break;
                 }
                 if at(pl, li2) == 0 {
-                    return score + SCORE_SUBST as c_int;
+                    return score + SCORE_SUBST;
                 }
                 li2 += 1;
                 si2 += 1;
@@ -424,12 +428,12 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
                 && at(pl, li2 + 1) == at(ps, si2)
                 && tails_equal(pl, li2 + 2, ps, si2 + 2)
             {
-                return score + SCORE_SUBST as c_int + SCORE_SWAP as c_int;
+                return score + SCORE_SUBST + SCORE_SWAP;
             }
 
             // 7: substitute and substitute
             if tails_equal(pl, li2 + 1, ps, si2 + 1) {
-                return score + SCORE_SUBST as c_int + SCORE_SUBST as c_int;
+                return score + SCORE_SUBST + SCORE_SUBST;
             }
 
             // 8: insert then delete
@@ -437,7 +441,7 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
             let mut si3 = si + 1;
             skip_equal_unchecked(pl, &mut li3, ps, &mut si3);
             if tails_equal(pl, li3 + 1, ps, si3) {
-                return score + SCORE_INS as c_int + SCORE_DEL as c_int;
+                return score + SCORE_INS + SCORE_DEL;
             }
 
             // 9: delete then insert
@@ -445,12 +449,12 @@ pub fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_int {
             let mut si4 = si;
             skip_equal_unchecked(pl, &mut li4, ps, &mut si4);
             if tails_equal(pl, li4, ps, si4 + 1) {
-                return score + SCORE_INS as c_int + SCORE_DEL as c_int;
+                return score + SCORE_INS + SCORE_DEL;
             }
         }
     }
 
-    SCORE_MAXMAX as c_int
+    SCORE_MAXMAX
 }
 
 /// Compute the edit distance to turn `badword` into `goodword`: the fewer
@@ -468,8 +472,8 @@ pub unsafe fn spell_edit_score(
     badword: *const c_char,
     goodword: *const c_char,
 ) -> c_int {
-    let mut wbadword = [0; MAXWLEN as usize];
-    let mut wgoodword = [0; MAXWLEN as usize];
+    let mut wbadword = [0; MAXWLEN];
+    let mut wgoodword = [0; MAXWLEN];
     // SAFETY: the caller guarantees NUL-terminated words that fit.
     let (badlen, goodlen) = unsafe {
         (
@@ -487,11 +491,11 @@ pub unsafe fn spell_edit_score(
 
     cnt[idx(0, 0)] = 0;
     for j in 1..=goodlen {
-        cnt[idx(0, j)] = cnt[idx(0, j - 1)] + SCORE_INS as c_int;
+        cnt[idx(0, j)] = cnt[idx(0, j - 1)] + SCORE_INS;
     }
 
     for i in 1..=badlen {
-        cnt[idx(i, 0)] = cnt[idx(i - 1, 0)] + SCORE_DEL as c_int;
+        cnt[idx(i, 0)] = cnt[idx(i - 1, 0)] + SCORE_DEL;
         for j in 1..=goodlen {
             let bc = wbadword[i - 1];
             let gc = wgoodword[j - 1];
@@ -502,10 +506,10 @@ pub unsafe fn spell_edit_score(
 
             let mut best = substitute_cost(slang, bc, gc) + cnt[idx(i - 1, j - 1)];
             if i > 1 && j > 1 && bc == wgoodword[j - 2] && wbadword[i - 2] == gc {
-                best = best.min(SCORE_SWAP as c_int + cnt[idx(i - 2, j - 2)]);
+                best = best.min(SCORE_SWAP + cnt[idx(i - 2, j - 2)]);
             }
-            best = best.min(SCORE_DEL as c_int + cnt[idx(i - 1, j)]);
-            best = best.min(SCORE_INS as c_int + cnt[idx(i, j - 1)]);
+            best = best.min(SCORE_DEL + cnt[idx(i - 1, j)]);
+            best = best.min(SCORE_INS + cnt[idx(i, j - 1)]);
             cnt[idx(i, j)] = best;
         }
     }
@@ -518,11 +522,11 @@ pub unsafe fn spell_edit_score(
 /// plain substitution.
 fn substitute_cost(slang: Option<&slang_T>, bc: c_int, gc: c_int) -> c_int {
     if spell_tofold(bc) == spell_tofold(gc) {
-        return SCORE_ICASE as c_int;
+        return SCORE_ICASE;
     }
     match slang {
-        Some(slang) if slang.sl_has_map && similar_chars(slang, gc, bc) => SCORE_SIMILAR as c_int,
-        _ => SCORE_SUBST as c_int,
+        Some(slang) if slang.sl_has_map && similar_chars(slang, gc, bc) => SCORE_SIMILAR,
+        _ => SCORE_SUBST,
     }
 }
 
@@ -535,7 +539,7 @@ struct Alternative {
 }
 
 /// The cheapest edit there is; nothing below this can bring a score down.
-const SCORE_EDIT_MIN: c_int = SCORE_SIMILAR as c_int;
+const SCORE_EDIT_MIN: c_int = SCORE_SIMILAR;
 
 /// Like [`spell_edit_score`], but stops as soon as the answer is known to
 /// exceed `limit`, in which case it returns `SCORE_MAXMAX`.
@@ -555,8 +559,8 @@ pub unsafe fn spell_edit_score_limit(
     goodword: *const c_char,
     limit: c_int,
 ) -> c_int {
-    let mut wbadword = [0; MAXWLEN as usize];
-    let mut wgoodword = [0; MAXWLEN as usize];
+    let mut wbadword = [0; MAXWLEN];
+    let mut wgoodword = [0; MAXWLEN];
     // SAFETY: the caller guarantees NUL-terminated words that fit.
     unsafe {
         word_chars(badword, &mut wbadword);
@@ -596,7 +600,7 @@ pub unsafe fn spell_edit_score_limit(
         if gc == NUL {
             // The good word ended: delete the rest of the bad word.
             loop {
-                score += SCORE_DEL as c_int;
+                score += SCORE_DEL;
                 if score >= minscore {
                     break;
                 }
@@ -609,7 +613,7 @@ pub unsafe fn spell_edit_score_limit(
         } else if bc == NUL {
             // The bad word ended: insert the rest of the good word.
             loop {
-                score += SCORE_INS as c_int;
+                score += SCORE_INS;
                 if score >= minscore {
                     break;
                 }
@@ -624,12 +628,7 @@ pub unsafe fn spell_edit_score_limit(
             // resolves right here (when so close to the limit that the rest
             // has to match exactly) or goes on the stack for later.
             for round in 0..=1 {
-                let score_off = score
-                    + if round == 0 {
-                        SCORE_DEL as c_int
-                    } else {
-                        SCORE_INS as c_int
-                    };
+                let score_off = score + if round == 0 { SCORE_DEL } else { SCORE_INS };
                 if score_off >= minscore {
                     continue;
                 }
@@ -657,13 +656,11 @@ pub unsafe fn spell_edit_score_limit(
             // A swap that makes the words match is always cheaper than the
             // substitution that would also fix it, so there is no need to
             // try both.
-            if score + (SCORE_SWAP as c_int) < minscore
-                && gc == wbadword[bi + 1]
-                && bc == wgoodword[gi + 1]
+            if score + (SCORE_SWAP) < minscore && gc == wbadword[bi + 1] && bc == wgoodword[gi + 1]
             {
                 gi += 2;
                 bi += 2;
-                score += SCORE_SWAP as c_int;
+                score += SCORE_SWAP;
                 continue 'alternatives;
             }
 
@@ -685,7 +682,7 @@ pub unsafe fn spell_edit_score_limit(
     // Past the limit the real score may be much higher; say so loudly, so
     // that a later bonus cannot pull it back under.
     if minscore > limit {
-        SCORE_MAXMAX as c_int
+        SCORE_MAXMAX
     } else {
         minscore
     }

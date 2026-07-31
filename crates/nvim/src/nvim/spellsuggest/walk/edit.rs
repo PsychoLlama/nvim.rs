@@ -125,7 +125,7 @@ impl Walk {
             {
                 0
             } else {
-                SCORE_SUBST as c_int
+                SCORE_SUBST
             };
 
             // Don't substitute where the bad word has already been
@@ -150,7 +150,7 @@ impl Walk {
             self.tword[self.stack[child].good_len as usize] = byte as c_char;
             self.stack[child].good_len += 1;
             self.stack[child].node = self.idx_at(at);
-            if newscore == SCORE_SUBST as c_int {
+            if newscore == SCORE_SUBST {
                 self.stack[child].diff = DIFF_YES;
             }
 
@@ -207,14 +207,14 @@ impl Walk {
                 let bad = utf_ptr2char(self.fword_ptr(char_start));
                 if utf_iscomposing_legacy(good) && utf_iscomposing_legacy(bad) {
                     // Changing a composing character counts for less.
-                    self.stack[level].score -= SCORE_SUBST as c_int - SCORE_SUBCOMP as c_int;
+                    self.stack[level].score -= SCORE_SUBST - SCORE_SUBCOMP;
                 } else if !self.soundfold
                     && (*self.slang).sl_has_map
                     && similar_chars(&*self.slang, good, bad)
                 {
                     // So does substituting a character the language's MAP
                     // lines call similar.
-                    self.stack[level].score -= SCORE_SUBST as c_int - SCORE_SIMILAR as c_int;
+                    self.stack[level].score -= SCORE_SUBST - SCORE_SIMILAR;
                 }
             } else if self.stack[level].diff == DIFF_INSERT
                 && self.stack[level].good_len > self.stack[level].char_len
@@ -224,14 +224,14 @@ impl Walk {
                 if utf_iscomposing_legacy(inserted) {
                     // Inserting a composing character does not count for
                     // much.
-                    self.stack[level].score -= SCORE_INS as c_int - SCORE_INSCOMP as c_int;
+                    self.stack[level].score -= SCORE_INS - SCORE_INSCOMP;
                 } else {
                     // Doubling a character earns a bonus. Illogical for
                     // the sound-fold tree, but it does score better there
                     // too.
                     p = Walk::char_back(self.tword.as_ptr(), p);
                     if inserted == utf_ptr2char(p) {
-                        self.stack[level].score -= SCORE_INS as c_int - SCORE_INSDUP as c_int;
+                        self.stack[level].score -= SCORE_INS - SCORE_INSDUP;
                     }
                 }
             }
@@ -269,9 +269,9 @@ impl Walk {
             {
                 // Deleting a leading vowel counts less; `soundalike_score`
                 // charges the same.
-                2 * SCORE_DEL as c_int / 3
+                2 * SCORE_DEL / 3
             } else {
-                SCORE_DEL as c_int
+                SCORE_DEL
             };
 
             if !(self.fword_at(bad_idx) != NUL && self.try_deeper(newscore)) {
@@ -295,9 +295,9 @@ impl Walk {
             self.stack[child].bad_idx =
                 (self.stack[child].bad_idx as c_int + utfc_ptr2len(self.fword_ptr(bad_idx))) as u8;
             if utf_iscomposing_legacy(deleted) {
-                self.stack[child].score -= SCORE_DEL as c_int - SCORE_DELCOMP as c_int;
+                self.stack[child].score -= SCORE_DEL - SCORE_DELCOMP;
             } else if deleted == utf_ptr2char(self.fword_ptr(self.stack[child].bad_idx as usize)) {
-                self.stack[child].score -= SCORE_DEL as c_int - SCORE_DELDUP as c_int;
+                self.stack[child].score -= SCORE_DEL - SCORE_DELDUP;
             }
         }
     }
@@ -377,9 +377,9 @@ impl Walk {
                 if self.soundfold && self.stack[level].good_len == 0 && byte == SOUND_VOWEL {
                     // Inserting a leading vowel counts less; see
                     // `soundalike_score`.
-                    2 * SCORE_INS as c_int / 3
+                    2 * SCORE_INS / 3
                 } else {
-                    SCORE_INS as c_int
+                    SCORE_INS
                 };
 
             // Skip a byte equal to the bad word's: accepting it, which
@@ -410,7 +410,7 @@ impl Walk {
                 // tree as well.
                 let good_len = self.stack[child].good_len as usize;
                 if good_len >= 2 && self.tword[good_len - 2] as u8 as c_int == byte {
-                    self.stack[child].score -= SCORE_INS as c_int - SCORE_INSDUP as c_int;
+                    self.stack[child].score -= SCORE_INS - SCORE_INSDUP;
                 }
             }
         }

@@ -94,13 +94,13 @@ impl Walk {
                 return;
             }
 
-            if !self.try_deeper(SCORE_SWAP as c_int) {
+            if !self.try_deeper(SCORE_SWAP) {
                 // If this swap is out of reach then SWAP3 is too.
                 self.stack[level].state = State::RepIni;
                 return;
             }
 
-            self.go_deeper(SCORE_SWAP as c_int);
+            self.go_deeper(SCORE_SWAP);
             self.stack[level].state = State::UnSwap;
             self.depth += 1;
 
@@ -171,12 +171,12 @@ impl Walk {
                 return;
             }
 
-            if !self.try_deeper(SCORE_SWAP3 as c_int) {
+            if !self.try_deeper(SCORE_SWAP3) {
                 self.stack[level].state = State::RepIni;
                 return;
             }
 
-            self.go_deeper(SCORE_SWAP3 as c_int);
+            self.go_deeper(SCORE_SWAP3);
             self.stack[level].state = State::UnSwap3;
             self.depth += 1;
 
@@ -222,12 +222,12 @@ impl Walk {
                 return;
             }
 
-            if !self.try_deeper(SCORE_SWAP3 as c_int) {
+            if !self.try_deeper(SCORE_SWAP3) {
                 self.stack[level].state = State::RepIni;
                 return;
             }
 
-            self.go_deeper(SCORE_SWAP3 as c_int);
+            self.go_deeper(SCORE_SWAP3);
             self.stack[level].state = State::UnRot3L;
             self.depth += 1;
 
@@ -263,12 +263,12 @@ impl Walk {
             ptr::copy(p, p.offset(last_len as isize), moved_len as usize);
             utf_char2bytes(last, p);
 
-            if !self.try_deeper(SCORE_SWAP3 as c_int) {
+            if !self.try_deeper(SCORE_SWAP3) {
                 self.stack[level].state = State::RepIni;
                 return;
             }
 
-            self.go_deeper(SCORE_SWAP3 as c_int);
+            self.go_deeper(SCORE_SWAP3);
             self.stack[level].state = State::UnRot3R;
             self.depth += 1;
 

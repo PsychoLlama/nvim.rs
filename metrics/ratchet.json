@@ -1,7 +1,7 @@
 {
   "internal_exports": 70,
-  "files_without_forbid_unsafe": 470,
-  "files_without_deny_unsafe_op": 226,
+  "files_without_forbid_unsafe": 471,
+  "files_without_deny_unsafe_op": 225,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -387,8 +387,9 @@
     "crates/nvim/src/nvim/sign.rs": {"lines": 3448, "unsafe": 58},
     "crates/nvim/src/nvim/spell.rs": {"lines": 4304, "unsafe": 76},
     "crates/nvim/src/nvim/spellfile.rs": {"lines": 7312, "unsafe": 83},
-    "crates/nvim/src/nvim/spellsuggest.rs": {"lines": 1272, "unsafe": 13},
+    "crates/nvim/src/nvim/spellsuggest.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/spellsuggest/collect.rs": {"unsafe": 12},
+    "crates/nvim/src/nvim/spellsuggest/prompt.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/spellsuggest/score.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/spellsuggest/soundalike.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/spellsuggest/walk.rs": {"unsafe": 12},

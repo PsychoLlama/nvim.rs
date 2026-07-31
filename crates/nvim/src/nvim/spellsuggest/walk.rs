@@ -91,11 +91,11 @@ use crate::src::nvim::types::{idx_T, int64_t, langp_T, proftime_T, slang_T};
 use core::ffi::{c_char, c_int};
 
 /// One level per byte of the bad word is all the walk can ever need.
-const STACK_SIZE: usize = MAXWLEN as usize;
+const STACK_SIZE: usize = MAXWLEN;
 
 /// `preword` holds a prefix, any number of compounded words and a split
 /// word one after another, so it needs room for several whole words.
-const PREWORD_SIZE: usize = MAXWLEN as usize * 3;
+const PREWORD_SIZE: usize = MAXWLEN * 3;
 
 // Values for `Frame::prefix_depth` that are not a stack depth.
 /// This level is not below a postponed prefix.
@@ -273,13 +273,13 @@ pub(crate) struct Walk {
     pub repextra: c_int,
 
     /// The good word collected from the tree so far.
-    pub tword: [c_char; MAXWLEN as usize],
+    pub tword: [c_char; MAXWLEN],
     /// The suggestion with its proper case: prefix, compounded words and
     /// split words concatenated. NUL-terminated while going deeper, but
     /// not on the way back up.
     pub preword: [c_char; PREWORD_SIZE],
     /// One compound flag per word collected in `preword`.
-    pub compflags: [u8; MAXWLEN as usize],
+    pub compflags: [u8; MAXWLEN],
 
     pub stack: [Frame; STACK_SIZE],
     pub depth: c_int,
@@ -346,9 +346,9 @@ impl Walk {
                 idxs: core::ptr::null_mut(),
                 fword,
                 repextra: 0,
-                tword: [0; MAXWLEN as usize],
+                tword: [0; MAXWLEN],
                 preword: [0; PREWORD_SIZE],
-                compflags: [0; MAXWLEN as usize],
+                compflags: [0; MAXWLEN],
                 stack: [Frame::default(); STACK_SIZE],
                 depth: 0,
                 breakcheckcount: 1000,

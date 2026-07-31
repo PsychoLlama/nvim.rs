@@ -218,7 +218,7 @@ impl Walk {
             // Splitting means the words so far have to be valid on their
             // own. A single word must not carry NEEDCOMPOUND.
             if self.stack[level].comp_len == self.stack[level].comp_split
-                && flags & WF_NEEDCOMP as c_int != 0
+                && flags & WF_NEEDCOMP != 0
             {
                 return None;
             }
@@ -238,9 +238,9 @@ impl Walk {
             }
 
             newscore += if (*self.slang).sl_nosplitsugs {
-                SCORE_SPLIT_NO as c_int
+                SCORE_SPLIT_NO
             } else {
-                SCORE_SPLIT as c_int
+                SCORE_SPLIT
             };
 
             // Give a bonus to words seen before.
@@ -299,7 +299,7 @@ impl Walk {
             } else {
                 // Replacing a non-word character with a space is a
                 // substitution, not a split.
-                self.stack[child].score -= SCORE_SPLIT as c_int - SCORE_SUBST as c_int;
+                self.stack[child].score -= SCORE_SPLIT - SCORE_SUBST;
             }
             self.stack[child].bad_idx = (self.stack[child].bad_idx as c_int + taken) as u8;
         }

@@ -44,7 +44,7 @@ impl Walk {
             // sound-fold tree, when the score would be too high anyway, or
             // when a REP item or a swap has already changed the text here.
             if ((*self.lp).lp_replang.is_null() && !self.soundfold)
-                || self.stack[level].score + SCORE_REP as c_int >= (*self.su).su_maxscore
+                || self.stack[level].score + SCORE_REP >= (*self.su).su_maxscore
                 || self.stack[level].bad_idx < self.stack[level].change_from
             {
                 self.stack[level].state = State::Final;
@@ -97,12 +97,12 @@ impl Walk {
                     break;
                 }
                 if strncmp((*item).ft_from, p, strlen((*item).ft_from)) != 0
-                    || !self.try_deeper(SCORE_REP as c_int)
+                    || !self.try_deeper(SCORE_REP)
                 {
                     continue;
                 }
 
-                self.go_deeper(SCORE_REP as c_int);
+                self.go_deeper(SCORE_REP);
                 // The replacement has to be undone when the walk returns.
                 self.stack[level].state = State::RepUndo;
                 self.depth += 1;

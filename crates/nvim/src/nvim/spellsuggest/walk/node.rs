@@ -193,7 +193,7 @@ impl Walk {
             self.stack[level].child += 1; // eat one NUL byte
 
             let mut flags = self.idx_at(at) as c_int;
-            if flags & WF_NOSUGGEST as c_int != 0 {
+            if flags & WF_NOSUGGEST != 0 {
                 return;
             }
 
@@ -216,7 +216,7 @@ impl Walk {
             // another compound word to it is still worth trying, below.
             let mut good_word_ends = !(self.stack[level].comp_len == self.stack[level].comp_split
                 && bad_word_ends
-                && flags & WF_NEEDCOMP as c_int != 0);
+                && flags & WF_NEEDCOMP != 0);
 
             // The last character of the word before this one, once there
             // is one to compound onto. Null until then, and the null is
@@ -246,7 +246,7 @@ impl Walk {
                 // A banned word must not be suggested. It may turn up
                 // again as a good word, so remember it.
                 let preword_len = self.stack[level].preword_len as usize;
-                if flags & WF_BANNED as c_int != 0 {
+                if flags & WF_BANNED != 0 {
                     add_banned(self.su, self.preword.as_mut_ptr().add(preword_len));
                     return;
                 }
@@ -264,20 +264,19 @@ impl Walk {
             let mut newscore = 0;
             if !self.soundfold {
                 // Sound-folded words have no flags.
-                if flags & WF_REGION as c_int != 0
-                    && (flags as u32 >> 16) & (*self.lp).lp_region as u32 == 0
+                if flags & WF_REGION != 0 && (flags as u32 >> 16) & (*self.lp).lp_region as u32 == 0
                 {
-                    newscore += SCORE_REGION as c_int;
+                    newscore += SCORE_REGION;
                 }
-                if flags & WF_RARE as c_int != 0 {
-                    newscore += SCORE_RARE as c_int;
+                if flags & WF_RARE != 0 {
+                    newscore += SCORE_RARE;
                 }
                 let preword_len = self.stack[level].preword_len as usize;
                 if !spell_valid_case(
                     (*self.su).su_badflags,
                     captype(self.preword.as_ptr().add(preword_len), ptr::null()),
                 ) {
-                    newscore += SCORE_ICASE as c_int;
+                    newscore += SCORE_ICASE;
                 }
             }
 
@@ -348,8 +347,8 @@ impl Walk {
             if prefix_flags == 0 {
                 return false;
             }
-            if prefix_flags & WF_RAREPFX as c_int != 0 {
-                *flags |= WF_RARE as c_int;
+            if prefix_flags & WF_RAREPFX != 0 {
+                *flags |= WF_RARE;
             }
 
             // Checking for a prefix and for compounding at once runs into
@@ -531,7 +530,7 @@ impl Walk {
             if self.soundfold {
                 // Sound-folded words have no case to get right.
                 strcpy(out, good);
-            } else if flags & WF_KEEPCAP as c_int != 0 {
+            } else if flags & WF_KEEPCAP != 0 {
                 // The spelling has to come from the keep-case tree.
                 find_keepcap_word(self.slang, good, out);
             } else {
@@ -539,17 +538,17 @@ impl Walk {
                 // word wants a good word to match. An all-cap bad word
                 // one character long only says one-cap, though.
                 let mut caps = (*self.su).su_badflags;
-                if caps & WF_ALLCAP as c_int != 0
+                if caps & WF_ALLCAP != 0
                     && (*self.su).su_badlen == utfc_ptr2len((*self.su).su_badptr)
                 {
-                    caps = WF_ONECAP as c_int;
+                    caps = WF_ONECAP;
                 }
                 caps |= flags;
 
                 // A compound word appended after a word character must not
                 // start with a capital.
                 if !prev_word_tail.is_null() && spell_iswordp_nmw(prev_word_tail, curwin.get()) {
-                    caps &= !(WF_ONECAP as c_int);
+                    caps &= !(WF_ONECAP);
                 }
                 make_case_word(good, out, caps);
             }
@@ -594,7 +593,7 @@ impl Walk {
                 let mut q = self.preword.as_mut_ptr().add(end);
                 q = Walk::char_back(self.preword.as_ptr(), q);
                 if spell_iswordp(q, curwin.get()) {
-                    newscore += SCORE_NONWORD as c_int;
+                    newscore += SCORE_NONWORD;
                 }
             }
 
@@ -626,19 +625,19 @@ impl Walk {
                 // With mixed case there is no telling whether the word
                 // should be upper or lower case, so offer both.
                 let caps = captype(self.preword.as_ptr(), ptr::null());
-                if caps == 0 || caps == WF_ALLCAP as c_int {
+                if caps == 0 || caps == WF_ALLCAP {
                     let split_off = self.stack[level].split_off as usize;
                     make_case_word(
                         self.tword.as_mut_ptr().add(split_off),
                         self.preword.as_mut_ptr().add(preword_len),
-                        if caps == 0 { WF_ALLCAP as c_int } else { 0 },
+                        if caps == 0 { WF_ALLCAP } else { 0 },
                     );
                     add_suggestion(
                         self.su,
                         &raw mut (*self.su).su_ga,
                         self.preword.as_ptr(),
                         replaced,
-                        score + SCORE_ICASE as c_int,
+                        score + SCORE_ICASE,
                         0,
                         false,
                         (*self.lp).lp_sallang,

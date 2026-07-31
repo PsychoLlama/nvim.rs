@@ -44,14 +44,23 @@ use crate::src::nvim::spellsuggest::score::{
     EMPTY_SOUND, score_wordcount_adj, spell_edit_score, spell_edit_score_limit, spell_isupper,
     spell_tofold,
 };
+use crate::src::nvim::spellsuggest::walk::suggest_trie_walk;
 use crate::src::nvim::spellsuggest::{
     MAXWLEN, NUL, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, TAB,
-    WF_CAPMASK, WF_KEEPCAP, WF_NOSUGGEST, WF_REGION, sftword_T, sps_flags, suggest_trie_walk,
-    suginfo_T,
+    WF_CAPMASK, WF_KEEPCAP, WF_NOSUGGEST, WF_REGION, sps_flags, suginfo_T,
 };
-use crate::src::nvim::types::{hashitem_T, idx_T, int16_t, langp_T, linenr_T, slang_T};
+use crate::src::nvim::types::{hashitem_T, idx_T, int16_t, langp_T, linenr_T, slang_T, uint8_t};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
+
+/// The best score seen so far for one sound-folded word, with that word
+/// stored inline after it. The hash table of soundfolds already handled
+/// keys on the inline word.
+#[repr(C)]
+struct sftword_T {
+    sft_score: int16_t,
+    sft_word: [uint8_t; 0],
+}
 
 /// Where the inline soundfolded word sits inside a `sftword_T`; the hash
 /// table keys on that field, so the record is recovered by stepping back.
@@ -257,20 +266,20 @@ pub unsafe fn add_sound_suggest(
 unsafe fn word_number_to_letters(
     slang: *mut slang_T,
     orgnr: c_int,
-) -> ([c_char; MAXWLEN as usize], usize, c_int) {
+) -> ([c_char; MAXWLEN], usize, c_int) {
     // SAFETY: the caller guarantees the tree; the indices below stay inside
     // it because every node's first byte is its number of children.
     unsafe {
         let byts = (*slang).sl_fbyts;
         let idxs: *mut idx_T = (*slang).sl_fidxs;
 
-        let mut theword = [0 as c_char; MAXWLEN as usize];
+        let mut theword = [0 as c_char; MAXWLEN];
         let mut n: usize = 0;
         let mut wordcount = 0;
         let mut wlen = 0;
         let mut i: c_int = 1;
 
-        while wlen < MAXWLEN as usize - 3 {
+        while wlen < MAXWLEN - 3 {
             i = 1;
             if wordcount == orgnr && *byts.add(n + 1) == 0 {
                 break; // found the end of the word
@@ -330,7 +339,7 @@ unsafe fn emit_word(
     su: *mut suginfo_T,
     lp: *mut langp_T,
     slang: *mut slang_T,
-    theword: &mut [c_char; MAXWLEN as usize],
+    theword: &mut [c_char; MAXWLEN],
     n: usize,
     mut i: c_int,
     score: c_int,
@@ -343,22 +352,22 @@ unsafe fn emit_word(
         // The flags and regions are the NUL-byte children of this node. The
         // bound has to be tested before the byte is read.
         while i <= *byts.add(n) as c_int && *byts.add(n + i as usize) == 0 {
-            let mut cword = [0 as c_char; MAXWLEN as usize];
+            let mut cword = [0 as c_char; MAXWLEN];
             let mut flags = *idxs.add(n + i as usize) as c_int;
             i += 1;
 
-            if flags & WF_NOSUGGEST as c_int != 0 {
+            if flags & WF_NOSUGGEST != 0 {
                 continue;
             }
 
-            let p = if flags & WF_KEEPCAP as c_int != 0 {
+            let p = if flags & WF_KEEPCAP != 0 {
                 // The letters came out of the case-folded tree, so the
                 // real spelling has to be looked up in the keep-case one.
                 find_keepcap_word(slang, theword.as_mut_ptr(), cword.as_mut_ptr());
                 cword.as_mut_ptr()
             } else {
                 flags |= (*su).su_badflags;
-                if flags & WF_CAPMASK as c_int != 0 {
+                if flags & WF_CAPMASK != 0 {
                     make_case_word(theword.as_mut_ptr(), cword.as_mut_ptr(), flags);
                     cword.as_mut_ptr()
                 } else {
@@ -366,7 +375,7 @@ unsafe fn emit_word(
                 }
             };
 
-            if sps_flags.get() & SPS_DOUBLE as c_int != 0 {
+            if sps_flags.get() & SPS_DOUBLE != 0 {
                 if score <= (*su).su_maxscore {
                     add_suggestion(
                         su,
@@ -384,13 +393,12 @@ unsafe fn emit_word(
             }
 
             // A word from another region is worth less.
-            let mut goodscore = if flags & WF_REGION as c_int != 0
-                && (flags as u32 >> 16) & (*lp).lp_region as u32 == 0
-            {
-                SCORE_REGION as c_int
-            } else {
-                0
-            };
+            let mut goodscore =
+                if flags & WF_REGION != 0 && (flags as u32 >> 16) & (*lp).lp_region as u32 == 0 {
+                    SCORE_REGION
+                } else {
+                    0
+                };
 
             // A small penalty for turning the first letter from lower to
             // upper case: "tath" -> "Kath" is less likely than "tath" ->
@@ -400,7 +408,7 @@ unsafe fn emit_word(
             if spell_isupper(gc) {
                 let bc = utf_ptr2char(&raw const (*su).su_badword as *const c_char);
                 if !spell_isupper(bc) && spell_tofold(bc) != spell_tofold(gc) {
-                    goodscore += SCORE_ICASE as c_int / 2;
+                    goodscore += SCORE_ICASE / 2;
                 }
             }
 
@@ -409,7 +417,7 @@ unsafe fn emit_word(
             // ceiling makes it faster; past a high enough ceiling the
             // depth-first search costs more than filling the table.
             let limit = (4 * ((*su).su_sfmaxscore - goodscore) - score) / 3;
-            goodscore += if limit > SCORE_LIMITMAX as c_int {
+            goodscore += if limit > SCORE_LIMITMAX {
                 spell_edit_score(
                     Some(&*slang),
                     &raw const (*su).su_badword as *const c_char,
@@ -424,7 +432,7 @@ unsafe fn emit_word(
                 )
             };
 
-            if goodscore >= SCORE_MAXMAX as c_int {
+            if goodscore >= SCORE_MAXMAX {
                 continue;
             }
 
@@ -560,10 +568,10 @@ pub unsafe fn find_keepcap_word(slang: *mut slang_T, fword: *mut c_char, kword: 
             return;
         }
 
-        let mut uword = [0 as c_char; MAXWLEN as usize];
+        let mut uword = [0 as c_char; MAXWLEN];
         allcap_copy(fword, uword.as_mut_ptr());
 
-        let mut stack = [KeepCapLevel::default(); MAXWLEN as usize];
+        let mut stack = [KeepCapLevel::default(); MAXWLEN];
         let mut depth: isize = 0;
 
         while depth >= 0 {

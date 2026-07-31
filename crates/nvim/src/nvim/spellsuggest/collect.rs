@@ -41,7 +41,7 @@ use core::{mem, ptr, slice};
 
 /// A sound-a-like score that could not be computed stands in as "three
 /// insertions apart", which is far but not infinitely so.
-const SCORE_BIG: c_int = SCORE_INS as c_int * 3;
+const SCORE_BIG: c_int = SCORE_INS * 3;
 
 /// Blend a word's edit-distance score with its sound-a-like score. The
 /// edit distance dominates; the sound only nudges.
@@ -52,7 +52,7 @@ fn rescore(word_score: c_int, sound_score: c_int) -> c_int {
 /// How many suggestions to keep when the list is cleaned up. Always
 /// comfortably more than will be displayed, because a later pass can
 /// rescore them and change the order.
-fn clean_count(su: &suginfo_T) -> c_int {
+pub(super) fn clean_count(su: &suginfo_T) -> c_int {
     if su.su_maxcount < 130 {
         150
     } else {
@@ -214,18 +214,18 @@ pub unsafe fn check_suggestions(su: *mut suginfo_T, gap: *mut garray_T) {
     // SAFETY: the caller guarantees the pointers; `longword` is sized for
     // any word plus a terminator and every copy into it is bounded.
     unsafe {
-        let mut longword = [0 as c_char; MAXWLEN as usize + 1];
+        let mut longword = [0 as c_char; MAXWLEN + 1];
         let stp = (*gap).ga_data as *mut suggest_T;
         for i in (0..(*gap).ga_len).rev() {
             let sug = &*stp.offset(i as isize);
             // Append what follows in the line, so that "the the" is
             // recognisable.
-            xstrlcpy(longword.as_mut_ptr(), sug.st_word, MAXWLEN as usize + 1);
+            xstrlcpy(longword.as_mut_ptr(), sug.st_word, MAXWLEN + 1);
             let len = sug.st_wordlen;
             xstrlcpy(
                 longword.as_mut_ptr().offset(len as isize),
                 (*su).su_badptr.offset(sug.st_orglen as isize),
-                MAXWLEN as usize + 1 - len as usize,
+                MAXWLEN + 1 - len as usize,
             );
 
             let mut attr: hlf_T = HLF_COUNT;
@@ -324,7 +324,7 @@ pub unsafe fn rescore_one(su: *mut suginfo_T, stp: &mut suggest_T) {
         };
 
         stp.st_altscore = stp_sal_score(stp, &*su, slang, badsound);
-        if stp.st_altscore == SCORE_MAXMAX as c_int {
+        if stp.st_altscore == SCORE_MAXMAX {
             stp.st_altscore = SCORE_BIG;
         }
         stp.st_score = rescore(stp.st_score, stp.st_altscore);
@@ -432,7 +432,7 @@ pub unsafe fn score_comp_sal(su: *mut suginfo_T) {
         for i in 0..(*su).su_ga.ga_len {
             let stp = &*((*su).su_ga.ga_data as *mut suggest_T).offset(i as isize);
             let score = stp_sal_score(stp, &*su, slang, &badsound);
-            if score >= SCORE_MAXMAX as c_int {
+            if score >= SCORE_MAXMAX {
                 continue;
             }
             let sstp =
@@ -479,7 +479,7 @@ pub unsafe fn score_combine(su: *mut suginfo_T) {
 
             for stp in suggestions(&raw mut (*su).su_ga) {
                 stp.st_altscore = stp_sal_score(stp, &*su, slang, &badsound);
-                let alt = if stp.st_altscore == SCORE_MAXMAX as c_int {
+                let alt = if stp.st_altscore == SCORE_MAXMAX {
                     SCORE_BIG
                 } else {
                     stp.st_altscore
@@ -503,7 +503,7 @@ pub unsafe fn score_combine(su: *mut suginfo_T) {
                 &raw const (*su).su_badword as *const c_char,
                 stp.st_word,
             );
-            let base = if stp.st_score == SCORE_MAXMAX as c_int {
+            let base = if stp.st_score == SCORE_MAXMAX {
                 SCORE_BIG
             } else {
                 stp.st_score
