@@ -1034,10 +1034,9 @@ unsafe fn term_may_alloc_scrollback(mut term: *mut Terminal, mut buf: *mut buf_T
     return true_0 != 0;
 }
 pub unsafe fn terminal_alloc(mut buf: *mut buf_T, mut opts: TerminalOptions) -> *mut Terminal {
-    let mut term: *mut Terminal =
-        xcalloc(1 as size_t, ::core::mem::size_of::<Terminal>()) as *mut Terminal;
-    (*term).opts = opts;
-    (*term).buf_handle = (*buf).handle;
+    // Leaked here and reclaimed by terminal_destroy. The buffer is the
+    // owner; every other reference reaches it through `buf_T::terminal`.
+    let mut term: *mut Terminal = Box::into_raw(Box::new(Terminal::new(opts, (*buf).handle)));
     (*buf).terminal = term;
     (*term).vt = vterm_new(
         opts.height as ::core::ffi::c_int,
@@ -1991,7 +1990,7 @@ pub unsafe fn terminal_destroy(mut termpp: *mut *mut Terminal) {
         (*term).termrequest_buffer.items = ::core::ptr::null_mut::<::core::ffi::c_char>();
         vterm_free((*term).vt);
         multiqueue_free((*term).pending.events);
-        xfree(term as *mut ::core::ffi::c_void);
+        drop(Box::from_raw(term));
         *termpp = ::core::ptr::null_mut::<Terminal>();
     }
 }

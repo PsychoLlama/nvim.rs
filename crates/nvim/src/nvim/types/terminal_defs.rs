@@ -4,7 +4,15 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+/// One `:terminal` buffer's emulator state.
+///
+/// Owned by the buffer it draws into: `terminal_alloc` leaks a `Box` and
+/// `terminal_destroy` reclaims it. Not `Copy` — there is exactly one of
+/// these per terminal buffer, reached through `buf_T::terminal`, and
+/// duplicating it would duplicate the allocations it owns.
+///
+/// Still `repr(C)`: `buf_T` is `repr(C)` and holds a `*mut Terminal`, so
+/// the FFI-safety lint follows the pointer into this definition.
 #[repr(C)]
 pub struct terminal {
     pub opts: TerminalOptions,
@@ -42,6 +50,71 @@ pub struct terminal {
     pub termrequest_terminator: VTermTerminator,
     pub refcount: size_t,
 }
+impl terminal {
+    /// A terminal with everything at rest, for `terminal_alloc` to fill in.
+    ///
+    /// This stands in for the `xcalloc` the transpiled code used: every
+    /// field starts as the all-zeroes value C would have produced, so the
+    /// initialisation that follows is the same one the C did.
+    pub fn new(opts: TerminalOptions, buf_handle: handle_T) -> Self {
+        Self {
+            opts,
+            buf_handle,
+            vt: ::core::ptr::null_mut(),
+            vts: ::core::ptr::null_mut(),
+            textbuf: [0; 8191],
+            sb_buffer: ::core::ptr::null_mut(),
+            sb_current: 0,
+            sb_size: 0,
+            sb_pending: 0,
+            sb_deleted: 0,
+            old_sb_deleted: 0,
+            old_height: 0,
+            title: ::core::ptr::null_mut(),
+            title_len: 0,
+            title_size: 0,
+            in_altscreen: false,
+            suspended: false,
+            closed: false,
+            destroy: false,
+            forward_mouse: false,
+            invalid_start: 0,
+            invalid_end: 0,
+            cursor: TerminalCursor {
+                row: 0,
+                col: 0,
+                shape: 0,
+                visible: false,
+                blink: false,
+            },
+            pending: TerminalPending {
+                resize: false,
+                cursor: false,
+                send: ::core::ptr::null_mut(),
+                events: ::core::ptr::null_mut(),
+            },
+            streamed_paste: false,
+            theme_updates: false,
+            synchronized_output: false,
+            sync_flush_pending: false,
+            color_set: [false; 16],
+            selection_buffer: ::core::ptr::null_mut(),
+            selection: StringBuilder {
+                size: 0,
+                capacity: 0,
+                items: ::core::ptr::null_mut(),
+            },
+            termrequest_buffer: StringBuilder {
+                size: 0,
+                capacity: 0,
+                items: ::core::ptr::null_mut(),
+            },
+            termrequest_terminator: 0,
+            refcount: 0,
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ScrollbackLine {
