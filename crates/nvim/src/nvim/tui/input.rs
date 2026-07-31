@@ -57,11 +57,11 @@ use crate::src::nvim::tui::termkey::termkey::{
     termkey_new_abstract, termkey_push_bytes, termkey_set_buffer_size, termkey_set_canonflags,
     termkey_start,
 };
-use crate::src::nvim::tui::tui::{TUIData, tui_set_size};
+use crate::src::nvim::tui::tui::tui_set_size;
 use crate::src::nvim::types::builders::ArrayBuf;
 use crate::src::nvim::types::{
-    Array, Event, Integer, KeyEncoding, Loop, Object, OptInt, RStream, String_0, TermKey,
-    TermKey_Terminfo_Getstr_Hook, TermKeyCsiParam, TermKeyKey, TerminfoEntry, size_t, uv_handle_t,
+    Array, Event, Integer, KEY_BUFFER_SIZE, KeyEncoding, Loop, Object, RStream, String_0,
+    TermInput, TermKey, TermKeyCsiParam, TermKeyKey, TerminfoEntry, size_t, uv_handle_t,
     uv_timer_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -69,56 +69,7 @@ use core::fmt::Write;
 
 // ------------------------------------------------------------------ the state
 
-/// Everything needed to read one terminal.
-///
-/// It lives inside the [`TUIData`] it belongs to, and holds that one's
-/// pointer: what the terminal says about its modes and its size is the TUI's
-/// business rather than the editor's.
-pub struct TermInput {
-    /// The terminal's file descriptor: this process's own stdin.
-    pub in_fd: c_int,
-    /// Which phase of a bracketed paste this is, or [`PASTE_NONE`].
-    pub paste: i8,
-    /// `'ttimeout'`: should an incomplete sequence time out at all?
-    pub ttimeout: bool,
-    pub callbacks: TermInputCallbacks,
-    pub key_encoding: KeyEncoding,
-    /// `'ttimeoutlen'`: how long to wait for the rest of a sequence.
-    pub ttimeoutlen: OptInt,
-    /// termkey's parser, holding whatever sequence is half-read.
-    pub tk: *mut TermKey,
-    /// How termkey asks the TUI for a capability, which is how nvim gets key
-    /// sequences the terminal's own description does not name.
-    pub tk_ti_hook_fn: Option<TermKey_Terminfo_Getstr_Hook>,
-    /// Fires when an incomplete sequence has waited long enough.
-    pub timer_handle: uv_timer_t,
-    /// Rations the background-colour queries that a terminal announcing a
-    /// theme change would otherwise provoke one of per announcement.
-    pub bg_query_timer: uv_timer_t,
-    pub loop_0: *mut Loop,
-    pub read_stream: RStream,
-    /// The TUI this belongs to.
-    pub tui_data: *mut TUIData,
-    /// Keys named but not yet sent. One `nvim_input` carries as many as have
-    /// accumulated by the end of a read.
-    pub key_buffer: [u8; KEY_BUFFER_SIZE],
-    pub key_buffer_len: usize,
-}
-
-/// What the TUI wants to be told about.
-#[derive(Copy, Clone)]
-pub struct TermInputCallbacks {
-    /// Called on the next reply to a device-attributes query, once. The TUI
-    /// sends such a query after resetting the terminal, so the reply is what
-    /// says the reset has been processed.
-    pub primary_device_attr: Option<unsafe fn(*mut TUIData)>,
-}
-
 // -------------------------------------------------------------- the constants
-
-/// How many named keys can wait for the next `nvim_input`, and the size of
-/// the buffer they wait in.
-pub const KEY_BUFFER_SIZE: usize = 0x1000;
 
 /// termkey's buffer, holding the sequence being parsed. It is grown for a
 /// paste-sized burst and shrunk back to this afterwards.

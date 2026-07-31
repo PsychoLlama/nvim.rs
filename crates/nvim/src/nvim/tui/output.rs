@@ -25,13 +25,10 @@ use crate::src::nvim::tui::terminfo::caps::{
     TerminfoDef, kTerm_cursor_invisible, kTerm_cursor_normal, kTermCount,
 };
 use crate::src::nvim::tui::terminfo::terminfo_fmt;
-use crate::src::nvim::tui::tui::TUIData;
-use crate::src::nvim::types::{TPVAR, size_t, uv_buf_t, uv_stream_t, uv_write_t};
+use crate::src::nvim::types::{
+    BUF_SIZE, TPVAR, TUIData, size_t, uv_buf_t, uv_stream_t, uv_write_t,
+};
 use core::ffi::{CStr, c_char, c_int};
-
-/// The staging buffer's size. A flush is one `uv_write`, so this also caps
-/// how much can be written without a syscall.
-pub const BUF_SIZE: usize = 65535;
 
 /// How much room a parameterised capability is assumed to need. If less than
 /// this is left in the buffer, flush first rather than risk a short write.

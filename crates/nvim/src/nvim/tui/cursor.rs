@@ -17,8 +17,9 @@ use crate::src::nvim::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
     kTerm_set_cursor_style,
 };
-use crate::src::nvim::tui::tui::TUIData;
-use crate::src::nvim::types::{CursorShape, Dict, HlAttrs, RgbValue, cursorentry_T, int32_t};
+use crate::src::nvim::types::{
+    CursorShape, Dict, HlAttrs, RgbValue, TUIData, cursorentry_T, int32_t,
+};
 use core::ffi::{CStr, c_int};
 
 /// Does the editor want the TUI driving cursor style at all? `'guicursor'`

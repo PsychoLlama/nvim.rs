@@ -38,18 +38,16 @@ use crate::src::nvim::os::env::{os_getenv, os_getenv_noalloc};
 use crate::src::nvim::os::input::os_isatty;
 use crate::src::nvim::os::libc::{abort, kill, sscanf};
 use crate::src::nvim::tui::events::{tui_mode_change, tui_mouse_off, tui_mouse_on, tui_set_title};
-use crate::src::nvim::tui::input::{
-    TermInput, tinput_destroy, tinput_init, tinput_start, tinput_stop,
-};
+use crate::src::nvim::tui::input::{tinput_destroy, tinput_init, tinput_start, tinput_stop};
 use crate::src::nvim::tui::negotiate::{
     BRACKETED_PASTE, GRAPHEME_CLUSTERS, LEFT_AND_RIGHT_MARGINS, RESIZE_EVENTS, SYNCHRONIZED_OUTPUT,
     THEME_UPDATES, tui_enable_extended_underline, tui_query_bg_color_noflush,
     tui_query_extended_underline, tui_query_kitty_keyboard, tui_request_term_mode,
     tui_reset_key_encoding, tui_set_term_mode, tui_tk_ti_getstr,
 };
-use crate::src::nvim::tui::output::{BUF_SIZE, flush, out, out_cstr, terminfo_out};
+use crate::src::nvim::tui::output::{flush, out, out_cstr, terminfo_out};
 use crate::src::nvim::tui::paint::cursor_goto;
-use crate::src::nvim::tui::quirks::{Terminal, TerminfoExt, augment_terminfo, patch_terminfo_bugs};
+use crate::src::nvim::tui::quirks::{Terminal, augment_terminfo, patch_terminfo_bugs};
 use crate::src::nvim::tui::terminfo::caps::{
     TerminfoDef, kTerm_change_scroll_region, kTerm_clear_screen, kTerm_cursor_normal,
     kTerm_delete_line, kTerm_enter_ca_mode, kTerm_erase_chars, kTerm_exit_attribute_mode,
@@ -59,8 +57,8 @@ use crate::src::nvim::tui::terminfo::caps::{
 };
 use crate::src::nvim::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
 use crate::src::nvim::types::{
-    Arena, FILE, HlAttrs, Integer, Loop, SignalWatcher, String_0, TerminfoEntry, UGrid,
-    cursorentry_T, uv_file, uv_handle_t, uv_loop_t, uv_pipe_t, uv_timer_t, uv_tty_mode_t, uv_tty_t,
+    HlAttrs, SignalWatcher, Staging, String_0, TUIData, TerminfoExt, uv_file, uv_handle_t,
+    uv_loop_t, uv_timer_t, uv_tty_mode_t, uv_tty_t,
 };
 use crate::src::nvim::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -72,222 +70,6 @@ unsafe extern "C" {
 }
 
 // --------------------------------------------------------------- the state
-
-/// Everything the TUI knows about the terminal it is driving.
-///
-/// One of these exists per UI process. It is built by [`tui_start`] and
-/// lives as long as the process does: libuv handles and the input layer
-/// hold pointers into it, so it can neither move nor be freed while the
-/// loop it registered with is still running.
-///
-/// Holding a `&mut TUIData` means holding a TUI that [`tui_start`] finished
-/// setting up: the write handles are open and `ti` describes the terminal
-/// on the other end. The modules that only paint (see
-/// [`output`](super::output), [`paint`](super::paint)) are safe on the
-/// strength of that, rather than re-asserting it at every call. The half of
-/// that which can be enforced rather than promised -- that what is staged
-/// really is within the buffer -- is [`Staging`]'s doing.
-pub struct TUIData {
-    /// The editor's event loop, borrowed. Not the loop writes go out on.
-    pub loop_0: *mut Loop,
-    /// Bytes on their way to the terminal.
-    pub staging: Staging,
-    pub input: TermInput,
-    /// The loop writes run on, private to the TUI so a flush can be
-    /// synchronous without pumping the editor's loop.
-    pub write_loop: uv_loop_t,
-    /// This terminal's capabilities.
-    pub ti: TerminfoEntry,
-    /// `$TERM`, or the name of the built-in entry standing in for it.
-    pub term: *mut c_char,
-    pub output_handle: OutputHandle,
-    pub out_isatty: bool,
-    pub winch_handle: SignalWatcher,
-    /// Fires once, shortly after startup, for the sequences that must not
-    /// be sent until the terminal has settled.
-    pub startup_delay_timer: uv_timer_t,
-    /// What the TUI believes is on the screen.
-    pub grid: UGrid,
-    /// Rectangles waiting to be repainted at the next flush.
-    pub invalid_regions: Vec<Rect>,
-    /// Where the editor last asked for the cursor, as opposed to where the
-    /// terminal's cursor actually is (`grid.row`/`grid.col`).
-    pub row: c_int,
-    pub col: c_int,
-    pub out_fd: c_int,
-    /// Resizes the terminal made itself, whose echo is not to be acted on.
-    pub pending_resize_events: c_int,
-    /// Did `$TERM` resolve against the terminfo database, or fall back?
-    pub terminfo_found_in_db: bool,
-    pub can_change_scroll_region: bool,
-    pub has_left_and_right_margin_mode: bool,
-    pub has_sync_mode: bool,
-    pub can_set_lr_margin: bool,
-    pub can_scroll: bool,
-    pub can_erase_chars: bool,
-    /// Does the terminal leave the final column immediately, rather than on
-    /// the next character?
-    pub immediate_wrap_after_last_column: bool,
-    /// "Background colour erase": erasing paints the current background.
-    pub bce: bool,
-    pub mouse_enabled: bool,
-    pub mouse_move_enabled: bool,
-    /// Mouse state to restore after a suspend.
-    pub mouse_enabled_save: bool,
-    pub title_enabled: bool,
-    pub sync_output: bool,
-    pub busy: bool,
-    /// Is the terminal's cursor hidden right now?
-    pub is_invisible: bool,
-    /// Does the editor want it hidden?
-    pub want_invisible: bool,
-    pub set_cursor_color_as_str: bool,
-    pub cursor_has_color: bool,
-    /// Between [`tui_start`] and the first mode change.
-    pub is_starting: bool,
-    pub resize_events_enabled: bool,
-    /// Terminal modes this TUI turned on and owes the terminal a reset for.
-    pub modes: TermModes,
-    /// Where a screenshot is being written instead of to the terminal.
-    pub screenshot: *mut FILE,
-    pub cursor_shapes: [cursorentry_T; 18],
-    /// The colours unset colours fall back to.
-    pub clear_attrs: HlAttrs,
-    /// Every highlight the editor has defined, indexed by id. Ids the
-    /// editor has not defined read as the default highlight.
-    pub attrs: Vec<HlAttrs>,
-    /// The attribute id the terminal is currently dressed for, or -1.
-    pub print_attr_id: c_int,
-    /// Is the terminal back at its own default attributes?
-    pub default_attr: bool,
-    pub set_default_colors: bool,
-    /// Would erasing paint the right thing in the current attributes?
-    pub can_clear_attr: bool,
-    pub showing_mode: usize,
-    pub verbose: Integer,
-    pub terminfo_ext: TerminfoExt,
-    pub can_set_title: bool,
-    pub can_set_underline_color: bool,
-    pub can_resize_screen: bool,
-    pub stopped: bool,
-    /// The size the editor has been told about.
-    pub width: c_int,
-    pub height: c_int,
-    /// `'termguicolors'`.
-    pub rgb: bool,
-    pub screen_or_tmux: bool,
-    /// The hyperlink the cells being painted are inside, or -1.
-    pub url: c_int,
-    pub ti_arena: Arena,
-}
-
-/// The bytes on their way to the terminal.
-///
-/// The fields are private, and that is the point: everything outside knows
-/// only that what is staged is staged and that there is room for what it is
-/// about to add. [`output`](super::output) writes what is here straight to
-/// the terminal without bounds-checking it first, which is sound because
-/// nothing can put more in than fits.
-pub struct Staging {
-    /// Boxed: 64 KiB has no business on the stack of whoever builds a TUI.
-    buf: Box<[u8; BUF_SIZE]>,
-    len: usize,
-}
-
-impl Staging {
-    fn new() -> Self {
-        // A `[0; BUF_SIZE]` literal would be built on the stack and then
-        // copied into the box, which is 64 KiB of pointless memcpy.
-        let buf: Box<[u8; BUF_SIZE]> = vec![0; BUF_SIZE]
-            .into_boxed_slice()
-            .try_into()
-            .expect("a boxed slice of exactly BUF_SIZE bytes");
-        Self { buf, len: 0 }
-    }
-
-    /// How much more will fit before a flush is needed.
-    pub fn room(&self) -> usize {
-        BUF_SIZE - self.len
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
-    /// Stage `bytes`. The caller flushes first if they do not fit --
-    /// dropping them silently would put half a sequence on the wire.
-    pub fn push(&mut self, bytes: &[u8]) {
-        let end = self.len + bytes.len();
-        assert!(end <= BUF_SIZE, "staged past the end of the buffer");
-        self.buf[self.len..end].copy_from_slice(bytes);
-        self.len = end;
-    }
-
-    /// Stage up to `count` copies of `byte`, returning how many fit.
-    pub fn fill(&mut self, byte: u8, count: usize) -> usize {
-        let taken = count.min(self.room());
-        let end = self.len + taken;
-        self.buf[self.len..end].fill(byte);
-        self.len = end;
-        taken
-    }
-
-    /// The room left, for the one writer that fills it in place: terminfo
-    /// expands a capability straight into the buffer. What it wrote is
-    /// staged by [`Self::commit`].
-    pub fn spare(&mut self) -> &mut [u8] {
-        &mut self.buf[self.len..]
-    }
-
-    /// Stage the `used` bytes [`Self::spare`] was just filled with.
-    pub fn commit(&mut self, used: usize) {
-        assert!(
-            used <= self.room(),
-            "committed more than there was room for"
-        );
-        self.len += used;
-    }
-
-    /// What a flush writes, as libuv wants it. The pointer is this buffer's
-    /// own and stays good until the next call that stages anything.
-    pub fn staged(&mut self) -> (*mut c_char, usize) {
-        (self.buf.as_mut_ptr().cast::<c_char>(), self.len)
-    }
-
-    /// Everything staged has been written.
-    pub fn clear(&mut self) {
-        self.len = 0;
-    }
-}
-
-/// A rectangle of the screen, in half-open rows and columns.
-#[derive(Copy, Clone)]
-pub struct Rect {
-    pub top: c_int,
-    pub bot: c_int,
-    pub left: c_int,
-    pub right: c_int,
-}
-
-/// Terminal modes the TUI turned on, packed so the whole set can be reset.
-#[derive(Copy, Clone)]
-pub struct TermModes {
-    pub grapheme_clusters_theme_updates_resize_events: [u8; 1],
-}
-crate::bitfield_accessors! {
-    impl TermModes.grapheme_clusters_theme_updates_resize_events {
-        0..=0 => grapheme_clusters, set_grapheme_clusters: bool;
-        1..=1 => theme_updates, set_theme_updates: bool;
-        2..=2 => resize_events, set_resize_events: bool;
-    }
-}
-
-/// Where output goes: a tty when there is one, a pipe otherwise.
-#[derive(Copy, Clone)]
-pub union OutputHandle {
-    pub tty: uv_tty_t,
-    pub pipe: uv_pipe_t,
-}
 
 // ----------------------------------------------------------- the constants
 

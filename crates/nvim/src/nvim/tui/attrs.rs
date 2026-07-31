@@ -30,8 +30,10 @@ use crate::src::nvim::tui::terminfo::caps::{
     kTerm_set_a_background, kTerm_set_a_foreground, kTerm_set_attributes, kTerm_set_rgb_background,
     kTerm_set_rgb_foreground, kTerm_set_underline_style,
 };
-use crate::src::nvim::tui::tui::{DEFAULT_ATTRS, TUIData};
-use crate::src::nvim::types::{Array, HlAttrs, Integer, MHPutStatus, Set_cstr_t, cstr_t, int32_t};
+use crate::src::nvim::tui::tui::DEFAULT_ATTRS;
+use crate::src::nvim::types::{
+    Array, HlAttrs, Integer, MHPutStatus, Set_cstr_t, TUIData, cstr_t, int32_t,
+};
 use core::ffi::{CStr, c_char, c_int};
 
 /// The underline style parameter each `HL_UNDER*` bit asks the terminal for,

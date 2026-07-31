@@ -26,10 +26,10 @@ use crate::src::nvim::tui::output::{TERMINFO_SEQ_LIMIT, flush, out, out_raw, ter
 use crate::src::nvim::tui::paint::invalidate;
 use crate::src::nvim::tui::terminfo::caps::{kTerm_from_status_line, kTerm_to_status_line};
 use crate::src::nvim::tui::terminfo::terminfo_info_msg;
-use crate::src::nvim::tui::tui::{LOGLVL_ERR, TUIData};
+use crate::src::nvim::tui::tui::LOGLVL_ERR;
 use crate::src::nvim::types::{
-    Array, ArrayBuf, DictBuf, Integer, Object, ObjectType, String_0, uv_buf_t, uv_stream_t,
-    uv_tty_mode_t, uv_tty_t, uv_write_t,
+    Array, ArrayBuf, DictBuf, Integer, Object, ObjectType, String_0, TUIData, uv_buf_t,
+    uv_stream_t, uv_tty_mode_t, uv_tty_t, uv_write_t,
 };
 use core::ffi::c_int;
 

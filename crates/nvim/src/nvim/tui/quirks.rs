@@ -31,7 +31,7 @@ use crate::src::nvim::tui::terminfo::caps::{
     kTerm_to_status_line,
 };
 use crate::src::nvim::tui::terminfo::{is_term_family, terminfo_is_bsd_console};
-use crate::src::nvim::types::{Arena, KeyEncoding, TerminfoEntry};
+use crate::src::nvim::types::{Arena, KeyEncoding, TerminfoEntry, TerminfoExt};
 use core::ffi::{CStr, c_char, c_int};
 
 /// The two key-encoding schemes this module chooses between. `KeyEncoding`
@@ -462,16 +462,6 @@ pub unsafe fn patch_terminfo_bugs(ti: &mut TerminfoEntry, arena: *mut Arena, t: 
 }
 
 // ---------------------------------------------------------------- augmenting
-
-/// The extra capability strings nvim carries because terminfo has no slot
-/// for them. All are fixed sequences chosen by terminal, never parameterised.
-#[derive(Clone, Copy, Default)]
-pub struct TerminfoExt {
-    pub enable_focus_reporting: Option<&'static CStr>,
-    pub disable_focus_reporting: Option<&'static CStr>,
-    pub reset_scroll_region: Option<&'static CStr>,
-    pub enter_altfont_mode: Option<&'static CStr>,
-}
 
 /// What [`augment_terminfo`] concluded, over and above the capabilities it
 /// wrote into the description.

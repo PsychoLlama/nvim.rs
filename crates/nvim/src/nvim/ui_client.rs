@@ -29,7 +29,7 @@ use crate::src::nvim::tui::paint::{
     tui_flush, tui_grid_clear, tui_grid_cursor_goto, tui_grid_resize, tui_grid_scroll,
     tui_raw_line, tui_screenshot,
 };
-use crate::src::nvim::tui::tui::{TUIData, tui_is_stopped, tui_start, tui_stop, tui_suspend};
+use crate::src::nvim::tui::tui::{tui_is_stopped, tui_start, tui_stop, tui_suspend};
 pub use crate::src::nvim::types::{
     __gid_t, __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
     __pthread_rwlock_arch_t, __uid_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
@@ -40,12 +40,12 @@ pub use crate::src::nvim::types::{
     KeyDict_highlight, KeySetLink, KeyValuePair, LibuvProc, LineFlags, Loop, LuaRef, MultiQueue,
     Object, ObjectType, OptionalKeys, PackerBuffer, PackerBufferFlush, Proc, ProcType, PtyProc,
     QUEUE, RStream, RemoteUI, RgbValue, RpcState, ScopeDictDictItem, ScopeType, SpecialVarValue,
-    StderrState, StdioPair, Stream, String_0, Terminal, UIClientHandler, Unpacker, VarLockStatus,
-    VarType, argv_callback, blob_T, blobvar_S, consumed_blk, dict_T, dictvar_S, float_T,
-    funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t, hash_T,
-    hashitem_T, hashtab_T, int16_t, int32_t, int64_t, internal_proc_cb, key_value_pair, linenr_T,
-    list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0, multiqueue,
-    object, object_data as C2Rust_Unnamed, packer_buffer_t, partial_S, partial_T, proc,
+    StderrState, StdioPair, Stream, String_0, TUIData, Terminal, UIClientHandler, Unpacker,
+    VarLockStatus, VarType, argv_callback, blob_T, blobvar_S, consumed_blk, dict_T, dictvar_S,
+    float_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t,
+    hash_T, hashitem_T, hashtab_T, int16_t, int32_t, int64_t, internal_proc_cb, key_value_pair,
+    linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, loop_0,
+    multiqueue, object, object_data as C2Rust_Unnamed, packer_buffer_t, partial_S, partial_T, proc,
     proc_exit_cb, proc_state_cb, proftime_T, pthread_mutex_t, pthread_rwlock_t, queue, rstream,
     sattr_T, schar_T, scid_T, sctx_T, size_t, ssize_t, stream, stream_close_cb, stream_read_cb,
     stream_uv as C2Rust_Unnamed_12, stream_write_cb, terminal, typval_T, typval_vval_union,

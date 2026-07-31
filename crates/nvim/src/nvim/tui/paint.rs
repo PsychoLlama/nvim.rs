@@ -33,8 +33,9 @@ use crate::src::nvim::tui::terminfo::caps::{
     kTerm_parm_insert_line, kTerm_parm_left_cursor, kTerm_parm_right_cursor, kTerm_parm_up_cursor,
     kTerm_set_lr_margin,
 };
-use crate::src::nvim::tui::tui::{Rect, TUIData};
-use crate::src::nvim::types::{FILE, Integer, LineFlags, String_0, UCell, sattr_T, schar_T};
+use crate::src::nvim::types::{
+    FILE, Integer, LineFlags, Rect, String_0, TUIData, UCell, sattr_T, schar_T,
+};
 use core::ffi::{c_char, c_int};
 
 /// The `schar_T` value of a cell nothing has been drawn into, and of the
