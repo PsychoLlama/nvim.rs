@@ -59,14 +59,14 @@ use crate::src::nvim::terminal::{
 use crate::src::nvim::types::{
     Callback, CallbackReader, Channel, ChannelPart, ChannelStdinMode, ChannelStreamType, Dict,
     InternalState, LuaRef, OptInt, Proc, PtyProc, RStream, RpcState, SocketWatcher, Stream,
-    TerminalOptions, auto_event, buf_T, dict_T, ptr_t, size_t, uint16_t, uint64_t, varnumber_T,
+    TerminalOptions, buf_T, dict_T, ptr_t, size_t, uint16_t, uint64_t, varnumber_T,
 };
 
 /// Values these belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
 
-    use super::{ChannelPart, ChannelStdinMode, ChannelStreamType, auto_event};
+    use super::{ChannelPart, ChannelStreamType};
     use core::ffi::c_int;
 
     pub const kChannelStreamProc: ChannelStreamType = 0;
@@ -81,13 +81,9 @@ mod known {
     pub const kChannelPartRpc: ChannelPart = 3;
     pub const kChannelPartAll: ChannelPart = 4;
 
-    pub const kChannelStdinPipe: ChannelStdinMode = 0;
-
     pub const kProcTypePty: c_int = 1;
-    pub const kCallbackNone: c_int = 0;
     pub const kListLenMayKnow: c_int = -3;
     pub const LUA_NOREF: c_int = -2;
-    pub const LOGLVL_INF: c_int = 2;
 
     pub const VAR_UNKNOWN: c_int = 0;
     pub const VAR_NUMBER: c_int = 1;
@@ -96,12 +92,6 @@ mod known {
     pub const VAR_DICT: c_int = 5;
     pub const VAR_UNLOCKED: c_int = 0;
 
-    pub const EVENT_CHANINFO: auto_event = 23;
-    pub const EVENT_CHANOPEN: auto_event = 24;
-
-    pub const STDIN_FILENO: c_int = 0;
-    pub const STDOUT_FILENO: c_int = 1;
-    pub const STDERR_FILENO: c_int = 2;
     /// `fcntl` command: dup to the lowest free descriptor at or above the
     /// third argument, with close-on-exec set.
     pub const F_DUPFD_CLOEXEC: c_int = 1030;
@@ -816,6 +806,8 @@ unsafe extern "C" fn channel_proc_state_cb(_proc: *mut Proc, suspended: bool, da
     }
 }
 
+use crate::src::nvim::types::channel::kChannelStdinPipe;
+use crate::src::nvim::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::src::nvim::ui_client::ui_client_attach_to_restarted_server;
 
 // ---------------------------------------------------------------------------

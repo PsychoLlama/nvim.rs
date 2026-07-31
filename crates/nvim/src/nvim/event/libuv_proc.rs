@@ -13,6 +13,7 @@ use crate::src::nvim::log::{LOGLVL_INF, logmsg};
 use crate::src::nvim::main::ui_client_forward_stdin;
 use crate::src::nvim::os::env::os_free_fullenv;
 use crate::src::nvim::os::libc::close;
+use crate::src::nvim::types::libc::STDERR_FILENO;
 use crate::src::nvim::types::{
     LibuvProc, Loop, Proc, uv_file, uv_handle_t, uv_pipe_t, uv_process_t, uv_stdio_container_t,
     uv_stdio_flags,
@@ -31,8 +32,6 @@ const UV_NONBLOCK_PIPE: c_int = 64;
 const UV_PROCESS_WINDOWS_HIDE: u32 = 16;
 /// `setsid()` the child, which on unix-likes we always want. #8107
 const UV_PROCESS_DETACHED: u32 = 8;
-
-const STDERR_FILENO: c_int = 2;
 
 /// A fresh, unspawned libuv child.
 pub fn libuv_proc_init(uv_loop: *mut Loop, data: *mut c_void) -> LibuvProc {

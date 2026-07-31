@@ -180,9 +180,6 @@ pub struct PumWant {
 }
 pub(crate) const NULL_0: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub static arena_alloc_count: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-pub(crate) const STDIN_FILENO: c_int = 0 as c_int;
-pub(crate) const STDOUT_FILENO: c_int = 1 as c_int;
-pub(crate) const STDERR_FILENO: c_int = 2 as c_int;
 pub(crate) const DEFAULT_MAXPATHL: c_int = 4096 as c_int;
 pub(crate) const MAXPATHL: c_int = DEFAULT_MAXPATHL;
 pub(crate) const KV_INITIAL_VALUE: Array = Array {

@@ -443,7 +443,6 @@ pub const DOBUF_LAST: dobuf_start_values = 2;
 pub const DOBUF_FIRST: dobuf_start_values = 1;
 pub const DOBUF_CURRENT: dobuf_start_values = 0;
 pub const kChannelPartAll: ChannelPart = 4;
-pub const kChannelStdinPipe: ChannelStdinMode = 0;
 pub const kMTLineWise: MotionType = 1;
 pub type C2Rust_Unnamed_42 = c_uint;
 pub const PUT_LINE: C2Rust_Unnamed_42 = 8;

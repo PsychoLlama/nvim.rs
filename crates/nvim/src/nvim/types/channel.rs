@@ -77,6 +77,9 @@ pub struct ChannelCallFrame {
 }
 pub type ChannelPart = ::core::ffi::c_uint;
 pub type ChannelStdinMode = ::core::ffi::c_uint;
+/// What a channel does with the job's stdin.
+pub const kChannelStdinPipe: ChannelStdinMode = 0;
+pub const kChannelStdinNull: ChannelStdinMode = 1;
 pub type ChannelStreamType = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 #[repr(C)]

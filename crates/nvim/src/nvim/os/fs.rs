@@ -22,6 +22,7 @@ use crate::src::nvim::path::{
     FullName_save, append_path, dir_of_file_exists, get_past_head, gettail_dir, path_tail_with_sep,
     save_abs_path, vim_ispathsep,
 };
+use crate::src::nvim::types::libc::STDIN_FILENO;
 pub use crate::src::nvim::types::{
     __gid_t, __mode_t, __off_t, __off64_t, __pthread_internal_list, __pthread_list_t,
     __pthread_mutex_s, __pthread_rwlock_arch_t, __uid_t, _IO_FILE, _IO_codecvt, _IO_lock_t,
@@ -211,7 +212,6 @@ pub const O_APPEND: ::core::ffi::c_int = 0o2000 as ::core::ffi::c_int;
 pub const F_GETFD: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const F_SETFD: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const FD_CLOEXEC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const STDIN_FILENO: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NODE_NORMAL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

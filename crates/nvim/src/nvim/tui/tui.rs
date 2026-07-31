@@ -56,6 +56,7 @@ use crate::src::nvim::tui::terminfo::caps::{
     kTerm_reset_cursor_style, kTerm_set_lr_margin, kTerm_set_underline_style,
 };
 use crate::src::nvim::tui::terminfo::{terminfo_from_builtin, terminfo_from_database};
+use crate::src::nvim::types::libc::STDOUT_FILENO;
 use crate::src::nvim::types::{
     HlAttrs, SignalWatcher, Staging, String_0, TUIData, TerminfoExt, uv_file, uv_handle_t,
     uv_loop_t, uv_timer_t, uv_tty_mode_t, uv_tty_t,
@@ -744,4 +745,3 @@ unsafe fn env_size(name: &CStr, out: *mut c_int) -> bool {
 }
 
 const EOF: c_int = -1;
-const STDOUT_FILENO: c_int = 1;

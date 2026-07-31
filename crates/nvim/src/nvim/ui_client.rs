@@ -60,16 +60,16 @@ use crate::src::nvim::tui::tui::{
 };
 use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf};
+use crate::src::nvim::types::channel::kChannelStdinPipe;
+use crate::src::nvim::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::src::nvim::types::ui::kLineFlagWrap;
 use crate::src::nvim::types::{
-    Arena, Array, Callback, CallbackReader, ChannelStdinMode, Dict, Error, Event, GridLineEvent,
-    HlAttrs, Integer, KeyDict_highlight, KeySetLink, Object, ObjectType, TUIData, UIClientHandler,
-    dict_T, garray_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeString, proftime_T, sattr_T, schar_T, uint16_t,
+    Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs, Integer,
+    KeyDict_highlight, KeySetLink, Object, ObjectType, TUIData, UIClientHandler, dict_T, garray_T,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    proftime_T, sattr_T, schar_T, uint16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
-
-const kChannelStdinPipe: ChannelStdinMode = 0;
 
 /// The descriptor the client hands the server as `stdin_fd` when the user
 /// piped something in: stdin has been moved there so that the terminal can
@@ -183,9 +183,6 @@ pub unsafe fn ui_client_start_server(
         (*channel).id
     }
 }
-
-const STDOUT_FILENO: c_int = 1;
-const STDERR_FILENO: c_int = 2;
 
 /// Attaches this client to the server as a UI.
 ///

@@ -15,7 +15,6 @@ use crate::src::nvim::eval::vars::{get_vim_var_list, get_vim_var_str, set_vim_va
 use crate::src::nvim::event::proc::{proc_stop, proc_wait};
 use crate::src::nvim::ex_docmd::{
     CMOD_CONFIRM, GA_EMPTY_INIT_VALUE, NUL, VV_ARGV, VV_EXITREASON, VV_PROGPATH, kChannelPartAll,
-    kChannelStdinPipe,
 };
 use crate::src::nvim::log::{LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{cmdmod, current_ui, e_invchan, exiting, getout};
@@ -26,6 +25,7 @@ use crate::src::nvim::msgpack_rpc::server::{server_start, server_stop};
 use crate::src::nvim::os::libc::strstr;
 use crate::src::nvim::strings::concat_str;
 use crate::src::nvim::types::api::kErrorTypeNone;
+use crate::src::nvim::types::channel::kChannelStdinPipe;
 use crate::src::nvim::types::{
     ArenaMem, Array, Callback, CallbackReader, Dict, Error, KeyValuePair, Object, exarg_T,
     kObjectTypeBoolean, kObjectTypeDict, kObjectTypeString, key_value_pair, listitem_T,

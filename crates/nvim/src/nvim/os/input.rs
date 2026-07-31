@@ -22,6 +22,7 @@ use crate::src::nvim::os::libc::{__assert_fail, gettext, memcpy, memmove, sscanf
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::profile::{prof_input_end, prof_input_start};
 use crate::src::nvim::state::{MODE_INSERT, get_real_state};
+use crate::src::nvim::types::libc::STDIN_FILENO;
 pub use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
@@ -256,7 +257,6 @@ pub const FSK_KEEP_X_KEY: C2Rust_Unnamed_27 = 2;
 pub const FSK_KEYCODE: C2Rust_Unnamed_27 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const STDIN_FILENO: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;

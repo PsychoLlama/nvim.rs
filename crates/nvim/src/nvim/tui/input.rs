@@ -59,6 +59,7 @@ use crate::src::nvim::tui::termkey::termkey::{
 };
 use crate::src::nvim::tui::tui::tui_set_size;
 use crate::src::nvim::types::builders::ArrayBuf;
+use crate::src::nvim::types::libc::STDIN_FILENO;
 use crate::src::nvim::types::{
     Array, Event, Integer, KEY_BUFFER_SIZE, KeyEncoding, Loop, Object, RStream, String_0,
     TermInput, TermKey, TermKeyCsiParam, TermKeyKey, TerminfoEntry, size_t, uv_handle_t,
@@ -102,7 +103,6 @@ const KEY_ENCODING_KITTY: KeyEncoding = 1;
 const BG_QUERY_DELAY_MS: u64 = 100;
 
 const ESC: u8 = 0x1b;
-const STDIN_FILENO: c_int = 0;
 
 // -------------------------------------------------------------- the lifecycle
 

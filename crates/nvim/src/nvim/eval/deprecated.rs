@@ -11,6 +11,7 @@ use crate::src::nvim::main::{e_api_spawn_failed, e_invarg, e_invarg2, firstbuf};
 use crate::src::nvim::memory::{xmalloc, xstrdup};
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::types::channel::kChannelStdinPipe;
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __time_t, __uid_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array,
@@ -164,8 +165,6 @@ pub const kChannelPartRpc: ChannelPart = 3;
 pub const kChannelPartStderr: ChannelPart = 2;
 pub const kChannelPartStdout: ChannelPart = 1;
 pub const kChannelPartStdin: ChannelPart = 0;
-pub const kChannelStdinNull: ChannelStdinMode = 1;
-pub const kChannelStdinPipe: ChannelStdinMode = 0;
 pub const kClientTypePlugin: ClientType = 4;
 pub const kClientTypeHost: ClientType = 3;
 pub const kClientTypeEmbedder: ClientType = 2;

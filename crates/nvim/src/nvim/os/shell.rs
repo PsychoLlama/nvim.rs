@@ -47,6 +47,7 @@ use crate::src::nvim::strings::{
     vim_snprintf, vim_strchr, vim_strnsave_unquoted, vim_strsave_escaped_ext,
 };
 use crate::src::nvim::tag::tag_freematch;
+use crate::src::nvim::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __gid_t, __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
@@ -405,8 +406,6 @@ pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const STDOUT_FILENO: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const STDERR_FILENO: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const KV_INITIAL_VALUE: StringBuilder = StringBuilder {

@@ -3,6 +3,11 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 
+// The standard descriptors, which a dozen modules had each spelled out.
+pub const STDIN_FILENO: ::core::ffi::c_int = 0;
+pub const STDOUT_FILENO: ::core::ffi::c_int = 1;
+pub const STDERR_FILENO: ::core::ffi::c_int = 2;
+
 // Opaque C types: layout unknown here, only ever used behind a pointer.
 #[repr(C)]
 pub struct _IO_codecvt {
