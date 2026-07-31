@@ -169,12 +169,6 @@ static e_write_error_file_system_full: GlobalCell<[::core::ffi::c_char; 38]> =
             *b"E514: Write error (file system full?)\0",
         )
     });
-static e_no_matching_autocommands_for_buftype_str_buffer: GlobalCell<[::core::ffi::c_char; 53]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 53], [::core::ffi::c_char; 53]>(
-            *b"E676: No matching autocommands for buftype=%s buffer\0",
-        )
-    });
 pub const SMALLBUFSIZE: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
 #[inline]
 unsafe extern "C" fn set_err_num(
@@ -335,23 +329,34 @@ pub unsafe extern "C" fn buf_write(
     (*buf).b_op_start.col = 0 as ::core::ffi::c_int as colnr_T;
     (*buf).b_op_end.lnum = end;
     (*buf).b_op_end.col = 0 as ::core::ffi::c_int as colnr_T;
-    let mut res: ::core::ffi::c_int = buf_write_do_autocmds(
-        buf,
-        &raw mut fname,
-        &raw mut sfname,
-        &raw mut ffname,
-        start,
-        &raw mut end,
-        eap,
+    let write_mode = WriteMode {
         append,
         filtering,
         reset_changed,
-        overwriting,
         whole,
-        orig_start,
-        orig_end,
+        overwriting,
+    };
+    let mut names = WriteNames {
+        fname,
+        sfname,
+        ffname,
+    };
+    let pre = buf_write_do_autocmds(
+        buf,
+        &mut names,
+        start,
+        &mut end,
+        eap,
+        write_mode,
+        OpMarks {
+            start: orig_start,
+            end: orig_end,
+        },
     );
-    if res != NOTDONE {
+    fname = names.fname;
+    sfname = names.sfname;
+    ffname = names.ffname;
+    if let PreWrite::Finished(res) = pre {
         return res;
     }
     if (*cmdmod.ptr()).cmod_flags & CMOD_LOCKMARKS as ::core::ffi::c_int != 0 {
@@ -1365,7 +1370,7 @@ pub unsafe extern "C" fn buf_write(
         );
     }
     if !should_abort(retval) {
-        buf_write_do_post_autocmds(buf, fname, eap, append, filtering, reset_changed, whole);
+        buf_write_do_post_autocmds(buf, fname, eap, write_mode);
         if aborting() {
             retval = false_0;
         }

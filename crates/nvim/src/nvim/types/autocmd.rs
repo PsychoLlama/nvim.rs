@@ -58,6 +58,29 @@ pub struct aco_save_T {
     pub save_VIsual_active: bool,
     pub save_prompt_insert: ::core::ffi::c_int,
 }
+
+impl Default for aco_save_T {
+    /// The zeroed state `aucmd_prepbuf` expects to be handed. Every caller
+    /// declares one of these as a local and immediately fills it in.
+    fn default() -> Self {
+        aco_save_T {
+            use_aucmd_win_idx: 0,
+            save_curwin_handle: 0,
+            new_curwin_handle: 0,
+            save_prevwin_handle: 0,
+            new_curbuf: bufref_T {
+                br_buf: ::core::ptr::null_mut(),
+                br_fnum: 0,
+                br_buf_free_count: 0,
+            },
+            tp_localdir: ::core::ptr::null_mut(),
+            globaldir: ::core::ptr::null_mut(),
+            save_VIsual_active: false,
+            save_prompt_insert: 0,
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct aucmdwin_T {
