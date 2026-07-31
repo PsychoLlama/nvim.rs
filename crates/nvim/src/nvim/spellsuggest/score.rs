@@ -40,7 +40,7 @@ use crate::src::nvim::charset::skiptowhite;
 use crate::src::nvim::hashtab::{hash_find, hash_removed};
 use crate::src::nvim::main::curwin;
 use crate::src::nvim::mbyte::{
-    MB_MAXCHAR, mb_cptr2char_adv, utf_char2bytes, utf_fold, utf_ptr2char,
+    MB_MAXCHAR, mb_cptr2char_adv, mb_isupper, utf_char2bytes, utf_fold, utf_ptr2char,
 };
 use crate::src::nvim::memory::xmemcpyz;
 use crate::src::nvim::os::libc::{strcpy, strlen};
@@ -66,7 +66,7 @@ const SOUND_VOWEL: c_char = b'*' as c_char;
 /// Fold a character for comparison, mirroring the `SPELL_TOFOLD` macro:
 /// the byte table covers Latin-1, everything above it goes through the
 /// Unicode fold.
-fn spell_tofold(c: c_int) -> c_int {
+pub fn spell_tofold(c: c_int) -> c_int {
     if c >= 128 {
         // SAFETY: a pure table lookup; the `unsafe` is only there because
         // the fold tables have not been rewritten yet.
@@ -76,6 +76,19 @@ fn spell_tofold(c: c_int) -> c_int {
         // byte out of it without keeping a reference (see `GlobalCell`).
         // Indices are 0..128 by the branch above.
         unsafe { (*spelltab.ptr()).st_fold[c as usize] as c_int }
+    }
+}
+
+/// Is this character upper-case? The byte table covers Latin-1,
+/// everything above it goes through Unicode.
+pub fn spell_isupper(c: c_int) -> bool {
+    if c >= 128 {
+        // SAFETY: a pure table lookup; see `spell_tofold`.
+        unsafe { mb_isupper(c) }
+    } else {
+        // SAFETY: reads one byte of main-thread editor state without
+        // keeping a reference.
+        unsafe { (*spelltab.ptr()).st_isu[c as usize] }
     }
 }
 

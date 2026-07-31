@@ -1,6 +1,6 @@
 {
   "internal_exports": 70,
-  "files_without_forbid_unsafe": 463,
+  "files_without_forbid_unsafe": 464,
   "files_without_deny_unsafe_op": 226,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -387,9 +387,10 @@
     "crates/nvim/src/nvim/sign.rs": {"lines": 3448, "unsafe": 58},
     "crates/nvim/src/nvim/spell.rs": {"lines": 4304, "unsafe": 76},
     "crates/nvim/src/nvim/spellfile.rs": {"lines": 7312, "unsafe": 83},
-    "crates/nvim/src/nvim/spellsuggest.rs": {"lines": 3607, "unsafe": 23},
+    "crates/nvim/src/nvim/spellsuggest.rs": {"lines": 3101, "unsafe": 16},
     "crates/nvim/src/nvim/spellsuggest/collect.rs": {"unsafe": 12},
-    "crates/nvim/src/nvim/spellsuggest/score.rs": {"unsafe": 8},
+    "crates/nvim/src/nvim/spellsuggest/score.rs": {"unsafe": 10},
+    "crates/nvim/src/nvim/spellsuggest/soundalike.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/state.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/statusline.rs": {"lines": 3411, "no_mangle": 1, "unsafe": 15},
     "crates/nvim/src/nvim/strings.rs": {"lines": 4007, "no_mangle": 1, "unsafe": 113, "variadic": 5},
