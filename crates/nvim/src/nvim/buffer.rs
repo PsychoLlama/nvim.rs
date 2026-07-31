@@ -102,6 +102,7 @@ use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::quickfix::qf_stack_get_bufnr;
 use crate::src::nvim::runtime::{estack_pop, estack_push};
 use crate::src::nvim::spell::parse_spelllang;
+use crate::src::nvim::state::{MAP_ALL_MODES, MODE_INSERT};
 use crate::src::nvim::statusline::build_stl_str_hl;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, xstrnsave};
 use crate::src::nvim::syntax::{reset_synblock, syntax_clear};
@@ -954,9 +955,7 @@ pub const BCO_NOHELP: C2Rust_Unnamed_32 = 4;
 pub const BCO_ENTER: C2Rust_Unnamed_32 = 1;
 pub const kBffInitChangedtick: C2Rust_Unnamed_35 = 2;
 pub const kBffClearWinInfo: C2Rust_Unnamed_35 = 1;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_31 = 255;
 pub const BCO_ALWAYS: C2Rust_Unnamed_32 = 2;
-pub const MODE_INSERT: C2Rust_Unnamed_31 = 16;
 pub const ECMD_FORCEIT: C2Rust_Unnamed_27 = 8;
 pub const ECMD_ONE: C2Rust_Unnamed_28 = 1;
 pub const WSP_VERT: C2Rust_Unnamed_34 = 2;
@@ -1039,24 +1038,6 @@ pub const READ_KEEP_UNDO: C2Rust_Unnamed_29 = 32;
 pub const READ_FILTER: C2Rust_Unnamed_29 = 2;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_int;
 pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_31 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_31 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_31 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_31 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_31 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_31 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_31 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_31 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_31 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_31 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_31 = 256;
-pub const MODE_TERMINAL: C2Rust_Unnamed_31 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_31 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_31 = 32;
-pub const MODE_CMDLINE: C2Rust_Unnamed_31 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_31 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_31 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_31 = 1;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
 pub const OPT_SKIPRTP: C2Rust_Unnamed_33 = 128;
@@ -2001,18 +1982,8 @@ unsafe extern "C" fn free_buffer_stuff(mut buf: *mut buf_T, mut free_flags: ::co
     }
     uc_clear(&raw mut (*buf).b_ucmds);
     extmark_free_all(buf);
-    map_clear_mode(
-        buf,
-        MAP_ALL_MODES as ::core::ffi::c_int,
-        true_0 != 0,
-        false_0 != 0,
-    );
-    map_clear_mode(
-        buf,
-        MAP_ALL_MODES as ::core::ffi::c_int,
-        true_0 != 0,
-        true_0 != 0,
-    );
+    map_clear_mode(buf, MAP_ALL_MODES, true_0 != 0, false_0 != 0);
+    map_clear_mode(buf, MAP_ALL_MODES, true_0 != 0, true_0 != 0);
     let mut ptr_: *mut *mut ::core::ffi::c_void =
         &raw mut (*buf).b_start_fenc as *mut *mut ::core::ffi::c_void;
     xfree(*ptr_);
@@ -2864,7 +2835,7 @@ pub unsafe extern "C" fn set_curbuf(
         if bufref_valid(&raw mut prevbufref) as ::core::ffi::c_int != 0 && !aborting() {
             let mut previouswin: *mut win_T = curwin.get();
             if prevbuf == curbuf.get()
-                && (State.get() & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                && (State.get() & MODE_INSERT == 0 as ::core::ffi::c_int
                     || (*curbuf.get()).b_nwindows <= 1 as ::core::ffi::c_int)
             {
                 u_sync(false_0 != 0);

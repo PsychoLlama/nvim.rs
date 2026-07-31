@@ -10,12 +10,11 @@
 
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{State, VIsual_active, curbuf, p_mouse};
-use crate::src::nvim::strings::vim_strchr;
-use core::ffi::{CStr, c_int};
-
-use super::{
+use crate::src::nvim::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_SETWSIZE,
 };
+use crate::src::nvim::strings::vim_strchr;
+use core::ffi::{CStr, c_int};
 
 /// What [`ui_check_mouse`] last worked out.
 static has_mouse: GlobalCell<bool> = GlobalCell::new(false);

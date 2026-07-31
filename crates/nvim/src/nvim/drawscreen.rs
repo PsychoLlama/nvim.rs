@@ -76,7 +76,11 @@ use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::profile::profile_setlimit;
 use crate::src::nvim::search::last_pat_prog;
 use crate::src::nvim::spell::spell_check_window;
-use crate::src::nvim::state::get_real_state;
+use crate::src::nvim::state::{
+    MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP,
+    MODE_NORMAL, MODE_SETWSIZE, MODE_TERMINAL, MODE_VISUAL, REPLACE_FLAG, VREPLACE_FLAG,
+    get_real_state,
+};
 use crate::src::nvim::statusline::{
     draw_tabline, redraw_ruler, stl_alloc_click_defs, stl_clear_click_defs, win_redr_status,
     win_redr_winbar,
@@ -327,10 +331,6 @@ pub const UPD_REDRAW_TOP: C2Rust_Unnamed_24 = 30;
 pub const UPD_INVERTED_ALL: C2Rust_Unnamed_24 = 25;
 pub const UPD_INVERTED: C2Rust_Unnamed_24 = 20;
 pub const UPD_VALID: C2Rust_Unnamed_24 = 10;
-pub const MODE_CMDLINE: C2Rust_Unnamed_26 = 8;
-pub const MODE_NORMAL: C2Rust_Unnamed_26 = 1;
-pub const MODE_INSERT: C2Rust_Unnamed_26 = 16;
-pub const MODE_VISUAL: C2Rust_Unnamed_26 = 2;
 pub const kUIExtCount: UIExtension = 10;
 pub const kUIFloatDebug: UIExtension = 9;
 pub const kUITermColors: UIExtension = 8;
@@ -342,10 +342,6 @@ pub const kUIWildmenu: UIExtension = 3;
 pub const kUITabline: UIExtension = 2;
 pub const kUIPopupmenu: UIExtension = 1;
 pub const kUICmdline: UIExtension = 0;
-pub const MODE_LANGMAP: C2Rust_Unnamed_26 = 32;
-pub const REPLACE_FLAG: C2Rust_Unnamed_26 = 256;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_26 = 512;
-pub const MODE_TERMINAL: C2Rust_Unnamed_26 = 128;
 pub type WindowCorner = ::core::ffi::c_uint;
 pub const WC_BOTTOM_RIGHT: WindowCorner = 3;
 pub const WC_BOTTOM_LEFT: WindowCorner = 2;
@@ -355,8 +351,6 @@ pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub const DID_FOLD: C2Rust_Unnamed_25 = 3;
 pub const DID_LINE: C2Rust_Unnamed_25 = 2;
 pub const DID_NONE: C2Rust_Unnamed_25 = 1;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_26 = 20480;
-pub const MODE_ASKMORE: C2Rust_Unnamed_26 = 12288;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;
@@ -465,17 +459,7 @@ pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
 pub const SHOWCMD_COLS: C2Rust_Unnamed_27 = 10;
 pub const MIN_COLUMNS: C2Rust_Unnamed_28 = 12;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_26 = 16384;
-pub const MODE_HITRETURN: C2Rust_Unnamed_26 = 8193;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_26 = 24592;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_26 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_26 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_26 = 784;
-pub const MODE_REPLACE: C2Rust_Unnamed_26 = 272;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_26 = 255;
-pub const MODE_SELECT: C2Rust_Unnamed_26 = 64;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_26 = 4;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub const STATUS_HEIGHT: C2Rust_Unnamed_28 = 1;
@@ -610,7 +594,7 @@ pub unsafe extern "C" fn screenclear() {
 }
 unsafe extern "C" fn cmdline_number_prompt() -> bool {
     return !ui_has(kUIMessages)
-        && State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
+        && State.get() & MODE_CMDLINE != 0
         && !(*get_cmdline_info()).mouse_used.is_null();
 }
 #[unsafe(no_mangle)]
@@ -627,10 +611,8 @@ pub unsafe extern "C" fn screen_resize(
     if width < 0 as ::core::ffi::c_int || height < 0 as ::core::ffi::c_int {
         return;
     }
-    if State.get() == MODE_HITRETURN as ::core::ffi::c_int
-        || State.get() == MODE_SETWSIZE as ::core::ffi::c_int
-    {
-        State.set(MODE_SETWSIZE as ::core::ffi::c_int);
+    if State.get() == MODE_HITRETURN || State.get() == MODE_SETWSIZE {
+        State.set(MODE_SETWSIZE);
         return;
     }
     resizing_screen.set(true_0 != 0);
@@ -696,22 +678,20 @@ pub unsafe extern "C" fn screen_resize(
     }
     resizing_autocmd.set(false_0 != 0);
     redraw_all_later(UPD_CLEAR as ::core::ffi::c_int);
-    if State.get() != MODE_ASKMORE as ::core::ffi::c_int
-        && State.get() != MODE_EXTERNCMD as ::core::ffi::c_int
-    {
+    if State.get() != MODE_ASKMORE && State.get() != MODE_EXTERNCMD {
         screenclear();
     }
     if starting.get() != NO_SCREEN {
         maketitle();
         changed_line_abv_curs();
         invalidate_botline_win(curwin.get());
-        if State.get() == MODE_ASKMORE as ::core::ffi::c_int
-            || State.get() == MODE_EXTERNCMD as ::core::ffi::c_int
+        if State.get() == MODE_ASKMORE
+            || State.get() == MODE_EXTERNCMD
             || exmode_active.get() as ::core::ffi::c_int != 0
-            || State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
+            || State.get() & MODE_CMDLINE != 0
                 && (*get_cmdline_info()).one_key as ::core::ffi::c_int != 0
         {
-            if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+            if State.get() & MODE_CMDLINE != 0 {
                 update_screen();
             }
             if !(*msg_grid.ptr()).chars.is_null() {
@@ -723,7 +703,7 @@ pub unsafe extern "C" fn screen_resize(
             if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
                 do_check_scrollbind(true_0 != 0);
             }
-            if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+            if State.get() & MODE_CMDLINE != 0 {
                 redraw_popupmenu.set(false_0 != 0);
                 update_screen();
                 redrawcmdline();
@@ -1062,7 +1042,7 @@ pub unsafe extern "C" fn update_screen() -> ::core::ffi::c_int {
     if pum_drawn() as ::core::ffi::c_int != 0 && must_redraw_pum.get() as ::core::ffi::c_int != 0 {
         win_check_ns_hl(curwin.get());
         pum_redraw();
-    } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_CMDLINE != 0 {
         pum_check_clear();
     }
     win_check_ns_hl(::core::ptr::null_mut::<win_T>());
@@ -1149,8 +1129,7 @@ pub unsafe extern "C" fn redraw_custom_title_later() -> bool {
 }
 pub unsafe extern "C" fn show_cursor_info_later(mut force: bool) {
     let mut state: ::core::ffi::c_int = get_real_state();
-    let mut empty_line: ::core::ffi::c_int = (State.get() & MODE_INSERT as ::core::ffi::c_int
-        == 0 as ::core::ffi::c_int
+    let mut empty_line: ::core::ffi::c_int = (State.get() & MODE_INSERT == 0 as ::core::ffi::c_int
         && *ml_get_buf((*curwin.get()).w_buffer, (*curwin.get()).w_cursor.lnum)
             as ::core::ffi::c_int
             == NUL) as ::core::ffi::c_int;
@@ -1214,8 +1193,8 @@ pub unsafe extern "C" fn showmode() -> ::core::ffi::c_int {
     msg_grid_validate();
     let mut do_mode: bool = p_smd.get() != 0
         && msg_silent.get() == 0 as ::core::ffi::c_int
-        && (State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
-            || State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+        && (State.get() & MODE_TERMINAL != 0
+            || State.get() & MODE_INSERT != 0
             || restart_edit.get() != NUL
             || VIsual_active.get() as ::core::ffi::c_int != 0);
     let mut can_show_mode: bool =
@@ -1284,25 +1263,25 @@ pub unsafe extern "C" fn showmode() -> ::core::ffi::c_int {
                     }
                 }
             } else {
-                if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+                if State.get() & MODE_TERMINAL != 0 {
                     msg_puts_hl(
                         gettext(b" TERMINAL\0".as_ptr() as *const ::core::ffi::c_char),
                         hl_id,
                         false_0 != 0,
                     );
-                } else if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+                } else if State.get() & VREPLACE_FLAG != 0 {
                     msg_puts_hl(
                         gettext(b" VREPLACE\0".as_ptr() as *const ::core::ffi::c_char),
                         hl_id,
                         false_0 != 0,
                     );
-                } else if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+                } else if State.get() & REPLACE_FLAG != 0 {
                     msg_puts_hl(
                         gettext(b" REPLACE\0".as_ptr() as *const ::core::ffi::c_char),
                         hl_id,
                         false_0 != 0,
                     );
-                } else if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+                } else if State.get() & MODE_INSERT != 0 {
                     if p_ri.get() != 0 {
                         msg_puts_hl(
                             gettext(b" REVERSE\0".as_ptr() as *const ::core::ffi::c_char),
@@ -1346,7 +1325,7 @@ pub unsafe extern "C" fn showmode() -> ::core::ffi::c_int {
                         false_0 != 0,
                     );
                 }
-                if State.get() & MODE_LANGMAP as ::core::ffi::c_int != 0 {
+                if State.get() & MODE_LANGMAP != 0 {
                     if (*curwin.get()).w_onebuf_opt.wo_arab != 0 {
                         msg_puts_hl(
                             gettext(b" Arabic\0".as_ptr() as *const ::core::ffi::c_char),
@@ -1366,7 +1345,7 @@ pub unsafe extern "C" fn showmode() -> ::core::ffi::c_int {
                         }
                     }
                 }
-                if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 && p_paste.get() != 0 {
+                if State.get() & MODE_INSERT != 0 && p_paste.get() != 0 {
                     msg_puts_hl(
                         gettext(b" (paste)\0".as_ptr() as *const ::core::ffi::c_char),
                         hl_id,
@@ -3674,13 +3653,13 @@ pub unsafe extern "C" fn conceal_cursor_line(mut wp: *const win_T) -> bool {
     if *(*wp).w_onebuf_opt.wo_cocu as ::core::ffi::c_int == NUL {
         return false_0 != 0;
     }
-    if get_real_state() & MODE_VISUAL as ::core::ffi::c_int != 0 {
+    if get_real_state() & MODE_VISUAL != 0 {
         c = 'v' as ::core::ffi::c_int;
-    } else if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_INSERT != 0 {
         c = 'i' as ::core::ffi::c_int;
-    } else if State.get() & MODE_NORMAL as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_NORMAL != 0 {
         c = 'n' as ::core::ffi::c_int;
-    } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_CMDLINE != 0 {
         c = 'c' as ::core::ffi::c_int;
     } else {
         return false_0 != 0;

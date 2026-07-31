@@ -32,19 +32,19 @@ use crate::src::nvim::memory::xfree;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
     BACKWARD, BL_WHITE, CA_COMMAND_BUSY, CAR, Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, DEL, ESC,
-    FO_OPEN_COMS, FORWARD, K_DEL, K_INS, KE_KDEL, KE_KINS, MAXCOL, ML_DEL_MESSAGE, ML_EMPTY,
-    MODE_INSERT, MODE_REPLACE, NL, NUL, OP_DELETE, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_TILDE,
-    OPENLINE_DO_COM, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
-    PUT_LINE_SPLIT, REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VALID_CROW, VIsual_mode_orig,
-    checkclearop, checkclearopq, clearop, clearopbeep, false_0, nv_object, nv_operator, prep_redo,
-    prep_redo_cmd, true_0, v_swap_corners, v_visop,
+    FO_OPEN_COMS, FORWARD, K_DEL, K_INS, KE_KDEL, KE_KINS, MAXCOL, ML_DEL_MESSAGE, ML_EMPTY, NL,
+    NUL, OP_DELETE, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_TILDE, OPENLINE_DO_COM, PUT_BLOCK_INNER,
+    PUT_CURSEND, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, REPLACE_CR_NCHAR,
+    REPLACE_NL_NCHAR, TAB, VALID_CROW, VIsual_mode_orig, checkclearop, checkclearopq, clearop,
+    clearopbeep, false_0, nv_object, nv_operator, prep_redo, prep_redo_cmd, true_0, v_swap_corners,
+    v_visop,
 };
 use crate::src::nvim::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::src::nvim::option::get_ve_flags;
 use crate::src::nvim::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptVeFlagAll};
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::register::{copy_register, do_put, free_register};
-use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::textformat::{auto_format, has_format_option};
 use crate::src::nvim::types::{cmdarg_T, colnr_T, linenr_T, size_t, yankreg_T};
@@ -200,7 +200,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
         for _ in 0..(*cap).count1 {
             // `ins_char` looks at 'State' to decide it is overwriting rather
             // than inserting.
-            State.set(MODE_REPLACE as c_int);
+            State.set(MODE_REPLACE);
             if (*cap).nchar == Ctrl_E || (*cap).nchar == Ctrl_Y {
                 // `r CTRL-E` and `r CTRL-Y` copy from the line below or above.
                 let from =
@@ -512,7 +512,7 @@ pub unsafe fn set_cursor_for_append_to_line() {
             // Insert mode is what makes `coladvance` allow the position one
             // past the end.
             let save_state = State.get();
-            State.set(MODE_INSERT as c_int);
+            State.set(MODE_INSERT);
             coladvance(curwin.get(), MAXCOL as c_int);
             State.set(save_state);
         } else {
@@ -572,7 +572,7 @@ pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
         // has to land on a real one first.
         if (*curwin.get()).w_cursor.coladd != 0 && (*cap).cmdchar != 'A' as c_int {
             let save_state = State.get();
-            State.set(MODE_INSERT as c_int);
+            State.set(MODE_INSERT);
             coladvance(curwin.get(), getviscol());
             State.set(save_state);
         }

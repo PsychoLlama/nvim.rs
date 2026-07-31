@@ -49,6 +49,10 @@ use crate::src::nvim::os::libc::{
     strcasecmp, strchr, strcmp, strlen, strncmp, strpbrk, strstr,
 };
 use crate::src::nvim::runtime::exestack;
+use crate::src::nvim::state::{
+    MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
+    MODE_TERMINAL, MODE_VISUAL,
+};
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
     __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
@@ -902,26 +906,6 @@ pub const ETYPE_UFUNC: etype_T = 2;
 pub const ETYPE_SCRIPT: etype_T = 1;
 pub const ETYPE_TOP: etype_T = 0;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_19 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_19 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_19 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_19 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_19 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_19 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_19 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_19 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_19 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_19 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_19 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_19 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_19 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_19 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_19 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_19 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_19 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_19 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_19 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_19 = 1;
 pub const KE_WILD: key_extra = 108;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_LUA: key_extra = 103;
@@ -1526,11 +1510,7 @@ pub unsafe extern "C" fn get_maphash_list(
     mut c: ::core::ffi::c_int,
 ) -> *mut mapblock_T {
     return (*maphash.ptr())[(if state
-        & (MODE_NORMAL as ::core::ffi::c_int
-            | MODE_VISUAL as ::core::ffi::c_int
-            | MODE_SELECT as ::core::ffi::c_int
-            | MODE_OP_PENDING as ::core::ffi::c_int
-            | MODE_TERMINAL as ::core::ffi::c_int)
+        & (MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING | MODE_TERMINAL)
         != 0
     {
         c
@@ -1543,11 +1523,7 @@ pub unsafe extern "C" fn get_buf_maphash_list(
     mut c: ::core::ffi::c_int,
 ) -> *mut mapblock_T {
     return (*curbuf.get()).b_maphash[(if state
-        & (MODE_NORMAL as ::core::ffi::c_int
-            | MODE_VISUAL as ::core::ffi::c_int
-            | MODE_SELECT as ::core::ffi::c_int
-            | MODE_OP_PENDING as ::core::ffi::c_int
-            | MODE_TERMINAL as ::core::ffi::c_int)
+        & (MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING | MODE_TERMINAL)
         != 0
     {
         c
@@ -1577,66 +1553,55 @@ pub unsafe extern "C" fn map_mode_to_chars(
     mut buf: *mut ::core::ffi::c_char,
 ) {
     let mut p: *mut ::core::ffi::c_char = buf;
-    if mode & (MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int)
-        == MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int
-    {
+    if mode & (MODE_INSERT | MODE_CMDLINE) == MODE_INSERT | MODE_CMDLINE {
         let c2rust_fresh0 = p;
         p = p.offset(1);
         *c2rust_fresh0 = '!' as ::core::ffi::c_char;
-    } else if mode & MODE_INSERT as ::core::ffi::c_int != 0 {
+    } else if mode & MODE_INSERT != 0 {
         let c2rust_fresh1 = p;
         p = p.offset(1);
         *c2rust_fresh1 = 'i' as ::core::ffi::c_char;
-    } else if mode & MODE_LANGMAP as ::core::ffi::c_int != 0 {
+    } else if mode & MODE_LANGMAP != 0 {
         let c2rust_fresh2 = p;
         p = p.offset(1);
         *c2rust_fresh2 = 'l' as ::core::ffi::c_char;
-    } else if mode & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+    } else if mode & MODE_CMDLINE != 0 {
         let c2rust_fresh3 = p;
         p = p.offset(1);
         *c2rust_fresh3 = 'c' as ::core::ffi::c_char;
-    } else if mode
-        & (MODE_NORMAL as ::core::ffi::c_int
-            | MODE_VISUAL as ::core::ffi::c_int
-            | MODE_SELECT as ::core::ffi::c_int
-            | MODE_OP_PENDING as ::core::ffi::c_int)
-        == MODE_NORMAL as ::core::ffi::c_int
-            | MODE_VISUAL as ::core::ffi::c_int
-            | MODE_SELECT as ::core::ffi::c_int
-            | MODE_OP_PENDING as ::core::ffi::c_int
+    } else if mode & (MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING)
+        == MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING
     {
         let c2rust_fresh4 = p;
         p = p.offset(1);
         *c2rust_fresh4 = ' ' as ::core::ffi::c_char;
     } else {
-        if mode & MODE_NORMAL as ::core::ffi::c_int != 0 {
+        if mode & MODE_NORMAL != 0 {
             let c2rust_fresh5 = p;
             p = p.offset(1);
             *c2rust_fresh5 = 'n' as ::core::ffi::c_char;
         }
-        if mode & MODE_OP_PENDING as ::core::ffi::c_int != 0 {
+        if mode & MODE_OP_PENDING != 0 {
             let c2rust_fresh6 = p;
             p = p.offset(1);
             *c2rust_fresh6 = 'o' as ::core::ffi::c_char;
         }
-        if mode & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+        if mode & MODE_TERMINAL != 0 {
             let c2rust_fresh7 = p;
             p = p.offset(1);
             *c2rust_fresh7 = 't' as ::core::ffi::c_char;
         }
-        if mode & (MODE_VISUAL as ::core::ffi::c_int | MODE_SELECT as ::core::ffi::c_int)
-            == MODE_VISUAL as ::core::ffi::c_int | MODE_SELECT as ::core::ffi::c_int
-        {
+        if mode & (MODE_VISUAL | MODE_SELECT) == MODE_VISUAL | MODE_SELECT {
             let c2rust_fresh8 = p;
             p = p.offset(1);
             *c2rust_fresh8 = 'v' as ::core::ffi::c_char;
         } else {
-            if mode & MODE_VISUAL as ::core::ffi::c_int != 0 {
+            if mode & MODE_VISUAL != 0 {
                 let c2rust_fresh9 = p;
                 p = p.offset(1);
                 *c2rust_fresh9 = 'x' as ::core::ffi::c_char;
             }
-            if mode & MODE_SELECT as ::core::ffi::c_int != 0 {
+            if mode & MODE_SELECT != 0 {
                 let c2rust_fresh10 = p;
                 p = p.offset(1);
                 *c2rust_fresh10 = 's' as ::core::ffi::c_char;
@@ -2014,11 +1979,7 @@ unsafe extern "C" fn map_add(
         *abbr_table = mp;
     } else {
         let n: ::core::ffi::c_int = if (*mp).m_mode
-            & (MODE_NORMAL as ::core::ffi::c_int
-                | MODE_VISUAL as ::core::ffi::c_int
-                | MODE_SELECT as ::core::ffi::c_int
-                | MODE_OP_PENDING as ::core::ffi::c_int
-                | MODE_TERMINAL as ::core::ffi::c_int)
+            & (MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING | MODE_TERMINAL)
             != 0
         {
             *(*mp).m_keys.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
@@ -2249,11 +2210,11 @@ unsafe extern "C" fn buf_do_map(
                         hash_start = if is_abbrev as ::core::ffi::c_int != 0 {
                             0 as ::core::ffi::c_int
                         } else if mode
-                            & (MODE_NORMAL as ::core::ffi::c_int
-                                | MODE_VISUAL as ::core::ffi::c_int
-                                | MODE_SELECT as ::core::ffi::c_int
-                                | MODE_OP_PENDING as ::core::ffi::c_int
-                                | MODE_TERMINAL as ::core::ffi::c_int)
+                            & (MODE_NORMAL
+                                | MODE_VISUAL
+                                | MODE_SELECT
+                                | MODE_OP_PENDING
+                                | MODE_TERMINAL)
                             != 0
                         {
                             *lhs.offset(0 as ::core::ffi::c_int as isize) as uint8_t
@@ -2415,11 +2376,11 @@ unsafe extern "C" fn buf_do_map(
                                             } else {
                                                 let mut new_hash: ::core::ffi::c_int = if (*mp_1)
                                                     .m_mode
-                                                    & (MODE_NORMAL as ::core::ffi::c_int
-                                                        | MODE_VISUAL as ::core::ffi::c_int
-                                                        | MODE_SELECT as ::core::ffi::c_int
-                                                        | MODE_OP_PENDING as ::core::ffi::c_int
-                                                        | MODE_TERMINAL as ::core::ffi::c_int)
+                                                    & (MODE_NORMAL
+                                                        | MODE_VISUAL
+                                                        | MODE_SELECT
+                                                        | MODE_OP_PENDING
+                                                        | MODE_TERMINAL)
                                                     != 0
                                                 {
                                                     *(*mp_1)
@@ -2589,34 +2550,31 @@ unsafe extern "C" fn get_map_mode(
     p = p.offset(1);
     let mut modec: ::core::ffi::c_int = *c2rust_fresh11 as uint8_t as ::core::ffi::c_int;
     if modec == 'i' as ::core::ffi::c_int {
-        mode = MODE_INSERT as ::core::ffi::c_int;
+        mode = MODE_INSERT;
     } else if modec == 'l' as ::core::ffi::c_int {
-        mode = MODE_LANGMAP as ::core::ffi::c_int;
+        mode = MODE_LANGMAP;
     } else if modec == 'c' as ::core::ffi::c_int {
-        mode = MODE_CMDLINE as ::core::ffi::c_int;
+        mode = MODE_CMDLINE;
     } else if modec == 'n' as ::core::ffi::c_int
         && *p as ::core::ffi::c_int != 'o' as ::core::ffi::c_int
     {
-        mode = MODE_NORMAL as ::core::ffi::c_int;
+        mode = MODE_NORMAL;
     } else if modec == 'v' as ::core::ffi::c_int {
-        mode = MODE_VISUAL as ::core::ffi::c_int | MODE_SELECT as ::core::ffi::c_int;
+        mode = MODE_VISUAL | MODE_SELECT;
     } else if modec == 'x' as ::core::ffi::c_int {
-        mode = MODE_VISUAL as ::core::ffi::c_int;
+        mode = MODE_VISUAL;
     } else if modec == 's' as ::core::ffi::c_int {
-        mode = MODE_SELECT as ::core::ffi::c_int;
+        mode = MODE_SELECT;
     } else if modec == 'o' as ::core::ffi::c_int {
-        mode = MODE_OP_PENDING as ::core::ffi::c_int;
+        mode = MODE_OP_PENDING;
     } else if modec == 't' as ::core::ffi::c_int {
-        mode = MODE_TERMINAL as ::core::ffi::c_int;
+        mode = MODE_TERMINAL;
     } else {
         p = p.offset(-1);
         if forceit {
-            mode = MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int;
+            mode = MODE_INSERT | MODE_CMDLINE;
         } else {
-            mode = MODE_VISUAL as ::core::ffi::c_int
-                | MODE_SELECT as ::core::ffi::c_int
-                | MODE_NORMAL as ::core::ffi::c_int
-                | MODE_OP_PENDING as ::core::ffi::c_int;
+            mode = MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING;
         }
     }
     *cmdp = p;
@@ -2671,11 +2629,11 @@ pub unsafe extern "C" fn map_clear_mode(
                     continue;
                 } else {
                     let mut new_hash: ::core::ffi::c_int = if (*mp).m_mode
-                        & (MODE_NORMAL as ::core::ffi::c_int
-                            | MODE_VISUAL as ::core::ffi::c_int
-                            | MODE_SELECT as ::core::ffi::c_int
-                            | MODE_OP_PENDING as ::core::ffi::c_int
-                            | MODE_TERMINAL as ::core::ffi::c_int)
+                        & (MODE_NORMAL
+                            | MODE_VISUAL
+                            | MODE_SELECT
+                            | MODE_OP_PENDING
+                            | MODE_TERMINAL)
                         != 0
                     {
                         *(*mp).m_keys.offset(0 as ::core::ffi::c_int as isize) as uint8_t
@@ -2720,28 +2678,28 @@ pub unsafe extern "C" fn map_to_exists(
         p_cpo.get(),
     );
     if !strchr(modechars, 'n' as ::core::ffi::c_int).is_null() {
-        mode |= MODE_NORMAL as ::core::ffi::c_int;
+        mode |= MODE_NORMAL;
     }
     if !strchr(modechars, 'v' as ::core::ffi::c_int).is_null() {
-        mode |= MODE_VISUAL as ::core::ffi::c_int | MODE_SELECT as ::core::ffi::c_int;
+        mode |= MODE_VISUAL | MODE_SELECT;
     }
     if !strchr(modechars, 'x' as ::core::ffi::c_int).is_null() {
-        mode |= MODE_VISUAL as ::core::ffi::c_int;
+        mode |= MODE_VISUAL;
     }
     if !strchr(modechars, 's' as ::core::ffi::c_int).is_null() {
-        mode |= MODE_SELECT as ::core::ffi::c_int;
+        mode |= MODE_SELECT;
     }
     if !strchr(modechars, 'o' as ::core::ffi::c_int).is_null() {
-        mode |= MODE_OP_PENDING as ::core::ffi::c_int;
+        mode |= MODE_OP_PENDING;
     }
     if !strchr(modechars, 'i' as ::core::ffi::c_int).is_null() {
-        mode |= MODE_INSERT as ::core::ffi::c_int;
+        mode |= MODE_INSERT;
     }
     if !strchr(modechars, 'l' as ::core::ffi::c_int).is_null() {
-        mode |= MODE_LANGMAP as ::core::ffi::c_int;
+        mode |= MODE_LANGMAP;
     }
     if !strchr(modechars, 'c' as ::core::ffi::c_int).is_null() {
-        mode |= MODE_CMDLINE as ::core::ffi::c_int;
+        mode |= MODE_CMDLINE;
     }
     let mut retval: bool = map_to_exists_mode(rhs, mode, abbr);
     xfree(buf as *mut ::core::ffi::c_void);
@@ -2898,13 +2856,10 @@ pub unsafe extern "C" fn set_context_in_map_cmd(
                 forceit as ::core::ffi::c_int != 0 || isabbrev as ::core::ffi::c_int != 0,
             ));
         } else {
-            expand_mapmodes
-                .set(MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int);
+            expand_mapmodes.set(MODE_INSERT | MODE_CMDLINE);
             if !isabbrev {
-                (*expand_mapmodes.ptr()) |= MODE_VISUAL as ::core::ffi::c_int
-                    | MODE_SELECT as ::core::ffi::c_int
-                    | MODE_NORMAL as ::core::ffi::c_int
-                    | MODE_OP_PENDING as ::core::ffi::c_int;
+                (*expand_mapmodes.ptr()) |=
+                    MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING;
             }
         }
         expand_isabbrev.set(isabbrev);
@@ -4293,14 +4248,9 @@ unsafe extern "C" fn get_map_mode_string(
     abbr: bool,
 ) -> ::core::ffi::c_int {
     let mut p: *const ::core::ffi::c_char = mode_string;
-    let MASK_V: ::core::ffi::c_int =
-        MODE_VISUAL as ::core::ffi::c_int | MODE_SELECT as ::core::ffi::c_int;
-    let MASK_MAP: ::core::ffi::c_int = MODE_VISUAL as ::core::ffi::c_int
-        | MODE_SELECT as ::core::ffi::c_int
-        | MODE_NORMAL as ::core::ffi::c_int
-        | MODE_OP_PENDING as ::core::ffi::c_int;
-    let MASK_BANG: ::core::ffi::c_int =
-        MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int;
+    let MASK_V: ::core::ffi::c_int = MODE_VISUAL | MODE_SELECT;
+    let MASK_MAP: ::core::ffi::c_int = MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING;
+    let MASK_BANG: ::core::ffi::c_int = MODE_INSERT | MODE_CMDLINE;
     if *p as ::core::ffi::c_int == NUL {
         p = b" \0".as_ptr() as *const ::core::ffi::c_char;
     }
@@ -4316,28 +4266,28 @@ unsafe extern "C" fn get_map_mode_string(
         let mut tmode: ::core::ffi::c_int = 0;
         match modec {
             105 => {
-                tmode = MODE_INSERT as ::core::ffi::c_int;
+                tmode = MODE_INSERT;
             }
             108 => {
-                tmode = MODE_LANGMAP as ::core::ffi::c_int;
+                tmode = MODE_LANGMAP;
             }
             99 => {
-                tmode = MODE_CMDLINE as ::core::ffi::c_int;
+                tmode = MODE_CMDLINE;
             }
             110 => {
-                tmode = MODE_NORMAL as ::core::ffi::c_int;
+                tmode = MODE_NORMAL;
             }
             120 => {
-                tmode = MODE_VISUAL as ::core::ffi::c_int;
+                tmode = MODE_VISUAL;
             }
             115 => {
-                tmode = MODE_SELECT as ::core::ffi::c_int;
+                tmode = MODE_SELECT;
             }
             111 => {
-                tmode = MODE_OP_PENDING as ::core::ffi::c_int;
+                tmode = MODE_OP_PENDING;
             }
             116 => {
-                tmode = MODE_TERMINAL as ::core::ffi::c_int;
+                tmode = MODE_TERMINAL;
             }
             118 => {
                 tmode = MASK_V;
@@ -5180,9 +5130,7 @@ pub unsafe extern "C" fn modify_keymap(
                 };
                 p = p.offset(1);
             }
-            is_abbrev = mode_val
-                & (MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int)
-                != 0 as ::core::ffi::c_int
+            is_abbrev = mode_val & (MODE_INSERT | MODE_CMDLINE) != 0 as ::core::ffi::c_int
                 && *p as ::core::ffi::c_int == 'a' as ::core::ffi::c_int;
             if is_abbrev {
                 p = p.offset(1);
@@ -5378,9 +5326,7 @@ pub unsafe extern "C" fn keymap_array(
         };
         p = p.offset(1);
     }
-    let mut is_abbrev: bool = int_mode
-        & (MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int)
-        != 0 as ::core::ffi::c_int
+    let mut is_abbrev: bool = int_mode & (MODE_INSERT | MODE_CMDLINE) != 0 as ::core::ffi::c_int
         && *p as ::core::ffi::c_int == 'a' as ::core::ffi::c_int;
     let mut buffer_value: ::core::ffi::c_int = if buf.is_null() {
         0 as ::core::ffi::c_int

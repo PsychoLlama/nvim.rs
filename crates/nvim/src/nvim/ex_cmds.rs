@@ -128,6 +128,7 @@ use crate::src::nvim::regexp::{
 };
 use crate::src::nvim::search::{get_search_pat, last_search_pat, save_re_pat, search_regcomp};
 use crate::src::nvim::spell::parse_spelllang;
+use crate::src::nvim::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::src::nvim::strings::{
     concat_str, vim_snprintf, vim_snprintf_add, vim_snprintf_safelen, vim_strchr,
     vim_strsave_escaped, xstrnsave,
@@ -1263,10 +1264,6 @@ pub const CCGD_EXCMD: C2Rust_Unnamed_35 = 16;
 pub const CCGD_FORCEIT: C2Rust_Unnamed_35 = 4;
 pub const CCGD_MULTWIN: C2Rust_Unnamed_35 = 2;
 pub const CCGD_AW: C2Rust_Unnamed_35 = 1;
-pub const MODE_NORMAL: C2Rust_Unnamed_38 = 1;
-pub const MODE_CMDLINE: C2Rust_Unnamed_38 = 8;
-pub const MODE_LANGMAP: C2Rust_Unnamed_38 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_38 = 16;
 pub const DOCMD_NOWAIT: C2Rust_Unnamed_36 = 2;
 pub const SEARCH_HIS: C2Rust_Unnamed_44 = 32;
 pub const RE_LAST: C2Rust_Unnamed_45 = 2;
@@ -1347,22 +1344,6 @@ pub const READ_BUFFER: C2Rust_Unnamed_37 = 8;
 pub const READ_STDIN: C2Rust_Unnamed_37 = 4;
 pub const READ_NEW: C2Rust_Unnamed_37 = 1;
 pub type C2Rust_Unnamed_38 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_38 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_38 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_38 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_38 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_38 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_38 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_38 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_38 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_38 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_38 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_38 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_38 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_38 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_38 = 64;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_38 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_38 = 2;
 pub type C2Rust_Unnamed_39 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_40 = ::core::ffi::c_uint;
 pub const BCO_NOHELP: C2Rust_Unnamed_40 = 4;
@@ -4630,9 +4611,9 @@ pub unsafe fn ex_append(mut eap: *mut exarg_T) {
     if empty as ::core::ffi::c_int != 0 && lnum == 1 as linenr_T {
         lnum = 0 as ::core::ffi::c_int as linenr_T;
     }
-    State.set(MODE_INSERT as ::core::ffi::c_int);
+    State.set(MODE_INSERT);
     if (*curbuf.get()).b_p_iminsert == B_IMODE_LMAP as OptInt {
-        (*State.ptr()) |= MODE_LANGMAP as ::core::ffi::c_int;
+        (*State.ptr()) |= MODE_LANGMAP;
     }
     loop {
         msg_scroll.set(true_0);
@@ -4668,7 +4649,7 @@ pub unsafe fn ex_append(mut eap: *mut exarg_T) {
             (*eap).nextcmd = p;
         } else {
             let mut save_State: ::core::ffi::c_int = State.get();
-            State.set(MODE_CMDLINE as ::core::ffi::c_int);
+            State.set(MODE_CMDLINE);
             theline = (*eap).ea_getline.expect("non-null function pointer")(
                 if (*(*eap).cstack).cs_looplevel > 0 as ::core::ffi::c_int {
                     -1 as ::core::ffi::c_int
@@ -4733,7 +4714,7 @@ pub unsafe fn ex_append(mut eap: *mut exarg_T) {
             }
         }
     }
-    State.set(MODE_NORMAL as ::core::ffi::c_int);
+    State.set(MODE_NORMAL);
     ui_cursor_shape();
     if (*eap).forceit != 0 {
         (*curbuf.get()).b_p_ai = ((*curbuf.get()).b_p_ai == 0) as ::core::ffi::c_int;

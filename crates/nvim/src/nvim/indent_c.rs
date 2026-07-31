@@ -19,6 +19,7 @@ use crate::src::nvim::os::libc::{__assert_fail, atoi, strcpy, strlen, strncmp, t
 use crate::src::nvim::plines::getvcol;
 use crate::src::nvim::pos::{MAXLNUM, lt};
 use crate::src::nvim::search::{check_linecomment, findmatchlimit, linewhite};
+use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
@@ -110,26 +111,6 @@ pub const KEY_COMPLETE: C2Rust_Unnamed_14 = 259;
 pub const KEY_OPEN_BACK: C2Rust_Unnamed_14 = 258;
 pub const KEY_OPEN_FORW: C2Rust_Unnamed_14 = 257;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_15 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_15 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_15 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_15 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_15 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_15 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_15 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_15 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_15 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_15 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_15 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_15 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_15 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_15 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_15 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_15 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_15 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_15 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_15 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_15 = 1;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
@@ -2193,7 +2174,7 @@ pub unsafe extern "C" fn get_c_indent() -> ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;
     }
     linecopy = xstrdup(ml_get(cur_curpos.lnum));
-    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+    if State.get() & MODE_INSERT != 0
         && (*curwin.get()).w_cursor.col < strlen(linecopy) as colnr_T
         && *linecopy.offset((*curwin.get()).w_cursor.col as isize) as ::core::ffi::c_int
             == ')' as ::core::ffi::c_int

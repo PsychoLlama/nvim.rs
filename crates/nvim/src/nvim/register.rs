@@ -71,6 +71,7 @@ use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::plines::{getvcol, init_charsize_arg, win_charsize};
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::search::{last_search_pat, set_last_search_pat};
+use crate::src::nvim::state::REPLACE_FLAG;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ext};
 use crate::src::nvim::terminal::terminal_paste;
 pub use crate::src::nvim::types::{
@@ -897,26 +898,6 @@ pub const REMAP_SCRIPT: RemapValues = -2;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_25 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_25 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_25 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_25 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_25 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_25 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_25 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_25 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_25 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_25 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_25 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_25 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_25 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_25 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_25 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_25 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_25 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_25 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_25 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_25 = 1;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
 pub const SIN_NOMARK: C2Rust_Unnamed_26 = 8;
 pub const SIN_UNDO: C2Rust_Unnamed_26 = 4;
@@ -2064,7 +2045,7 @@ pub unsafe extern "C" fn insert_reg(
                     && (*reg).y_type as ::core::ffi::c_int == kMTCharWise as ::core::ffi::c_int
                 {
                     let mut dir: Direction = BACKWARD;
-                    if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 as ::core::ffi::c_int {
+                    if State.get() & REPLACE_FLAG != 0 as ::core::ffi::c_int {
                         let mut curpos: pos_T = pos_T {
                             lnum: 0,
                             col: 0,

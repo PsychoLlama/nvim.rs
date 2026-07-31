@@ -28,7 +28,7 @@ use crate::src::nvim::os::libc::{memcpy, memset};
 use crate::src::nvim::plines::{
     getvcol, getvvcol, init_charsize_arg, linetabsize, linetabsize_eol, win_charsize,
 };
-use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::src::nvim::types::{
     CharsizeArg, buf_T, colnr_T, int64_t, linenr_T, pos_T, size_t, win_T,
 };
@@ -36,8 +36,6 @@ use crate::src::nvim::types::{
 pub const MAXCOL: c_int = 2147483647;
 const NUL: c_int = 0;
 const TAB: c_int = 9;
-const MODE_INSERT: c_int = 16;
-const MODE_TERMINAL: c_int = 128;
 const VALID_VIRTCOL: c_int = 0x4;
 const UPD_NOT_VALID: c_int = 40;
 

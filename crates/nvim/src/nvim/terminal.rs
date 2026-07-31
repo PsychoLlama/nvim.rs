@@ -92,6 +92,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
 
+use crate::src::nvim::state::MODE_TERMINAL;
 pub use input::{terminal_paste, terminal_set_streamed_paste};
 pub use mode::terminal_enter;
 pub use refresh::{
@@ -119,7 +120,6 @@ const OPT_LOCAL: c_int = 2;
 /// `drawline` sizes its array to match.
 const TERM_ATTRS_MAX: c_int = 1024;
 /// `State` bit set while terminal mode is running.
-const MODE_TERMINAL: c_int = 128;
 /// `redraw_later` levels.
 const UPD_VALID: c_int = 10;
 const UPD_SOME_VALID: c_int = 35;

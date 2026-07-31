@@ -61,7 +61,7 @@ use crate::src::nvim::path::{FullName_save, path_fnamecmp, path_tail};
 use crate::src::nvim::profile::{prof_child_enter, prof_child_exit};
 use crate::src::nvim::runtime::{estack_pop, estack_push, exestack};
 use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
-use crate::src::nvim::state::{get_mode, get_real_state};
+use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::src::nvim::strings::{vim_strchr, vim_strnicmp_asc, xstrnsave};
 pub use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
@@ -1260,31 +1260,11 @@ pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 pub const OPT_NOWIN: C2Rust_Unnamed_36 = 16;
-pub const MODE_INSERT: C2Rust_Unnamed_35 = 16;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_35 = 4097;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
 pub const DOCMD_KEEPLINE: C2Rust_Unnamed_34 = 32;
 pub const DOCMD_EXCRESET: C2Rust_Unnamed_34 = 16;
 pub const DOCMD_KEYTYPED: C2Rust_Unnamed_34 = 8;
 pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_35 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_35 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_35 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_35 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_35 = 8193;
-pub const MODE_LREPLACE: C2Rust_Unnamed_35 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_35 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_35 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_35 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_35 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_35 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_35 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_35 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_35 = 32;
-pub const MODE_CMDLINE: C2Rust_Unnamed_35 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_35 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_35 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_35 = 1;
 pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
 pub const OPT_SKIPRTP: C2Rust_Unnamed_36 = 128;
 pub const OPT_NO_REDRAW: C2Rust_Unnamed_36 = 64;
@@ -3171,7 +3151,7 @@ pub unsafe extern "C" fn has_event(mut event: event_T) -> bool {
 }
 unsafe extern "C" fn has_cursorhold() -> bool {
     return has_event(
-        (if get_real_state() == MODE_NORMAL_BUSY as ::core::ffi::c_int {
+        (if get_real_state() == MODE_NORMAL_BUSY {
             EVENT_CURSORHOLD as ::core::ffi::c_int
         } else {
             EVENT_CURSORHOLDI as ::core::ffi::c_int
@@ -3186,9 +3166,7 @@ pub unsafe extern "C" fn trigger_cursorhold() -> bool {
         && !ins_compl_active()
     {
         let mut state: ::core::ffi::c_int = get_real_state();
-        if state == MODE_NORMAL_BUSY as ::core::ffi::c_int
-            || state & MODE_INSERT as ::core::ffi::c_int != 0 as ::core::ffi::c_int
-        {
+        if state == MODE_NORMAL_BUSY || state & MODE_INSERT != 0 as ::core::ffi::c_int {
             return true_0 != 0;
         }
     }

@@ -20,6 +20,7 @@ use crate::src::nvim::os::libc::{strcmp, strncmp};
 use crate::src::nvim::plines::{init_charsize_arg, win_charsize};
 use crate::src::nvim::pos::lt;
 use crate::src::nvim::search::{findmatch, linewhite};
+use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::vim_strchr;
 
 pub unsafe extern "C" fn get_expr_indent() -> ::core::ffi::c_int {
@@ -48,7 +49,7 @@ pub unsafe extern "C" fn get_expr_indent() -> ::core::ffi::c_int {
     (*textlock.ptr()) -= 1;
     current_sctx.set(save_sctx);
     let mut save_State: ::core::ffi::c_int = State.get();
-    State.set(MODE_INSERT as ::core::ffi::c_int);
+    State.set(MODE_INSERT);
     (*curwin.get()).w_cursor = save_pos;
     (*curwin.get()).w_curswant = save_curswant;
     (*curwin.get()).w_set_curswant = save_set_curswant as ::core::ffi::c_int;

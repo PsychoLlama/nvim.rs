@@ -42,8 +42,7 @@ use crate::src::nvim::normal::{
     B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CPO_DIGRAPH, Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, ESC,
     GRAPHEME_STATE_INIT, K_DEL, K_DOWN, K_END, K_HOME, K_KENTER, K_LEFT, K_RIGHT, K_S_LEFT,
     K_S_RIGHT, K_UP, K_ZERO, KE_C_LEFT, KE_C_RIGHT, KE_EVENT, KE_IGNORE, KE_KDEL, KE_MOUSEMOVE,
-    MOD_MASK_SHIFT, MODE_LANGMAP, MODE_LREPLACE, MODE_NORMAL, MODE_NORMAL_BUSY, MODE_REPLACE,
-    MODE_SELECT, NL, NUL, NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS,
+    MOD_MASK_SHIFT, NL, NUL, NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS,
     NormalState, OP_COLON, OP_NOP, add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd,
     del_from_showcmd, do_check_scrollbind, normal_handle_special_visual_command,
     normal_need_additional_char, normal_need_redraw_mode_message, normal_redraw_mode_message,
@@ -52,7 +51,10 @@ use crate::src::nvim::normal::{
 use crate::src::nvim::ops::{do_pending_operator, get_op_type};
 use crate::src::nvim::os::libc::qsort;
 use crate::src::nvim::register::get_default_register_name;
-use crate::src::nvim::state::{get_real_state, may_trigger_modechanged};
+use crate::src::nvim::state::{
+    MODE_LANGMAP, MODE_LREPLACE, MODE_NORMAL, MODE_NORMAL_BUSY, MODE_REPLACE, MODE_SELECT,
+    get_real_state, may_trigger_modechanged,
+};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     GraphemeState, OptInt, VimState, cmdarg_T, int16_t, int64_t, oparg_T,
@@ -333,7 +335,7 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
                 Slot::None => unreachable!(),
             };
             if repl {
-                State.set(MODE_REPLACE as c_int);
+                State.set(MODE_REPLACE);
                 ui_cursor_shape_no_check_conceal();
             }
             // A language-mapped argument is read *with* mappings on, which is
@@ -342,18 +344,14 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
             if langmap_active {
                 (*no_mapping.ptr()) -= 1;
                 (*allow_keys.ptr()) -= 1;
-                State.set(if repl {
-                    MODE_LREPLACE as c_int
-                } else {
-                    MODE_LANGMAP as c_int
-                });
+                State.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });
             }
             *cp = plain_vgetc();
             if langmap_active {
                 (*no_mapping.ptr()) += 1;
                 (*allow_keys.ptr()) += 1;
             }
-            State.set(MODE_NORMAL_BUSY as c_int);
+            State.set(MODE_NORMAL_BUSY);
             (*s).need_flushbuf |= add_to_showcmd(*cp);
 
             if !lit {
@@ -604,7 +602,7 @@ pub(crate) unsafe extern "C" fn normal_execute(state: *mut VimState, key: c_int)
         (*s).ctrl_w = false;
         (*s).old_col = (*curwin.get()).w_curswant as c_int;
         (*s).c = key;
-        langmap_adjust(&mut (*s).c, get_real_state() != MODE_SELECT as c_int);
+        langmap_adjust(&mut (*s).c, get_real_state() != MODE_SELECT);
 
         if restart_edit.get() == 0 {
             (*s).old_mapped_len = 0;
@@ -705,7 +703,7 @@ pub(crate) unsafe extern "C" fn normal_execute(state: *mut VimState, key: c_int)
             if (*s).ca.cmdchar != K_IGNORE && (*s).ca.cmdchar != K_EVENT {
                 did_cursorhold.set(false);
             }
-            State.set(MODE_NORMAL as c_int);
+            State.set(MODE_NORMAL);
 
             if (*s).ca.nchar == ESC || (*s).ca.extra_char == ESC {
                 clearop(&raw mut (*s).oa);

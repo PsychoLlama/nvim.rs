@@ -77,6 +77,9 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::time::os_delay;
 use crate::src::nvim::register::write_reg_contents;
 use crate::src::nvim::runtime::{estack_sfile, exestack};
+use crate::src::nvim::state::{
+    MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE,
+};
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, vim_vsnprintf};
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __pthread_internal_list,
@@ -1059,8 +1062,6 @@ pub const VIM_ALL: C2Rust_Unnamed_37 = 5;
 pub const VIM_CANCEL: C2Rust_Unnamed_37 = 4;
 pub const VIM_NO: C2Rust_Unnamed_37 = 3;
 pub const VIM_YES: C2Rust_Unnamed_37 = 2;
-pub const MODE_ASKMORE: C2Rust_Unnamed_39 = 12288;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_39 = 16384;
 pub const MOUSE_SETPOS: C2Rust_Unnamed_40 = 8;
 pub const KE_X2MOUSE: key_extra = 92;
 pub const KE_X1MOUSE: key_extra = 89;
@@ -1106,7 +1107,6 @@ pub const ETYPE_UFUNC: etype_T = 2;
 pub const ETYPE_SCRIPT: etype_T = 1;
 pub const ETYPE_TOP: etype_T = 0;
 pub const KE_EVENT: key_extra = 102;
-pub const MODE_HITRETURN: C2Rust_Unnamed_39 = 8193;
 pub const ESTACK_SCRIPT: estack_arg_T = 3;
 pub const ESTACK_STACK: estack_arg_T = 2;
 pub const ESTACK_SFILE: estack_arg_T = 1;
@@ -1114,26 +1114,9 @@ pub const ESTACK_NONE: estack_arg_T = 0;
 pub const FLUSH_INPUT: flush_buffers_T = 2;
 pub const FLUSH_TYPEAHEAD: flush_buffers_T = 1;
 pub const FLUSH_MINIMAL: flush_buffers_T = 0;
-pub const MODE_CMDLINE: C2Rust_Unnamed_39 = 8;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_39 = 20480;
 pub const DLG_HOTKEY_CHAR: C2Rust_Unnamed_41 = 38;
 pub const DLG_BUTTON_SEP: C2Rust_Unnamed_41 = 10;
 pub type C2Rust_Unnamed_39 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_39 = 24592;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_39 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_39 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_39 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_39 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_39 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_39 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_39 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_39 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_39 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_39 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_39 = 16;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_39 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_39 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_39 = 1;
 pub const KE_WILD: key_extra = 108;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_LUA: key_extra = 103;
@@ -1341,7 +1324,7 @@ pub unsafe extern "C" fn msg_grid_validate() {
             Rows.get() as size_t,
             ::core::mem::size_of::<::core::ffi::c_int>(),
         ) as *mut ::core::ffi::c_int;
-        let mut pos: ::core::ffi::c_int = if State.get() & MODE_ASKMORE as ::core::ffi::c_int != 0 {
+        let mut pos: ::core::ffi::c_int = if State.get() & MODE_ASKMORE != 0 {
             0 as ::core::ffi::c_int
         } else if max_rows - msg_scrolled.get() > 0 as ::core::ffi::c_int {
             max_rows - msg_scrolled.get()
@@ -3288,7 +3271,7 @@ pub unsafe extern "C" fn wait_return(mut redraw: ::core::ffi::c_int) {
     } else if !stuff_empty() {
         c = CAR;
     } else {
-        State.set(MODE_HITRETURN as ::core::ffi::c_int);
+        State.set(MODE_HITRETURN);
         setmouse();
         cmdline_row.set(msg_row.get());
         if need_check_timestamps.get() {
@@ -3448,7 +3431,7 @@ pub unsafe extern "C" fn wait_return(mut redraw: ::core::ffi::c_int) {
         *ptr_ = NULL;
         let _ = *ptr_;
     }
-    if tmpState == MODE_SETWSIZE as ::core::ffi::c_int {
+    if tmpState == MODE_SETWSIZE {
         ui_refresh();
     } else if !skip_redraw.get() {
         if redraw == true_0
@@ -4584,7 +4567,7 @@ unsafe extern "C" fn msg_puts_display(
                 }
                 if p_more.get() != 0
                     && lines_left.get() == 0 as ::core::ffi::c_int
-                    && State.get() != MODE_HITRETURN as ::core::ffi::c_int
+                    && State.get() != MODE_HITRETURN
                     && !msg_no_more.get()
                     && !exmode_active.get()
                 {
@@ -5237,8 +5220,7 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
         headless_mode.get() as ::core::ffi::c_int != 0 && !embedded_mode.get() && ui_active() == 0;
     if no_need_more as ::core::ffi::c_int != 0
         || entered.get() as ::core::ffi::c_int != 0
-        || State.get() == MODE_HITRETURN as ::core::ffi::c_int
-            && typed_char == 0 as ::core::ffi::c_int
+        || State.get() == MODE_HITRETURN && typed_char == 0 as ::core::ffi::c_int
     {
         return false_0 != 0;
     }
@@ -5254,7 +5236,7 @@ unsafe extern "C" fn do_more_prompt(mut typed_char: ::core::ffi::c_int) -> bool 
             i += 1;
         }
     }
-    State.set(MODE_ASKMORE as ::core::ffi::c_int);
+    State.set(MODE_ASKMORE);
     setmouse();
     if typed_char == NUL {
         msg_moremsg(false_0 != 0);
@@ -5499,19 +5481,15 @@ pub unsafe extern "C" fn repeat_message() {
     if ui_has(kUIMessages) {
         return;
     }
-    if State.get() == MODE_ASKMORE as ::core::ffi::c_int {
+    if State.get() == MODE_ASKMORE {
         msg_moremsg(true_0 != 0);
         msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
-    } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
-        && !(*confirm_msg.ptr()).is_null()
-    {
+    } else if State.get() & MODE_CMDLINE != 0 && !(*confirm_msg.ptr()).is_null() {
         display_confirm_msg();
         msg_row.set(Rows.get() - 1 as ::core::ffi::c_int);
-    } else if State.get() == MODE_EXTERNCMD as ::core::ffi::c_int {
+    } else if State.get() == MODE_EXTERNCMD {
         ui_cursor_goto(msg_row.get(), msg_col.get());
-    } else if State.get() == MODE_HITRETURN as ::core::ffi::c_int
-        || State.get() == MODE_SETWSIZE as ::core::ffi::c_int
-    {
+    } else if State.get() == MODE_HITRETURN || State.get() == MODE_SETWSIZE {
         if msg_row.get() == Rows.get() - 1 as ::core::ffi::c_int {
             msg_didout.set(false_0 != 0);
             msg_col.set(0 as ::core::ffi::c_int);
@@ -5579,7 +5557,7 @@ pub unsafe extern "C" fn msg_clr_cmdline() {
 pub unsafe extern "C" fn msg_end() -> bool {
     if !exiting.get()
         && need_wait_return.get() as ::core::ffi::c_int != 0
-        && State.get() & MODE_CMDLINE as ::core::ffi::c_int == 0
+        && State.get() & MODE_CMDLINE == 0
     {
         wait_return(false_0);
         return false_0 != 0;

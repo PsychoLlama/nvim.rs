@@ -27,6 +27,7 @@ use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{gettext, memmove, memset, ngettext, snprintf, strncmp};
 use crate::src::nvim::plines::{getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize};
 use crate::src::nvim::search::findmatch;
+use crate::src::nvim::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG};
 use crate::src::nvim::strings::xstrnsave;
 use crate::src::nvim::undo::{u_clearline, u_save, u_savecommon};
 
@@ -222,7 +223,7 @@ pub unsafe extern "C" fn ins_try_si(mut c: ::core::ffi::c_int) {
             }
             i = get_indent();
             (*curwin.get()).w_cursor = old_pos;
-            if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+            if State.get() & VREPLACE_FLAG != 0 {
                 change_indent(INDENT_SET as ::core::ffi::c_int, i, 0, true);
             } else {
                 set_indent(i, SIN_CHANGED as ::core::ffi::c_int);
@@ -277,7 +278,7 @@ pub unsafe extern "C" fn change_indent(
     let mut insstart_less: ::core::ffi::c_int = 0;
     let mut orig_col: colnr_T = 0 as colnr_T;
     let mut orig_line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+    if State.get() & VREPLACE_FLAG != 0 {
         orig_line = xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
         orig_col = (*curwin.get()).w_cursor.col;
     }
@@ -307,8 +308,8 @@ pub unsafe extern "C" fn change_indent(
         );
     } else {
         let mut save_State: ::core::ffi::c_int = State.get();
-        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
-            State.set(MODE_INSERT as ::core::ffi::c_int);
+        if State.get() & VREPLACE_FLAG != 0 {
+            State.set(MODE_INSERT);
         }
         shift_line(
             type_0 == INDENT_DEC as ::core::ffi::c_int,
@@ -324,7 +325,7 @@ pub unsafe extern "C" fn change_indent(
             insstart_less = MAXCOL as ::core::ffi::c_int;
         }
         new_cursor_col += (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
-    } else if State.get() & MODE_INSERT as ::core::ffi::c_int == 0 {
+    } else if State.get() & MODE_INSERT == 0 {
         new_cursor_col = (*curwin.get()).w_cursor.col as ::core::ffi::c_int;
     } else {
         vcol = get_indent() - vcol;
@@ -398,7 +399,7 @@ pub unsafe extern "C" fn change_indent(
     }) as colnr_T;
     (*curwin.get()).w_set_curswant = 1;
     changed_cline_bef_curs(curwin.get());
-    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_INSERT != 0 {
         if (*curwin.get()).w_cursor.lnum == (*Insstart.ptr()).lnum
             && (*Insstart.ptr()).col != 0 as ::core::ffi::c_int
         {
@@ -414,8 +415,8 @@ pub unsafe extern "C" fn change_indent(
             (*ai_col.ptr()) -= insstart_less;
         }
     }
-    if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
-        && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0
+    if State.get() & REPLACE_FLAG != 0
+        && State.get() & VREPLACE_FLAG == 0
         && start_col >= 0 as ::core::ffi::c_int
     {
         while start_col > (*curwin.get()).w_cursor.col {
@@ -427,7 +428,7 @@ pub unsafe extern "C" fn change_indent(
             start_col += 1;
         }
     }
-    if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+    if State.get() & VREPLACE_FLAG != 0 {
         let mut new_line: *mut ::core::ffi::c_char =
             xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
         *new_line.offset((*curwin.get()).w_cursor.col as isize) = NUL as ::core::ffi::c_char;

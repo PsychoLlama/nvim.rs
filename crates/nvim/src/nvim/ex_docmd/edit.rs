@@ -22,10 +22,9 @@ use crate::src::nvim::ex_docmd::{
     BACKWARD, BL_FIX, BL_SOL, BL_WHITE, CMD_delete, CMD_earlier, CMD_folddoclosed, CMD_foldopen,
     CMD_list, CMD_move, CMD_number, CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert,
     CMD_startreplace, CMD_yank, CPO_EXECBUF, Ctrl_C, Ctrl_O, DOCMD_NOWAIT, DOCMD_VERBOSE,
-    EXFLAG_LIST, EXFLAG_NR, FAIL, FORWARD, K_SPECIAL, KE_FILLER, KS_SPECIAL, ML_EMPTY, MODE_INSERT,
-    MODE_TERMINAL, NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, OPTION_MAGIC_OFF,
-    OPTION_MAGIC_ON, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, REMAP_NONE, REMAP_YES, UPD_VALID,
-    kFalse, kMTLineWise, kNone,
+    EXFLAG_LIST, EXFLAG_NR, FAIL, FORWARD, K_SPECIAL, KE_FILLER, KS_SPECIAL, ML_EMPTY, NUL,
+    OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, PUT_CURSLINE,
+    PUT_FIXINDENT, PUT_LINE, REMAP_NONE, REMAP_YES, UPD_VALID, kFalse, kMTLineWise, kNone,
 };
 use crate::src::nvim::ex_getln::getexline;
 use crate::src::nvim::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRange};
@@ -60,6 +59,7 @@ use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::plines::plines_m_win_fill;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::register::{do_execreg, do_put, op_yank};
+use crate::src::nvim::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
     colnr_T, exarg_T, handle_T, int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T,
@@ -681,7 +681,7 @@ pub unsafe fn restore_current_state(sst: *mut save_state_T) {
 /// `:normal` — run the argument as normal-mode keys.
 pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
     unsafe {
-        if !(*curbuf.get()).terminal.is_null() && State.get() & MODE_TERMINAL as c_int != 0 {
+        if !(*curbuf.get()).terminal.is_null() && State.get() & MODE_TERMINAL != 0 {
             emsg(c"Can't re-enter normal mode from terminal mode".as_ptr());
             return;
         }
@@ -792,7 +792,7 @@ pub(crate) unsafe fn ex_startinsert(eap: *mut exarg_T) {
             }
             set_cursor_for_append_to_line();
         }
-        if State.get() & MODE_INSERT as c_int != 0 {
+        if State.get() & MODE_INSERT != 0 {
             return;
         }
         let idx = (*eap).cmdidx as c_int;

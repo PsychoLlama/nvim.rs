@@ -40,6 +40,7 @@ use crate::src::nvim::options::kOptFormatexpr;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::strncmp;
 use crate::src::nvim::search::check_linecomment;
+use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL, VREPLACE_FLAG};
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 use crate::src::nvim::textobject::startPS;
 pub use crate::src::nvim::types::{
@@ -381,26 +382,6 @@ pub const VV_PREVCOUNT: VimVarIndex = 2;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_21 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_21 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_21 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_21 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_21 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_21 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_21 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_21 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_21 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_21 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_21 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_21 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_21 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_21 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_21 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_21 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_21 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_21 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_21 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_21 = 1;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
@@ -466,7 +447,7 @@ pub unsafe extern "C" fn internal_format(
     let mut do_comments: bool = flags & INSCHAR_DO_COM as ::core::ffi::c_int != 0;
     let mut has_lbr: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_lbr;
     (*curwin.get()).w_onebuf_opt.wo_lbr = false_0;
-    if (*curbuf.get()).b_p_ai == 0 && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0 {
+    if (*curbuf.get()).b_p_ai == 0 && State.get() & VREPLACE_FLAG == 0 {
         cc = gchar_cursor();
         if ascii_iswhite(cc) {
             save_char = cc as ::core::ffi::c_char;
@@ -702,7 +683,7 @@ pub unsafe extern "C" fn internal_format(
             break;
         } else {
             undisplay_dollar();
-            if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+            if State.get() & VREPLACE_FLAG != 0 {
                 orig_col = startcol;
             } else {
                 replace_offset.set(startcol - end_foundcol);
@@ -726,7 +707,7 @@ pub unsafe extern "C" fn internal_format(
             } else {
                 0 as ::core::ffi::c_int
             };
-            if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+            if State.get() & VREPLACE_FLAG != 0 {
                 saved_text = xstrnsave(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t);
                 (*curwin.get()).w_cursor.col = orig_col as colnr_T;
                 *saved_text.offset(startcol as isize) = NUL as ::core::ffi::c_char;
@@ -779,7 +760,7 @@ pub unsafe extern "C" fn internal_format(
                             get_number_indent((*curwin.get()).w_cursor.lnum - 1 as linenr_T);
                     }
                     if second_indent >= 0 as ::core::ffi::c_int {
-                        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+                        if State.get() & VREPLACE_FLAG != 0 {
                             change_indent(
                                 INDENT_SET as ::core::ffi::c_int,
                                 second_indent,
@@ -808,7 +789,7 @@ pub unsafe extern "C" fn internal_format(
                 }
                 first_line = false_0 != 0;
             }
-            if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+            if State.get() & VREPLACE_FLAG != 0 {
                 ins_bytes(saved_text);
                 xfree(saved_text as *mut ::core::ffi::c_void);
             } else {
@@ -1031,7 +1012,7 @@ pub unsafe extern "C" fn auto_format(mut trailblank: bool, mut prev_line: bool) 
         && !trailblank
         && !wasatend
         && pos.col > 0 as ::core::ffi::c_int
-        && State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+        && State.get() & MODE_INSERT != 0
     {
         let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
         if ascii_iswhite(
@@ -1404,14 +1385,14 @@ pub unsafe extern "C" fn format_lines(mut line_count: linenr_T, mut avoid_fex: b
                     }
                     set_indent(indent, SIN_CHANGED as ::core::ffi::c_int);
                 }
-                State.set(MODE_NORMAL as ::core::ffi::c_int);
+                State.set(MODE_NORMAL);
                 coladvance(curwin.get(), MAXCOL as ::core::ffi::c_int);
                 while (*curwin.get()).w_cursor.col != 0
                     && ascii_isspace(gchar_cursor()) as ::core::ffi::c_int != 0
                 {
                     dec_cursor();
                 }
-                State.set(MODE_INSERT as ::core::ffi::c_int);
+                State.set(MODE_INSERT);
                 smd_save = p_smd.get();
                 p_smd.set(false_0);
                 insertchar(

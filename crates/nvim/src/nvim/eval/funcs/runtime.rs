@@ -5,8 +5,8 @@
 use super::args::frame;
 use super::wrappers::non_zero_arg;
 use super::{
-    MENU_ALL_MODES, MODE_CMDLINE, NUL, VAR_STRING, VV_SHELL_ERROR, kErrorTypeNone, kFalse,
-    kListLenMayKnow, kNone, kRetNilBool, kTrue, true_0,
+    MENU_ALL_MODES, NUL, VAR_STRING, VV_SHELL_ERROR, kErrorTypeNone, kFalse, kListLenMayKnow,
+    kNone, kRetNilBool, kTrue, true_0,
 };
 use crate::src::nvim::api::private::converter::object_to_vim;
 use crate::src::nvim::api::private::helpers::api_metadata;
@@ -37,7 +37,7 @@ use crate::src::nvim::ops::cursor_pos_info;
 use crate::src::nvim::os::env::{os_get_hostname, os_get_pid};
 use crate::src::nvim::os::libc::{atoi, strcasecmp, strlen, strncasecmp, strtoul};
 use crate::src::nvim::popupmenu::{pum_set_event_info, pum_visible};
-use crate::src::nvim::state::{get_mode, get_was_safe_state};
+use crate::src::nvim::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::syntax::syntax_present;
 use crate::src::nvim::types::{
@@ -658,8 +658,7 @@ pub unsafe extern "C" fn f_wildmenumode(
 ) {
     // SAFETY: `rettv` is the cleared return value.
     unsafe {
-        if wild_menu_showing.get() != 0
-            || (State.get() & MODE_CMDLINE as c_int != 0 && cmdline_pum_active())
+        if wild_menu_showing.get() != 0 || (State.get() & MODE_CMDLINE != 0 && cmdline_pum_active())
         {
             (*rettv).vval.v_number = 1;
         }

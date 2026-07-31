@@ -33,7 +33,10 @@ use crate::src::nvim::os::libc::{
     strncmp,
 };
 use crate::src::nvim::popupmenu::pum_show_popupmenu;
-use crate::src::nvim::state::get_real_state;
+use crate::src::nvim::state::{
+    MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
+    MODE_TERMINAL, MODE_VISUAL, get_real_state,
+};
 use crate::src::nvim::strings::{vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
@@ -882,26 +885,6 @@ pub const MENU_SELECT_MODE: C2Rust_Unnamed_17 = 4;
 pub const MENU_VISUAL_MODE: C2Rust_Unnamed_17 = 2;
 pub const MENU_NORMAL_MODE: C2Rust_Unnamed_17 = 1;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_18 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_18 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_18 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_18 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_18 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_18 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_18 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_18 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_18 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_18 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_18 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_18 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_18 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_18 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_18 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_18 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_18 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_18 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_18 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_18 = 1;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
 pub const REPTERM_NO_SIMPLIFY: C2Rust_Unnamed_19 = 8;
 pub const REPTERM_NO_SPECIAL: C2Rust_Unnamed_19 = 4;
@@ -2568,7 +2551,7 @@ unsafe extern "C" fn menu_is_hidden(mut name: *mut ::core::ffi::c_char) -> bool 
             && *name.offset(5 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != NUL;
 }
 unsafe extern "C" fn get_menu_mode() -> ::core::ffi::c_int {
-    if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_TERMINAL != 0 {
         return MENU_INDEX_TERMINAL as ::core::ffi::c_int;
     }
     if VIsual_active.get() {
@@ -2577,22 +2560,22 @@ unsafe extern "C" fn get_menu_mode() -> ::core::ffi::c_int {
         }
         return MENU_INDEX_VISUAL as ::core::ffi::c_int;
     }
-    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_INSERT != 0 {
         return MENU_INDEX_INSERT as ::core::ffi::c_int;
     }
-    if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
-        || State.get() == MODE_ASKMORE as ::core::ffi::c_int
-        || State.get() == MODE_HITRETURN as ::core::ffi::c_int
+    if State.get() & MODE_CMDLINE != 0
+        || State.get() == MODE_ASKMORE
+        || State.get() == MODE_HITRETURN
     {
         return MENU_INDEX_CMDLINE as ::core::ffi::c_int;
     }
     if finish_op.get() {
         return MENU_INDEX_OP_PENDING as ::core::ffi::c_int;
     }
-    if State.get() & MODE_NORMAL as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_NORMAL != 0 {
         return MENU_INDEX_NORMAL as ::core::ffi::c_int;
     }
-    if State.get() & MODE_LANGMAP as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_LANGMAP != 0 {
         return MENU_INDEX_INSERT as ::core::ffi::c_int;
     }
     return MENU_INDEX_INVALID as ::core::ffi::c_int;
@@ -2648,13 +2631,13 @@ pub unsafe extern "C" fn execute_menu(
 ) {
     let mut idx: ::core::ffi::c_int = mode_idx;
     if idx < 0 as ::core::ffi::c_int {
-        if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+        if State.get() & MODE_TERMINAL != 0 {
             idx = MENU_INDEX_TERMINAL as ::core::ffi::c_int;
-        } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+        } else if State.get() & MODE_CMDLINE != 0 {
             idx = MENU_INDEX_CMDLINE as ::core::ffi::c_int;
-        } else if get_real_state() & MODE_VISUAL as ::core::ffi::c_int != 0 {
+        } else if get_real_state() & MODE_VISUAL != 0 {
             idx = MENU_INDEX_VISUAL as ::core::ffi::c_int;
-        } else if (State.get() & MODE_INSERT as ::core::ffi::c_int != 0 || restart_edit.get() != 0)
+        } else if (State.get() & MODE_INSERT != 0 || restart_edit.get() != 0)
             && (*current_sctx.ptr()).sc_sid == 0 as ::core::ffi::c_int
         {
             idx = MENU_INDEX_INSERT as ::core::ffi::c_int;

@@ -49,7 +49,7 @@ use crate::src::nvim::popupmenu::pum_visible;
 use crate::src::nvim::pos::{equalpos, lt, ltoreq};
 use crate::src::nvim::register::{do_put, insert_reg, yank_register_mline};
 use crate::src::nvim::search::findmatch;
-use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG, virtual_active};
 use crate::src::nvim::statusline::stl_connected;
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
@@ -160,26 +160,6 @@ pub const UPD_INVERTED_ALL: C2Rust_Unnamed_14 = 25;
 pub const UPD_INVERTED: C2Rust_Unnamed_14 = 20;
 pub const UPD_VALID: C2Rust_Unnamed_14 = 10;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_15 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_15 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_15 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_15 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_15 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_15 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_15 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_15 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_15 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_15 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_15 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_15 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_15 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_15 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_15 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_15 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_15 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_15 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_15 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_15 = 1;
 pub const KE_WILD: key_extra = 108;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_LUA: key_extra = 103;
@@ -751,7 +731,7 @@ pub unsafe extern "C" fn do_mouse(
         && mod_mask.get() & MOD_MASK_CTRL != 0
         && which_button == MOUSE_RIGHT as ::core::ffi::c_int
     {
-        if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+        if State.get() & MODE_INSERT != 0 {
             stuffcharReadbuff(Ctrl_O);
         }
         if count > 1 as ::core::ffi::c_int {
@@ -786,7 +766,7 @@ pub unsafe extern "C" fn do_mouse(
         0 as ::core::ffi::c_int
     };
     if which_button == MOUSE_MIDDLE as ::core::ffi::c_int {
-        if State.get() == MODE_NORMAL as ::core::ffi::c_int {
+        if State.get() == MODE_NORMAL {
             if !oap.is_null() && (*oap).op_type != OP_NOP as ::core::ffi::c_int {
                 clearopbeep(oap);
                 return false_0 != 0;
@@ -804,10 +784,10 @@ pub unsafe extern "C" fn do_mouse(
                 }
                 return false_0 != 0;
             }
-        } else if State.get() & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+        } else if State.get() & MODE_INSERT == 0 as ::core::ffi::c_int {
             return false_0 != 0;
         }
-        if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+        if State.get() & MODE_INSERT != 0 {
             if regname == '.' as ::core::ffi::c_int {
                 insert_reg(regname, ::core::ptr::null_mut::<yankreg_T>(), true_0 != 0);
             } else {
@@ -821,9 +801,7 @@ pub unsafe extern "C" fn do_mouse(
                     regname = '*' as ::core::ffi::c_int;
                 }
                 let mut reg: *mut yankreg_T = ::core::ptr::null_mut::<yankreg_T>();
-                if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
-                    && !yank_register_mline(regname, &raw mut reg)
-                {
+                if State.get() & REPLACE_FLAG != 0 && !yank_register_mline(regname, &raw mut reg) {
                     insert_reg(regname, reg, true_0 != 0);
                 } else {
                     do_put(
@@ -968,7 +946,7 @@ pub unsafe extern "C" fn do_mouse(
         coladd: 0,
     };
     let mut mouse_can_visual: bool = ui_mouse_has(MOUSE_VISUAL);
-    if State.get() & (MODE_NORMAL as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int) != 0
+    if State.get() & (MODE_NORMAL | MODE_INSERT) != 0
         && mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
     {
         if which_button == MOUSE_LEFT as ::core::ffi::c_int
@@ -1211,9 +1189,7 @@ pub unsafe extern "C" fn do_mouse(
                 VIsual.set(start_visual);
             }
         }
-    } else if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
-        && VIsual_active.get() as ::core::ffi::c_int != 0
-    {
+    } else if State.get() & MODE_INSERT != 0 && VIsual_active.get() as ::core::ffi::c_int != 0 {
         stuffcharReadbuff(Ctrl_O);
     }
     if which_button == MOUSE_MIDDLE as ::core::ffi::c_int {
@@ -1280,13 +1256,13 @@ pub unsafe extern "C" fn do_mouse(
         || (*curbuf.get()).b_help as ::core::ffi::c_int != 0
             && mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK
     {
-        if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+        if State.get() & MODE_INSERT != 0 {
             stuffcharReadbuff(Ctrl_O);
         }
         stuffcharReadbuff(Ctrl_RSB);
         got_click.set(false_0 != 0);
     } else if mod_mask.get() & MOD_MASK_SHIFT != 0 {
-        if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+        if State.get() & MODE_INSERT != 0
             || VIsual_active.get() as ::core::ffi::c_int != 0
                 && VIsual_select.get() as ::core::ffi::c_int != 0
         {
@@ -1300,8 +1276,7 @@ pub unsafe extern "C" fn do_mouse(
     } else if !(in_status_line as ::core::ffi::c_int != 0 || in_sep_line as ::core::ffi::c_int != 0)
     {
         if mod_mask.get() & MOD_MASK_MULTI_CLICK != 0
-            && State.get() & (MODE_NORMAL as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int)
-                != 0
+            && State.get() & (MODE_NORMAL | MODE_INSERT) != 0
             && mouse_can_visual as ::core::ffi::c_int != 0
         {
             if is_click as ::core::ffi::c_int != 0 || !VIsual_active.get() {
@@ -1441,9 +1416,7 @@ pub unsafe extern "C" fn do_mousescroll(mut cap: *mut cmdarg_T) {
     let mut shift_or_ctrl: bool = mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0;
     if (*cap).arg == MSCR_UP as ::core::ffi::c_int || (*cap).arg == MSCR_DOWN as ::core::ffi::c_int
     {
-        if State.get() & MODE_NORMAL as ::core::ffi::c_int != 0
-            && shift_or_ctrl as ::core::ffi::c_int != 0
-        {
+        if State.get() & MODE_NORMAL != 0 && shift_or_ctrl as ::core::ffi::c_int != 0 {
             pagescroll(
                 (if (*cap).arg != 0 {
                     FORWARD as ::core::ffi::c_int

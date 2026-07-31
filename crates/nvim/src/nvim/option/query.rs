@@ -34,11 +34,11 @@ use crate::src::nvim::types::{
 };
 
 use super::{
-    BS_NOSTOP, BS_START, EOL_DOS, EOL_MAC, EOL_UNIX, FAIL, FORCE_BIN, MODE_TERMINAL, NUL, OK,
-    SHM_LINES, SHM_MOD, SHM_RO, SHM_WRI, VAR_STRING, get_varp, kCallbackNone, kOptFlagWasSet,
-    kOptScopeBuf, kOptScopeWin, kOptValTypeString, option_has_scope, optval_from_varp,
-    set_option_direct,
+    BS_NOSTOP, BS_START, EOL_DOS, EOL_MAC, EOL_UNIX, FAIL, FORCE_BIN, NUL, OK, SHM_LINES, SHM_MOD,
+    SHM_RO, SHM_WRI, VAR_STRING, get_varp, kCallbackNone, kOptFlagWasSet, kOptScopeBuf,
+    kOptScopeWin, kOptValTypeString, option_has_scope, optval_from_varp, set_option_direct,
 };
+use crate::src::nvim::state::MODE_TERMINAL;
 
 /// 'equalprg', local where set.
 pub fn get_equalprg() -> *mut c_char {
@@ -511,7 +511,7 @@ pub fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
 pub unsafe fn get_scrolloff_value(wp: *mut win_T) -> int64_t {
     // SAFETY: the caller's window and its buffer are live.
     unsafe {
-        if State.get() & MODE_TERMINAL as c_int != 0 && !(*(*wp).w_buffer).terminal.is_null() {
+        if State.get() & MODE_TERMINAL != 0 && !(*(*wp).w_buffer).terminal.is_null() {
             return 0;
         }
         match (*wp).w_onebuf_opt.wo_so {

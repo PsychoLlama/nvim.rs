@@ -7,6 +7,9 @@ use crate::src::nvim::highlight_group::{syn_check_group, syn_id2attr};
 
 use crate::src::nvim::main::{State, VIsual_active, finish_op, p_guicursor, p_sel};
 use crate::src::nvim::os::libc::{strlen, strncasecmp};
+use crate::src::nvim::state::{
+    MODE_CMDLINE, MODE_INSERT, MODE_SHOWMATCH, MODE_TERMINAL, REPLACE_FLAG, VREPLACE_FLAG,
+};
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     Arena, Array, Boolean, CursorShape, Dict, Float, Integer, KeyValuePair, LuaRef, Object,
@@ -37,27 +40,7 @@ pub const SHAPE_IDX_N: C2Rust_Unnamed_0 = 0;
 pub const SHAPE_VER: CursorShape = 2;
 pub const SHAPE_HOR: CursorShape = 1;
 pub const SHAPE_BLOCK: CursorShape = 0;
-pub const MODE_CMDLINE: C2Rust_Unnamed_1 = 8;
-pub const MODE_INSERT: C2Rust_Unnamed_1 = 16;
-pub const REPLACE_FLAG: C2Rust_Unnamed_1 = 256;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_1 = 512;
-pub const MODE_TERMINAL: C2Rust_Unnamed_1 = 128;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_1 = 24592;
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_1 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_1 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_1 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_1 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_1 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_1 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_1 = 784;
-pub const MODE_REPLACE: C2Rust_Unnamed_1 = 272;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_1 = 255;
-pub const MODE_SELECT: C2Rust_Unnamed_1 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_1 = 32;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_1 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_1 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_1 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LOGLVL_WRN: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
@@ -765,17 +748,17 @@ pub unsafe extern "C" fn cursor_mode_uses_syn_id(mut syn_id: ::core::ffi::c_int)
     return false_0 != 0;
 }
 pub unsafe extern "C" fn cursor_get_mode_idx() -> ::core::ffi::c_int {
-    if State.get() == MODE_SHOWMATCH as ::core::ffi::c_int {
+    if State.get() == MODE_SHOWMATCH {
         return SHAPE_IDX_SM as ::core::ffi::c_int;
-    } else if State.get() == MODE_TERMINAL as ::core::ffi::c_int {
+    } else if State.get() == MODE_TERMINAL {
         return SHAPE_IDX_TERM as ::core::ffi::c_int;
-    } else if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+    } else if State.get() & VREPLACE_FLAG != 0 {
         return SHAPE_IDX_R as ::core::ffi::c_int;
-    } else if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+    } else if State.get() & REPLACE_FLAG != 0 {
         return SHAPE_IDX_R as ::core::ffi::c_int;
-    } else if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_INSERT != 0 {
         return SHAPE_IDX_I as ::core::ffi::c_int;
-    } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_CMDLINE != 0 {
         if cmdline_at_end() {
             return SHAPE_IDX_C as ::core::ffi::c_int;
         } else if cmdline_overstrike() {

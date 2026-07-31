@@ -16,8 +16,7 @@ use crate::src::nvim::eval::eval_to_string;
 use crate::src::nvim::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
 use crate::src::nvim::ex_docmd::argopt::open_exfile;
 use crate::src::nvim::ex_docmd::{
-    FAIL, MODE_CMDLINE, NUL, OK, UPD_INVERTED, UPD_NOT_VALID, UPD_SOME_VALID, VV_HLSEARCH,
-    ex_pressedreturn,
+    FAIL, NUL, OK, UPD_INVERTED, UPD_NOT_VALID, UPD_SOME_VALID, VV_HLSEARCH, ex_pressedreturn,
 };
 use crate::src::nvim::highlight_group::{do_highlight, load_colors};
 use crate::src::nvim::main::{
@@ -31,6 +30,7 @@ use crate::src::nvim::r#move::{update_topline, validate_cursor};
 use crate::src::nvim::os::env::expand_env_save;
 use crate::src::nvim::os::libc::{fclose, gettext, strcasecmp};
 use crate::src::nvim::register::{valid_yank_reg, write_reg_contents};
+use crate::src::nvim::state::MODE_CMDLINE;
 use crate::src::nvim::statusline::draw_tabline;
 use crate::src::nvim::types::{FILE, exarg_T, ssize_t, uint8_t, varnumber_T};
 use crate::src::nvim::ui::ui_flush;
@@ -188,7 +188,7 @@ pub(crate) unsafe fn ex_redrawstatus(eap: *mut exarg_T) {
             status_redraw_curbuf();
         }
         let (r, p) = suspend_lazyredraw();
-        if State.get() & MODE_CMDLINE as c_int != 0 {
+        if State.get() & MODE_CMDLINE != 0 {
             redraw_statuslines();
         } else {
             if VIsual_active.get() {

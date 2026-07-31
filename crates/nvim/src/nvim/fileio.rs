@@ -78,6 +78,7 @@ use crate::src::nvim::path::{
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::shada::check_marks_read;
+use crate::src::nvim::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 pub use crate::src::nvim::types::{
     __gid_t, __mode_t, __off_t, __off64_t, __pthread_internal_list, __pthread_list_t,
@@ -1218,28 +1219,8 @@ pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
 pub const RELOAD_NORMAL: C2Rust_Unnamed_31 = 1;
 pub const RELOAD_NONE: C2Rust_Unnamed_31 = 0;
 pub const SHM_FILEINFO: C2Rust_Unnamed_35 = 70;
-pub const MODE_CMDLINE: C2Rust_Unnamed_32 = 8;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_32 = 4097;
 pub const VIM_WARNING: C2Rust_Unnamed_33 = 2;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_32 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_32 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_32 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_32 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_32 = 8193;
-pub const MODE_LREPLACE: C2Rust_Unnamed_32 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_32 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_32 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_32 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_32 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_32 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_32 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_32 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_32 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_32 = 16;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_32 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_32 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_32 = 1;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
 pub const VIM_LAST_TYPE: C2Rust_Unnamed_33 = 4;
 pub const VIM_QUESTION: C2Rust_Unnamed_33 = 4;
@@ -4749,8 +4730,8 @@ pub unsafe extern "C" fn buf_check_timestamp(mut buf: *mut buf_T) -> ::core::ffi
                 }
                 _ => {}
             }
-        } else if State.get() > MODE_NORMAL_BUSY as ::core::ffi::c_int
-            || State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
+        } else if State.get() > MODE_NORMAL_BUSY
+            || State.get() & MODE_CMDLINE != 0
             || already_warned.get() as ::core::ffi::c_int != 0
         {
             if *mesg2 as ::core::ffi::c_int != NUL {

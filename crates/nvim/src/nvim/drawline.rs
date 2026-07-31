@@ -65,7 +65,7 @@ use crate::src::nvim::quickfix::qf_current_entry;
 use crate::src::nvim::spell::{
     check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end,
 };
-use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::state::{MODE_INSERT, virtual_active};
 use crate::src::nvim::statusline::build_statuscol_str;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::syntax::{
@@ -385,7 +385,6 @@ pub const SLF_RIGHTLEFT: C2Rust_Unnamed_32 = 1;
 pub const SLF_INC_VCOL: C2Rust_Unnamed_32 = 4;
 pub const HL_CONCEAL: C2Rust_Unnamed_34 = 131072;
 pub const kCharsizeFast: C2Rust_Unnamed_33 = 1;
-pub const MODE_INSERT: C2Rust_Unnamed_31 = 16;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;
@@ -496,25 +495,6 @@ pub const SMT_RARE: smt_T = 2;
 pub const SMT_BAD: smt_T = 1;
 pub const SMT_ALL: smt_T = 0;
 pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_31 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_31 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_31 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_31 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_31 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_31 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_31 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_31 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_31 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_31 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_31 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_31 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_31 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_31 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_31 = 32;
-pub const MODE_CMDLINE: C2Rust_Unnamed_31 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_31 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_31 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_31 = 1;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
 pub const kCharsizeRegular: C2Rust_Unnamed_33 = 0;
@@ -1673,7 +1653,7 @@ unsafe extern "C" fn apply_cursorline_highlight(mut wp: *mut win_T, mut wlv: *mu
         && ae.cterm_fg_color as ::core::ffi::c_int == 0 as ::core::ffi::c_int
     {
         (*wlv).line_attr_lowprio = (*wlv).cul_attr;
-    } else if State.get() & MODE_INSERT as ::core::ffi::c_int == 0
+    } else if State.get() & MODE_INSERT == 0
         && bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
         && qf_current_entry(wp) == (*wlv).lnum
     {
@@ -2649,7 +2629,7 @@ pub unsafe extern "C" fn win_line(
             != 0;
         ptr_0 = line_1.offset(v as isize);
     }
-    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+    if State.get() & MODE_INSERT != 0
         && ins_compl_win_active(wp) as ::core::ffi::c_int != 0
         && (in_curline as ::core::ffi::c_int != 0
             || ins_compl_lnum_in_range(lnum) as ::core::ffi::c_int != 0)
@@ -3009,7 +2989,7 @@ pub unsafe extern "C" fn win_line(
                         if *ptr_0 as ::core::ffi::c_int == NUL {
                             has_match_conc = 0 as ::core::ffi::c_int;
                         }
-                        if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+                        if State.get() & MODE_INSERT != 0
                             && ins_compl_win_active(wp) as ::core::ffi::c_int != 0
                             && (in_curline as ::core::ffi::c_int != 0
                                 || ins_compl_lnum_in_range(lnum) as ::core::ffi::c_int != 0)
@@ -3487,7 +3467,7 @@ pub unsafe extern "C" fn win_line(
                                 word_end = v1 + len_0;
                                 if spell_hlf_0 as ::core::ffi::c_uint
                                     != HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    && State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+                                    && State.get() & MODE_INSERT != 0
                                     && (*wp).w_cursor.lnum == lnum
                                     && (*wp).w_cursor.col
                                         >= prev_ptr_0.offset_from(line_1) as colnr_T

@@ -13,9 +13,8 @@ use crate::src::nvim::eval::vars::{set_vim_var_string, v_exception, v_throwpoint
 use crate::src::nvim::ex_cmds::print_line_no_prefix;
 use crate::src::nvim::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 use crate::src::nvim::ex_docmd::{
-    ETYPE_EXCEPT, FAIL, HLF_E, IOSIZE, ML_EMPTY, MODE_NORMAL, MSG_BUF_LEN, OK, UPD_NOT_VALID,
-    VV_EXITREASON, cmdline_call_depth, dbg_stuff, ex_error_buf, ex_pressedreturn, loop_cookie,
-    wcmd_T,
+    ETYPE_EXCEPT, FAIL, HLF_E, IOSIZE, ML_EMPTY, MSG_BUF_LEN, OK, UPD_NOT_VALID, VV_EXITREASON,
+    cmdline_call_depth, dbg_stuff, ex_error_buf, ex_pressedreturn, loop_cookie, wcmd_T,
 };
 use crate::src::nvim::ex_eval::discard_current_exception;
 use crate::src::nvim::ex_getln::{getcmdline, getexline};
@@ -34,7 +33,7 @@ use crate::src::nvim::message::{
 };
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::runtime::{estack_pop, estack_push};
-use crate::src::nvim::state::may_trigger_modechanged;
+use crate::src::nvim::state::{MODE_NORMAL, may_trigger_modechanged};
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::types::{
     LineGetter, OptInt, garray_T, linenr_T, msglist_T, ptrdiff_t, size_t,
@@ -95,7 +94,7 @@ pub(crate) unsafe fn restore_dbg_stuff(dsp: *mut dbg_stuff) {
 pub unsafe fn do_exmode() {
     unsafe {
         exmode_active.set(true);
-        State.set(MODE_NORMAL as c_int);
+        State.set(MODE_NORMAL);
         may_trigger_modechanged();
 
         // `:global` runs Ex mode for each line itself; there is no prompt

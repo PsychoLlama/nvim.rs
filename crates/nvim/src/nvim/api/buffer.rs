@@ -32,6 +32,7 @@ use crate::src::nvim::r#move::{changed_cline_bef_curs, invalidate_botline_win, u
 use crate::src::nvim::ops::get_region_bytecount;
 use crate::src::nvim::os::libc::{memcpy, strchr, strlen};
 use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::state::MODE_INSERT;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
@@ -142,7 +143,6 @@ pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kMarkAdjustTerm: MarkAdjustMode = 2;
 pub const kMarkAdjustApi: MarkAdjustMode = 1;
 pub const kMarkAdjustNormal: MarkAdjustMode = 0;
-pub const MODE_INSERT: C2Rust_Unnamed_17 = 16;
 pub const FORWARD: C2Rust_Unnamed_16 = 1;
 pub const DOBUF_FIRST: dobuf_start_values = 1;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
@@ -172,25 +172,6 @@ pub const DOBUF_MOD: dobuf_start_values = 3;
 pub const DOBUF_LAST: dobuf_start_values = 2;
 pub const DOBUF_CURRENT: dobuf_start_values = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_17 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_17 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_17 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_17 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_17 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_17 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_17 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_17 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_17 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_17 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_17 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_17 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_17 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_17 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_17 = 32;
-pub const MODE_CMDLINE: C2Rust_Unnamed_17 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_17 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_17 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_17 = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
@@ -1805,12 +1786,11 @@ unsafe extern "C" fn fix_cursor_cols(
     mut new_rows: linenr_T,
     mut new_cols_at_end_row: colnr_T,
 ) {
-    let mut mode_col_adj: colnr_T =
-        if win == curwin.get() && State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
-            0 as colnr_T
-        } else {
-            1 as colnr_T
-        };
+    let mut mode_col_adj: colnr_T = if win == curwin.get() && State.get() & MODE_INSERT != 0 {
+        0 as colnr_T
+    } else {
+        1 as colnr_T
+    };
     fix_pos_col(
         (*win).w_buffer,
         &raw mut (*win).w_cursor,

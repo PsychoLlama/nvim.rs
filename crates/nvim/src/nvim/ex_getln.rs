@@ -129,7 +129,8 @@ use crate::src::nvim::search::{
     save_search_patterns, searchit,
 };
 use crate::src::nvim::state::{
-    may_trigger_modechanged, may_trigger_safestate, state_enter, state_handle_k_event,
+    MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, may_trigger_modechanged,
+    may_trigger_safestate, state_enter, state_handle_k_event,
 };
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 pub use crate::src::nvim::types::{
@@ -1360,17 +1361,13 @@ pub const KE_MIDDLEDRAG: key_extra = 48;
 pub const KE_IGNORE: key_extra = 53;
 pub const KE_C_LEFT: key_extra = 85;
 pub const KE_C_RIGHT: key_extra = 86;
-pub const MODE_LANGMAP: C2Rust_Unnamed_52 = 32;
 pub const KE_KINS: key_extra = 79;
 pub const KE_KDEL: key_extra = 80;
 pub const KE_WILD: key_extra = 108;
 pub const KE_XF2: key_extra = 58;
 pub const KE_XF1: key_extra = 57;
 pub const KE_NOP: key_extra = 97;
-pub const MODE_NORMAL: C2Rust_Unnamed_52 = 1;
 pub const OPT_LOCAL: C2Rust_Unnamed_53 = 2;
-pub const MODE_INSERT: C2Rust_Unnamed_52 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_52 = 8;
 pub const KE_CMDWIN: key_extra = 84;
 pub const PROCESS_NEXT_KEY: C2Rust_Unnamed_57 = 4;
 #[derive(Copy, Clone)]
@@ -1385,22 +1382,6 @@ pub const KE_COMMAND: key_extra = 104;
 pub const KE_EVENT: key_extra = 102;
 pub const KE_LUA: key_extra = 103;
 pub type C2Rust_Unnamed_52 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_52 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_52 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_52 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_52 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_52 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_52 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_52 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_52 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_52 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_52 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_52 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_52 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_52 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_52 = 64;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_52 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_52 = 2;
 pub const KE_DROP: key_extra = 95;
 pub const KE_PLUG: key_extra = 83;
 pub const KE_SNR: key_extra = 82;
@@ -2532,7 +2513,7 @@ unsafe extern "C" fn command_line_enter(
             (*s).xpc.xp_arg = (*ccline.ptr()).xp_arg;
         }
         msg_scroll.set(false_0);
-        State.set(MODE_CMDLINE as ::core::ffi::c_int);
+        State.set(MODE_CMDLINE);
         if (*s).firstc == '/' as ::core::ffi::c_int
             || (*s).firstc == '?' as ::core::ffi::c_int
             || (*s).firstc == '@' as ::core::ffi::c_int
@@ -2544,7 +2525,7 @@ unsafe extern "C" fn command_line_enter(
             }
             (*s).b_im_ptr_buf = curbuf.get();
             if *(*s).b_im_ptr == B_IMODE_LMAP as OptInt {
-                (*State.ptr()) |= MODE_LANGMAP as ::core::ffi::c_int;
+                (*State.ptr()) |= MODE_LANGMAP;
             }
         }
         setmouse();
@@ -3779,12 +3760,12 @@ unsafe extern "C" fn command_line_toggle_langmap(mut s: *mut CommandLineState) {
     };
     if map_to_exists_mode(
         b"\0".as_ptr() as *const ::core::ffi::c_char,
-        MODE_LANGMAP as ::core::ffi::c_int,
+        MODE_LANGMAP,
         false_0 != 0,
     ) {
-        (*State.ptr()) ^= MODE_LANGMAP as ::core::ffi::c_int;
+        (*State.ptr()) ^= MODE_LANGMAP;
         if !b_im_ptr.is_null() {
-            if State.get() & MODE_LANGMAP as ::core::ffi::c_int != 0 {
+            if State.get() & MODE_LANGMAP != 0 {
                 *b_im_ptr = B_IMODE_LMAP as OptInt;
             } else {
                 *b_im_ptr = B_IMODE_NONE as OptInt;
@@ -7194,7 +7175,7 @@ pub unsafe extern "C" fn get_cmdline_last_prompt_id() -> ::core::ffi::c_uint {
     return last_prompt_id.get();
 }
 unsafe extern "C" fn get_ccline_ptr() -> *mut CmdlineInfo {
-    if State.get() & MODE_CMDLINE as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+    if State.get() & MODE_CMDLINE == 0 as ::core::ffi::c_int {
         return ::core::ptr::null_mut::<CmdlineInfo>();
     } else if !(*ccline.ptr()).cmdbuff.is_null() {
         return ccline.ptr();
@@ -7632,13 +7613,13 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
             add_map(
                 b"<Tab>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 b"<C-X><C-V>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                MODE_INSERT as ::core::ffi::c_int,
+                MODE_INSERT,
                 true_0 != 0,
             );
             add_map(
                 b"<Tab>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 b"a<C-X><C-V>\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                MODE_NORMAL as ::core::ffi::c_int,
+                MODE_NORMAL,
                 true_0 != 0,
             );
         }
@@ -7698,7 +7679,7 @@ unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
     ui_ext_cmdline_hide(false_0 != 0);
     redraw_later(curwin.get(), UPD_SOME_VALID as ::core::ffi::c_int);
     exmode_active.set(false_0 != 0);
-    State.set(MODE_NORMAL as ::core::ffi::c_int);
+    State.set(MODE_NORMAL);
     setmouse();
     clear_showcmd();
     cmdwin_result.set(0 as ::core::ffi::c_int);
@@ -8099,7 +8080,7 @@ pub unsafe extern "C" fn f_wildtrigger(
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    if State.get() & MODE_CMDLINE as ::core::ffi::c_int == 0
+    if State.get() & MODE_CMDLINE == 0
         || char_avail() as ::core::ffi::c_int != 0
         || wild_menu_showing.get() != 0
         || cmdline_pum_active() as ::core::ffi::c_int != 0

@@ -42,7 +42,9 @@ use crate::src::nvim::memory::{strequal, xstrdup};
 use crate::src::nvim::r#move::{set_topline, validate_cursor};
 use crate::src::nvim::options::kOptCuloptFlagNumber;
 use crate::src::nvim::optionstr::free_string_option;
-use crate::src::nvim::state::{may_trigger_modechanged, state_enter, state_handle_k_event};
+use crate::src::nvim::state::{
+    MODE_TERMINAL, may_trigger_modechanged, state_enter, state_handle_k_event,
+};
 use crate::src::nvim::types::{
     OptInt, Terminal, VimState, WinInfo, colnr_T, handle_T, linenr_T, pos_T, size_t, uint8_t,
     win_T, winopt_T,
@@ -62,8 +64,7 @@ use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
 use super::{
-    MODE_TERMINAL, UPD_SOME_VALID, UPD_VALID, map_get_int_ptr_t, terminal_check_size,
-    terminal_set_state,
+    UPD_SOME_VALID, UPD_VALID, map_get_int_ptr_t, terminal_check_size, terminal_set_state,
 };
 
 const DOBUF_WIPE: c_int = 4;

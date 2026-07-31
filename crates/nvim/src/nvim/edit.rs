@@ -120,8 +120,9 @@ use crate::src::nvim::register::{
     do_put, get_expr_register, get_yank_register, insert_reg, valid_yank_reg,
 };
 use crate::src::nvim::state::{
-    may_trigger_modechanged, may_trigger_safestate, state_enter, state_handle_k_event,
-    virtual_active,
+    MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_REPLACE, MODE_VREPLACE,
+    REPLACE_FLAG, VREPLACE_FLAG, may_trigger_modechanged, may_trigger_safestate, state_enter,
+    state_handle_k_event, virtual_active,
 };
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, xstrnsave};
 use crate::src::nvim::syntax::syntax_present;
@@ -420,7 +421,6 @@ pub const kUIWildmenu: UIExtension = 3;
 pub const kUITabline: UIExtension = 2;
 pub const kUIPopupmenu: UIExtension = 1;
 pub const kUICmdline: UIExtension = 0;
-pub const MODE_NORMAL: C2Rust_Unnamed_29 = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_26 {
@@ -428,11 +428,6 @@ pub struct C2Rust_Unnamed_26 {
     pub capacity: size_t,
     pub items: *mut ::core::ffi::c_char,
 }
-pub const REPLACE_FLAG: C2Rust_Unnamed_29 = 256;
-pub const MODE_INSERT: C2Rust_Unnamed_29 = 16;
-pub const MODE_LANGMAP: C2Rust_Unnamed_29 = 32;
-pub const MODE_VREPLACE: C2Rust_Unnamed_29 = 784;
-pub const MODE_REPLACE: C2Rust_Unnamed_29 = 272;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;
@@ -539,7 +534,6 @@ pub const VV_ERRMSG: VimVarIndex = 3;
 pub const VV_PREVCOUNT: VimVarIndex = 2;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_29 = 512;
 pub const KE_EVENT: key_extra = 102;
 pub const KE_NOP: key_extra = 97;
 pub const kCharsizeFast: C2Rust_Unnamed_33 = 1;
@@ -596,23 +590,10 @@ pub const YREG_PASTE: C2Rust_Unnamed_32 = 0;
 pub const PUT_FIXINDENT: C2Rust_Unnamed_31 = 1;
 pub const KE_XF1: key_extra = 57;
 pub const KE_KINS: key_extra = 79;
-pub const MODE_CMDLINE: C2Rust_Unnamed_29 = 8;
 pub const MB_MAXBYTES: C2Rust_Unnamed_28 = 21;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub const MB_MAXCHAR: C2Rust_Unnamed_28 = 6;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_29 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_29 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_29 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_29 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_29 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_29 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_29 = 288;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_29 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_29 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_29 = 64;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_29 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_29 = 2;
 pub const KE_WILD: key_extra = 108;
 pub const KE_DROP: key_extra = 95;
 pub const KE_CMDWIN: key_extra = 84;
@@ -779,7 +760,7 @@ static replace_stack: GlobalCell<C2Rust_Unnamed_26> = GlobalCell::new(KV_INITIAL
 unsafe extern "C" fn insert_enter(mut s: *mut InsertState) {
     (*s).did_backspace = true_0 != 0;
     (*s).old_topfill = -1 as ::core::ffi::c_int;
-    (*s).replaceState = MODE_REPLACE as ::core::ffi::c_int;
+    (*s).replaceState = MODE_REPLACE;
     (*s).cmdchar_todo = (*s).cmdchar;
     (*s).ins_just_started = true_0 != 0;
     did_restart_edit.set(restart_edit.get());
@@ -811,7 +792,7 @@ unsafe extern "C" fn insert_enter(mut s: *mut InsertState) {
         {
             let mut save_state: ::core::ffi::c_int = State.get();
             (*curwin.get()).w_cursor = save_cursor;
-            State.set(MODE_INSERT as ::core::ffi::c_int);
+            State.set(MODE_INSERT);
             check_cursor_col(curwin.get());
             State.set(save_state);
         }
@@ -849,15 +830,15 @@ unsafe extern "C" fn insert_enter(mut s: *mut InsertState) {
         }
     }
     if (*s).cmdchar == 'R' as ::core::ffi::c_int {
-        State.set(MODE_REPLACE as ::core::ffi::c_int);
+        State.set(MODE_REPLACE);
     } else if (*s).cmdchar == 'V' as ::core::ffi::c_int || (*s).cmdchar == 'v' as ::core::ffi::c_int
     {
-        State.set(MODE_VREPLACE as ::core::ffi::c_int);
-        (*s).replaceState = MODE_VREPLACE as ::core::ffi::c_int;
+        State.set(MODE_VREPLACE);
+        (*s).replaceState = MODE_VREPLACE;
         orig_line_count.set((*curbuf.get()).b_ml.ml_line_count);
         vr_lines_changed.set(1 as ::core::ffi::c_int);
     } else {
-        State.set(MODE_INSERT as ::core::ffi::c_int);
+        State.set(MODE_INSERT);
     }
     may_trigger_modechanged();
     stop_insert_mode.set(false_0 != 0);
@@ -865,11 +846,11 @@ unsafe extern "C" fn insert_enter(mut s: *mut InsertState) {
         (*curwin.get()).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
     }
     if (*curbuf.get()).b_p_iminsert == B_IMODE_LMAP as OptInt {
-        (*State.ptr()) |= MODE_LANGMAP as ::core::ffi::c_int;
+        (*State.ptr()) |= MODE_LANGMAP;
     }
     setmouse();
     clear_showcmd();
-    revins_on.set(State.get() == MODE_INSERT as ::core::ffi::c_int && p_ri.get() != 0);
+    revins_on.set(State.get() == MODE_INSERT && p_ri.get() != 0);
     if revins_on.get() {
         undisplay_dollar();
     }
@@ -2323,7 +2304,7 @@ pub unsafe extern "C" fn truncate_spaces(mut line: *mut ::core::ffi::c_char, mut
     while i >= 0 as ::core::ffi::c_int
         && ascii_iswhite(*line.offset(i as isize) as ::core::ffi::c_int) as ::core::ffi::c_int != 0
     {
-        if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if State.get() & REPLACE_FLAG != 0 {
             replace_join(0 as ::core::ffi::c_int);
         }
         i -= 1;
@@ -2333,7 +2314,7 @@ pub unsafe extern "C" fn truncate_spaces(mut line: *mut ::core::ffi::c_char, mut
 pub unsafe extern "C" fn backspace_until_column(mut col: ::core::ffi::c_int) {
     while (*curwin.get()).w_cursor.col > col {
         (*curwin.get()).w_cursor.col -= 1;
-        if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if State.get() & REPLACE_FLAG != 0 {
             replace_do_bs(col);
         } else if !del_char_after_col(col) {
             break;
@@ -2385,7 +2366,7 @@ pub unsafe extern "C" fn get_literal(mut no_simplify: bool) -> ::core::ffi::c_in
         if mod_mask.get() & !MOD_MASK_SHIFT != 0 as ::core::ffi::c_int {
             break;
         }
-        if State.get() & MODE_CMDLINE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+        if State.get() & MODE_CMDLINE == 0 as ::core::ffi::c_int
             && (if nc < 0 as ::core::ffi::c_int || nc > 255 as ::core::ffi::c_int {
                 1 as ::core::ffi::c_int
             } else {
@@ -2503,8 +2484,8 @@ pub unsafe extern "C" fn insertchar(
     if textwidth > 0 as ::core::ffi::c_int
         && (force_format != 0
             || !ascii_iswhite(c)
-                && !(State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
-                    && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0
+                && !(State.get() & REPLACE_FLAG != 0
+                    && State.get() & VREPLACE_FLAG == 0
                     && *get_cursor_pos_ptr() as ::core::ffi::c_int != NUL)
                 && ((*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
                     || (!has_format_option(FO_INS_LONG) || Insstart_textlen.get() <= textwidth)
@@ -2605,7 +2586,7 @@ pub unsafe extern "C" fn insertchar(
         && !has_event(EVENT_INSERTCHARPRE)
         && !test_disable_char_avail.get()
         && vpeekc() != NUL
-        && State.get() & REPLACE_FLAG as ::core::ffi::c_int == 0
+        && State.get() & REPLACE_FLAG == 0
         && !cindent_on()
         && p_ri.get() == 0
     {
@@ -2737,7 +2718,7 @@ pub unsafe extern "C" fn stop_arrow() -> ::core::ffi::c_int {
             ins_need_undo.set(false_0 != 0);
         }
         ai_col.set(0 as ::core::ffi::c_int as colnr_T);
-        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if State.get() & VREPLACE_FLAG != 0 {
             orig_line_count.set((*curbuf.get()).b_ml.ml_line_count);
             vr_lines_changed.set(1 as ::core::ffi::c_int);
         }
@@ -3005,7 +2986,7 @@ pub unsafe extern "C" fn cursor_up_inner(
                     ) as ::core::ffi::c_int
                         != 0) as ::core::ffi::c_int) as linenr_T;
             if n > 0 as linenr_T
-                || !(State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+                || !(State.get() & MODE_INSERT != 0
                     || fdo_flags.get()
                         & kOptFdoFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
                         != 0)
@@ -3314,7 +3295,7 @@ pub unsafe extern "C" fn replace_join(mut off: ::core::ffi::c_int) {
 }
 unsafe extern "C" fn replace_pop_ins() {
     let mut oldState: ::core::ffi::c_int = State.get();
-    State.set(MODE_NORMAL as ::core::ffi::c_int);
+    State.set(MODE_NORMAL);
     while replace_pop_if_nul() > 0 as ::core::ffi::c_int {
         mb_replace_pop_ins();
         dec_cursor();
@@ -3345,7 +3326,7 @@ unsafe extern "C" fn replace_do_bs(mut limit_col: ::core::ffi::c_int) {
     if cc > 0 as ::core::ffi::c_int {
         let mut orig_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut orig_vcols: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if l_State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if l_State & VREPLACE_FLAG != 0 {
             getvcol(
                 curwin.get(),
                 &raw mut (*curwin.get()).w_cursor,
@@ -3356,11 +3337,11 @@ unsafe extern "C" fn replace_do_bs(mut limit_col: ::core::ffi::c_int) {
             orig_vcols = win_chartabsize(curwin.get(), get_cursor_pos_ptr(), start_vcol);
         }
         del_char_after_col(limit_col);
-        if l_State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if l_State & VREPLACE_FLAG != 0 {
             orig_len = get_cursor_pos_len() as ::core::ffi::c_int;
         }
         replace_pop_ins();
-        if l_State & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if l_State & VREPLACE_FLAG != 0 {
             let mut p: *mut ::core::ffi::c_char = get_cursor_pos_ptr();
             let mut ins_len: ::core::ffi::c_int = get_cursor_pos_len() - orig_len;
             let mut vcol: ::core::ffi::c_int = start_vcol as ::core::ffi::c_int;
@@ -3534,15 +3515,15 @@ unsafe extern "C" fn ins_ctrl_g() {
 unsafe extern "C" fn ins_ctrl_hat() {
     if map_to_exists_mode(
         b"\0".as_ptr() as *const ::core::ffi::c_char,
-        MODE_LANGMAP as ::core::ffi::c_int,
+        MODE_LANGMAP,
         false_0 != 0,
     ) {
-        if State.get() & MODE_LANGMAP as ::core::ffi::c_int != 0 {
+        if State.get() & MODE_LANGMAP != 0 {
             (*curbuf.get()).b_p_iminsert = B_IMODE_NONE as OptInt;
-            (*State.ptr()) &= !(MODE_LANGMAP as ::core::ffi::c_int);
+            (*State.ptr()) &= !(MODE_LANGMAP);
         } else {
             (*curbuf.get()).b_p_iminsert = B_IMODE_LMAP as OptInt;
-            (*State.ptr()) |= MODE_LANGMAP as ::core::ffi::c_int;
+            (*State.ptr()) |= MODE_LANGMAP;
         }
     }
     set_iminsert_global(curbuf.get());
@@ -3574,7 +3555,7 @@ unsafe extern "C" fn ins_esc(
         *count -= 1;
         if *count > 0 as ::core::ffi::c_int {
             if !vim_strchr(p_cpo.get(), CPO_REPLCNT).is_null() {
-                (*State.ptr()) &= !(REPLACE_FLAG as ::core::ffi::c_int);
+                (*State.ptr()) &= !(REPLACE_FLAG);
             }
             start_redo_ins();
             if cmdchar == 'r' as ::core::ffi::c_int || cmdchar == 'v' as ::core::ffi::c_int {
@@ -3629,7 +3610,7 @@ unsafe extern "C" fn ins_esc(
             mb_adjust_cursor();
         }
     }
-    State.set(MODE_NORMAL as ::core::ffi::c_int);
+    State.set(MODE_NORMAL);
     may_trigger_modechanged();
     if gchar_cursor() == TAB || buf_meta_total(curbuf.get(), kMTMetaInline) > 0 as uint32_t {
         (*curwin.get()).w_valid &= !(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
@@ -3660,7 +3641,7 @@ unsafe extern "C" fn ins_ctrl_() {
         }
     }
     p_ri.set((p_ri.get() == 0) as ::core::ffi::c_int);
-    revins_on.set(State.get() == MODE_INSERT as ::core::ffi::c_int && p_ri.get() != 0);
+    revins_on.set(State.get() == MODE_INSERT && p_ri.get() != 0);
     if revins_on.get() {
         revins_scol.set((*curwin.get()).w_cursor.col as ::core::ffi::c_int);
         (*revins_legal.ptr()) += 1;
@@ -3706,9 +3687,9 @@ unsafe extern "C" fn ins_start_select(mut c: ::core::ffi::c_int) -> bool {
 unsafe extern "C" fn ins_insert(mut replaceState: ::core::ffi::c_int) {
     set_vim_var_string(
         VV_INSERTMODE,
-        if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if State.get() & REPLACE_FLAG != 0 {
             b"i\0".as_ptr() as *const ::core::ffi::c_char
-        } else if replaceState == MODE_VREPLACE as ::core::ffi::c_int {
+        } else if replaceState == MODE_VREPLACE {
             b"v\0".as_ptr() as *const ::core::ffi::c_char
         } else {
             b"r\0".as_ptr() as *const ::core::ffi::c_char
@@ -3716,12 +3697,10 @@ unsafe extern "C" fn ins_insert(mut replaceState: ::core::ffi::c_int) {
         1 as ptrdiff_t,
     );
     ins_apply_autocmds(EVENT_INSERTCHANGE);
-    if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
-        State.set(
-            MODE_INSERT as ::core::ffi::c_int | State.get() & MODE_LANGMAP as ::core::ffi::c_int,
-        );
+    if State.get() & REPLACE_FLAG != 0 {
+        State.set(MODE_INSERT | State.get() & MODE_LANGMAP);
     } else {
-        State.set(replaceState | State.get() & MODE_LANGMAP as ::core::ffi::c_int);
+        State.set(replaceState | State.get() & MODE_LANGMAP);
     }
     may_trigger_modechanged();
     AppendCharToRedobuff(K_INS);
@@ -3730,9 +3709,9 @@ unsafe extern "C" fn ins_insert(mut replaceState: ::core::ffi::c_int) {
 }
 unsafe extern "C" fn ins_ctrl_o() {
     restart_VIsual_select.set(0 as ::core::ffi::c_int);
-    if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+    if State.get() & VREPLACE_FLAG != 0 {
         restart_edit.set('V' as ::core::ffi::c_int);
-    } else if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+    } else if State.get() & REPLACE_FLAG != 0 {
         restart_edit.set('R' as ::core::ffi::c_int);
     } else {
         restart_edit.set('I' as ::core::ffi::c_int);
@@ -3754,7 +3733,7 @@ unsafe extern "C" fn ins_shift(mut c: ::core::ffi::c_int, mut lastc: ::core::ffi
     {
         (*curwin.get()).w_cursor.col -= 1;
         del_char(false_0 != 0);
-        if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if State.get() & REPLACE_FLAG != 0 {
             replace_pop_ins();
         }
         if lastc == '^' as ::core::ffi::c_int {
@@ -3806,7 +3785,7 @@ unsafe extern "C" fn ins_del() {
             vim_beep(kOptBoFlagBackspace as ::core::ffi::c_int as ::core::ffi::c_uint);
         } else {
             (*curwin.get()).w_cursor.col = temp as colnr_T;
-            if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0
+            if State.get() & VREPLACE_FLAG != 0
                 && orig_line_count.get() > (*curbuf.get()).b_ml.ml_line_count
             {
                 orig_line_count.set((*curbuf.get()).b_ml.ml_line_count);
@@ -3883,15 +3862,13 @@ unsafe extern "C" fn ins_bs(
             (*Insstart.ptr()).col = ml_get_len((*Insstart.ptr()).lnum);
         }
         cc = -1 as ::core::ffi::c_int;
-        if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if State.get() & REPLACE_FLAG != 0 {
             cc = replace_pop_if_nul();
         }
-        if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
-            && (*curwin.get()).w_cursor.lnum <= lnum
-        {
+        if State.get() & REPLACE_FLAG != 0 && (*curwin.get()).w_cursor.lnum <= lnum {
             dec_cursor();
         } else {
-            if State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0
+            if State.get() & VREPLACE_FLAG == 0
                 || (*curwin.get()).w_cursor.lnum > orig_line_count.get()
             {
                 temp = gchar_cursor();
@@ -3933,9 +3910,9 @@ unsafe extern "C" fn ins_bs(
             } else {
                 dec_cursor();
             }
-            if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+            if State.get() & REPLACE_FLAG != 0 {
                 let mut oldState: ::core::ffi::c_int = State.get();
-                State.set(MODE_NORMAL as ::core::ffi::c_int);
+                State.set(MODE_NORMAL);
                 while cc > 0 as ::core::ffi::c_int {
                     let mut save_col: colnr_T = (*curwin.get()).w_cursor.col;
                     mb_replace_pop_ins();
@@ -4027,7 +4004,7 @@ unsafe extern "C" fn ins_bs(
             let want_col: colnr_T = space_sci.ptr.offset_from(line) as colnr_T;
             while (*curwin.get()).w_cursor.col > want_col {
                 dec_cursor();
-                if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+                if State.get() & REPLACE_FLAG != 0 {
                     if (*curwin.get()).w_cursor.lnum != (*Insstart.ptr()).lnum
                         || (*curwin.get()).w_cursor.col >= (*Insstart.ptr()).col
                     {
@@ -4043,7 +4020,7 @@ unsafe extern "C" fn ins_bs(
                 {
                     (*Insstart_orig.ptr()).col = (*curwin.get()).w_cursor.col;
                 }
-                if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+                if State.get() & VREPLACE_FLAG != 0 {
                     ins_char(' ' as ::core::ffi::c_int);
                 } else {
                     ins_str(
@@ -4051,7 +4028,7 @@ unsafe extern "C" fn ins_bs(
                         ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
                             .wrapping_sub(1 as size_t),
                     );
-                    if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+                    if State.get() & REPLACE_FLAG != 0 {
                         replace_push_nul();
                     }
                 }
@@ -4076,12 +4053,12 @@ unsafe extern "C" fn ins_bs(
                 {
                     if !revins_on.get() {
                         inc_cursor();
-                    } else if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+                    } else if State.get() & REPLACE_FLAG != 0 {
                         dec_cursor();
                     }
                     break;
                 }
-                if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+                if State.get() & REPLACE_FLAG != 0 {
                     replace_do_bs(-1 as ::core::ffi::c_int);
                 } else {
                     let mut has_composing: bool = false_0 != 0;
@@ -4422,14 +4399,14 @@ unsafe extern "C" fn ins_tab() -> bool {
         if temp <= 0 as ::core::ffi::c_int {
             break;
         }
-        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if State.get() & VREPLACE_FLAG != 0 {
             ins_char(' ' as ::core::ffi::c_int);
         } else {
             ins_str(
                 b" \0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
                 ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
             );
-            if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+            if State.get() & REPLACE_FLAG != 0 {
                 replace_push_nul();
             }
         }
@@ -4452,7 +4429,7 @@ unsafe extern "C" fn ins_tab() -> bool {
         let mut vcol: colnr_T = 0;
         let mut change_col: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
         let mut save_list: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_list;
-        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if State.get() & VREPLACE_FLAG != 0 {
             pos = (*curwin.get()).w_cursor;
             cursor = &raw mut pos;
             saved_line = xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t);
@@ -4473,7 +4450,7 @@ unsafe extern "C" fn ins_tab() -> bool {
             fpos.col -= 1;
             ptr = ptr.offset(-1);
         }
-        if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
+        if State.get() & REPLACE_FLAG != 0
             && fpos.lnum == (*Insstart.ptr()).lnum
             && fpos.col < (*Insstart.ptr()).col
         {
@@ -4567,7 +4544,7 @@ unsafe extern "C" fn ins_tab() -> bool {
             let mut i_0: ::core::ffi::c_int =
                 (*cursor).col as ::core::ffi::c_int - fpos.col as ::core::ffi::c_int;
             if i_0 > 0 as ::core::ffi::c_int {
-                if State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0 {
+                if State.get() & VREPLACE_FLAG == 0 {
                     let newp_len: colnr_T = (*curbuf.get()).b_ml.ml_line_textlen - i_0 as colnr_T;
                     let mut newp: *mut ::core::ffi::c_char =
                         xmalloc(newp_len as size_t) as *mut ::core::ffi::c_char;
@@ -4604,9 +4581,7 @@ unsafe extern "C" fn ins_tab() -> bool {
                         strlen(ptr.offset(i_0 as isize)).wrapping_add(1 as size_t),
                     );
                 }
-                if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
-                    && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0
-                {
+                if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 {
                     temp = i_0;
                     loop {
                         temp -= 1;
@@ -4618,7 +4593,7 @@ unsafe extern "C" fn ins_tab() -> bool {
                 }
             }
             (*cursor).col -= i_0;
-            if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+            if State.get() & VREPLACE_FLAG != 0 {
                 backspace_until_column(change_col);
                 ins_bytes_len(
                     saved_line.offset(change_col as isize),
@@ -4626,7 +4601,7 @@ unsafe extern "C" fn ins_tab() -> bool {
                 );
             }
         }
-        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+        if State.get() & VREPLACE_FLAG != 0 {
             xfree(saved_line as *mut ::core::ffi::c_void);
         }
         (*curwin.get()).w_onebuf_opt.wo_list = save_list;
@@ -4641,9 +4616,7 @@ pub unsafe extern "C" fn ins_eol(mut c: ::core::ffi::c_int) -> bool {
         return false_0 != 0;
     }
     undisplay_dollar();
-    if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0
-        && State.get() & VREPLACE_FLAG as ::core::ffi::c_int == 0
-    {
+    if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 {
         replace_push_nul();
     }
     if virtual_active(curwin.get()) as ::core::ffi::c_int != 0

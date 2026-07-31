@@ -52,6 +52,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::path::{path_tail, shorten_dir};
 use crate::src::nvim::plines::getvvcol;
 use crate::src::nvim::sign::describe_sign_text;
+use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
@@ -412,26 +413,6 @@ pub const kUITabline: UIExtension = 2;
 pub const kUIPopupmenu: UIExtension = 1;
 pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_16 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_16 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_16 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_16 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_16 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_16 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_16 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_16 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_16 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_16 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_16 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_16 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_16 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_16 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_16 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_16 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_16 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_16 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_16 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_16 = 1;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const OPT_SKIPRTP: C2Rust_Unnamed_17 = 128;
 pub const OPT_NO_REDRAW: C2Rust_Unnamed_17 = 64;
@@ -1111,8 +1092,7 @@ pub unsafe extern "C" fn redraw_ruler() {
         );
         (*wp).w_onebuf_opt.wo_list = true_0;
     }
-    let mut empty_line: ::core::ffi::c_int = (State.get() & MODE_INSERT as ::core::ffi::c_int
-        == 0 as ::core::ffi::c_int
+    let mut empty_line: ::core::ffi::c_int = (State.get() & MODE_INSERT == 0 as ::core::ffi::c_int
         && *ml_get_buf((*wp).w_buffer, (*wp).w_cursor.lnum) as ::core::ffi::c_int == NUL)
         as ::core::ffi::c_int;
     let mut buffer: [::core::ffi::c_char; 70] = [0; 70];
@@ -2505,7 +2485,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                             break 's_1848;
                                         }
                                         99 => {
-                                            num = if State.get() & MODE_INSERT as ::core::ffi::c_int
+                                            num = if State.get() & MODE_INSERT
                                                 == 0 as ::core::ffi::c_int
                                                 && empty_line as ::core::ffi::c_int != 0
                                             {
@@ -2521,8 +2501,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                             if opt as ::core::ffi::c_int
                                                 == STL_VIRTCOL_ALT as ::core::ffi::c_int
                                                 && virtcol
-                                                    == (if State.get()
-                                                        & MODE_INSERT as ::core::ffi::c_int
+                                                    == (if State.get() & MODE_INSERT
                                                         == 0 as ::core::ffi::c_int
                                                         && empty_line as ::core::ffi::c_int != 0
                                                     {
@@ -2829,8 +2808,7 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                     0 as ::core::ffi::c_int
                                 } else {
                                     l + 1 as ::core::ffi::c_int
-                                        + (if State.get() & MODE_INSERT as ::core::ffi::c_int
-                                            == 0 as ::core::ffi::c_int
+                                        + (if State.get() & MODE_INSERT == 0 as ::core::ffi::c_int
                                             && empty_line as ::core::ffi::c_int != 0
                                         {
                                             0 as ::core::ffi::c_int

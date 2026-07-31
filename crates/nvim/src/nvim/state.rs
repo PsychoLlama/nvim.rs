@@ -170,27 +170,28 @@ pub const NUM_EVENTS: auto_event = 145;
 pub const kCmdRedrawAll: CmdRedraw = 2;
 pub const kCmdRedrawPos: CmdRedraw = 1;
 pub const kCmdRedrawNone: CmdRedraw = 0;
-pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_26 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_26 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_26 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_26 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_26 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_26 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_26 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_26 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_26 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_26 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_26 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_26 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_26 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_26 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_26 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_26 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_26 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_26 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_26 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_26 = 1;
+/// The editor-mode bitmask `State` carries, and the masks that read it.
+pub type ModeFlags = ::core::ffi::c_int;
+pub const MODE_SHOWMATCH: ModeFlags = 24592;
+pub const MODE_EXTERNCMD: ModeFlags = 20480;
+pub const MODE_SETWSIZE: ModeFlags = 16384;
+pub const MODE_ASKMORE: ModeFlags = 12288;
+pub const MODE_HITRETURN: ModeFlags = 8193;
+pub const MODE_NORMAL_BUSY: ModeFlags = 4097;
+pub const MODE_LREPLACE: ModeFlags = 288;
+pub const MODE_VREPLACE: ModeFlags = 784;
+pub const VREPLACE_FLAG: ModeFlags = 512;
+pub const MODE_REPLACE: ModeFlags = 272;
+pub const REPLACE_FLAG: ModeFlags = 256;
+pub const MAP_ALL_MODES: ModeFlags = 255;
+pub const MODE_TERMINAL: ModeFlags = 128;
+pub const MODE_SELECT: ModeFlags = 64;
+pub const MODE_LANGMAP: ModeFlags = 32;
+pub const MODE_INSERT: ModeFlags = 16;
+pub const MODE_CMDLINE: ModeFlags = 8;
+pub const MODE_OP_PENDING: ModeFlags = 4;
+pub const MODE_VISUAL: ModeFlags = 2;
+pub const MODE_NORMAL: ModeFlags = 1;
 pub const KE_WILD: key_extra = 108;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_LUA: key_extra = 103;
@@ -315,7 +316,7 @@ pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
             } else {
                 if must_redraw.get() != 0 as ::core::ffi::c_int
                     && !need_wait_return.get()
-                    && State.get() & MODE_CMDLINE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                    && State.get() & MODE_CMDLINE == 0 as ::core::ffi::c_int
                 {
                     update_screen();
                     setcursor();
@@ -390,7 +391,7 @@ pub unsafe extern "C" fn virtual_active(mut wp: *mut win_T) -> bool {
     if virtual_op.get() as ::core::ffi::c_int != kNone as ::core::ffi::c_int {
         return virtual_op.get() as u64 != 0;
     }
-    if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_TERMINAL != 0 {
         return true_0 != 0;
     }
     let mut cur_ve_flags: ::core::ffi::c_uint = get_ve_flags(wp);
@@ -399,54 +400,54 @@ pub unsafe extern "C" fn virtual_active(mut wp: *mut win_T) -> bool {
             && VIsual_active.get() as ::core::ffi::c_int != 0
             && VIsual_mode.get() == Ctrl_V
         || cur_ve_flags & kOptVeFlagInsert as ::core::ffi::c_int as ::core::ffi::c_uint != 0
-            && State.get() & MODE_INSERT as ::core::ffi::c_int != 0;
+            && State.get() & MODE_INSERT != 0;
 }
 pub unsafe extern "C" fn get_real_state() -> ::core::ffi::c_int {
-    if State.get() & MODE_NORMAL as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_NORMAL != 0 {
         if VIsual_active.get() {
             if VIsual_select.get() {
-                return MODE_SELECT as ::core::ffi::c_int;
+                return MODE_SELECT;
             }
-            return MODE_VISUAL as ::core::ffi::c_int;
+            return MODE_VISUAL;
         } else if finish_op.get() {
-            return MODE_OP_PENDING as ::core::ffi::c_int;
+            return MODE_OP_PENDING;
         }
     }
     return State.get();
 }
 pub unsafe extern "C" fn get_mode(mut buf: *mut ::core::ffi::c_char) {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if State.get() == MODE_HITRETURN as ::core::ffi::c_int
-        || State.get() == MODE_ASKMORE as ::core::ffi::c_int
-        || State.get() == MODE_SETWSIZE as ::core::ffi::c_int
-        || State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
+    if State.get() == MODE_HITRETURN
+        || State.get() == MODE_ASKMORE
+        || State.get() == MODE_SETWSIZE
+        || State.get() & MODE_CMDLINE != 0
             && (*get_cmdline_info()).one_key as ::core::ffi::c_int != 0
     {
         let c2rust_fresh0 = i;
         i = i + 1;
         *buf.offset(c2rust_fresh0 as isize) = 'r' as ::core::ffi::c_char;
-        if State.get() == MODE_ASKMORE as ::core::ffi::c_int {
+        if State.get() == MODE_ASKMORE {
             let c2rust_fresh1 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh1 as isize) = 'm' as ::core::ffi::c_char;
-        } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+        } else if State.get() & MODE_CMDLINE != 0 {
             let c2rust_fresh2 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh2 as isize) = '?' as ::core::ffi::c_char;
         }
-    } else if State.get() == MODE_EXTERNCMD as ::core::ffi::c_int {
+    } else if State.get() == MODE_EXTERNCMD {
         let c2rust_fresh3 = i;
         i = i + 1;
         *buf.offset(c2rust_fresh3 as isize) = '!' as ::core::ffi::c_char;
-    } else if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
-        if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_INSERT != 0 {
+        if State.get() & VREPLACE_FLAG != 0 {
             let c2rust_fresh4 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh4 as isize) = 'R' as ::core::ffi::c_char;
             let c2rust_fresh5 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh5 as isize) = 'v' as ::core::ffi::c_char;
-        } else if State.get() & REPLACE_FLAG as ::core::ffi::c_int != 0 {
+        } else if State.get() & REPLACE_FLAG != 0 {
             let c2rust_fresh6 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh6 as isize) = 'R' as ::core::ffi::c_char;
@@ -464,9 +465,7 @@ pub unsafe extern "C" fn get_mode(mut buf: *mut ::core::ffi::c_char) {
             i = i + 1;
             *buf.offset(c2rust_fresh9 as isize) = 'x' as ::core::ffi::c_char;
         }
-    } else if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
-        || exmode_active.get() as ::core::ffi::c_int != 0
-    {
+    } else if State.get() & MODE_CMDLINE != 0 || exmode_active.get() as ::core::ffi::c_int != 0 {
         let c2rust_fresh10 = i;
         i = i + 1;
         *buf.offset(c2rust_fresh10 as isize) = 'c' as ::core::ffi::c_char;
@@ -475,14 +474,12 @@ pub unsafe extern "C" fn get_mode(mut buf: *mut ::core::ffi::c_char) {
             i = i + 1;
             *buf.offset(c2rust_fresh11 as isize) = 'v' as ::core::ffi::c_char;
         }
-        if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
-            && cmdline_overstrike() as ::core::ffi::c_int != 0
-        {
+        if State.get() & MODE_CMDLINE != 0 && cmdline_overstrike() as ::core::ffi::c_int != 0 {
             let c2rust_fresh12 = i;
             i = i + 1;
             *buf.offset(c2rust_fresh12 as isize) = 'r' as ::core::ffi::c_char;
         }
-    } else if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0 {
+    } else if State.get() & MODE_TERMINAL != 0 {
         let c2rust_fresh13 = i;
         i = i + 1;
         *buf.offset(c2rust_fresh13 as isize) = 't' as ::core::ffi::c_char;

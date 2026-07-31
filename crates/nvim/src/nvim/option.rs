@@ -164,7 +164,6 @@ pub const VV_OPTION_OLD: VimVarIndex = 63;
 pub const VV_OPTION_NEW: VimVarIndex = 62;
 pub const VV_WARNINGMSG: VimVarIndex = 4;
 pub const FUZZY_SCORE_NONE: c_int = -2147483648;
-pub const MODE_TERMINAL: c_uint = 128;
 pub const FSK_SIMPLIFY: c_uint = 8;
 pub const FSK_KEEP_X_KEY: c_uint = 2;
 pub const FSK_KEYCODE: c_uint = 1;

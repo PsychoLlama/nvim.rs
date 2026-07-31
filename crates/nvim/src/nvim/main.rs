@@ -35,6 +35,7 @@ mod remote;
 mod usage;
 pub use self::exit::*;
 use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::state::MODE_NORMAL;
 
 /// A C string literal as the fixed-size `c_char` array a global holds.
 ///
@@ -128,7 +129,6 @@ pub(crate) const READ_NEW: c_uint = 1;
 pub(crate) const ETYPE_ENV: etype_T = 7;
 pub(crate) const ETYPE_ARGS: etype_T = 6;
 pub(crate) const ETYPE_TOP: etype_T = 0;
-pub(crate) const MODE_NORMAL: c_uint = 1;
 pub(crate) const KE_NOP: key_extra = 97;
 pub(crate) const kRetObject: LuaRetMode = 0;
 #[derive(Copy, Clone)]
@@ -1133,7 +1133,7 @@ pub static vr_lines_changed: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static inhibit_delete_count: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static fenc_default: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub static State: GlobalCell<c_int> = GlobalCell::new(MODE_NORMAL as c_int);
+pub static State: GlobalCell<c_int> = GlobalCell::new(MODE_NORMAL);
 pub static debug_mode: GlobalCell<bool> = GlobalCell::new(false);
 pub static finish_op: GlobalCell<bool> = GlobalCell::new(false);
 pub static opcount: GlobalCell<c_int> = GlobalCell::new(0 as c_int);

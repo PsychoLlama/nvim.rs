@@ -22,6 +22,7 @@ use crate::src::nvim::os::env::{expand_env_save, home_replace};
 use crate::src::nvim::os::libc::{atoi, gettext, memmove, strcmp, strcpy, strlen, strncmp, strstr};
 use crate::src::nvim::path::fix_fname;
 use crate::src::nvim::runtime::{estack_sfile, exestack};
+use crate::src::nvim::state::MODE_NORMAL;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Array, AutoPat, AutoPatCmd, AutoPatCmd_S, BoolVarValue,
     Boolean, BufUpdateCallbacks, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5,
@@ -782,7 +783,6 @@ pub const ETYPE_AUCMD: etype_T = 3;
 pub const ETYPE_UFUNC: etype_T = 2;
 pub const ETYPE_SCRIPT: etype_T = 1;
 pub const ETYPE_TOP: etype_T = 0;
-pub const MODE_NORMAL: C2Rust_Unnamed_18 = 1;
 pub const KE_SNR: key_extra = 82;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -820,25 +820,6 @@ pub const DOCMD_KEYTYPED: C2Rust_Unnamed_17 = 8;
 pub const DOCMD_REPEAT: C2Rust_Unnamed_17 = 4;
 pub const DOCMD_NOWAIT: C2Rust_Unnamed_17 = 2;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_18 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_18 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_18 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_18 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_18 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_18 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_18 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_18 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_18 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_18 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_18 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_18 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_18 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_18 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_18 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_18 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_18 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_18 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_18 = 2;
 pub const KE_WILD: key_extra = 108;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_LUA: key_extra = 103;
@@ -1008,7 +989,7 @@ pub unsafe extern "C" fn do_debug(mut cmd: *mut ::core::ffi::c_char) {
     msg_silent.set(false_0);
     emsg_silent.set(false_0);
     redir_off.set(true_0 != 0);
-    State.set(MODE_NORMAL as ::core::ffi::c_int);
+    State.set(MODE_NORMAL);
     debug_mode.set(true_0 != 0);
     if !debug_did_msg.get() {
         msg(

@@ -42,6 +42,7 @@ use crate::src::nvim::os::signal::{signal_accept_deadly, signal_reject_deadly};
 use crate::src::nvim::os::time::{os_delay, os_hrtime};
 use crate::src::nvim::path::{add_pathsep, invocation_path_tail, path_has_wildcard, path_tail};
 use crate::src::nvim::profile::{prof_child_enter, prof_child_exit};
+use crate::src::nvim::state::MODE_EXTERNCMD;
 use crate::src::nvim::strings::{
     vim_snprintf, vim_strchr, vim_strnsave_unquoted, vim_strsave_escaped_ext,
 };
@@ -375,26 +376,6 @@ pub const VV_PREVCOUNT: VimVarIndex = 2;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_29 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_29 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_29 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_29 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_29 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_29 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_29 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_29 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_29 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_29 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_29 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_29 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_29 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_29 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_29 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_29 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_29 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_29 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_29 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_29 = 1;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
 pub const kShellOptHideMess: C2Rust_Unnamed_30 = 64;
 pub const kShellOptWrite: C2Rust_Unnamed_30 = 32;
@@ -1155,7 +1136,7 @@ pub unsafe extern "C" fn os_call_shell(
     {
         forward_output = false_0 != 0;
     } else {
-        State.set(MODE_EXTERNCMD as ::core::ffi::c_int);
+        State.set(MODE_EXTERNCMD);
         if opts & kShellOptWrite as ::core::ffi::c_int != 0 {
             read_input(&raw mut input);
         }

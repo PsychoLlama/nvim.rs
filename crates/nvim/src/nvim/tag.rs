@@ -67,6 +67,7 @@ use crate::src::nvim::quickfix::set_errorlist;
 use crate::src::nvim::regexp::skip_regexp;
 use crate::src::nvim::runtime::do_in_runtimepath;
 use crate::src::nvim::search::{do_search, ignorecase, ignorecase_opt};
+use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
     __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
@@ -1095,26 +1096,6 @@ pub const FINDFILE_BOTH: C2Rust_Unnamed_26 = 2;
 pub const FINDFILE_DIR: C2Rust_Unnamed_26 = 1;
 pub const FINDFILE_FILE: C2Rust_Unnamed_26 = 0;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_27 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_27 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_27 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_27 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_27 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_27 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_27 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_27 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_27 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_27 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_27 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_27 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_27 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_27 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_27 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_27 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_27 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_27 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_27 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_27 = 1;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub const OPT_SKIPRTP: C2Rust_Unnamed_28 = 128;
 pub const OPT_NO_REDRAW: C2Rust_Unnamed_28 = 64;
@@ -3760,7 +3741,7 @@ unsafe extern "C" fn findtags_add_match(
                 (*tagpp).tagname as *const ::core::ffi::c_void,
                 len,
             );
-            if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+            if State.get() & MODE_INSERT != 0 {
                 (*st).get_searchpat = p_sft.get() != 0;
             }
         }

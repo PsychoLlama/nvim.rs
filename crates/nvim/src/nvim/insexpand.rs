@@ -95,7 +95,7 @@ use crate::src::nvim::search::{find_pattern_in_path, ignorecase, search_for_exac
 use crate::src::nvim::spell::{
     expand_spelling, spell_dump_compl, spell_expand_check_cap, spell_move_to, spell_word_start,
 };
-use crate::src::nvim::state::may_trigger_modechanged;
+use crate::src::nvim::state::{MODE_INSERT, REPLACE_FLAG, may_trigger_modechanged};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
 use crate::src::nvim::tag::find_tags;
 use crate::src::nvim::textformat::auto_format;
@@ -542,26 +542,6 @@ pub const VV_COUNT: VimVarIndex = 0;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_int;
 pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_23 = -2147483648;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_24 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_24 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_24 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_24 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_24 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_24 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_24 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_24 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_24 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_24 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_24 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_24 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_24 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_24 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_24 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_24 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_24 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_24 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_24 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_24 = 1;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
@@ -3300,7 +3280,7 @@ unsafe extern "C" fn set_ctrl_x_mode(c: ::core::ffi::c_int) -> bool {
         match c {
             Ctrl_E | Ctrl_Y => {
                 ctrl_x_mode.set(CTRL_X_SCROLL as ::core::ffi::c_int);
-                if State.get() & REPLACE_FLAG as ::core::ffi::c_int == 0 {
+                if State.get() & REPLACE_FLAG == 0 {
                     edit_submode.set(gettext(
                         b" (insert) Scroll (^E/^Y)\0".as_ptr() as *const ::core::ffi::c_char
                     ));
@@ -4392,7 +4372,7 @@ pub unsafe extern "C" fn f_complete(
     mut _rettv: *mut typval_T,
     mut _fptr: EvalFuncData,
 ) {
-    if State.get() & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+    if State.get() & MODE_INSERT == 0 as ::core::ffi::c_int {
         emsg(gettext(
             b"E785: complete() can only be used in Insert mode\0".as_ptr()
                 as *const ::core::ffi::c_char,

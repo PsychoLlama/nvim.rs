@@ -17,7 +17,7 @@ use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::r#move::{win_col_off, win_col_off2};
 use crate::src::nvim::option::get_showbreak_value;
 use crate::src::nvim::pos::{lt, ltoreq};
-use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::state::{MODE_NORMAL, virtual_active};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CSType, Callback,
     Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, CharInfo, CharSize,
@@ -114,26 +114,6 @@ pub const kMTMetaSignHL: MetaIndex = 2;
 pub const kMTMetaLines: MetaIndex = 1;
 pub const kMTMetaInline: MetaIndex = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_15 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_15 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_15 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_15 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_15 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_15 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_15 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_15 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_15 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_15 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_15 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_15 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_15 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_15 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_15 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_15 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_15 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_15 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_15 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_15 = 1;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const kInvalidByteCells: C2Rust_Unnamed_16 = 4;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
@@ -695,10 +675,10 @@ unsafe extern "C" fn virt_text_cursor_off(
     mut on_NUL: bool,
 ) -> ::core::ffi::c_int {
     let mut off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if !on_NUL || State.get() & MODE_NORMAL as ::core::ffi::c_int == 0 {
+    if !on_NUL || State.get() & MODE_NORMAL == 0 {
         off += (*csarg).cur_text_width_left;
     }
-    if !on_NUL && State.get() & MODE_NORMAL as ::core::ffi::c_int != 0 {
+    if !on_NUL && State.get() & MODE_NORMAL != 0 {
         off += (*csarg).cur_text_width_right;
     }
     return off;
@@ -792,7 +772,7 @@ pub unsafe extern "C" fn getvcol(
     }
     if !cursor.is_null() {
         if ci.chr.value == TAB as int32_t
-            && State.get() & MODE_NORMAL as ::core::ffi::c_int != 0
+            && State.get() & MODE_NORMAL != 0
             && (*wp).w_onebuf_opt.wo_list == 0
             && !virtual_active(wp)
             && !(VIsual_active.get() as ::core::ffi::c_int != 0
@@ -1111,7 +1091,7 @@ pub unsafe extern "C" fn plines_win_col(
     }
     let mut col: colnr_T = vcol;
     if ci.chr.value == TAB as int32_t
-        && State.get() & MODE_NORMAL as ::core::ffi::c_int != 0
+        && State.get() & MODE_NORMAL != 0
         && csarg.use_tabstop as ::core::ffi::c_int != 0
     {
         col += win_charsize(

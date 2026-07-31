@@ -65,7 +65,11 @@ use crate::src::nvim::os::libc::{
     strncmp,
 };
 use crate::src::nvim::plines::{init_charsize_arg, win_charsize};
-use crate::src::nvim::state::{get_real_state, state_handle_k_event, state_no_longer_safe};
+use crate::src::nvim::state::{
+    MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
+    MODE_SELECT, MODE_TERMINAL, MODE_VISUAL, get_real_state, state_handle_k_event,
+    state_no_longer_safe,
+};
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
@@ -340,14 +344,11 @@ pub const FLUSH_TYPEAHEAD: flush_buffers_T = 1;
 pub const FLUSH_MINIMAL: flush_buffers_T = 0;
 pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
 pub const NSCRIPT: C2Rust_Unnamed_30 = 15;
-pub const MODE_HITRETURN: C2Rust_Unnamed_32 = 8193;
 pub const RM_SCRIPT: C2Rust_Unnamed_36 = 2;
 pub const RM_NONE: C2Rust_Unnamed_36 = 1;
 pub const RM_YES: C2Rust_Unnamed_36 = 0;
 pub const RM_ABBR: C2Rust_Unnamed_36 = 4;
 pub const KE_IGNORE: key_extra = 53;
-pub const MODE_CMDLINE: C2Rust_Unnamed_32 = 8;
-pub const MODE_INSERT: C2Rust_Unnamed_32 = 16;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct gotchars_state_T {
@@ -367,20 +368,14 @@ pub struct C2Rust_Unnamed_31 {
 }
 pub const KEYLEN_PART_KEY: C2Rust_Unnamed_37 = -1;
 pub const SHOWCMD_COLS: C2Rust_Unnamed_33 = 10;
-pub const MODE_LANGMAP: C2Rust_Unnamed_32 = 32;
-pub const MODE_NORMAL: C2Rust_Unnamed_32 = 1;
 pub const kCharsizeFast: C2Rust_Unnamed_35 = 1;
 pub const map_result_get: map_result_T = 1;
 pub type map_result_T = ::core::ffi::c_uint;
 pub const map_result_nomatch: map_result_T = 3;
 pub const map_result_retry: map_result_T = 2;
 pub const map_result_fail: map_result_T = 0;
-pub const MODE_VISUAL: C2Rust_Unnamed_32 = 2;
-pub const MODE_TERMINAL: C2Rust_Unnamed_32 = 128;
 pub const KEYLEN_PART_MAP: C2Rust_Unnamed_37 = -2;
 pub const KE_SNR: key_extra = 82;
-pub const MODE_SELECT: C2Rust_Unnamed_32 = 64;
-pub const MODE_ASKMORE: C2Rust_Unnamed_32 = 12288;
 pub const KE_PLUG: key_extra = 83;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
@@ -406,17 +401,6 @@ pub const KE_ZHOME: key_extra = 64;
 pub const KE_XHOME: key_extra = 63;
 pub const KE_MOUSEMOVE: key_extra = 100;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_32 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_32 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_32 = 16384;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_32 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_32 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_32 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_32 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_32 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_32 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_32 = 255;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_32 = 4;
 pub const KE_WILD: key_extra = 108;
 pub const KE_EVENT: key_extra = 102;
 pub const KE_NOP: key_extra = 97;
@@ -1985,7 +1969,7 @@ pub unsafe extern "C" fn ungetchars(mut len: ::core::ffi::c_int) {
     last_recorded_len.set((*last_recorded_len.ptr()).wrapping_sub(len as size_t));
 }
 pub unsafe extern "C" fn may_sync_undo() {
-    if (State.get() & (MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int) == 0
+    if (State.get() & (MODE_INSERT | MODE_CMDLINE) == 0
         || arrow_used.get() as ::core::ffi::c_int != 0)
         && curscript.get() < 0 as ::core::ffi::c_int
     {
@@ -2163,7 +2147,7 @@ pub unsafe extern "C" fn openscript(mut name: *mut ::core::ffi::c_char, mut dire
         let mut save_restart_edit: ::core::ffi::c_int = restart_edit.get();
         let mut save_finish_op: ::core::ffi::c_int = finish_op.get() as ::core::ffi::c_int;
         let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
-        State.set(MODE_NORMAL as ::core::ffi::c_int);
+        State.set(MODE_NORMAL);
         msg_scroll.set(false_0);
         restart_edit.set(0 as ::core::ffi::c_int);
         clear_oparg(&raw mut oa);
@@ -2431,7 +2415,7 @@ pub unsafe extern "C" fn vgetc() -> ::core::ffi::c_int {
             if no_mapping.get() == 0
                 && KeyTyped.get() as ::core::ffi::c_int != 0
                 && mod_mask.get() == MOD_MASK_ALT
-                && State.get() & MODE_TERMINAL as ::core::ffi::c_int == 0
+                && State.get() & MODE_TERMINAL == 0
                 && !is_mouse_key(c)
             {
                 mod_mask.set(0 as ::core::ffi::c_int);
@@ -3016,9 +3000,7 @@ unsafe extern "C" fn at_ins_compl_key() -> bool {
 unsafe extern "C" fn check_simplify_modifier(
     mut max_offset: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
-        || no_reduce_keys.get() > 0 as ::core::ffi::c_int
-    {
+    if State.get() & MODE_TERMINAL != 0 || no_reduce_keys.get() > 0 as ::core::ffi::c_int {
         return 0 as ::core::ffi::c_int;
     }
     let mut offset: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3143,13 +3125,9 @@ unsafe extern "C" fn handle_mapping(
                 .offset((*typebuf.ptr()).tb_off as isize) as ::core::ffi::c_int
                 & (RM_NONE as ::core::ffi::c_int | RM_ABBR as ::core::ffi::c_int)
                 == 0)
-        && !(p_paste.get() != 0
-            && State.get()
-                & (MODE_INSERT as ::core::ffi::c_int | MODE_CMDLINE as ::core::ffi::c_int)
-                != 0)
-        && !(State.get() == MODE_HITRETURN as ::core::ffi::c_int
-            && (tb_c1 == CAR || tb_c1 == ' ' as ::core::ffi::c_int))
-        && State.get() != MODE_ASKMORE as ::core::ffi::c_int
+        && !(p_paste.get() != 0 && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0)
+        && !(State.get() == MODE_HITRETURN && (tb_c1 == CAR || tb_c1 == ' ' as ::core::ffi::c_int))
+        && State.get() != MODE_ASKMORE
         && !at_ins_compl_key()
     {
         let mut mlen: ::core::ffi::c_int = 0;
@@ -3158,10 +3136,8 @@ unsafe extern "C" fn handle_mapping(
             nolmaplen = 2 as ::core::ffi::c_int;
         } else {
             if *p_langmap.get() as ::core::ffi::c_int != 0
-                && (State.get()
-                    & (MODE_CMDLINE as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int)
-                    == 0 as ::core::ffi::c_int
-                    && get_real_state() != MODE_SELECT as ::core::ffi::c_int)
+                && (State.get() & (MODE_CMDLINE | MODE_INSERT) == 0 as ::core::ffi::c_int
+                    && get_real_state() != MODE_SELECT)
                 && (p_lrm.get() != 0
                     || (if vgetc_busy.get() != 0 {
                         (typebuf_maplen() == 0 as ::core::ffi::c_int) as ::core::ffi::c_int
@@ -3192,7 +3168,7 @@ unsafe extern "C" fn handle_mapping(
                 as ::core::ffi::c_int
                 == tb_c1
                 && (*mp).m_mode & local_State != 0
-                && ((*mp).m_mode & MODE_LANGMAP as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+                && ((*mp).m_mode & MODE_LANGMAP == 0 as ::core::ffi::c_int
                     || (*typebuf.ptr()).tb_maplen == 0 as ::core::ffi::c_int)
             {
                 let mut nomap: ::core::ffi::c_int = nolmaplen;
@@ -3296,10 +3272,8 @@ unsafe extern "C" fn handle_mapping(
                             } else if keylen > mp_match_len
                                 || keylen == mp_match_len
                                     && !mp_match.is_null()
-                                    && (*mp_match).m_mode & MODE_LANGMAP as ::core::ffi::c_int
-                                        == 0 as ::core::ffi::c_int
-                                    && (*mp).m_mode & MODE_LANGMAP as ::core::ffi::c_int
-                                        != 0 as ::core::ffi::c_int
+                                    && (*mp_match).m_mode & MODE_LANGMAP == 0 as ::core::ffi::c_int
+                                    && (*mp).m_mode & MODE_LANGMAP != 0 as ::core::ffi::c_int
                             {
                                 mp_match = mp;
                                 mp_match_len = keylen;
@@ -3389,7 +3363,7 @@ unsafe extern "C" fn handle_mapping(
         let mut i: ::core::ffi::c_int = 0;
         let mut map_str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if keylen > (*typebuf.ptr()).tb_maplen
-            && (*mp).m_mode & MODE_LANGMAP as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+            && (*mp).m_mode & MODE_LANGMAP == 0 as ::core::ffi::c_int
         {
             gotchars(
                 (*typebuf.ptr())
@@ -3406,7 +3380,7 @@ unsafe extern "C" fn handle_mapping(
             emsg(gettext(
                 (e_recursive_mapping.ptr() as *const _) as *const ::core::ffi::c_char,
             ));
-            if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+            if State.get() & MODE_CMDLINE != 0 {
                 redrawcmdline();
             } else {
                 setcursor();
@@ -3418,7 +3392,7 @@ unsafe extern "C" fn handle_mapping(
         }
         if VIsual_active.get() as ::core::ffi::c_int != 0
             && VIsual_select.get() as ::core::ffi::c_int != 0
-            && (*mp).m_mode & MODE_VISUAL as ::core::ffi::c_int != 0
+            && (*mp).m_mode & MODE_VISUAL != 0
         {
             VIsual_select.set(false_0 != 0);
             ins_typebuf(
@@ -3473,7 +3447,7 @@ unsafe extern "C" fn handle_mapping(
                         &raw mut buf as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
                         3 as size_t,
                     ) as *mut ::core::ffi::c_char;
-                    if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+                    if State.get() & MODE_CMDLINE != 0 {
                         msg_didout.set(true_0 != 0);
                         msg_row.set(if msg_row.get() > cmdline_row.get() {
                             msg_row.get()
@@ -3482,10 +3456,7 @@ unsafe extern "C" fn handle_mapping(
                         });
                         redrawcmd();
                     }
-                } else if State.get()
-                    & (MODE_NORMAL as ::core::ffi::c_int | MODE_INSERT as ::core::ffi::c_int)
-                    != 0
-                {
+                } else if State.get() & (MODE_NORMAL | MODE_INSERT) != 0 {
                     setcursor();
                 }
             }
@@ -3499,7 +3470,7 @@ unsafe extern "C" fn handle_mapping(
         } else {
             let mut noremap: ::core::ffi::c_int = 0;
             if keylen > (*typebuf.ptr()).tb_maplen
-                && (*mp).m_mode & MODE_LANGMAP as ::core::ffi::c_int != 0 as ::core::ffi::c_int
+                && (*mp).m_mode & MODE_LANGMAP != 0 as ::core::ffi::c_int
             {
                 gotchars(map_str as *mut uint8_t, strlen(map_str));
             }
@@ -3623,10 +3594,7 @@ unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
                         0 as ::core::ffi::c_long,
                     );
                     if (c != 0 || (*typebuf.ptr()).tb_maplen != 0)
-                        && State.get()
-                            & (MODE_INSERT as ::core::ffi::c_int
-                                | MODE_CMDLINE as ::core::ffi::c_int)
-                            != 0
+                        && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0
                     {
                         c = ESC;
                     } else {
@@ -3700,7 +3668,7 @@ unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
                         && no_mapping.get() == 0
                         && ex_normal_busy.get() == 0 as ::core::ffi::c_int
                         && (*typebuf.ptr()).tb_maplen == 0 as ::core::ffi::c_int
-                        && State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+                        && State.get() & MODE_INSERT != 0
                         && (p_timeout.get() != 0
                             || keylen == KEYLEN_PART_KEY as ::core::ffi::c_int
                                 && p_ttimeout.get() != 0)
@@ -3842,7 +3810,7 @@ unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
                         if (*typebuf.ptr()).tb_len > 0 as ::core::ffi::c_int {
                             timedout = true_0 != 0;
                         } else {
-                            c = if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
+                            c = if State.get() & MODE_CMDLINE != 0
                                 || cmdwin_type.get() > 0 as ::core::ffi::c_int && tc.get() == ESC
                             {
                                 Ctrl_C
@@ -3860,11 +3828,8 @@ unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
                             break;
                         }
                     } else {
-                        if (State.get() & MODE_INSERT as ::core::ffi::c_int
-                            != 0 as ::core::ffi::c_int
-                            || p_lz.get() != 0)
-                            && State.get() & MODE_CMDLINE as ::core::ffi::c_int
-                                == 0 as ::core::ffi::c_int
+                        if (State.get() & MODE_INSERT != 0 as ::core::ffi::c_int || p_lz.get() != 0)
+                            && State.get() & MODE_CMDLINE == 0 as ::core::ffi::c_int
                             && advance as ::core::ffi::c_int != 0
                             && must_redraw.get() != 0 as ::core::ffi::c_int
                             && !need_wait_return.get()
@@ -3878,14 +3843,11 @@ unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
                             && advance as ::core::ffi::c_int != 0
                             && !exmode_active.get()
                         {
-                            if (State.get()
-                                & (MODE_NORMAL as ::core::ffi::c_int
-                                    | MODE_INSERT as ::core::ffi::c_int)
-                                != 0
-                                || State.get() == MODE_LANGMAP as ::core::ffi::c_int)
-                                && State.get() != MODE_HITRETURN as ::core::ffi::c_int
+                            if (State.get() & (MODE_NORMAL | MODE_INSERT) != 0
+                                || State.get() == MODE_LANGMAP)
+                                && State.get() != MODE_HITRETURN
                             {
-                                if State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+                                if State.get() & MODE_INSERT != 0
                                     && ptr2cells(
                                         ((*typebuf.ptr()).tb_buf as *mut ::core::ffi::c_char)
                                             .offset((*typebuf.ptr()).tb_off as isize)
@@ -3924,7 +3886,7 @@ unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
                                 (*curwin.get()).w_wcol = old_wcol_0;
                                 (*curwin.get()).w_wrow = old_wrow_0;
                             }
-                            if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
+                            if State.get() & MODE_CMDLINE != 0
                                 && !(*get_cmdline_info()).cmdbuff.is_null()
                                 && cmdline_star.get() == 0 as ::core::ffi::c_int
                             {
@@ -3977,10 +3939,10 @@ unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
                             pop_showcmd();
                         }
                         if showing_partial as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
-                            if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+                            if State.get() & MODE_INSERT != 0 {
                                 edit_unputchar();
                             }
-                            if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
+                            if State.get() & MODE_CMDLINE != 0
                                 && !(*get_cmdline_info()).cmdbuff.is_null()
                             {
                                 unputcmdline();
@@ -4024,7 +3986,7 @@ unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
     if advance as ::core::ffi::c_int != 0
         && p_smd.get() != 0
         && msg_silent.get() == 0 as ::core::ffi::c_int
-        && State.get() & MODE_INSERT as ::core::ffi::c_int != 0
+        && State.get() & MODE_INSERT != 0
     {
         if c == ESC
             && !mode_deleted
@@ -4061,7 +4023,7 @@ unsafe extern "C" fn inchar(
     if wait_time == -1 as ::core::ffi::c_long || wait_time > 100 as ::core::ffi::c_long {
         ui_flush();
     }
-    if State.get() != MODE_HITRETURN as ::core::ffi::c_int {
+    if State.get() != MODE_HITRETURN {
         did_outofmem_msg.set(false_0 != 0);
         did_swapwrite_msg.set(false_0 != 0);
     }
@@ -4371,7 +4333,7 @@ pub unsafe extern "C" fn paste_store(
     str: String_0,
     crlf: bool,
 ) {
-    if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+    if State.get() & MODE_CMDLINE != 0 {
         return;
     }
     let need_redo: bool = !block_redo.get();
@@ -4388,7 +4350,7 @@ pub unsafe extern "C" fn paste_store(
         };
         if need_redo {
             if state as ::core::ffi::c_int == kFalse as ::core::ffi::c_int
-                && State.get() & MODE_INSERT as ::core::ffi::c_int == 0
+                && State.get() & MODE_INSERT == 0
             {
                 ResetRedobuff();
             }

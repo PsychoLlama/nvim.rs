@@ -50,6 +50,7 @@ use crate::src::nvim::options::{
 use crate::src::nvim::os::libc::{__assert_fail, gettext, memset, strchr, strlen};
 use crate::src::nvim::plines::plines_m_win;
 use crate::src::nvim::plines::win_linetabsize;
+use crate::src::nvim::state::MODE_CMDLINE;
 use crate::src::nvim::strings::reverse_text;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
@@ -834,26 +835,6 @@ pub const ECMD_ONE: C2Rust_Unnamed_19 = 1;
 pub const ECMD_LAST: C2Rust_Unnamed_19 = -1;
 pub const ECMD_LASTL: C2Rust_Unnamed_19 = 0;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_20 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_20 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_20 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_20 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_20 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_20 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_20 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_20 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_20 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_20 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_20 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_20 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_20 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_20 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_20 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_20 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_20 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_20 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_20 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_20 = 1;
 pub const kUIExtCount: UIExtension = 10;
 pub const kUIFloatDebug: UIExtension = 9;
 pub const kUITermColors: UIExtension = 8;
@@ -1083,7 +1064,7 @@ unsafe extern "C" fn pum_compute_vertical_placement(
         && pum_win_row - above_row > (below_row - above_row) / 2 as ::core::ffi::c_int
     {
         pum_above.set(true_0 != 0);
-        if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 && target_win.is_null() {
+        if State.get() & MODE_CMDLINE != 0 && target_win.is_null() {
             context_lines = 0 as ::core::ffi::c_int;
         } else {
             context_lines =
@@ -1115,7 +1096,7 @@ unsafe extern "C" fn pum_compute_vertical_placement(
         }
     } else {
         pum_above.set(false_0 != 0);
-        if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 && target_win.is_null() {
+        if State.get() & MODE_CMDLINE != 0 && target_win.is_null() {
             context_lines = 0 as ::core::ffi::c_int;
         } else {
             validate_cheight(target_win);
@@ -1262,12 +1243,12 @@ pub unsafe extern "C" fn pum_display(
     if !pum_is_visible.get() {
         pum_external.set(
             ui_has(kUIPopupmenu) as ::core::ffi::c_int != 0
-                || State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0
+                || State.get() & MODE_CMDLINE != 0
                     && ui_has(kUIWildmenu) as ::core::ffi::c_int != 0,
         );
     }
     pum_rl.set(
-        State.get() & MODE_CMDLINE as ::core::ffi::c_int == 0 as ::core::ffi::c_int
+        State.get() & MODE_CMDLINE == 0 as ::core::ffi::c_int
             && (*curwin.get()).w_onebuf_opt.wo_rl != 0,
     );
     let mut border_width: ::core::ffi::c_int = pum_border_width();
@@ -1282,17 +1263,17 @@ pub unsafe extern "C" fn pum_display(
             } else {
                 (*curwin.get()).w_winrow + (*curwin.get()).w_view_height
             };
-        if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+        if State.get() & MODE_CMDLINE != 0 {
             below_row = cmdline_row.get();
         }
-        let mut target_win: *mut win_T = if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+        let mut target_win: *mut win_T = if State.get() & MODE_CMDLINE != 0 {
             cmdline_win.get()
         } else {
             curwin.get()
         };
         pum_win_row_offset.set(0 as ::core::ffi::c_int);
         pum_win_col_offset.set(0 as ::core::ffi::c_int);
-        if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+        if State.get() & MODE_CMDLINE != 0 {
             pum_win_row = if !(*cmdline_win.ptr()).is_null() {
                 (*cmdline_win.get()).w_wrow
             } else if ui_has(kUICmdline) as ::core::ffi::c_int != 0 {
@@ -1453,7 +1434,7 @@ pub unsafe extern "C" fn pum_display(
             break;
         }
     }
-    (*pum_grid.ptr()).zindex = if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+    (*pum_grid.ptr()).zindex = if State.get() & MODE_CMDLINE != 0 {
         kZIndexCmdlinePopupMenu as ::core::ffi::c_int
     } else {
         kZIndexPopupMenu as ::core::ffi::c_int
@@ -1475,19 +1456,18 @@ unsafe extern "C" fn pum_compute_text_attrs(
     {
         return ::core::ptr::null_mut::<::core::ffi::c_int>();
     }
-    let mut leader: *mut ::core::ffi::c_char =
-        if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
-            cmdline_compl_pattern()
-        } else {
-            ins_compl_leader()
-        };
+    let mut leader: *mut ::core::ffi::c_char = if State.get() & MODE_CMDLINE != 0 {
+        cmdline_compl_pattern()
+    } else {
+        ins_compl_leader()
+    };
     if leader.is_null() || *leader as ::core::ffi::c_int == NUL {
         return ::core::ptr::null_mut::<::core::ffi::c_int>();
     }
     let mut attrs: *mut ::core::ffi::c_int = xmalloc(
         ::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(vim_strsize(text) as size_t),
     ) as *mut ::core::ffi::c_int;
-    let mut in_fuzzy: bool = if State.get() & MODE_CMDLINE as ::core::ffi::c_int != 0 {
+    let mut in_fuzzy: bool = if State.get() & MODE_CMDLINE != 0 {
         cmdline_compl_is_fuzzy() as ::core::ffi::c_int
     } else {
         (get_cot_flags() & kOptCotFlagFuzzy as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -1682,7 +1662,7 @@ pub unsafe extern "C" fn pum_redraw() {
     if pum_rl.get() {
         col_off = pum_width.get() - 1 as ::core::ffi::c_int;
         '_c2rust_label: {
-            if State.get() & MODE_CMDLINE as ::core::ffi::c_int == 0 {
+            if State.get() & MODE_CMDLINE == 0 {
             } else {
                 __assert_fail(
                     b"!(State & MODE_CMDLINE)\0".as_ptr() as *const ::core::ffi::c_char,

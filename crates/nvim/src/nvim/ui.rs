@@ -63,6 +63,7 @@ use crate::src::nvim::option::{set_option_value, ui_refresh_options};
 use crate::src::nvim::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlagLine};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::os::time::{os_hrtime, os_sleep};
+use crate::src::nvim::state::MODE_CMDLINE;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::builders::static_string;
 use crate::src::nvim::types::{
@@ -766,13 +767,6 @@ pub unsafe fn ui_flush() {
         os_sleep(p_wd.get().unsigned_abs());
     }
 }
-
-pub(super) const MODE_CMDLINE: c_int = 8;
-pub(super) const MODE_INSERT: c_int = 16;
-pub(super) const MODE_HITRETURN: c_int = 8193;
-pub(super) const MODE_ASKMORE: c_int = 12288;
-pub(super) const MODE_SETWSIZE: c_int = 16384;
-pub(super) const MODE_EXTERNCMD: c_int = 20480;
 
 /// Recomputes the cursor shape for the current mode, without disturbing
 /// `'conceallevel'`. For the paths that are about to redraw anyway.

@@ -104,7 +104,9 @@ use crate::src::nvim::pos::{MAXLNUM, equalpos};
 use crate::src::nvim::quickfix::qf_view_result;
 use crate::src::nvim::quickfix::{copy_loclist_stack, qf_free_all};
 use crate::src::nvim::search::find_pattern_in_path;
-use crate::src::nvim::state::{get_real_state, virtual_active};
+use crate::src::nvim::state::{
+    MODE_CMDLINE, MODE_INSERT, MODE_NORMAL, MODE_TERMINAL, get_real_state, virtual_active,
+};
 use crate::src::nvim::statusline::stl_clear_click_defs;
 use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::syntax::reset_synblock;
@@ -954,26 +956,6 @@ pub const ECMD_ONE: C2Rust_Unnamed_26 = 1;
 pub const ECMD_LAST: C2Rust_Unnamed_26 = -1;
 pub const ECMD_LASTL: C2Rust_Unnamed_26 = 0;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_27 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_27 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_27 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_27 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_27 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_27 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_27 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_27 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_27 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_27 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_27 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_27 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_27 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_27 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_27 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_27 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_27 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_27 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_27 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_27 = 1;
 pub const kMTUnknown: MotionType = -1;
 pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
@@ -4046,7 +4028,7 @@ pub unsafe extern "C" fn leaving_window(win: *mut win_T) {
         clear_cmdline.set(true_0 != 0);
     }
     restart_edit.set(NUL);
-    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 && !stop_insert_mode.get() {
+    if State.get() & MODE_INSERT != 0 && !stop_insert_mode.get() {
         stop_insert_mode.set(true_0 != 0);
         if (*(*win).w_buffer).b_prompt_insert == NUL {
             (*(*win).w_buffer).b_prompt_insert = 'A' as ::core::ffi::c_int;
@@ -4060,7 +4042,7 @@ pub unsafe extern "C" fn entering_window(win: *mut win_T) {
     if (*(*win).w_buffer).b_prompt_insert != NUL {
         stop_insert_mode.set(false_0 != 0);
     }
-    if State.get() & MODE_INSERT as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
+    if State.get() & MODE_INSERT == 0 as ::core::ffi::c_int {
         restart_edit.set((*(*win).w_buffer).b_prompt_insert);
     }
 }
@@ -6926,13 +6908,7 @@ unsafe extern "C" fn win_enter_ext(wp: *mut win_T, flags: ::core::ffi::c_int) {
     if *p_spk.get() as ::core::ffi::c_int == 'c' as ::core::ffi::c_int {
         changed_line_abv_curs();
     } else {
-        win_fix_cursor(
-            get_real_state()
-                & (MODE_NORMAL as ::core::ffi::c_int
-                    | MODE_CMDLINE as ::core::ffi::c_int
-                    | MODE_TERMINAL as ::core::ffi::c_int)
-                != 0,
-        );
+        win_fix_cursor(get_real_state() & (MODE_NORMAL | MODE_CMDLINE | MODE_TERMINAL) != 0);
     }
     win_fix_current_dir();
     entering_window(curwin.get());
@@ -8636,12 +8612,7 @@ pub unsafe extern "C" fn win_fix_scroll(mut resize: bool) {
         wp = (*wp).w_next;
     }
     skip_update_topline.set(false_0 != 0);
-    if get_real_state()
-        & (MODE_NORMAL as ::core::ffi::c_int
-            | MODE_CMDLINE as ::core::ffi::c_int
-            | MODE_TERMINAL as ::core::ffi::c_int)
-        == 0
-    {
+    if get_real_state() & (MODE_NORMAL | MODE_CMDLINE | MODE_TERMINAL) == 0 {
         win_fix_cursor(false_0 != 0);
     } else if resize {
         win_fix_cursor(true_0 != 0);

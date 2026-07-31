@@ -33,6 +33,7 @@ use crate::src::nvim::normal::add_to_showcmd;
 use crate::src::nvim::os::input::fast_breakcheck;
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::runtime::{getsourceline, source_runtime};
+use crate::src::nvim::state::MODE_LANGMAP;
 use crate::src::nvim::types::{
     BoolVarValue, EvalFuncData, OptInt, VarType, exarg_T, garray_T, int16_t, list_T, typval_T,
     varnumber_T, win_T,
@@ -624,7 +625,6 @@ const B_IMODE_LMAP: OptInt = 1;
 const KMAP_LLEN: usize = 200;
 const MAPTYPE_MAP: c_int = 0;
 const MAPTYPE_UNMAP: c_int = 1;
-const MODE_LANGMAP: c_int = 0x20;
 
 /// One `:loadkeymap` entry: heap C strings owned by the buffer's
 /// `b_kmap_ga` (freed by [`keymap_ga_clear`]).

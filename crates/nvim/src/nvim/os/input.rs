@@ -21,7 +21,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::os::libc::{__assert_fail, gettext, memcpy, memmove, sscanf};
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::profile::{prof_input_end, prof_input_start};
-use crate::src::nvim::state::get_real_state;
+use crate::src::nvim::state::{MODE_INSERT, get_real_state};
 pub use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
@@ -157,26 +157,6 @@ pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
 pub const NUM_EVENTS: auto_event = 145;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_26 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_26 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_26 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_26 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_26 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_26 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_26 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_26 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_26 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_26 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_26 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_26 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_26 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_26 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_26 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_26 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_26 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_26 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_26 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_26 = 1;
 pub const KE_WILD: key_extra = 108;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_LUA: key_extra = 103;
@@ -416,7 +396,7 @@ pub unsafe extern "C" fn input_stop() {
     rstream_may_close(read_stream.ptr());
 }
 unsafe extern "C" fn cursorhold_event(mut _argv: *mut *mut ::core::ffi::c_void) {
-    let mut event: event_T = (if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 {
+    let mut event: event_T = (if State.get() & MODE_INSERT != 0 {
         EVENT_CURSORHOLDI as ::core::ffi::c_int
     } else {
         EVENT_CURSORHOLD as ::core::ffi::c_int

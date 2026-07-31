@@ -46,10 +46,10 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memory::{xfree, xstrdup};
 use crate::src::nvim::message::{may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::src::nvim::normal::{
-    CA_COMMAND_BUSY, MOD_MASK_SHIFT, MODE_INSERT, MODE_NORMAL, MODE_NORMAL_BUSY, NUL, NV_NCH,
-    NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS, NormalState, OP_NOP, SHM_FILEINFO, UPD_INVERTED,
-    check_scrollbind, clearop, clearopbeep, current_oap, end_visual_mode, false_0, find_command,
-    normal_execute, nv_cmds, true_0, unshift_special,
+    CA_COMMAND_BUSY, MOD_MASK_SHIFT, NUL, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS,
+    NormalState, OP_NOP, SHM_FILEINFO, UPD_INVERTED, check_scrollbind, clearop, clearopbeep,
+    current_oap, end_visual_mode, false_0, find_command, normal_execute, nv_cmds, true_0,
+    unshift_special,
 };
 use crate::src::nvim::option::shortmess;
 use crate::src::nvim::options::kOptFdoFlagAll;
@@ -57,7 +57,8 @@ use crate::src::nvim::os::libc::time;
 use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::profile::{time_finish, time_msg};
 use crate::src::nvim::state::{
-    may_trigger_modechanged, may_trigger_safestate, state_enter, state_no_longer_safe,
+    MODE_INSERT, MODE_NORMAL, MODE_NORMAL_BUSY, may_trigger_modechanged, may_trigger_safestate,
+    state_enter, state_no_longer_safe,
 };
 use crate::src::nvim::terminal::terminal_check_refresh;
 use crate::src::nvim::types::{VimState, cmdarg_T, int64_t, oparg_T};
@@ -190,7 +191,7 @@ pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
         }
 
         (*s).mapped_len = typebuf_maplen();
-        State.set(MODE_NORMAL_BUSY as c_int);
+        State.set(MODE_NORMAL_BUSY);
         if (*s).toplevel && readbuf1_empty() {
             set_vcount_ca(&raw mut (*s).ca, &mut (*s).set_prevcount);
         }
@@ -292,7 +293,7 @@ pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> boo
 pub(crate) fn normal_redraw_mode_message() {
     let save_state = State.get();
     if restart_edit.get() != 0 {
-        State.set(MODE_INSERT as c_int);
+        State.set(MODE_INSERT);
     }
     // SAFETY: `keep_msg` is null or an owned string; the copy is what makes
     // it safe to pass to `msg`, which may free the global.
@@ -354,7 +355,7 @@ unsafe fn normal_check_interrupt(s: *mut NormalState) {
         if (*s).noexmode && global_busy.get() != 0 && !exmode_active.get() && (*s).previous_got_int
         {
             exmode_active.set(true);
-            State.set(MODE_NORMAL as c_int);
+            State.set(MODE_NORMAL);
         } else if global_busy.get() == 0 || !exmode_active.get() {
             if !quit_more.get() {
                 vgetc();

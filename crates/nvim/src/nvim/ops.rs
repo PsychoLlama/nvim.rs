@@ -73,7 +73,7 @@ use crate::src::nvim::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,
     shift_delete_registers, valid_yank_reg,
 };
-use crate::src::nvim::state::virtual_active;
+use crate::src::nvim::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr};
 use crate::src::nvim::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
 pub use crate::src::nvim::types::{
@@ -248,26 +248,6 @@ pub const BL_FIX: C2Rust_Unnamed_26 = 4;
 pub const BL_SOL: C2Rust_Unnamed_26 = 2;
 pub const BL_WHITE: C2Rust_Unnamed_26 = 1;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const MODE_SHOWMATCH: C2Rust_Unnamed_27 = 24592;
-pub const MODE_EXTERNCMD: C2Rust_Unnamed_27 = 20480;
-pub const MODE_SETWSIZE: C2Rust_Unnamed_27 = 16384;
-pub const MODE_ASKMORE: C2Rust_Unnamed_27 = 12288;
-pub const MODE_HITRETURN: C2Rust_Unnamed_27 = 8193;
-pub const MODE_NORMAL_BUSY: C2Rust_Unnamed_27 = 4097;
-pub const MODE_LREPLACE: C2Rust_Unnamed_27 = 288;
-pub const MODE_VREPLACE: C2Rust_Unnamed_27 = 784;
-pub const VREPLACE_FLAG: C2Rust_Unnamed_27 = 512;
-pub const MODE_REPLACE: C2Rust_Unnamed_27 = 272;
-pub const REPLACE_FLAG: C2Rust_Unnamed_27 = 256;
-pub const MAP_ALL_MODES: C2Rust_Unnamed_27 = 255;
-pub const MODE_TERMINAL: C2Rust_Unnamed_27 = 128;
-pub const MODE_SELECT: C2Rust_Unnamed_27 = 64;
-pub const MODE_LANGMAP: C2Rust_Unnamed_27 = 32;
-pub const MODE_INSERT: C2Rust_Unnamed_27 = 16;
-pub const MODE_CMDLINE: C2Rust_Unnamed_27 = 8;
-pub const MODE_OP_PENDING: C2Rust_Unnamed_27 = 4;
-pub const MODE_VISUAL: C2Rust_Unnamed_27 = 2;
-pub const MODE_NORMAL: C2Rust_Unnamed_27 = 1;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub const SIN_NOMARK: C2Rust_Unnamed_28 = 8;
 pub const SIN_UNDO: C2Rust_Unnamed_28 = 4;
@@ -880,7 +860,7 @@ pub unsafe extern "C" fn shift_line(
     } else {
         count = get_new_vts_indent(left, round, amount, vts_array);
     }
-    if State.get() & VREPLACE_FLAG as ::core::ffi::c_int != 0 {
+    if State.get() & VREPLACE_FLAG != 0 {
         change_indent(
             INDENT_SET as ::core::ffi::c_int,
             crate::src::nvim::math::trim_to_int(count),
@@ -924,7 +904,7 @@ unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi:
     let mut incr: ::core::ffi::c_int = 0;
     let old_p_ri: ::core::ffi::c_int = p_ri.get();
     p_ri.set(0 as ::core::ffi::c_int);
-    State.set(MODE_INSERT as ::core::ffi::c_int);
+    State.set(MODE_INSERT);
     block_prep(oap, &raw mut bd, (*curwin.get()).w_cursor.lnum, true_0 != 0);
     if bd.is_short != 0 {
         return;
@@ -1215,7 +1195,7 @@ unsafe extern "C" fn block_insert(
     let mut newp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut oldp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut oldstate: ::core::ffi::c_int = State.get();
-    State.set(MODE_INSERT as ::core::ffi::c_int);
+    State.set(MODE_INSERT);
     let mut lnum: linenr_T = (*oap).start.lnum + 1 as linenr_T;
     while lnum <= (*oap).end.lnum {
         block_prep(oap, bdp, lnum, true_0 != 0);
@@ -1748,7 +1728,7 @@ unsafe extern "C" fn pbyte(mut lp: pos_T, mut c: ::core::ffi::c_int) {
 }
 unsafe extern "C" fn replace_character(mut c: ::core::ffi::c_int) {
     let n: ::core::ffi::c_int = State.get();
-    State.set(MODE_REPLACE as ::core::ffi::c_int);
+    State.set(MODE_REPLACE);
     ins_char(c);
     State.set(n);
     dec_cursor();
@@ -2592,7 +2572,7 @@ pub unsafe extern "C" fn adjust_cursor_eol() {
             == 0 as ::core::ffi::c_uint
         && cur_ve_flags & kOptVeFlagAll as ::core::ffi::c_int as ::core::ffi::c_uint
             == 0 as ::core::ffi::c_uint
-        && !(restart_edit.get() != 0 || State.get() & MODE_INSERT as ::core::ffi::c_int != 0);
+        && !(restart_edit.get() != 0 || State.get() & MODE_INSERT != 0);
     if !adj_cursor {
         return;
     }

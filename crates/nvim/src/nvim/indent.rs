@@ -34,6 +34,7 @@ pub mod tabstop;
 
 // Split out for size. The names below are what the rest of the tree calls,
 // and it calls them as `indent::*`.
+use crate::src::nvim::state::MODE_INSERT;
 pub use breakindent::{briopt_check, get_breakindent_win};
 pub use edit::{
     change_indent, copy_indent, ex_retab, inindent, ins_try_si, may_do_si, op_reindent,
@@ -61,9 +62,6 @@ const kOptIndentexpr: OptIndex = 148;
 const kOptValTypeString: OptValType = 2;
 const kOptVartabstop: OptIndex = 338;
 const MAXCOL: ::core::ffi::c_int = 2147483647;
-const MODE_INSERT: ::core::ffi::c_int = 16;
-const REPLACE_FLAG: ::core::ffi::c_int = 256;
-const VREPLACE_FLAG: ::core::ffi::c_int = 512;
 const NUL: ::core::ffi::c_int = 0;
 const TAB: ::core::ffi::c_int = 9;
 const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -666,7 +664,7 @@ pub unsafe extern "C" fn get_number_indent(mut lnum: linenr_T) -> ::core::ffi::c
         return -1 as ::core::ffi::c_int;
     }
     pos.lnum = 0 as ::core::ffi::c_int as linenr_T;
-    if State.get() & MODE_INSERT as ::core::ffi::c_int != 0 || has_format_option(FO_Q_COMS) {
+    if State.get() & MODE_INSERT != 0 || has_format_option(FO_Q_COMS) {
         lead_len = get_leader_len(
             ml_get(lnum),
             ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
