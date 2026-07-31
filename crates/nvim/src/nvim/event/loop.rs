@@ -54,7 +54,7 @@ pub unsafe fn loop_init(uv_loop: *mut Loop) {
     (*uv_loop).recursive = 0;
     (*uv_loop).closing = false;
     (*uv_loop).uv.data = uv_loop.cast();
-    (*uv_loop).children = Box::into_raw(Box::new(Vec::<*mut Proc>::new())).cast();
+    (*uv_loop).children = Box::into_raw(Box::new(Vec::<*mut Proc>::new()));
     (*uv_loop).events = multiqueue_new(Some(loop_on_put), uv_loop.cast());
     (*uv_loop).fast_events = multiqueue_new_child((*uv_loop).events);
     (*uv_loop).thread_events = multiqueue_new(None, ptr::null_mut());
@@ -135,11 +135,10 @@ pub unsafe fn loop_close(uv_loop: *mut Loop, wait: bool) -> bool {
 
 /// The list of job-control children.
 ///
-/// Kept behind a `*mut c_void` in the `repr(C)` `Loop` so the struct stays
-/// FFI-safe for the extern blocks that name it. Callers take a momentary
-/// borrow: closing a child's handles re-enters this list.
+/// Handed out as a pointer, not a borrow: closing a child's handles re-enters
+/// this list, so callers take a momentary borrow around each access.
 pub unsafe fn loop_children(uv_loop: *mut Loop) -> *mut Vec<*mut Proc> {
-    (*uv_loop).children.cast()
+    (*uv_loop).children
 }
 
 /// Close every handle libuv still knows about, so `uv_loop_close` can succeed.

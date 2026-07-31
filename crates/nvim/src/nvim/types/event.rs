@@ -49,9 +49,9 @@ pub struct loop_0 {
     pub events: *mut MultiQueue,
     pub thread_events: *mut MultiQueue,
     pub fast_events: *mut MultiQueue,
-    /// The job-control children: a `Box<Vec<*mut Proc>>`, behind a
-    /// `*mut c_void` so `Loop` stays FFI-safe. See `event/loop.rs`.
-    pub children: *mut ::core::ffi::c_void,
+    /// The job-control children. Owned: a `Box<Vec<*mut Proc>>` that
+    /// `loop_init` leaves here and `loop_close` takes back.
+    pub children: *mut Vec<*mut Proc>,
     pub children_watcher: uv_signal_t,
     pub children_kill_timer: uv_timer_t,
     pub poll_timer: uv_timer_t,

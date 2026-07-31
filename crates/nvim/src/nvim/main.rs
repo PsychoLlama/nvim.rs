@@ -10,7 +10,7 @@ use crate::src::nvim::types::{
     DecorSignHighlight, DecorState, DecorState_ranges_i, DecorState_slots, ErrorType, FILE,
     GridView, ListLenSpecials, Loop, LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int,
     Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash, MarkTreeIter, MarkTreeIter_s, MultiQueue, NS,
-    Object, OptInt, OptValType, RgbValue, ScreenGrid, Set_String, Set_int, Set_uint32_t,
+    Object, OptInt, OptValType, Proc, RgbValue, ScreenGrid, Set_String, Set_int, Set_uint32_t,
     Set_uint64_t, StlClickDefinition, String_0, TriState, VarLockStatus, VarType, VimVarIndex,
     WinExtmark, XDGVarType, alist_T, aucmdwin_T, auto_event, bln_values, buf_T, bufref_T,
     caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T, estack_T_es_info, etype_T, evalarg_T,
@@ -1967,7 +1967,7 @@ pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
     events: ::core::ptr::null_mut::<MultiQueue>(),
     thread_events: ::core::ptr::null_mut::<MultiQueue>(),
     fast_events: ::core::ptr::null_mut::<MultiQueue>(),
-    children: ::core::ptr::null_mut::<c_void>(),
+    children: ::core::ptr::null_mut::<Vec<*mut Proc>>(),
     children_watcher: uv_signal_t {
         data: ::core::ptr::null_mut::<c_void>(),
         loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
