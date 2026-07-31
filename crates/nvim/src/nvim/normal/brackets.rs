@@ -9,16 +9,17 @@ use crate::src::nvim::cursor::{dec_cursor, gchar_cursor, inc_cursor};
 use crate::src::nvim::diff::diff_move_to;
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::fold::foldMoveTo;
+use crate::src::nvim::keycodes::{K_LEFTMOUSE, K_RIGHTRELEASE};
 use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::src::nvim::memory::{xfree, xmemdupz};
 use crate::src::nvim::mouse::do_mouse;
 use crate::src::nvim::normal::{
     _ISlower, _ISupper, ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, BL_FIX, BL_WHITE, FIND_ANY,
-    FIND_DEFINE, FIND_IDENT, FM_BACKWARD, FM_FORWARD, KE_LEFTMOUSE, KE_RIGHTRELEASE, OP_NOP,
-    PUT_FIXINDENT, SMT_ALL, SMT_BAD, SMT_RARE, clearop, clearopbeep, false_0,
-    find_ident_under_cursor, kDirectionNotSet, kMTCharWise, kMarkBeginLine, kMarkContext,
-    may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt, true_0,
+    FIND_DEFINE, FIND_IDENT, FM_BACKWARD, FM_FORWARD, OP_NOP, PUT_FIXINDENT, SMT_ALL, SMT_BAD,
+    SMT_RARE, clearop, clearopbeep, false_0, find_ident_under_cursor, kDirectionNotSet,
+    kMTCharWise, kMarkBeginLine, kMarkContext, may_fold_open, nv_gotofile, nv_mark_move_to,
+    nv_put_opt, true_0,
 };
 use crate::src::nvim::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
 use crate::src::nvim::os::libc::__ctype_b_loc;
@@ -31,8 +32,6 @@ use crate::src::nvim::types::{MarkMove, cmdarg_T, linenr_T, pos_T, smt_T};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// The mouse keys `[` and `]` accept, which are one contiguous run.
-const K_LEFTMOUSE: c_int = -(253 + ((KE_LEFTMOUSE as c_int) << 8));
-const K_RIGHTRELEASE: c_int = -(253 + ((KE_RIGHTRELEASE as c_int) << 8));
 
 /// Which way a `[` or `]` command searches.
 unsafe fn direction(cap: *mut cmdarg_T) -> c_int {

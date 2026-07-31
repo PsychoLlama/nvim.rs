@@ -5,7 +5,7 @@ use crate::src::nvim::eval::last_set_msg;
 use crate::src::nvim::ex_docmd::{do_cmdline, ends_excmd};
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::keycodes::replace_termcodes;
+use crate::src::nvim::keycodes::{K_SPECIAL, replace_termcodes};
 use crate::src::nvim::lua::executor::{
     api_free_luaref, api_new_luaref, nlua_do_ucmd, nlua_funcref_str, nlua_set_sctx,
 };
@@ -921,7 +921,6 @@ pub const EX_ZEROR: ::core::ffi::c_uint = 0x1000 as ::core::ffi::c_uint;
 pub const EX_BUFNAME: ::core::ffi::c_uint = 0x8000 as ::core::ffi::c_uint;
 pub const EX_KEEPSCRIPT: ::core::ffi::c_uint = 0x4000000 as ::core::ffi::c_uint;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
 pub static ucmds: GlobalCell<garray_T> = GlobalCell::new(garray_T {

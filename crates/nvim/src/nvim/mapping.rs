@@ -21,7 +21,8 @@ use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_grow, ga_init}
 use crate::src::nvim::getchar::{ins_typebuf, noremap_keys};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::keycodes::{
-    get_special_key_name, replace_termcodes, vim_strsave_escape_ks, vim_unescape_ks,
+    K_SPECIAL, K_ZERO, get_special_key_name, replace_termcodes, vim_strsave_escape_ks,
+    vim_unescape_ks,
 };
 use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{
@@ -1065,15 +1066,12 @@ pub const Ctrl_RSB: ::core::ffi::c_int = 29 as ::core::ffi::c_int;
 pub const CPO_BSLASH: ::core::ffi::c_int = 'B' as ::core::ffi::c_int;
 pub const MAX_MAPHASH: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
 pub const FC_LUAREF: ::core::ffi::c_int = 0x800 as ::core::ffi::c_int;
-pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int =
-    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 static first_abbr: GlobalCell<*mut mapblock_T> =
     GlobalCell::new(::core::ptr::null_mut::<mapblock_T>());
 static maphash: GlobalCell<[*mut mapblock_T; 256]> = GlobalCell::new([

@@ -720,7 +720,6 @@ static nfa_regengine: GlobalCell<regengine_T> = GlobalCell::new(regengine {
 static regexp_engine: GlobalCell<c_int> = GlobalCell::new(0);
 pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
-pub const K_SPECIAL: c_int = 0x80 as c_int;
 pub const GRAPHEME_STATE_INIT: c_int = 0;
 pub const MAX_MCO: c_int = 6;
 pub const CPO_LITERAL: c_int = 'l' as c_int;

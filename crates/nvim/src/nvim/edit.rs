@@ -64,7 +64,16 @@ use crate::src::nvim::insexpand::{
     ins_compl_prep, ins_compl_used_match, ins_compl_win_active, ins_complete, ins_ctrl_x,
     pum_wanted,
 };
-use crate::src::nvim::keycodes::{add_char2buf, get_special_key_name};
+use crate::src::nvim::keycodes::{
+    K_BS, K_COMMAND, K_DEL, K_DOWN, K_END, K_F1, K_HELP, K_HOME, K_INS, K_KDEL, K_KEND, K_KENTER,
+    K_KHOME, K_KINS, K_KPAGEDOWN, K_KPAGEUP, K_LEFT, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTMOUSE_NM,
+    K_LEFTRELEASE, K_LEFTRELEASE_NM, K_LUA, K_MIDDLEDRAG, K_MIDDLEMOUSE, K_MIDDLERELEASE,
+    K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP, K_PAGEDOWN, K_PAGEUP,
+    K_PASTE_START, K_RIGHT, K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_S_DOWN, K_S_END, K_S_HOME,
+    K_S_LEFT, K_S_RIGHT, K_S_TAB, K_S_UP, K_SELECT, K_SPECIAL, K_UP, K_X1DRAG, K_X1MOUSE,
+    K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE, K_XF1, K_ZERO, add_char2buf,
+    get_special_key_name,
+};
 use crate::src::nvim::main::{
     Insstart, Insstart_orig, KeyStuffed, KeyTyped, RedrawingDisabled, State, VIsual_active, ai_col,
     allow_keys, arrow_used, can_si, can_si_back, clear_cmdline, cmdmod, cmdwin_result, cmdwin_type,
@@ -4823,72 +4832,8 @@ pub unsafe extern "C" fn ins_apply_autocmds(mut event: event_T) -> ::core::ffi::
     }
     return r;
 }
-pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int = -22783;
-pub const K_UP: ::core::ffi::c_int = -30059;
-pub const K_DOWN: ::core::ffi::c_int = -25707;
-pub const K_LEFT: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_RIGHT: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_S_UP: ::core::ffi::c_int = -1277;
-pub const K_S_DOWN: ::core::ffi::c_int = -1533;
-pub const K_S_LEFT: ::core::ffi::c_int =
-    -('#' as ::core::ffi::c_int + (('4' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_S_RIGHT: ::core::ffi::c_int =
-    -('%' as ::core::ffi::c_int + (('i' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_S_HOME: ::core::ffi::c_int = -12835;
-pub const K_S_END: ::core::ffi::c_int = -14122;
-pub const K_S_TAB: ::core::ffi::c_int = -17003;
-pub const K_XF1: ::core::ffi::c_int = -14845;
-pub const K_F1: ::core::ffi::c_int = -12651;
-pub const K_HELP: ::core::ffi::c_int =
-    -('%' as ::core::ffi::c_int + (('1' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_BS: ::core::ffi::c_int = -25195;
-pub const K_INS: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('I' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KINS: ::core::ffi::c_int = -20477;
-pub const K_DEL: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('D' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KDEL: ::core::ffi::c_int = -20733;
-pub const K_HOME: ::core::ffi::c_int = -26731;
-pub const K_KHOME: ::core::ffi::c_int = -12619;
-pub const K_END: ::core::ffi::c_int = -14144;
-pub const K_KEND: ::core::ffi::c_int = -13387;
-pub const K_PAGEUP: ::core::ffi::c_int = -20587;
-pub const K_PAGEDOWN: ::core::ffi::c_int = -20075;
-pub const K_KPAGEUP: ::core::ffi::c_int = -13131;
-pub const K_KPAGEDOWN: ::core::ffi::c_int = -13643;
-pub const K_KENTER: ::core::ffi::c_int =
-    -('K' as ::core::ffi::c_int + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_PASTE_START: ::core::ffi::c_int = -21328;
-pub const K_SELECT: ::core::ffi::c_int = -22773;
-pub const K_LEFTMOUSE: ::core::ffi::c_int = -11517;
-pub const K_LEFTMOUSE_NM: ::core::ffi::c_int = -17917;
-pub const K_LEFTDRAG: ::core::ffi::c_int = -11773;
-pub const K_LEFTRELEASE: ::core::ffi::c_int = -12029;
-pub const K_LEFTRELEASE_NM: ::core::ffi::c_int = -18173;
-pub const K_MOUSEMOVE: ::core::ffi::c_int = -25853;
-pub const K_MIDDLEMOUSE: ::core::ffi::c_int = -12285;
-pub const K_MIDDLEDRAG: ::core::ffi::c_int = -12541;
-pub const K_MIDDLERELEASE: ::core::ffi::c_int = -12797;
-pub const K_RIGHTMOUSE: ::core::ffi::c_int = -13053;
-pub const K_RIGHTDRAG: ::core::ffi::c_int = -13309;
-pub const K_RIGHTRELEASE: ::core::ffi::c_int = -13565;
-pub const K_X1MOUSE: ::core::ffi::c_int = -23037;
-pub const K_X1DRAG: ::core::ffi::c_int = -23293;
-pub const K_X1RELEASE: ::core::ffi::c_int = -23549;
-pub const K_X2MOUSE: ::core::ffi::c_int = -23805;
-pub const K_X2DRAG: ::core::ffi::c_int = -24061;
-pub const K_X2RELEASE: ::core::ffi::c_int = -24317;
-pub const K_MOUSEDOWN: ::core::ffi::c_int = -19453;
-pub const K_MOUSEUP: ::core::ffi::c_int = -19709;
-pub const K_MOUSELEFT: ::core::ffi::c_int = -19965;
-pub const K_MOUSERIGHT: ::core::ffi::c_int = -20221;
-pub const K_COMMAND: ::core::ffi::c_int = -26877;
-pub const K_LUA: ::core::ffi::c_int = -26621;
 pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const MOD_MASK_CMD: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;

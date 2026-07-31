@@ -1600,6 +1600,90 @@ pub unsafe extern "C" fn vim_unescape_ks(mut p: *mut ::core::ffi::c_char) {
 pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
+
+/// The editor's keycode for one of the "extra" keys — everything with no
+/// termcap name of its own, which is most of what a modern terminal sends.
+const fn extra(ke: key_extra) -> ::core::ffi::c_int {
+    -(KS_EXTRA + ((ke as ::core::ffi::c_int) << 8))
+}
+
+/// The editor's keycode for a two-character termcap key name.
+const fn termcap(first: u8, second: u8) -> ::core::ffi::c_int {
+    -((first as ::core::ffi::c_int) + ((second as ::core::ffi::c_int) << 8))
+}
+
+/// Keycodes derived from a key's `KE_*`/termcap name, the way C's
+/// `K_*` macros spell them.  (The names above predate these and still
+/// carry the folded arithmetic.)
+pub const K_COMMAND: ::core::ffi::c_int = extra(KE_COMMAND);
+pub const K_C_END: ::core::ffi::c_int = extra(KE_C_END);
+pub const K_C_HOME: ::core::ffi::c_int = extra(KE_C_HOME);
+pub const K_C_LEFT: ::core::ffi::c_int = extra(KE_C_LEFT);
+pub const K_C_RIGHT: ::core::ffi::c_int = extra(KE_C_RIGHT);
+pub const K_EVENT: ::core::ffi::c_int = extra(KE_EVENT);
+pub const K_IGNORE: ::core::ffi::c_int = extra(KE_IGNORE);
+pub const K_KDEL: ::core::ffi::c_int = extra(KE_KDEL);
+pub const K_KINS: ::core::ffi::c_int = extra(KE_KINS);
+pub const K_LEFTDRAG: ::core::ffi::c_int = extra(KE_LEFTDRAG);
+pub const K_LEFTMOUSE: ::core::ffi::c_int = extra(KE_LEFTMOUSE);
+pub const K_LEFTRELEASE: ::core::ffi::c_int = extra(KE_LEFTRELEASE);
+pub const K_LUA: ::core::ffi::c_int = extra(KE_LUA);
+pub const K_MIDDLEDRAG: ::core::ffi::c_int = extra(KE_MIDDLEDRAG);
+pub const K_MIDDLEMOUSE: ::core::ffi::c_int = extra(KE_MIDDLEMOUSE);
+pub const K_MIDDLERELEASE: ::core::ffi::c_int = extra(KE_MIDDLERELEASE);
+pub const K_MOUSEDOWN: ::core::ffi::c_int = extra(KE_MOUSEDOWN);
+pub const K_MOUSELEFT: ::core::ffi::c_int = extra(KE_MOUSELEFT);
+pub const K_MOUSEMOVE: ::core::ffi::c_int = extra(KE_MOUSEMOVE);
+pub const K_MOUSERIGHT: ::core::ffi::c_int = extra(KE_MOUSERIGHT);
+pub const K_MOUSEUP: ::core::ffi::c_int = extra(KE_MOUSEUP);
+pub const K_NOP: ::core::ffi::c_int = extra(KE_NOP);
+pub const K_RIGHTDRAG: ::core::ffi::c_int = extra(KE_RIGHTDRAG);
+pub const K_RIGHTMOUSE: ::core::ffi::c_int = extra(KE_RIGHTMOUSE);
+pub const K_RIGHTRELEASE: ::core::ffi::c_int = extra(KE_RIGHTRELEASE);
+pub const K_S_DOWN: ::core::ffi::c_int = extra(KE_S_DOWN);
+pub const K_S_F1: ::core::ffi::c_int = extra(KE_S_F1);
+pub const K_S_F10: ::core::ffi::c_int = extra(KE_S_F10);
+pub const K_S_F11: ::core::ffi::c_int = extra(KE_S_F11);
+pub const K_S_F12: ::core::ffi::c_int = extra(KE_S_F12);
+pub const K_S_F2: ::core::ffi::c_int = extra(KE_S_F2);
+pub const K_S_F3: ::core::ffi::c_int = extra(KE_S_F3);
+pub const K_S_F4: ::core::ffi::c_int = extra(KE_S_F4);
+pub const K_S_F5: ::core::ffi::c_int = extra(KE_S_F5);
+pub const K_S_F6: ::core::ffi::c_int = extra(KE_S_F6);
+pub const K_S_F7: ::core::ffi::c_int = extra(KE_S_F7);
+pub const K_S_F8: ::core::ffi::c_int = extra(KE_S_F8);
+pub const K_S_F9: ::core::ffi::c_int = extra(KE_S_F9);
+pub const K_X1DRAG: ::core::ffi::c_int = extra(KE_X1DRAG);
+pub const K_X1MOUSE: ::core::ffi::c_int = extra(KE_X1MOUSE);
+pub const K_X1RELEASE: ::core::ffi::c_int = extra(KE_X1RELEASE);
+pub const K_X2DRAG: ::core::ffi::c_int = extra(KE_X2DRAG);
+pub const K_X2MOUSE: ::core::ffi::c_int = extra(KE_X2MOUSE);
+pub const K_X2RELEASE: ::core::ffi::c_int = extra(KE_X2RELEASE);
+pub const K_PASTE_START: ::core::ffi::c_int = termcap(b'P', b'S');
+pub const K_S_END: ::core::ffi::c_int = termcap(b'*', b'7');
+pub const K_S_HOME: ::core::ffi::c_int = termcap(b'#', b'2');
+pub const K_S_LEFT: ::core::ffi::c_int = termcap(b'#', b'4');
+pub const K_S_RIGHT: ::core::ffi::c_int = termcap(b'%', b'i');
+pub const K_HOR_SCROLLBAR: ::core::ffi::c_int =
+    -(248 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_LEFTMOUSE_NM: ::core::ffi::c_int = -17917;
+pub const K_LEFTRELEASE_NM: ::core::ffi::c_int = -18173;
+pub const K_PASTE_END: ::core::ffi::c_int =
+    -('P' as ::core::ffi::c_int + (('E' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_SELECT: ::core::ffi::c_int =
+    -(245 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_S_UP: ::core::ffi::c_int = -1277;
+pub const K_VER_SCROLLBAR: ::core::ffi::c_int =
+    -(249 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
+pub const K_XDOWN: ::core::ffi::c_int = -17149;
+pub const K_XEND: ::core::ffi::c_int = -15869;
+pub const K_XF1: ::core::ffi::c_int = -14845;
+pub const K_XHOME: ::core::ffi::c_int = -16381;
+pub const K_XLEFT: ::core::ffi::c_int = -17405;
+pub const K_XRIGHT: ::core::ffi::c_int = -17661;
+pub const K_XUP: ::core::ffi::c_int = -16893;
+pub const K_ZEND: ::core::ffi::c_int = -16125;
+pub const K_ZHOME: ::core::ffi::c_int = -16637;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const KS_KEY: ::core::ffi::c_int = 242 as ::core::ffi::c_int;
 pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;

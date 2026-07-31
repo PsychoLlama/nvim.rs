@@ -48,6 +48,9 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::syn_name2attr;
 use crate::src::nvim::indent::{get_indent, inindent};
 use crate::src::nvim::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
+use crate::src::nvim::keycodes::{
+    K_BS, K_DOWN, K_KENTER, K_KPAGEDOWN, K_KPAGEUP, K_PAGEDOWN, K_PAGEUP, K_S_TAB, K_SELECT, K_UP,
+};
 use crate::src::nvim::lua::executor::nlua_expand_pat;
 use crate::src::nvim::main::{
     IObuff, KeyTyped, RedrawingDisabled, State, arrow_used, can_si, can_si_back, cmdwin_type,
@@ -8043,25 +8046,6 @@ pub unsafe extern "C" fn f_preinserted(
         (*rettv).vval.v_number = 1 as varnumber_T;
     }
 }
-pub const K_UP: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_DOWN: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_S_TAB: ::core::ffi::c_int = -17003;
-pub const K_BS: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('b' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_PAGEUP: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('P' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_PAGEDOWN: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPAGEUP: ::core::ffi::c_int =
-    -('K' as ::core::ffi::c_int + (('3' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KPAGEDOWN: ::core::ffi::c_int =
-    -('K' as ::core::ffi::c_int + (('5' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KENTER: ::core::ffi::c_int =
-    -('K' as ::core::ffi::c_int + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_SELECT: ::core::ffi::c_int =
-    -(245 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

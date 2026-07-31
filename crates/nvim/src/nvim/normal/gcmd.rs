@@ -19,13 +19,10 @@ use crate::src::nvim::memline::goto_byte;
 use crate::src::nvim::message::show_sb_text;
 use crate::src::nvim::mouse::do_mouse;
 use crate::src::nvim::normal::{
-    Ctrl_H, K_END, K_KEND, KE_IGNORE, KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_MIDDLEDRAG,
-    KE_MIDDLEMOUSE, KE_MIDDLERELEASE, KE_MOUSEMOVE, KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE,
-    KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE, KE_X2DRAG, KE_X2MOUSE, KE_X2RELEASE, MAXCOL,
-    MOD_MASK_CTRL, NUL, OK, OP_NOP, VALID_WCOL, adjust_for_sel, check_text_locked, checkclearop,
-    checkclearopq, clearopbeep, false_0, invoke_edit, kMTCharWise, kMTLineWise, nv_Replace,
-    nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto, nv_gotofile, nv_gv_cmd, nv_ident, nv_join,
-    nv_operator, nv_pcmark, nv_put, nv_screengo, nv_visual, nv_vreplace, true_0,
+    Ctrl_H, MAXCOL, MOD_MASK_CTRL, NUL, OK, OP_NOP, VALID_WCOL, adjust_for_sel, check_text_locked,
+    checkclearop, checkclearopq, clearopbeep, false_0, invoke_edit, kMTCharWise, kMTLineWise,
+    nv_Replace, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto, nv_gotofile, nv_gv_cmd, nv_ident,
+    nv_join, nv_operator, nv_pcmark, nv_put, nv_screengo, nv_visual, nv_vreplace, true_0,
 };
 use crate::src::nvim::ops::cursor_pos_info;
 use crate::src::nvim::plines::{getvvcol, linetabsize};
@@ -37,31 +34,18 @@ use crate::src::nvim::undo::undo_time;
 use crate::src::nvim::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;
 
+use crate::src::nvim::keycodes::{
+    K_BS, K_DOWN, K_END, K_HOME, K_IGNORE, K_KEND, K_KHOME, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTRELEASE,
+    K_MIDDLEDRAG, K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEMOVE, K_RIGHTDRAG, K_RIGHTMOUSE,
+    K_RIGHTRELEASE, K_UP, K_X1DRAG, K_X1MOUSE, K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE,
+};
 use crate::src::nvim::r#move::{
     adjust_skipcol, sms_marker_overlap, update_curswant_force, validate_cheight, validate_virtcol,
     win_col_off, win_col_off2,
 };
-use crate::src::nvim::normal::{K_BS, K_DOWN, K_HOME, K_KHOME, K_UP};
 
 /// The mouse keys `g` accepts, which it re-sends as their CTRL-modified form.
-const K_LEFTMOUSE: c_int = -(253 + ((KE_LEFTMOUSE as c_int) << 8));
-const K_LEFTDRAG: c_int = -(253 + ((KE_LEFTDRAG as c_int) << 8));
-const K_LEFTRELEASE: c_int = -(253 + ((KE_LEFTRELEASE as c_int) << 8));
-const K_MOUSEMOVE: c_int = -(253 + ((KE_MOUSEMOVE as c_int) << 8));
-const K_MIDDLEMOUSE: c_int = -(253 + ((KE_MIDDLEMOUSE as c_int) << 8));
-const K_MIDDLEDRAG: c_int = -(253 + ((KE_MIDDLEDRAG as c_int) << 8));
-const K_MIDDLERELEASE: c_int = -(253 + ((KE_MIDDLERELEASE as c_int) << 8));
-const K_RIGHTMOUSE: c_int = -(253 + ((KE_RIGHTMOUSE as c_int) << 8));
-const K_RIGHTDRAG: c_int = -(253 + ((KE_RIGHTDRAG as c_int) << 8));
-const K_RIGHTRELEASE: c_int = -(253 + ((KE_RIGHTRELEASE as c_int) << 8));
-const K_X1MOUSE: c_int = -(253 + ((KE_X1MOUSE as c_int) << 8));
-const K_X1DRAG: c_int = -(253 + ((KE_X1DRAG as c_int) << 8));
-const K_X1RELEASE: c_int = -(253 + ((KE_X1RELEASE as c_int) << 8));
-const K_X2MOUSE: c_int = -(253 + ((KE_X2MOUSE as c_int) << 8));
-const K_X2DRAG: c_int = -(253 + ((KE_X2DRAG as c_int) << 8));
-const K_X2RELEASE: c_int = -(253 + ((KE_X2RELEASE as c_int) << 8));
 /// The key that means "nothing happened"; `g` swallows it.
-const K_IGNORE: c_int = -(253 + ((KE_IGNORE as c_int) << 8));
 
 // The non-printing bytes the tree dispatches on, spelled as the bytes a
 // pattern can name.

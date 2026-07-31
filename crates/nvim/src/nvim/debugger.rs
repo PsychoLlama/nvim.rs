@@ -9,6 +9,7 @@ use crate::src::nvim::fileio::file_pat_to_reg_pat;
 use crate::src::nvim::garray::{ga_clear, ga_grow};
 use crate::src::nvim::getchar::{restore_typeahead, save_typeahead};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::keycodes::K_SPECIAL;
 use crate::src::nvim::main::{
     NameBuff, RedrawingDisabled, Rows, State, cmd_silent, cmdline_row, curbuf, curwin,
     debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick, did_emsg,
@@ -1909,7 +1910,6 @@ pub unsafe extern "C" fn dbg_breakpoint(mut name: *mut ::core::ffi::c_char, mut 
     debug_breakpoint_name.set(name);
     debug_breakpoint_lnum.set(lnum);
 }
-pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

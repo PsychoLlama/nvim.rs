@@ -36,6 +36,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::hashtab::{hash_add, hash_find, hash_find_len, hash_init, hash_remove};
 use crate::src::nvim::insexpand::ins_compl_active;
+use crate::src::nvim::keycodes::K_SPECIAL;
 use crate::src::nvim::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
@@ -6451,7 +6452,6 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_basetv: ::core::ptr::null_mut::<typval_T>(),
     fe_found_var: false_0 != 0,
 };
-pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

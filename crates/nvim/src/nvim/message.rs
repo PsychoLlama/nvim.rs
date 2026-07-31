@@ -34,7 +34,9 @@ use crate::src::nvim::highlight::hl_combine_attr;
 use crate::src::nvim::highlight_group::{highlight_changed, syn_check_group, syn_id2attr};
 use crate::src::nvim::indent::tabstop_padding;
 use crate::src::nvim::input::{get_keystroke, prompt_for_input};
-use crate::src::nvim::keycodes::get_special_key_name;
+use crate::src::nvim::keycodes::{
+    K_BS, K_DOWN, K_EVENT, K_PAGEDOWN, K_PAGEUP, K_SPECIAL, K_UP, K_ZERO, get_special_key_name,
+};
 use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{
     Columns, IObuff, KeyTyped, Rows, State, allow_keys, called_emsg, capture_ga, clear_cmdline,
@@ -6278,21 +6280,10 @@ pub unsafe extern "C" fn msg_check_for_delay(mut check_msg_scroll: bool) {
 }
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
-pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int =
-    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_UP: ::core::ffi::c_int = -30059;
-pub const K_DOWN: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_BS: ::core::ffi::c_int = -25195;
-pub const K_PAGEUP: ::core::ffi::c_int = -20587;
-pub const K_PAGEDOWN: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('N' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_EVENT: ::core::ffi::c_int = -26365;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

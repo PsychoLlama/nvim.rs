@@ -22,7 +22,13 @@ use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat_len, ga_grow, ga_i
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::input::get_keystroke;
 use crate::src::nvim::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
-use crate::src::nvim::keycodes::special_to_buf;
+use crate::src::nvim::keycodes::{
+    K_DOWN, K_END, K_HOME, K_HOR_SCROLLBAR, K_K0, K_K1, K_K2, K_K3, K_K4, K_K5, K_K6, K_K7, K_K8,
+    K_K9, K_KCOMMA, K_KDIVIDE, K_KDOWN, K_KENTER, K_KEQUAL, K_KLEFT, K_KMINUS, K_KMULTIPLY,
+    K_KPLUS, K_KPOINT, K_KRIGHT, K_KUP, K_LEFT, K_PASTE_END, K_PASTE_START, K_RIGHT, K_S_END,
+    K_S_HOME, K_SPECIAL, K_UP, K_VER_SCROLLBAR, K_XDOWN, K_XEND, K_XHOME, K_XLEFT, K_XRIGHT, K_XUP,
+    K_ZEND, K_ZERO, K_ZHOME, special_to_buf,
+};
 use crate::src::nvim::kvec::_memcpy_free;
 use crate::src::nvim::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::src::nvim::main::{
@@ -4459,7 +4465,6 @@ pub unsafe extern "C" fn paste_repeat(mut count: ::core::ffi::c_int) {
     arena_mem_free(arena_finish(&raw mut arena));
     ga_clear(&raw mut ga);
 }
-pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
@@ -4467,62 +4472,6 @@ pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const K_SELECT_STRING: [::core::ffi::c_char; 4] =
     unsafe { ::core::mem::transmute::<[u8; 4], [::core::ffi::c_char; 4]>(*b"\x80\xF5X\0") };
 pub const KE_FILLER: ::core::ffi::c_int = 'X' as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int =
-    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_UP: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KUP: ::core::ffi::c_int = -30027;
-pub const K_DOWN: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KDOWN: ::core::ffi::c_int = -25675;
-pub const K_LEFT: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KLEFT: ::core::ffi::c_int = -27723;
-pub const K_RIGHT: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KRIGHT: ::core::ffi::c_int = -29259;
-pub const K_S_HOME: ::core::ffi::c_int =
-    -('#' as ::core::ffi::c_int + (('2' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_S_END: ::core::ffi::c_int =
-    -('*' as ::core::ffi::c_int + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_XUP: ::core::ffi::c_int = -16893;
-pub const K_XDOWN: ::core::ffi::c_int = -17149;
-pub const K_XLEFT: ::core::ffi::c_int = -17405;
-pub const K_XRIGHT: ::core::ffi::c_int = -17661;
-pub const K_HOME: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('h' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_XHOME: ::core::ffi::c_int = -16381;
-pub const K_ZHOME: ::core::ffi::c_int = -16637;
-pub const K_END: ::core::ffi::c_int =
-    -('@' as ::core::ffi::c_int + (('7' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_XEND: ::core::ffi::c_int = -15869;
-pub const K_ZEND: ::core::ffi::c_int = -16125;
-pub const K_KPLUS: ::core::ffi::c_int = -13899;
-pub const K_KMINUS: ::core::ffi::c_int = -14155;
-pub const K_KDIVIDE: ::core::ffi::c_int = -14411;
-pub const K_KMULTIPLY: ::core::ffi::c_int = -14667;
-pub const K_KENTER: ::core::ffi::c_int = -16715;
-pub const K_KPOINT: ::core::ffi::c_int = -16971;
-pub const K_PASTE_START: ::core::ffi::c_int =
-    -('P' as ::core::ffi::c_int + (('S' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_PASTE_END: ::core::ffi::c_int =
-    -('P' as ::core::ffi::c_int + (('E' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_K0: ::core::ffi::c_int = -17227;
-pub const K_K1: ::core::ffi::c_int = -17483;
-pub const K_K2: ::core::ffi::c_int = -17739;
-pub const K_K3: ::core::ffi::c_int = -17995;
-pub const K_K4: ::core::ffi::c_int = -18251;
-pub const K_K5: ::core::ffi::c_int = -18507;
-pub const K_K6: ::core::ffi::c_int = -18763;
-pub const K_K7: ::core::ffi::c_int = -19019;
-pub const K_K8: ::core::ffi::c_int = -19275;
-pub const K_K9: ::core::ffi::c_int = -19531;
-pub const K_KCOMMA: ::core::ffi::c_int = -19787;
-pub const K_KEQUAL: ::core::ffi::c_int = -20043;
-pub const K_VER_SCROLLBAR: ::core::ffi::c_int =
-    -(249 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_HOR_SCROLLBAR: ::core::ffi::c_int =
-    -(248 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const MOD_MASK_ALT: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;

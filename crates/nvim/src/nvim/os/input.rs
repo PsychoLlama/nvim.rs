@@ -11,7 +11,7 @@ use crate::src::nvim::event::rstream::{
 };
 use crate::src::nvim::getchar::{before_blocking, typebuf_changed};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::keycodes::trans_special;
+use crate::src::nvim::keycodes::{K_SPECIAL, trans_special};
 use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
 use crate::src::nvim::main::{
     Columns, Rows, State, ch_before_blocking_events, ctrl_c_interrupts, curbuf, current_ui,
@@ -259,7 +259,6 @@ pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const STDIN_FILENO: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;

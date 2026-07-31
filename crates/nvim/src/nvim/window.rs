@@ -49,6 +49,7 @@ use crate::src::nvim::grid::{
     grid_adjust, grid_assign_handle, grid_clear, grid_free, win_grid_alloc,
 };
 use crate::src::nvim::hashtab::hash_init;
+use crate::src::nvim::keycodes::{K_BS, K_DOWN, K_KENTER, K_LEFT, K_RIGHT, K_UP};
 use crate::src::nvim::main::aucmd_win_vec;
 use crate::src::nvim::main::{
     Columns, KeyStuffed, KeyTyped, RedrawingDisabled, Rows, State, VIsual_active, allow_keys,
@@ -1048,12 +1049,6 @@ pub const Ctrl_RSB: ::core::ffi::c_int = 29;
 pub const Ctrl_HAT: ::core::ffi::c_int = 30;
 pub const Ctrl__: ::core::ffi::c_int = 31;
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
-pub const K_UP: ::core::ffi::c_int = -30059;
-pub const K_DOWN: ::core::ffi::c_int = -25707;
-pub const K_LEFT: ::core::ffi::c_int = -27755;
-pub const K_RIGHT: ::core::ffi::c_int = -29291;
-pub const K_BS: ::core::ffi::c_int = -25195;
-pub const K_KENTER: ::core::ffi::c_int = -16715;
 pub const NOWIN: *mut win_T = -1 as ::core::ffi::c_int as *mut win_T;
 static e_cannot_close_last_window: GlobalCell<[::core::ffi::c_char; 31]> =
     GlobalCell::new(unsafe {

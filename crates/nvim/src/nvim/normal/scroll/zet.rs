@@ -19,9 +19,9 @@ use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::memline::ml_get_pos;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
-    BL_FIX, BL_WHITE, CAR, FAIL, FIND_IDENT, INT_MAX, K_DEL, K_LEFT, K_RIGHT, KE_KDEL, OK, OP_FOLD,
-    OP_NOP, SMT_ALL, SPELL_ADD_BAD, SPELL_ADD_GOOD, checkclearop, clearopbeep, false_0,
-    find_ident_under_cursor, get_visual_text, nv_operator, nv_put, read_command_char, true_0,
+    BL_FIX, BL_WHITE, CAR, FAIL, FIND_IDENT, INT_MAX, OK, OP_FOLD, OP_NOP, SMT_ALL, SPELL_ADD_BAD,
+    SPELL_ADD_GOOD, checkclearop, clearopbeep, false_0, find_ident_under_cursor, get_visual_text,
+    nv_operator, nv_put, read_command_char, true_0,
 };
 use crate::src::nvim::option::get_sidescrolloff_value;
 use crate::src::nvim::os::libc::gettext;
@@ -34,14 +34,12 @@ use crate::src::nvim::types::{OptInt, SpellAddType, cmdarg_T, colnr_T, int64_t, 
 use crate::src::nvim::window::{set_fraction, win_setheight};
 use core::ffi::{c_char, c_int};
 
+use crate::src::nvim::keycodes::{K_DEL, K_KDEL, K_KENTER, K_LEFT, K_RIGHT};
 use crate::src::nvim::r#move::{
     changed_window_setting, scroll_cursor_bot, scroll_cursor_halfway, scroll_cursor_top,
     validate_botline_win, win_col_off,
 };
-use crate::src::nvim::normal::K_KENTER;
 use crate::src::nvim::search::{BACKWARD, FORWARD};
-
-const K_KDEL: c_int = -(253 + ((KE_KDEL as c_int) << 8));
 
 /// Where the positioning commands put the cursor's line.
 #[derive(Copy, Clone)]

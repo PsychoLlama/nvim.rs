@@ -67,7 +67,6 @@ const TAB: c_int = 9;
 const NL: c_int = 10;
 const CAR: c_int = 13;
 const Ctrl_V: c_int = 22;
-const K_SPECIAL: c_int = 0x80;
 const KS_ZERO: c_int = 255;
 const KS_SPECIAL: c_int = 254;
 const EOL_MAC: c_int = 2;

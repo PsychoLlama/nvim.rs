@@ -44,6 +44,11 @@ mod operator;
 pub(crate) use self::operator::*;
 mod gcmd;
 pub use self::gcmd::*;
+use crate::src::nvim::keycodes::{
+    K_BS, K_DEL, K_DOWN, K_END, K_F1, K_HELP, K_HOME, K_INS, K_KEND, K_KHOME, K_KPAGEDOWN,
+    K_KPAGEUP, K_LEFT, K_PAGEDOWN, K_PAGEUP, K_PASTE_START, K_RIGHT, K_S_END, K_S_HOME, K_S_LEFT,
+    K_S_RIGHT, K_SELECT, K_UNDO, K_UP,
+};
 use crate::src::nvim::search::{BACKWARD, FORWARD};
 mod misc;
 pub(crate) use self::misc::*;
@@ -259,32 +264,6 @@ pub(crate) const CPO_CHANGEW: c_int = '_' as c_int;
 pub const VALID_WCOL: c_int = 0x2 as c_int;
 pub const VALID_CROW: c_int = 0x10 as c_int;
 pub const B_IMODE_LMAP: c_int = 1 as c_int;
-pub const K_ZERO: c_int = -(255 as c_int + (('X' as c_int) << 8 as c_int));
-pub const K_UP: c_int = -30059;
-pub const K_DOWN: c_int = -25707;
-pub const K_LEFT: c_int = -('k' as c_int + (('l' as c_int) << 8 as c_int));
-pub const K_RIGHT: c_int = -('k' as c_int + (('r' as c_int) << 8 as c_int));
-pub const K_S_LEFT: c_int = -('#' as c_int + (('4' as c_int) << 8 as c_int));
-pub const K_S_RIGHT: c_int = -('%' as c_int + (('i' as c_int) << 8 as c_int));
-pub const K_S_HOME: c_int = -('#' as c_int + (('2' as c_int) << 8 as c_int));
-pub const K_S_END: c_int = -('*' as c_int + (('7' as c_int) << 8 as c_int));
-pub const K_F1: c_int = -('k' as c_int + (('1' as c_int) << 8 as c_int));
-pub const K_HELP: c_int = -('%' as c_int + (('1' as c_int) << 8 as c_int));
-pub const K_UNDO: c_int = -('&' as c_int + (('8' as c_int) << 8 as c_int));
-pub const K_BS: c_int = -25195;
-pub const K_INS: c_int = -('k' as c_int + (('I' as c_int) << 8 as c_int));
-pub const K_DEL: c_int = -('k' as c_int + (('D' as c_int) << 8 as c_int));
-pub const K_HOME: c_int = -26731;
-pub const K_KHOME: c_int = -12619;
-pub const K_END: c_int = -('@' as c_int + (('7' as c_int) << 8 as c_int));
-pub const K_KEND: c_int = -('K' as c_int + (('4' as c_int) << 8 as c_int));
-pub const K_PAGEUP: c_int = -('k' as c_int + (('P' as c_int) << 8 as c_int));
-pub const K_PAGEDOWN: c_int = -('k' as c_int + (('N' as c_int) << 8 as c_int));
-pub const K_KPAGEUP: c_int = -('K' as c_int + (('3' as c_int) << 8 as c_int));
-pub const K_KPAGEDOWN: c_int = -('K' as c_int + (('5' as c_int) << 8 as c_int));
-pub const K_KENTER: c_int = -16715;
-pub const K_PASTE_START: c_int = -('P' as c_int + (('S' as c_int) << 8 as c_int));
-pub const K_SELECT: c_int = -(245 as c_int + (('X' as c_int) << 8 as c_int));
 pub const MOD_MASK_SHIFT: c_int = 0x2 as c_int;
 pub const MOD_MASK_CTRL: c_int = 0x4 as c_int;
 pub const GRAPHEME_STATE_INIT: c_int = 0 as c_int;

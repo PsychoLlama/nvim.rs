@@ -2,6 +2,7 @@ use crate::src::nvim::ex_getln::getcmdline_prompt;
 use crate::src::nvim::getchar::{fix_input_buffer, merge_modifiers};
 
 use crate::src::nvim::eval::typval::kCallbackNone;
+use crate::src::nvim::keycodes::{K_SPECIAL, K_ZERO};
 use crate::src::nvim::main::{
     IObuff, State, allow_keys, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask,
     msg_row, msg_scrolled, need_wait_return, no_mapping, no_wait_return,
@@ -476,10 +477,7 @@ pub unsafe extern "C" fn prompt_for_input(
     }
     return ret;
 }
-pub const K_SPECIAL: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
 pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int =
-    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

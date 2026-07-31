@@ -21,9 +21,9 @@ use super::{
     CT_CELL_MASK, EOL_MAC, MAXCOL, NL, NUL, TAB, chartab_initialized, g_chartab, kOptDyFlagUhex,
     vim_isprintc,
 };
+use crate::src::nvim::keycodes::K_SPECIAL;
 
 const CAR: c_int = 13;
-const K_SPECIAL: c_int = 0x80;
 const KS_ZERO: c_int = 255;
 const KS_SPECIAL: c_int = 254;
 

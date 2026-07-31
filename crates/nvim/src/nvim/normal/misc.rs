@@ -16,6 +16,7 @@ use crate::src::nvim::getchar::{
     getcmdkeycmd, map_execute_lua, paste_repeat, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff,
 };
 use crate::src::nvim::help::ex_help;
+use crate::src::nvim::keycodes::{K_COMMAND, K_IGNORE, K_LUA};
 use crate::src::nvim::main::{
     KeyTyped, VIsual_active, VIsual_select, clear_cmdline, cmdwin_result, cmdwin_type, curbuf,
     curwin, did_emsg, ex_normal_busy, finish_op, firstwin, got_int, may_garbage_collect,
@@ -24,9 +25,9 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memline::ml_get_len;
 use crate::src::nvim::message::{msg, msg_ext_set_trigger};
 use crate::src::nvim::normal::{
-    CA_COMMAND_BUSY, Ctrl_C, Ctrl_G, Ctrl_N, DOCMD_KEEPLINE, GETF_ALT, GETF_SETMARK, KE_COMMAND,
-    KE_IGNORE, KE_LUA, NUL, NULL, OP_NOP, checkclearop, checkclearopq, clearop, clearopbeep,
-    end_visual_mode, false_0, kMTCharWise, nv_left, nv_operator, nv_pcmark, true_0, v_visop,
+    CA_COMMAND_BUSY, Ctrl_C, Ctrl_G, Ctrl_N, DOCMD_KEEPLINE, GETF_ALT, GETF_SETMARK, NUL, NULL,
+    OP_NOP, checkclearop, checkclearopq, clearop, clearopbeep, end_visual_mode, false_0,
+    kMTCharWise, nv_left, nv_operator, nv_pcmark, true_0, v_visop,
 };
 use crate::src::nvim::options::kOptBoFlagEsc;
 use crate::src::nvim::os::libc::gettext;
@@ -39,11 +40,8 @@ use crate::src::nvim::window::do_window;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 /// The key a `<Cmd>` mapping arrives as.
-const K_COMMAND: c_int = -(253 + ((KE_COMMAND as c_int) << 8));
 /// The key a Lua callback mapping arrives as.
-const K_LUA: c_int = -(253 + ((KE_LUA as c_int) << 8));
 /// The answer that leaves the command-line window open.
-const K_IGNORE: c_int = -(253 + ((KE_IGNORE as c_int) << 8));
 
 /// A key the command loop must swallow without doing anything: it marks the
 /// command busy so nothing else acts on it.

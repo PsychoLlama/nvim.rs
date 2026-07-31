@@ -23,6 +23,7 @@ use crate::src::nvim::fileio::vim_fgets;
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
+use crate::src::nvim::keycodes::K_SPECIAL;
 use crate::src::nvim::main::{current_sctx, do_profiling, e_notopen, time_fd};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc};
 use crate::src::nvim::message::emsg;
@@ -52,7 +53,6 @@ const EXPAND_FILES: c_int = 2;
 const EXPAND_USER_FUNC: c_int = 19;
 const EXPAND_PROFILE: c_int = 35;
 /// First byte of a `<SNR>`-mangled function name.
-const K_SPECIAL: u8 = 0x80;
 const NL: c_char = b'\n' as c_char;
 const IOSIZE: usize = 1024 + 1;
 /// Offset of `uf_name` inside `ufunc_T`: hash keys point at the name, this
@@ -642,7 +642,7 @@ pub fn profile_dump() {
 /// `"name()"` with a newline, decoding the `<SNR>` mangling.
 unsafe fn write_func_name(fd: &mut dyn Write, fp: *mut ufunc_T) -> io::Result<()> {
     let name = CStr::from_ptr(&raw const (*fp).uf_name as *const c_char).to_bytes();
-    if name.first() == Some(&K_SPECIAL) {
+    if name.first().copied() == Some(K_SPECIAL as u8) {
         write!(fd, "<SNR>")?;
         fd.write_all(name.get(3..).unwrap_or_default())?;
     } else {

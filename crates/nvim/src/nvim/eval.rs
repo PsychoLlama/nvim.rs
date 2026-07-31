@@ -231,7 +231,6 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_found_var: false,
 };
 pub const PROF_YES: c_int = 1 as c_int;
-pub const K_SPECIAL: c_int = 0x80 as c_int;
 pub const KS_EXTRA: c_int = 253 as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;
 pub const RE_MAGIC: c_int = 1 as c_int;

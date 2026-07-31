@@ -691,7 +691,6 @@ pub const FTPLUGOF_FILE: [c_char; 13] = c_bytes(b"ftplugof.vim\0");
 pub const INDOFF_FILE: [c_char; 11] = c_bytes(b"indoff.vim\0");
 pub const PROF_YES: c_int = 1 as c_int;
 pub const SID_NONE: c_int = -6 as c_int;
-pub const K_SPECIAL: c_int = 0x80 as c_int;
 pub const KS_SPECIAL: c_int = 254 as c_int;
 pub const KE_FILLER: c_int = 'X' as c_int;
 static command_count: GlobalCell<c_int> = GlobalCell::new(557 as c_int);

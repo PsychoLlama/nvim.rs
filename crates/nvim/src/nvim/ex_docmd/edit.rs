@@ -24,8 +24,8 @@ use crate::src::nvim::ex_docmd::{
     BL_FIX, BL_SOL, BL_WHITE, CMD_delete, CMD_earlier, CMD_folddoclosed, CMD_foldopen, CMD_list,
     CMD_move, CMD_number, CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace,
     CMD_yank, CPO_EXECBUF, Ctrl_C, Ctrl_O, DOCMD_NOWAIT, DOCMD_VERBOSE, EXFLAG_LIST, EXFLAG_NR,
-    FAIL, K_SPECIAL, KE_FILLER, KS_SPECIAL, ML_EMPTY, NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT,
-    OP_YANK, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, REMAP_NONE,
+    FAIL, KE_FILLER, KS_SPECIAL, ML_EMPTY, NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK,
+    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, REMAP_NONE,
     REMAP_YES, kFalse, kMTLineWise, kNone,
 };
 use crate::src::nvim::ex_getln::getexline;
@@ -33,6 +33,7 @@ use crate::src::nvim::fold::{foldCreate, foldManualAllowed, hasFolding, opFoldRa
 use crate::src::nvim::getchar::{
     beep_flush, ins_typebuf, restore_typeahead, save_typeahead, stuff_empty, typebuf_typed, vpeekc,
 };
+use crate::src::nvim::keycodes::K_SPECIAL;
 use crate::src::nvim::lua::executor::ex_lua;
 use crate::src::nvim::main::{
     State, VIsual_active, curbuf, curwin, did_syncbind, e_argreq, e_empty_buffer, e_invarg2,

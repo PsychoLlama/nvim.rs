@@ -22,23 +22,20 @@
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::src::nvim::getchar::{ins_char_typebuf, ungetchars};
 use crate::src::nvim::keycodes::{
-    K_BS, K_DEL, K_DOWN, K_END, K_F1, K_F2, K_F3, K_F4, K_F5, K_F6, K_F7, K_F8, K_F9, K_F10, K_F11,
-    K_F12, K_F13, K_F14, K_F15, K_F16, K_F17, K_F18, K_F19, K_F20, K_F21, K_F22, K_F23, K_F24,
-    K_F25, K_F26, K_F27, K_F28, K_F29, K_F30, K_F31, K_F32, K_F33, K_F34, K_F35, K_F36, K_F37,
-    K_F38, K_F39, K_F40, K_F41, K_F42, K_F43, K_F44, K_F45, K_F46, K_F47, K_F48, K_F49, K_F50,
-    K_F51, K_F52, K_F53, K_F54, K_F55, K_F56, K_F57, K_F58, K_F59, K_F60, K_F61, K_F62, K_F63,
-    K_HOME, K_INS, K_K0, K_K1, K_K2, K_K3, K_K4, K_K5, K_K6, K_K7, K_K8, K_K9, K_KDIVIDE, K_KDOWN,
-    K_KEND, K_KENTER, K_KHOME, K_KLEFT, K_KMINUS, K_KMULTIPLY, K_KORIGIN, K_KPAGEDOWN, K_KPAGEUP,
-    K_KPLUS, K_KPOINT, K_KRIGHT, K_KUP, K_LEFT, K_PAGEDOWN, K_PAGEUP, K_RIGHT, K_S_TAB, K_UP,
-    K_ZERO,
-};
-use crate::src::nvim::keycodes::{
-    KE_C_END, KE_C_HOME, KE_C_LEFT, KE_C_RIGHT, KE_COMMAND, KE_EVENT, KE_IGNORE, KE_KDEL, KE_KINS,
-    KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_LUA, KE_MIDDLEDRAG, KE_MIDDLEMOUSE,
-    KE_MIDDLERELEASE, KE_MOUSEDOWN, KE_MOUSELEFT, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_NOP,
-    KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_S_DOWN, KE_S_F1, KE_S_F2, KE_S_F3, KE_S_F4,
-    KE_S_F5, KE_S_F6, KE_S_F7, KE_S_F8, KE_S_F9, KE_S_F10, KE_S_F11, KE_S_F12, KE_S_UP, KE_X1DRAG,
-    KE_X1MOUSE, KE_X1RELEASE, KE_X2DRAG, KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA,
+    K_BS, K_C_END, K_C_HOME, K_C_LEFT, K_C_RIGHT, K_DEL, K_DOWN, K_END, K_F1, K_F2, K_F3, K_F4,
+    K_F5, K_F6, K_F7, K_F8, K_F9, K_F10, K_F11, K_F12, K_F13, K_F14, K_F15, K_F16, K_F17, K_F18,
+    K_F19, K_F20, K_F21, K_F22, K_F23, K_F24, K_F25, K_F26, K_F27, K_F28, K_F29, K_F30, K_F31,
+    K_F32, K_F33, K_F34, K_F35, K_F36, K_F37, K_F38, K_F39, K_F40, K_F41, K_F42, K_F43, K_F44,
+    K_F45, K_F46, K_F47, K_F48, K_F49, K_F50, K_F51, K_F52, K_F53, K_F54, K_F55, K_F56, K_F57,
+    K_F58, K_F59, K_F60, K_F61, K_F62, K_F63, K_HOME, K_INS, K_K0, K_K1, K_K2, K_K3, K_K4, K_K5,
+    K_K6, K_K7, K_K8, K_K9, K_KDEL, K_KDIVIDE, K_KDOWN, K_KEND, K_KENTER, K_KHOME, K_KINS, K_KLEFT,
+    K_KMINUS, K_KMULTIPLY, K_KORIGIN, K_KPAGEDOWN, K_KPAGEUP, K_KPLUS, K_KPOINT, K_KRIGHT, K_KUP,
+    K_LEFT, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTRELEASE, K_MIDDLEDRAG, K_MIDDLEMOUSE, K_MIDDLERELEASE,
+    K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP, K_PAGEDOWN, K_PAGEUP, K_RIGHT,
+    K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_S_DOWN, K_S_END, K_S_F1, K_S_F2, K_S_F3, K_S_F4,
+    K_S_F5, K_S_F6, K_S_F7, K_S_F8, K_S_F9, K_S_F10, K_S_F11, K_S_F12, K_S_HOME, K_S_LEFT,
+    K_S_RIGHT, K_S_TAB, K_S_UP, K_UP, K_X1DRAG, K_X1MOUSE, K_X1RELEASE, K_X2DRAG, K_X2MOUSE,
+    K_X2RELEASE, K_ZERO,
 };
 use crate::src::nvim::main::{
     KeyTyped, curbuf, curwin, mod_mask, mouse_col, mouse_grid, mouse_row, tpf_flags, vgetc_char,
@@ -53,7 +50,7 @@ use crate::src::nvim::options::{
     kOptTpfFlagHT,
 };
 use crate::src::nvim::types::{
-    String_0, Terminal, VTermKey, VTermModifier, cmdarg_T, key_extra, oparg_T, size_t, win_T,
+    String_0, Terminal, VTermKey, VTermModifier, cmdarg_T, oparg_T, size_t, win_T,
 };
 use crate::src::nvim::vterm::keyboard::{
     vterm_keyboard_end_paste, vterm_keyboard_key, vterm_keyboard_start_paste,
@@ -95,70 +92,6 @@ pub(super) const Ctrl_BSL: c_int = 28;
 const fn function_key(n: c_int) -> VTermKey {
     VTERM_KEY_FUNCTION_0 + n as VTermKey
 }
-
-/// The editor's keycode for one of the "extra" keys — everything with no
-/// termcap name of its own, which is most of what a modern terminal sends.
-const fn extra(ke: key_extra) -> c_int {
-    -(KS_EXTRA + ((ke as c_int) << 8))
-}
-
-/// The editor's keycode for a two-character termcap key name.
-const fn termcap(first: u8, second: u8) -> c_int {
-    -((first as c_int) + ((second as c_int) << 8))
-}
-
-// Keycodes `keycodes.rs` does not (yet) name. Shifted and control-modified
-// cursor keys are termcap names; the rest are extras.
-const K_S_UP: c_int = extra(KE_S_UP);
-const K_S_DOWN: c_int = extra(KE_S_DOWN);
-const K_S_LEFT: c_int = termcap(b'#', b'4');
-const K_S_RIGHT: c_int = termcap(b'%', b'i');
-const K_S_HOME: c_int = termcap(b'#', b'2');
-const K_S_END: c_int = termcap(b'*', b'7');
-const K_C_LEFT: c_int = extra(KE_C_LEFT);
-const K_C_RIGHT: c_int = extra(KE_C_RIGHT);
-const K_C_HOME: c_int = extra(KE_C_HOME);
-const K_C_END: c_int = extra(KE_C_END);
-const K_S_F1: c_int = extra(KE_S_F1);
-const K_S_F2: c_int = extra(KE_S_F2);
-const K_S_F3: c_int = extra(KE_S_F3);
-const K_S_F4: c_int = extra(KE_S_F4);
-const K_S_F5: c_int = extra(KE_S_F5);
-const K_S_F6: c_int = extra(KE_S_F6);
-const K_S_F7: c_int = extra(KE_S_F7);
-const K_S_F8: c_int = extra(KE_S_F8);
-const K_S_F9: c_int = extra(KE_S_F9);
-const K_S_F10: c_int = extra(KE_S_F10);
-const K_S_F11: c_int = extra(KE_S_F11);
-const K_S_F12: c_int = extra(KE_S_F12);
-const K_KINS: c_int = extra(KE_KINS);
-const K_KDEL: c_int = extra(KE_KDEL);
-pub(super) const K_PASTE_START: c_int = termcap(b'P', b'S');
-const K_LEFTMOUSE: c_int = extra(KE_LEFTMOUSE);
-const K_LEFTDRAG: c_int = extra(KE_LEFTDRAG);
-const K_LEFTRELEASE: c_int = extra(KE_LEFTRELEASE);
-const K_MIDDLEMOUSE: c_int = extra(KE_MIDDLEMOUSE);
-const K_MIDDLEDRAG: c_int = extra(KE_MIDDLEDRAG);
-const K_MIDDLERELEASE: c_int = extra(KE_MIDDLERELEASE);
-const K_RIGHTMOUSE: c_int = extra(KE_RIGHTMOUSE);
-const K_RIGHTDRAG: c_int = extra(KE_RIGHTDRAG);
-const K_RIGHTRELEASE: c_int = extra(KE_RIGHTRELEASE);
-const K_X1MOUSE: c_int = extra(KE_X1MOUSE);
-const K_X1DRAG: c_int = extra(KE_X1DRAG);
-const K_X1RELEASE: c_int = extra(KE_X1RELEASE);
-const K_X2MOUSE: c_int = extra(KE_X2MOUSE);
-const K_X2DRAG: c_int = extra(KE_X2DRAG);
-const K_X2RELEASE: c_int = extra(KE_X2RELEASE);
-const K_MOUSEDOWN: c_int = extra(KE_MOUSEDOWN);
-const K_MOUSEUP: c_int = extra(KE_MOUSEUP);
-const K_MOUSELEFT: c_int = extra(KE_MOUSELEFT);
-const K_MOUSERIGHT: c_int = extra(KE_MOUSERIGHT);
-const K_MOUSEMOVE: c_int = extra(KE_MOUSEMOVE);
-pub(super) const K_IGNORE: c_int = extra(KE_IGNORE);
-pub(super) const K_NOP: c_int = extra(KE_NOP);
-pub(super) const K_EVENT: c_int = extra(KE_EVENT);
-pub(super) const K_COMMAND: c_int = extra(KE_COMMAND);
-pub(super) const K_LUA: c_int = extra(KE_LUA);
 
 /// `redraw_later` level: the window scrolled, so nothing on it holds.
 

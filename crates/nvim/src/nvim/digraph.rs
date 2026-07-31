@@ -21,6 +21,7 @@ use crate::src::nvim::ex_getln::putcmdline;
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::src::nvim::getchar::plain_vgetc;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::keycodes::K_BS;
 use crate::src::nvim::main::{
     Columns, allow_keys, cmdline_star, curbuf, curwin, e_number_exp, emsg_skip, got_int, msg_col,
     no_mapping, p_cpo, p_dg, p_enc,
@@ -45,7 +46,6 @@ const NUL: c_int = 0;
 const ESC: c_int = 27;
 const CTRL_H: c_int = 8;
 /// Special key code for `<BS>` (`K_BS` upstream).
-const K_BS: c_int = -(('k' as c_int) + (('b' as c_int) << 8));
 const OK: c_int = 1;
 const FAIL: c_int = 0;
 /// Highlight ids used by the `:digraphs` listing.

@@ -27,6 +27,7 @@ use crate::src::nvim::highlight_group::syn_check_group;
 use crate::src::nvim::insexpand::{
     compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
 };
+use crate::src::nvim::keycodes::{K_DOWN, K_UP};
 use crate::src::nvim::main::{
     Columns, RedrawingDisabled, Rows, State, cia_flags, cmdline_row, cmdline_win, cmdwin_type,
     curbuf, curtab, curwin, default_grid, e_menu_only_exists_in_another_mode, firstwin,
@@ -962,10 +963,6 @@ pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const K_UP: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_DOWN: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 static pum_array: GlobalCell<*mut pumitem_T> =
     GlobalCell::new(::core::ptr::null_mut::<pumitem_T>());
 static pum_size: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

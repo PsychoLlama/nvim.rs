@@ -22,6 +22,7 @@ use crate::src::nvim::edit::{
 use crate::src::nvim::fold::{foldUpdateAfterInsert, hasFolding};
 use crate::src::nvim::getchar::{AppendCharToRedobuff, AppendToRedobuff};
 use crate::src::nvim::getchar::{stuff_empty, stuffReadbuff, stuffcharReadbuff, stuffnumReadbuff};
+use crate::src::nvim::keycodes::{K_DEL, K_INS, K_KDEL, K_KINS};
 use crate::src::nvim::main::{
     State, VIsual_active, VIsual_mode, cb_flags, curbuf, curwin, e_modifiable, got_int, msg_silent,
     p_sel, p_sta, p_to, p_ww, restart_edit,
@@ -32,11 +33,11 @@ use crate::src::nvim::memory::xfree;
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
     BL_WHITE, CA_COMMAND_BUSY, CAR, Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, DEL, ESC, FO_OPEN_COMS,
-    K_DEL, K_INS, KE_KDEL, KE_KINS, MAXCOL, ML_DEL_MESSAGE, ML_EMPTY, NL, NUL, OP_DELETE, OP_NOP,
-    OP_NR_ADD, OP_NR_SUB, OP_TILDE, OPENLINE_DO_COM, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT,
-    PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB,
-    VALID_CROW, VIsual_mode_orig, checkclearop, checkclearopq, clearop, clearopbeep, false_0,
-    nv_object, nv_operator, prep_redo, prep_redo_cmd, true_0, v_swap_corners, v_visop,
+    MAXCOL, ML_DEL_MESSAGE, ML_EMPTY, NL, NUL, OP_DELETE, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_TILDE,
+    OPENLINE_DO_COM, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
+    PUT_LINE_SPLIT, REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB, VALID_CROW, VIsual_mode_orig,
+    checkclearop, checkclearopq, clearop, clearopbeep, false_0, nv_object, nv_operator, prep_redo,
+    prep_redo_cmd, true_0, v_swap_corners, v_visop,
 };
 use crate::src::nvim::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::src::nvim::option::get_ve_flags;
@@ -53,8 +54,6 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// The keypad's own `<Del>` and `<Insert>`, which mean the same as the main
 /// keyboard's.
-const K_KDEL: c_int = -(253 + ((KE_KDEL as c_int) << 8));
-const K_KINS: c_int = -(253 + ((KE_KINS as c_int) << 8));
 
 /// Refuse a change in a prompt buffer that is not on its own editable line.
 unsafe fn prompt_refuses(cap: *mut cmdarg_T) -> bool {

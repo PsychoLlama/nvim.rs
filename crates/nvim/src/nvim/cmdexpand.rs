@@ -41,6 +41,7 @@ use crate::src::nvim::help::{cleanup_help_tags, find_help_tags};
 use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight_group::{get_highlight_name, set_context_in_highlight_cmd};
 use crate::src::nvim::insexpand::find_word_end;
+use crate::src::nvim::keycodes::{K_DOWN, K_KENTER, K_LEFT, K_RIGHT, K_UP};
 use crate::src::nvim::lua::executor::{
     nlua_call_user_expand_func, nlua_exec, nlua_expand_get_matches, nlua_expand_pat,
 };
@@ -6555,16 +6556,6 @@ unsafe extern "C" fn expand_pattern_in_buf(
     ga_clear_strings(&raw mut ga);
     return FAIL;
 }
-pub const K_UP: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('u' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_DOWN: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('d' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_LEFT: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('l' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_RIGHT: ::core::ffi::c_int =
-    -('k' as ::core::ffi::c_int + (('r' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_KENTER: ::core::ffi::c_int =
-    -('K' as ::core::ffi::c_int + (('A' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
