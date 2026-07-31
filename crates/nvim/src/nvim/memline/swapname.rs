@@ -5,10 +5,14 @@
 //! that *is* using it means either a crash to recover from or another Nvim with
 //! the file open, which is what `attention_message` and the `SwapExists`
 //! autocommand (`do_swapexists`) exist to sort out.
+//!
+//! `recover_names` walks the same option in the other direction: which swap
+//! files already exist for a given file, for `:recover`, `swapfilelist()` and
+//! the ATTENTION message.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::{c_char, c_int, c_uint};
 
 #[allow(unused_imports)]
 use super::*;
@@ -599,5 +603,270 @@ pub(crate) unsafe fn findswapname(
 
         xfree(dir_name.cast());
         fname
+    }
+}
+
+/// Find the swap files in the current directory and in every directory of
+/// the `'directory'` option.
+///
+/// Used to list them for `nvim -r`, to count them while recovering, to list
+/// them while recovering, to fill `swapfilelist()`, and to name the n'th one.
+///
+/// `fname` is the file whose swap files are wanted, or null for all of them.
+/// `do_list` lists the names; `ret_list`, when given, collects them; `nr`,
+/// when non-zero, asks for the n'th name in `fname_out`.
+///
+/// Returns the number of swap files found.
+pub unsafe fn recover_names(
+    fname: *mut c_char,
+    do_list: bool,
+    ret_list: *mut list_T,
+    nr: c_int,
+    fname_out: *mut *mut c_char,
+) -> c_int {
+    unsafe {
+        // Expand a symlink, because the swap file was created against the
+        // actual file rather than the link.
+        let mut fname_buf: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
+        let mut fname_res: *mut c_char = core::ptr::null_mut();
+        if !fname.is_null() {
+            fname_res = if resolve_symlink(fname, fname_buf.as_mut_ptr()) == OK {
+                fname_buf.as_mut_ptr()
+            } else {
+                fname
+            };
+        }
+
+        msg_ext_skip_flush.set(true);
+        if do_list {
+            // Use msg() to start the scrolling properly.
+            msg_ext_set_kind(c"list_cmd".as_ptr());
+            msg(gettext(c"Swap files found:".as_ptr()), 0);
+            msg_putchar('\n' as c_int);
+        }
+
+        let mut file_count = 0;
+        let mut names: [*mut c_char; 6] = [core::ptr::null_mut(); 6];
+        // One buffer for the directory name, big enough for the longest
+        // entry in 'directory'.
+        let mut dir_name = String_0 {
+            data: xmalloc(strlen(p_dir.get()) + 1) as *mut c_char,
+            size: 0,
+        };
+        let mut dirp = p_dir.get();
+        while *dirp != 0 {
+            // Isolate one directory name and advance `dirp` past it. The
+            // buffer is known to be large enough, hence the 31000.
+            dir_name.size = copy_option_part(
+                &raw mut dirp,
+                dir_name.data,
+                31000,
+                c",".as_ptr().cast_mut(),
+            );
+
+            let num_names;
+            let current_dir =
+                *dir_name.data as c_int == '.' as c_int && *dir_name.data.offset(1) as c_int == NUL;
+            if fname.is_null() {
+                // Every swap file, under whatever name. On unix a leading dot
+                // is special, so the two forms are listed separately.
+                let patterns = [c"*.sw?", c".*.sw?", c".sw?"];
+                for (slot, pattern) in names.iter_mut().zip(patterns) {
+                    *slot = if current_dir {
+                        xmemdupz(pattern.as_ptr().cast(), pattern.count_bytes()) as *mut c_char
+                    } else {
+                        concat_fnames(dir_name.data, pattern.as_ptr(), true)
+                    };
+                }
+                num_names = 3;
+            } else if current_dir {
+                num_names = recov_file_names(&mut names, fname_res, true);
+            } else {
+                let end = dir_name.data.add(dir_name.size);
+                let tail = if after_pathsep(dir_name.data, end) != 0
+                    && dir_name.size > 1
+                    && *end.offset(-1) as c_int == *end.offset(-2) as c_int
+                {
+                    // Ends with "//": the swap file's name holds the full path.
+                    make_percent_swname(dir_name.data, end, fname_res)
+                } else {
+                    concat_fnames(dir_name.data, path_tail(fname_res), true)
+                };
+                num_names = recov_file_names(&mut names, tail, false);
+                xfree(tail.cast());
+            }
+
+            let mut num_files = 0;
+            let mut files: *mut *mut c_char = core::ptr::null_mut();
+            if num_names != 0
+                && expand_wildcards(
+                    num_names,
+                    names.as_mut_ptr(),
+                    &raw mut num_files,
+                    &raw mut files,
+                    (EW_KEEPALL | EW_FILE | EW_SILENT) as c_int,
+                ) == FAIL
+            {
+                num_files = 0;
+            }
+
+            // Nothing found may mean the wildcard expansion itself failed
+            // (no shell to run, say). Try the plain ".swp" name.
+            if *dirp as c_int == NUL && file_count + num_files == 0 && !fname.is_null() {
+                let mut swapname = modname(fname_res, c".swp".as_ptr(), true);
+                if !swapname.is_null() {
+                    if os_path_exists(swapname) {
+                        files = xmalloc(size_of::<*mut c_char>()) as *mut *mut c_char;
+                        *files = swapname;
+                        swapname = core::ptr::null_mut();
+                        num_files = 1;
+                    }
+                    xfree(swapname.cast());
+                }
+            }
+
+            // The current buffer's own swap file is not interesting — except
+            // to swapfilelist(), which wants everything.
+            let mine = if (*curbuf.get()).b_ml.ml_mfp.is_null() {
+                core::ptr::null_mut()
+            } else {
+                (*(*curbuf.get()).b_ml.ml_mfp).mf_fname
+            };
+            if !mine.is_null() && ret_list.is_null() {
+                let mut i = 0;
+                while i < num_files {
+                    // Do not expand wildcards: on Windows that would try to
+                    // expand the "%tmp%" in "%tmp%file".
+                    if path_full_compare(mine, *files.offset(i as isize), true, false) as c_uint
+                        & kEqualFiles as c_uint
+                        != 0
+                    {
+                        // Drop it and move the rest down. When the array
+                        // empties it is freed here, since FreeWild() below
+                        // will not be reached.
+                        xfree((*files.offset(i as isize)).cast());
+                        num_files -= 1;
+                        if num_files == 0 {
+                            xfree(files.cast());
+                        } else {
+                            while i < num_files {
+                                *files.offset(i as isize) = *files.offset(i as isize + 1);
+                                i += 1;
+                            }
+                        }
+                    }
+                    i += 1;
+                }
+            }
+
+            if nr > 0 {
+                file_count += num_files;
+                if nr <= file_count {
+                    *fname_out = xstrdup(*files.offset((nr - 1 + num_files - file_count) as isize));
+                    dirp = c"".as_ptr().cast_mut(); // stop searching
+                }
+            } else if do_list {
+                if current_dir {
+                    if fname.is_null() {
+                        msg_puts(gettext(c"   In current directory:\n".as_ptr()));
+                    } else {
+                        msg_puts(gettext(c"   Using specified name:\n".as_ptr()));
+                    }
+                } else {
+                    msg_puts(gettext(c"   In directory ".as_ptr()));
+                    msg_home_replace(dir_name.data);
+                    msg_puts(c":\n".as_ptr());
+                }
+
+                if num_files == 0 {
+                    msg_puts(gettext(c"      -- none --\n".as_ptr()));
+                } else {
+                    for i in 0..num_files {
+                        file_count += 1;
+                        msg_outnum(file_count);
+                        msg_puts(c".    ".as_ptr());
+                        msg_puts(path_tail(*files.offset(i as isize)));
+                        msg_putchar('\n' as c_int);
+
+                        // kv_resize(msg, IOSIZE)
+                        let mut msg_buf = KV_INITIAL_VALUE;
+                        msg_buf.capacity = 1024 + 1;
+                        msg_buf.items = xrealloc(msg_buf.items.cast(), msg_buf.capacity).cast();
+                        swapfile_info(*files.offset(i as isize), &raw mut msg_buf);
+                        let mut need_clear = false;
+                        msg_multiline(
+                            String_0 {
+                                data: msg_buf.items,
+                                size: msg_buf.size,
+                            },
+                            0,
+                            false,
+                            false,
+                            &raw mut need_clear,
+                        );
+                        xfree(msg_buf.items.cast()); // kv_destroy(msg)
+                    }
+                }
+                ui_flush();
+            } else if !ret_list.is_null() {
+                for i in 0..num_files {
+                    let name = concat_fnames(dir_name.data, *files.offset(i as isize), true);
+                    tv_list_append_allocated_string(ret_list, name);
+                }
+            } else {
+                file_count += num_files;
+            }
+
+            for name in names.iter().take(num_names as usize) {
+                xfree((*name).cast());
+            }
+            if num_files > 0 {
+                FreeWild(num_files, files);
+            }
+        }
+        msg_ext_skip_flush.set(false);
+        xfree(dir_name.data.cast());
+        file_count
+    }
+}
+
+/// Fill `names` with the wildcard patterns that match `path`'s swap files,
+/// returning how many were written.
+///
+/// `prepend_dot` also asks for the hidden form, for a swap file kept in the
+/// same directory as the file itself.
+unsafe fn recov_file_names(
+    names: &mut [*mut c_char; 6],
+    path: *mut c_char,
+    prepend_dot: bool,
+) -> c_int {
+    unsafe {
+        let mut num_names = 0usize;
+        if prepend_dot {
+            names[num_names] = modname(path, c".sw?".as_ptr(), true);
+            if names[num_names].is_null() {
+                return num_names as c_int;
+            }
+            num_names += 1;
+        }
+
+        // The plain form: the name with ".sw?" appended.
+        names[num_names] = concat_fnames(path, c".sw?".as_ptr(), false);
+        if num_names == 0 {
+            num_names += 1;
+        } else {
+            // Both forms may have come out the same; keep only one.
+            let mut p = names[num_names - 1];
+            let extra = strlen(names[num_names - 1]) as isize - strlen(names[num_names]) as isize;
+            if extra > 0 {
+                p = p.offset(extra); // the name was expanded to a full path
+            }
+            if strcmp(p, names[num_names]) != 0 {
+                num_names += 1;
+            } else {
+                xfree(names[num_names].cast());
+            }
+        }
+        num_names as c_int
     }
 }

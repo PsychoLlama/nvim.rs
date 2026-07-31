@@ -8,8 +8,20 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::c_uint;
+
 #[allow(unused_imports)]
 use super::*;
+
+impl PointerBlock {
+    /// How many entries fit in a pointer block of this page size. It is
+    /// stored in the block itself (`pb_count_max`), so that a swap file
+    /// written by a build with a different page size is recognisable.
+    pub(crate) fn count_max(page_size: c_uint) -> uint16_t {
+        let header = core::mem::offset_of!(PointerBlock, pb_pointer);
+        ((page_size as usize - header) / size_of::<PointerEntry>()) as uint16_t
+    }
+}
 
 pub(crate) unsafe extern "C" fn ml_get_buf_impl(
     mut buf: *mut buf_T,
@@ -267,10 +279,7 @@ pub(crate) unsafe extern "C" fn ml_new_ptr(mut mfp: *mut memfile_T) -> *mut bhdr
         let mut pp: *mut PointerBlock = (*hp).bh_data as *mut PointerBlock;
         (*pp).pb_id = PTR_ID as ::core::ffi::c_int as uint16_t;
         (*pp).pb_count = 0 as uint16_t;
-        (*pp).pb_count_max = ((*mfp).mf_page_size as usize)
-            .wrapping_sub(8 as usize)
-            .wrapping_div(::core::mem::size_of::<PointerEntry>())
-            as uint16_t;
+        (*pp).pb_count_max = PointerBlock::count_max((*mfp).mf_page_size);
         return hp;
     }
 }
