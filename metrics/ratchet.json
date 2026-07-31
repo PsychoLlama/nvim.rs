@@ -389,7 +389,7 @@
     "crates/nvim/src/nvim/strings.rs": {"lines": 4007, "no_mangle": 1, "unsafe": 113, "variadic": 5},
     "crates/nvim/src/nvim/syntax.rs": {"lines": 7803, "unsafe": 148},
     "crates/nvim/src/nvim/tag.rs": {"lines": 5874, "unsafe": 61},
-    "crates/nvim/src/nvim/terminal.rs": {"lines": 5341, "no_mangle": 14, "unsafe": 100},
+    "crates/nvim/src/nvim/terminal.rs": {"lines": 4209, "no_mangle": 14, "unsafe": 100},
     "crates/nvim/src/nvim/testing.rs": {"lines": 1638, "unsafe": 31},
     "crates/nvim/src/nvim/textformat.rs": {"lines": 1502, "unsafe": 13},
     "crates/nvim/src/nvim/textobject.rs": {"lines": 1978, "unsafe": 27},
