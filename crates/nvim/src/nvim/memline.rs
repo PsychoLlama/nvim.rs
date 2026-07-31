@@ -7,7 +7,7 @@ use crate::src::nvim::change::{changed_internal, unchanged};
 use crate::src::nvim::cursor::{check_cursor, coladvance};
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::src::nvim::eval::typval::{
-    tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len, tv_list_append_allocated_string,
+    tv_dict_add_nr, tv_dict_add_str_len, tv_list_append_allocated_string,
 };
 use crate::src::nvim::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::src::nvim::event::libuv::{uv_strerror, uv_uptime};
@@ -358,7 +358,7 @@ pub unsafe fn ml_open(mut buf: *mut buf_T) -> ::core::ffi::c_int {
             );
             b0_store_number(
                 (*mfp).mf_page_size as ::core::ffi::c_long,
-                &raw mut (*b0p).b0_page_size as *mut ::core::ffi::c_char,
+                &mut (*b0p).b0_page_size,
             );
             if !(*buf).b_spell {
                 (*b0p).b0_fname[(B0_FNAME_SIZE_ORG as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
@@ -385,10 +385,7 @@ pub unsafe fn ml_open(mut buf: *mut buf_T) -> ::core::ffi::c_int {
                 (*b0p).b0_hname
                     [(B0_HNAME_SIZE as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize] =
                     NUL as ::core::ffi::c_char;
-                b0_store_number(
-                    os_get_pid() as ::core::ffi::c_long,
-                    &raw mut (*b0p).b0_pid as *mut ::core::ffi::c_char,
-                );
+                b0_store_number(os_get_pid() as ::core::ffi::c_long, &mut (*b0p).b0_pid);
             }
             mf_put(mfp, hp, true_0 != 0, false_0 != 0);
             if !(*buf).b_help && !(*buf).b_spell {
@@ -830,13 +827,13 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                             true_0 != 0,
                         );
                         msg_end();
-                    } else if ml_check_b0_id(b0p) as ::core::ffi::c_int == FAIL {
+                    } else if !ml_check_b0_id(&*b0p) {
                         semsg(
                             gettext(b"E307: %s does not look like a Nvim swap file\0".as_ptr()
                                 as *const ::core::ffi::c_char),
                             (*mfp).mf_fname,
                         );
-                    } else if b0_magic_wrong(b0p) {
+                    } else if b0_magic_wrong(&*b0p) {
                         msg_start();
                         msg_outtrans((*mfp).mf_fname, hl_id, true_0 != 0);
                         msg_puts_hl(
@@ -867,16 +864,12 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                         msg_end();
                     } else {
                         if (*mfp).mf_page_size
-                            != b0_read_number(
-                                &raw mut (*b0p).b0_page_size as *mut ::core::ffi::c_char,
-                            ) as ::core::ffi::c_uint
+                            != b0_read_number(&(*b0p).b0_page_size) as ::core::ffi::c_uint
                         {
                             let mut previous_page_size: ::core::ffi::c_uint = (*mfp).mf_page_size;
                             mf_new_page_size(
                                 mfp,
-                                b0_read_number(
-                                    &raw mut (*b0p).b0_page_size as *mut ::core::ffi::c_char,
-                                ) as ::core::ffi::c_uint,
+                                b0_read_number(&(*b0p).b0_page_size) as ::core::ffi::c_uint,
                             );
                             if (*mfp).mf_page_size < previous_page_size {
                                 msg_start();
@@ -1033,8 +1026,7 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                                 },
                             },
                         };
-                        mtime = b0_read_number(&raw mut (*b0p).b0_mtime as *mut ::core::ffi::c_char)
-                            as ::core::ffi::c_int;
+                        mtime = b0_read_number(&(*b0p).b0_mtime) as ::core::ffi::c_int;
                         if !(*curbuf.get()).b_ffname.is_null()
                             && os_fileinfo((*curbuf.get()).b_ffname, &raw mut org_file_info)
                                 as ::core::ffi::c_int
@@ -1584,12 +1576,10 @@ pub unsafe extern "C" fn ml_recover(mut checkext: bool) {
                                 b"\nYou may want to delete the .swp file now.\0".as_ptr()
                                     as *const ::core::ffi::c_char,
                             ));
-                            if swapfile_proc_running(b0p, fname_used) != 0 {
+                            if swapfile_proc_running(&*b0p, fname_used) != 0 {
                                 msg_puts(gettext(b"\nNote: process STILL RUNNING: \0".as_ptr()
                                     as *const ::core::ffi::c_char));
-                                msg_outnum(b0_read_number(
-                                    &raw mut (*b0p).b0_pid as *mut ::core::ffi::c_char,
-                                ) as ::core::ffi::c_int);
+                                msg_outnum(b0_read_number(&(*b0p).b0_pid) as ::core::ffi::c_int);
                             }
                             if !ui_has(kUIMessages) {
                                 msg_puts(b"\n\n\0".as_ptr() as *const ::core::ffi::c_char);

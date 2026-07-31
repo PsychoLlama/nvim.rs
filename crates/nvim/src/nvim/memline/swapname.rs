@@ -553,7 +553,7 @@ pub(crate) unsafe extern "C" fn findswapname(
                             ) as usize
                                 == ::core::mem::size_of::<ZeroBlock>()
                             {
-                                proc_running.set(swapfile_proc_running(&raw mut b0, fname));
+                                proc_running.set(swapfile_proc_running(&b0, fname));
                                 if b0.b0_fname[(B0_FNAME_SIZE_ORG as ::core::ffi::c_int
                                     - 2 as ::core::ffi::c_int)
                                     as usize]
@@ -572,12 +572,10 @@ pub(crate) unsafe extern "C" fn findswapname(
                                             NameBuff.ptr() as *mut ::core::ffi::c_char,
                                             MAXPATHL,
                                         );
-                                        if fnamecmp_ino(
+                                        if files_differ(
                                             (*buf).b_ffname,
                                             NameBuff.ptr() as *mut ::core::ffi::c_char,
-                                            b0_read_number(
-                                                &raw mut b0.b0_ino as *mut ::core::ffi::c_char,
-                                            ),
+                                            b0_read_number(&b0.b0_ino),
                                         ) {
                                             differ = true_0 != 0;
                                         }
@@ -588,12 +586,10 @@ pub(crate) unsafe extern "C" fn findswapname(
                                         NameBuff.ptr() as *mut ::core::ffi::c_char,
                                         MAXPATHL,
                                     );
-                                    if fnamecmp_ino(
+                                    if files_differ(
                                         (*buf).b_ffname,
                                         NameBuff.ptr() as *mut ::core::ffi::c_char,
-                                        b0_read_number(
-                                            &raw mut b0.b0_ino as *mut ::core::ffi::c_char,
-                                        ),
+                                        b0_read_number(&b0.b0_ino),
                                     ) {
                                         differ = true_0 != 0;
                                     }
