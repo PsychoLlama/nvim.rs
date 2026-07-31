@@ -24,24 +24,22 @@ use crate::src::nvim::main::{
 use crate::src::nvim::mbyte::{
     convert_setup, enc_canonize, mb_charlen, mb_cptr2char_adv, mb_ptr2char_adv, mb_toupper,
     string_convert, utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len,
-    utf_valid_string, utfc_ptr2len,
+    utfc_ptr2len,
 };
 use crate::src::nvim::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup, xstrlcat, xstrlcpy};
 use crate::src::nvim::message::{
-    emsg, msg, msg_clr_eos, msg_outtrans_long, msg_puts, msg_start, semsg, smsg, verbose_enter,
-    verbose_leave,
+    emsg, msg, msg_clr_eos, msg_outtrans_long, msg_start, semsg, smsg, verbose_enter, verbose_leave,
 };
 use crate::src::nvim::option::{copy_option_part, set_option_value_give_err};
 use crate::src::nvim::options::kOptSpellfile;
 use crate::src::nvim::os::env::home_replace;
 use crate::src::nvim::os::fs::{os_fopen, os_isdir, os_mkdir, os_mkdir_recurse, os_path_exists};
-use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck, veryfast_breakcheck};
+use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck};
 use crate::src::nvim::os::libc::{
     __assert_fail, __ctype_b_loc, __errno_location, atoi, fclose, feof, ferror, fprintf, fputc,
-    fread, fseek, ftell, fwrite, getc, gettext, memchr, memcmp, memcpy, memmove, memset, putc,
-    qsort, snprintf, strcat, strcmp, strcpy, strerror, strlen, strncmp, strrchr, strstr, time,
-    ungetc,
+    fread, fseek, ftell, fwrite, getc, gettext, memchr, memcmp, memmove, memset, putc, qsort,
+    snprintf, strcat, strcmp, strcpy, strerror, strlen, strncmp, strrchr, strstr, time, ungetc,
 };
 use crate::src::nvim::os::stdpaths::get_xdg_home;
 use crate::src::nvim::os::time::os_time;
@@ -51,7 +49,7 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::runtime::{estack_pop, estack_push};
 use crate::src::nvim::spell::{
-    byte_in_str, captype, clear_spell_chartab, close_spellbuf, count_common_word, did_set_spelltab,
+    byte_in_str, clear_spell_chartab, close_spellbuf, count_common_word, did_set_spelltab,
     e_format, first_lang, init_spell_chartab, init_syl_tab, int_wordlist, onecap_copy,
     open_spellbuf, parse_spelllang, slang_alloc, slang_clear, slang_clear_sug, slang_free,
     spell_casefold, spell_enc, spell_soundfold, spelltab,
@@ -97,6 +95,11 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::bufIsChanged;
+mod wordtree;
+use wordtree::{
+    MSG_COMPRESSING, SpellArena, set_compression_limits, store_word, tree_add_word,
+    valid_spell_word, wordnode_T, wordtree_alloc, wordtree_compress,
+};
 unsafe extern "C" {
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
@@ -186,8 +189,6 @@ pub const SN_CHARFLAGS: C2Rust_Unnamed_30 = 1;
 pub const SN_REGION: C2Rust_Unnamed_30 = 0;
 pub const SN_INFO: C2Rust_Unnamed_30 = 15;
 pub const SN_END: C2Rust_Unnamed_30 = 255;
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct spellinfo_T {
     pub si_foldroot: *mut wordnode_T,
     pub si_foldwcount: ::core::ffi::c_int,
@@ -195,8 +196,7 @@ pub struct spellinfo_T {
     pub si_keepwcount: ::core::ffi::c_int,
     pub si_prefroot: *mut wordnode_T,
     pub si_sugtree: ::core::ffi::c_int,
-    pub si_blocks: *mut sblock_T,
-    pub si_blocks_cnt: ::core::ffi::c_int,
+    pub si_arena: SpellArena,
     pub si_did_emsg: ::core::ffi::c_int,
     pub si_compress_cnt: ::core::ffi::c_int,
     pub si_first_free: *mut wordnode_T,
@@ -239,40 +239,6 @@ pub struct spellinfo_T {
     pub si_prefcond: garray_T,
     pub si_newprefID: ::core::ffi::c_int,
     pub si_newcompID: ::core::ffi::c_int,
-}
-pub type wordnode_T = wordnode_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct wordnode_S {
-    pub wn_u1: C2Rust_Unnamed_27,
-    pub wn_u2: C2Rust_Unnamed_26,
-    pub wn_child: *mut wordnode_T,
-    pub wn_sibling: *mut wordnode_T,
-    pub wn_refs: ::core::ffi::c_int,
-    pub wn_byte: uint8_t,
-    pub wn_affixID: uint8_t,
-    pub wn_flags: uint16_t,
-    pub wn_region: int16_t,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_26 {
-    pub next: *mut wordnode_T,
-    pub wnode: *mut wordnode_T,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union C2Rust_Unnamed_27 {
-    pub hashkey: [uint8_t; 6],
-    pub index: ::core::ffi::c_int,
-}
-pub type sblock_T = sblock_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct sblock_S {
-    pub sb_used: ::core::ffi::c_int,
-    pub sb_next: *mut sblock_T,
-    pub sb_data: [::core::ffi::c_char; 0],
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -379,17 +345,22 @@ static e_afftrailing: GlobalCell<*const ::core::ffi::c_char> =
 static e_affname: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(
     b"Affix name too long in %s line %d: %s\0".as_ptr() as *const ::core::ffi::c_char,
 );
-static msg_compressing: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(b"Compressing word tree...\0".as_ptr() as *const ::core::ffi::c_char);
 pub const MAXLINELEN: ::core::ffi::c_int = 500 as ::core::ffi::c_int;
 pub const AFT_CHAR: ::core::ffi::c_int = 0;
 pub const AFT_LONG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const AFT_CAPLONG: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const AFT_NUM: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const AH_KEY_LEN: ::core::ffi::c_int = 17 as ::core::ffi::c_int;
-pub const SBLOCKSIZE: ::core::ffi::c_int = 16000 as ::core::ffi::c_int;
-pub const WN_MASK: ::core::ffi::c_int = 0xffff as ::core::ffi::c_int;
 #[inline(always)]
+unsafe fn getroom(spin: *mut spellinfo_T, len: size_t, align: bool) -> *mut ::core::ffi::c_void {
+    unsafe { (*spin).si_arena.alloc_bytes(len as usize, align).cast() }
+}
+unsafe fn getroom_save(
+    spin: *mut spellinfo_T,
+    s: *mut ::core::ffi::c_char,
+) -> *mut ::core::ffi::c_char {
+    unsafe { (*spin).si_arena.save_str(s) }
+}
 unsafe fn spell_check_magic_string(fd: *mut FILE) -> ::core::ffi::c_int {
     let mut buf: [::core::ffi::c_char; 8] = [0; 8];
     let n__SPRB: size_t =
@@ -1821,11 +1792,6 @@ pub const CONDIT_COMB: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const CONDIT_CFIX: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CONDIT_SUF: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const CONDIT_AFF: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-static compress_start: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(30000 as ::core::ffi::c_int);
-static compress_inc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(100 as ::core::ffi::c_int);
-static compress_added: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(500000 as ::core::ffi::c_int);
 pub unsafe fn spell_check_msm() -> ::core::ffi::c_int {
     let mut p: *mut ::core::ffi::c_char = p_msm.get();
     if !ascii_isdigit(*p as ::core::ffi::c_int) {
@@ -1833,7 +1799,7 @@ pub unsafe fn spell_check_msm() -> ::core::ffi::c_int {
     }
     let mut start: ::core::ffi::c_int =
         getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int) * 10 as ::core::ffi::c_int
-            / (SBLOCKSIZE / 102 as ::core::ffi::c_int);
+            / (wordtree::block_size() / 102 as ::core::ffi::c_int);
     if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
         return FAIL;
     }
@@ -1843,7 +1809,7 @@ pub unsafe fn spell_check_msm() -> ::core::ffi::c_int {
     }
     let mut incr: ::core::ffi::c_int =
         getdigits_int(&raw mut p, true_0 != 0, 0 as ::core::ffi::c_int) * 102 as ::core::ffi::c_int
-            / (SBLOCKSIZE / 10 as ::core::ffi::c_int);
+            / (wordtree::block_size() / 10 as ::core::ffi::c_int);
     if *p as ::core::ffi::c_int != ',' as ::core::ffi::c_int {
         return FAIL;
     }
@@ -1864,9 +1830,7 @@ pub unsafe fn spell_check_msm() -> ::core::ffi::c_int {
     {
         return FAIL;
     }
-    compress_start.set(start);
-    compress_inc.set(incr);
-    compress_added.set(added);
+    set_compression_limits(start, incr, added);
     return OK;
 }
 unsafe fn spell_read_aff(
@@ -3010,14 +2974,9 @@ unsafe fn spell_read_aff(
                             if (*aff_entry).ae_compforbid != 0 {
                                 n |= WFP_COMPFORBID as ::core::ffi::c_int;
                             }
-                            tree_add_word(
-                                spin,
-                                p,
-                                (*spin).si_prefroot,
-                                n,
-                                idx,
-                                (*cur_aff).ah_newID,
-                            );
+                            let prefroot = (*spin).si_prefroot;
+                            let newID = (*cur_aff).ah_newID;
+                            tree_add_word(&mut *spin, p, prefroot, n, idx, newID);
                             did_postpone_prefix = true_0 != 0;
                         }
                         if aff_todo == 0 as ::core::ffi::c_int && !did_postpone_prefix {
@@ -4042,11 +4001,12 @@ unsafe fn spell_read_dic(
                         );
                     }
                 }
+                let region = (*spin).si_region;
                 if store_word(
-                    spin,
+                    &mut *spin,
                     dw,
                     flags,
-                    (*spin).si_region,
+                    region,
                     &raw mut store_afflist as *mut ::core::ffi::c_char,
                     need_affix,
                 ) == FAIL
@@ -4468,11 +4428,12 @@ unsafe fn store_aff_word(
                                 use_flags |= WF_NOCOMPBEF as ::core::ffi::c_int;
                             }
                         }
+                        let region = (*spin).si_region;
                         if store_word(
-                            spin,
+                            &mut *spin,
                             &raw mut newword as *mut ::core::ffi::c_char,
                             use_flags,
-                            (*spin).si_region,
+                            region,
                             use_pfxlist,
                             need_affix,
                         ) == FAIL
@@ -4760,7 +4721,7 @@ unsafe fn spell_read_wordfile(
             if (*spin).si_ascii != 0 && has_non_ascii(line) as ::core::ffi::c_int != 0 {
                 non_ascii += 1;
             } else if store_word(
-                spin,
+                &mut *spin,
                 line,
                 flags,
                 regionmask,
@@ -4788,524 +4749,6 @@ unsafe fn spell_read_wordfile(
         spell_message(spin, IObuff.ptr() as *mut ::core::ffi::c_char);
     }
     return retval;
-}
-unsafe fn getroom(
-    mut spin: *mut spellinfo_T,
-    mut len: size_t,
-    mut align: bool,
-) -> *mut ::core::ffi::c_void {
-    let mut bl: *mut sblock_T = (*spin).si_blocks;
-    '_c2rust_label: {
-        if len <= 16000 as size_t {
-        } else {
-            __assert_fail(
-                b"len <= SBLOCKSIZE\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/spellfile.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3771 as ::core::ffi::c_uint,
-                b"void *getroom(spellinfo_T *, size_t, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    if align as ::core::ffi::c_int != 0 && !bl.is_null() {
-        (*bl).sb_used = (((*bl).sb_used as size_t)
-            .wrapping_add(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-            .wrapping_sub(1 as size_t)
-            & !::core::mem::size_of::<*mut ::core::ffi::c_char>().wrapping_sub(1 as size_t))
-            as ::core::ffi::c_int;
-    }
-    if bl.is_null() || ((*bl).sb_used as size_t).wrapping_add(len) > SBLOCKSIZE as size_t {
-        bl = xcalloc(
-            1 as size_t,
-            (16 as size_t)
-                .wrapping_add(SBLOCKSIZE as size_t)
-                .wrapping_add(1 as size_t),
-        ) as *mut sblock_T;
-        (*bl).sb_next = (*spin).si_blocks;
-        (*spin).si_blocks = bl;
-        (*bl).sb_used = 0 as ::core::ffi::c_int;
-        (*spin).si_blocks_cnt += 1;
-    }
-    let mut p: *mut ::core::ffi::c_char =
-        (&raw mut (*bl).sb_data as *mut ::core::ffi::c_char).offset((*bl).sb_used as isize);
-    (*bl).sb_used += len as ::core::ffi::c_int;
-    return p as *mut ::core::ffi::c_void;
-}
-unsafe fn getroom_save(
-    mut spin: *mut spellinfo_T,
-    mut s: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    let s_size: size_t = strlen(s).wrapping_add(1 as size_t);
-    return memcpy(
-        getroom(spin, s_size, false_0 != 0),
-        s as *const ::core::ffi::c_void,
-        s_size,
-    ) as *mut ::core::ffi::c_char;
-}
-unsafe fn free_blocks(mut bl: *mut sblock_T) {
-    while !bl.is_null() {
-        let mut next: *mut sblock_T = (*bl).sb_next;
-        xfree(bl as *mut ::core::ffi::c_void);
-        bl = next;
-    }
-}
-unsafe fn wordtree_alloc(mut spin: *mut spellinfo_T) -> *mut wordnode_T {
-    return getroom(spin, ::core::mem::size_of::<wordnode_T>(), true_0 != 0) as *mut wordnode_T;
-}
-unsafe fn valid_spell_word(
-    mut word: *const ::core::ffi::c_char,
-    mut end: *const ::core::ffi::c_char,
-) -> bool {
-    if !utf_valid_string(word, end) {
-        return false_0 != 0;
-    }
-    let mut p: *const ::core::ffi::c_char = word;
-    while *p as ::core::ffi::c_int != NUL && p < end {
-        if (*p as uint8_t as ::core::ffi::c_int) < ' ' as ::core::ffi::c_int
-            || *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '/' as ::core::ffi::c_int
-                && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-        {
-            return false_0 != 0;
-        }
-        p = p.offset(utfc_ptr2len(p) as isize);
-    }
-    return true_0 != 0;
-}
-unsafe fn store_word(
-    mut spin: *mut spellinfo_T,
-    mut word: *mut ::core::ffi::c_char,
-    mut flags: ::core::ffi::c_int,
-    mut region: ::core::ffi::c_int,
-    mut pfxlist: *const ::core::ffi::c_char,
-    mut need_affix: bool,
-) -> ::core::ffi::c_int {
-    let mut len: ::core::ffi::c_int = strlen(word) as ::core::ffi::c_int;
-    let mut ct: ::core::ffi::c_int = captype(word, word.offset(len as isize));
-    let mut foldword: [::core::ffi::c_char; 254] = [0; 254];
-    let mut res: ::core::ffi::c_int = OK;
-    if !valid_spell_word(word, word.offset(len as isize)) {
-        return FAIL;
-    }
-    spell_casefold(
-        curwin.get(),
-        word,
-        len,
-        &raw mut foldword as *mut ::core::ffi::c_char,
-        MAXWLEN as ::core::ffi::c_int,
-    );
-    let mut p: *const ::core::ffi::c_char = pfxlist;
-    while res == OK {
-        if !need_affix || !p.is_null() && *p as ::core::ffi::c_int != NUL {
-            res = tree_add_word(
-                spin,
-                &raw mut foldword as *mut ::core::ffi::c_char,
-                (*spin).si_foldroot,
-                ct | flags,
-                region,
-                if p.is_null() {
-                    0 as ::core::ffi::c_int
-                } else {
-                    *p as ::core::ffi::c_int
-                },
-            );
-        }
-        if p.is_null() || *p as ::core::ffi::c_int == NUL {
-            break;
-        }
-        p = p.offset(1);
-    }
-    (*spin).si_foldwcount += 1;
-    if res == OK
-        && (ct == WF_KEEPCAP as ::core::ffi::c_int || flags & WF_KEEPCAP as ::core::ffi::c_int != 0)
-    {
-        let mut p_0: *const ::core::ffi::c_char = pfxlist;
-        while res == OK {
-            if !need_affix || !p_0.is_null() && *p_0 as ::core::ffi::c_int != NUL {
-                res = tree_add_word(
-                    spin,
-                    word,
-                    (*spin).si_keeproot,
-                    flags,
-                    region,
-                    if p_0.is_null() {
-                        0 as ::core::ffi::c_int
-                    } else {
-                        *p_0 as ::core::ffi::c_int
-                    },
-                );
-            }
-            if p_0.is_null() || *p_0 as ::core::ffi::c_int == NUL {
-                break;
-            }
-            p_0 = p_0.offset(1);
-        }
-        (*spin).si_keepwcount += 1;
-    }
-    return res;
-}
-unsafe fn tree_add_word(
-    mut spin: *mut spellinfo_T,
-    mut word: *const ::core::ffi::c_char,
-    mut root: *mut wordnode_T,
-    mut flags: ::core::ffi::c_int,
-    mut region: ::core::ffi::c_int,
-    mut affixID: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut node: *mut wordnode_T = root;
-    let mut prev: *mut *mut wordnode_T = ::core::ptr::null_mut::<*mut wordnode_T>();
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    loop {
-        if !node.is_null() && (*node).wn_refs > 1 as ::core::ffi::c_int {
-            (*node).wn_refs -= 1;
-            let mut copyprev: *mut *mut wordnode_T = prev;
-            let mut copyp: *mut wordnode_T = node;
-            while !copyp.is_null() {
-                let mut np: *mut wordnode_T = get_wordnode(spin);
-                if np.is_null() {
-                    return FAIL;
-                }
-                (*np).wn_child = (*copyp).wn_child;
-                if !(*np).wn_child.is_null() {
-                    (*(*np).wn_child).wn_refs += 1;
-                }
-                (*np).wn_byte = (*copyp).wn_byte;
-                if (*np).wn_byte as ::core::ffi::c_int == NUL {
-                    (*np).wn_flags = (*copyp).wn_flags;
-                    (*np).wn_region = (*copyp).wn_region;
-                    (*np).wn_affixID = (*copyp).wn_affixID;
-                }
-                (*np).wn_refs = 1 as ::core::ffi::c_int;
-                if !copyprev.is_null() {
-                    *copyprev = np;
-                }
-                copyprev = &raw mut (*np).wn_sibling;
-                if copyp == node {
-                    node = np;
-                }
-                copyp = (*copyp).wn_sibling;
-            }
-        }
-        while !node.is_null()
-            && (((*node).wn_byte as ::core::ffi::c_int)
-                < *word.offset(i as isize) as uint8_t as ::core::ffi::c_int
-                || (*node).wn_byte as ::core::ffi::c_int == NUL
-                    && (if flags < 0 as ::core::ffi::c_int {
-                        (((*node).wn_affixID as ::core::ffi::c_uint)
-                            < affixID as ::core::ffi::c_uint)
-                            as ::core::ffi::c_int
-                    } else {
-                        (((*node).wn_flags as ::core::ffi::c_uint)
-                            < (flags & WN_MASK) as ::core::ffi::c_uint
-                            || (*node).wn_flags as ::core::ffi::c_int == flags & WN_MASK
-                                && (if (*spin).si_sugtree != 0 {
-                                    (((*node).wn_region as ::core::ffi::c_int
-                                        & 0xffff as ::core::ffi::c_int)
-                                        < region)
-                                        as ::core::ffi::c_int
-                                } else {
-                                    (((*node).wn_affixID as ::core::ffi::c_uint)
-                                        < affixID as ::core::ffi::c_uint)
-                                        as ::core::ffi::c_int
-                                }) != 0) as ::core::ffi::c_int
-                    }) != 0)
-        {
-            prev = &raw mut (*node).wn_sibling;
-            node = *prev;
-        }
-        if node.is_null()
-            || (*node).wn_byte as ::core::ffi::c_int
-                != *word.offset(i as isize) as uint8_t as ::core::ffi::c_int
-            || *word.offset(i as isize) as ::core::ffi::c_int == NUL
-                && (flags < 0 as ::core::ffi::c_int
-                    || (*spin).si_sugtree != 0
-                    || (*node).wn_flags as ::core::ffi::c_int != flags & WN_MASK
-                    || (*node).wn_affixID as ::core::ffi::c_int != affixID)
-        {
-            let mut np_0: *mut wordnode_T = get_wordnode(spin);
-            if np_0.is_null() {
-                return FAIL;
-            }
-            (*np_0).wn_byte = *word.offset(i as isize) as uint8_t;
-            if node.is_null() {
-                (*np_0).wn_refs = 1 as ::core::ffi::c_int;
-            } else {
-                (*np_0).wn_refs = (*node).wn_refs;
-                (*node).wn_refs = 1 as ::core::ffi::c_int;
-            }
-            if !prev.is_null() {
-                *prev = np_0;
-            }
-            (*np_0).wn_sibling = node;
-            node = np_0;
-        }
-        if *word.offset(i as isize) as ::core::ffi::c_int == NUL {
-            (*node).wn_flags = flags as uint16_t;
-            (*node).wn_region = ((*node).wn_region as ::core::ffi::c_int
-                | region as int16_t as ::core::ffi::c_int)
-                as int16_t;
-            (*node).wn_affixID = affixID as uint8_t;
-            break;
-        } else {
-            prev = &raw mut (*node).wn_child;
-            node = *prev;
-            i += 1;
-        }
-    }
-    (*spin).si_msg_count += 1;
-    if (*spin).si_compress_cnt > 1 as ::core::ffi::c_int {
-        (*spin).si_compress_cnt -= 1;
-        if (*spin).si_compress_cnt == 1 as ::core::ffi::c_int {
-            (*spin).si_blocks_cnt += compress_inc.get();
-        }
-    }
-    if if (*spin).si_compress_cnt == 1 as ::core::ffi::c_int {
-        ((*spin).si_free_count < MAXWLEN as ::core::ffi::c_int) as ::core::ffi::c_int
-    } else {
-        ((*spin).si_blocks_cnt >= compress_start.get()) as ::core::ffi::c_int
-    } != 0
-    {
-        (*spin).si_blocks_cnt -= compress_inc.get();
-        (*spin).si_compress_cnt = compress_added.get();
-        if (*spin).si_verbose != 0 {
-            msg_start();
-            msg_puts(gettext(msg_compressing.get()));
-            msg_clr_eos();
-            msg_didout.set(false_0 != 0);
-            msg_col.set(0 as ::core::ffi::c_int);
-            ui_flush();
-        }
-        wordtree_compress(
-            spin,
-            (*spin).si_foldroot,
-            b"case-folded\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        if affixID >= 0 as ::core::ffi::c_int {
-            wordtree_compress(
-                spin,
-                (*spin).si_keeproot,
-                b"keep-case\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    }
-    return OK;
-}
-unsafe fn get_wordnode(mut spin: *mut spellinfo_T) -> *mut wordnode_T {
-    let mut n: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
-    if (*spin).si_first_free.is_null() {
-        n = getroom(spin, ::core::mem::size_of::<wordnode_T>(), true_0 != 0) as *mut wordnode_T;
-    } else {
-        n = (*spin).si_first_free;
-        (*spin).si_first_free = (*n).wn_child;
-        memset(
-            n as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<wordnode_T>(),
-        );
-        (*spin).si_free_count -= 1;
-    }
-    return n;
-}
-unsafe fn deref_wordnode(
-    mut spin: *mut spellinfo_T,
-    mut node: *mut wordnode_T,
-) -> ::core::ffi::c_int {
-    let mut cnt: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    (*node).wn_refs -= 1;
-    if (*node).wn_refs == 0 as ::core::ffi::c_int {
-        let mut np: *mut wordnode_T = node;
-        while !np.is_null() {
-            if !(*np).wn_child.is_null() {
-                cnt += deref_wordnode(spin, (*np).wn_child);
-            }
-            free_wordnode(spin, np);
-            cnt += 1;
-            np = (*np).wn_sibling;
-        }
-        cnt += 1;
-    }
-    return cnt;
-}
-unsafe fn free_wordnode(mut spin: *mut spellinfo_T, mut n: *mut wordnode_T) {
-    (*n).wn_child = (*spin).si_first_free;
-    (*spin).si_first_free = n;
-    (*spin).si_free_count += 1;
-}
-unsafe fn wordtree_compress(
-    mut spin: *mut spellinfo_T,
-    mut root: *mut wordnode_T,
-    mut name: *const ::core::ffi::c_char,
-) {
-    let mut ht: hashtab_T = hashtab_T {
-        ht_mask: 0,
-        ht_used: 0,
-        ht_filled: 0,
-        ht_changed: 0,
-        ht_locked: 0,
-        ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-        ht_smallarray: [hashitem_T {
-            hi_hash: 0,
-            hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        }; 16],
-    };
-    let mut tot: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut perc: ::core::ffi::c_long = 0;
-    if (*root).wn_sibling.is_null() {
-        return;
-    }
-    hash_init(&raw mut ht);
-    let n: ::core::ffi::c_int = node_compress(spin, (*root).wn_sibling, &raw mut ht, &raw mut tot);
-    if (*spin).si_verbose != 0 || p_verbose.get() > 2 as OptInt {
-        if tot > 1000000 as ::core::ffi::c_int {
-            perc = ((tot - n) / (tot / 100 as ::core::ffi::c_int)) as ::core::ffi::c_long;
-        } else if tot == 0 as ::core::ffi::c_int {
-            perc = 0 as ::core::ffi::c_long;
-        } else {
-            perc = ((tot - n) * 100 as ::core::ffi::c_int / tot) as ::core::ffi::c_long;
-        }
-        vim_snprintf(
-            IObuff.ptr() as *mut ::core::ffi::c_char,
-            IOSIZE as size_t,
-            gettext(
-                b"Compressed %s: %d of %d nodes; %d (%ld%%) remaining\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ),
-            name,
-            n,
-            tot,
-            tot - n,
-            perc,
-        );
-        spell_message(spin, IObuff.ptr() as *mut ::core::ffi::c_char);
-    }
-    hash_clear(&raw mut ht);
-}
-unsafe fn node_compress(
-    mut spin: *mut spellinfo_T,
-    mut node: *mut wordnode_T,
-    mut ht: *mut hashtab_T,
-    mut tot: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut tp: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
-    let mut child: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
-    let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut n: ::core::ffi::c_uint = 0;
-    let mut compressed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut np: *mut wordnode_T = node;
-    while !np.is_null() && !got_int.get() {
-        len += 1;
-        child = (*np).wn_child;
-        if !child.is_null() {
-            compressed += node_compress(spin, child, ht, tot);
-            let mut hash: hash_T = hash_hash(
-                &raw mut (*child).wn_u1.hashkey as *mut uint8_t as *mut ::core::ffi::c_char,
-            );
-            let mut hi: *mut hashitem_T = hash_lookup(
-                ht,
-                &raw mut (*child).wn_u1.hashkey as *mut uint8_t as *const ::core::ffi::c_char,
-                strlen(&raw mut (*child).wn_u1.hashkey as *mut uint8_t as *mut ::core::ffi::c_char),
-                hash,
-            );
-            if !((*hi).hi_key.is_null()
-                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char)
-            {
-                tp = (*hi).hi_key as *mut wordnode_T;
-                while !tp.is_null() {
-                    if node_equal(child, tp) {
-                        (*tp).wn_refs += 1;
-                        compressed += deref_wordnode(spin, child);
-                        (*np).wn_child = tp;
-                        break;
-                    } else {
-                        tp = (*tp).wn_u2.next;
-                    }
-                }
-                if tp.is_null() {
-                    tp = (*hi).hi_key as *mut wordnode_T;
-                    (*child).wn_u2.next = (*tp).wn_u2.next;
-                    (*tp).wn_u2.next = child;
-                }
-            } else {
-                hash_add_item(
-                    ht,
-                    hi,
-                    &raw mut (*child).wn_u1.hashkey as *mut uint8_t as *mut ::core::ffi::c_char,
-                    hash,
-                );
-            }
-        }
-        np = (*np).wn_sibling;
-    }
-    *tot += len + 1 as ::core::ffi::c_int;
-    (*node).wn_u1.hashkey[0 as ::core::ffi::c_int as usize] = len as uint8_t;
-    let mut nr: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
-    let mut np_0: *mut wordnode_T = node;
-    while !np_0.is_null() {
-        if (*np_0).wn_byte as ::core::ffi::c_int == NUL {
-            n = ((*np_0).wn_flags as ::core::ffi::c_int
-                + (((*np_0).wn_region as ::core::ffi::c_int) << 8 as ::core::ffi::c_int)
-                + (((*np_0).wn_affixID as ::core::ffi::c_int) << 16 as ::core::ffi::c_int))
-                as ::core::ffi::c_uint;
-        } else {
-            n = ((*np_0).wn_byte as uintptr_t).wrapping_add(
-                ((*np_0).wn_child.expose_provenance() as uintptr_t) << 8 as ::core::ffi::c_int,
-            ) as ::core::ffi::c_uint;
-        }
-        nr = nr.wrapping_mul(101 as ::core::ffi::c_uint).wrapping_add(n);
-        np_0 = (*np_0).wn_sibling;
-    }
-    n = nr & 0xff as ::core::ffi::c_uint;
-    (*node).wn_u1.hashkey[1 as ::core::ffi::c_int as usize] = (if n == 0 as ::core::ffi::c_uint {
-        1 as ::core::ffi::c_int
-    } else {
-        n as uint8_t as ::core::ffi::c_int
-    }) as uint8_t;
-    n = nr >> 8 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint;
-    (*node).wn_u1.hashkey[2 as ::core::ffi::c_int as usize] = (if n == 0 as ::core::ffi::c_uint {
-        1 as ::core::ffi::c_int
-    } else {
-        n as uint8_t as ::core::ffi::c_int
-    }) as uint8_t;
-    n = nr >> 16 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint;
-    (*node).wn_u1.hashkey[3 as ::core::ffi::c_int as usize] = (if n == 0 as ::core::ffi::c_uint {
-        1 as ::core::ffi::c_int
-    } else {
-        n as uint8_t as ::core::ffi::c_int
-    }) as uint8_t;
-    n = nr >> 24 as ::core::ffi::c_int & 0xff as ::core::ffi::c_uint;
-    (*node).wn_u1.hashkey[4 as ::core::ffi::c_int as usize] = (if n == 0 as ::core::ffi::c_uint {
-        1 as ::core::ffi::c_int
-    } else {
-        n as uint8_t as ::core::ffi::c_int
-    }) as uint8_t;
-    (*node).wn_u1.hashkey[5 as ::core::ffi::c_int as usize] = NUL as uint8_t;
-    veryfast_breakcheck();
-    return compressed;
-}
-unsafe fn node_equal(mut n1: *mut wordnode_T, mut n2: *mut wordnode_T) -> bool {
-    let mut p1: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
-    let mut p2: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
-    p1 = n1;
-    p2 = n2;
-    while !p1.is_null() && !p2.is_null() {
-        if (*p1).wn_byte as ::core::ffi::c_int != (*p2).wn_byte as ::core::ffi::c_int
-            || (if (*p1).wn_byte as ::core::ffi::c_int == NUL {
-                ((*p1).wn_flags as ::core::ffi::c_int != (*p2).wn_flags as ::core::ffi::c_int
-                    || (*p1).wn_region as ::core::ffi::c_int
-                        != (*p2).wn_region as ::core::ffi::c_int
-                    || (*p1).wn_affixID as ::core::ffi::c_int
-                        != (*p2).wn_affixID as ::core::ffi::c_int)
-                    as ::core::ffi::c_int
-            } else {
-                ((*p1).wn_child != (*p2).wn_child) as ::core::ffi::c_int
-            }) != 0
-        {
-            break;
-        }
-        p1 = (*p1).wn_sibling;
-        p2 = (*p2).wn_sibling;
-    }
-    return p1.is_null() && p2.is_null();
 }
 unsafe extern "C" fn rep_compare(
     mut s1: *const ::core::ffi::c_void,
@@ -5970,8 +5413,7 @@ unsafe fn spell_make_sugfile(mut spin: *mut spellinfo_T, mut wfname: *mut ::core
         }
         free_slang = true_0 != 0;
     }
-    (*spin).si_blocks = ::core::ptr::null_mut::<sblock_T>();
-    (*spin).si_blocks_cnt = 0 as ::core::ffi::c_int;
+    (*spin).si_arena.block_count = 0 as ::core::ffi::c_int;
     (*spin).si_compress_cnt = 0 as ::core::ffi::c_int;
     (*spin).si_free_count = 0 as ::core::ffi::c_int;
     (*spin).si_first_free = ::core::ptr::null_mut::<wordnode_T>();
@@ -5988,12 +5430,9 @@ unsafe fn spell_make_sugfile(mut spin: *mut spellinfo_T, mut wfname: *mut ::core
                     as *const ::core::ffi::c_char),
                 (*(*spin).si_spellbuf).b_ml.ml_line_count as int64_t,
             );
-            spell_message(spin, gettext(msg_compressing.get()));
-            wordtree_compress(
-                spin,
-                (*spin).si_foldroot,
-                b"case-folded\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+            spell_message(spin, gettext(MSG_COMPRESSING.as_ptr()));
+            let foldroot = (*spin).si_foldroot;
+            wordtree_compress(&mut *spin, foldroot, c"case-folded");
             fname = xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
             xstrlcpy(fname, wfname, MAXPATHL as size_t);
             len = strlen(fname) as ::core::ffi::c_int;
@@ -6006,7 +5445,7 @@ unsafe fn spell_make_sugfile(mut spin: *mut spellinfo_T, mut wfname: *mut ::core
     if free_slang {
         slang_free(slang);
     }
-    free_blocks((*spin).si_blocks);
+    (*spin).si_arena.clear();
     close_spellbuf((*spin).si_spellbuf);
 }
 unsafe fn sug_filltree(mut spin: *mut spellinfo_T, mut slang: *mut slang_T) -> ::core::ffi::c_int {
@@ -6016,7 +5455,7 @@ unsafe fn sug_filltree(mut spin: *mut spellinfo_T, mut slang: *mut slang_T) -> :
     let mut tsalword: [::core::ffi::c_char; 254] = [0; 254];
     let mut words_done: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
     let mut wordcount: [::core::ffi::c_int; 254] = [0; 254];
-    (*spin).si_foldroot = wordtree_alloc(spin);
+    (*spin).si_foldroot = wordtree_alloc(&mut *spin);
     (*spin).si_sugtree = true_0;
     let mut byts: *mut uint8_t = (*slang).sl_fbyts;
     let mut idxs: *mut idx_T = (*slang).sl_fidxs;
@@ -6049,10 +5488,11 @@ unsafe fn sug_filltree(mut spin: *mut spellinfo_T, mut slang: *mut slang_T) -> :
                     true_0 != 0,
                     &raw mut tsalword as *mut ::core::ffi::c_char,
                 );
+                let foldroot = (*spin).si_foldroot;
                 if tree_add_word(
-                    spin,
+                    &mut *spin,
                     &raw mut tsalword as *mut ::core::ffi::c_char,
-                    (*spin).si_foldroot,
+                    foldroot,
                     (words_done >> 16 as ::core::ffi::c_int) as ::core::ffi::c_int,
                     (words_done & 0xffff as ::core::ffi::c_uint) as ::core::ffi::c_int,
                     0 as ::core::ffi::c_int,
@@ -6062,7 +5502,7 @@ unsafe fn sug_filltree(mut spin: *mut spellinfo_T, mut slang: *mut slang_T) -> :
                 }
                 words_done = words_done.wrapping_add(1);
                 wordcount[depth as usize] += 1;
-                (*spin).si_blocks_cnt = 0 as ::core::ffi::c_int;
+                (*spin).si_arena.block_count = 0 as ::core::ffi::c_int;
                 while (n as ::core::ffi::c_int + 1 as ::core::ffi::c_int) < (*slang).sl_fbyts_len
                     && *byts.offset((n as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize)
                         as ::core::ffi::c_int
@@ -6341,8 +5781,7 @@ unsafe fn mkspell(
         si_keepwcount: 0,
         si_prefroot: ::core::ptr::null_mut::<wordnode_T>(),
         si_sugtree: 0,
-        si_blocks: ::core::ptr::null_mut::<sblock_T>(),
-        si_blocks_cnt: 0,
+        si_arena: SpellArena::new(),
         si_did_emsg: 0,
         si_compress_cnt: 0,
         si_first_free: ::core::ptr::null_mut::<wordnode_T>(),
@@ -6640,9 +6079,9 @@ unsafe fn mkspell(
                 i += 1;
             }
             spin.si_region_count = incount;
-            spin.si_foldroot = wordtree_alloc(&raw mut spin);
-            spin.si_keeproot = wordtree_alloc(&raw mut spin);
-            spin.si_prefroot = wordtree_alloc(&raw mut spin);
+            spin.si_foldroot = wordtree_alloc(&mut spin);
+            spin.si_keeproot = wordtree_alloc(&mut spin);
+            spin.si_prefroot = wordtree_alloc(&mut spin);
             if spin.si_add == 0 {
                 spin.si_clear_chartab = true_0;
             }
@@ -6697,22 +6136,13 @@ unsafe fn mkspell(
                 );
             }
             if !error && !got_int.get() {
-                spell_message(&raw mut spin, gettext(msg_compressing.get()));
-                wordtree_compress(
-                    &raw mut spin,
-                    spin.si_foldroot,
-                    b"case-folded\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-                wordtree_compress(
-                    &raw mut spin,
-                    spin.si_keeproot,
-                    b"keep-case\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-                wordtree_compress(
-                    &raw mut spin,
-                    spin.si_prefroot,
-                    b"prefixes\0".as_ptr() as *const ::core::ffi::c_char,
-                );
+                spell_message(&raw mut spin, gettext(MSG_COMPRESSING.as_ptr()));
+                let root = spin.si_foldroot;
+                wordtree_compress(&mut spin, root, c"case-folded");
+                let root = spin.si_keeproot;
+                wordtree_compress(&mut spin, root, c"keep-case");
+                let root = spin.si_prefroot;
+                wordtree_compress(&mut spin, root, c"prefixes");
             }
             if !error && !got_int.get() {
                 vim_snprintf(
@@ -6753,7 +6183,7 @@ unsafe fn mkspell(
                 }
                 i_1 += 1;
             }
-            free_blocks(spin.si_blocks);
+            spin.si_arena.clear();
             if spin.si_sugtime != 0 as time_t && !error && !got_int.get() {
                 spell_make_sugfile(&raw mut spin, wfname);
             }
