@@ -9,10 +9,14 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
-- Rewrote `:terminal` buffers, covering the emulator's screen and
-  scrollback, terminal mode and its key translation, mouse forwarding,
-  `TermRequest` and the other terminal autocommands, `b:term_title`, and
-  OSC 52 clipboard writes.
+- Rewrote the user interface, covering the built-in terminal UI (terminfo
+  resolution and quirks, painting, cursor shapes, and the input parser
+  behind mouse reporting, bracketed paste and the kitty keyboard
+  protocol), `:terminal` buffers (the emulator's screen and scrollback,
+  terminal mode, mouse forwarding, `TermRequest` and the other terminal
+  autocommands, `b:term_title`, and OSC 52 clipboard writes), and the
+  remote-UI protocol on both ends: `nvim_ui_attach` and its options, the
+  serialisation of every UI event, and the `--remote-ui` client.
 
 ## [2026.07.30-4b9dee25d3]
 
