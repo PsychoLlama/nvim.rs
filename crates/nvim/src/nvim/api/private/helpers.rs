@@ -76,7 +76,6 @@ const MH_TOMBSTONE: uint32_t = u32::MAX;
 const NUL: c_char = 0;
 const NL: c_char = b'\n' as c_char;
 const CAR: c_char = b'\r' as c_char;
-const MAXLNUM: int64_t = 2147483647;
 const MAXCOL: Integer = 2147483647;
 
 /// `current_sctx.sc_sid` for a call that came from Lua, and for one that came

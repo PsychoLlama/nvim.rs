@@ -9,7 +9,7 @@ use crate::src::nvim::message::{
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{gettext, memmove, snprintf};
 use crate::src::nvim::os::time::os_time;
-use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::pos::{MAXLNUM, equalpos};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 

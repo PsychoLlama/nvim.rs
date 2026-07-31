@@ -17,7 +17,7 @@ use crate::src::nvim::memory::{xfree, xmalloc, xstrdup};
 use crate::src::nvim::option::{copy_option_part, skip_to_option_part};
 use crate::src::nvim::os::libc::{__assert_fail, atoi, strcpy, strlen, strncmp, tolower};
 use crate::src::nvim::plines::getvcol;
-use crate::src::nvim::pos::lt;
+use crate::src::nvim::pos::{MAXLNUM, lt};
 use crate::src::nvim::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
@@ -51,7 +51,6 @@ pub use crate::src::nvim::types::{
     winopt_T, wline_T, xfmark_T,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed = 2147483647;
 pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_0 = 2147483647;
 pub const kVPosWinCol: VirtTextPos = 5;

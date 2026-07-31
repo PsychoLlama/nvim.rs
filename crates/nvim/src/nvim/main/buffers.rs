@@ -28,12 +28,12 @@ use crate::src::nvim::fileio::readfile;
 use crate::src::nvim::getchar::vgetc;
 use crate::src::nvim::main::exit::getout;
 use crate::src::nvim::main::{
-    BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, IOSIZE, IObuff, MAXLNUM, NameBuff, READ_NEW,
-    READ_STDIN, SEA_DIALOG, SEA_NONE, SEA_QUIT, SID_CARG, VAR_FIXED, VV_ARGF, WIN_HOR, WIN_TABS,
-    WIN_VER, arg_had_last, autocmd_no_enter, autocmd_no_leave, curbuf, curtab, curwin, did_emsg,
-    firstwin, global_alist, got_int, kListLenMayKnow, kOptErrorfile, kOptShortmess,
-    kOptValTypeString, mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef, p_efm, p_fdls,
-    p_menc, p_shm, recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
+    BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, IOSIZE, IObuff, NameBuff, READ_NEW, READ_STDIN,
+    SEA_DIALOG, SEA_NONE, SEA_QUIT, SID_CARG, VAR_FIXED, VV_ARGF, WIN_HOR, WIN_TABS, WIN_VER,
+    arg_had_last, autocmd_no_enter, autocmd_no_leave, curbuf, curtab, curwin, did_emsg, firstwin,
+    global_alist, got_int, kListLenMayKnow, kOptErrorfile, kOptShortmess, kOptValTypeString,
+    mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef, p_efm, p_fdls, p_menc, p_shm,
+    recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
 };
 use crate::src::nvim::memline::ml_recover;
 use crate::src::nvim::memory::{xfree, xstrdup};
@@ -55,6 +55,7 @@ use crate::src::nvim::window::{
 };
 
 use crate::src::nvim::main::exit::os_exit;
+use crate::src::nvim::pos::MAXLNUM;
 
 /// The user answered "quit" to the swap-file ATTENTION prompt: leave with
 /// status 1.

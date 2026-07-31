@@ -96,7 +96,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_13 = 2147483647;
 pub const kRetMulti: LuaRetMode = 3;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;

@@ -34,6 +34,7 @@ mod exit;
 mod remote;
 mod usage;
 pub use self::exit::*;
+use crate::src::nvim::pos::MAXLNUM;
 
 /// A C string literal as the fixed-size `c_char` array a global holds.
 ///
@@ -76,7 +77,6 @@ pub(crate) const kCallbackNone: CallbackType = 0;
 pub(crate) const VAR_FIXED: VarLockStatus = 2;
 pub(crate) const VAR_NUMBER: VarType = 1;
 pub(crate) const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub(crate) const MAXLNUM: c_uint = 2147483647;
 pub(crate) const kListLenMayKnow: ListLenSpecials = -3;
 pub(crate) const HLF_NONE: hlf_T = 0;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;

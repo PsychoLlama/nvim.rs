@@ -97,7 +97,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::path::pathcmp;
 use crate::src::nvim::plines::{plines_win, plines_win_col, plines_win_nofill, win_text_height};
 use crate::src::nvim::popupmenu::pum_ui_flush;
-use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::pos::{MAXLNUM, equalpos};
 use crate::src::nvim::quickfix::qf_view_result;
 use crate::src::nvim::quickfix::{copy_loclist_stack, qf_free_all};
 use crate::src::nvim::search::find_pattern_in_path;
@@ -216,7 +216,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_12 = 2147483647;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;

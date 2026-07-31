@@ -36,6 +36,7 @@ use crate::src::nvim::r#move::validate_cursor;
 use crate::src::nvim::normal::do_check_scrollbind;
 use crate::src::nvim::os::libc::{__assert_fail, gettext, snprintf, strlen};
 use crate::src::nvim::path::vim_FullName;
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::src::nvim::runtime::source_runtime_vim_lua;
 pub use crate::src::nvim::types::{
@@ -75,7 +76,6 @@ use crate::src::nvim::window::{
     goto_tabpage_tp, goto_tabpage_win, valid_tabpage, win_goto, win_split, win_valid,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed = 2147483647;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

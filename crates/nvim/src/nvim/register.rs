@@ -67,6 +67,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::plines::{getvcol, init_charsize_arg, win_charsize};
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::search::{last_search_pat, set_last_search_pat};
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ext};
 use crate::src::nvim::terminal::terminal_paste;
@@ -165,7 +166,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_13 = 2147483647;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;

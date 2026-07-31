@@ -95,6 +95,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::path::{FullName_save, fix_fname, path_fnamecmp, path_tail};
 use crate::src::nvim::plines::win_get_fill;
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::quickfix::qf_stack_get_bufnr;
 use crate::src::nvim::runtime::{estack_pop, estack_push};
 use crate::src::nvim::spell::parse_spelllang;
@@ -240,7 +241,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_15 = 2147483647;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const DO_NOT_FREE_CNT: C2Rust_Unnamed_16 = 1073741823;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;

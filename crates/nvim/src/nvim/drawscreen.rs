@@ -72,6 +72,7 @@ use crate::src::nvim::plines::{
     getvcols, getvvcol, plines_m_win, plines_win, win_get_fill, win_may_fill,
 };
 use crate::src::nvim::popupmenu::{pum_check_clear, pum_drawn, pum_invalidate, pum_redraw};
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::profile::profile_setlimit;
 use crate::src::nvim::search::last_pat_prog;
 use crate::src::nvim::spell::spell_check_window;
@@ -195,7 +196,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_13 = 2147483647;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
 pub const HLF_COUNT: hlf_T = 76;

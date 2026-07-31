@@ -70,6 +70,7 @@ use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::path::{
     concat_fnames_realloc, path_fnamecmp, path_tail_with_sep, path_try_shorten_fname,
 };
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::regexp::regtilde;
 use crate::src::nvim::register::op_reg_get;
 use crate::src::nvim::register::op_reg_index;
@@ -272,7 +273,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_15 = 2147483647;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kListLenShouldKnow: ListLenSpecials = -2;
 pub const kListLenUnknown: ListLenSpecials = -1;

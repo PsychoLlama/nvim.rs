@@ -72,6 +72,7 @@ use crate::src::nvim::path::{
     add_pathsep, after_pathsep, dir_of_file_exists, path_fnamecmp, path_is_absolute,
     path_shorten_fname, path_tail, path_with_url, vim_FullName, vim_ispathsep,
 };
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::shada::check_marks_read;
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
@@ -361,7 +362,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_19 = 2147483647;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_20 = 2147483647;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;

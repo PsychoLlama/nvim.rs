@@ -86,7 +86,7 @@ use crate::src::nvim::path::{FreeWild, expand_wildcards, path_tail, vim_ispathse
 use crate::src::nvim::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,
 };
-use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::pos::{MAXLNUM, equalpos};
 use crate::src::nvim::register::get_register_name;
 use crate::src::nvim::register::{copy_register, free_register, valid_yank_reg};
 use crate::src::nvim::search::{find_pattern_in_path, ignorecase, search_for_exact_line, searchit};
@@ -229,7 +229,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub const kListLenMayKnow: ListLenSpecials = -3;

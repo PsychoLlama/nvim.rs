@@ -118,7 +118,7 @@ use crate::src::nvim::os::time::os_time;
 use crate::src::nvim::path::{fix_fname, invocation_path_tail};
 use crate::src::nvim::plines::linetabsize_str;
 use crate::src::nvim::plines::{getvcol, plines_m_win_fill};
-use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::pos::{MAXLNUM, equalpos};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};
 use crate::src::nvim::regexp::vim_regexec_multi;
 use crate::src::nvim::regexp::{
@@ -258,7 +258,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;

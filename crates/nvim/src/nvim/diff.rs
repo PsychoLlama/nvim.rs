@@ -58,6 +58,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::os::shell::call_shell;
 use crate::src::nvim::path::FullName_save;
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
@@ -178,7 +179,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub const HLF_COUNT: hlf_T = 76;

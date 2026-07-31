@@ -53,7 +53,6 @@ pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
 pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const MAXLNUM: c_uint = 2147483647;
 pub const kZIndexFloatDefault: c_uint = 50;
 pub const kOptValTypeString: OptValType = 2;
 pub const UPD_NOT_VALID: c_uint = 40;

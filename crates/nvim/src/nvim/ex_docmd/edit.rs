@@ -22,8 +22,8 @@ use crate::src::nvim::ex_docmd::{
     BACKWARD, BL_FIX, BL_SOL, BL_WHITE, CMD_delete, CMD_earlier, CMD_folddoclosed, CMD_foldopen,
     CMD_list, CMD_move, CMD_number, CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert,
     CMD_startreplace, CMD_yank, CPO_EXECBUF, Ctrl_C, Ctrl_O, DOCMD_NOWAIT, DOCMD_VERBOSE,
-    EXFLAG_LIST, EXFLAG_NR, FAIL, FORWARD, K_SPECIAL, KE_FILLER, KS_SPECIAL, MAXLNUM, ML_EMPTY,
-    MODE_INSERT, MODE_TERMINAL, NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, OPTION_MAGIC_OFF,
+    EXFLAG_LIST, EXFLAG_NR, FAIL, FORWARD, K_SPECIAL, KE_FILLER, KS_SPECIAL, ML_EMPTY, MODE_INSERT,
+    MODE_TERMINAL, NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, OPTION_MAGIC_OFF,
     OPTION_MAGIC_ON, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, REMAP_NONE, REMAP_YES, UPD_VALID,
     kFalse, kMTLineWise, kNone,
 };
@@ -58,6 +58,7 @@ use crate::src::nvim::option::get_scrolloff_value;
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::plines::plines_m_win_fill;
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::register::{do_execreg, do_put, op_yank};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{

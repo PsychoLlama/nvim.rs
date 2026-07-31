@@ -27,7 +27,7 @@ use crate::src::nvim::ex_docmd::{
     ADDR_ARGUMENTS, ADDR_BUFFERS, ADDR_LINES, ADDR_LOADED_BUFFERS, ADDR_NONE, ADDR_OTHER,
     ADDR_QUICKFIX, ADDR_QUICKFIX_VALID, ADDR_TABS, ADDR_TABS_RELATIVE, ADDR_UNSIGNED, ADDR_WINDOWS,
     CMD_SIZE, CMD_cc, CMD_diffget, CMD_diffput, CMD_ll, CMD_wincmd, EX_RANGE, EX_ZEROR,
-    EXPAND_NOTHING, FAIL, INT32_MAX, MAXCOL, MAXLNUM, NUL, OK, cmdnames, e_backslash, e_invrange,
+    EXPAND_NOTHING, FAIL, INT32_MAX, MAXCOL, NUL, OK, cmdnames, e_backslash, e_invrange,
     e_line_number_out_of_range, e_no_errors, e_norange, searchcmdlen,
 };
 use crate::src::nvim::ex_docmd::{kMarkAll, kMarkBufLocal};
@@ -37,6 +37,7 @@ use crate::src::nvim::mark::{mark_check, mark_get, mark_get_visual, mark_move_to
 use crate::src::nvim::message::iemsg;
 use crate::src::nvim::option::magic_isset;
 use crate::src::nvim::os::libc::{gettext, strlen};
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::quickfix::{
     qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_valid_size,
 };

@@ -31,6 +31,7 @@ use crate::src::nvim::memory::{
 use crate::src::nvim::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::src::nvim::ops::get_region_bytecount;
 use crate::src::nvim::os::libc::{memcpy, strchr, strlen};
+use crate::src::nvim::pos::MAXLNUM;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
@@ -129,7 +130,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub const ET_INTERRUPT: except_type_T = 2;

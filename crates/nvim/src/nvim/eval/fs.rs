@@ -44,6 +44,7 @@ use crate::src::nvim::path::{
     path_next_component, path_tail, path_tail_with_sep, shorten_dir_len, simplify_filename,
     vim_isAbsName, vim_ispathsep,
 };
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::runtime::script_is_lua;
 use crate::src::nvim::strings::{concat_str, vim_strchr, vim_strsave_shellescape, xstrnsave};
 pub use crate::src::nvim::types::{
@@ -82,7 +83,6 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::window::find_tabpage;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed = 2147483647;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

@@ -114,7 +114,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::path::vim_ispathsep;
 use crate::src::nvim::popupmenu::{pum_check_clear, pum_undisplay};
-use crate::src::nvim::pos::{clearpos, equalpos, lt};
+use crate::src::nvim::pos::{MAXLNUM, clearpos, equalpos, lt};
 use crate::src::nvim::profile::profile_setlimit;
 use crate::src::nvim::regexp::skip_regexp_ex;
 use crate::src::nvim::register::is_literal_register;
@@ -270,7 +270,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;

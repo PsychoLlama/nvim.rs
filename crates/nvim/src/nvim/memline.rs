@@ -61,6 +61,7 @@ use crate::src::nvim::path::{
     path_full_compare, path_is_absolute, path_tail, same_directory, shorten_dir, vim_FullName,
     vim_ispathsep,
 };
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::spell::spell_delete_wordlist;
 use crate::src::nvim::statusline::get_trans_bufname;
 use crate::src::nvim::strings::{kv_do_printf, vim_strchr, xstrnsave};
@@ -155,7 +156,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_12 = 2147483647;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;

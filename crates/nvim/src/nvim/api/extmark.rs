@@ -34,6 +34,7 @@ use crate::src::nvim::memline::ml_get_buf_len;
 use crate::src::nvim::memory::{strequal, xfree, xrealloc};
 use crate::src::nvim::r#move::changed_window_setting;
 use crate::src::nvim::os::libc::__assert_fail;
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::sign::init_sign_text;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
@@ -140,7 +141,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;

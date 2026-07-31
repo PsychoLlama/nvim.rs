@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    CAR, MAXLNUM, NL, NUL, STRING_INIT, api_set_error, arena_string, arena_take_arraybuilder,
+    CAR, NL, NUL, STRING_INIT, api_set_error, arena_string, arena_take_arraybuilder,
     kErrorTypeValidation,
 };
 use crate::src::nvim::api::private::validate::api_err_invalid;
@@ -16,6 +16,7 @@ use crate::src::nvim::kvec::InitVec;
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{memchrsub, xmemdupz, xstrndup};
 use crate::src::nvim::os::libc::{strlen, strnlen};
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::types::{
     Arena, Array, ArrayBuilder, Error, String_0, buf_T, garray_T, int64_t, kObjectTypeString,
     linenr_T, object, object_data, size_t,
@@ -201,7 +202,7 @@ pub(crate) unsafe fn buf_get_text(
 ) -> String_0 {
     // SAFETY: `buf` is a loaded buffer and `err` the caller's error slot.
     unsafe {
-        if lnum >= MAXLNUM {
+        if lnum >= i64::from(MAXLNUM) {
             api_err_invalid(
                 err,
                 c"line index".as_ptr(),

@@ -48,7 +48,6 @@ mod misc;
 pub(crate) use self::misc::*;
 pub const _ISlower: c_uint = 512;
 pub const _ISupper: c_uint = 256;
-pub const MAXLNUM: c_uint = 2147483647;
 pub const MAXCOL: c_uint = 2147483647;
 pub const HLF_MSG: hlf_T = 63;
 pub const HLF_LC: hlf_T = 9;

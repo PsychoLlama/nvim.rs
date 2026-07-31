@@ -22,6 +22,7 @@ use crate::src::nvim::marktree::{
 use crate::src::nvim::memline::ml_find_line_or_offset;
 use crate::src::nvim::memory::{xfree, xrealloc};
 use crate::src::nvim::os::libc::{__assert_fail, memset};
+use crate::src::nvim::pos::MAXLNUM;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
     Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, DecorExt,
@@ -119,7 +120,6 @@ pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_13 = 2147483647;
 pub const kExtmarkUndoNoRedo: ExtmarkOp = 3;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;

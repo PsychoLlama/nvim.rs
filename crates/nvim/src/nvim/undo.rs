@@ -72,7 +72,6 @@ mod header {
     pub const FAIL: c_int = 0;
     pub const EOF: c_int = -1;
     pub const SIZE_MAX: c_ulong = 18446744073709551615;
-    pub const MAXLNUM: c_int = 2147483647;
     pub const MAXPATHL: c_int = 4096;
     pub const NMARKS: c_int = 26;
 

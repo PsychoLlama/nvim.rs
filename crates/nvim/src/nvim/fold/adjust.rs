@@ -4,7 +4,7 @@ use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::mbyte::mb_adjust_cursor;
 use crate::src::nvim::memline::ml_get_len;
 use crate::src::nvim::os::libc::memmove;
-use crate::src::nvim::pos::ltoreq;
+use crate::src::nvim::pos::{MAXLNUM, ltoreq};
 use core::ffi::{c_int, c_void};
 use core::ptr;
 

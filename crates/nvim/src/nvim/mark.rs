@@ -64,7 +64,6 @@ pub const FAIL: c_int = 0;
 pub const NUL: c_int = 0;
 pub const TAB: c_int = '\t' as c_int;
 pub const MAXCOL: c_uint = 2147483647;
-pub const MAXLNUM: c_uint = 2147483647;
 pub const MAXPATHL: c_int = 4096;
 pub const IOSIZE: c_int = 1024 + 1;
 pub const FORWARD: Direction = 1;
@@ -121,6 +120,7 @@ pub const NMARK_LOCAL_MAX: c_int = 126;
 /// How many positions a window's jumplist remembers.
 pub const JUMPLISTSIZE: c_int = 100;
 
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::quickfix::qf_mark_adjust;
 unsafe extern "C" {}
 /// Set named mark "c" at current cursor position.

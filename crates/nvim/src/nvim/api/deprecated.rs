@@ -29,6 +29,7 @@ use crate::src::nvim::option::{
     optval_as_object, set_option_value_for,
 };
 use crate::src::nvim::options::kOptInvalid;
+use crate::src::nvim::pos::MAXLNUM;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue,
     Boolean, BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
@@ -128,7 +129,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub const kRetMulti: LuaRetMode = 3;

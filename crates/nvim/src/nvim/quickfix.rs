@@ -93,6 +93,7 @@ use crate::src::nvim::path::{
     FreeWild, add_pathsep, concat_fnames, fix_fname, gen_expand_wildcards, path_fnamecmp,
     path_is_absolute, path_tail, path_try_shorten_fname, vim_isAbsName,
 };
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::regexp::{vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
 use crate::src::nvim::search::{do_search, last_search_pat};
 use crate::src::nvim::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen, vim_strchr};
@@ -143,7 +144,6 @@ use crate::src::nvim::window::{
 };
 use crate::src::nvim::window::{goto_tabpage_win, win_close, win_enter, win_goto, win_valid};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed = 2147483647;
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

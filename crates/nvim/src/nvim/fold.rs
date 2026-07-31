@@ -43,6 +43,7 @@ pub use open_close::{
 pub use session::put_folds;
 pub use text::get_foldtext;
 
+use crate::src::nvim::pos::MAXLNUM;
 use level::foldUpdateIEMS;
 use open_close::check_closed;
 
@@ -50,7 +51,6 @@ pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
 pub const NUL: c_int = 0;
 pub const TAB: c_int = '\t' as c_int;
-pub const MAXLNUM: c_uint = 2147483647;
 pub const FORWARD: c_int = 1;
 pub const MODE_INSERT: c_int = 16;
 pub const UPD_INVERTED: c_uint = 20;

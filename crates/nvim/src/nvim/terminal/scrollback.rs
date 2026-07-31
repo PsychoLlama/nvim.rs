@@ -26,7 +26,8 @@ use crate::src::nvim::vterm::screen::vterm_screen_get_cell;
 use crate::src::nvim::vterm::vterm::vterm_get_size;
 
 use super::refresh::invalidate_terminal;
-use super::{MAXLNUM, NUL, SB_MAX, buf_for_handle, kExtmarkUndo, kMarkAdjustTerm};
+use super::{NUL, SB_MAX, buf_for_handle, kExtmarkUndo, kMarkAdjustTerm};
+use crate::src::nvim::pos::MAXLNUM;
 
 /// A cell holding nothing. vterm reports an empty cell as a zero `schar`;
 /// the width still has to be 1 or the row scan below would not advance.

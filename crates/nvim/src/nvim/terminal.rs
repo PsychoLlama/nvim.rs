@@ -103,7 +103,6 @@ pub use refresh::{
 const kErrorTypeNone: ErrorType = -1;
 
 /// "To the end of the buffer", for the mark adjustments.
-const MAXLNUM: linenr_T = 2147483647;
 const NUL: c_int = 0;
 /// `ml_flags` bit meaning the buffer holds one empty line and nothing else.
 const ML_EMPTY: c_int = 0x1;

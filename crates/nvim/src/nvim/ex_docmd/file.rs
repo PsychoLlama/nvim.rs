@@ -22,8 +22,7 @@ use crate::src::nvim::ex_docmd::{
     CMD_split, CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit,
     CMOD_KEEPALT, CPO_ALTREAD, DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF,
     ECMD_ALTBUF, ECMD_FORCEIT, ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, FAIL, FNAME_MESS, FORWARD,
-    MAXLNUM, ML_EMPTY, NUL, OK, UPD_NOT_VALID, UPD_VALID, ex_pressedreturn, kDirectionNotSet,
-    kUICmdline,
+    ML_EMPTY, NUL, OK, UPD_NOT_VALID, UPD_VALID, ex_pressedreturn, kDirectionNotSet, kUICmdline,
 };
 use crate::src::nvim::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::src::nvim::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
@@ -43,6 +42,7 @@ use crate::src::nvim::normal::normal_enter;
 use crate::src::nvim::option::get_findfunc;
 use crate::src::nvim::os::libc::{gettext, strlen};
 use crate::src::nvim::path::path_fnamecmp;
+use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::search::find_pattern_in_path;
 use crate::src::nvim::shada::{shada_read_everything, shada_write_file};
 use crate::src::nvim::strings::vim_strchr;

@@ -49,12 +49,13 @@ use crate::src::nvim::window::global_stl_height;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
 use super::{
-    B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI, EOL_MAC, FAIL, FO_ALL,
-    MAXLNUM, NUL, OK, OPT_GLOBAL, OPT_LOCAL, SID_NONE, UPD_NOT_VALID, UPD_VALID, did_set_opt_flags,
+    B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI, EOL_MAC, FAIL, FO_ALL, NUL,
+    OK, OPT_GLOBAL, OPT_LOCAL, SID_NONE, UPD_NOT_VALID, UPD_VALID, did_set_opt_flags,
     did_set_optexpr, did_set_option_listflag, did_set_str_generic,
     e_backupext_and_patchmode_are_equal, e_comma_required, illegal_char, kOptValTypeString,
     opt_strings_flags, valid_filetype,
 };
+use crate::src::nvim::pos::MAXLNUM;
 
 /// 'backspace' is a word list, except that the number 2 is also accepted
 /// and means everything but "nostop".

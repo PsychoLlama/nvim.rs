@@ -6,7 +6,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     cmdmod, curbuf, curtab, curwin, first_tabpage, firstwin, namedfm, saved_cursor,
 };
-use crate::src::nvim::pos::equalpos;
+use crate::src::nvim::pos::{MAXLNUM, equalpos};
 use core::ffi::{c_int, c_uint};
 use core::ptr;
 

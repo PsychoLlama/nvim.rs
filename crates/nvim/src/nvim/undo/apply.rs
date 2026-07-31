@@ -3,6 +3,7 @@
 
 use super::tree::*;
 use super::*;
+use crate::src::nvim::pos::MAXLNUM;
 
 pub unsafe extern "C" fn u_undo(mut count: c_int) {
     if !(*curbuf.get()).b_u_synced {

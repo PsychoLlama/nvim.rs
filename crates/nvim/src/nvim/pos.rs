@@ -9,6 +9,10 @@
 
 use crate::src::nvim::types::pos_T;
 
+/// One past the last addressable line: the line number `$` and an open-ended
+/// range resolve to, and the sentinel a "no line" mark carries.
+pub const MAXLNUM: ::core::ffi::c_uint = 2147483647;
+
 /// Whether two positions name the same place, `coladd` included.
 pub fn equalpos(a: pos_T, b: pos_T) -> bool {
     a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd
