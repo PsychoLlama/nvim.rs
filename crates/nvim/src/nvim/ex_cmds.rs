@@ -120,6 +120,7 @@ use crate::src::nvim::plines::linetabsize_str;
 use crate::src::nvim::plines::{getvcol, plines_m_win_fill};
 use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit, profile_zero};
+use crate::src::nvim::regexp::vim_regexec_multi;
 use crate::src::nvim::regexp::{
     regtilde, skip_regexp, skip_regexp_err, skip_regexp_ex, vim_regsub_multi,
 };
@@ -182,15 +183,6 @@ unsafe extern "C" {
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-    fn vim_regexec_multi(
-        rmp: *mut regmmatch_T,
-        win: *mut win_T,
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        tm: *mut proftime_T,
-        timed_out: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISalnum: C2Rust_Unnamed = 8;

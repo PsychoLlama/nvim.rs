@@ -61,6 +61,7 @@ use crate::src::nvim::options::{
 use crate::src::nvim::os::libc::{__assert_fail, abs, memcpy, memmove, memset, snprintf, strlen};
 use crate::src::nvim::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
 use crate::src::nvim::pos::ltoreq;
+use crate::src::nvim::quickfix::qf_current_entry;
 use crate::src::nvim::spell::{
     check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end,
 };
@@ -110,7 +111,6 @@ pub use crate::src::nvim::types::{
 use crate::src::nvim::ui::ui_rgb_attached;
 unsafe extern "C" {
     static win_extmark_arr: GlobalCell<C2Rust_Unnamed_30>;
-    fn qf_current_entry(wp: *mut win_T) -> linenr_T;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;

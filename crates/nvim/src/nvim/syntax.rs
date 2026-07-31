@@ -45,6 +45,7 @@ use crate::src::nvim::path::path_is_absolute;
 use crate::src::nvim::profile::{
     profile_add, profile_cmp, profile_divide, profile_end, profile_msg, profile_start, profile_zero,
 };
+use crate::src::nvim::regexp::vim_regexec_multi;
 use crate::src::nvim::regexp::{ref_extmatch, skip_regexp, unref_extmatch, vim_regcomp_had_eol};
 use crate::src::nvim::runtime::{do_source, source_runtime};
 use crate::src::nvim::strings::{
@@ -89,15 +90,6 @@ unsafe extern "C" {
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-    fn vim_regexec_multi(
-        rmp: *mut regmmatch_T,
-        win: *mut win_T,
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        tm: *mut proftime_T,
-        timed_out: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
 }
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;

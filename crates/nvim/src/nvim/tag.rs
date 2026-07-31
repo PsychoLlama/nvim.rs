@@ -63,6 +63,7 @@ use crate::src::nvim::path::{
     vim_isAbsName,
 };
 use crate::src::nvim::pos::clearpos;
+use crate::src::nvim::quickfix::set_errorlist;
 use crate::src::nvim::regexp::skip_regexp;
 use crate::src::nvim::runtime::do_in_runtimepath;
 use crate::src::nvim::search::{do_search, ignorecase, ignorecase_opt};
@@ -109,13 +110,6 @@ use crate::src::nvim::window::{
     win_split, win_valid,
 };
 unsafe extern "C" {
-    fn set_errorlist(
-        wp: *mut win_T,
-        list: *mut list_T,
-        action: ::core::ffi::c_int,
-        title: *mut ::core::ffi::c_char,
-        what: *mut dict_T,
-    ) -> ::core::ffi::c_int;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

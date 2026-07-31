@@ -121,16 +121,8 @@ pub const NMARK_LOCAL_MAX: c_int = 126;
 /// How many positions a window's jumplist remembers.
 pub const JUMPLISTSIZE: c_int = 100;
 
-unsafe extern "C" {
-    fn qf_mark_adjust(
-        buf: *mut buf_T,
-        wp: *mut win_T,
-        line1: linenr_T,
-        line2: linenr_T,
-        amount: linenr_T,
-        amount_after: linenr_T,
-    ) -> bool;
-}
+use crate::src::nvim::quickfix::qf_mark_adjust;
+unsafe extern "C" {}
 /// Set named mark "c" at current cursor position.
 /// Returns OK on success, FAIL if bad name given.
 pub unsafe extern "C" fn setmark(mut c: c_int) -> c_int {

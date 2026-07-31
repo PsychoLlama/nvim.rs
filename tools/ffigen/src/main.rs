@@ -885,6 +885,19 @@ impl<'w> Emitter<'w> {
             }
             return Some(out);
         }
+        // A field held by value needs its type's layout, so a type that is
+        // only ever declared incomplete cannot render one. Refusing here
+        // leaves the enclosing tag incomplete too, which is honest: the
+        // struct has no C-visible layout either. Pointers to such a type
+        // are still fine, and `cty` renders those without coming past here
+        // with a bare path.
+        if let syn::Type::Path(tp) = &f.ty {
+            if let Some(seg) = tp.path.segments.last() {
+                if self.unknown.contains(&seg.ident.to_string()) {
+                    return None;
+                }
+            }
+        }
         let cty = self.cty(file, &f.ty)?;
         Some(vec![format!("{};", decl(&cty, &c_name(&f.name)))])
     }

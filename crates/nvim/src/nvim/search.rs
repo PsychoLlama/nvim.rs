@@ -68,6 +68,7 @@ use crate::src::nvim::plines::getvcol;
 use crate::src::nvim::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit};
 use crate::src::nvim::regexp::skip_regexp_ex;
+use crate::src::nvim::regexp::vim_regexec_multi;
 use crate::src::nvim::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
 pub use crate::src::nvim::types::{
     __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
@@ -113,15 +114,6 @@ unsafe extern "C" {
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
-    fn vim_regexec_multi(
-        rmp: *mut regmmatch_T,
-        win: *mut win_T,
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        tm: *mut proftime_T,
-        timed_out: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
 }
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;

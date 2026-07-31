@@ -66,14 +66,6 @@ pub(crate) unsafe fn time_msg_at(what: &core::ffi::CStr) {
 }
 
 unsafe extern "C" {
-    fn qf_init(
-        wp: *mut win_T,
-        efile: *const c_char,
-        errorformat: *mut c_char,
-        newlist: c_int,
-        qf_title: *const c_char,
-        enc: *mut c_char,
-    ) -> c_int;
     fn qf_jump(qi: *mut qf_info_T, dir: c_int, errornr: c_int, forceit: c_int);
 }
 pub(crate) const kErrorTypeNone: ErrorType = -1;

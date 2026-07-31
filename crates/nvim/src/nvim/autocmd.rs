@@ -28,6 +28,7 @@ use crate::src::nvim::grid::grid_free;
 use crate::src::nvim::hashtab::hash_init;
 use crate::src::nvim::insexpand::ins_compl_active;
 use crate::src::nvim::lua::executor::{nlua_call_ref, nlua_set_sctx};
+use crate::src::nvim::main::aucmd_win_vec;
 use crate::src::nvim::main::{
     KeyTyped, RedrawingDisabled, VIsual, VIsual_active, au_pending_free_buf, au_pending_free_win,
     autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full, autocmd_match,
@@ -127,7 +128,6 @@ use crate::src::nvim::window::{
 };
 use crate::src::nvim::winfloat::win_config_float;
 unsafe extern "C" {
-    static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_30>;
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
         re_flags: ::core::ffi::c_int,

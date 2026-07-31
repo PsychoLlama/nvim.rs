@@ -45,6 +45,7 @@ use crate::src::nvim::grid::{
     grid_adjust, grid_assign_handle, grid_clear, grid_free, win_grid_alloc,
 };
 use crate::src::nvim::hashtab::hash_init;
+use crate::src::nvim::main::aucmd_win_vec;
 use crate::src::nvim::main::{
     Columns, KeyStuffed, KeyTyped, RedrawingDisabled, Rows, State, VIsual_active, allow_keys,
     au_pending_free_win, autocmd_busy, clear_cmdline, cmdline_row, cmdline_win, cmdmod,
@@ -98,6 +99,7 @@ use crate::src::nvim::plines::{plines_win, plines_win_col, plines_win_nofill, wi
 use crate::src::nvim::popupmenu::pum_ui_flush;
 use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::quickfix::qf_view_result;
+use crate::src::nvim::quickfix::{copy_loclist_stack, qf_free_all};
 use crate::src::nvim::search::find_pattern_in_path;
 use crate::src::nvim::state::{get_real_state, virtual_active};
 use crate::src::nvim::statusline::stl_clear_click_defs;
@@ -154,11 +156,7 @@ use crate::src::nvim::winfloat::{
     win_border_height, win_border_width, win_config_float, win_float_anchor_laststatus,
     win_float_find_altwin, win_float_update_statusline, win_new_float, win_reconfig_floats,
 };
-unsafe extern "C" {
-    static aucmd_win_vec: GlobalCell<C2Rust_Unnamed_20>;
-    fn qf_free_all(wp: *mut win_T);
-    fn copy_loclist_stack(from: *mut win_T, to: *mut win_T);
-}
+unsafe extern "C" {}
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;

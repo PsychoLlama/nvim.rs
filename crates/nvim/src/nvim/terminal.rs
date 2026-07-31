@@ -1,3 +1,5 @@
+pub mod scrollback;
+
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_object, cstr_as_string, dict_get_value, dict_set_var,
 };
@@ -7,7 +9,7 @@ use crate::src::nvim::autocmd::{
 use crate::src::nvim::autocmd::{block_autocmds, has_event, is_autocmd_blocked, unblock_autocmds};
 use crate::src::nvim::buffer::buf_get_changedtick;
 use crate::src::nvim::buffer::do_buffer;
-use crate::src::nvim::change::{appended_lines_buf, changed_lines, deleted_lines_buf};
+use crate::src::nvim::change::{changed_lines, deleted_lines_buf};
 use crate::src::nvim::cursor::coladvance;
 use crate::src::nvim::cursor_shape::{parse_shape_opt, shape_table};
 use crate::src::nvim::drawscreen::{redraw_buf_line_later, redraw_later, status_redraw_buf};
@@ -32,7 +34,6 @@ use crate::src::nvim::getchar::{
     getcmdkeycmd, ins_char_typebuf, map_execute_lua, merge_modifiers, paste_repeat, ungetchars,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::grid::schar_get_adv;
 use crate::src::nvim::highlight::{hl_add_url, hl_combine_attr, hl_get_term_attr};
 use crate::src::nvim::highlight_group::name_to_color;
 use crate::src::nvim::main::{
@@ -43,7 +44,6 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::main::{curbuf, curtab, curwin, first_tabpage, firstwin};
 use crate::src::nvim::map::{mh_delete_ptr_t, mh_get_int, mh_get_ptr_t, mh_put_ptr_t};
-use crate::src::nvim::mark::mark_adjust_buf;
 use crate::src::nvim::mbyte::{mb_check_adjust_col, utf_ptr2char, utf_ptr2len};
 use crate::src::nvim::memline::{ml_append_buf, ml_delete_buf, ml_replace_buf};
 use crate::src::nvim::memory::{
@@ -59,7 +59,7 @@ use crate::src::nvim::options::{
     kOptTpfFlagDEL, kOptTpfFlagESC, kOptTpfFlagFF, kOptTpfFlagHT,
 };
 use crate::src::nvim::optionstr::free_string_option;
-use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memmove, memset, snprintf, strlen};
+use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memset, snprintf, strlen};
 use crate::src::nvim::state::{may_trigger_modechanged, state_enter, state_handle_k_event};
 use crate::src::nvim::strings::kv_do_printf;
 pub use crate::src::nvim::types::{
@@ -74,8 +74,8 @@ pub use crate::src::nvim::types::{
     Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkAdjustMode,
     MarkTree, MotionType, MultiQueue, Object, ObjectType, OptIndex, OptInt, OptVal, OptValData,
     OptValType, Proc, ProcType, PutCallback, QUEUE, RStream, RgbValue, ScopeDictDictItem,
-    ScopeType, ScreenCell, ScreenGrid, ScreenPen, ScrollbackLine, Set_int, Set_int64_t, Set_ptr_t,
-    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    ScopeType, ScreenCell, ScreenGrid, ScreenPen, Set_int, Set_int64_t, Set_ptr_t, Set_uint32_t,
+    Set_uint64_t, SpecialVarValue, StlClickDefinition,
     StlClickDefinition_type_0 as C2Rust_Unnamed_16, Stream, String_0, StringBuilder, Terminal,
     TerminalCursor, TerminalOptions, TerminalPending, TimeWatcher, Timestamp, TriState, VTerm,
     VTermAttr, VTermColor, VTermColor_indexed as C2Rust_Unnamed_5,
@@ -136,9 +136,8 @@ use crate::src::nvim::vterm::parser::vterm_input_write;
 use crate::src::nvim::vterm::pen::{convert_color_to_rgb, set_palette_color, set_pen_attr};
 use crate::src::nvim::vterm::screen::{
     vterm_obtain_screen, vterm_screen_enable_altscreen, vterm_screen_enable_reflow,
-    vterm_screen_flush_damage, vterm_screen_get_cell, vterm_screen_reset,
-    vterm_screen_set_callbacks, vterm_screen_set_damage_merge,
-    vterm_screen_set_unrecognised_fallbacks,
+    vterm_screen_flush_damage, vterm_screen_reset, vterm_screen_set_callbacks,
+    vterm_screen_set_damage_merge, vterm_screen_set_unrecognised_fallbacks,
 };
 use crate::src::nvim::vterm::state::{
     vterm_obtain_state, vterm_state_focus_in, vterm_state_focus_out,
@@ -150,6 +149,7 @@ use crate::src::nvim::vterm::vterm::{
 };
 use crate::src::nvim::window::may_trigger_win_scrolled_resized;
 use crate::src::nvim::window::win_valid;
+use scrollback::{fetch_cell, fetch_row, refresh_scrollback, term_may_alloc_scrollback};
 
 pub const kErrorTypeNone: ErrorType = -1;
 pub const VTERM_TERMINATOR_BEL: VTermTerminator = 0;
@@ -414,7 +414,7 @@ static vterm_screen_callbacks: GlobalCell<VTermScreenCallbacks> =
                 as unsafe extern "C" fn(*mut bool, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
         ),
         sb_pushline: Some(
-            term_sb_push
+            scrollback::term_sb_push
                 as unsafe extern "C" fn(
                     ::core::ffi::c_int,
                     *const VTermScreenCell,
@@ -422,7 +422,7 @@ static vterm_screen_callbacks: GlobalCell<VTermScreenCallbacks> =
                 ) -> ::core::ffi::c_int,
         ),
         sb_popline: Some(
-            term_sb_pop
+            scrollback::term_sb_pop
                 as unsafe extern "C" fn(
                     ::core::ffi::c_int,
                     *mut VTermScreenCell,
@@ -430,7 +430,8 @@ static vterm_screen_callbacks: GlobalCell<VTermScreenCallbacks> =
                 ) -> ::core::ffi::c_int,
         ),
         sb_clear: Some(
-            term_sb_clear as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+            scrollback::term_sb_clear
+                as unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int,
         ),
     });
 static vterm_selection_callbacks: GlobalCell<VTermSelectionCallbacks> =
@@ -478,7 +479,7 @@ unsafe extern "C" fn emit_termrequest(mut argv: *mut *mut ::core::ffi::c_void) {
         return;
     }
     let mut term: *mut Terminal = (*buf).terminal;
-    if (*term).sb_pending > 0 as ::core::ffi::c_int {
+    if (*term).sb.pending() > 0 {
         multiqueue_put_event(
             (*term).pending.events,
             Event {
@@ -518,7 +519,7 @@ unsafe extern "C" fn emit_termrequest(mut argv: *mut *mut ::core::ffi::c_void) {
     *cursor.items.offset(c2rust_fresh0 as isize) = object {
         type_0: kObjectTypeInteger,
         data: C2Rust_Unnamed {
-            integer: row as int64_t - (*term).sb_deleted.wrapping_sub(sb_deleted) as int64_t,
+            integer: row as int64_t - ((*term).sb.deleted() - sb_deleted) as int64_t,
         },
     };
     let c2rust_fresh1 = cursor.size;
@@ -668,7 +669,7 @@ unsafe fn schedule_termrequest(mut term: *mut Terminal) {
                     (*term).cursor.col as intptr_t as usize,
                 ),
                 ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                    (*term).sb_deleted as intptr_t as usize,
+                    (*term).sb.deleted() as intptr_t as usize,
                 ),
                 ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
                     (*term).termrequest_terminator as intptr_t as usize,
@@ -991,6 +992,10 @@ static vterm_fallbacks: GlobalCell<VTermStateFallbacks> = GlobalCell::new(VTermS
     pm: None,
     sos: None,
 });
+/// The buffer a handle names, or null once it has been wiped.
+unsafe fn buf_for_handle(handle: handle_T) -> *mut buf_T {
+    map_get_int_ptr_t(buffer_handles.ptr(), handle as ::core::ffi::c_int) as *mut buf_T
+}
 pub unsafe fn terminal_init() {
     time_watcher_init(main_loop.ptr(), refresh_timer.ptr(), NULL_0);
     (*refresh_timer.ptr()).events = multiqueue_new_child((*main_loop.ptr()).events);
@@ -1010,28 +1015,6 @@ unsafe extern "C" fn term_output_callback(
     mut user_data: *mut ::core::ffi::c_void,
 ) {
     terminal_send(user_data as *mut Terminal, s, len);
-}
-unsafe fn term_may_alloc_scrollback(mut term: *mut Terminal, mut buf: *mut buf_T) -> bool {
-    if !(*term).sb_buffer.is_null() {
-        return true_0 != 0;
-    }
-    if buf.is_null() {
-        buf = map_get_int_ptr_t(
-            buffer_handles.ptr(),
-            (*term).buf_handle as ::core::ffi::c_int,
-        ) as *mut buf_T;
-        if buf.is_null() {
-            return false_0 != 0;
-        }
-    }
-    if (*buf).b_p_scbk < 1 as OptInt {
-        (*buf).b_p_scbk = SB_MAX as OptInt;
-    }
-    (*term).sb_size = (*buf).b_p_scbk as size_t;
-    (*term).sb_buffer =
-        xmalloc(::core::mem::size_of::<*mut ScrollbackLine>().wrapping_mul((*term).sb_size))
-            as *mut *mut ScrollbackLine;
-    return true_0 != 0;
 }
 pub unsafe fn terminal_alloc(mut buf: *mut buf_T, mut opts: TerminalOptions) -> *mut Terminal {
     // Leaked here and reclaimed by terminal_destroy. The buffer is the
@@ -1152,7 +1135,7 @@ pub unsafe fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: *mut buf_T)
         save_prompt_insert: 0,
     };
     aucmd_prepbuf(&raw mut aco, buf);
-    if !(*term).sb_buffer.is_null() {
+    if (*term).sb.is_sized() {
         refresh_scrollback(term, buf);
     } else {
         '_c2rust_label_0: {
@@ -1972,12 +1955,6 @@ pub unsafe fn terminal_destroy(mut termpp: *mut *mut Terminal) {
             unblock_autocmds();
             set_del_ptr_t(invalidated_terminals.ptr(), term as ptr_t);
         }
-        let mut i: size_t = 0 as size_t;
-        while i < (*term).sb_current {
-            xfree(*(*term).sb_buffer.offset(i as isize) as *mut ::core::ffi::c_void);
-            i = i.wrapping_add(1);
-        }
-        xfree((*term).sb_buffer as *mut ::core::ffi::c_void);
         xfree((*term).title as *mut ::core::ffi::c_void);
         xfree((*term).selection_buffer as *mut ::core::ffi::c_void);
         xfree((*term).selection.items as *mut ::core::ffi::c_void);
@@ -2678,156 +2655,6 @@ unsafe extern "C" fn term_theme(
     *dark = *p_bg.get() as ::core::ffi::c_int == 'd' as ::core::ffi::c_int;
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn term_sb_push(
-    mut cols: ::core::ffi::c_int,
-    mut cells: *const VTermScreenCell,
-    mut data: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut term: *mut Terminal = data as *mut Terminal;
-    if !term_may_alloc_scrollback(term, ::core::ptr::null_mut::<buf_T>()) {
-        return 0 as ::core::ffi::c_int;
-    }
-    '_c2rust_label: {
-        if (*term).sb_size > 0 as size_t {
-        } else {
-            __assert_fail(
-                b"term->sb_size > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1705 as ::core::ffi::c_uint,
-                b"int term_sb_push(int, const VTermScreenCell *, void *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut c: size_t = cols as size_t;
-    let mut sbrow: *mut ScrollbackLine = ::core::ptr::null_mut::<ScrollbackLine>();
-    if (*term).sb_current == (*term).sb_size {
-        if (**(*term)
-            .sb_buffer
-            .offset((*term).sb_current.wrapping_sub(1 as size_t) as isize))
-        .cols
-            == c
-        {
-            sbrow = *(*term)
-                .sb_buffer
-                .offset((*term).sb_current.wrapping_sub(1 as size_t) as isize);
-        } else {
-            xfree(
-                *(*term)
-                    .sb_buffer
-                    .offset((*term).sb_current.wrapping_sub(1 as size_t) as isize)
-                    as *mut ::core::ffi::c_void,
-            );
-        }
-        (*term).sb_deleted = (*term).sb_deleted.wrapping_add(1);
-        memmove(
-            (*term).sb_buffer.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-            (*term).sb_buffer as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<*mut ScrollbackLine>()
-                .wrapping_mul((*term).sb_current.wrapping_sub(1 as size_t)),
-        );
-    } else if (*term).sb_current > 0 as size_t {
-        memmove(
-            (*term).sb_buffer.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
-            (*term).sb_buffer as *const ::core::ffi::c_void,
-            ::core::mem::size_of::<*mut ScrollbackLine>().wrapping_mul((*term).sb_current),
-        );
-    }
-    if sbrow.is_null() {
-        sbrow = xmalloc(
-            ::core::mem::size_of::<ScrollbackLine>()
-                .wrapping_add(c.wrapping_mul(::core::mem::size_of::<VTermScreenCell>())),
-        ) as *mut ScrollbackLine;
-        (*sbrow).cols = c;
-    }
-    *(*term).sb_buffer.offset(0 as ::core::ffi::c_int as isize) = sbrow;
-    if (*term).sb_current < (*term).sb_size {
-        (*term).sb_current = (*term).sb_current.wrapping_add(1);
-    }
-    if (*term).sb_pending < (*term).sb_size as ::core::ffi::c_int {
-        (*term).sb_pending += 1;
-    }
-    memcpy(
-        &raw mut (*sbrow).cells as *mut VTermScreenCell as *mut ::core::ffi::c_void,
-        cells as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<VTermScreenCell>().wrapping_mul(c),
-    );
-    if !(*term).synchronized_output {
-        set_put_ptr_t(
-            invalidated_terminals.ptr(),
-            term as ptr_t,
-            ::core::ptr::null_mut::<*mut ptr_t>(),
-        );
-    }
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn term_sb_pop(
-    mut cols: ::core::ffi::c_int,
-    mut cells: *mut VTermScreenCell,
-    mut data: *mut ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let mut term: *mut Terminal = data as *mut Terminal;
-    if (*term).sb_current == 0 {
-        return 0 as ::core::ffi::c_int;
-    }
-    if (*term).sb_pending > 0 as ::core::ffi::c_int {
-        (*term).sb_pending -= 1;
-    } else {
-        (*term).old_height += 1;
-    }
-    let mut sbrow: *mut ScrollbackLine =
-        *(*term).sb_buffer.offset(0 as ::core::ffi::c_int as isize);
-    (*term).sb_current = (*term).sb_current.wrapping_sub(1);
-    memmove(
-        (*term).sb_buffer as *mut ::core::ffi::c_void,
-        (*term).sb_buffer.offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<*mut ScrollbackLine>().wrapping_mul((*term).sb_current),
-    );
-    let mut cols_to_copy: size_t = if (cols as size_t) < (*sbrow).cols {
-        cols as size_t
-    } else {
-        (*sbrow).cols
-    };
-    memcpy(
-        cells as *mut ::core::ffi::c_void,
-        &raw mut (*sbrow).cells as *mut VTermScreenCell as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<VTermScreenCell>().wrapping_mul(cols_to_copy),
-    );
-    let mut col: size_t = cols_to_copy;
-    while col < cols as size_t {
-        (*cells.offset(col as isize)).schar = 0 as schar_T;
-        (*cells.offset(col as isize)).width = 1 as ::core::ffi::c_char;
-        col = col.wrapping_add(1);
-    }
-    xfree(sbrow as *mut ::core::ffi::c_void);
-    if !(*term).synchronized_output {
-        set_put_ptr_t(
-            invalidated_terminals.ptr(),
-            term as ptr_t,
-            ::core::ptr::null_mut::<*mut ptr_t>(),
-        );
-    }
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn term_sb_clear(mut data: *mut ::core::ffi::c_void) -> ::core::ffi::c_int {
-    let mut term: *mut Terminal = data as *mut Terminal;
-    if (*term).in_altscreen as ::core::ffi::c_int != 0
-        || (*term).sb_size == 0
-        || (*term).sb_current == 0
-    {
-        return 1 as ::core::ffi::c_int;
-    }
-    let mut i: size_t = 0 as size_t;
-    while i < (*term).sb_current {
-        xfree(*(*term).sb_buffer.offset(i as isize) as *mut ::core::ffi::c_void);
-        i = i.wrapping_add(1);
-    }
-    (*term).sb_deleted = (*term).sb_deleted.wrapping_add((*term).sb_current);
-    (*term).sb_current = 0 as size_t;
-    (*term).sb_pending = 0 as ::core::ffi::c_int;
-    invalidate_terminal(term, -1 as ::core::ffi::c_int, -1 as ::core::ffi::c_int);
-    return 1 as ::core::ffi::c_int;
-}
 unsafe extern "C" fn term_clipboard_set(mut argv: *mut *mut ::core::ffi::c_void) {
     let mut mask: VTermSelectionMask = (*argv.offset(0 as ::core::ffi::c_int as isize))
         .expose_provenance() as ::core::ffi::c_long
@@ -3492,71 +3319,6 @@ unsafe fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ffi::c_int) -
     }
     return true_0 != 0;
 }
-unsafe fn fetch_row(
-    mut term: *mut Terminal,
-    mut row: ::core::ffi::c_int,
-    mut end_col: ::core::ffi::c_int,
-) {
-    let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut line_len: size_t = 0 as size_t;
-    let mut ptr: *mut ::core::ffi::c_char = &raw mut (*term).textbuf as *mut ::core::ffi::c_char;
-    while col < end_col {
-        let mut cell: VTermScreenCell = VTermScreenCell {
-            schar: 0,
-            width: 0,
-            attrs: VTermScreenCellAttrs {
-                bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [0; 3],
-                c2rust_padding: [0; 1],
-            },
-            fg: VTermColor { type_0: 0 },
-            bg: VTermColor { type_0: 0 },
-            uri: 0,
-        };
-        fetch_cell(term, row, col, &raw mut cell);
-        if cell.schar != 0 {
-            schar_get_adv(&raw mut ptr, cell.schar);
-            line_len =
-                ptr.offset_from(&raw mut (*term).textbuf as *mut ::core::ffi::c_char) as size_t;
-        } else {
-            let c2rust_fresh6 = ptr;
-            ptr = ptr.offset(1);
-            *c2rust_fresh6 = ' ' as ::core::ffi::c_char;
-        }
-        col += cell.width as ::core::ffi::c_int;
-    }
-    (*term).textbuf[line_len as usize] = NUL as ::core::ffi::c_char;
-}
-unsafe fn fetch_cell(
-    mut term: *mut Terminal,
-    mut row: ::core::ffi::c_int,
-    mut col: ::core::ffi::c_int,
-    mut cell: *mut VTermScreenCell,
-) -> bool {
-    if row < 0 as ::core::ffi::c_int {
-        let mut sbrow: *mut ScrollbackLine = *(*term)
-            .sb_buffer
-            .offset((-row - 1 as ::core::ffi::c_int) as isize);
-        if (col as size_t) < (*sbrow).cols {
-            *cell = *(&raw mut (*sbrow).cells as *mut VTermScreenCell).offset(col as isize);
-        } else {
-            *cell = VTermScreenCell {
-                schar: 0 as schar_T,
-                width: 1 as ::core::ffi::c_char,
-                attrs: VTermScreenCellAttrs {
-                    bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [0; 3],
-                    c2rust_padding: [0; 1],
-                },
-                fg: VTermColor { type_0: 0 },
-                bg: VTermColor { type_0: 0 },
-                uri: 0,
-            };
-            return false_0 != 0;
-        }
-    } else {
-        vterm_screen_get_cell((*term).vts, VTermPos { row: row, col: col }, cell);
-    }
-    return true_0 != 0;
-}
 unsafe fn invalidate_terminal(
     mut term: *mut Terminal,
     mut start_row: ::core::ffi::c_int,
@@ -3722,122 +3484,9 @@ unsafe fn refresh_size(mut term: *mut Terminal, mut _buf: *mut buf_T) -> bool {
     return true_0 != 0;
 }
 pub unsafe fn on_scrollback_option_changed(mut term: *mut Terminal) {
-    if !(*term).sb_buffer.is_null() {
+    if (*term).sb.is_sized() {
         refresh_terminal(term);
     }
-}
-unsafe fn adjust_scrollback(mut term: *mut Terminal, mut buf: *mut buf_T) {
-    if (*buf).b_p_scbk < 1 as OptInt {
-        (*buf).b_p_scbk = SB_MAX as OptInt;
-    }
-    let scbk: size_t = (*buf).b_p_scbk as size_t;
-    '_c2rust_label: {
-        if (*term).sb_current < 18446744073709551615 as size_t {
-        } else {
-            __assert_fail(
-                b"term->sb_current < SIZE_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                2528 as ::core::ffi::c_uint,
-                b"void adjust_scrollback(Terminal *, buf_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    if (*term).sb_pending > 0 as ::core::ffi::c_int {
-        abort();
-    }
-    if scbk < (*term).sb_current {
-        let mut diff: size_t = (*term).sb_current.wrapping_sub(scbk);
-        let mut i: size_t = 0 as size_t;
-        while i < diff {
-            ml_delete_buf(buf, 1 as linenr_T, false_0 != 0);
-            (*term).sb_current = (*term).sb_current.wrapping_sub(1);
-            xfree(
-                *(*term).sb_buffer.offset((*term).sb_current as isize) as *mut ::core::ffi::c_void
-            );
-            i = i.wrapping_add(1);
-        }
-        mark_adjust_buf(
-            buf,
-            1 as linenr_T,
-            diff as linenr_T,
-            MAXLNUM as ::core::ffi::c_int as linenr_T,
-            -(diff as linenr_T),
-            true_0 != 0,
-            kMarkAdjustTerm,
-            kExtmarkUndo,
-        );
-        deleted_lines_buf(buf, 1 as linenr_T, diff as linenr_T);
-    }
-    let mut sb_region: size_t = ::core::mem::size_of::<*mut ScrollbackLine>().wrapping_mul(scbk);
-    if scbk != (*term).sb_size {
-        (*term).sb_buffer = xrealloc((*term).sb_buffer as *mut ::core::ffi::c_void, sb_region)
-            as *mut *mut ScrollbackLine;
-    }
-    (*term).sb_size = scbk;
-}
-unsafe fn refresh_scrollback(mut term: *mut Terminal, mut buf: *mut buf_T) {
-    (*term)
-        .opts
-        .read_pause_cb
-        .expect("non-null function pointer")(true_0 != 0, (*term).opts.data);
-    let mut deleted: linenr_T = (*term).sb_deleted.wrapping_sub((*term).old_sb_deleted) as linenr_T;
-    deleted = if deleted < (*buf).b_ml.ml_line_count {
-        deleted
-    } else {
-        (*buf).b_ml.ml_line_count
-    };
-    mark_adjust_buf(
-        buf,
-        1 as linenr_T,
-        deleted,
-        MAXLNUM as ::core::ffi::c_int as linenr_T,
-        -deleted,
-        true_0 != 0,
-        kMarkAdjustTerm,
-        kExtmarkUndo,
-    );
-    (*term).old_sb_deleted = (*term).sb_deleted;
-    let mut old_height: ::core::ffi::c_int = (*term).old_height;
-    let mut width: ::core::ffi::c_int = 0;
-    let mut height: ::core::ffi::c_int = 0;
-    vterm_get_size((*term).vt, &raw mut height, &raw mut width);
-    while deleted > 0 as linenr_T && (*buf).b_ml.ml_line_count > old_height as linenr_T {
-        ml_delete_buf(buf, 1 as linenr_T, false_0 != 0);
-        deleted_lines_buf(buf, 1 as linenr_T, 1 as linenr_T);
-        deleted -= 1;
-    }
-    old_height = (if (old_height as linenr_T) < (*buf).b_ml.ml_line_count {
-        old_height as linenr_T
-    } else {
-        (*buf).b_ml.ml_line_count
-    }) as ::core::ffi::c_int;
-    while (*term).sb_pending > 0 as ::core::ffi::c_int {
-        fetch_row(term, -(*term).sb_pending, width);
-        let mut buf_index: ::core::ffi::c_int =
-            (*buf).b_ml.ml_line_count as ::core::ffi::c_int - old_height;
-        ml_append_buf(
-            buf,
-            buf_index as linenr_T,
-            &raw mut (*term).textbuf as *mut ::core::ffi::c_char,
-            0 as colnr_T,
-            false_0 != 0,
-        );
-        appended_lines_buf(buf, buf_index as linenr_T, 1 as linenr_T);
-        (*term).sb_pending -= 1;
-    }
-    let mut max_line_count: ::core::ffi::c_int = (*term).sb_current as ::core::ffi::c_int + height;
-    // Not immutable: ml_delete_buf() mutates (*buf).b_ml behind the raw pointer.
-    #[allow(clippy::while_immutable_condition)]
-    while (*buf).b_ml.ml_line_count > max_line_count as linenr_T {
-        ml_delete_buf(buf, (*buf).b_ml.ml_line_count, false_0 != 0);
-        deleted_lines_buf(buf, (*buf).b_ml.ml_line_count, 1 as linenr_T);
-    }
-    adjust_scrollback(term, buf);
-    (*term)
-        .opts
-        .read_pause_cb
-        .expect("non-null function pointer")(false_0 != 0, (*term).opts.data);
 }
 unsafe fn refresh_screen(mut term: *mut Terminal, mut buf: *mut buf_T) {
     let mut changed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3958,7 +3607,7 @@ unsafe fn row_to_linenr(
     mut row: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     return if row != INT_MAX {
-        row + (*term).sb_current as ::core::ffi::c_int + 1 as ::core::ffi::c_int
+        row + (*term).sb.len() as ::core::ffi::c_int + 1
     } else {
         INT_MAX
     };
@@ -3967,7 +3616,7 @@ unsafe fn linenr_to_row(
     mut term: *mut Terminal,
     mut linenr: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    return linenr - (*term).sb_current as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+    return linenr - (*term).sb.len() as ::core::ffi::c_int - 1;
 }
 unsafe fn is_focused(mut term: *mut Terminal) -> bool {
     return State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0

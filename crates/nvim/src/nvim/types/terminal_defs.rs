@@ -2,6 +2,8 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
+use std::collections::VecDeque;
+
 use super::*;
 
 /// One `:terminal` buffer's emulator state.
@@ -19,12 +21,8 @@ pub struct terminal {
     pub vt: *mut VTerm,
     pub vts: *mut VTermScreen,
     pub textbuf: [::core::ffi::c_char; 8191],
-    pub sb_buffer: *mut *mut ScrollbackLine,
-    pub sb_current: size_t,
-    pub sb_size: size_t,
-    pub sb_pending: ::core::ffi::c_int,
-    pub sb_deleted: size_t,
-    pub old_sb_deleted: size_t,
+    pub sb: Scrollback,
+    pub old_sb_deleted: usize,
     pub old_height: ::core::ffi::c_int,
     pub title: *mut ::core::ffi::c_char,
     pub title_len: size_t,
@@ -63,11 +61,7 @@ impl terminal {
             vt: ::core::ptr::null_mut(),
             vts: ::core::ptr::null_mut(),
             textbuf: [0; 8191],
-            sb_buffer: ::core::ptr::null_mut(),
-            sb_current: 0,
-            sb_size: 0,
-            sb_pending: 0,
-            sb_deleted: 0,
+            sb: Scrollback::default(),
             old_sb_deleted: 0,
             old_height: 0,
             title: ::core::ptr::null_mut(),
@@ -115,11 +109,135 @@ impl terminal {
     }
 }
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ScrollbackLine {
-    pub cols: size_t,
-    pub cells: [VTermScreenCell; 0],
+/// The rows that have scrolled off the top of a terminal's screen.
+///
+/// Newest first: index 0 scrolled away most recently, index `len() - 1` is
+/// the oldest still kept. vterm pushes at the new end and pops from it, and
+/// eviction happens at the old end, so both are ends of a deque rather than
+/// a shift of the whole array — which is what the C did, once per pushed
+/// row.
+///
+/// A capacity of zero means the scrollback has not been sized yet: that
+/// waits until there is a buffer to read `'scrollback'` from.
+#[derive(Default)]
+pub struct Scrollback {
+    rows: VecDeque<Box<[VTermScreenCell]>>,
+    capacity: usize,
+    /// Rows pushed but not yet mirrored into the buffer by the refresh.
+    pending: ::core::ffi::c_int,
+    /// Rows evicted since the terminal opened. Buffer line numbers are
+    /// relative to this, so it only ever grows.
+    deleted: usize,
+}
+
+impl Scrollback {
+    pub fn is_sized(&self) -> bool {
+        self.capacity > 0
+    }
+
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+
+    pub fn pending(&self) -> ::core::ffi::c_int {
+        self.pending
+    }
+
+    pub fn deleted(&self) -> usize {
+        self.deleted
+    }
+
+    pub fn set_capacity(&mut self, capacity: usize) {
+        self.capacity = capacity;
+    }
+
+    /// The row `index` places above the top of the screen, newest first.
+    pub fn row(&self, index: usize) -> Option<&[VTermScreenCell]> {
+        self.rows.get(index).map(|row| &**row)
+    }
+
+    /// Take `cells` as the row that just scrolled off the top.
+    ///
+    /// When the scrollback is full the oldest row makes way, and its
+    /// allocation is reused if it is the right width — the common case,
+    /// since a terminal that is not being resized pushes one width forever.
+    pub fn push(&mut self, cells: &[VTermScreenCell]) {
+        let mut reused = None;
+        if self.rows.len() >= self.capacity
+            && let Some(oldest) = self.rows.pop_back()
+        {
+            self.deleted += 1;
+            if oldest.len() == cells.len() {
+                reused = Some(oldest);
+            }
+        }
+        let row = match reused {
+            Some(mut row) => {
+                row.copy_from_slice(cells);
+                row
+            }
+            None => cells.to_vec().into_boxed_slice(),
+        };
+        self.rows.push_front(row);
+        // Capped rather than counted: the refresh can only ever owe the
+        // buffer as many rows as are actually kept.
+        if self.pending < self.capacity as ::core::ffi::c_int {
+            self.pending += 1;
+        }
+    }
+
+    /// Give the most recently scrolled-off row back to the screen.
+    ///
+    /// `cells` is vterm's row buffer. A stored row narrower than that leaves
+    /// the tail blank; a wider one is truncated.
+    pub fn pop(
+        &mut self,
+        cells: &mut [VTermScreenCell],
+        old_height: &mut ::core::ffi::c_int,
+    ) -> bool {
+        let Some(row) = self.rows.pop_front() else {
+            return false;
+        };
+        // A row the refresh had not yet mirrored simply cancels out.
+        // Anything else means the screen grew by a line.
+        if self.pending > 0 {
+            self.pending -= 1;
+        } else {
+            *old_height += 1;
+        }
+        let copied = row.len().min(cells.len());
+        cells[..copied].copy_from_slice(&row[..copied]);
+        for cell in &mut cells[copied..] {
+            cell.schar = 0;
+            cell.width = 1;
+        }
+        true
+    }
+
+    /// Forget every row kept, without giving up the sizing.
+    pub fn clear(&mut self) {
+        self.deleted += self.rows.len();
+        self.rows.clear();
+        self.pending = 0;
+    }
+
+    /// Drop the oldest row, for trimming down to a lowered `'scrollback'`.
+    ///
+    /// Unlike eviction by [`Self::push`] this does not bump `deleted`: the
+    /// caller is deleting the buffer's line itself and moving the marks, so
+    /// the line numbering does not shift.
+    pub fn drop_oldest(&mut self) {
+        self.rows.pop_back();
+    }
+
+    /// Record that the refresh has appended one owed row to the buffer.
+    pub fn mark_mirrored(&mut self) {
+        self.pending -= 1;
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

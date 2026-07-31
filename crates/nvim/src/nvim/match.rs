@@ -28,6 +28,7 @@ use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::os::libc::{__assert_fail, gettext, snprintf, strlen, strncasecmp};
 use crate::src::nvim::profile::{profile_passed_limit, profile_setlimit};
 use crate::src::nvim::regexp::skip_regexp;
+use crate::src::nvim::regexp::vim_regexec_multi;
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
@@ -67,15 +68,6 @@ unsafe extern "C" {
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
-    fn vim_regexec_multi(
-        rmp: *mut regmmatch_T,
-        win: *mut win_T,
-        buf: *mut buf_T,
-        lnum: linenr_T,
-        col: colnr_T,
-        tm: *mut proftime_T,
-        timed_out: *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int;
 }
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed = 2147483647;
