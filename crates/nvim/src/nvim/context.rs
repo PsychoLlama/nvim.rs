@@ -18,6 +18,7 @@ use crate::src::nvim::shada::{
     shada_encode_buflist, shada_encode_gvars, shada_encode_jumps, shada_encode_regs,
     shada_read_string,
 };
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 pub use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Boolean, Context, Dict, Error, ErrorType, Float, Integer,
     KeyDict_exec_opts, KeyValuePair, LuaRef, Object, ObjectType, OptIndex, OptInt, OptVal,
@@ -52,9 +53,6 @@ pub const VAR_FUNC: VarType = 3;
 pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;

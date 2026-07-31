@@ -19,6 +19,7 @@ use crate::src::nvim::option::{parse_winhl_opt, set_option_direct_for};
 use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::libc::{__assert_fail, memcmp, qsort, strlen};
 use crate::src::nvim::strings::concat_str;
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType,
@@ -111,9 +112,6 @@ pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
 pub const kZIndexCmdlinePopupMenu: C2Rust_Unnamed_12 = 250;
 pub const kZIndexMessages: C2Rust_Unnamed_12 = 200;

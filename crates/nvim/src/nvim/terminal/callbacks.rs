@@ -40,7 +40,8 @@ use crate::src::nvim::vterm::vterm::{
 use core::ffi::{c_char, c_int, c_void};
 
 use super::refresh::invalidate_terminal;
-use super::{buf_for_handle, kErrorTypeNone, scrollback};
+use super::{buf_for_handle, scrollback};
+use crate::src::nvim::types::api::kErrorTypeNone;
 
 pub static SCREEN_CALLBACKS: VTermScreenCallbacks = VTermScreenCallbacks {
     damage: Some(term_damage),

@@ -76,9 +76,6 @@ pub use crate::src::nvim::types::{
     undo_object, uvarnumber_T, varnumber_T, vimconv_T, virt_line, visualinfo_T, win_T, window_S,
     wininfo_S, winopt_T, wline_T, xfmark_T,
 };
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

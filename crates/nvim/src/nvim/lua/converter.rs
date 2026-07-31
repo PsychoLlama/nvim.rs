@@ -30,6 +30,7 @@ use crate::src::nvim::main::nlua_global_refs;
 use crate::src::nvim::memory::{arena_memdupz, xfree, xmalloc, xrealloc, xstrdup};
 use crate::src::nvim::message::{emsg, internal_error, semsg};
 use crate::src::nvim::os::libc::{__assert_fail, abort, gettext, memchr, memcpy, memset, strlen};
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     Arena, Array, BoolVarValue, Boolean, Buffer, Dict, Error, ErrorType, FieldHashfn, Float,
     Integer, KeySetLink, KeyValuePair, LuaRef, MPConvPartialStage, MPConvStack, MPConvStackVal,
@@ -47,9 +48,6 @@ pub use crate::src::nvim::types::{
     partial_S, partial_T, proftime_T, ptrdiff_t, queue, scid_T, sctx_T, size_t, typval_T,
     typval_vval_union, ufunc_S, ufunc_T, uint8_t, uint64_t, varnumber_T,
 };
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const VAR_DEF_SCOPE: ScopeType = 2;
 pub const VAR_SCOPE: ScopeType = 1;
 pub const VAR_NO_SCOPE: ScopeType = 0;

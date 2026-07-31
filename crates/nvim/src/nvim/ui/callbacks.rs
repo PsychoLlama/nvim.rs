@@ -24,13 +24,11 @@ use crate::src::nvim::log::logmsg;
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
 use crate::src::nvim::main::{expr_map_lock, textlock, ui_event_ns_id};
 use crate::src::nvim::message::{msg_schedule_semsg, msg_schedule_semsg_multiline};
-use crate::src::nvim::types::{
-    Arena, Array, Error, ErrorType, LuaRef, LuaRetMode, NS, kObjectTypeBoolean,
-};
+use crate::src::nvim::types::api::kErrorTypeNone;
+use crate::src::nvim::types::{Arena, Array, Error, LuaRef, LuaRetMode, NS, kObjectTypeBoolean};
 use crate::src::nvim::ui::{kUICmdline, kUILinegrid, kUIMessages};
 use core::ffi::{CStr, c_char};
 
-const kErrorTypeNone: ErrorType = -1;
 const kRetNilBool: LuaRetMode = 1;
 
 /// How many times a handler may raise an error before it is unregistered.

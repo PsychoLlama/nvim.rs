@@ -83,6 +83,7 @@ use crate::src::nvim::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE,
 };
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, vim_vsnprintf};
+use crate::src::nvim::types::api::kErrorTypeNone;
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __pthread_internal_list,
     __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __va_list_tag,
@@ -178,9 +179,6 @@ pub const UV_WRITE: uv_req_type = 3;
 pub const UV_CONNECT: uv_req_type = 2;
 pub const UV_REQ: uv_req_type = 1;
 pub const UV_UNKNOWN_REQ: uv_req_type = 0;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

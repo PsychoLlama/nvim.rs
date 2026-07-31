@@ -39,6 +39,7 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::time::os_delay;
 use crate::src::nvim::runtime::{exestack, source_runtime_vim_lua};
 use crate::src::nvim::strings::{vim_memcpy_up, vim_strup};
+use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S,
     BoolVarValue, Boolean, BufUpdateCallbacks, Callback, Callback_data as C2Rust_Unnamed_6,
@@ -91,9 +92,6 @@ pub const _ISdigit: C2Rust_Unnamed = 2048;
 pub const _ISalpha: C2Rust_Unnamed = 1024;
 pub const _ISlower: C2Rust_Unnamed = 512;
 pub const _ISupper: C2Rust_Unnamed = 256;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

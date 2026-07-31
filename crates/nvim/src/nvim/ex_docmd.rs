@@ -184,7 +184,6 @@ mod filetype;
 pub use self::filetype::*;
 mod childproc;
 pub(crate) use self::childproc::*;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

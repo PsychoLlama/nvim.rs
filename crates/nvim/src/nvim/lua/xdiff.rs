@@ -11,6 +11,7 @@ use crate::src::nvim::lua::ffi::{
 };
 use crate::src::nvim::memory::strequal;
 use crate::src::nvim::os::libc::{memcpy, memset};
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     Arena, Array, Boolean, Dict, Error, ErrorType, FieldHashfn, Float, Integer, KeyDict_xdl_diff,
     KeySetLink, KeyValuePair, LuaRef, Object, ObjectType, OptionalKeys, String_0, find_func_t,
@@ -20,9 +21,6 @@ pub use crate::src::nvim::types::{
     s_xpparam, size_t, uint64_t, xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t, xpparam_t,
 };
 use crate::src::xdiff::xdiffi::xdl_diff;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kNluaXdiffModeLocations: NluaXdiffMode = 2;
 pub type NluaXdiffMode = ::core::ffi::c_uint;
 pub const kNluaXdiffModeOnHunkCB: NluaXdiffMode = 1;

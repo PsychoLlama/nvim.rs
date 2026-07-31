@@ -8,6 +8,7 @@ use crate::src::nvim::main::{
     autocmd_no_enter, autocmd_no_leave, cmdwin_buf, cmdwin_type, curtab, curwin, e_cmdwin, firstwin,
 };
 use crate::src::nvim::os::libc::abort;
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
@@ -44,9 +45,6 @@ pub use crate::src::nvim::types::{
 use crate::src::nvim::window::{
     tabpage_index, tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
 };
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

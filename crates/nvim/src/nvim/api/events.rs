@@ -9,9 +9,6 @@ pub use crate::src::nvim::types::{
     ObjectType, String_0, VimVarIndex, int64_t, kObjectTypeString, key_value_pair, object,
     object_data as C2Rust_Unnamed, ptrdiff_t, size_t, uint64_t,
 };
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;

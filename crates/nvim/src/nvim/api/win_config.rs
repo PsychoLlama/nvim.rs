@@ -30,6 +30,7 @@ use crate::src::nvim::option::{copy_option_part, didset_window_options};
 use crate::src::nvim::options::opt_winborder_values;
 use crate::src::nvim::os::libc::{__assert_fail, memcpy, memset, strchr};
 use crate::src::nvim::strings::striequal;
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean, BorderTextType,
     BufUpdateCallbacks, Buffer, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5,
@@ -76,9 +77,6 @@ use crate::src::nvim::window::{
 use crate::src::nvim::winfloat::{
     win_config_float, win_float_find_altwin, win_new_float, win_set_minimal_style,
 };
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

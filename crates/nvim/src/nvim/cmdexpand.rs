@@ -101,6 +101,7 @@ use crate::src::nvim::syntax::{
     set_context_in_syntax_cmd,
 };
 use crate::src::nvim::tag::expand_tags;
+use crate::src::nvim::types::api::kErrorTypeNone;
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array,
     BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback,
@@ -157,9 +158,6 @@ unsafe extern "C" {
     fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T)
     -> bool;
 }
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

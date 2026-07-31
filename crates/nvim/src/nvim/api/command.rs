@@ -27,6 +27,7 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::register::valid_yank_reg;
 use crate::src::nvim::strings::kv_do_printf;
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5,
@@ -75,9 +76,6 @@ unsafe extern "C" {
         re_flags: ::core::ffi::c_int,
     ) -> *mut regprog_T;
 }
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

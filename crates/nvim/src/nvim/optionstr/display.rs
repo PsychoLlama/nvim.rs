@@ -45,9 +45,10 @@ use super::{
     OPT_LOCAL, SCL_NUM, SHAPE_CURSOR, WW_ALL, check_chars_options, check_signcolumn, check_str_opt,
     check_string_option, did_set_option_listflag, did_set_statustabline_rulerformat,
     did_set_str_generic, e_showbreak_contains_unprintable_or_wide_character, free_string_option,
-    kAlignLeft, kErrorTypeNone, kFloatRelativeEditor, kWinSplitLeft, kWinStyleUnused,
-    kZIndexFloatDefault, opt_strings_flags, terminal_notify_theme,
+    kAlignLeft, kFloatRelativeEditor, kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault,
+    opt_strings_flags, terminal_notify_theme,
 };
+use crate::src::nvim::types::api::kErrorTypeNone;
 
 /// 'ambiwidth' decides how wide an ambiguous-width character is drawn, so
 /// the two character options have to be re-checked against the new answer.

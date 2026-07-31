@@ -92,9 +92,6 @@ use crate::src::nvim::window::{
     find_tabpage, global_stl_height, goto_tabpage, tabpage_index, tabpage_move,
     win_drag_status_line, win_drag_vsep_line, win_enter, win_fdccol_count, win_valid,
 };
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

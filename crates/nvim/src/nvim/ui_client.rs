@@ -57,17 +57,16 @@ use crate::src::nvim::tui::paint::{
 use crate::src::nvim::tui::tui::{
     tui_is_stopped, tui_start, tui_stop, tui_suspend, tui_wait_ready,
 };
+use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf};
 use crate::src::nvim::types::{
-    Arena, Array, Callback, CallbackReader, CallbackType, ChannelStdinMode, Dict, Error, ErrorType,
-    Event, GridLineEvent, HlAttrs, Integer, KeyDict_highlight, KeySetLink, LineFlags, Object,
-    ObjectType, TUIData, UIClientHandler, dict_T, garray_T, kObjectTypeArray, kObjectTypeBoolean,
+    Arena, Array, Callback, CallbackReader, CallbackType, ChannelStdinMode, Dict, Error, Event,
+    GridLineEvent, HlAttrs, Integer, KeyDict_highlight, KeySetLink, LineFlags, Object, ObjectType,
+    TUIData, UIClientHandler, dict_T, garray_T, kObjectTypeArray, kObjectTypeBoolean,
     kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, proftime_T, sattr_T, schar_T, uint16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-const kErrorTypeValidation: ErrorType = 1;
-const kErrorTypeNone: ErrorType = -1;
 const kCallbackNone: CallbackType = 0;
 const kChannelStdinPipe: ChannelStdinMode = 0;
 const kLineFlagWrap: LineFlags = 1;

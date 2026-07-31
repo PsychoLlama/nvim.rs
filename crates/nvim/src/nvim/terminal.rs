@@ -67,9 +67,9 @@ use crate::src::nvim::os::libc::{abort, strlen};
 use crate::src::nvim::types::builders::{DictBuf, static_cstring};
 use crate::src::nvim::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::src::nvim::types::{
-    Arena, Buffer, Error, ErrorType, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode,
-    Object, OptVal, OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermAttr,
-    VTermColor, VTermColor_rgb, VTermDamageSize, VTermScreenCell, VTermScreenCellAttrs, VTermState,
+    Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode, Object, OptVal,
+    OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermAttr, VTermColor,
+    VTermColor_rgb, VTermDamageSize, VTermScreenCell, VTermScreenCellAttrs, VTermState,
     VTermTerminator, VTermValue, VTermValueType, VimVarIndex, aco_save_T, buf_T, colnr_T, exarg_T,
     handle_T, int16_t, kObjectTypeNil, kObjectTypeString, linenr_T, pos_T, ptr_t, save_v_event_T,
     size_t, tabpage_T, uint8_t, varnumber_T, win_T,
@@ -93,6 +93,7 @@ use core::ffi::{c_char, c_int, c_void};
 use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
 
 use crate::src::nvim::state::MODE_TERMINAL;
+use crate::src::nvim::types::api::kErrorTypeNone;
 pub use input::{terminal_paste, terminal_set_streamed_paste};
 pub use mode::terminal_enter;
 pub use refresh::{
@@ -101,7 +102,6 @@ pub use refresh::{
 
 /// An `Error` that carries no error. The API calls made here cannot fail in
 /// a way any caller could act on, so their errors are cleared and dropped.
-const kErrorTypeNone: ErrorType = -1;
 
 /// "To the end of the buffer", for the mark adjustments.
 const NUL: c_int = 0;

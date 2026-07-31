@@ -103,7 +103,6 @@ pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MPACK_ERROR: C2Rust_Unnamed_13 = 2;
 pub const MPACK_EOF: C2Rust_Unnamed_13 = 1;
 pub const MPACK_OK: C2Rust_Unnamed_13 = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

@@ -134,6 +134,7 @@ use crate::src::nvim::state::{
     may_trigger_safestate, state_enter, state_handle_k_event,
 };
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array,
     BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, CMD_index, Callback,
@@ -210,9 +211,6 @@ use crate::src::nvim::window::{
 unsafe extern "C" {
     static pum_want: GlobalCell<C2Rust_Unnamed_51>;
 }
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

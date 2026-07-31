@@ -147,9 +147,6 @@ use crate::src::nvim::window::{
 };
 use crate::src::nvim::window::{goto_tabpage_win, win_close, win_enter, win_goto, win_valid};
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

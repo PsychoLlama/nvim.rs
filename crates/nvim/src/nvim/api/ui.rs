@@ -45,10 +45,11 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::memory::{strequal, xfree};
 use crate::src::nvim::option::set_tty_option;
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf};
 use crate::src::nvim::types::{
-    Boolean, Dict, Error, ErrorType, Float, Integer, Object, ObjectType, PackerBuffer, RemoteUI,
-    String_0, UIExtension, handle_T, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString,
+    Boolean, Dict, Error, Float, Integer, Object, ObjectType, PackerBuffer, RemoteUI, String_0,
+    UIExtension, handle_T, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString,
 };
 use crate::src::nvim::ui::{
     kUICmdline, kUIExtCount, kUIHlState, kUILinegrid, kUIMessages, kUIMultigrid, kUIPopupmenu,
@@ -56,10 +57,6 @@ use crate::src::nvim::ui::{
     ui_refresh, ui_set_ext_option,
 };
 use core::ffi::{CStr, c_char, c_int};
-
-const kErrorTypeException: ErrorType = 0;
-const kErrorTypeValidation: ErrorType = 1;
-const kErrorTypeNone: ErrorType = -1;
 
 /// The channel id `--embed` and `nvim -` use, which is the only one whose
 /// tty-ness is the editor's own.

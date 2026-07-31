@@ -6,7 +6,7 @@ use core::ptr;
 
 use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string};
 use crate::src::nvim::ex_docmd::cmdline::do_cmdline_cmd;
-use crate::src::nvim::ex_docmd::{HLF_E, NUL, kErrorTypeNone, kRetNilBool};
+use crate::src::nvim::ex_docmd::{HLF_E, NUL, kRetNilBool};
 use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::{cmdmod, e_shellempty, p_sh};
 use crate::src::nvim::memory::{xfree, xstrlcat};
@@ -14,6 +14,7 @@ use crate::src::nvim::message::{emsg, emsg_multiline};
 use crate::src::nvim::os::libc::{gettext, snprintf};
 use crate::src::nvim::os::shell::{shell_build_argv, shell_free_argv};
 use crate::src::nvim::strings::vim_strsave_escaped;
+use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{Array, Error, Object, String_0, exarg_T, kObjectTypeString, size_t};
 use crate::src::nvim::usercmd::add_win_cmd_modifiers;
 

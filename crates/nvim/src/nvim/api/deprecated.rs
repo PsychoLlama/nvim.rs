@@ -30,6 +30,7 @@ use crate::src::nvim::option::{
 };
 use crate::src::nvim::options::kOptInvalid;
 use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue,
     Boolean, BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
@@ -65,9 +66,6 @@ pub use crate::src::nvim::types::{
     undo_object, undo_object_data as C2Rust_Unnamed_7, varnumber_T, virt_line, visualinfo_T, win_T,
     window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

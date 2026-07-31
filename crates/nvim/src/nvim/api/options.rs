@@ -18,6 +18,7 @@ use crate::src::nvim::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::src::nvim::os::libc::{__assert_fail, strcmp};
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
@@ -52,9 +53,6 @@ pub use crate::src::nvim::types::{
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::window::close_windows;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

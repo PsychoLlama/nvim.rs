@@ -8,10 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{
-    EMPTY_HL_MESSAGE, HLF_E, NIL, STRING_INIT, api_set_error, cstr_as_string, kErrorTypeNone,
-    kErrorTypeValidation,
-};
+use super::{EMPTY_HL_MESSAGE, HLF_E, NIL, STRING_INIT, api_set_error, cstr_as_string};
 use crate::src::nvim::api::private::metadata::PACKED_API_METADATA;
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::global_cell::GlobalCell;
@@ -24,6 +21,7 @@ use crate::src::nvim::memory::{
 use crate::src::nvim::message::hl_msg_free;
 use crate::src::nvim::msgpack_rpc::unpacker::unpack;
 use crate::src::nvim::os::libc::{abort, memcpy};
+use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, ArenaMem, Array, ArrayBuilder, Dict, Error, HlMessage, HlMessageChunk, KeyValuePair,
     Object, ObjectType, String_0, consumed_blk, kObjectTypeArray, kObjectTypeBoolean,

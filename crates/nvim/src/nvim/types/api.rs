@@ -57,6 +57,11 @@ pub struct Error {
     pub msg: *mut ::core::ffi::c_char,
 }
 pub type ErrorType = ::core::ffi::c_int;
+/// What an [`Error`] carries, and the one value that means it carries
+/// nothing. Every module that reports an API error needs these.
+pub const kErrorTypeNone: ErrorType = -1;
+pub const kErrorTypeException: ErrorType = 0;
+pub const kErrorTypeValidation: ErrorType = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ExtmarkInfoArray {

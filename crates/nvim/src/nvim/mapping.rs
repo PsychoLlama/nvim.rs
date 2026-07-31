@@ -54,6 +54,7 @@ use crate::src::nvim::state::{
     MODE_TERMINAL, MODE_VISUAL,
 };
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
     AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array, ArrayBuilder,
@@ -96,9 +97,6 @@ pub use crate::src::nvim::types::{
 unsafe extern "C" {
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

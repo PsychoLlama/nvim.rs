@@ -18,6 +18,7 @@ use crate::src::nvim::message::{msg_ext_set_kind, msg_putchar, msg_puts};
 use crate::src::nvim::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::src::nvim::os::libc::{__assert_fail, atoi, gettext, memchr, snprintf, strchr, strstr};
 use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::types::api::kErrorTypeNone;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, CMD_index, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType,
@@ -105,9 +106,6 @@ pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const HLF_COUNT: C2Rust_Unnamed_13 = 76;
 pub const HLF_PRE: C2Rust_Unnamed_13 = 75;

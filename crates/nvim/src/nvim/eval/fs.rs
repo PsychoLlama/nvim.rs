@@ -83,9 +83,6 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::window::find_tabpage;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

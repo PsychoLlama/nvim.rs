@@ -28,6 +28,7 @@ use crate::src::nvim::path::{FreeWild, add_pathsep, gen_expand_wildcards, path_f
 use crate::src::nvim::runtime::do_in_path;
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::src::nvim::tag::{do_tag, find_tags};
+use crate::src::nvim::types::api::kErrorTypeNone;
 pub use crate::src::nvim::types::{
     __compar_fn_t, __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
     _IO_wide_data, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
@@ -122,9 +123,6 @@ pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const HLF_COUNT: C2Rust_Unnamed_14 = 76;
 pub const HLF_PRE: C2Rust_Unnamed_14 = 75;

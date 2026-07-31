@@ -18,12 +18,13 @@ use crate::src::nvim::event::socket::socket_address_is_tcp;
 use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::exit::os_exit;
 use crate::src::nvim::main::{
-    ARRAY_DICT_INIT, GA_EMPTY_INIT_VALUE, WIN_TABS, kCallbackNone, kErrorTypeNone, kFalse, kNone,
-    kRetObject, kTrue, mparm_T, ui_client_channel_id,
+    ARRAY_DICT_INIT, GA_EMPTY_INIT_VALUE, WIN_TABS, kCallbackNone, kFalse, kNone, kRetObject,
+    kTrue, mparm_T, ui_client_channel_id,
 };
 use crate::src::nvim::memory::{strequal, xfree, xrealloc};
 use crate::src::nvim::os::env::os_getenv_noalloc;
 use crate::src::nvim::os::libc::{fprintf, printf, stderr};
+use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::{
     Arena, Array, Callback, Callback_data, CallbackReader, Dict, Error, Integer, Object, String_0,
     TriState, dict_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,

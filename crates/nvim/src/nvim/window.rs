@@ -113,6 +113,7 @@ use crate::src::nvim::strings::vim_snprintf;
 use crate::src::nvim::syntax::reset_synblock;
 use crate::src::nvim::tag::tagstack_clear_entry;
 use crate::src::nvim::terminal::terminal_check_size;
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, BoolVarValue, Boolean,
     BufUpdateCallbacks, CMD_index, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType,
@@ -163,9 +164,6 @@ use crate::src::nvim::winfloat::{
     win_float_find_altwin, win_float_update_statusline, win_new_float, win_reconfig_floats,
 };
 unsafe extern "C" {}
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

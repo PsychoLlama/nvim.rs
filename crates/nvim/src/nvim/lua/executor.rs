@@ -69,6 +69,7 @@ use crate::src::nvim::runtime::{
     runtime_search_path_validate, script_is_lua,
 };
 use crate::src::nvim::strings::{arena_printf, vim_snprintf};
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
     __pthread_rwlock_arch_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
@@ -213,9 +214,6 @@ pub type luv_CFcpcall = Option<
 >;
 pub type luv_acquire_vm = Option<unsafe extern "C-unwind" fn() -> *mut lua_State>;
 pub type luv_release_vm = Option<unsafe extern "C-unwind" fn(*mut lua_State) -> ()>;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

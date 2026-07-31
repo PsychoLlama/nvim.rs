@@ -102,6 +102,7 @@ use crate::src::nvim::terminal::{
     terminal_alloc, terminal_buf, terminal_check_size, terminal_destroy, terminal_open,
     terminal_running, terminal_set_streamed_paste,
 };
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __time_t, __uid_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array,
@@ -177,9 +178,6 @@ use crate::src::nvim::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::src::nvim::window::{
     global_stl_height, goto_tabpage_tp, goto_tabpage_win, win_find_tabpage,
 };
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

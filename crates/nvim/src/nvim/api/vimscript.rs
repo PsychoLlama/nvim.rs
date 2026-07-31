@@ -18,6 +18,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memmove, strlen};
 use crate::src::nvim::runtime::do_source_str;
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, ArgvFunc, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
@@ -74,9 +75,6 @@ use crate::src::nvim::viml::parser::expressions::{
 use crate::src::nvim::viml::parser::parser::{
     parser_simple_get_line, viml_parser_destroy, viml_parser_init,
 };
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

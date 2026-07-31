@@ -62,7 +62,6 @@ pub const VIRTTEXT_EMPTY: VirtText = VirtText {
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kWinOptFoldtext: c_int = 22;
 pub const VV_LNUM: VimVarIndex = 9;

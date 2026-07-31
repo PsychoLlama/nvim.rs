@@ -63,6 +63,7 @@ use crate::src::nvim::runtime::{estack_pop, estack_push, exestack};
 use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
 use crate::src::nvim::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::src::nvim::strings::{vim_strchr, vim_strnicmp_asc, xstrnsave};
+use crate::src::nvim::types::api::kErrorTypeNone;
 pub use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     __time_t, AdditionalData, AlignTextPos, Arena, Array, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd,
@@ -134,9 +135,6 @@ unsafe extern "C" {
     ) -> *mut regprog_T;
     fn vim_regfree(prog: *mut regprog_T);
 }
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

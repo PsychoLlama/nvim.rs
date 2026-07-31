@@ -7,16 +7,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{
-    CAR, NL, NUL, STRING_INIT, api_set_error, arena_string, arena_take_arraybuilder,
-    kErrorTypeValidation,
-};
+use super::{CAR, NL, NUL, STRING_INIT, api_set_error, arena_string, arena_take_arraybuilder};
 use crate::src::nvim::api::private::validate::api_err_invalid;
 use crate::src::nvim::kvec::InitVec;
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{memchrsub, xmemdupz, xstrndup};
 use crate::src::nvim::os::libc::{strlen, strnlen};
 use crate::src::nvim::pos::MAXLNUM;
+use crate::src::nvim::types::api::kErrorTypeValidation;
 use crate::src::nvim::types::{
     Arena, Array, ArrayBuilder, Error, String_0, buf_T, garray_T, int64_t, kObjectTypeString,
     linenr_T, object, object_data, size_t,

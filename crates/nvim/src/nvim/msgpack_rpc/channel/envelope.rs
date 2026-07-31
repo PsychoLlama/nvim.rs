@@ -23,6 +23,7 @@ use crate::src::nvim::types::{
 
 use super::known::*;
 use super::{channel_write, trace};
+use crate::src::nvim::types::api::kErrorTypeNone;
 
 /// Packs a request (with an id) or a notification (without one) and sends it
 /// to each of `nchans` channels.

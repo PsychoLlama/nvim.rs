@@ -37,6 +37,7 @@ use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
 use crate::src::nvim::memory::{strequal, xfree};
 use crate::src::nvim::os::libc::{__assert_fail, memchr, memset, strcasecmp};
 use crate::src::nvim::runtime::script_autoload;
+use crate::src::nvim::types::api::kErrorTypeNone;
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gnuc_va_list, __time_t, __va_list_tag, AdditionalData, AlignTextPos,
     BoolVarValue, BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_4,
@@ -131,9 +132,6 @@ pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const ET_INTERRUPT: except_type_T = 2;
 pub const ET_ERROR: except_type_T = 1;
 pub const ET_USER: except_type_T = 0;

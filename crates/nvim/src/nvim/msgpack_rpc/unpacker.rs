@@ -42,15 +42,13 @@ use crate::src::nvim::ui_client::{
 
 pub mod protocol;
 
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use protocol::{
     ARRAY as TOKEN_ARRAY, BIN as TOKEN_BIN, BOOLEAN as TOKEN_BOOLEAN, CHUNK as TOKEN_CHUNK,
     EXT as TOKEN_EXT, FLOAT as TOKEN_FLOAT, MAP as TOKEN_MAP, NIL as TOKEN_NIL, SINT as TOKEN_SINT,
     STR as TOKEN_STR, UINT as TOKEN_UINT,
 };
 
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kMessageTypeRedrawEvent: MessageType = 3;
 pub const kMessageTypeNotification: MessageType = 2;
 pub const kMessageTypeResponse: MessageType = 1;

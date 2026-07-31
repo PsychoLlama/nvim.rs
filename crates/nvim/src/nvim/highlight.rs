@@ -30,6 +30,7 @@ use crate::src::nvim::message::emsg;
 use crate::src::nvim::option::check_blending;
 use crate::src::nvim::os::libc::{gettext, memset, strcasecmp, strlen};
 use crate::src::nvim::popupmenu::pum_drawn;
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
@@ -67,9 +68,6 @@ pub use crate::src::nvim::types::{
     win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::ui::ui_call_hl_attr_define;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

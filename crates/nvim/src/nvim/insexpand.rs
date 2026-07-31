@@ -167,9 +167,6 @@ pub type MergeSortCompareFunc = Option<
         *const ::core::ffi::c_void,
     ) -> ::core::ffi::c_int,
 >;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

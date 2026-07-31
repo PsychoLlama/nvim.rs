@@ -7,21 +7,21 @@ use crate::src::nvim::profile::time_msg;
 use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
     AdditionalData, Array, Callback, Callback_data, CallbackType, DecorRangeSlot,
-    DecorSignHighlight, DecorState, DecorState_ranges_i, DecorState_slots, ErrorType, FILE,
-    GridView, ListLenSpecials, Loop, LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int,
-    Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash, MarkTreeIter, MarkTreeIter_s, MultiQueue, NS,
-    Object, OptInt, OptValType, Proc, RgbValue, ScreenGrid, Set_String, Set_int, Set_uint32_t,
-    Set_uint64_t, StlClickDefinition, String_0, TriState, VarLockStatus, VarType, VimVarIndex,
-    WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope,
-    cmdmod_T, colnr_T, disptick_T, estack_T, estack_T_es_info, etype_T, evalarg_T, except_T,
-    file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t, int32_t,
-    int64_t, key_extra, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s,
-    optmagic_T, pos_T, proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, qf_info_T,
-    reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t,
-    tabpage_T, typebuf_T, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u,
-    uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap,
-    uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node,
-    uv_timer_s_u, uv_timer_t, vimmenu_T, win_T, xfmark_T,
+    DecorSignHighlight, DecorState, DecorState_ranges_i, DecorState_slots, FILE, GridView,
+    ListLenSpecials, Loop, LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t,
+    Map_uint64_t_ptr_t, MapHash, MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt,
+    OptValType, Proc, RgbValue, ScreenGrid, Set_String, Set_int, Set_uint32_t, Set_uint64_t,
+    StlClickDefinition, String_0, TriState, VarLockStatus, VarType, VimVarIndex, WinExtmark,
+    XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, colnr_T,
+    disptick_T, estack_T, estack_T_es_info, etype_T, evalarg_T, except_T, file_comparison, fmark_T,
+    fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t, int32_t, int64_t, key_extra, linenr_T,
+    lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, optmagic_T, pos_T, proftime_T,
+    pthread_mutex_t, pthread_rwlock_t, ptr_t, qf_info_T, reg_extmatch_T, regmatch_T, regmmatch_T,
+    regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t, tabpage_T, typebuf_T, uint8_t, uint32_t,
+    uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
+    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
+    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
+    xfmark_T,
 };
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 
@@ -70,7 +70,6 @@ pub(crate) unsafe fn time_msg_at(what: &core::ffi::CStr) {
 unsafe extern "C" {
     fn qf_jump(qi: *mut qf_info_T, dir: c_int, errornr: c_int, forceit: c_int);
 }
-pub(crate) const kErrorTypeNone: ErrorType = -1;
 pub(crate) const kTrue: TriState = 1;
 pub(crate) const kFalse: TriState = 0;
 pub(crate) const kNone: TriState = -1;

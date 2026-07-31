@@ -80,6 +80,7 @@ use crate::src::nvim::profile::{
     time_pop, time_push,
 };
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
+use crate::src::nvim::types::api::kErrorTypeNone;
 pub use crate::src::nvim::types::{
     __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __time_t,
     _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data, AdditionalData, AlignTextPos,
@@ -129,9 +130,6 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

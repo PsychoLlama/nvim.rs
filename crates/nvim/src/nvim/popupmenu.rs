@@ -54,6 +54,7 @@ use crate::src::nvim::plines::plines_m_win;
 use crate::src::nvim::plines::win_linetabsize;
 use crate::src::nvim::state::MODE_CMDLINE;
 use crate::src::nvim::strings::reverse_text;
+use crate::src::nvim::types::api::kErrorTypeNone;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, CMD_index, CSType, Callback, Callback_data as C2Rust_Unnamed_4,
@@ -160,9 +161,6 @@ pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;

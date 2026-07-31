@@ -8,7 +8,6 @@
 
 use super::{
     DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO, NIL, VAR_UNKNOWN, VAR_UNLOCKED, api_set_error,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
 };
 use crate::src::nvim::api::private::converter::{object_to_vim, vim_to_object};
 use crate::src::nvim::eval::typval::{
@@ -16,6 +15,7 @@ use crate::src::nvim::eval::typval::{
     tv_dict_item_remove, tv_dict_watcher_notify,
 };
 use crate::src::nvim::eval::vars::{before_set_vvar, get_vimvar_dict};
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::{
     Arena, Error, Object, String_0, dict_T, dictitem_T, ptrdiff_t, size_t, typval_T,
     typval_vval_union,

@@ -93,6 +93,7 @@ mod known {
     pub const ARENA_BLOCK_SIZE: usize = 4096;
 }
 
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use known::*;
 
 /// The all-nil `Object`, which is what an API call that produced nothing, or

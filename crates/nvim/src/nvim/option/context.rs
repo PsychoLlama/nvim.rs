@@ -23,9 +23,10 @@ use crate::src::nvim::types::{
 use crate::src::nvim::window::win_find_tabpage;
 
 use super::{
-    FAIL, get_option_value, kErrorTypeException, kErrorTypeNone, kFalse, kOptScopeBuf,
-    kOptScopeWin, kOptValTypeNil, set_option_direct, set_option_value_handle_tty,
+    FAIL, get_option_value, kFalse, kOptScopeBuf, kOptScopeWin, kOptValTypeNil, set_option_direct,
+    set_option_value_handle_tty,
 };
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 
 /// [`set_option_direct`] with another window or buffer standing in for the
 /// current one.

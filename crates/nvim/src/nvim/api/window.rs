@@ -20,6 +20,7 @@ use crate::src::nvim::message::emsg;
 use crate::src::nvim::r#move::{update_topline, validate_cursor};
 use crate::src::nvim::os::libc::gettext;
 use crate::src::nvim::plines::{win_get_fill, win_text_height};
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
@@ -58,9 +59,6 @@ use crate::src::nvim::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
     win_set_buf, win_setheight_win, win_setwidth_win,
 };
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

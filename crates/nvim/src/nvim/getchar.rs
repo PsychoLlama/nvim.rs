@@ -71,6 +71,7 @@ use crate::src::nvim::state::{
     state_no_longer_safe,
 };
 use crate::src::nvim::strings::vim_strchr;
+use crate::src::nvim::types::api::kErrorTypeNone;
 pub use crate::src::nvim::types::{
     __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
     __pthread_rwlock_arch_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
@@ -125,9 +126,6 @@ pub use crate::src::nvim::types::{
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::src::nvim::undo::u_sync;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;

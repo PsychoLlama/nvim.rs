@@ -33,6 +33,7 @@ use crate::src::nvim::ops::get_region_bytecount;
 use crate::src::nvim::os::libc::{memcpy, strchr, strlen};
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::state::MODE_INSERT;
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
@@ -70,9 +71,6 @@ pub use crate::src::nvim::types::{
     visualinfo_T, win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
 };
 use crate::src::nvim::undo::u_save_buf;
-pub const kErrorTypeValidation: ErrorType = 1;
-pub const kErrorTypeException: ErrorType = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub const kVPosRightAlign: VirtTextPos = 4;
 pub const kVPosOverlay: VirtTextPos = 3;

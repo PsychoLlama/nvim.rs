@@ -16,6 +16,7 @@ use core::ptr;
 
 use super::marker::*;
 use super::*;
+use crate::src::nvim::types::api::kErrorTypeNone;
 
 /// Generates text to display
 ///

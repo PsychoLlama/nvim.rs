@@ -22,8 +22,8 @@
 
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::types::{
-    AlignTextPos, CharsOption, ErrorType, FloatRelative, OptValType, WinSplit, WinStyle, colnr_T,
-    fcs_chars_T, lcs_chars_T, regmatch_T, schar_T,
+    AlignTextPos, CharsOption, FloatRelative, OptValType, WinSplit, WinStyle, colnr_T, fcs_chars_T,
+    lcs_chars_T, regmatch_T, schar_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
@@ -52,7 +52,6 @@ pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
 pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const kErrorTypeNone: ErrorType = -1;
 pub const kZIndexFloatDefault: c_uint = 50;
 pub const kOptValTypeString: OptValType = 2;
 pub const CPT_MENU: c_uint = 2;

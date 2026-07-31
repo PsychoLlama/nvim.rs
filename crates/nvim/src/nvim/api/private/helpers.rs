@@ -36,6 +36,7 @@ use crate::src::nvim::mark::setmark_pos;
 use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::os::libc::vsnprintf;
 use crate::src::nvim::runtime::script_is_lua;
+use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
 use crate::src::nvim::types::{
     Buffer, Dict, Error, ErrorType, HlMessage, Integer, Map_int_ptr_t, Object, String_0, Tabpage,
     TryState, VarLockStatus, VarType, Window, buf_T, colnr_T, except_type_T, fmarkv_T, int64_t,
@@ -52,10 +53,6 @@ pub(crate) use self::keydict::*;
 pub(crate) use self::text::*;
 pub(crate) use self::value::*;
 pub(crate) use self::vimdict::*;
-
-const kErrorTypeNone: ErrorType = -1;
-const kErrorTypeException: ErrorType = 0;
-const kErrorTypeValidation: ErrorType = 1;
 
 const VAR_UNKNOWN: VarType = 0;
 const VAR_UNLOCKED: VarLockStatus = 0;
