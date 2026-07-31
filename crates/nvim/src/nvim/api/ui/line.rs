@@ -27,7 +27,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::events::{remote_ui_cursor_goto, remote_ui_highlight_set, remote_ui_put};
+use super::events::{linegrid, remote_ui_cursor_goto, remote_ui_highlight_set, remote_ui_put};
 use super::packer::{MAX_CELLS_PENDING, UI_BUF_SIZE, prepare_call, push_call, ui_flush_buf};
 use crate::src::nvim::grid::{schar_get, schar_get_adv};
 use crate::src::nvim::main::Columns;
@@ -76,7 +76,7 @@ pub unsafe fn remote_ui_raw_line(
     attrs: *const sattr_T,
 ) {
     unsafe {
-        if (*ui).ui_ext[crate::src::nvim::ui::kUILinegrid as usize] {
+        if linegrid(ui) {
             raw_line_linegrid(
                 ui, grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
             );
@@ -130,8 +130,11 @@ unsafe fn raw_line_linegrid(
                 continue;
             }
 
+            // Saturating because an overfull buffer must flush rather
+            // than wrap to "plenty of room", which is what C's unsigned
+            // subtraction would have done.
             let used = (*ui).packer.ptr.addr() - (*ui).packer.startptr.addr();
-            if UI_BUF_SIZE - used < 2 * MAX_CELL_SIZE + 1
+            if UI_BUF_SIZE.saturating_sub(used) < 2 * MAX_CELL_SIZE + 1
                 || (*ui).ncells_pending >= MAX_CELLS_PENDING
             {
                 // Out of room mid-run. Close this `grid_line` and open
