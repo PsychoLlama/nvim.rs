@@ -102,16 +102,6 @@ pub unsafe fn out_raw(tui: *mut TUIData, ptr: *const c_char, len: usize) {
     unsafe { out(tui, core::slice::from_raw_parts(ptr.cast::<u8>(), len)) };
 }
 
-/// Stage a raw capability pointer, doing nothing when it is null.
-///
-/// # Safety
-/// `tui` must be live, and `str` either null or NUL-terminated.
-pub unsafe fn out_ptr(tui: *mut TUIData, str: *const c_char) {
-    if !str.is_null() {
-        unsafe { out(tui, CStr::from_ptr(str).to_bytes()) };
-    }
-}
-
 /// Format up to three integers into `fmt` and stage the result.
 ///
 /// This replaces a `printf` variadic whose only two callers pass small
@@ -163,13 +153,41 @@ pub unsafe fn terminfo_out(tui: *mut TUIData, what: TerminfoDef) {
     unsafe { terminfo_print(tui, what, &mut params) };
 }
 
-/// Stage capability `what` with up to three numeric parameters.
+/// Stage `count` copies of `byte`.
+///
+/// Flushing as often as it takes, so a run longer than the staging buffer is
+/// written in whole buffers rather than refused.
 ///
 /// # Safety
 /// `tui` must point to a live `TUIData`.
-pub unsafe fn terminfo_print_num(tui: *mut TUIData, what: TerminfoDef, nums: [c_int; 3]) {
+pub unsafe fn out_repeat(tui: *mut TUIData, byte: u8, count: usize) {
+    unsafe {
+        let mut left = count;
+        loop {
+            let fits = left.min(BUF_SIZE - (*tui).bufpos);
+            let dst = (&raw mut (*tui).buf).cast::<u8>().add((*tui).bufpos);
+            core::ptr::write_bytes(dst, byte, fits);
+            (*tui).bufpos += fits;
+            left -= fits;
+            if left == 0 {
+                return;
+            }
+            flush_buf(tui);
+        }
+    }
+}
+
+/// Stage capability `what` with numeric parameters.
+///
+/// terminfo's parameter stack holds nine; anything the caller does not give
+/// is zero, which is what a capability that ignores a parameter expects to
+/// find.
+///
+/// # Safety
+/// `tui` must point to a live `TUIData`.
+pub unsafe fn terminfo_print_nums(tui: *mut TUIData, what: TerminfoDef, nums: &[c_int]) {
     let mut params = NO_PARAMS;
-    for (slot, n) in params.iter_mut().zip(nums) {
+    for (slot, &n) in params.iter_mut().zip(nums) {
         slot.num = n as core::ffi::c_long;
     }
     unsafe { terminfo_print(tui, what, &mut params) };
@@ -194,7 +212,7 @@ pub unsafe fn terminfo_print_str(tui: *mut TUIData, what: TerminfoDef, s: &CStr)
 ///
 /// # Safety
 /// `tui` must point to a live `TUIData`.
-pub unsafe fn terminfo_print(tui: *mut TUIData, what: TerminfoDef, params: &mut [TPVAR; 9]) {
+unsafe fn terminfo_print(tui: *mut TUIData, what: TerminfoDef, params: &mut [TPVAR; 9]) {
     assert!(what < kTermCount, "capability {what} out of range");
     unsafe {
         let str = (*tui).ti.defs[what as usize];

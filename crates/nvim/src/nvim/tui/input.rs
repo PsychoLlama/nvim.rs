@@ -13,6 +13,9 @@ use crate::src::nvim::memory::{strnequal, xfree, xrealloc};
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcmp, memcpy, memmove, snprintf, strlen};
 use crate::src::nvim::strings::kv_do_printf;
+use crate::src::nvim::tui::negotiate::{
+    tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color,
+};
 use crate::src::nvim::tui::termkey::driver_csi::{
     csi_param_value, termkey_interpret_csi, termkey_interpret_modereport, termkey_interpret_mouse,
 };
@@ -22,9 +25,7 @@ use crate::src::nvim::tui::termkey::termkey::{
     termkey_new_abstract, termkey_push_bytes, termkey_set_buffer_size, termkey_set_canonflags,
     termkey_start, termkey_strfkey,
 };
-use crate::src::nvim::tui::tui::{
-    TUIData, tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color, tui_set_size,
-};
+use crate::src::nvim::tui::tui::{TUIData, tui_set_size};
 pub use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, Array,
     Boolean, Dict, Event, Float, Integer, KeyEncoding, KeyValuePair, Loop, LuaRef, Map_int_ptr_t,

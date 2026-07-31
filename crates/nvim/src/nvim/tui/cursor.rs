@@ -12,7 +12,7 @@
 use crate::src::nvim::cursor_shape::shape_table;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::log::logmsg;
-use crate::src::nvim::tui::output::{terminfo_out, terminfo_print_num, terminfo_print_str};
+use crate::src::nvim::tui::output::{terminfo_out, terminfo_print_nums, terminfo_print_str};
 use crate::src::nvim::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
     kTerm_set_cursor_style,
@@ -143,7 +143,7 @@ pub unsafe fn set_mode(tui: *mut TUIData, mode: usize) {
     unsafe {
         let entry = (*tui).cursor_shapes[mode];
         apply_color(tui, &entry);
-        terminfo_print_num(tui, kTerm_set_cursor_style, [decscusr_code(&entry), 0, 0]);
+        terminfo_print_nums(tui, kTerm_set_cursor_style, &[decscusr_code(&entry)]);
     }
 }
 
@@ -194,11 +194,7 @@ unsafe fn apply_color(tui: *mut TUIData, entry: &cursorentry_T) {
                 let s = CStr::from_bytes_with_nul(&hex).expect("hex buffer is NUL-terminated");
                 terminfo_print_str(tui, kTerm_set_cursor_color, s);
             } else {
-                terminfo_print_num(
-                    tui,
-                    kTerm_set_cursor_color,
-                    [aep.rgb_bg_color as c_int, 0, 0],
-                );
+                terminfo_print_nums(tui, kTerm_set_cursor_color, &[aep.rgb_bg_color as c_int]);
             }
             (*tui).cursor_has_color = true;
         }

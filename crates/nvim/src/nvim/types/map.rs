@@ -16,5 +16,27 @@ pub struct MapHash {
     pub keys_capacity: uint32_t,
     pub hash: *mut uint32_t,
 }
+impl MapHash {
+    /// A table with nothing in it and nothing allocated. Every map and set
+    /// starts here; the first insert allocates.
+    pub const EMPTY: Self = Self {
+        n_buckets: 0,
+        size: 0,
+        n_occupied: 0,
+        upper_bound: 0,
+        n_keys: 0,
+        keys_capacity: 0,
+        hash: ::core::ptr::null_mut(),
+    };
+}
+
+impl Set_cstr_t {
+    /// An empty set of C strings. See [`MapHash::EMPTY`].
+    pub const EMPTY: Self = Self {
+        h: MapHash::EMPTY,
+        keys: ::core::ptr::null_mut(),
+    };
+}
+
 pub type cstr_t = *const ::core::ffi::c_char;
 pub type ptr_t = *mut ::core::ffi::c_void;

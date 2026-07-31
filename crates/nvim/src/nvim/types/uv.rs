@@ -240,6 +240,40 @@ pub type uv_loop_t = uv_loop_s;
 pub type uv_mutex_t = pthread_mutex_t;
 #[derive(Copy, Clone)]
 #[repr(C)]
+pub struct uv_tty_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub loop_0: *mut uv_loop_t,
+    pub type_0: uv_handle_type,
+    pub close_cb: uv_close_cb,
+    pub handle_queue: uv__queue,
+    pub u: uv_tty_s_u,
+    pub next_closing: *mut uv_handle_t,
+    pub flags: ::core::ffi::c_uint,
+    pub write_queue_size: size_t,
+    pub alloc_cb: uv_alloc_cb,
+    pub read_cb: uv_read_cb,
+    pub connect_req: *mut uv_connect_t,
+    pub shutdown_req: *mut uv_shutdown_t,
+    pub io_watcher: uv__io_t,
+    pub write_queue: uv__queue,
+    pub write_completed_queue: uv__queue,
+    pub connection_cb: uv_connection_cb,
+    pub delayed_error: ::core::ffi::c_int,
+    pub accepted_fd: ::core::ffi::c_int,
+    pub queued_fds: *mut ::core::ffi::c_void,
+    pub orig_termios: termios,
+    pub mode: ::core::ffi::c_int,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union uv_tty_s_u {
+    pub fd: ::core::ffi::c_int,
+    pub reserved: [*mut ::core::ffi::c_void; 4],
+}
+pub type uv_tty_t = uv_tty_s;
+pub type uv_tty_mode_t = ::core::ffi::c_uint;
+#[derive(Copy, Clone)]
+#[repr(C)]
 pub struct uv_pipe_s {
     pub data: *mut ::core::ffi::c_void,
     pub loop_0: *mut uv_loop_t,

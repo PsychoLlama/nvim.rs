@@ -19,13 +19,17 @@ use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
 use crate::src::nvim::os::env::{os_env_exists, os_get_pid};
 use crate::src::nvim::os::libc::{__assert_fail, abort, close, dup, memcmp};
 use crate::src::nvim::profile::{time_finish, time_msg};
-use crate::src::nvim::tui::tui::{
-    TUIData, tui_add_url, tui_bell, tui_busy_start, tui_busy_stop, tui_chdir,
-    tui_default_colors_set, tui_flush, tui_grid_clear, tui_grid_cursor_goto, tui_grid_resize,
-    tui_grid_scroll, tui_hl_attr_define, tui_is_stopped, tui_mode_change, tui_mode_info_set,
-    tui_mouse_off, tui_mouse_on, tui_option_set, tui_raw_line, tui_screenshot, tui_set_icon,
-    tui_set_title, tui_start, tui_stop, tui_suspend, tui_ui_send, tui_update_menu, tui_visual_bell,
+use crate::src::nvim::tui::attrs::{tui_add_url, tui_default_colors_set, tui_hl_attr_define};
+use crate::src::nvim::tui::events::{
+    tui_bell, tui_busy_start, tui_busy_stop, tui_chdir, tui_mode_change, tui_mode_info_set,
+    tui_mouse_off, tui_mouse_on, tui_option_set, tui_set_icon, tui_set_title, tui_ui_send,
+    tui_update_menu, tui_visual_bell,
 };
+use crate::src::nvim::tui::paint::{
+    tui_flush, tui_grid_clear, tui_grid_cursor_goto, tui_grid_resize, tui_grid_scroll,
+    tui_raw_line, tui_screenshot,
+};
+use crate::src::nvim::tui::tui::{TUIData, tui_is_stopped, tui_start, tui_stop, tui_suspend};
 pub use crate::src::nvim::types::{
     __gid_t, __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
     __pthread_rwlock_arch_t, __uid_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
