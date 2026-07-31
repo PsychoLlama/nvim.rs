@@ -107,6 +107,7 @@ use crate::src::nvim::statusline::build_stl_str_hl;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, xstrnsave};
 use crate::src::nvim::syntax::{reset_synblock, syntax_clear};
 use crate::src::nvim::terminal::{terminal_check_size, terminal_close, terminal_running};
+use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, Array, AutoPat, AutoPatCmd,
     AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback,
@@ -968,17 +969,6 @@ pub const WILD_BUFLASTUSED: C2Rust_Unnamed_25 = 4096;
 pub const WILD_HOME_REPLACE: C2Rust_Unnamed_25 = 2;
 pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_30 = -2147483648;
 pub const BUF_DIFF_FILTER: C2Rust_Unnamed_25 = 8192;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const SHM_RO: C2Rust_Unnamed_24 = 114;
 pub const SHM_MOD: C2Rust_Unnamed_24 = 109;
 pub const WSP_BELOW: C2Rust_Unnamed_34 = 64;

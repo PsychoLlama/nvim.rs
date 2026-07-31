@@ -17,7 +17,7 @@
 //! than becoming a slice and an index.
 
 use crate::src::nvim::event::libuv::uv_strerror;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::memory::{alloc_block, free_block};
 use crate::src::nvim::os::fs::{
     os_close, os_file_mkdir, os_fsync, os_open, os_open_stdin_fd, os_read, os_readv, os_write,
@@ -29,8 +29,6 @@ use core::slice;
 
 /// Size of the arena block a `FileDescriptor` buffers through.
 const ARENA_BLOCK_SIZE: usize = 4096;
-
-const LOGLVL_ERR: c_int = 4;
 
 const UV_EINVAL: c_int = -22;
 const UV_EIO: c_int = -5;

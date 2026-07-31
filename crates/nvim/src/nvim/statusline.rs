@@ -54,6 +54,7 @@ use crate::src::nvim::plines::getvvcol;
 use crate::src::nvim::sign::describe_sign_text;
 use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
+use crate::src::nvim::types::ui::{kUIMessages, kUITabline, kUIWildmenu};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, Callback, Callback_data as C2Rust_Unnamed_6, CallbackType,
@@ -401,17 +402,6 @@ pub const VV_ERRMSG: VimVarIndex = 3;
 pub const VV_PREVCOUNT: VimVarIndex = 2;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const OPT_SKIPRTP: C2Rust_Unnamed_17 = 128;

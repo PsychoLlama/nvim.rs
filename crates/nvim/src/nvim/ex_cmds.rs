@@ -135,6 +135,7 @@ use crate::src::nvim::strings::{
     vim_strsave_escaped, xstrnsave,
 };
 use crate::src::nvim::terminal::{terminal_check_size, terminal_running};
+use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks,
     CMD_index, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem,
@@ -1034,17 +1035,6 @@ pub const BFA_IGNORE_ABORT: bfa_values = 8;
 pub const BFA_KEEP_UNDO: bfa_values = 4;
 pub const BFA_WIPE: bfa_values = 2;
 pub const BFA_DEL: bfa_values = 1;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_21 = 83;
 pub const SHM_FILEINFO: C2Rust_Unnamed_21 = 70;

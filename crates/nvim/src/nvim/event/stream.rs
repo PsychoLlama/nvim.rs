@@ -14,7 +14,7 @@ use crate::src::nvim::event::libuv::{
     uv_close, uv_guess_handle, uv_idle_init, uv_is_closing, uv_loop_close, uv_loop_init,
     uv_pipe_init, uv_pipe_open, uv_run, uv_stream_get_write_queue_size, uv_stream_set_blocking,
 };
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 pub use crate::src::nvim::types::{
     Loop, MultiQueue, Stream, uv_file, uv_handle_t, uv_handle_type, uv_loop_t, uv_pipe_t,
     uv_run_mode, uv_stream_t,
@@ -26,9 +26,6 @@ const UV_NAMED_PIPE: uv_handle_type = 7;
 const UV_TTY: uv_handle_type = 14;
 const UV_FILE: uv_handle_type = 17;
 const UV_RUN_NOWAIT: uv_run_mode = 2;
-
-const LOGLVL_DBG: c_int = 1;
-const LOGLVL_WRN: c_int = 3;
 
 /// Put `fd` into (or out of) blocking mode.
 ///

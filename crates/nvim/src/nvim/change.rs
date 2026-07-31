@@ -66,6 +66,7 @@ use crate::src::nvim::spell::spell_check_window;
 use crate::src::nvim::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG, virtual_active};
 use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::src::nvim::textformat::{comp_textwidth, has_format_option};
+use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
     Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, DecorExt,
@@ -384,17 +385,6 @@ pub const VV_ERRMSG: VimVarIndex = 3;
 pub const VV_PREVCOUNT: VimVarIndex = 2;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const KEY_OPEN_BACK: C2Rust_Unnamed_21 = 258;
 pub const KEY_OPEN_FORW: C2Rust_Unnamed_21 = 257;
 pub const SIN_NOMARK: C2Rust_Unnamed_23 = 8;

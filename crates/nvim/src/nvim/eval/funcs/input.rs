@@ -5,7 +5,7 @@
 use super::args::frame;
 use super::{
     FAIL, NUL, SIGINT, VAR_LIST, VAR_STRING, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION,
-    VIM_WARNING, false_0, kUIMessages, true_0, tv_get_buf_from_arg,
+    VIM_WARNING, false_0, true_0, tv_get_buf_from_arg,
 };
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::api::vim::nvim_feedkeys;
@@ -33,6 +33,7 @@ use crate::src::nvim::message::{
     verb_msg,
 };
 use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     EvalFuncData, buf_T, garray_T, listitem_T, tasave_T, typval_T, varnumber_T,
 };

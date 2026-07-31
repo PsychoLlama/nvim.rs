@@ -13,13 +13,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::src::nvim::main::nvim_testing;
 use crate::src::nvim::memory::strequal;
 use crate::src::nvim::os::libc::tcgetattr;
 use crate::src::nvim::tui::output::{flush, out, out_fmt};
 use crate::src::nvim::tui::terminfo::caps::kTerm_set_underline_style;
-use crate::src::nvim::tui::tui::{LOGLVL_DBG, LOGLVL_WRN};
 use crate::src::nvim::types::{KeyEncoding, TUIData, TermInput, TermMode, TermModeState, termios};
 use core::ffi::{CStr, c_char, c_void};
 

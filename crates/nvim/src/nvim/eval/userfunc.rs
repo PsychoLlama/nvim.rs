@@ -75,6 +75,7 @@ use crate::src::nvim::runtime::{
 };
 use crate::src::nvim::search::{restore_search_patterns, save_search_patterns};
 use crate::src::nvim::strings::{concat_str, vim_strchr, xstrnsave};
+use crate::src::nvim::types::ui::kUICmdline;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArgvFunc, Array, AutoPat,
     AutoPatCmd, AutoPatCmd_S, BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback,
@@ -968,17 +969,6 @@ pub const VV_ERRMSG: VimVarIndex = 3;
 pub const VV_PREVCOUNT: VimVarIndex = 2;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const TFN_READ_ONLY: C2Rust_Unnamed_22 = 16;
 pub const TFN_NO_DEREF: C2Rust_Unnamed_22 = 8;

@@ -47,12 +47,14 @@ use crate::src::nvim::memory::{strequal, xfree};
 use crate::src::nvim::option::set_tty_option;
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf};
+use crate::src::nvim::types::ui::{
+    kUICmdline, kUIExtCount, kUIHlState, kUILinegrid, kUIMessages, kUIMultigrid, kUIPopupmenu,
+};
 use crate::src::nvim::types::{
     Boolean, Dict, Error, Float, Integer, Object, ObjectType, PackerBuffer, RemoteUI, String_0,
     UIExtension, handle_T, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString,
 };
 use crate::src::nvim::ui::{
-    kUICmdline, kUIExtCount, kUIHlState, kUILinegrid, kUIMessages, kUIMultigrid, kUIPopupmenu,
     ui_active, ui_attach_impl, ui_call_ui_send, ui_can_attach_more, ui_detach_impl, ui_grid_resize,
     ui_refresh, ui_set_ext_option,
 };

@@ -11,10 +11,13 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::grid::{
     MAX_SCHAR_SIZE, grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint,
 };
-use crate::src::nvim::highlight_group::{
+use crate::src::nvim::highlight::{
     HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DIM, HL_INVERSE, HL_ITALIC, HL_NOCOMBINE, HL_OVERLINE,
     HL_STANDOUT, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDASHED, HL_UNDERDOTTED, HL_UNDERDOUBLE,
-    HL_UNDERLINE, get_highlight_name_ext, highlight_color, highlight_exists, highlight_has_attr,
+    HL_UNDERLINE,
+};
+use crate::src::nvim::highlight_group::{
+    get_highlight_name_ext, highlight_color, highlight_exists, highlight_has_attr,
     syn_get_final_id, syn_name2id,
 };
 use crate::src::nvim::main::{curbuf, curwin};
@@ -261,33 +264,33 @@ fn attr_selector(what: &[u8]) -> Option<Attr> {
     Some(match at(0) {
         b'b' => match at(1) {
             b'g' => Attr::Color,
-            b'l' => Attr::Bit(HL_BLINK as c_int),
-            _ => Attr::Bit(HL_BOLD as c_int),
+            b'l' => Attr::Bit(HL_BLINK),
+            _ => Attr::Bit(HL_BOLD),
         },
-        b'c' => Attr::Bit(HL_CONCEALED as c_int),
-        b'd' => Attr::Bit(HL_DIM as c_int),
-        b'o' => Attr::Bit(HL_OVERLINE as c_int),
+        b'c' => Attr::Bit(HL_CONCEALED),
+        b'd' => Attr::Bit(HL_DIM),
+        b'o' => Attr::Bit(HL_OVERLINE),
         b'f' => Attr::Color,
-        b'i' if at(1) == b'n' => Attr::Bit(HL_INVERSE as c_int),
-        b'i' => Attr::Bit(HL_ITALIC as c_int),
-        b'n' if at(1) == b'o' => Attr::Bit(HL_NOCOMBINE as c_int),
+        b'i' if at(1) == b'n' => Attr::Bit(HL_INVERSE),
+        b'i' => Attr::Bit(HL_ITALIC),
+        b'n' if at(1) == b'o' => Attr::Bit(HL_NOCOMBINE),
         b'n' => Attr::Name,
-        b'r' => Attr::Bit(HL_INVERSE as c_int),
+        b'r' => Attr::Bit(HL_INVERSE),
         b's' => match at(1) {
             b'p' => Attr::Color,
-            b't' if at(2) == b'r' => Attr::Bit(HL_STRIKETHROUGH as c_int),
-            _ => Attr::Bit(HL_STANDOUT as c_int),
+            b't' if at(2) == b'r' => Attr::Bit(HL_STRIKETHROUGH),
+            _ => Attr::Bit(HL_STANDOUT),
         },
         // `ul` is the underline *colour*; every other `u` spelling is one
         // of the five underline styles, and those are only told apart from
         // the sixth byte on — which is why the length guard comes first.
         b'u' if what.len() < 9 => Attr::Color,
         b'u' => match (at(5), at(6), at(7)) {
-            (b'l', _, _) => Attr::Bit(HL_UNDERLINE as c_int),
-            (c, _, _) if c != b'd' => Attr::Bit(HL_UNDERCURL as c_int),
-            (_, c, _) if c != b'o' => Attr::Bit(HL_UNDERDASHED as c_int),
-            (_, _, b'u') => Attr::Bit(HL_UNDERDOUBLE as c_int),
-            _ => Attr::Bit(HL_UNDERDOTTED as c_int),
+            (b'l', _, _) => Attr::Bit(HL_UNDERLINE),
+            (c, _, _) if c != b'd' => Attr::Bit(HL_UNDERCURL),
+            (_, c, _) if c != b'o' => Attr::Bit(HL_UNDERDASHED),
+            (_, _, b'u') => Attr::Bit(HL_UNDERDOUBLE),
+            _ => Attr::Bit(HL_UNDERDOTTED),
         },
         _ => return None,
     })

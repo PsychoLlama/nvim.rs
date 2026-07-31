@@ -11,7 +11,10 @@ use crate::src::nvim::ex_docmd::ends_excmd;
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_grow, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::{
-    HLATTRS_INIT, hl_get_syn_attr, hl_get_ui_attr, hlattrs2dict, ns_get_hl, syn_attr2entry,
+    HL_ALTFONT, HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DEFAULT, HL_DIM, HL_INVERSE, HL_ITALIC,
+    HL_NOCOMBINE, HL_OVERLINE, HL_STANDOUT, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDASHED,
+    HL_UNDERDOTTED, HL_UNDERDOUBLE, HL_UNDERLINE, HL_UNDERLINE_MASK, HLATTRS_INIT, hl_get_syn_attr,
+    hl_get_ui_attr, hlattrs2dict, ns_get_hl, syn_attr2entry,
 };
 use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
@@ -40,6 +43,7 @@ use crate::src::nvim::os::time::os_delay;
 use crate::src::nvim::runtime::{exestack, source_runtime_vim_lua};
 use crate::src::nvim::strings::{vim_memcpy_up, vim_strup};
 use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
+use crate::src::nvim::types::ui::{kUILinegrid, kUIMessages};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, AutoPat, AutoPatCmd, AutoPatCmd_S,
     BoolVarValue, Boolean, BufUpdateCallbacks, Callback, Callback_data as C2Rust_Unnamed_6,
@@ -148,27 +152,6 @@ pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
 pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const HL_GLOBAL: C2Rust_Unnamed_14 = 16384;
-pub const HL_DEFAULT: C2Rust_Unnamed_14 = 8192;
-pub const HL_FG_INDEXED: C2Rust_Unnamed_14 = 4096;
-pub const HL_BG_INDEXED: C2Rust_Unnamed_14 = 2048;
-pub const HL_NOCOMBINE: C2Rust_Unnamed_14 = 1024;
-pub const HL_OVERLINE: C2Rust_Unnamed_14 = 131072;
-pub const HL_CONCEALED: C2Rust_Unnamed_14 = 65536;
-pub const HL_BLINK: C2Rust_Unnamed_14 = 32768;
-pub const HL_DIM: C2Rust_Unnamed_14 = 512;
-pub const HL_ALTFONT: C2Rust_Unnamed_14 = 256;
-pub const HL_STRIKETHROUGH: C2Rust_Unnamed_14 = 128;
-pub const HL_STANDOUT: C2Rust_Unnamed_14 = 64;
-pub const HL_UNDERDASHED: C2Rust_Unnamed_14 = 40;
-pub const HL_UNDERDOTTED: C2Rust_Unnamed_14 = 32;
-pub const HL_UNDERDOUBLE: C2Rust_Unnamed_14 = 24;
-pub const HL_UNDERCURL: C2Rust_Unnamed_14 = 16;
-pub const HL_UNDERLINE: C2Rust_Unnamed_14 = 8;
-pub const HL_UNDERLINE_MASK: C2Rust_Unnamed_14 = 56;
-pub const HL_ITALIC: C2Rust_Unnamed_14 = 4;
-pub const HL_BOLD: C2Rust_Unnamed_14 = 2;
-pub const HL_INVERSE: C2Rust_Unnamed_14 = 1;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const HLF_COUNT: C2Rust_Unnamed_15 = 76;
 pub const HLF_PRE: C2Rust_Unnamed_15 = 75;
@@ -334,17 +317,6 @@ pub const ET_ERROR: except_type_T = 1;
 pub const ET_USER: except_type_T = 0;
 pub const NUM_EVENTS: auto_event = 145;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const ETYPE_SPELL: etype_T = 9;
 pub const ETYPE_INTERNAL: etype_T = 8;
 pub const ETYPE_ENV: etype_T = 7;
@@ -510,23 +482,23 @@ static hl_name_table: GlobalCell<[*mut ::core::ffi::c_char; 18]> = GlobalCell::n
     b"NONE\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
 ]);
 static hl_attr_table: GlobalCell<[::core::ffi::c_int; 18]> = GlobalCell::new([
-    HL_BOLD as ::core::ffi::c_int,
-    HL_STANDOUT as ::core::ffi::c_int,
-    HL_UNDERLINE as ::core::ffi::c_int,
-    HL_UNDERCURL as ::core::ffi::c_int,
-    HL_UNDERDOUBLE as ::core::ffi::c_int,
-    HL_UNDERDOTTED as ::core::ffi::c_int,
-    HL_UNDERDASHED as ::core::ffi::c_int,
-    HL_ITALIC as ::core::ffi::c_int,
-    HL_INVERSE as ::core::ffi::c_int,
-    HL_INVERSE as ::core::ffi::c_int,
-    HL_STRIKETHROUGH as ::core::ffi::c_int,
-    HL_ALTFONT as ::core::ffi::c_int,
-    HL_DIM as ::core::ffi::c_int,
-    HL_BLINK as ::core::ffi::c_int,
-    HL_CONCEALED as ::core::ffi::c_int,
-    HL_OVERLINE as ::core::ffi::c_int,
-    HL_NOCOMBINE as ::core::ffi::c_int,
+    HL_BOLD,
+    HL_STANDOUT,
+    HL_UNDERLINE,
+    HL_UNDERCURL,
+    HL_UNDERDOUBLE,
+    HL_UNDERDOTTED,
+    HL_UNDERDASHED,
+    HL_ITALIC,
+    HL_INVERSE,
+    HL_INVERSE,
+    HL_STRIKETHROUGH,
+    HL_ALTFONT,
+    HL_DIM,
+    HL_BLINK,
+    HL_CONCEALED,
+    HL_OVERLINE,
+    HL_NOCOMBINE,
     0 as ::core::ffi::c_int,
 ]);
 static e_highlight_group_name_not_found_str: GlobalCell<[::core::ffi::c_char; 36]> =
@@ -1594,7 +1566,7 @@ pub unsafe extern "C" fn set_hl_group(
     mut link_id: ::core::ffi::c_int,
 ) {
     let mut idx: ::core::ffi::c_int = id - 1 as ::core::ffi::c_int;
-    let mut is_default: bool = attrs.rgb_ae_attr & HL_DEFAULT as ::core::ffi::c_int as int32_t != 0;
+    let mut is_default: bool = attrs.rgb_ae_attr & HL_DEFAULT as int32_t != 0;
     if is_default as ::core::ffi::c_int != 0
         && hl_has_settings(idx, true_0 != 0) as ::core::ffi::c_int != 0
         && !(*dict).force
@@ -1627,8 +1599,7 @@ pub unsafe extern "C" fn set_hl_group(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__update
         != 0 as ::core::ffi::c_ulonglong
         && (*dict).update as ::core::ffi::c_int != 0;
-    (*g).sg_gui =
-        (attrs.rgb_ae_attr & !(HL_DEFAULT as ::core::ffi::c_int as int32_t)) as ::core::ffi::c_int;
+    (*g).sg_gui = (attrs.rgb_ae_attr & !(HL_DEFAULT as int32_t)) as ::core::ffi::c_int;
     (*g).sg_rgb_fg = attrs.rgb_fg_color;
     (*g).sg_rgb_bg = attrs.rgb_bg_color;
     (*g).sg_rgb_sp = attrs.rgb_sp_color;
@@ -1716,11 +1687,10 @@ pub unsafe extern "C" fn set_hl_group(
         }
         j += 1;
     }
-    (*g).sg_cterm = (attrs.cterm_ae_attr & !(HL_DEFAULT as ::core::ffi::c_int as int32_t))
-        as ::core::ffi::c_int;
+    (*g).sg_cterm = (attrs.cterm_ae_attr & !(HL_DEFAULT as int32_t)) as ::core::ffi::c_int;
     (*g).sg_cterm_bg = attrs.cterm_bg_color as ::core::ffi::c_int;
     (*g).sg_cterm_fg = attrs.cterm_fg_color as ::core::ffi::c_int;
-    (*g).sg_cterm_bold = (*g).sg_cterm & HL_BOLD as ::core::ffi::c_int != 0;
+    (*g).sg_cterm_bold = (*g).sg_cterm & HL_BOLD != 0;
     if attrs.hl_blend != -1 as int32_t {
         (*g).sg_blend = attrs.hl_blend as ::core::ffi::c_int;
     } else if !update {
@@ -2165,10 +2135,10 @@ pub unsafe extern "C" fn do_highlight(
                                                 continue;
                                             }
                                             if (*hl_attr_table.ptr())[i_0 as usize]
-                                                & HL_UNDERLINE_MASK as ::core::ffi::c_int
+                                                & HL_UNDERLINE_MASK
                                                 != 0
                                             {
-                                                attr &= !(HL_UNDERLINE_MASK as ::core::ffi::c_int);
+                                                attr &= !(HL_UNDERLINE_MASK);
                                             }
                                             attr |= (*hl_attr_table.ptr())[i_0 as usize];
                                             off += len;
@@ -2277,7 +2247,7 @@ pub unsafe extern "C" fn do_highlight(
                                                 (*((*highlight_ga.ptr()).ga_data
                                                     as *mut HlGroup)
                                                     .offset(idx as isize))
-                                                .sg_cterm &= !(HL_BOLD as ::core::ffi::c_int);
+                                                .sg_cterm &= !(HL_BOLD);
                                                 (*((*highlight_ga.ptr()).ga_data
                                                     as *mut HlGroup)
                                                     .offset(idx as isize))
@@ -2419,7 +2389,7 @@ pub unsafe extern "C" fn do_highlight(
                                                         (*((*highlight_ga.ptr()).ga_data
                                                             as *mut HlGroup)
                                                             .offset(idx as isize))
-                                                        .sg_cterm |= HL_BOLD as ::core::ffi::c_int;
+                                                        .sg_cterm |= HL_BOLD;
                                                         (*((*highlight_ga.ptr()).ga_data
                                                             as *mut HlGroup)
                                                             .offset(idx as isize))
@@ -2430,8 +2400,7 @@ pub unsafe extern "C" fn do_highlight(
                                                         (*((*highlight_ga.ptr()).ga_data
                                                             as *mut HlGroup)
                                                             .offset(idx as isize))
-                                                        .sg_cterm &=
-                                                            !(HL_BOLD as ::core::ffi::c_int);
+                                                        .sg_cterm &= !(HL_BOLD);
                                                     }
                                                 }
                                             }
@@ -2917,7 +2886,7 @@ unsafe extern "C" fn hlgroup2dict(
         arena,
         (HLATTRS_DICT_SIZE as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t,
     );
-    if attr.rgb_ae_attr & HL_DEFAULT as ::core::ffi::c_int as int32_t != 0 {
+    if attr.rgb_ae_attr & HL_DEFAULT as int32_t != 0 {
         let c2rust_fresh1 = (*hl).size;
         (*hl).size = (*hl).size.wrapping_add(1);
         *(*hl).items.offset(c2rust_fresh1 as isize) = key_value_pair {
@@ -3113,10 +3082,9 @@ unsafe extern "C" fn highlight_list_arg(
         buf[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while (*hl_attr_table.ptr())[i as usize] != 0 as ::core::ffi::c_int {
-            if (*hl_attr_table.ptr())[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0
-                && iarg & HL_UNDERLINE_MASK as ::core::ffi::c_int
-                    == (*hl_attr_table.ptr())[i as usize]
-                || (*hl_attr_table.ptr())[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int == 0
+            if (*hl_attr_table.ptr())[i as usize] & HL_UNDERLINE_MASK != 0
+                && iarg & HL_UNDERLINE_MASK == (*hl_attr_table.ptr())[i as usize]
+                || (*hl_attr_table.ptr())[i as usize] & HL_UNDERLINE_MASK == 0
                     && iarg & (*hl_attr_table.ptr())[i as usize] != 0
             {
                 if buf[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int != NUL {
@@ -3131,8 +3099,7 @@ unsafe extern "C" fn highlight_list_arg(
                     (*hl_name_table.ptr())[i as usize] as *const ::core::ffi::c_char,
                     100 as size_t,
                 );
-                if (*hl_attr_table.ptr())[i as usize] & HL_UNDERLINE_MASK as ::core::ffi::c_int == 0
-                {
+                if (*hl_attr_table.ptr())[i as usize] & HL_UNDERLINE_MASK == 0 {
                     iarg &= !(*hl_attr_table.ptr())[i as usize];
                 }
             }
@@ -3177,8 +3144,8 @@ pub unsafe extern "C" fn highlight_has_attr(
             .offset((id - 1 as ::core::ffi::c_int) as isize))
         .sg_cterm;
     }
-    if flag & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-        let mut ul: ::core::ffi::c_int = attr & HL_UNDERLINE_MASK as ::core::ffi::c_int;
+    if flag & HL_UNDERLINE_MASK != 0 {
+        let mut ul: ::core::ffi::c_int = attr & HL_UNDERLINE_MASK;
         return if ul == flag {
             b"1\0".as_ptr() as *const ::core::ffi::c_char
         } else {

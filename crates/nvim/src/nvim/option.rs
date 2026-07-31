@@ -81,7 +81,6 @@ pub const kNone: TriState = -1;
 pub const kCallbackNone: CallbackType = 0;
 pub const VAR_STRING: VarType = 2;
 pub const MAXCOL: c_uint = 2147483647;
-pub const HL_GLOBAL: c_uint = 16384;
 pub const HLF_W: c_uint = 26;
 pub const NUMBUFLEN: c_uint = 65;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
@@ -196,7 +195,6 @@ pub const NULL_STRING: String_0 = String_0 {
     data: ::core::ptr::null_mut::<c_char>(),
     size: 0 as size_t,
 };
-pub const LOGLVL_INF: c_int = 2 as c_int;
 pub const OK: c_int = 1 as c_int;
 pub const FAIL: c_int = 0 as c_int;
 pub const NUL: c_int = '\0' as c_int;
@@ -267,7 +265,6 @@ pub const NO_LOCAL_UNDOLEVEL: c_int = -123456 as c_int;
 pub const SB_MAX: c_int = 1000000 as c_int;
 pub const MAX_NUMBERWIDTH: c_int = 20 as c_int;
 pub const TABSTOP_MAX: c_int = 9999 as c_int;
-pub const SHAPE_CURSOR: c_int = 2 as c_int;
 pub const IOSIZE: c_int = 1024 as c_int + 1 as c_int;
 pub const DFLT_ERRORFILE: [c_char; 11] =
     unsafe { ::core::mem::transmute::<[u8; 11], [c_char; 11]>(*b"errors.err\0") };

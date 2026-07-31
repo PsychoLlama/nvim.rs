@@ -30,7 +30,7 @@ use crate::src::nvim::indent::{
     use_indentexpr_for_lisp,
 };
 use crate::src::nvim::indent_c::get_c_indent;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::main::{
     IObuff, Insstart, KeyTyped, State, VIsual, VIsual_active, VIsual_mode, VIsual_reselect,
     VIsual_select, VIsual_select_reg, ai_col, bangredo, can_si, cmdmod, curbuf,
@@ -390,7 +390,6 @@ pub const VALID_WROW: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const VALID_WCOL: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const VALID_VIRTCOL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

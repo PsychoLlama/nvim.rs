@@ -52,7 +52,7 @@ use crate::src::nvim::highlight_group::{
 use crate::src::nvim::insexpand::get_cot_flags;
 use crate::src::nvim::keycodes::{name_to_mod_mask, replace_termcodes, vim_strsave_escape_ks};
 use crate::src::nvim::kvec::_memcpy_free;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
 use crate::src::nvim::lua::executor::{
     api_free_luaref, nlua_call_ref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
 };
@@ -758,7 +758,6 @@ pub const KEYSET_OPTIDX_redraw__win: ::core::ffi::c_int = 2 as ::core::ffi::c_in
 pub const KEYSET_OPTIDX_redraw__flush: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_redraw__range: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_redraw__valid: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NULL_STRING: String_0 = STRING_INIT;
 pub unsafe extern "C" fn nvim_get_hl_id_by_name(mut name: String_0) -> Integer {
     return syn_check_group(name.data, name.size) as Integer;

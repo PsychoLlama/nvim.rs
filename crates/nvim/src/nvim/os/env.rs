@@ -7,7 +7,7 @@ use crate::src::nvim::event::libuv::{
     uv_err_name, uv_os_getenv, uv_os_homedir, uv_os_setenv, uv_os_unsetenv, uv_strerror,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::main::{
     IObuff, NameBuff, didset_vim, didset_vimruntime, nvim_testing, os_buf, p_hf,
 };
@@ -431,7 +431,6 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const RUNTIME_DIRNAME: [::core::ffi::c_char; 8] =
     unsafe { ::core::mem::transmute::<[u8; 8], [::core::ffi::c_char; 8]>(*b"runtime\0") };
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub static default_vim_dir: GlobalCell<*mut ::core::ffi::c_char> = GlobalCell::new(
     b"/usr/local/share/nvim\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,

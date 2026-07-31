@@ -11,7 +11,7 @@ use crate::src::nvim::event::libuv::uv_hrtime;
 use crate::src::nvim::event::libuv::{uv_clock_gettime, uv_err_name, uv_now, uv_sleep};
 use crate::src::nvim::event::r#loop::process_events_until;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_ERR, logmsg};
 use crate::src::nvim::main::{got_int, main_loop};
 use crate::src::nvim::memory::{xstrlcat, xstrlcpy};
 use crate::src::nvim::os::env::os_getenv_noalloc;
@@ -20,9 +20,6 @@ use crate::src::nvim::os::libc::{gettext, localtime_r, strftime, strncmp, strpti
 pub use crate::src::nvim::types::{Timestamp, UV_CLOCK_REALTIME, time_t, tm, uv_timespec64_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
-
-const LOGLVL_DBG: c_int = 1;
-const LOGLVL_ERR: c_int = 4;
 
 /// A `struct tm` with every field zeroed, for callers about to fill it in.
 ///

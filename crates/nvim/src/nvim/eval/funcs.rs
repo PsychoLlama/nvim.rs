@@ -166,7 +166,6 @@ pub const kChannelPartStdout: ChannelPart = 1;
 pub const kChannelPartStdin: ChannelPart = 0;
 pub const kChannelStdinNull: ChannelStdinMode = 1;
 pub const kChannelStdinPipe: ChannelStdinMode = 0;
-pub const kUIMessages: UIExtension = 4;
 pub type C2Rust_Unnamed_43 = ::core::ffi::c_uint;
 pub const WILD_ALL_KEEP: C2Rust_Unnamed_43 = 8;
 pub const WILD_ALL: C2Rust_Unnamed_43 = 6;
@@ -284,7 +283,6 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 };
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const EX_NOSPC: ::core::ffi::c_uint = 0x10 as ::core::ffi::c_uint;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

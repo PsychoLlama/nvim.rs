@@ -47,6 +47,7 @@ use crate::src::nvim::spell::{
 };
 use crate::src::nvim::spellfile::suggest_load_files;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, xstrnsave};
+use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __compar_fn_t, __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
     _IO_wide_data, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
@@ -274,17 +275,6 @@ pub struct suggest_T {
     pub st_had_bonus: bool,
     pub st_slang: *mut slang_T,
 }
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const SCORE_INS: C2Rust_Unnamed_18 = 96;
 pub const SCORE_MAXMAX: C2Rust_Unnamed_22 = 999999;
 pub const SCORE_DEL: C2Rust_Unnamed_18 = 94;

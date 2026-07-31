@@ -11,7 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_write};
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::main::{stdin_isatty, ui_client_channel_id};
 use crate::src::nvim::memory::{strequal, xfree};
 use crate::src::nvim::msgpack_rpc::channel::rpc_send_event;
@@ -26,7 +26,6 @@ use crate::src::nvim::tui::output::{TERMINFO_SEQ_LIMIT, flush, out, out_raw, ter
 use crate::src::nvim::tui::paint::invalidate;
 use crate::src::nvim::tui::terminfo::caps::{kTerm_from_status_line, kTerm_to_status_line};
 use crate::src::nvim::tui::terminfo::terminfo_info_msg;
-use crate::src::nvim::tui::tui::LOGLVL_ERR;
 use crate::src::nvim::types::{
     Array, ArrayBuf, DictBuf, Integer, Object, ObjectType, String_0, TUIData, uv_buf_t,
     uv_stream_t, uv_tty_mode_t, uv_tty_t, uv_write_t,

@@ -19,8 +19,8 @@
 
 use crate::src::nvim::autocmd::{block_autocmds, unblock_autocmds};
 use crate::src::nvim::change::changed_lines;
-use crate::src::nvim::cursor_shape::shape_table;
-use crate::src::nvim::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_TERM, SHAPE_VER};
+use crate::src::nvim::cursor_shape::SHAPE_VER;
+use crate::src::nvim::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_TERM, shape_table};
 use crate::src::nvim::event::multiqueue::{
     multiqueue_free, multiqueue_move_events, multiqueue_new_child, multiqueue_process_events,
 };

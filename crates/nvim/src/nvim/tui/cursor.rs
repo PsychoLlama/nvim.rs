@@ -9,9 +9,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::src::nvim::cursor_shape::shape_table;
+use crate::src::nvim::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_VER, shape_table};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::highlight::HL_INVERSE;
+use crate::src::nvim::log::{LOGLVL_WRN, logmsg};
 use crate::src::nvim::tui::output::{terminfo_out, terminfo_print_nums, terminfo_print_str};
 use crate::src::nvim::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
@@ -27,19 +28,12 @@ use core::ffi::{CStr, c_int};
 /// the cursor back the way it found it.
 pub static cursor_style_enabled: GlobalCell<bool> = GlobalCell::new(false);
 
-const SHAPE_BLOCK: CursorShape = 0;
-const SHAPE_HOR: CursorShape = 1;
-const SHAPE_VER: CursorShape = 2;
-
-const LOGLVL_WRN: c_int = 3;
-
 /// The blend value `'guicursor'` uses to mean "no cursor at all".
 const BLEND_INVISIBLE: int32_t = 100;
 
 /// `HL_INVERSE`, the attribute that says "swap foreground and background" --
 /// a cursor carrying it wants the terminal's own inverse rendering rather
 /// than an explicit colour.
-const HL_INVERSE: int32_t = 1;
 
 /// The DECSCUSR parameter for a shape, in its steady form.
 ///

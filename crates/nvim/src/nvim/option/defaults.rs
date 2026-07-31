@@ -20,11 +20,11 @@ use core::ptr;
 use crate::src::nvim::api::private::helpers::{cstr_as_string, cstr_to_string};
 use crate::src::nvim::buffer::buf_is_empty;
 use crate::src::nvim::change::save_file_ff;
-use crate::src::nvim::cursor_shape::parse_shape_opt;
+use crate::src::nvim::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
 use crate::src::nvim::drawscreen::comp_col;
 use crate::src::nvim::garray::{ga_grow, ga_init};
 use crate::src::nvim::indent_c::parse_cino;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{
     Rows, curbuf, current_sctx, curtab, curwin, fenc_default, first_tabpage, firstwin, p_ch, p_enc,
     p_hlg, p_icon, p_rtp, p_sh, p_title, p_window,
@@ -58,9 +58,9 @@ use crate::src::nvim::types::{
 use crate::src::nvim::window::{last_status, win_comp_scroll};
 
 use super::{
-    LOGLVL_INF, NO_LOCAL_UNDOLEVEL, NUL, OPT_GLOBAL, OPT_LOCAL, PATHSEPSTR, PROJECT_NAME, ROOT_UID,
-    SHAPE_CURSOR, SID_NONE, check_options, check_win_options, default_fileformat, didset_options,
-    didset_options2, get_option_unset_value, insecure_flag, kFalse, kOptFlagComma, kOptFlagGettext,
+    NO_LOCAL_UNDOLEVEL, NUL, OPT_GLOBAL, OPT_LOCAL, PATHSEPSTR, PROJECT_NAME, ROOT_UID, SID_NONE,
+    check_options, check_win_options, default_fileformat, didset_options, didset_options2,
+    get_option_unset_value, insecure_flag, kFalse, kOptFlagComma, kOptFlagGettext,
     kOptFlagInsecure, kOptFlagNoDefExp, kOptFlagNoDefault, kOptFlagWasSet, kOptValTypeBoolean,
     kOptValTypeNumber, kOptValTypeString, kTrue, option_expand, option_has_type,
     option_is_global_local, option_was_set, optval_copy, optval_free, set_fileformat,

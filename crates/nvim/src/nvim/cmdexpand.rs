@@ -102,6 +102,7 @@ use crate::src::nvim::syntax::{
 };
 use crate::src::nvim::tag::expand_tags;
 use crate::src::nvim::types::api::kErrorTypeNone;
+use crate::src::nvim::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 pub use crate::src::nvim::types::{
     __compar_fn_t, __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array,
     BoolVarValue, Boolean, BufUpdateCallbacks, CMD_index, Callback,
@@ -1033,17 +1034,6 @@ pub const EW_PATH: C2Rust_Unnamed_28 = 128;
 pub const MB_MAXBYTES: C2Rust_Unnamed_23 = 21;
 pub const WM_SCROLLED: C2Rust_Unnamed_26 = 2;
 pub const WM_SHOWN: C2Rust_Unnamed_26 = 1;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_22 {

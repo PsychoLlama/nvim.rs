@@ -31,7 +31,7 @@ use crate::src::nvim::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
 };
 use crate::src::nvim::event::stream::stream_set_blocking;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::src::nvim::main::{main_loop, t_colors, ui_client_error_exit, ui_client_exit_status};
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, xfree};
 use crate::src::nvim::os::env::{os_getenv, os_getenv_noalloc};
@@ -72,10 +72,6 @@ unsafe extern "C" {
 // --------------------------------------------------------------- the state
 
 // ----------------------------------------------------------- the constants
-
-pub(crate) const LOGLVL_DBG: c_int = 1;
-pub(crate) const LOGLVL_WRN: c_int = 3;
-pub(crate) const LOGLVL_ERR: c_int = 4;
 
 const UV_RUN_DEFAULT: core::ffi::c_uint = 0;
 const UV_EINTR: c_int = -4;

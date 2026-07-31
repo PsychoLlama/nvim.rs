@@ -24,7 +24,7 @@ use crate::src::nvim::event::libuv::{
 use crate::src::nvim::event::r#loop::loop_children;
 use crate::src::nvim::event::proc::{kProcTypePty, proc_get_exepath, proc_init};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::os::fs::os_set_cloexec;
 use crate::src::nvim::os::libc::{
     __errno_location, _exit, cfsetispeed, cfsetospeed, close, dup, environ, execvp, fcntl, forkpty,
@@ -70,8 +70,6 @@ const TIOCSWINSZ: c_ulong = 0x5414;
 const WNOHANG: c_int = 1;
 const WUNTRACED: c_int = 2;
 const WCONTINUED: c_int = 8;
-
-const LOGLVL_ERR: c_int = 4;
 
 /// The most recent `errno`.
 fn errno() -> c_int {

@@ -11,14 +11,12 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
 
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_WRN, logmsg};
 use crate::src::nvim::memory::{xfree, xmallocz, xrealloc, xstrdup};
 use crate::src::nvim::path::path_fnamecmp;
 use crate::src::nvim::strings::sort_strings;
 
 pub use crate::src::nvim::types::garray::garray_T;
-
-const LOGLVL_WRN: c_int = 3;
 
 /// A reallocation the growth policy decided on: realloc `ga_data` to
 /// `new_size` bytes and zero the tail starting at `old_size`.

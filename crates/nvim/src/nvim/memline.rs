@@ -67,6 +67,7 @@ use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::spell::spell_delete_wordlist;
 use crate::src::nvim::statusline::get_trans_bufname;
 use crate::src::nvim::strings::{kv_do_printf, vim_strchr, xstrnsave};
+use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __off_t, __time_t, __uid_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks,
     CMD_index, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem,
@@ -1033,17 +1034,6 @@ pub const SHM_ATTENTION: C2Rust_Unnamed_25 = 65;
 pub type upd_block0_T = ::core::ffi::c_uint;
 pub const UB_SAME_DIR: upd_block0_T = 1;
 pub const UB_FNAME: upd_block0_T = 0;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const MLCS_MINL: C2Rust_Unnamed_31 = 400;
 pub const ML_FIND: C2Rust_Unnamed_30 = 19;
 pub const ML_INSERT: C2Rust_Unnamed_30 = 18;

@@ -2,7 +2,7 @@ use crate::src::nvim::api::private::helpers::api_typename;
 use crate::src::nvim::api::private::validate::api_err_exp;
 use crate::src::nvim::autocmd::do_termresponse_autocmd;
 use crate::src::nvim::eval::vars::set_vim_var_string;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::memory::strequal;
 pub use crate::src::nvim::types::{
     Array, Boolean, Dict, Error, ErrorType, Float, Integer, KeyValuePair, LuaRef, Object,
@@ -116,7 +116,6 @@ pub const VV_PREVCOUNT: VimVarIndex = 2;
 pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub unsafe extern "C" fn nvim_error_event(
     mut channel_id: uint64_t,

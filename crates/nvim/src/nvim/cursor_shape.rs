@@ -17,32 +17,32 @@ pub use crate::src::nvim::types::{
     kObjectTypeString, key_value_pair, object, object_data as C2Rust_Unnamed, size_t, uint8_t,
 };
 use crate::src::nvim::ui::ui_mode_info_set;
-pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const SHAPE_IDX_COUNT: C2Rust_Unnamed_0 = 18;
-pub const SHAPE_IDX_TERM: C2Rust_Unnamed_0 = 17;
-pub const SHAPE_IDX_SM: C2Rust_Unnamed_0 = 16;
-pub const SHAPE_IDX_MOREL: C2Rust_Unnamed_0 = 15;
-pub const SHAPE_IDX_MORE: C2Rust_Unnamed_0 = 14;
-pub const SHAPE_IDX_VDRAG: C2Rust_Unnamed_0 = 13;
-pub const SHAPE_IDX_VSEP: C2Rust_Unnamed_0 = 12;
-pub const SHAPE_IDX_SDRAG: C2Rust_Unnamed_0 = 11;
-pub const SHAPE_IDX_STATUS: C2Rust_Unnamed_0 = 10;
-pub const SHAPE_IDX_CLINE: C2Rust_Unnamed_0 = 9;
-pub const SHAPE_IDX_VE: C2Rust_Unnamed_0 = 8;
-pub const SHAPE_IDX_O: C2Rust_Unnamed_0 = 7;
-pub const SHAPE_IDX_CR: C2Rust_Unnamed_0 = 6;
-pub const SHAPE_IDX_CI: C2Rust_Unnamed_0 = 5;
-pub const SHAPE_IDX_C: C2Rust_Unnamed_0 = 4;
-pub const SHAPE_IDX_R: C2Rust_Unnamed_0 = 3;
-pub const SHAPE_IDX_I: C2Rust_Unnamed_0 = 2;
-pub const SHAPE_IDX_V: C2Rust_Unnamed_0 = 1;
-pub const SHAPE_IDX_N: C2Rust_Unnamed_0 = 0;
+/// Where a mode's cursor shape sits in `shape_table`.
+pub type ShapeIdx = ::core::ffi::c_int;
+pub const SHAPE_IDX_COUNT: ShapeIdx = 18;
+pub const SHAPE_IDX_TERM: ShapeIdx = 17;
+pub const SHAPE_IDX_SM: ShapeIdx = 16;
+pub const SHAPE_IDX_MOREL: ShapeIdx = 15;
+pub const SHAPE_IDX_MORE: ShapeIdx = 14;
+pub const SHAPE_IDX_VDRAG: ShapeIdx = 13;
+pub const SHAPE_IDX_VSEP: ShapeIdx = 12;
+pub const SHAPE_IDX_SDRAG: ShapeIdx = 11;
+pub const SHAPE_IDX_STATUS: ShapeIdx = 10;
+pub const SHAPE_IDX_CLINE: ShapeIdx = 9;
+pub const SHAPE_IDX_VE: ShapeIdx = 8;
+pub const SHAPE_IDX_O: ShapeIdx = 7;
+pub const SHAPE_IDX_CR: ShapeIdx = 6;
+pub const SHAPE_IDX_CI: ShapeIdx = 5;
+pub const SHAPE_IDX_C: ShapeIdx = 4;
+pub const SHAPE_IDX_R: ShapeIdx = 3;
+pub const SHAPE_IDX_I: ShapeIdx = 2;
+pub const SHAPE_IDX_V: ShapeIdx = 1;
+pub const SHAPE_IDX_N: ShapeIdx = 0;
 pub const SHAPE_VER: CursorShape = 2;
 pub const SHAPE_HOR: CursorShape = 1;
 pub const SHAPE_BLOCK: CursorShape = 0;
 pub type C2Rust_Unnamed_1 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const LOGLVL_WRN: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const SHAPE_MOUSE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SHAPE_CURSOR: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -297,9 +297,9 @@ pub static shape_table: GlobalCell<[cursorentry_T; 18]> = GlobalCell::new([
     },
 ]);
 pub unsafe extern "C" fn mode_style_array(mut arena: *mut Arena) -> Array {
-    let mut all: Array = arena_array(arena, SHAPE_IDX_COUNT as ::core::ffi::c_int as size_t);
+    let mut all: Array = arena_array(arena, SHAPE_IDX_COUNT as size_t);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < SHAPE_IDX_COUNT as ::core::ffi::c_int {
+    while i < SHAPE_IDX_COUNT {
         let mut cur: *mut cursorentry_T =
             (shape_table.ptr() as *mut cursorentry_T).offset(i as isize);
         let mut dic: Dict = arena_dict(
@@ -534,10 +534,10 @@ pub unsafe extern "C" fn parse_shape_opt(
                                 + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
                         }) == 'a' as ::core::ffi::c_int
                     {
-                        all_idx = SHAPE_IDX_COUNT as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+                        all_idx = SHAPE_IDX_COUNT - 1 as ::core::ffi::c_int;
                     } else {
                         idx = 0 as ::core::ffi::c_int;
-                        while idx < SHAPE_IDX_COUNT as ::core::ffi::c_int {
+                        while idx < SHAPE_IDX_COUNT {
                             if strncasecmp(
                                 modep,
                                 (*shape_table.ptr())[idx as usize].name,
@@ -548,7 +548,7 @@ pub unsafe extern "C" fn parse_shape_opt(
                             }
                             idx += 1;
                         }
-                        if idx == SHAPE_IDX_COUNT as ::core::ffi::c_int
+                        if idx == SHAPE_IDX_COUNT
                             || (*shape_table.ptr())[idx as usize].used_for as ::core::ffi::c_int
                                 & what
                                 == 0 as ::core::ffi::c_int
@@ -704,29 +704,29 @@ pub unsafe extern "C" fn parse_shape_opt(
         round += 1;
     }
     if !found_ve {
-        (*shape_table.ptr())[SHAPE_IDX_VE as ::core::ffi::c_int as usize].shape =
-            (*shape_table.ptr())[SHAPE_IDX_V as ::core::ffi::c_int as usize].shape;
-        (*shape_table.ptr())[SHAPE_IDX_VE as ::core::ffi::c_int as usize].percentage =
-            (*shape_table.ptr())[SHAPE_IDX_V as ::core::ffi::c_int as usize].percentage;
-        (*shape_table.ptr())[SHAPE_IDX_VE as ::core::ffi::c_int as usize].blinkwait =
-            (*shape_table.ptr())[SHAPE_IDX_V as ::core::ffi::c_int as usize].blinkwait;
-        (*shape_table.ptr())[SHAPE_IDX_VE as ::core::ffi::c_int as usize].blinkon =
-            (*shape_table.ptr())[SHAPE_IDX_V as ::core::ffi::c_int as usize].blinkon;
-        (*shape_table.ptr())[SHAPE_IDX_VE as ::core::ffi::c_int as usize].blinkoff =
-            (*shape_table.ptr())[SHAPE_IDX_V as ::core::ffi::c_int as usize].blinkoff;
-        (*shape_table.ptr())[SHAPE_IDX_VE as ::core::ffi::c_int as usize].id =
-            (*shape_table.ptr())[SHAPE_IDX_V as ::core::ffi::c_int as usize].id;
-        (*shape_table.ptr())[SHAPE_IDX_VE as ::core::ffi::c_int as usize].id_lm =
-            (*shape_table.ptr())[SHAPE_IDX_V as ::core::ffi::c_int as usize].id_lm;
+        (*shape_table.ptr())[SHAPE_IDX_VE as usize].shape =
+            (*shape_table.ptr())[SHAPE_IDX_V as usize].shape;
+        (*shape_table.ptr())[SHAPE_IDX_VE as usize].percentage =
+            (*shape_table.ptr())[SHAPE_IDX_V as usize].percentage;
+        (*shape_table.ptr())[SHAPE_IDX_VE as usize].blinkwait =
+            (*shape_table.ptr())[SHAPE_IDX_V as usize].blinkwait;
+        (*shape_table.ptr())[SHAPE_IDX_VE as usize].blinkon =
+            (*shape_table.ptr())[SHAPE_IDX_V as usize].blinkon;
+        (*shape_table.ptr())[SHAPE_IDX_VE as usize].blinkoff =
+            (*shape_table.ptr())[SHAPE_IDX_V as usize].blinkoff;
+        (*shape_table.ptr())[SHAPE_IDX_VE as usize].id =
+            (*shape_table.ptr())[SHAPE_IDX_V as usize].id;
+        (*shape_table.ptr())[SHAPE_IDX_VE as usize].id_lm =
+            (*shape_table.ptr())[SHAPE_IDX_V as usize].id_lm;
     }
     ui_mode_info_set();
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 pub unsafe extern "C" fn cursor_is_block_during_visual(mut exclusive: bool) -> bool {
     let mut mode_idx: ::core::ffi::c_int = if exclusive as ::core::ffi::c_int != 0 {
-        SHAPE_IDX_VE as ::core::ffi::c_int
+        SHAPE_IDX_VE
     } else {
-        SHAPE_IDX_V as ::core::ffi::c_int
+        SHAPE_IDX_V
     };
     return SHAPE_BLOCK as ::core::ffi::c_int as ::core::ffi::c_uint
         == (*shape_table.ptr())[mode_idx as usize].shape as ::core::ffi::c_uint
@@ -737,7 +737,7 @@ pub unsafe extern "C" fn cursor_mode_uses_syn_id(mut syn_id: ::core::ffi::c_int)
         return false_0 != 0;
     }
     let mut mode_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while mode_idx < SHAPE_IDX_COUNT as ::core::ffi::c_int {
+    while mode_idx < SHAPE_IDX_COUNT {
         if (*shape_table.ptr())[mode_idx as usize].id == syn_id
             || (*shape_table.ptr())[mode_idx as usize].id_lm == syn_id
         {
@@ -749,38 +749,38 @@ pub unsafe extern "C" fn cursor_mode_uses_syn_id(mut syn_id: ::core::ffi::c_int)
 }
 pub unsafe extern "C" fn cursor_get_mode_idx() -> ::core::ffi::c_int {
     if State.get() == MODE_SHOWMATCH {
-        return SHAPE_IDX_SM as ::core::ffi::c_int;
+        return SHAPE_IDX_SM;
     } else if State.get() == MODE_TERMINAL {
-        return SHAPE_IDX_TERM as ::core::ffi::c_int;
+        return SHAPE_IDX_TERM;
     } else if State.get() & VREPLACE_FLAG != 0 {
-        return SHAPE_IDX_R as ::core::ffi::c_int;
+        return SHAPE_IDX_R;
     } else if State.get() & REPLACE_FLAG != 0 {
-        return SHAPE_IDX_R as ::core::ffi::c_int;
+        return SHAPE_IDX_R;
     } else if State.get() & MODE_INSERT != 0 {
-        return SHAPE_IDX_I as ::core::ffi::c_int;
+        return SHAPE_IDX_I;
     } else if State.get() & MODE_CMDLINE != 0 {
         if cmdline_at_end() {
-            return SHAPE_IDX_C as ::core::ffi::c_int;
+            return SHAPE_IDX_C;
         } else if cmdline_overstrike() {
-            return SHAPE_IDX_CR as ::core::ffi::c_int;
+            return SHAPE_IDX_CR;
         } else {
-            return SHAPE_IDX_CI as ::core::ffi::c_int;
+            return SHAPE_IDX_CI;
         }
     } else if finish_op.get() {
-        return SHAPE_IDX_O as ::core::ffi::c_int;
+        return SHAPE_IDX_O;
     } else if VIsual_active.get() {
         if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int {
-            return SHAPE_IDX_VE as ::core::ffi::c_int;
+            return SHAPE_IDX_VE;
         } else {
-            return SHAPE_IDX_V as ::core::ffi::c_int;
+            return SHAPE_IDX_V;
         }
     } else {
-        return SHAPE_IDX_N as ::core::ffi::c_int;
+        return SHAPE_IDX_N;
     };
 }
 unsafe extern "C" fn clear_shape_table() {
     let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while idx < SHAPE_IDX_COUNT as ::core::ffi::c_int {
+    while idx < SHAPE_IDX_COUNT {
         (*shape_table.ptr())[idx as usize].shape = SHAPE_BLOCK;
         (*shape_table.ptr())[idx as usize].blinkwait = 0 as ::core::ffi::c_int;
         (*shape_table.ptr())[idx as usize].blinkon = 0 as ::core::ffi::c_int;

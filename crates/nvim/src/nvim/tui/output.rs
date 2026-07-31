@@ -19,7 +19,7 @@
 // length, or a scratch buffer.
 
 use crate::src::nvim::event::libuv::{uv_run, uv_strerror, uv_write};
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::os::libc::fwrite;
 use crate::src::nvim::tui::terminfo::caps::{
     TerminfoDef, kTerm_cursor_invisible, kTerm_cursor_normal, kTermCount,
@@ -375,5 +375,4 @@ fn write_out(tui: &mut TUIData, oversized: Option<&[u8]>) {
     }
 }
 
-const LOGLVL_ERR: c_int = 4;
 const UV_RUN_DEFAULT: core::ffi::c_uint = 0;

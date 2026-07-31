@@ -21,7 +21,7 @@ use crate::src::nvim::hashtab::{
 use crate::src::nvim::insexpand::{
     ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted,
 };
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::main::{
     IObuff, bot_top_msg, curbuf, curtab, curwin, decor_state, e_invarg, e_no_spell, firstbuf,
     firstwin, got_int, p_enc, p_ic, p_ws, starting, sub_nlines, sub_nsubs, top_bot_msg,
@@ -987,7 +987,6 @@ pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;

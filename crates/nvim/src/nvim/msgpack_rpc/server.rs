@@ -12,7 +12,7 @@ use crate::src::nvim::event::socket::{
     socket_watcher_close, socket_watcher_init, socket_watcher_start,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::src::nvim::main::{IObuff, NameBuff, main_loop};
 use crate::src::nvim::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::src::nvim::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};

@@ -4664,9 +4664,11 @@ unsafe extern "C" fn log_write_prefix(
     }
     return true_0 != 0;
 }
-pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const LOGLVL_WRN: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
+/// The levels `log_message` takes, and 'verbose' compares against.
+pub const LOGLVL_DBG: ::core::ffi::c_int = 1;
+pub const LOGLVL_INF: ::core::ffi::c_int = 2;
+pub const LOGLVL_WRN: ::core::ffi::c_int = 3;
+pub const LOGLVL_ERR: ::core::ffi::c_int = 4;
 pub const ENV_LOGFILE: [::core::ffi::c_char; 14] =
     unsafe { ::core::mem::transmute::<[u8; 14], [::core::ffi::c_char; 14]>(*b"NVIM_LOG_FILE\0") };
 pub const ENV_NVIM: [::core::ffi::c_char; 5] =

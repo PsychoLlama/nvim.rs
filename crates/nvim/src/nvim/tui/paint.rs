@@ -16,7 +16,7 @@
 
 use crate::src::nvim::event::r#loop::{loop_purge, loop_size};
 use crate::src::nvim::grid::{schar_cache_clear_if_full, schar_get, schar_get_ascii};
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_WRN, logmsg};
 use crate::src::nvim::mbyte::{utf_ambiguous_width, utf_char2cells, utf_ptr2char};
 use crate::src::nvim::os::libc::{fclose, fopen, fprintf};
 use crate::src::nvim::tui::attrs::{attrs_differ, update_attrs};
@@ -52,7 +52,6 @@ const MAX_REPEATED_BACK: c_int = 4;
 const MAX_REPEATED_FORWARD: c_int = 2;
 
 /// The log level for the event-queue flood warning.
-const LOGLVL_WRN: c_int = 3;
 
 // ------------------------------------------------------------------ cursor
 

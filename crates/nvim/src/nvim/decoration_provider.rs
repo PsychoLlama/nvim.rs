@@ -5,7 +5,7 @@ use crate::src::nvim::api::private::helpers::{
 use crate::src::nvim::decoration::decor_check_to_be_deleted;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::hl_check_ns;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
 use crate::src::nvim::main::{decor_state, display_tick, ns_hl_active, textlock};
 use crate::src::nvim::memory::xrealloc;
@@ -127,7 +127,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 static decor_providers: GlobalCell<C2Rust_Unnamed_19> = GlobalCell::new(C2Rust_Unnamed_19 {
     size: 0 as size_t,
     capacity: 0 as size_t,

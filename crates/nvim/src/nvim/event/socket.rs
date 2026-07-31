@@ -22,7 +22,7 @@ use crate::src::nvim::event::r#loop::{one_arg_event, process_events_until};
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::event::socket::address::{SOCKET_ADDR_LEN, port_suffix, tcp_host_end};
 use crate::src::nvim::event::stream::{stream_init, stream_may_close};
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
 use crate::src::nvim::main::main_loop;
 use crate::src::nvim::memory::{xfree, xstrdup, xstrlcpy};
 use crate::src::nvim::os::fs::{os_path_exists, os_remove};
@@ -33,10 +33,6 @@ use crate::src::nvim::types::{
     socket_close_cb, uv__work, uv_connect_t, uv_handle_t, uv_handle_type, uv_loop_t, uv_pipe_t,
     uv_req_type, uv_stream_t, uv_tcp_t,
 };
-
-const LOGLVL_INF: c_int = 2;
-const LOGLVL_WRN: c_int = 3;
-const LOGLVL_ERR: c_int = 4;
 
 const UV_TCP: uv_handle_type = 12;
 

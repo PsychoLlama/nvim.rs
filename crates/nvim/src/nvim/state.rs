@@ -10,7 +10,7 @@ use crate::src::nvim::getchar::{
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
 use crate::src::nvim::keycodes::get_special_key_name;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
 use crate::src::nvim::main::{
     State, VIsual_active, VIsual_mode, VIsual_select, curbuf, debug_mode, exmode_active, finish_op,
     global_busy, got_int, last_mode, main_loop, mod_mask, motion_force, must_redraw,
@@ -291,7 +291,6 @@ pub const KE_S_UP: key_extra = 4;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub unsafe extern "C" fn state_enter(mut s: *mut VimState) {
     's_132: loop {
         let mut check_result: ::core::ffi::c_int = if (*s).check.is_some() {

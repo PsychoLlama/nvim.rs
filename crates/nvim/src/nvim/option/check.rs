@@ -21,7 +21,7 @@ use crate::src::nvim::drawscreen::{
 };
 use crate::src::nvim::ex_getln::{check_opt_wim, did_set_cedit};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::highlight::ns_hl_def;
+use crate::src::nvim::highlight::{HL_GLOBAL, ns_hl_def};
 use crate::src::nvim::highlight_group::{highlight_changed, syn_check_group};
 use crate::src::nvim::indent::tabstop_set;
 use crate::src::nvim::main::{
@@ -45,10 +45,10 @@ use crate::src::nvim::types::{
 };
 
 use super::{
-    HL_GLOBAL, HLATTRS_INIT, NO_SCREEN, NUL, NULL_STRING, OPT_GLOBAL, OPT_LOCAL,
-    didset_options_sctx, didset_window_options, get_varp, kFillchars, kListchars, kOptFlagHLOnly,
-    kOptFlagInsecure, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl,
-    kOptFlagRedrWin, kOptValTypeString, option_has_type,
+    HLATTRS_INIT, NO_SCREEN, NUL, NULL_STRING, OPT_GLOBAL, OPT_LOCAL, didset_options_sctx,
+    didset_window_options, get_varp, kFillchars, kListchars, kOptFlagHLOnly, kOptFlagInsecure,
+    kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl, kOptFlagRedrWin,
+    kOptValTypeString, option_has_type,
 };
 
 /// What 'binary' overrode, so that switching it off again restores the
@@ -366,7 +366,7 @@ pub unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bool {
 
             if !wp.is_null() {
                 let mut attrs: HlAttrs = HLATTRS_INIT;
-                attrs.rgb_ae_attr = (attrs.rgb_ae_attr as c_int | HL_GLOBAL as c_int) as int32_t;
+                attrs.rgb_ae_attr = (attrs.rgb_ae_attr as c_int | HL_GLOBAL) as int32_t;
                 ns_hl_def(
                     ns_hl as NS,
                     hl_id_link,

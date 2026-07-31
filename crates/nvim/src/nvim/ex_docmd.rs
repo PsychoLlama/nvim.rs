@@ -234,7 +234,6 @@ pub const CSL_HAD_FINA: C2Rust_Unnamed_37 = 8;
 pub const CSL_HAD_CONT: C2Rust_Unnamed_37 = 4;
 pub const CSL_HAD_ENDLOOP: C2Rust_Unnamed_37 = 2;
 pub const CSL_HAD_LOOP: C2Rust_Unnamed_37 = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const CMD_SIZE: CMD_index = 557;
 pub const CMD_Next: CMD_index = 556;
 pub const CMD_tilde: CMD_index = 555;
@@ -597,7 +596,6 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_growsize: 1 as c_int,
     ga_data: NULL_1,
 };
-pub const LOGLVL_INF: c_int = 2 as c_int;
 pub const EX_RANGE: c_uint = 0x1 as c_uint;
 pub const EX_BANG: c_uint = 0x2 as c_uint;
 pub const EX_EXTRA: c_uint = 0x4 as c_uint;

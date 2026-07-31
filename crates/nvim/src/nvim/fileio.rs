@@ -24,7 +24,7 @@ use crate::src::nvim::fold::{foldUpdateAll, foldmethodIsManual};
 use crate::src::nvim::garray::{ga_clear_strings, ga_grow, ga_init};
 use crate::src::nvim::getchar::{stuff_empty, typebuf_typed};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::src::nvim::main::{
     IObuff, NameBuff, State, allbuf_lock, autocmd_busy, cmdmod, curbuf, curtab, curwin,
     did_check_timestamps, e_interr, e_notopen, emsg_silent, ex_no_reprint, exiting, exmode_active,
@@ -80,6 +80,7 @@ use crate::src::nvim::sha256::Sha256;
 use crate::src::nvim::shada::check_marks_read;
 use crate::src::nvim::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::src::nvim::strings::{sort_strings, vim_snprintf, vim_strchr};
+use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __gid_t, __mode_t, __off_t, __off64_t, __pthread_internal_list, __pthread_list_t,
     __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __uid_t, _IO_FILE, _IO_codecvt,
@@ -1167,17 +1168,6 @@ pub const ENC_ENDIAN_B: C2Rust_Unnamed_26 = 16;
 pub const ENC_UNICODE: C2Rust_Unnamed_26 = 4;
 pub const ENC_DBCS: C2Rust_Unnamed_26 = 2;
 pub const ENC_8BIT: C2Rust_Unnamed_26 = 1;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const READ_NOFILE: C2Rust_Unnamed_27 = 256;
 pub const READ_NOWINENTER: C2Rust_Unnamed_27 = 128;
@@ -1262,9 +1252,6 @@ pub const BF_NOTEDITED: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
 pub const BF_NEW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
 pub const BF_NEW_W: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const LOGLVL_WRN: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

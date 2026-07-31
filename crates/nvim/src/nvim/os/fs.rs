@@ -7,7 +7,7 @@ use crate::src::nvim::event::libuv::{
     uv_translate_sys_error,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::main::{e_mkdir, e_noname, g_stats, p_verbose, stdin_fd};
 use crate::src::nvim::memory::{
     memcnt, xfree, xmalloc, xmemcpyz, xmemdupz, xstrchrnul, xstrdup, xstrlcpy,
@@ -2872,7 +2872,6 @@ pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const ENOTSUP: ::core::ffi::c_int = EOPNOTSUPP;
 pub const EOPNOTSUPP: ::core::ffi::c_int = 95;
 pub const EPERM: ::core::ffi::c_int = 1;

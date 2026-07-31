@@ -74,6 +74,7 @@ use crate::src::nvim::search::{last_search_pat, set_last_search_pat};
 use crate::src::nvim::state::REPLACE_FLAG;
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ext};
 use crate::src::nvim::terminal::terminal_paste;
+use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, BoolVarValue, BufUpdateCallbacks, CMD_index,
     CSType, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem,
@@ -875,17 +876,6 @@ pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub const BL_FIX: C2Rust_Unnamed_23 = 4;
 pub const BL_SOL: C2Rust_Unnamed_23 = 2;
 pub const BL_WHITE: C2Rust_Unnamed_23 = 1;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub const FNAME_UNESC: C2Rust_Unnamed_24 = 32;
 pub const FNAME_REL: C2Rust_Unnamed_24 = 16;

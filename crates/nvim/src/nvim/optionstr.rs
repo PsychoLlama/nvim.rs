@@ -89,7 +89,6 @@ pub const COCU_ALL: &CStr = c"nvic";
 pub const COM_ALL: &CStr = c"nbsmexflrO";
 pub const SCL_NO: c_int = -1;
 pub const SCL_NUM: c_int = -2;
-pub const SHAPE_CURSOR: c_int = 2;
 pub const IOSIZE: c_int = 1024 as c_int + 1;
 pub const SID_NONE: c_int = -6;
 pub const STL_IN_ICON: c_int = 1;

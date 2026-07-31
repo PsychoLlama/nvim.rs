@@ -642,9 +642,9 @@ unsafe fn get_rgb(state: *mut VTermState, mut color: VTermColor) -> c_int {
 fn get_underline_hl_flag(attrs: VTermScreenCellAttrs) -> c_int {
     match attrs.underline() {
         0 => 0,
-        2 => HL_UNDERDOUBLE as c_int,
-        3 => HL_UNDERCURL as c_int,
-        _ => HL_UNDERLINE as c_int,
+        2 => HL_UNDERDOUBLE,
+        3 => HL_UNDERCURL,
+        _ => HL_UNDERLINE,
     }
 }
 

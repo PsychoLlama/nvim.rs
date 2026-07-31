@@ -22,8 +22,8 @@ use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::highlight::{HLATTRS_DICT_SIZE, hlattrs2dict, syn_attr2entry};
 use crate::src::nvim::main::p_bg;
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf};
+use crate::src::nvim::types::ui::{kUILinegrid, kUITermColors};
 use crate::src::nvim::types::{Array, Boolean, Integer, Object, RemoteUI, String_0, Window};
-use crate::src::nvim::ui::{kUILinegrid, kUITermColors};
 use core::ffi::{c_char, c_int};
 
 /// Queues `name(args...)` on `ui`'s buffer, with the argument array built

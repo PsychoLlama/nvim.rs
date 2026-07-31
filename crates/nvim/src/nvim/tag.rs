@@ -69,6 +69,7 @@ use crate::src::nvim::runtime::do_in_runtimepath;
 use crate::src::nvim::search::{do_search, ignorecase, ignorecase_opt};
 use crate::src::nvim::state::MODE_INSERT;
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, xstrnsave};
+use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CMD_index, Callback,
@@ -1073,17 +1074,6 @@ pub const CONV_TO_LATIN1: C2Rust_Unnamed_25 = 3;
 pub const CONV_9_TO_UTF8: C2Rust_Unnamed_25 = 2;
 pub const CONV_TO_UTF8: C2Rust_Unnamed_25 = 1;
 pub const CONV_NONE: C2Rust_Unnamed_25 = 0;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
 pub const FINDFILE_BOTH: C2Rust_Unnamed_26 = 2;
 pub const FINDFILE_DIR: C2Rust_Unnamed_26 = 1;

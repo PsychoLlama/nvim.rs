@@ -33,7 +33,7 @@ use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::event::socket::socket_address_is_tcp;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::{HLATTRS_INIT, dict2hlattrs};
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{
     grid_line_buf_attr, grid_line_buf_char, grid_line_buf_size, main_loop, os_exit, stderr_isatty,
     stdin_isatty, stdout_isatty, t_colors, time_fd, ui_client_attached, ui_client_channel_id,
@@ -59,20 +59,17 @@ use crate::src::nvim::tui::tui::{
 };
 use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf};
+use crate::src::nvim::types::ui::kLineFlagWrap;
 use crate::src::nvim::types::{
     Arena, Array, Callback, CallbackReader, CallbackType, ChannelStdinMode, Dict, Error, Event,
-    GridLineEvent, HlAttrs, Integer, KeyDict_highlight, KeySetLink, LineFlags, Object, ObjectType,
-    TUIData, UIClientHandler, dict_T, garray_T, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, proftime_T, sattr_T, schar_T, uint16_t,
+    GridLineEvent, HlAttrs, Integer, KeyDict_highlight, KeySetLink, Object, ObjectType, TUIData,
+    UIClientHandler, dict_T, garray_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
+    kObjectTypeInteger, kObjectTypeString, proftime_T, sattr_T, schar_T, uint16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 const kCallbackNone: CallbackType = 0;
 const kChannelStdinPipe: ChannelStdinMode = 0;
-const kLineFlagWrap: LineFlags = 1;
-
-const LOGLVL_INF: c_int = 2;
-const LOGLVL_ERR: c_int = 4;
 
 /// The descriptor the client hands the server as `stdin_fd` when the user
 /// piped something in: stdin has been moved there so that the terminal can

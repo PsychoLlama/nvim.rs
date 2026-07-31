@@ -47,6 +47,7 @@ use crate::src::nvim::strings::{
     vim_snprintf, vim_strchr, vim_strnsave_unquoted, vim_strsave_escaped_ext,
 };
 use crate::src::nvim::tag::tag_freematch;
+use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __gid_t, __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
     __pthread_rwlock_arch_t, __time_t, __uid_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
@@ -390,17 +391,6 @@ pub const EW_EXEC: C2Rust_Unnamed_31 = 64;
 pub const EW_FILE: C2Rust_Unnamed_31 = 2;
 pub const EW_DIR: C2Rust_Unnamed_31 = 1;
 pub const EW_SILENT: C2Rust_Unnamed_31 = 32;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const EW_KEEPDOLLAR: C2Rust_Unnamed_31 = 2048;
 pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
 pub const EW_NOBREAK: C2Rust_Unnamed_31 = 262144;

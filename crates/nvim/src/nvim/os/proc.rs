@@ -13,12 +13,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::event::libuv::uv_kill;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_INF, logmsg};
 use core::ffi::c_int;
 use core::ptr;
 use std::ffi::CString;
 
-const LOGLVL_INF: c_int = 2;
 const SIGKILL: c_int = 9;
 const SIGTERM: c_int = 15;
 /// `uv_kill` reporting ESRCH: no such process.

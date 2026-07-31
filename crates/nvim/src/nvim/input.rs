@@ -11,6 +11,7 @@ use crate::src::nvim::message::{msg_putchar, set_keep_msg};
 use crate::src::nvim::mouse::{is_mouse_key, setmouse};
 use crate::src::nvim::os::input::input_get;
 use crate::src::nvim::os::libc::{atoi, gettext, memmove, snprintf};
+use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     BoolVarValue, Callback, Callback_data as C2Rust_Unnamed, CallbackType, LuaRef, MultiQueue,
     QUEUE, ScopeDictDictItem, ScopeType, SpecialVarValue, UIExtension, VarLockStatus, VarType,
@@ -191,17 +192,6 @@ pub const HLF_TERM: C2Rust_Unnamed_2 = 3;
 pub const HLF_EOB: C2Rust_Unnamed_2 = 2;
 pub const HLF_8: C2Rust_Unnamed_2 = 1;
 pub const HLF_NONE: C2Rust_Unnamed_2 = 0;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const KE_LEFTMOUSE: key_extra = 44;
 pub const KE_IGNORE: key_extra = 53;
 pub const KE_WILD: key_extra = 108;

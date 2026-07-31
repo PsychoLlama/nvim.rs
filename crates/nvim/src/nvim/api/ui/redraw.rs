@@ -26,10 +26,10 @@ use crate::src::nvim::api::private::helpers::{arena_array, arena_dict, cstr_as_s
 use crate::src::nvim::highlight::{HLATTRS_DICT_SIZE, hl_get_url, hlattrs2dict, syn_attr2entry};
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::src::nvim::types::builders::{ArrayBuf, DictBuf, static_cstring};
+use crate::src::nvim::types::ui::{kUIHlState, kUIPopupmenu, kUIWildmenu};
 use crate::src::nvim::types::{
     Arena, Array, Dict, HlAttrs, Integer, KeyValuePair, Object, RemoteUI,
 };
-use crate::src::nvim::ui::{kUIHlState, kUIPopupmenu, kUIWildmenu};
 use core::ffi::CStr;
 
 /// Announces a highlight attribute id and what it resolves to.

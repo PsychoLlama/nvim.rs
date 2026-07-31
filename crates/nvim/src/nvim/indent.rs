@@ -4,7 +4,7 @@ use crate::src::nvim::charset::{byte2cells, char2cells, getwhitecols_curline, sk
 use crate::src::nvim::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::src::nvim::edit::get_nolist_virtcol;
 use crate::src::nvim::extmark::extmark_splice_cols;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::main::{State, curbuf, curwin, e_invarg2, e_positive, saved_cursor};
 use crate::src::nvim::memline::{ml_get, ml_get_buf, ml_get_pos, ml_replace};
 use crate::src::nvim::memory::{xfree, xmalloc};
@@ -71,7 +71,6 @@ const SIN_INSERT: ::core::ffi::c_uint = 2;
 const SIN_UNDO: ::core::ffi::c_uint = 4;
 const SIN_NOMARK: ::core::ffi::c_uint = 8;
 const VV_LNUM: VimVarIndex = 9;
-pub const LOGLVL_ERR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FO_Q_COMS: ::core::ffi::c_int = 'q' as ::core::ffi::c_int;

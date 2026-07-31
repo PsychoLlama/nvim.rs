@@ -14,7 +14,7 @@ use crate::src::nvim::event::signal::{
 };
 use crate::src::nvim::ex_cmds2::autowrite_all;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{IObuff, curbuf, main_loop, p_awa, preserve_exit, v_dying};
 use crate::src::nvim::memline::ml_sync_all;
 use crate::src::nvim::os::libc::snprintf;
@@ -56,8 +56,6 @@ pub const SIGPWR: c_int = 30;
 
 const SIG_SETMASK: c_int = 2;
 const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-const LOGLVL_INF: c_int = 2;
-const LOGLVL_ERR: c_int = 4;
 const IOSIZE: usize = 1025;
 const VV_DYING: VimVarIndex = 29;
 

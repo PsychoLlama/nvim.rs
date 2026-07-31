@@ -18,9 +18,9 @@ pub(crate) use crate::src::nvim::main::e_invalblob;
 use crate::src::nvim::types::{
     Array, BoolVarValue, CMD_index, CallbackType, ChannelStreamType, GRegFlags, ListLenSpecials,
     LuaRetMode, Map_uint64_t_ptr_t, MapHash, MarkGet, MotionType, Object, OptValType, ScopeType,
-    Set_uint64_t, UIExtension, VarLockStatus, VarType, VimVarIndex, blob_T, dict_T, exprtype_T,
-    funcexe_T, key_extra, linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T,
-    uint32_t, uint64_t, var_flavour_T,
+    Set_uint64_t, VarLockStatus, VarType, VimVarIndex, blob_T, dict_T, exprtype_T, funcexe_T,
+    key_extra, linenr_T, list_T, listwatch_T, partial_T, ptr_t, size_t, typval_T, uint32_t,
+    uint64_t, var_flavour_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 
@@ -96,7 +96,6 @@ pub const CMD_echo: CMD_index = 135;
 pub const CMD_const: CMD_index = 99;
 pub const CMD_call: CMD_index = 53;
 pub const kChannelStreamProc: ChannelStreamType = 0;
-pub const kUIMessages: UIExtension = 4;
 pub const STR2NR_ALL: c_uint = 15;
 pub const VV_LUA: VimVarIndex = 101;
 pub const VV_ARGV: VimVarIndex = 89;

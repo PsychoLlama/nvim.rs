@@ -13,7 +13,7 @@ use crate::src::nvim::api::win_config::parse_winborder;
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::{getdigits_int, init_chartab, ptr2cells};
 use crate::src::nvim::cursor::coladvance;
-use crate::src::nvim::cursor_shape::parse_shape_opt;
+use crate::src::nvim::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
 use crate::src::nvim::drawscreen::{
     UPD_INVERTED, UPD_NOT_VALID, comp_col, redraw_all_later, redraw_curbuf_later, redrawWinline,
 };
@@ -42,7 +42,7 @@ use crate::src::nvim::window::check_colorcolumn;
 use super::frame::{errbuf, invalid, local_window, old_value, varp, win};
 use super::{
     COCU_ALL, FAIL, HIGHLIGHT_INIT, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, NUL, OK,
-    OPT_LOCAL, SCL_NUM, SHAPE_CURSOR, WW_ALL, check_chars_options, check_signcolumn, check_str_opt,
+    OPT_LOCAL, SCL_NUM, WW_ALL, check_chars_options, check_signcolumn, check_str_opt,
     check_string_option, did_set_option_listflag, did_set_statustabline_rulerformat,
     did_set_str_generic, e_showbreak_contains_unprintable_or_wide_character, free_string_option,
     kAlignLeft, kFloatRelativeEditor, kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault,

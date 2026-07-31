@@ -1,7 +1,7 @@
 use crate::src::nvim::decoration::{decor_check_invalid_glyphs, next_virt_text_chunk};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::{hl_apply_winblend, hl_combine_attr};
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
 use crate::src::nvim::main::{
     curtab, default_grid, exmode_active, firstwin, full_screen, hl_attr_active, linebuf_attr,
     linebuf_char, linebuf_scratch, linebuf_vcol, p_arshape, p_tbidi, rdb_flags, resizing_screen,
@@ -16,6 +16,7 @@ use crate::src::nvim::memory::{xcalloc, xfree, xmalloc};
 use crate::src::nvim::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::src::nvim::optionstr::check_chars_options;
 use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memmove, memset, strlen, strnlen};
+use crate::src::nvim::types::ui::kUIMultigrid;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BorderTextType, BufUpdateCallbacks,
     Callback, Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, CharBoundsOff,
@@ -190,21 +191,9 @@ pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const SLF_INC_VCOL: C2Rust_Unnamed_13 = 4;
 pub const SLF_WRAP: C2Rust_Unnamed_13 = 2;
 pub const SLF_RIGHTLEFT: C2Rust_Unnamed_13 = 1;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,

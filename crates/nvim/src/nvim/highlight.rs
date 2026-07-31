@@ -124,28 +124,29 @@ pub const kDecorProviderDisabled: C2Rust_Unnamed_13 = 4;
 pub const kDecorProviderRedrawDisabled: C2Rust_Unnamed_13 = 3;
 pub const kDecorProviderWinDisabled: C2Rust_Unnamed_13 = 2;
 pub const kDecorProviderActive: C2Rust_Unnamed_13 = 1;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const HL_GLOBAL: C2Rust_Unnamed_14 = 16384;
-pub const HL_DEFAULT: C2Rust_Unnamed_14 = 8192;
-pub const HL_FG_INDEXED: C2Rust_Unnamed_14 = 4096;
-pub const HL_BG_INDEXED: C2Rust_Unnamed_14 = 2048;
-pub const HL_NOCOMBINE: C2Rust_Unnamed_14 = 1024;
-pub const HL_OVERLINE: C2Rust_Unnamed_14 = 131072;
-pub const HL_CONCEALED: C2Rust_Unnamed_14 = 65536;
-pub const HL_BLINK: C2Rust_Unnamed_14 = 32768;
-pub const HL_DIM: C2Rust_Unnamed_14 = 512;
-pub const HL_ALTFONT: C2Rust_Unnamed_14 = 256;
-pub const HL_STRIKETHROUGH: C2Rust_Unnamed_14 = 128;
-pub const HL_STANDOUT: C2Rust_Unnamed_14 = 64;
-pub const HL_UNDERDASHED: C2Rust_Unnamed_14 = 40;
-pub const HL_UNDERDOTTED: C2Rust_Unnamed_14 = 32;
-pub const HL_UNDERDOUBLE: C2Rust_Unnamed_14 = 24;
-pub const HL_UNDERCURL: C2Rust_Unnamed_14 = 16;
-pub const HL_UNDERLINE: C2Rust_Unnamed_14 = 8;
-pub const HL_UNDERLINE_MASK: C2Rust_Unnamed_14 = 56;
-pub const HL_ITALIC: C2Rust_Unnamed_14 = 4;
-pub const HL_BOLD: C2Rust_Unnamed_14 = 2;
-pub const HL_INVERSE: C2Rust_Unnamed_14 = 1;
+/// The attribute bits an `HlAttrs`' `rgb_ae_attr`/`cterm_ae_attr` carry.
+pub type HlAttrFlags = ::core::ffi::c_int;
+pub const HL_GLOBAL: HlAttrFlags = 16384;
+pub const HL_DEFAULT: HlAttrFlags = 8192;
+pub const HL_FG_INDEXED: HlAttrFlags = 4096;
+pub const HL_BG_INDEXED: HlAttrFlags = 2048;
+pub const HL_NOCOMBINE: HlAttrFlags = 1024;
+pub const HL_OVERLINE: HlAttrFlags = 131072;
+pub const HL_CONCEALED: HlAttrFlags = 65536;
+pub const HL_BLINK: HlAttrFlags = 32768;
+pub const HL_DIM: HlAttrFlags = 512;
+pub const HL_ALTFONT: HlAttrFlags = 256;
+pub const HL_STRIKETHROUGH: HlAttrFlags = 128;
+pub const HL_STANDOUT: HlAttrFlags = 64;
+pub const HL_UNDERDASHED: HlAttrFlags = 40;
+pub const HL_UNDERDOTTED: HlAttrFlags = 32;
+pub const HL_UNDERDOUBLE: HlAttrFlags = 24;
+pub const HL_UNDERCURL: HlAttrFlags = 16;
+pub const HL_UNDERLINE: HlAttrFlags = 8;
+pub const HL_UNDERLINE_MASK: HlAttrFlags = 56;
+pub const HL_ITALIC: HlAttrFlags = 4;
+pub const HL_BOLD: HlAttrFlags = 2;
+pub const HL_INVERSE: HlAttrFlags = 1;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const HLF_COUNT: C2Rust_Unnamed_15 = 76;
 pub const HLF_PRE: C2Rust_Unnamed_15 = 75;
@@ -574,7 +575,7 @@ pub unsafe extern "C" fn ns_hl_def(
         set_hl_group(hl_id, attrs, dict, link_id);
         return;
     }
-    if attrs.rgb_ae_attr & HL_DEFAULT as ::core::ffi::c_int as int32_t != 0
+    if attrs.rgb_ae_attr & HL_DEFAULT as int32_t != 0
         && set_has_ColorKey(
             &raw mut (*ns_hls.ptr()).set,
             ColorKey {
@@ -596,8 +597,8 @@ pub unsafe extern "C" fn ns_hl_def(
         attr_id: attr_id,
         link_id: link_id,
         version: (*p).hl_valid,
-        is_default: attrs.rgb_ae_attr & HL_DEFAULT as ::core::ffi::c_int as int32_t != 0,
-        link_global: attrs.rgb_ae_attr & HL_GLOBAL as ::core::ffi::c_int as int32_t != 0,
+        is_default: attrs.rgb_ae_attr & HL_DEFAULT as int32_t != 0,
+        link_global: attrs.rgb_ae_attr & HL_GLOBAL as int32_t != 0,
     };
     map_put_ColorKey_ColorItem(
         ns_hls.ptr(),
@@ -798,8 +799,8 @@ pub unsafe extern "C" fn ns_get_hl(
             hl_get_syn_attr(ns_id, hl_id, attrs)
         };
         it.version = (*p).hl_valid - tmp as ::core::ffi::c_int;
-        it.is_default = attrs.rgb_ae_attr & HL_DEFAULT as ::core::ffi::c_int as int32_t != 0;
-        it.link_global = attrs.rgb_ae_attr & HL_GLOBAL as ::core::ffi::c_int as int32_t != 0;
+        it.is_default = attrs.rgb_ae_attr & HL_DEFAULT as int32_t != 0;
+        it.link_global = attrs.rgb_ae_attr & HL_GLOBAL as int32_t != 0;
         map_put_ColorKey_ColorItem(
             ns_hls.ptr(),
             ColorKey {
@@ -1068,8 +1069,8 @@ pub unsafe extern "C" fn win_bg_attr(mut wp: *mut win_T) -> ::core::ffi::c_int {
 }
 pub unsafe extern "C" fn hl_get_underline() -> ::core::ffi::c_int {
     let mut attrs: HlAttrs = HLATTRS_INIT;
-    attrs.cterm_ae_attr = HL_UNDERLINE as ::core::ffi::c_int as int16_t as int32_t;
-    attrs.rgb_ae_attr = HL_UNDERLINE as ::core::ffi::c_int as int16_t as int32_t;
+    attrs.cterm_ae_attr = HL_UNDERLINE as int16_t as int32_t;
+    attrs.rgb_ae_attr = HL_UNDERLINE as int16_t as int32_t;
     return get_attr_entry(HlEntry {
         attr: attrs,
         kind: kHlUI,
@@ -1201,11 +1202,11 @@ pub unsafe extern "C" fn hl_invalidate_blends() {
     update_window_hl(curwin.get(), true_0 != 0);
 }
 unsafe extern "C" fn hl_combine_ae(mut char_ae: int32_t, mut prim_ae: int32_t) -> int32_t {
-    let mut char_ul: int32_t = char_ae & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t;
-    let mut prim_ul: int32_t = prim_ae & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t;
+    let mut char_ul: int32_t = char_ae & HL_UNDERLINE_MASK as int32_t;
+    let mut prim_ul: int32_t = prim_ae & HL_UNDERLINE_MASK as int32_t;
     let mut new_ul: int32_t = if prim_ul != 0 { prim_ul } else { char_ul };
-    return char_ae & !(HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t)
-        | prim_ae & !(HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t)
+    return char_ae & !(HL_UNDERLINE_MASK as int32_t)
+        | prim_ae & !(HL_UNDERLINE_MASK as int32_t)
         | new_ul;
 }
 pub unsafe extern "C" fn hl_combine_attr(
@@ -1226,12 +1227,12 @@ pub unsafe extern "C" fn hl_combine_attr(
     let mut char_aep: HlAttrs = syn_attr2entry(char_attr);
     let mut prim_aep: HlAttrs = syn_attr2entry(prim_attr);
     let mut new_en: HlAttrs = char_aep;
-    if prim_aep.cterm_ae_attr & HL_NOCOMBINE as ::core::ffi::c_int as int32_t != 0 {
+    if prim_aep.cterm_ae_attr & HL_NOCOMBINE as int32_t != 0 {
         new_en.cterm_ae_attr = prim_aep.cterm_ae_attr;
     } else {
         new_en.cterm_ae_attr = hl_combine_ae(new_en.cterm_ae_attr, prim_aep.cterm_ae_attr);
     }
-    if prim_aep.rgb_ae_attr & HL_NOCOMBINE as ::core::ffi::c_int as int32_t != 0 {
+    if prim_aep.rgb_ae_attr & HL_NOCOMBINE as int32_t != 0 {
         new_en.rgb_ae_attr = prim_aep.rgb_ae_attr;
     } else {
         new_en.rgb_ae_attr = hl_combine_ae(new_en.rgb_ae_attr, prim_aep.rgb_ae_attr);
@@ -1239,29 +1240,25 @@ pub unsafe extern "C" fn hl_combine_attr(
     if prim_aep.cterm_fg_color as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
         new_en.cterm_fg_color = prim_aep.cterm_fg_color;
         new_en.rgb_ae_attr = (new_en.rgb_ae_attr as ::core::ffi::c_int
-            & (!(HL_FG_INDEXED as ::core::ffi::c_int as int32_t)
-                | prim_aep.rgb_ae_attr & HL_FG_INDEXED as ::core::ffi::c_int as int32_t)
+            & (!(HL_FG_INDEXED as int32_t) | prim_aep.rgb_ae_attr & HL_FG_INDEXED as int32_t)
                 as ::core::ffi::c_int) as int32_t;
     }
     if prim_aep.cterm_bg_color as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
         new_en.cterm_bg_color = prim_aep.cterm_bg_color;
         new_en.rgb_ae_attr = (new_en.rgb_ae_attr as ::core::ffi::c_int
-            & (!(HL_BG_INDEXED as ::core::ffi::c_int as int32_t)
-                | prim_aep.rgb_ae_attr & HL_BG_INDEXED as ::core::ffi::c_int as int32_t)
+            & (!(HL_BG_INDEXED as int32_t) | prim_aep.rgb_ae_attr & HL_BG_INDEXED as int32_t)
                 as ::core::ffi::c_int) as int32_t;
     }
     if prim_aep.rgb_fg_color >= 0 as RgbValue {
         new_en.rgb_fg_color = prim_aep.rgb_fg_color;
         new_en.rgb_ae_attr = (new_en.rgb_ae_attr as ::core::ffi::c_int
-            & (!(HL_FG_INDEXED as ::core::ffi::c_int as int32_t)
-                | prim_aep.rgb_ae_attr & HL_FG_INDEXED as ::core::ffi::c_int as int32_t)
+            & (!(HL_FG_INDEXED as int32_t) | prim_aep.rgb_ae_attr & HL_FG_INDEXED as int32_t)
                 as ::core::ffi::c_int) as int32_t;
     }
     if prim_aep.rgb_bg_color >= 0 as RgbValue {
         new_en.rgb_bg_color = prim_aep.rgb_bg_color;
         new_en.rgb_ae_attr = (new_en.rgb_ae_attr as ::core::ffi::c_int
-            & (!(HL_BG_INDEXED as ::core::ffi::c_int as int32_t)
-                | prim_aep.rgb_ae_attr & HL_BG_INDEXED as ::core::ffi::c_int as int32_t)
+            & (!(HL_BG_INDEXED as int32_t) | prim_aep.rgb_ae_attr & HL_BG_INDEXED as int32_t)
                 as ::core::ffi::c_int) as int32_t;
     }
     if prim_aep.rgb_sp_color >= 0 as RgbValue {
@@ -1315,12 +1312,11 @@ unsafe extern "C" fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     } else {
         0xff0000 as RgbValue
     };
-    if attrs.rgb_ae_attr & HL_INVERSE as ::core::ffi::c_int as int32_t != 0 {
+    if attrs.rgb_ae_attr & HL_INVERSE as int32_t != 0 {
         let mut temp: ::core::ffi::c_int = attrs.rgb_bg_color as ::core::ffi::c_int;
         attrs.rgb_bg_color = attrs.rgb_fg_color;
         attrs.rgb_fg_color = temp as RgbValue;
-        attrs.rgb_ae_attr = (attrs.rgb_ae_attr as ::core::ffi::c_int
-            & !(HL_INVERSE as ::core::ffi::c_int)) as int32_t;
+        attrs.rgb_ae_attr = (attrs.rgb_ae_attr as ::core::ffi::c_int & !(HL_INVERSE)) as int32_t;
     }
     return attrs;
 }
@@ -1370,7 +1366,7 @@ pub unsafe extern "C" fn hl_blend_attrs(
             battrs.rgb_fg_color as ::core::ffi::c_int,
             fattrs.rgb_bg_color as ::core::ffi::c_int,
         ) as RgbValue;
-        if cattrs.rgb_ae_attr & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0
+        if cattrs.rgb_ae_attr & HL_UNDERLINE_MASK as int32_t != 0
             && battrs_raw.rgb_sp_color != -1 as RgbValue
         {
             cattrs.rgb_sp_color = rgb_blend(
@@ -1385,8 +1381,7 @@ pub unsafe extern "C" fn hl_blend_attrs(
         cattrs.cterm_fg_color =
             cterm_blend(ratio, battrs.cterm_fg_color, fattrs.cterm_bg_color) as int16_t;
         cattrs.rgb_ae_attr = (cattrs.rgb_ae_attr as ::core::ffi::c_int
-            & !(HL_FG_INDEXED as ::core::ffi::c_int | HL_BG_INDEXED as ::core::ffi::c_int))
-            as int32_t;
+            & !(HL_FG_INDEXED | HL_BG_INDEXED)) as int32_t;
     } else {
         cattrs = fattrs;
         cattrs.rgb_fg_color = rgb_blend(
@@ -1394,7 +1389,7 @@ pub unsafe extern "C" fn hl_blend_attrs(
             battrs.rgb_fg_color as ::core::ffi::c_int,
             fattrs.rgb_fg_color as ::core::ffi::c_int,
         ) as RgbValue;
-        if cattrs.rgb_ae_attr & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
+        if cattrs.rgb_ae_attr & HL_UNDERLINE_MASK as int32_t != 0 {
             cattrs.rgb_sp_color = rgb_blend(
                 ratio / 2 as ::core::ffi::c_int,
                 battrs.rgb_bg_color as ::core::ffi::c_int,
@@ -1404,8 +1399,7 @@ pub unsafe extern "C" fn hl_blend_attrs(
             cattrs.rgb_sp_color = -1 as ::core::ffi::c_int as RgbValue;
         }
         cattrs.rgb_ae_attr = (cattrs.rgb_ae_attr as ::core::ffi::c_int
-            & !(HL_FG_INDEXED as ::core::ffi::c_int | HL_BG_INDEXED as ::core::ffi::c_int))
-            as int32_t;
+            & !(HL_FG_INDEXED | HL_BG_INDEXED)) as int32_t;
     }
     if ratio == 100 as ::core::ffi::c_int && battrs_raw.rgb_bg_color == -1 as RgbValue {
         cattrs.rgb_bg_color = -1 as ::core::ffi::c_int as RgbValue;
@@ -1627,7 +1621,7 @@ pub unsafe extern "C" fn hlattrs2dict(
     } else {
         ae.cterm_ae_attr as ::core::ffi::c_int
     };
-    if mask & HL_INVERSE as ::core::ffi::c_int != 0 {
+    if mask & HL_INVERSE != 0 {
         let c2rust_fresh11 = (*hl_attrs).size;
         (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
         *(*hl_attrs).items.offset(c2rust_fresh11 as isize) = key_value_pair {
@@ -1638,7 +1632,7 @@ pub unsafe extern "C" fn hlattrs2dict(
             },
         };
     }
-    if mask & HL_BOLD as ::core::ffi::c_int != 0 {
+    if mask & HL_BOLD != 0 {
         let c2rust_fresh12 = (*hl_attrs).size;
         (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
         *(*hl_attrs).items.offset(c2rust_fresh12 as isize) = key_value_pair {
@@ -1649,7 +1643,7 @@ pub unsafe extern "C" fn hlattrs2dict(
             },
         };
     }
-    if mask & HL_ITALIC as ::core::ffi::c_int != 0 {
+    if mask & HL_ITALIC != 0 {
         let c2rust_fresh13 = (*hl_attrs).size;
         (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
         *(*hl_attrs).items.offset(c2rust_fresh13 as isize) = key_value_pair {
@@ -1660,7 +1654,7 @@ pub unsafe extern "C" fn hlattrs2dict(
             },
         };
     }
-    match mask & HL_UNDERLINE_MASK as ::core::ffi::c_int {
+    match mask & HL_UNDERLINE_MASK {
         8 => {
             let c2rust_fresh14 = (*hl_attrs).size;
             (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
@@ -1718,7 +1712,7 @@ pub unsafe extern "C" fn hlattrs2dict(
         }
         _ => {}
     }
-    if mask & HL_STANDOUT as ::core::ffi::c_int != 0 {
+    if mask & HL_STANDOUT != 0 {
         let c2rust_fresh19 = (*hl_attrs).size;
         (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
         *(*hl_attrs).items.offset(c2rust_fresh19 as isize) = key_value_pair {
@@ -1729,7 +1723,7 @@ pub unsafe extern "C" fn hlattrs2dict(
             },
         };
     }
-    if mask & HL_STRIKETHROUGH as ::core::ffi::c_int != 0 {
+    if mask & HL_STRIKETHROUGH != 0 {
         let c2rust_fresh20 = (*hl_attrs).size;
         (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
         *(*hl_attrs).items.offset(c2rust_fresh20 as isize) = key_value_pair {
@@ -1740,7 +1734,7 @@ pub unsafe extern "C" fn hlattrs2dict(
             },
         };
     }
-    if mask & HL_ALTFONT as ::core::ffi::c_int != 0 {
+    if mask & HL_ALTFONT != 0 {
         let c2rust_fresh21 = (*hl_attrs).size;
         (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
         *(*hl_attrs).items.offset(c2rust_fresh21 as isize) = key_value_pair {
@@ -1751,7 +1745,7 @@ pub unsafe extern "C" fn hlattrs2dict(
             },
         };
     }
-    if mask & HL_DIM as ::core::ffi::c_int != 0 {
+    if mask & HL_DIM != 0 {
         let c2rust_fresh22 = (*hl_attrs).size;
         (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
         *(*hl_attrs).items.offset(c2rust_fresh22 as isize) = key_value_pair {
@@ -1762,7 +1756,7 @@ pub unsafe extern "C" fn hlattrs2dict(
             },
         };
     }
-    if mask & HL_BLINK as ::core::ffi::c_int != 0 {
+    if mask & HL_BLINK != 0 {
         let c2rust_fresh23 = (*hl_attrs).size;
         (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
         *(*hl_attrs).items.offset(c2rust_fresh23 as isize) = key_value_pair {
@@ -1773,7 +1767,7 @@ pub unsafe extern "C" fn hlattrs2dict(
             },
         };
     }
-    if mask & HL_CONCEALED as ::core::ffi::c_int != 0 {
+    if mask & HL_CONCEALED != 0 {
         let c2rust_fresh24 = (*hl_attrs).size;
         (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
         *(*hl_attrs).items.offset(c2rust_fresh24 as isize) = key_value_pair {
@@ -1784,7 +1778,7 @@ pub unsafe extern "C" fn hlattrs2dict(
             },
         };
     }
-    if mask & HL_OVERLINE as ::core::ffi::c_int != 0 {
+    if mask & HL_OVERLINE != 0 {
         let c2rust_fresh25 = (*hl_attrs).size;
         (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
         *(*hl_attrs).items.offset(c2rust_fresh25 as isize) = key_value_pair {
@@ -1795,7 +1789,7 @@ pub unsafe extern "C" fn hlattrs2dict(
             },
         };
     }
-    if mask & HL_NOCOMBINE as ::core::ffi::c_int != 0 {
+    if mask & HL_NOCOMBINE != 0 {
         let c2rust_fresh26 = (*hl_attrs).size;
         (*hl_attrs).size = (*hl_attrs).size.wrapping_add(1);
         *(*hl_attrs).items.offset(c2rust_fresh26 as isize) = key_value_pair {
@@ -1858,7 +1852,7 @@ pub unsafe extern "C" fn hlattrs2dict(
                 },
             };
         }
-        if mask & HL_FG_INDEXED as ::core::ffi::c_int != 0 {
+        if mask & HL_FG_INDEXED != 0 {
             let c2rust_fresh30 = (*hl).size;
             (*hl).size = (*hl).size.wrapping_add(1);
             *(*hl).items.offset(c2rust_fresh30 as isize) = key_value_pair {
@@ -1869,7 +1863,7 @@ pub unsafe extern "C" fn hlattrs2dict(
                 },
             };
         }
-        if mask & HL_BG_INDEXED as ::core::ffi::c_int != 0 {
+        if mask & HL_BG_INDEXED != 0 {
             let c2rust_fresh31 = (*hl).size;
             (*hl).size = (*hl).size.wrapping_add(1);
             *(*hl).items.offset(c2rust_fresh31 as isize) = key_value_pair {
@@ -1993,10 +1987,9 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__reverse
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag_: int32_t = HL_INVERSE as ::core::ffi::c_int as int32_t;
-        let mut cmask_: int32_t = if flag_ & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0
-        {
-            HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
+        let mut flag_: int32_t = HL_INVERSE as int32_t;
+        let mut cmask_: int32_t = if flag_ & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
         } else {
             flag_
         };
@@ -2010,13 +2003,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__bold
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__0: int32_t = HL_BOLD as ::core::ffi::c_int as int32_t;
-        let mut cmask__0: int32_t =
-            if flag__0 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__0
-            };
+        let mut flag__0: int32_t = HL_BOLD as int32_t;
+        let mut cmask__0: int32_t = if flag__0 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__0
+        };
         if (*dict).bold {
             mask = mask & !cmask__0 | flag__0;
         } else if mask & cmask__0 == flag__0 {
@@ -2027,13 +2019,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__italic
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__1: int32_t = HL_ITALIC as ::core::ffi::c_int as int32_t;
-        let mut cmask__1: int32_t =
-            if flag__1 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__1
-            };
+        let mut flag__1: int32_t = HL_ITALIC as int32_t;
+        let mut cmask__1: int32_t = if flag__1 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__1
+        };
         if (*dict).italic {
             mask = mask & !cmask__1 | flag__1;
         } else if mask & cmask__1 == flag__1 {
@@ -2044,13 +2035,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__underline
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__2: int32_t = HL_UNDERLINE as ::core::ffi::c_int as int32_t;
-        let mut cmask__2: int32_t =
-            if flag__2 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__2
-            };
+        let mut flag__2: int32_t = HL_UNDERLINE as int32_t;
+        let mut cmask__2: int32_t = if flag__2 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__2
+        };
         if (*dict).underline {
             mask = mask & !cmask__2 | flag__2;
         } else if mask & cmask__2 == flag__2 {
@@ -2061,13 +2051,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__undercurl
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__3: int32_t = HL_UNDERCURL as ::core::ffi::c_int as int32_t;
-        let mut cmask__3: int32_t =
-            if flag__3 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__3
-            };
+        let mut flag__3: int32_t = HL_UNDERCURL as int32_t;
+        let mut cmask__3: int32_t = if flag__3 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__3
+        };
         if (*dict).undercurl {
             mask = mask & !cmask__3 | flag__3;
         } else if mask & cmask__3 == flag__3 {
@@ -2078,13 +2067,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__underdouble
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__4: int32_t = HL_UNDERDOUBLE as ::core::ffi::c_int as int32_t;
-        let mut cmask__4: int32_t =
-            if flag__4 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__4
-            };
+        let mut flag__4: int32_t = HL_UNDERDOUBLE as int32_t;
+        let mut cmask__4: int32_t = if flag__4 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__4
+        };
         if (*dict).underdouble {
             mask = mask & !cmask__4 | flag__4;
         } else if mask & cmask__4 == flag__4 {
@@ -2095,13 +2083,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__underdotted
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__5: int32_t = HL_UNDERDOTTED as ::core::ffi::c_int as int32_t;
-        let mut cmask__5: int32_t =
-            if flag__5 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__5
-            };
+        let mut flag__5: int32_t = HL_UNDERDOTTED as int32_t;
+        let mut cmask__5: int32_t = if flag__5 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__5
+        };
         if (*dict).underdotted {
             mask = mask & !cmask__5 | flag__5;
         } else if mask & cmask__5 == flag__5 {
@@ -2112,13 +2099,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__underdashed
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__6: int32_t = HL_UNDERDASHED as ::core::ffi::c_int as int32_t;
-        let mut cmask__6: int32_t =
-            if flag__6 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__6
-            };
+        let mut flag__6: int32_t = HL_UNDERDASHED as int32_t;
+        let mut cmask__6: int32_t = if flag__6 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__6
+        };
         if (*dict).underdashed {
             mask = mask & !cmask__6 | flag__6;
         } else if mask & cmask__6 == flag__6 {
@@ -2129,13 +2115,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__standout
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__7: int32_t = HL_STANDOUT as ::core::ffi::c_int as int32_t;
-        let mut cmask__7: int32_t =
-            if flag__7 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__7
-            };
+        let mut flag__7: int32_t = HL_STANDOUT as int32_t;
+        let mut cmask__7: int32_t = if flag__7 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__7
+        };
         if (*dict).standout {
             mask = mask & !cmask__7 | flag__7;
         } else if mask & cmask__7 == flag__7 {
@@ -2146,13 +2131,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__strikethrough
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__8: int32_t = HL_STRIKETHROUGH as ::core::ffi::c_int as int32_t;
-        let mut cmask__8: int32_t =
-            if flag__8 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__8
-            };
+        let mut flag__8: int32_t = HL_STRIKETHROUGH as int32_t;
+        let mut cmask__8: int32_t = if flag__8 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__8
+        };
         if (*dict).strikethrough {
             mask = mask & !cmask__8 | flag__8;
         } else if mask & cmask__8 == flag__8 {
@@ -2163,13 +2147,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__altfont
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__9: int32_t = HL_ALTFONT as ::core::ffi::c_int as int32_t;
-        let mut cmask__9: int32_t =
-            if flag__9 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__9
-            };
+        let mut flag__9: int32_t = HL_ALTFONT as int32_t;
+        let mut cmask__9: int32_t = if flag__9 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__9
+        };
         if (*dict).altfont {
             mask = mask & !cmask__9 | flag__9;
         } else if mask & cmask__9 == flag__9 {
@@ -2180,13 +2163,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__dim
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__10: int32_t = HL_DIM as ::core::ffi::c_int as int32_t;
-        let mut cmask__10: int32_t =
-            if flag__10 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__10
-            };
+        let mut flag__10: int32_t = HL_DIM as int32_t;
+        let mut cmask__10: int32_t = if flag__10 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__10
+        };
         if (*dict).dim {
             mask = mask & !cmask__10 | flag__10;
         } else if mask & cmask__10 == flag__10 {
@@ -2197,13 +2179,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__blink
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__11: int32_t = HL_BLINK as ::core::ffi::c_int as int32_t;
-        let mut cmask__11: int32_t =
-            if flag__11 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__11
-            };
+        let mut flag__11: int32_t = HL_BLINK as int32_t;
+        let mut cmask__11: int32_t = if flag__11 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__11
+        };
         if (*dict).blink {
             mask = mask & !cmask__11 | flag__11;
         } else if mask & cmask__11 == flag__11 {
@@ -2214,13 +2195,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__conceal
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__12: int32_t = HL_CONCEALED as ::core::ffi::c_int as int32_t;
-        let mut cmask__12: int32_t =
-            if flag__12 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__12
-            };
+        let mut flag__12: int32_t = HL_CONCEALED as int32_t;
+        let mut cmask__12: int32_t = if flag__12 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__12
+        };
         if (*dict).conceal {
             mask = mask & !cmask__12 | flag__12;
         } else if mask & cmask__12 == flag__12 {
@@ -2231,13 +2211,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__overline
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__13: int32_t = HL_OVERLINE as ::core::ffi::c_int as int32_t;
-        let mut cmask__13: int32_t =
-            if flag__13 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__13
-            };
+        let mut flag__13: int32_t = HL_OVERLINE as int32_t;
+        let mut cmask__13: int32_t = if flag__13 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__13
+        };
         if (*dict).overline {
             mask = mask & !cmask__13 | flag__13;
         } else if mask & cmask__13 == flag__13 {
@@ -2249,13 +2228,12 @@ pub unsafe extern "C" fn dict2hlattrs(
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__fg_indexed
             != 0 as ::core::ffi::c_ulonglong
         {
-            let mut flag__14: int32_t = HL_FG_INDEXED as ::core::ffi::c_int as int32_t;
-            let mut cmask__14: int32_t =
-                if flag__14 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                    HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-                } else {
-                    flag__14
-                };
+            let mut flag__14: int32_t = HL_FG_INDEXED as int32_t;
+            let mut cmask__14: int32_t = if flag__14 & HL_UNDERLINE_MASK as int32_t != 0 {
+                HL_UNDERLINE_MASK as int32_t
+            } else {
+                flag__14
+            };
             if (*dict).fg_indexed {
                 mask = mask & !cmask__14 | flag__14;
             } else if mask & cmask__14 == flag__14 {
@@ -2266,13 +2244,12 @@ pub unsafe extern "C" fn dict2hlattrs(
             & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__bg_indexed
             != 0 as ::core::ffi::c_ulonglong
         {
-            let mut flag__15: int32_t = HL_BG_INDEXED as ::core::ffi::c_int as int32_t;
-            let mut cmask__15: int32_t =
-                if flag__15 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                    HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-                } else {
-                    flag__15
-                };
+            let mut flag__15: int32_t = HL_BG_INDEXED as int32_t;
+            let mut cmask__15: int32_t = if flag__15 & HL_UNDERLINE_MASK as int32_t != 0 {
+                HL_UNDERLINE_MASK as int32_t
+            } else {
+                flag__15
+            };
             if (*dict).bg_indexed {
                 mask = mask & !cmask__15 | flag__15;
             } else if mask & cmask__15 == flag__15 {
@@ -2284,13 +2261,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__nocombine
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__16: int32_t = HL_NOCOMBINE as ::core::ffi::c_int as int32_t;
-        let mut cmask__16: int32_t =
-            if flag__16 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__16
-            };
+        let mut flag__16: int32_t = HL_NOCOMBINE as int32_t;
+        let mut cmask__16: int32_t = if flag__16 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__16
+        };
         if (*dict).nocombine {
             mask = mask & !cmask__16 | flag__16;
         } else if mask & cmask__16 == flag__16 {
@@ -2301,13 +2277,12 @@ pub unsafe extern "C" fn dict2hlattrs(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__default
         != 0 as ::core::ffi::c_ulonglong
     {
-        let mut flag__17: int32_t = HL_DEFAULT as ::core::ffi::c_int as int32_t;
-        let mut cmask__17: int32_t =
-            if flag__17 & HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t != 0 {
-                HL_UNDERLINE_MASK as ::core::ffi::c_int as int32_t
-            } else {
-                flag__17
-            };
+        let mut flag__17: int32_t = HL_DEFAULT as int32_t;
+        let mut cmask__17: int32_t = if flag__17 & HL_UNDERLINE_MASK as int32_t != 0 {
+            HL_UNDERLINE_MASK as int32_t
+        } else {
+            flag__17
+        };
         if (*dict).default_ {
             mask = mask & !cmask__17 | flag__17;
         } else if mask & cmask__17 == flag__17 {
@@ -2431,7 +2406,7 @@ pub unsafe extern "C" fn dict2hlattrs(
             != 0 as ::core::ffi::c_ulonglong
         {
             *link_id = (*dict).link_global as ::core::ffi::c_int;
-            mask = (mask as ::core::ffi::c_int | HL_GLOBAL as ::core::ffi::c_int) as int32_t;
+            mask = (mask as ::core::ffi::c_int | HL_GLOBAL) as int32_t;
         } else {
             *link_id = (*dict).link as ::core::ffi::c_int;
         }
@@ -2475,149 +2450,100 @@ pub unsafe extern "C" fn dict2hlattrs(
         cterm_mask_provided = true_0 != 0;
         cterm_mask = 0 as ::core::ffi::c_int as int32_t;
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).reverse {
-            if HL_INVERSE as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_INVERSE & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_INVERSE as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_INVERSE) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).bold {
-            if HL_BOLD as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_BOLD & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_BOLD as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_BOLD) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).italic {
-            if HL_ITALIC as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_ITALIC & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_ITALIC as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_ITALIC) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).underline {
-            if HL_UNDERLINE as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_UNDERLINE & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_UNDERLINE as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_UNDERLINE) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).undercurl {
-            if HL_UNDERCURL as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_UNDERCURL & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_UNDERCURL as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_UNDERCURL) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).underdouble {
-            if HL_UNDERDOUBLE as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_UNDERDOUBLE & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_UNDERDOUBLE as ::core::ffi::c_int)
-                as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_UNDERDOUBLE) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).underdotted {
-            if HL_UNDERDOTTED as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_UNDERDOTTED & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_UNDERDOTTED as ::core::ffi::c_int)
-                as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_UNDERDOTTED) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).underdashed {
-            if HL_UNDERDASHED as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_UNDERDASHED & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_UNDERDASHED as ::core::ffi::c_int)
-                as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_UNDERDASHED) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).standout {
-            if HL_STANDOUT as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_STANDOUT & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_STANDOUT as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_STANDOUT) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).strikethrough {
-            if HL_STRIKETHROUGH as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0
-            {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_STRIKETHROUGH & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_STRIKETHROUGH as ::core::ffi::c_int)
-                as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_STRIKETHROUGH) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).altfont {
-            if HL_ALTFONT as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_ALTFONT & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_ALTFONT as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_ALTFONT) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).dim {
-            if HL_DIM as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_DIM & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_DIM as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_DIM) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).blink {
-            if HL_BLINK as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_BLINK & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_BLINK as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_BLINK) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).conceal {
-            if HL_CONCEALED as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_CONCEALED & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_CONCEALED as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_CONCEALED) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).overline {
-            if HL_OVERLINE as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_OVERLINE & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_OVERLINE as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_OVERLINE) as int32_t;
         }
         if (*(&raw mut cterm as *mut KeyDict_highlight_cterm)).nocombine {
-            if HL_NOCOMBINE as ::core::ffi::c_int & HL_UNDERLINE_MASK as ::core::ffi::c_int != 0 {
-                cterm_mask = (cterm_mask as ::core::ffi::c_int
-                    & !(HL_UNDERLINE_MASK as ::core::ffi::c_int))
-                    as int32_t;
+            if HL_NOCOMBINE & HL_UNDERLINE_MASK != 0 {
+                cterm_mask = (cterm_mask as ::core::ffi::c_int & !(HL_UNDERLINE_MASK)) as int32_t;
             }
-            cterm_mask =
-                (cterm_mask as ::core::ffi::c_int | HL_NOCOMBINE as ::core::ffi::c_int) as int32_t;
+            cterm_mask = (cterm_mask as ::core::ffi::c_int | HL_NOCOMBINE) as int32_t;
         }
     }
     if (*dict).is_set__highlight_ as ::core::ffi::c_ulonglong

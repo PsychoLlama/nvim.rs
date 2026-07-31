@@ -19,6 +19,7 @@ use crate::src::nvim::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::src::nvim::os::libc::{__assert_fail, atoi, gettext, memchr, snprintf, strchr, strstr};
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::api::kErrorTypeNone;
+use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, CMD_index, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType,
@@ -775,17 +776,6 @@ pub const SHM_WRI: C2Rust_Unnamed_15 = 119;
 pub const SHM_LINES: C2Rust_Unnamed_15 = 108;
 pub const SHM_MOD: C2Rust_Unnamed_15 = 109;
 pub const SHM_RO: C2Rust_Unnamed_15 = 114;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const kRetMulti: LuaRetMode = 3;
 pub const kRetLuaref: LuaRetMode = 2;
 pub const kRetNilBool: LuaRetMode = 1;

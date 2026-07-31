@@ -55,6 +55,7 @@ use crate::src::nvim::plines::win_linetabsize;
 use crate::src::nvim::state::MODE_CMDLINE;
 use crate::src::nvim::strings::reverse_text;
 use crate::src::nvim::types::api::kErrorTypeNone;
+use crate::src::nvim::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
     BufUpdateCallbacks, Buffer, CMD_index, CSType, Callback, Callback_data as C2Rust_Unnamed_4,
@@ -828,17 +829,6 @@ pub const ECMD_ONE: C2Rust_Unnamed_19 = 1;
 pub const ECMD_LAST: C2Rust_Unnamed_19 = -1;
 pub const ECMD_LASTL: C2Rust_Unnamed_19 = 0;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const CPT_COUNT: C2Rust_Unnamed_21 = 4;
 pub const CPT_INFO: C2Rust_Unnamed_21 = 3;

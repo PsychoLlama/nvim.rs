@@ -135,6 +135,7 @@ use crate::src::nvim::state::{
 };
 use crate::src::nvim::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone};
+use crate::src::nvim::types::ui::{kUICmdline, kUIMessages};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array,
     BoolVarValue, Boolean, BufUpdateCallbacks, Buffer, CMD_index, Callback,
@@ -1101,17 +1102,6 @@ pub const CONV_TO_LATIN1: C2Rust_Unnamed_27 = 3;
 pub const CONV_9_TO_UTF8: C2Rust_Unnamed_27 = 2;
 pub const CONV_TO_UTF8: C2Rust_Unnamed_27 = 1;
 pub const CONV_NONE: C2Rust_Unnamed_27 = 0;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const REMAP_SKIP: RemapValues = -3;
 pub const REMAP_SCRIPT: RemapValues = -2;
 pub const REMAP_NONE: RemapValues = -1;

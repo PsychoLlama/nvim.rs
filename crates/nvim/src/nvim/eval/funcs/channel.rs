@@ -5,7 +5,7 @@
 use super::args::{Args, frame};
 use super::{
     ARENA_EMPTY, ARRAY_DICT_INIT, C2Rust_Unnamed_16, C2Rust_Unnamed_22, GA_EMPTY_INIT_VALUE,
-    LOGLVL_ERR, MAX_FUNC_ARGS, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, false_0, kCallbackNone,
+    MAX_FUNC_ARGS, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, false_0, kCallbackNone,
     kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
     kRetObject,
 };
@@ -23,7 +23,7 @@ use crate::src::nvim::eval::userfunc::{restore_funccal, save_funccal, set_curren
 use crate::src::nvim::event::libuv::uv_strerror;
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::garray::ga_grow;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::{
     autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx, e_invarg,

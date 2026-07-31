@@ -30,7 +30,7 @@ use crate::src::nvim::normal::{
     KE_LEFTRELEASE, KE_MIDDLEDRAG, KE_MIDDLEMOUSE, KE_MIDDLERELEASE, KE_MOUSEDOWN, KE_MOUSELEFT,
     KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE,
     KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE, KE_X2DRAG, KE_X2MOUSE, KE_X2RELEASE, NUL, SHOWCMD_BUFLEN,
-    SHOWCMD_COLS, kUIMessages, old_showcmd_buf, showcmd_is_clear, showcmd_visual,
+    SHOWCMD_COLS, old_showcmd_buf, showcmd_is_clear, showcmd_visual,
 };
 use crate::src::nvim::os::libc::{memmove, snprintf, strcat, strcpy, strlen};
 use crate::src::nvim::plines::getvcols;
@@ -45,6 +45,7 @@ use crate::src::nvim::ui::{ui_call_msg_showcmd, ui_has};
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::src::nvim::types::object_data;
+use crate::src::nvim::types::ui::kUIMessages;
 
 /// The buffer holds a NUL-terminated C string; this is its length.
 #[inline(always)]

@@ -35,7 +35,7 @@ use crate::src::nvim::highlight_group::{highlight_changed, syn_check_group, syn_
 use crate::src::nvim::indent::tabstop_padding;
 use crate::src::nvim::input::{get_keystroke, prompt_for_input};
 use crate::src::nvim::keycodes::get_special_key_name;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{
     Columns, IObuff, KeyTyped, Rows, State, allow_keys, called_emsg, capture_ga, clear_cmdline,
     cmd_silent, cmdline_row, cmdline_was_last_drawn, cmdmod, cmdmsg_rl, curbuf, curwin,
@@ -84,6 +84,7 @@ use crate::src::nvim::state::{
 };
 use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, vim_vsnprintf};
 use crate::src::nvim::types::api::kErrorTypeNone;
+use crate::src::nvim::types::ui::{kUIMessages, kUIMultigrid};
 pub use crate::src::nvim::types::{
     __builtin_va_list, __gnuc_va_list, __off_t, __off64_t, __pthread_internal_list,
     __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __va_list_tag,
@@ -909,17 +910,6 @@ pub const AUGROUP_DELETED: C2Rust_Unnamed_30 = -4;
 pub const AUGROUP_ALL: C2Rust_Unnamed_30 = -3;
 pub const AUGROUP_ERROR: C2Rust_Unnamed_30 = -2;
 pub const AUGROUP_DEFAULT: C2Rust_Unnamed_30 = -1;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
 pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_34 = 83;
 pub const SHM_FILEINFO: C2Rust_Unnamed_34 = 70;
@@ -1208,8 +1198,6 @@ pub const ESC: ::core::ffi::c_int = 27;
 pub const Ctrl_B: ::core::ffi::c_int = 2;
 pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const Ctrl_F: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const LOGLVL_INF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static confirm_msg_used: GlobalCell<::core::ffi::c_int> = GlobalCell::new(false_0);
 static confirm_msg: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());

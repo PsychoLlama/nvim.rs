@@ -18,14 +18,12 @@ use crate::src::nvim::event::multiqueue::{
     multiqueue_new_child, multiqueue_process_events, multiqueue_purge_events, multiqueue_put_event,
     multiqueue_size,
 };
-use crate::src::nvim::log::{log_uv_handles, logmsg};
+use crate::src::nvim::log::{LOGLVL_ERR, log_uv_handles, logmsg};
 use crate::src::nvim::os::libc::abort;
 use crate::src::nvim::os::time::os_hrtime;
 use crate::src::nvim::types::{
     Event, Loop, MultiQueue, Proc, argv_callback, uv_async_t, uv_handle_t, uv_run_mode, uv_timer_t,
 };
-
-const LOGLVL_ERR: c_int = 4;
 
 const UV_RUN_DEFAULT: uv_run_mode = 0;
 const UV_RUN_ONCE: uv_run_mode = 1;

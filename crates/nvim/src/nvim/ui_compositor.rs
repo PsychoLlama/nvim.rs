@@ -2,7 +2,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{schar_from_buf, schar_from_char};
 use crate::src::nvim::highlight::hl_blend_attrs;
 use crate::src::nvim::highlight_group::{syn_check_group, syn_id2attr};
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
 use crate::src::nvim::main::{
     Columns, Rows, curtab, curwin, default_grid, firstwin, hl_attr_active, msg_grid, p_wd,
     rdb_flags,
@@ -11,6 +11,7 @@ use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
 use crate::src::nvim::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
 use crate::src::nvim::os::libc::{__assert_fail, abort, llabs, memcpy};
 use crate::src::nvim::os::time::os_sleep;
+use crate::src::nvim::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, Boolean, BufUpdateCallbacks, Callback,
     Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, DecorExt,
@@ -175,20 +176,7 @@ pub const HLF_TERM: C2Rust_Unnamed_12 = 3;
 pub const HLF_EOB: C2Rust_Unnamed_12 = 2;
 pub const HLF_8: C2Rust_Unnamed_12 = 1;
 pub const HLF_NONE: C2Rust_Unnamed_12 = 0;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const kLineFlagInvalid: C2Rust_Unnamed_14 = 2;
-pub const kLineFlagWrap: C2Rust_Unnamed_14 = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct C2Rust_Unnamed_15 {
@@ -202,7 +190,6 @@ pub const KV_INITIAL_VALUE: C2Rust_Unnamed_15 = C2Rust_Unnamed_15 {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<*mut ScreenGrid>(),
 };
-pub const LOGLVL_DBG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 static composed_uis: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub static layers: GlobalCell<C2Rust_Unnamed_15> = GlobalCell::new(KV_INITIAL_VALUE);

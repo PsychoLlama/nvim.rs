@@ -34,7 +34,7 @@ use crate::src::nvim::event::multiqueue::{
 use crate::src::nvim::event::proc::exit_on_closed_chan;
 use crate::src::nvim::event::rstream::rstream_start;
 use crate::src::nvim::event::wstream::{wstream_release_wbuffer, wstream_write};
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{
     ch_before_blocking_events, channels, main_loop, resize_events, ui_client_attached,
     ui_client_channel_id, ui_client_error_exit,

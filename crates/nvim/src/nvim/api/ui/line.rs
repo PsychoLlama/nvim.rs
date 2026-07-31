@@ -36,12 +36,12 @@ use crate::src::nvim::msgpack_rpc::packer::{
     mpack_array, mpack_array_dyn16, mpack_be16, mpack_bool, mpack_str_small, mpack_uint,
 };
 use crate::src::nvim::types::builders::ArrayBuf;
+use crate::src::nvim::types::ui::kLineFlagWrap;
 use crate::src::nvim::types::{Integer, LineFlags, RemoteUI, sattr_T, schar_T};
 use core::ffi::{c_char, c_int};
 
 /// The wrap bit of the flags a line carries: the next row continues this
 /// one, which matters to a UI that reflows on copy.
-const kLineFlagWrap: LineFlags = 1;
 
 /// The largest a single cell can pack to: a fixarray header, the text with
 /// its header, the highlight id and the repeat count. Two of those plus the

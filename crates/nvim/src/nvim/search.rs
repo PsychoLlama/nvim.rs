@@ -71,6 +71,7 @@ use crate::src::nvim::regexp::skip_regexp_ex;
 use crate::src::nvim::regexp::vim_regexec_multi;
 use crate::src::nvim::state::MODE_SHOWMATCH;
 use crate::src::nvim::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
+use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
     AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
@@ -474,17 +475,6 @@ pub struct searchstat_T {
     pub incomplete: ::core::ffi::c_int,
     pub last_maxcount: ::core::ffi::c_int,
 }
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub const LSIZE: C2Rust_Unnamed_29 = 512;
 #[derive(Copy, Clone)]
 #[repr(C)]

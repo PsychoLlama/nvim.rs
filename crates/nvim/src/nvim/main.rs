@@ -198,8 +198,6 @@ pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_growsize: 1 as c_int,
     ga_data: NULL_0,
 };
-pub(crate) const LOGLVL_DBG: c_int = 1 as c_int;
-pub(crate) const LOGLVL_INF: c_int = 2 as c_int;
 pub static g_min_log_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) const SESSION_FILE: [c_char; 12] = c_bytes(b"Session.vim\0");
 pub(crate) const OK: c_int = 1 as c_int;

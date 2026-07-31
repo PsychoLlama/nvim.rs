@@ -35,7 +35,7 @@ use crate::src::nvim::fileio::shorten_fnames;
 use crate::src::nvim::getchar::{open_scriptin, stuffcharReadbuff};
 use crate::src::nvim::highlight::highlight_init;
 use crate::src::nvim::highlight_group::init_highlight;
-use crate::src::nvim::log::{log_init, logmsg};
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_INF, log_init, logmsg};
 use crate::src::nvim::lua::executor::{
     nlua_exec_file, nlua_init, nlua_init_defaults, nlua_run_script,
 };
@@ -51,11 +51,11 @@ use crate::src::nvim::main::exit::{getout, os_exit};
 use crate::src::nvim::main::remote::remote_request;
 use crate::src::nvim::main::usage::{mainerr, print_mainerr};
 use crate::src::nvim::main::{
-    APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, IObuff, KE_NOP, LOGLVL_DBG, LOGLVL_INF,
-    NO_BUFFERS, NUL, RedrawingDisabled, Rows, VV_OLDFILES, VV_PROGPATH, VV_STARTTIME,
-    VV_SWAPCOMMAND, VV_VIM_DID_ENTER, VV_VIM_DID_INIT, WRITEBIN, argv0, cb_flags, cmdline_row,
-    curbuf, curtab, curwin, debug_break_level, embedded_mode, err_arg_missing, exmode_active,
-    firstwin, full_screen, global_alist, headless_mode, kCallbackNone, kOptCbFlagUnnamed,
+    APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, IObuff, KE_NOP, NO_BUFFERS, NUL,
+    RedrawingDisabled, Rows, VV_OLDFILES, VV_PROGPATH, VV_STARTTIME, VV_SWAPCOMMAND,
+    VV_VIM_DID_ENTER, VV_VIM_DID_INIT, WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curtab,
+    curwin, debug_break_level, embedded_mode, err_arg_missing, exmode_active, firstwin,
+    full_screen, global_alist, headless_mode, kCallbackNone, kOptCbFlagUnnamed,
     kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout, msg_row, msg_scroll, no_wait_return,
     p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit, scriptout,
     silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,

@@ -18,7 +18,7 @@ use crate::src::nvim::eval::{eval_fmt_source_name_line, get_v_event, restore_v_e
 use crate::src::nvim::event::r#loop::one_arg_event;
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
 use crate::src::nvim::event::proc::proc_is_stopped;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{IObuff, channels, curbuf, main_loop};
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree};
 use crate::src::nvim::os::libc::qsort;

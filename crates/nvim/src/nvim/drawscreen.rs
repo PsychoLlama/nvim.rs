@@ -91,6 +91,7 @@ use crate::src::nvim::syntax::{
     syntax_present,
 };
 use crate::src::nvim::terminal::{terminal_check_size, terminal_suspended};
+use crate::src::nvim::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
     Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, CmdRedraw,
@@ -332,17 +333,6 @@ pub const UPD_REDRAW_TOP: RedrawType = 30;
 pub const UPD_INVERTED_ALL: RedrawType = 25;
 pub const UPD_INVERTED: RedrawType = 20;
 pub const UPD_VALID: RedrawType = 10;
-pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIHlState: UIExtension = 7;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMessages: UIExtension = 4;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUICmdline: UIExtension = 0;
 pub type WindowCorner = ::core::ffi::c_uint;
 pub const WC_BOTTOM_RIGHT: WindowCorner = 3;
 pub const WC_BOTTOM_LEFT: WindowCorner = 2;

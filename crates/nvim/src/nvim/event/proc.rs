@@ -38,7 +38,7 @@ use crate::src::nvim::event::multiqueue::{
 use crate::src::nvim::event::rstream::rstream_may_close;
 use crate::src::nvim::event::stream::{stream_init, stream_may_close};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::log::logmsg;
+use crate::src::nvim::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
 use crate::src::nvim::main::{
     exiting, got_int, main_loop, os_exit, preserve_exit, ui_client_channel_id,
     ui_client_exit_status,
@@ -70,9 +70,6 @@ const KILL_TIMEOUT_MS: u64 = 2000;
 /// Fallback for the read-ahead limit when libuv will not report the socket
 /// receive buffer size.
 const ARENA_BLOCK_SIZE: c_int = 4096;
-
-const LOGLVL_DBG: c_int = 1;
-const LOGLVL_INF: c_int = 2;
 
 /// Set for the whole of [`proc_teardown`]. Relaxes the "a child is closed
 /// exactly once" assertion, because a detached or pty child can die while

@@ -39,7 +39,9 @@ use crate::src::nvim::api::private::validate::api_err_invalid;
 use crate::src::nvim::api::ui::remote_ui_option_set;
 use crate::src::nvim::autocmd::do_autocmd_uienter;
 use crate::src::nvim::buffer::resettitle;
-use crate::src::nvim::cursor_shape::{cursor_get_mode_idx, mode_style_array, shape_table};
+use crate::src::nvim::cursor_shape::{
+    SHAPE_IDX_N, SHAPE_IDX_R, cursor_get_mode_idx, mode_style_array, shape_table,
+};
 use crate::src::nvim::drawscreen::{conceal_check_cursor_line, screen_resize};
 use crate::src::nvim::event::libuv::uv_cwd;
 use crate::src::nvim::event::multiqueue::multiqueue_put_event;
@@ -66,6 +68,10 @@ use crate::src::nvim::os::time::{os_hrtime, os_sleep};
 use crate::src::nvim::state::MODE_CMDLINE;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::builders::static_string;
+use crate::src::nvim::types::ui::{
+    kLineFlagInvalid, kLineFlagWrap, kUIExtCount, kUIFloatDebug, kUIHlState, kUILinegrid,
+    kUIMessages, kUIMultigrid, kUITermColors,
+};
 use crate::src::nvim::types::{
     Arena, Array, Boolean, Dict, Error, Integer, KeyValuePair, LineFlags, Object, OptVal,
     OptValData, RemoteUI, ScreenGrid, String_0, UIExtension, handle_T,
@@ -76,21 +82,6 @@ use crate::src::nvim::ui_compositor::{
 use crate::src::nvim::window::{win_set_inner_size, win_ui_flush};
 use crate::src::nvim::winfloat::win_config_float;
 use core::ffi::c_int;
-
-pub const kUICmdline: UIExtension = 0;
-pub const kUIPopupmenu: UIExtension = 1;
-pub const kUITabline: UIExtension = 2;
-pub const kUIWildmenu: UIExtension = 3;
-pub const kUIMessages: UIExtension = 4;
-pub const kUILinegrid: UIExtension = 5;
-pub const kUIMultigrid: UIExtension = 6;
-pub const kUIHlState: UIExtension = 7;
-pub const kUITermColors: UIExtension = 8;
-pub const kUIFloatDebug: UIExtension = 9;
-pub const kUIExtCount: UIExtension = 10;
-
-pub const kLineFlagWrap: LineFlags = 1;
-pub const kLineFlagInvalid: LineFlags = 2;
 
 /// The screen the editor draws into when nothing else claims a grid.
 const DEFAULT_GRID_HANDLE: handle_T = 1;
@@ -126,9 +117,6 @@ static pending_has_mouse: GlobalCell<c_int> = GlobalCell::new(-1);
 /// Nesting depth of [`ui_busy_start`]/[`ui_busy_stop`]; the UIs only hear
 /// about the outermost pair.
 static busy: GlobalCell<c_int> = GlobalCell::new(0);
-
-const SHAPE_IDX_N: c_int = 0;
-const SHAPE_IDX_R: c_int = 3;
 
 /// Which of the attached UIs a sink reaches.
 ///

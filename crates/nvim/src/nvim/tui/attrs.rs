@@ -38,7 +38,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 /// The underline style parameter each `HL_UNDER*` bit asks the terminal for,
 /// in the order the sequences are emitted.
-const UNDERLINE_STYLES: [(u32, c_int); 4] = [
+const UNDERLINE_STYLES: [(c_int, c_int); 4] = [
     (HL_UNDERCURL, 3),
     (HL_UNDERDOUBLE, 2),
     (HL_UNDERDOTTED, 4),
@@ -150,8 +150,7 @@ pub(crate) fn attrs_differ(tui: &TUIData, id1: c_int, id2: c_int, rgb: bool) -> 
         a1.cterm_fg_color != a2.cterm_fg_color
             || a1.cterm_bg_color != a2.cterm_bg_color
             || a1.cterm_ae_attr != a2.cterm_ae_attr
-            || (a1.cterm_ae_attr & HL_UNDERLINE_MASK as int32_t != 0
-                && a1.rgb_sp_color != a2.rgb_sp_color)
+            || (a1.cterm_ae_attr & HL_UNDERLINE_MASK != 0 && a1.rgb_sp_color != a2.rgb_sp_color)
     }
 }
 
@@ -175,7 +174,7 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
 
     let attrs = attr(tui, attr_id);
     let attr = ae_attr(tui, attrs);
-    let has = |bit: u32| attr & bit as c_int != 0;
+    let has = |bit: c_int| attr & bit != 0;
     let (bold, italic, reverse) = (has(HL_BOLD), has(HL_ITALIC), has(HL_INVERSE));
     let (standout, strikethrough) = (has(HL_STANDOUT), has(HL_STRIKETHROUGH));
     let (altfont, dim, blink) = (has(HL_ALTFONT), has(HL_DIM), has(HL_BLINK));
@@ -184,13 +183,13 @@ pub(crate) fn update_attrs(tui: &mut TUIData, attr_id: c_int) {
     // Terminals that can style an underline get the exact style asked for;
     // the rest get a plain underline for any of them.
     let styled_underline = !tui.ti.defs[kTerm_set_underline_style as usize].is_null();
-    let underline_bits = attr & HL_UNDERLINE_MASK as c_int;
+    let underline_bits = attr & HL_UNDERLINE_MASK;
     let underline = if styled_underline {
-        underline_bits == HL_UNDERLINE as c_int
+        underline_bits == HL_UNDERLINE
     } else {
         underline_bits != 0
     };
-    let style_of = |bit: u32| styled_underline && underline_bits == bit as c_int;
+    let style_of = |bit: c_int| styled_underline && underline_bits == bit;
     let any_underline = underline || UNDERLINE_STYLES.iter().any(|&(bit, _)| style_of(bit));
 
     if !tui.ti.defs[kTerm_set_attributes as usize].is_null() {
