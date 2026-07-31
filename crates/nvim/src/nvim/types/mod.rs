@@ -60,6 +60,7 @@ pub mod misc;
 pub mod mpack;
 pub mod mpack_core;
 pub mod multiqueue_defs;
+pub mod multiqueue_list;
 pub mod normal;
 pub mod object_defs;
 pub mod option;

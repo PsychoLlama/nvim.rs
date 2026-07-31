@@ -20,30 +20,12 @@
 //! those call sites is already inside an `unsafe fn`. They are the surface to
 //! retire once the loop and channel code above them is rewritten.
 
-mod list;
-
+use crate::src::nvim::types::multiqueue_list::{Item, ItemList};
 pub use crate::src::nvim::types::{
     Event, MultiQueue, PutCallback, argv_callback, multiqueue, size_t,
 };
 use core::ffi::c_void;
 use core::ptr;
-use list::{Handle, List};
-
-/// A queue's items, in order.
-type ItemList = List<Item>;
-
-/// A slot in a queue's list.
-enum Item {
-    /// An event on the queue it was pushed to. `parent_slot` names the link
-    /// standing for it in the parent's list, when there is a parent.
-    Event {
-        event: Event,
-        parent_slot: Option<Handle>,
-    },
-    /// A placeholder in a parent's list, standing for the head event of
-    /// `child` at the time the parent reaches it.
-    Link { child: *mut MultiQueue },
-}
 
 /// What `multiqueue_get` yields for an empty queue.
 const NIL_EVENT: Event = Event {
@@ -81,14 +63,14 @@ fn new_queue(parent: *mut MultiQueue, on_put: PutCallback, data: *mut c_void) ->
         on_put,
         data,
         size: 0,
-        items: Box::into_raw(Box::new(ItemList::new())).cast(),
+        items: Box::into_raw(Box::new(ItemList::new())),
     }))
 }
 
 /// The items `queue` owns. Every queue is created with a list and keeps it
 /// until `multiqueue_free` takes both away together.
 unsafe fn items<'a>(queue: *mut MultiQueue) -> &'a mut ItemList {
-    &mut *(*queue).items.cast::<ItemList>()
+    &mut *(*queue).items
 }
 
 /// Release `queue` and unlink whatever it still holds from its parent.
@@ -101,7 +83,7 @@ pub unsafe extern "C" fn multiqueue_free(queue: *mut MultiQueue) {
     // Both boxes stay alive until the end of the scope: the parent is read
     // out of `owned` while its items are being unlinked.
     let owned = Box::from_raw(queue);
-    let mut own_items = Box::from_raw(owned.items.cast::<ItemList>());
+    let mut own_items = Box::from_raw(owned.items);
     while let Some(item) = own_items.pop_front() {
         if let Item::Event {
             parent_slot: Some(slot),

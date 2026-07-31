@@ -13,6 +13,24 @@
 //! took the slot over.
 #![forbid(unsafe_code)]
 
+use super::{Event, MultiQueue};
+
+/// A queue's items, in order.
+pub type ItemList = List<Item>;
+
+/// A slot in a queue's list.
+pub enum Item {
+    /// An event on the queue it was pushed to. `parent_slot` names the link
+    /// standing for it in the parent's list, when there is a parent.
+    Event {
+        event: Event,
+        parent_slot: Option<Handle>,
+    },
+    /// A placeholder in a parent's list, standing for the head event of
+    /// `child` at the time the parent reaches it.
+    Link { child: *mut MultiQueue },
+}
+
 /// Where an element sits in a [`List`]. Only meaningful for the list that
 /// produced it, and only until that element is removed.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

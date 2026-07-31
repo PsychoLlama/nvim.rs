@@ -1397,7 +1397,19 @@ fn main() {
                     }
                 }
                 Some(cty) => writeln!(chunk, "typedef {};", decl(&cty, &c)).unwrap(),
-                None => emitter.notes.push(format!("alias skipped: {}", name)),
+                None => {
+                    // The target has no C-visible form (a generic container,
+                    // say). Declare the alias itself incomplete rather than
+                    // dropping it: pointer-typed fields and prototypes that
+                    // name it still resolve, and a by-value use stays a loud
+                    // incomplete-type error at fixture-compile time. Emitting
+                    // nothing left those references dangling on a name C had
+                    // never heard of.
+                    writeln!(chunk, "typedef struct {} {};", c, c).unwrap();
+                    emitter
+                        .notes
+                        .push(format!("alias left incomplete: {}", name));
+                }
             }
         }
     }
