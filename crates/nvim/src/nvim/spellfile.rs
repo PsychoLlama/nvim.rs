@@ -390,7 +390,7 @@ pub const AH_KEY_LEN: ::core::ffi::c_int = 17 as ::core::ffi::c_int;
 pub const SBLOCKSIZE: ::core::ffi::c_int = 16000 as ::core::ffi::c_int;
 pub const WN_MASK: ::core::ffi::c_int = 0xffff as ::core::ffi::c_int;
 #[inline(always)]
-unsafe extern "C" fn spell_check_magic_string(fd: *mut FILE) -> ::core::ffi::c_int {
+unsafe fn spell_check_magic_string(fd: *mut FILE) -> ::core::ffi::c_int {
     let mut buf: [::core::ffi::c_char; 8] = [0; 8];
     let n__SPRB: size_t =
         ::core::mem::size_of::<[::core::ffi::c_char; 9]>().wrapping_sub(1 as size_t);
@@ -419,7 +419,7 @@ unsafe extern "C" fn spell_check_magic_string(fd: *mut FILE) -> ::core::ffi::c_i
     }
     return 0 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn spell_load_file(
+pub unsafe fn spell_load_file(
     mut fname: *mut ::core::ffi::c_char,
     mut lang: *mut ::core::ffi::c_char,
     mut old_lp: *mut slang_T,
@@ -688,7 +688,7 @@ pub unsafe extern "C" fn spell_load_file(
     }
     return lp;
 }
-unsafe extern "C" fn tree_count_words(
+unsafe fn tree_count_words(
     mut byts: *const uint8_t,
     mut byts_len: ::core::ffi::c_int,
     mut idxs: *mut idx_T,
@@ -733,7 +733,7 @@ unsafe extern "C" fn tree_count_words(
         }
     }
 }
-pub unsafe extern "C" fn suggest_load_files() {
+pub unsafe fn suggest_load_files() {
     let mut c: ::core::ffi::c_int = 0;
     let mut timestamp: time_t = 0;
     let mut wcount: ::core::ffi::c_int = 0;
@@ -908,7 +908,7 @@ pub unsafe extern "C" fn suggest_load_files() {
         lpi += 1;
     }
 }
-unsafe extern "C" fn read_cnt_string(
+unsafe fn read_cnt_string(
     mut fd: *mut FILE,
     mut cnt_bytes: ::core::ffi::c_int,
     mut cntp: *mut ::core::ffi::c_int,
@@ -935,7 +935,7 @@ unsafe extern "C" fn read_cnt_string(
     }
     return str;
 }
-unsafe extern "C" fn read_region_section(
+unsafe fn read_region_section(
     mut fd: *mut FILE,
     mut lp: *mut slang_T,
     mut len: ::core::ffi::c_int,
@@ -969,7 +969,7 @@ unsafe extern "C" fn read_region_section(
     (*lp).sl_regions[len as usize] = NUL as ::core::ffi::c_char;
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn read_charflags_section(mut fd: *mut FILE) -> ::core::ffi::c_int {
+unsafe fn read_charflags_section(mut fd: *mut FILE) -> ::core::ffi::c_int {
     let mut flagslen: ::core::ffi::c_int = 0;
     let mut follen: ::core::ffi::c_int = 0;
     let mut flags: *mut ::core::ffi::c_char =
@@ -993,10 +993,7 @@ unsafe extern "C" fn read_charflags_section(mut fd: *mut FILE) -> ::core::ffi::c
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn read_prefcond_section(
-    mut fd: *mut FILE,
-    mut lp: *mut slang_T,
-) -> ::core::ffi::c_int {
+unsafe fn read_prefcond_section(mut fd: *mut FILE, mut lp: *mut slang_T) -> ::core::ffi::c_int {
     let cnt: ::core::ffi::c_int = get2c(fd);
     if cnt <= 0 as ::core::ffi::c_int {
         return SP_FORMERROR as ::core::ffi::c_int;
@@ -1046,7 +1043,7 @@ unsafe extern "C" fn read_prefcond_section(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn read_rep_section(
+unsafe fn read_rep_section(
     mut fd: *mut FILE,
     mut gap: *mut garray_T,
     mut first: *mut int16_t,
@@ -1094,10 +1091,7 @@ unsafe extern "C" fn read_rep_section(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn read_sal_section(
-    mut fd: *mut FILE,
-    mut slang: *mut slang_T,
-) -> ::core::ffi::c_int {
+unsafe fn read_sal_section(mut fd: *mut FILE, mut slang: *mut slang_T) -> ::core::ffi::c_int {
     (*slang).sl_sofo = false_0 != 0;
     let flags: ::core::ffi::c_int = getc(fd);
     if flags & SAL_F0LLOWUP as ::core::ffi::c_int != 0 {
@@ -1248,7 +1242,7 @@ unsafe extern "C" fn read_sal_section(
     set_sal_first(slang);
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn read_words_section(
+unsafe fn read_words_section(
     mut fd: *mut FILE,
     mut lp: *mut slang_T,
     mut len: ::core::ffi::c_int,
@@ -1282,10 +1276,7 @@ unsafe extern "C" fn read_words_section(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn read_sofo_section(
-    mut fd: *mut FILE,
-    mut slang: *mut slang_T,
-) -> ::core::ffi::c_int {
+unsafe fn read_sofo_section(mut fd: *mut FILE, mut slang: *mut slang_T) -> ::core::ffi::c_int {
     let mut cnt: ::core::ffi::c_int = 0;
     let mut res: ::core::ffi::c_int = 0;
     (*slang).sl_sofo = true_0 != 0;
@@ -1311,7 +1302,7 @@ unsafe extern "C" fn read_sofo_section(
     xfree(to as *mut ::core::ffi::c_void);
     return res;
 }
-unsafe extern "C" fn read_compound(
+unsafe fn read_compound(
     mut fd: *mut FILE,
     mut slang: *mut slang_T,
     mut len: ::core::ffi::c_int,
@@ -1499,7 +1490,7 @@ unsafe extern "C" fn read_compound(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn set_sofo(
+unsafe fn set_sofo(
     mut lp: *mut slang_T,
     mut from: *const ::core::ffi::c_char,
     mut to: *const ::core::ffi::c_char,
@@ -1576,7 +1567,7 @@ unsafe extern "C" fn set_sofo(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn set_sal_first(mut lp: *mut slang_T) {
+unsafe fn set_sal_first(mut lp: *mut slang_T) {
     let mut gap: *mut garray_T = &raw mut (*lp).sl_sal;
     let mut sfirst: *mut salfirst_T = &raw mut (*lp).sl_sal_first as *mut salfirst_T;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -1629,7 +1620,7 @@ unsafe extern "C" fn set_sal_first(mut lp: *mut slang_T) {
         i_0 += 1;
     }
 }
-unsafe extern "C" fn mb_str2wide(mut s: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_int {
+unsafe fn mb_str2wide(mut s: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut res: *mut ::core::ffi::c_int = xmalloc(
         (mb_charlen(s) as size_t)
@@ -1645,7 +1636,7 @@ unsafe extern "C" fn mb_str2wide(mut s: *const ::core::ffi::c_char) -> *mut ::co
     *res.offset(i as isize) = NUL;
     return res;
 }
-unsafe extern "C" fn spell_read_tree(
+unsafe fn spell_read_tree(
     mut fd: *mut FILE,
     mut bytsp: *mut *mut uint8_t,
     mut bytsp_len: *mut ::core::ffi::c_int,
@@ -1690,7 +1681,7 @@ unsafe extern "C" fn spell_read_tree(
     }
     return 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn read_tree_node(
+unsafe fn read_tree_node(
     mut fd: *mut FILE,
     mut byts: *mut uint8_t,
     mut idxs: *mut idx_T,
@@ -1797,7 +1788,7 @@ unsafe extern "C" fn read_tree_node(
     return idx;
 }
 pub const SHARED_MASK: ::core::ffi::c_int = 0x8000000 as ::core::ffi::c_int;
-unsafe extern "C" fn spell_reload_one(mut fname: *mut ::core::ffi::c_char, mut added_word: bool) {
+unsafe fn spell_reload_one(mut fname: *mut ::core::ffi::c_char, mut added_word: bool) {
     let mut didit: bool = false_0 != 0;
     let mut slang: *mut slang_T = first_lang.get();
     while !slang.is_null() {
@@ -1835,7 +1826,7 @@ static compress_start: GlobalCell<::core::ffi::c_int> =
 static compress_inc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(100 as ::core::ffi::c_int);
 static compress_added: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(500000 as ::core::ffi::c_int);
-pub unsafe extern "C" fn spell_check_msm() -> ::core::ffi::c_int {
+pub unsafe fn spell_check_msm() -> ::core::ffi::c_int {
     let mut p: *mut ::core::ffi::c_char = p_msm.get();
     if !ascii_isdigit(*p as ::core::ffi::c_int) {
         return FAIL;
@@ -1878,7 +1869,7 @@ pub unsafe extern "C" fn spell_check_msm() -> ::core::ffi::c_int {
     compress_added.set(added);
     return OK;
 }
-unsafe extern "C" fn spell_read_aff(
+unsafe fn spell_read_aff(
     mut spin: *mut spellinfo_T,
     mut fname: *mut ::core::ffi::c_char,
 ) -> *mut afffile_T {
@@ -3460,7 +3451,7 @@ unsafe extern "C" fn spell_read_aff(
     return aff;
 }
 pub const MAXITEMCNT: ::core::ffi::c_int = 30 as ::core::ffi::c_int;
-unsafe extern "C" fn is_aff_rule(
+unsafe fn is_aff_rule(
     mut items: *mut *mut ::core::ffi::c_char,
     mut itemcnt: ::core::ffi::c_int,
     mut rulename: *mut ::core::ffi::c_char,
@@ -3474,7 +3465,7 @@ unsafe extern "C" fn is_aff_rule(
                     as ::core::ffi::c_int
                     == '#' as ::core::ffi::c_int);
 }
-unsafe extern "C" fn aff_process_flags(mut affile: *mut afffile_T, mut entry: *mut affentry_T) {
+unsafe fn aff_process_flags(mut affile: *mut afffile_T, mut entry: *mut affentry_T) {
     if !(*entry).ae_flags.is_null()
         && ((*affile).af_compforbid != 0 as ::core::ffi::c_uint
             || (*affile).af_comppermit != 0 as ::core::ffi::c_uint)
@@ -3507,7 +3498,7 @@ unsafe extern "C" fn aff_process_flags(mut affile: *mut afffile_T, mut entry: *m
         }
     }
 }
-unsafe extern "C" fn spell_info_item(mut s: *mut ::core::ffi::c_char) -> bool {
+unsafe fn spell_info_item(mut s: *mut ::core::ffi::c_char) -> bool {
     return strcmp(s, b"NAME\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
         || strcmp(s, b"HOME\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
         || strcmp(s, b"VERSION\0".as_ptr() as *const ::core::ffi::c_char)
@@ -3518,7 +3509,7 @@ unsafe extern "C" fn spell_info_item(mut s: *mut ::core::ffi::c_char) -> bool {
         || strcmp(s, b"COPYRIGHT\0".as_ptr() as *const ::core::ffi::c_char)
             == 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn affitem2flag(
+unsafe fn affitem2flag(
     mut flagtype: ::core::ffi::c_int,
     mut item: *mut ::core::ffi::c_char,
     mut fname: *mut ::core::ffi::c_char,
@@ -3558,7 +3549,7 @@ unsafe extern "C" fn affitem2flag(
     }
     return res;
 }
-unsafe extern "C" fn get_affitem(
+unsafe fn get_affitem(
     mut flagtype: ::core::ffi::c_int,
     mut pp: *mut *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_uint {
@@ -3588,7 +3579,7 @@ unsafe extern "C" fn get_affitem(
     }
     return res as ::core::ffi::c_uint;
 }
-unsafe extern "C" fn process_compflags(
+unsafe fn process_compflags(
     mut spin: *mut spellinfo_T,
     mut aff: *mut afffile_T,
     mut compflags: *mut ::core::ffi::c_char,
@@ -3677,7 +3668,7 @@ unsafe extern "C" fn process_compflags(
     }
     *tp = NUL as uint8_t;
 }
-unsafe extern "C" fn check_renumber(mut spin: *mut spellinfo_T) {
+unsafe fn check_renumber(mut spin: *mut spellinfo_T) {
     if (*spin).si_newprefID == (*spin).si_newcompID
         && (*spin).si_newcompID < 128 as ::core::ffi::c_int
     {
@@ -3685,7 +3676,7 @@ unsafe extern "C" fn check_renumber(mut spin: *mut spellinfo_T) {
         (*spin).si_newcompID = 255 as ::core::ffi::c_int;
     }
 }
-unsafe extern "C" fn flag_in_afflist(
+unsafe fn flag_in_afflist(
     mut flagtype: ::core::ffi::c_int,
     mut afflist: *mut ::core::ffi::c_char,
     mut flag: ::core::ffi::c_uint,
@@ -3744,7 +3735,7 @@ unsafe extern "C" fn flag_in_afflist(
     }
     return false_0 != 0;
 }
-unsafe extern "C" fn aff_check_number(
+unsafe fn aff_check_number(
     mut spinval: ::core::ffi::c_int,
     mut affval: ::core::ffi::c_int,
     mut name: *mut ::core::ffi::c_char,
@@ -3760,7 +3751,7 @@ unsafe extern "C" fn aff_check_number(
         );
     }
 }
-unsafe extern "C" fn aff_check_string(
+unsafe fn aff_check_string(
     mut spinval: *mut ::core::ffi::c_char,
     mut affval: *mut ::core::ffi::c_char,
     mut name: *mut ::core::ffi::c_char,
@@ -3776,16 +3767,13 @@ unsafe extern "C" fn aff_check_string(
         );
     }
 }
-unsafe extern "C" fn str_equal(
-    mut s1: *mut ::core::ffi::c_char,
-    mut s2: *mut ::core::ffi::c_char,
-) -> bool {
+unsafe fn str_equal(mut s1: *mut ::core::ffi::c_char, mut s2: *mut ::core::ffi::c_char) -> bool {
     if s1.is_null() || s2.is_null() {
         return s1 == s2;
     }
     return strcmp(s1, s2) == 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn add_fromto(
+unsafe fn add_fromto(
     mut spin: *mut spellinfo_T,
     mut gap: *mut garray_T,
     mut from: *mut ::core::ffi::c_char,
@@ -3811,11 +3799,11 @@ unsafe extern "C" fn add_fromto(
     );
     (*ftp).ft_to = getroom_save(spin, &raw mut word as *mut ::core::ffi::c_char);
 }
-unsafe extern "C" fn sal_to_bool(mut s: *mut ::core::ffi::c_char) -> bool {
+unsafe fn sal_to_bool(mut s: *mut ::core::ffi::c_char) -> bool {
     return strcmp(s, b"1\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int
         || strcmp(s, b"true\0".as_ptr() as *const ::core::ffi::c_char) == 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn spell_free_aff(mut aff: *mut afffile_T) {
+unsafe fn spell_free_aff(mut aff: *mut afffile_T) {
     xfree((*aff).af_enc as *mut ::core::ffi::c_void);
     let mut ht: *mut hashtab_T = &raw mut (*aff).af_pref;
     loop {
@@ -3844,7 +3832,7 @@ unsafe extern "C" fn spell_free_aff(mut aff: *mut afffile_T) {
     hash_clear(&raw mut (*aff).af_suff);
     hash_clear(&raw mut (*aff).af_comp);
 }
-unsafe extern "C" fn spell_read_dic(
+unsafe fn spell_read_dic(
     mut spin: *mut spellinfo_T,
     mut fname: *mut ::core::ffi::c_char,
     mut affile: *mut afffile_T,
@@ -4124,7 +4112,7 @@ unsafe extern "C" fn spell_read_dic(
     fclose(fd);
     return retval;
 }
-unsafe extern "C" fn get_affix_flags(
+unsafe fn get_affix_flags(
     mut affile: *mut afffile_T,
     mut afflist: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -4171,7 +4159,7 @@ unsafe extern "C" fn get_affix_flags(
     }
     return flags;
 }
-unsafe extern "C" fn get_pfxlist(
+unsafe fn get_pfxlist(
     mut affile: *mut afffile_T,
     mut afflist: *mut ::core::ffi::c_char,
     mut store_afflist: *mut ::core::ffi::c_char,
@@ -4211,7 +4199,7 @@ unsafe extern "C" fn get_pfxlist(
     *store_afflist.offset(cnt as isize) = NUL as ::core::ffi::c_char;
     return cnt;
 }
-unsafe extern "C" fn get_compflags(
+unsafe fn get_compflags(
     mut affile: *mut afffile_T,
     mut afflist: *mut ::core::ffi::c_char,
     mut store_afflist: *mut ::core::ffi::c_char,
@@ -4247,7 +4235,7 @@ unsafe extern "C" fn get_compflags(
     }
     *store_afflist.offset(cnt as isize) = NUL as ::core::ffi::c_char;
 }
-unsafe extern "C" fn store_aff_word(
+unsafe fn store_aff_word(
     mut spin: *mut spellinfo_T,
     mut word: *mut ::core::ffi::c_char,
     mut afflist: *mut ::core::ffi::c_char,
@@ -4552,7 +4540,7 @@ unsafe extern "C" fn store_aff_word(
     }
     return retval;
 }
-unsafe extern "C" fn spell_read_wordfile(
+unsafe fn spell_read_wordfile(
     mut spin: *mut spellinfo_T,
     mut fname: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -4801,7 +4789,7 @@ unsafe extern "C" fn spell_read_wordfile(
     }
     return retval;
 }
-unsafe extern "C" fn getroom(
+unsafe fn getroom(
     mut spin: *mut spellinfo_T,
     mut len: size_t,
     mut align: bool,
@@ -4843,7 +4831,7 @@ unsafe extern "C" fn getroom(
     (*bl).sb_used += len as ::core::ffi::c_int;
     return p as *mut ::core::ffi::c_void;
 }
-unsafe extern "C" fn getroom_save(
+unsafe fn getroom_save(
     mut spin: *mut spellinfo_T,
     mut s: *mut ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
@@ -4854,17 +4842,17 @@ unsafe extern "C" fn getroom_save(
         s_size,
     ) as *mut ::core::ffi::c_char;
 }
-unsafe extern "C" fn free_blocks(mut bl: *mut sblock_T) {
+unsafe fn free_blocks(mut bl: *mut sblock_T) {
     while !bl.is_null() {
         let mut next: *mut sblock_T = (*bl).sb_next;
         xfree(bl as *mut ::core::ffi::c_void);
         bl = next;
     }
 }
-unsafe extern "C" fn wordtree_alloc(mut spin: *mut spellinfo_T) -> *mut wordnode_T {
+unsafe fn wordtree_alloc(mut spin: *mut spellinfo_T) -> *mut wordnode_T {
     return getroom(spin, ::core::mem::size_of::<wordnode_T>(), true_0 != 0) as *mut wordnode_T;
 }
-unsafe extern "C" fn valid_spell_word(
+unsafe fn valid_spell_word(
     mut word: *const ::core::ffi::c_char,
     mut end: *const ::core::ffi::c_char,
 ) -> bool {
@@ -4884,7 +4872,7 @@ unsafe extern "C" fn valid_spell_word(
     }
     return true_0 != 0;
 }
-unsafe extern "C" fn store_word(
+unsafe fn store_word(
     mut spin: *mut spellinfo_T,
     mut word: *mut ::core::ffi::c_char,
     mut flags: ::core::ffi::c_int,
@@ -4956,7 +4944,7 @@ unsafe extern "C" fn store_word(
     }
     return res;
 }
-unsafe extern "C" fn tree_add_word(
+unsafe fn tree_add_word(
     mut spin: *mut spellinfo_T,
     mut word: *const ::core::ffi::c_char,
     mut root: *mut wordnode_T,
@@ -5102,7 +5090,7 @@ unsafe extern "C" fn tree_add_word(
     }
     return OK;
 }
-unsafe extern "C" fn get_wordnode(mut spin: *mut spellinfo_T) -> *mut wordnode_T {
+unsafe fn get_wordnode(mut spin: *mut spellinfo_T) -> *mut wordnode_T {
     let mut n: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
     if (*spin).si_first_free.is_null() {
         n = getroom(spin, ::core::mem::size_of::<wordnode_T>(), true_0 != 0) as *mut wordnode_T;
@@ -5118,7 +5106,7 @@ unsafe extern "C" fn get_wordnode(mut spin: *mut spellinfo_T) -> *mut wordnode_T
     }
     return n;
 }
-unsafe extern "C" fn deref_wordnode(
+unsafe fn deref_wordnode(
     mut spin: *mut spellinfo_T,
     mut node: *mut wordnode_T,
 ) -> ::core::ffi::c_int {
@@ -5138,12 +5126,12 @@ unsafe extern "C" fn deref_wordnode(
     }
     return cnt;
 }
-unsafe extern "C" fn free_wordnode(mut spin: *mut spellinfo_T, mut n: *mut wordnode_T) {
+unsafe fn free_wordnode(mut spin: *mut spellinfo_T, mut n: *mut wordnode_T) {
     (*n).wn_child = (*spin).si_first_free;
     (*spin).si_first_free = n;
     (*spin).si_free_count += 1;
 }
-unsafe extern "C" fn wordtree_compress(
+unsafe fn wordtree_compress(
     mut spin: *mut spellinfo_T,
     mut root: *mut wordnode_T,
     mut name: *const ::core::ffi::c_char,
@@ -5192,7 +5180,7 @@ unsafe extern "C" fn wordtree_compress(
     }
     hash_clear(&raw mut ht);
 }
-unsafe extern "C" fn node_compress(
+unsafe fn node_compress(
     mut spin: *mut spellinfo_T,
     mut node: *mut wordnode_T,
     mut ht: *mut hashtab_T,
@@ -5294,7 +5282,7 @@ unsafe extern "C" fn node_compress(
     veryfast_breakcheck();
     return compressed;
 }
-unsafe extern "C" fn node_equal(mut n1: *mut wordnode_T, mut n2: *mut wordnode_T) -> bool {
+unsafe fn node_equal(mut n1: *mut wordnode_T, mut n2: *mut wordnode_T) -> bool {
     let mut p1: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
     let mut p2: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
     p1 = n1;
@@ -5327,7 +5315,7 @@ unsafe extern "C" fn rep_compare(
     let mut p2: *mut fromto_T = s2 as *mut fromto_T;
     return strcmp((*p1).ft_from, (*p2).ft_from);
 }
-unsafe extern "C" fn write_vim_spell(
+unsafe fn write_vim_spell(
     mut spin: *mut spellinfo_T,
     mut fname: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -5812,7 +5800,7 @@ unsafe extern "C" fn write_vim_spell(
     }
     return retval;
 }
-unsafe extern "C" fn clear_node(mut node: *mut wordnode_T) {
+unsafe fn clear_node(mut node: *mut wordnode_T) {
     if !node.is_null() {
         let mut np: *mut wordnode_T = node;
         while !np.is_null() {
@@ -5825,7 +5813,7 @@ unsafe extern "C" fn clear_node(mut node: *mut wordnode_T) {
         }
     }
 }
-unsafe extern "C" fn put_node(
+unsafe fn put_node(
     mut fd: *mut FILE,
     mut node: *mut wordnode_T,
     mut idx: ::core::ffi::c_int,
@@ -5951,10 +5939,7 @@ pub unsafe fn ex_mkspell(mut eap: *mut exarg_T) {
     mkspell(fcount, fnames, ascii, (*eap).forceit != 0, false_0 != 0);
     FreeWild(fcount, fnames);
 }
-unsafe extern "C" fn spell_make_sugfile(
-    mut spin: *mut spellinfo_T,
-    mut wfname: *mut ::core::ffi::c_char,
-) {
+unsafe fn spell_make_sugfile(mut spin: *mut spellinfo_T, mut wfname: *mut ::core::ffi::c_char) {
     let mut len: ::core::ffi::c_int = 0;
     let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut slang: *mut slang_T = ::core::ptr::null_mut::<slang_T>();
@@ -6024,10 +6009,7 @@ unsafe extern "C" fn spell_make_sugfile(
     free_blocks((*spin).si_blocks);
     close_spellbuf((*spin).si_spellbuf);
 }
-unsafe extern "C" fn sug_filltree(
-    mut spin: *mut spellinfo_T,
-    mut slang: *mut slang_T,
-) -> ::core::ffi::c_int {
+unsafe fn sug_filltree(mut spin: *mut spellinfo_T, mut slang: *mut slang_T) -> ::core::ffi::c_int {
     let mut arridx: [idx_T; 254] = [0; 254];
     let mut curi: [::core::ffi::c_int; 254] = [0; 254];
     let mut tword: [::core::ffi::c_char; 254] = [0; 254];
@@ -6106,7 +6088,7 @@ unsafe extern "C" fn sug_filltree(
     );
     return OK;
 }
-unsafe extern "C" fn sug_maketable(mut spin: *mut spellinfo_T) -> ::core::ffi::c_int {
+unsafe fn sug_maketable(mut spin: *mut spellinfo_T) -> ::core::ffi::c_int {
     let mut ga: garray_T = garray_T {
         ga_len: 0,
         ga_maxlen: 0,
@@ -6133,7 +6115,7 @@ unsafe extern "C" fn sug_maketable(mut spin: *mut spellinfo_T) -> ::core::ffi::c
     ga_clear(&raw mut ga);
     return res;
 }
-unsafe extern "C" fn sug_filltable(
+unsafe fn sug_filltable(
     mut spin: *mut spellinfo_T,
     mut node: *mut wordnode_T,
     mut startwordnr: ::core::ffi::c_int,
@@ -6191,7 +6173,7 @@ unsafe extern "C" fn sug_filltable(
     }
     return wordnr;
 }
-unsafe extern "C" fn offset2bytes(
+unsafe fn offset2bytes(
     mut nr: ::core::ffi::c_int,
     mut buf_in: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -6226,7 +6208,7 @@ unsafe extern "C" fn offset2bytes(
     *buf.offset(0 as ::core::ffi::c_int as isize) = b1 as uint8_t;
     return 1 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn sug_write(mut spin: *mut spellinfo_T, mut fname: *mut ::core::ffi::c_char) {
+unsafe fn sug_write(mut spin: *mut spellinfo_T, mut fname: *mut ::core::ffi::c_char) {
     let mut tree: *mut wordnode_T = ::core::ptr::null_mut::<wordnode_T>();
     let mut nodecount: size_t = 0;
     let mut wcount: linenr_T = 0;
@@ -6342,7 +6324,7 @@ unsafe extern "C" fn sug_write(mut spin: *mut spellinfo_T, mut fname: *mut ::cor
     }
     fclose(fd);
 }
-unsafe extern "C" fn mkspell(
+unsafe fn mkspell(
     mut fcount: ::core::ffi::c_int,
     mut fnames: *mut *mut ::core::ffi::c_char,
     mut ascii: bool,
@@ -6780,10 +6762,7 @@ unsafe extern "C" fn mkspell(
     xfree(fname as *mut ::core::ffi::c_void);
     xfree(wfname as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn spell_message(
-    mut spin: *const spellinfo_T,
-    mut str: *mut ::core::ffi::c_char,
-) {
+unsafe fn spell_message(mut spin: *const spellinfo_T, mut str: *mut ::core::ffi::c_char) {
     if (*spin).si_verbose != 0 || p_verbose.get() > 2 as OptInt {
         if (*spin).si_verbose == 0 {
             verbose_enter();
@@ -6814,7 +6793,7 @@ pub unsafe fn ex_spell(mut eap: *mut exarg_T) {
         (*eap).cmdidx as ::core::ffi::c_int == CMD_spellundo as ::core::ffi::c_int,
     );
 }
-pub unsafe extern "C" fn spell_add_word(
+pub unsafe fn spell_add_word(
     mut word: *mut ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
     mut what: SpellAddType,
@@ -7038,7 +7017,7 @@ pub unsafe extern "C" fn spell_add_word(
     }
     xfree(fnamebuf as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn init_spellfile() {
+unsafe fn init_spellfile() {
     let mut lend: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut aspath: bool = false_0 != 0;
     let mut lstart: *mut ::core::ffi::c_char = (*curbuf.get()).b_s.b_p_spl;
@@ -7137,7 +7116,7 @@ unsafe extern "C" fn init_spellfile() {
     );
     xfree(buf as *mut ::core::ffi::c_void);
 }
-unsafe extern "C" fn set_spell_charflags(
+unsafe fn set_spell_charflags(
     mut flags_in: *const ::core::ffi::c_char,
     mut cnt: ::core::ffi::c_int,
     mut fol: *const ::core::ffi::c_char,
@@ -7176,7 +7155,7 @@ unsafe extern "C" fn set_spell_charflags(
     }
     set_spell_finish(&raw mut new_st);
 }
-unsafe extern "C" fn set_spell_finish(mut new_st: *mut spelltab_T) -> ::core::ffi::c_int {
+unsafe fn set_spell_finish(mut new_st: *mut spelltab_T) -> ::core::ffi::c_int {
     if did_set_spelltab.get() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < 256 as ::core::ffi::c_int {
@@ -7203,7 +7182,7 @@ unsafe extern "C" fn set_spell_finish(mut new_st: *mut spelltab_T) -> ::core::ff
     }
     return OK;
 }
-unsafe extern "C" fn write_spell_prefcond(
+unsafe fn write_spell_prefcond(
     mut fd: *mut FILE,
     mut gap: *mut garray_T,
     mut fwv: *mut size_t,
@@ -7268,7 +7247,7 @@ unsafe extern "C" fn write_spell_prefcond(
     };
     return totlen as ::core::ffi::c_int;
 }
-unsafe extern "C" fn set_map_str(mut lp: *mut slang_T, mut map: *const ::core::ffi::c_char) {
+unsafe fn set_map_str(mut lp: *mut slang_T, mut map: *const ::core::ffi::c_char) {
     let mut headc: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if *map as ::core::ffi::c_int == NUL {
         (*lp).sl_has_map = false_0 != 0;

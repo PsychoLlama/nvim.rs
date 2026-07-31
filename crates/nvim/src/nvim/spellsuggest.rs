@@ -248,7 +248,7 @@ pub const WC_KEY_OFF: ::core::ffi::c_ulong = 2 as ::core::ffi::c_ulong;
 pub const WF_MIXCAP: ::core::ffi::c_int = 0x20 as ::core::ffi::c_int;
 static spell_suggest_timeout: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(5000 as ::core::ffi::c_int);
-unsafe extern "C" fn can_be_compound(
+unsafe fn can_be_compound(
     mut sp: *mut trystate_T,
     mut slang: *mut slang_T,
     mut compflags: *mut uint8_t,
@@ -280,7 +280,7 @@ unsafe extern "C" fn can_be_compound(
     }
     return true_0 != 0;
 }
-unsafe extern "C" fn score_wordcount_adj(
+unsafe fn score_wordcount_adj(
     mut slang: *mut slang_T,
     mut score: ::core::ffi::c_int,
     mut word: *mut ::core::ffi::c_char,
@@ -310,7 +310,7 @@ unsafe extern "C" fn score_wordcount_adj(
     }
     return newscore;
 }
-unsafe extern "C" fn badword_captype(
+unsafe fn badword_captype(
     mut word: *mut ::core::ffi::c_char,
     mut end: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -349,7 +349,7 @@ unsafe extern "C" fn badword_captype(
     }
     return flags;
 }
-unsafe extern "C" fn bytes2offset(mut pp: *mut *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
+unsafe fn bytes2offset(mut pp: *mut *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     let mut p: *mut uint8_t = *pp as *mut uint8_t;
     let mut nr: ::core::ffi::c_int = 0;
     let c2rust_fresh18 = p;
@@ -393,7 +393,7 @@ unsafe extern "C" fn bytes2offset(mut pp: *mut *mut ::core::ffi::c_char) -> ::co
 }
 static sps_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(SPS_BEST as ::core::ffi::c_int);
 static sps_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(9999 as ::core::ffi::c_int);
-pub unsafe extern "C" fn spell_check_sps() -> ::core::ffi::c_int {
+pub unsafe fn spell_check_sps() -> ::core::ffi::c_int {
     let mut buf: [::core::ffi::c_char; 4096] = [0; 4096];
     sps_flags.set(0 as ::core::ffi::c_int);
     sps_limit.set(9999 as ::core::ffi::c_int);
@@ -475,7 +475,7 @@ pub unsafe extern "C" fn spell_check_sps() -> ::core::ffi::c_int {
     }
     return OK;
 }
-pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
+pub unsafe fn spell_suggest(mut count: ::core::ffi::c_int) {
     let mut need_cap: ::core::ffi::c_int = 0;
     let mut line: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut sug: suginfo_T = suginfo_T {
@@ -874,7 +874,7 @@ pub unsafe extern "C" fn spell_suggest(mut count: ::core::ffi::c_int) {
     }
     (*curwin.get()).w_onebuf_opt.wo_spell = wo_spell_save;
 }
-pub unsafe extern "C" fn spell_suggest_list(
+pub unsafe fn spell_suggest_list(
     mut gap: *mut garray_T,
     mut word: *mut ::core::ffi::c_char,
     mut maxcount: ::core::ffi::c_int,
@@ -956,7 +956,7 @@ pub unsafe extern "C" fn spell_suggest_list(
     }
     spell_find_cleanup(&raw mut sug);
 }
-unsafe extern "C" fn spell_find_suggest(
+unsafe fn spell_find_suggest(
     mut badptr: *mut ::core::ffi::c_char,
     mut badlen: ::core::ffi::c_int,
     mut su: *mut suginfo_T,
@@ -1144,10 +1144,7 @@ unsafe extern "C" fn spell_find_suggest(
         score_combine(su);
     }
 }
-unsafe extern "C" fn spell_suggest_expr(
-    mut su: *mut suginfo_T,
-    mut expr: *mut ::core::ffi::c_char,
-) {
+unsafe fn spell_suggest_expr(mut su: *mut suginfo_T, mut expr: *mut ::core::ffi::c_char) {
     let mut p: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let list: *mut list_T =
         eval_spell_expr(&raw mut (*su).su_badword as *mut ::core::ffi::c_char, expr);
@@ -1183,10 +1180,7 @@ unsafe extern "C" fn spell_suggest_expr(
     check_suggestions(su, &raw mut (*su).su_ga);
     cleanup_suggestions(&raw mut (*su).su_ga, (*su).su_maxscore, (*su).su_maxcount);
 }
-unsafe extern "C" fn spell_suggest_file(
-    mut su: *mut suginfo_T,
-    mut fname: *mut ::core::ffi::c_char,
-) {
+unsafe fn spell_suggest_file(mut su: *mut suginfo_T, mut fname: *mut ::core::ffi::c_char) {
     let mut line: [::core::ffi::c_char; 508] = [0; 508];
     let mut len: ::core::ffi::c_int = 0;
     let mut cword: [::core::ffi::c_char; 254] = [0; 254];
@@ -1252,7 +1246,7 @@ unsafe extern "C" fn spell_suggest_file(
     check_suggestions(su, &raw mut (*su).su_ga);
     cleanup_suggestions(&raw mut (*su).su_ga, (*su).su_maxscore, (*su).su_maxcount);
 }
-unsafe extern "C" fn spell_suggest_intern(mut su: *mut suginfo_T, mut interactive: bool) {
+unsafe fn spell_suggest_intern(mut su: *mut suginfo_T, mut interactive: bool) {
     suggest_load_files();
     suggest_try_special(su);
     suggest_try_change(su);
@@ -1305,7 +1299,7 @@ unsafe extern "C" fn spell_suggest_intern(mut su: *mut suginfo_T, mut interactiv
         cleanup_suggestions(&raw mut (*su).su_ga, (*su).su_maxscore, (*su).su_maxcount);
     }
 }
-unsafe extern "C" fn spell_find_cleanup(mut su: *mut suginfo_T) {
+unsafe fn spell_find_cleanup(mut su: *mut suginfo_T) {
     let mut _gap: *mut garray_T = &raw mut (*su).su_ga;
     if !(*_gap).ga_data.is_null() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -1329,7 +1323,7 @@ unsafe extern "C" fn spell_find_cleanup(mut su: *mut suginfo_T) {
     ga_clear(_gap_0);
     hash_clear_all(&raw mut (*su).su_banned, 0 as ::core::ffi::c_uint);
 }
-unsafe extern "C" fn suggest_try_special(mut su: *mut suginfo_T) {
+unsafe fn suggest_try_special(mut su: *mut suginfo_T) {
     let mut word: [::core::ffi::c_char; 254] = [0; 254];
     let mut p: *mut ::core::ffi::c_char =
         skiptowhite(&raw mut (*su).su_fbadword as *mut ::core::ffi::c_char);
@@ -1365,7 +1359,7 @@ unsafe extern "C" fn suggest_try_special(mut su: *mut suginfo_T) {
         );
     }
 }
-unsafe extern "C" fn suggest_try_change(mut su: *mut suginfo_T) {
+unsafe fn suggest_try_change(mut su: *mut suginfo_T) {
     let mut fword: [::core::ffi::c_char; 254] = [0; 254];
     strcpy(
         &raw mut fword as *mut ::core::ffi::c_char,
@@ -1400,7 +1394,7 @@ unsafe extern "C" fn suggest_try_change(mut su: *mut suginfo_T) {
         lpi += 1;
     }
 }
-unsafe extern "C" fn suggest_trie_walk(
+unsafe fn suggest_trie_walk(
     mut su: *mut suginfo_T,
     mut lp: *mut langp_T,
     mut fword: *mut ::core::ffi::c_char,
@@ -3127,7 +3121,7 @@ unsafe extern "C" fn suggest_trie_walk(
         }
     }
 }
-unsafe extern "C" fn go_deeper(
+unsafe fn go_deeper(
     mut stack: *mut trystate_T,
     mut depth: ::core::ffi::c_int,
     mut score_add: ::core::ffi::c_int,
@@ -3139,7 +3133,7 @@ unsafe extern "C" fn go_deeper(
     (*stack.offset((depth + 1 as ::core::ffi::c_int) as isize)).ts_curi = 1 as int16_t;
     (*stack.offset((depth + 1 as ::core::ffi::c_int) as isize)).ts_flags = 0 as uint8_t;
 }
-unsafe extern "C" fn find_keepcap_word(
+unsafe fn find_keepcap_word(
     mut slang: *mut slang_T,
     mut fword: *mut ::core::ffi::c_char,
     mut kword: *mut ::core::ffi::c_char,
@@ -3258,7 +3252,7 @@ unsafe extern "C" fn find_keepcap_word(
     }
     *kword = NUL as ::core::ffi::c_char;
 }
-unsafe extern "C" fn score_comp_sal(mut su: *mut suginfo_T) {
+unsafe fn score_comp_sal(mut su: *mut suginfo_T) {
     let mut badsound: [::core::ffi::c_char; 254] = [0; 254];
     ga_grow(&raw mut (*su).su_sga, (*su).su_ga.ga_len);
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -3300,7 +3294,7 @@ unsafe extern "C" fn score_comp_sal(mut su: *mut suginfo_T) {
         }
     }
 }
-unsafe extern "C" fn score_combine(mut su: *mut suginfo_T) {
+unsafe fn score_combine(mut su: *mut suginfo_T) {
     let mut ga: garray_T = garray_T {
         ga_len: 0,
         ga_maxlen: 0,
@@ -3433,7 +3427,7 @@ unsafe extern "C" fn score_combine(mut su: *mut suginfo_T) {
     }
     (*su).su_ga = ga;
 }
-unsafe extern "C" fn stp_sal_score(
+unsafe fn stp_sal_score(
     mut stp: *mut suggest_T,
     mut su: *mut suginfo_T,
     mut slang: *mut slang_T,
@@ -3514,7 +3508,7 @@ static dumsft: GlobalCell<sftword_T> = GlobalCell::new(sftword_T {
     sft_score: 0,
     sft_word: [],
 });
-unsafe extern "C" fn suggest_try_soundalike_prep() {
+unsafe fn suggest_try_soundalike_prep() {
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lpi < (*(*curwin.get()).w_s).b_langp.ga_len {
         let mut lp: *mut langp_T =
@@ -3526,7 +3520,7 @@ unsafe extern "C" fn suggest_try_soundalike_prep() {
         lpi += 1;
     }
 }
-unsafe extern "C" fn suggest_try_soundalike(mut su: *mut suginfo_T) {
+unsafe fn suggest_try_soundalike(mut su: *mut suginfo_T) {
     let mut salword: [::core::ffi::c_char; 254] = [0; 254];
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lpi < (*(*curwin.get()).w_s).b_langp.ga_len {
@@ -3550,7 +3544,7 @@ unsafe extern "C" fn suggest_try_soundalike(mut su: *mut suginfo_T) {
         lpi += 1;
     }
 }
-unsafe extern "C" fn suggest_try_soundalike_finish() {
+unsafe fn suggest_try_soundalike_finish() {
     let mut lpi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while lpi < (*(*curwin.get()).w_s).b_langp.ga_len {
         let mut lp: *mut langp_T =
@@ -3580,7 +3574,7 @@ unsafe extern "C" fn suggest_try_soundalike_finish() {
         lpi += 1;
     }
 }
-unsafe extern "C" fn add_sound_suggest(
+unsafe fn add_sound_suggest(
     mut su: *mut suginfo_T,
     mut goodword: *mut ::core::ffi::c_char,
     mut score: ::core::ffi::c_int,
@@ -3797,7 +3791,7 @@ unsafe extern "C" fn add_sound_suggest(
         }
     }
 }
-unsafe extern "C" fn soundfold_find(
+unsafe fn soundfold_find(
     mut slang: *mut slang_T,
     mut word: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -3857,7 +3851,7 @@ unsafe extern "C" fn soundfold_find(
     }
     return wordnr;
 }
-unsafe extern "C" fn similar_chars(
+unsafe fn similar_chars(
     mut slang: *mut slang_T,
     mut c1: ::core::ffi::c_int,
     mut c2: ::core::ffi::c_int,
@@ -3914,7 +3908,7 @@ unsafe extern "C" fn similar_chars(
     }
     return m1 == m2;
 }
-unsafe extern "C" fn add_suggestion(
+unsafe fn add_suggestion(
     mut su: *mut suginfo_T,
     mut gap: *mut garray_T,
     mut goodword: *const ::core::ffi::c_char,
@@ -4050,7 +4044,7 @@ unsafe extern "C" fn add_suggestion(
         }
     }
 }
-unsafe extern "C" fn check_suggestions(mut su: *mut suginfo_T, mut gap: *mut garray_T) {
+unsafe fn check_suggestions(mut su: *mut suginfo_T, mut gap: *mut garray_T) {
     let mut longword: [::core::ffi::c_char; 255] = [0; 255];
     if (*gap).ga_len == 0 as ::core::ffi::c_int {
         return;
@@ -4097,7 +4091,7 @@ unsafe extern "C" fn check_suggestions(mut su: *mut suginfo_T, mut gap: *mut gar
         i -= 1;
     }
 }
-unsafe extern "C" fn add_banned(mut su: *mut suginfo_T, mut word: *mut ::core::ffi::c_char) {
+unsafe fn add_banned(mut su: *mut suginfo_T, mut word: *mut ::core::ffi::c_char) {
     let mut hash: hash_T = hash_hash(word);
     let word_len: size_t = strlen(word);
     let mut hi: *mut hashitem_T = hash_lookup(&raw mut (*su).su_banned, word, word_len, hash);
@@ -4110,7 +4104,7 @@ unsafe extern "C" fn add_banned(mut su: *mut suginfo_T, mut word: *mut ::core::f
         xmemdupz(word as *const ::core::ffi::c_void, word_len) as *mut ::core::ffi::c_char;
     hash_add_item(&raw mut (*su).su_banned, hi, s, hash);
 }
-unsafe extern "C" fn rescore_suggestions(mut su: *mut suginfo_T) {
+unsafe fn rescore_suggestions(mut su: *mut suginfo_T) {
     if !(*su).su_sallang.is_null() {
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < (*su).su_ga.ga_len {
@@ -4122,7 +4116,7 @@ unsafe extern "C" fn rescore_suggestions(mut su: *mut suginfo_T) {
         }
     }
 }
-unsafe extern "C" fn rescore_one(mut su: *mut suginfo_T, mut stp: *mut suggest_T) {
+unsafe fn rescore_one(mut su: *mut suginfo_T, mut stp: *mut suggest_T) {
     let mut slang: *mut slang_T = (*stp).st_slang;
     let mut sal_badword: [::core::ffi::c_char; 254] = [0; 254];
     if !slang.is_null()
@@ -4177,7 +4171,7 @@ unsafe extern "C" fn sug_compare(
     }
     return n;
 }
-unsafe extern "C" fn cleanup_suggestions(
+unsafe fn cleanup_suggestions(
     mut gap: *mut garray_T,
     mut maxscore: ::core::ffi::c_int,
     mut keep: ::core::ffi::c_int,
@@ -4212,7 +4206,7 @@ unsafe extern "C" fn cleanup_suggestions(
     }
     return maxscore;
 }
-unsafe extern "C" fn soundalike_score(
+unsafe fn soundalike_score(
     mut goodstart: *mut ::core::ffi::c_char,
     mut badstart: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
@@ -4440,7 +4434,7 @@ unsafe extern "C" fn soundalike_score(
     }
     return SCORE_MAXMAX as ::core::ffi::c_int;
 }
-unsafe extern "C" fn spell_edit_score(
+unsafe fn spell_edit_score(
     mut slang: *mut slang_T,
     mut badword: *const ::core::ffi::c_char,
     mut goodword: *const ::core::ffi::c_char,
@@ -4604,7 +4598,7 @@ unsafe extern "C" fn spell_edit_score(
     xfree(cnt as *mut ::core::ffi::c_void);
     return i_0;
 }
-unsafe extern "C" fn spell_edit_score_limit(
+unsafe fn spell_edit_score_limit(
     mut slang: *mut slang_T,
     mut badword: *mut ::core::ffi::c_char,
     mut goodword: *mut ::core::ffi::c_char,
@@ -4612,7 +4606,7 @@ unsafe extern "C" fn spell_edit_score_limit(
 ) -> ::core::ffi::c_int {
     return spell_edit_score_limit_w(slang, badword, goodword, limit);
 }
-unsafe extern "C" fn spell_edit_score_limit_w(
+unsafe fn spell_edit_score_limit_w(
     mut slang: *mut slang_T,
     mut badword: *const ::core::ffi::c_char,
     mut goodword: *const ::core::ffi::c_char,
