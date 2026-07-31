@@ -258,18 +258,6 @@ pub const B0_SAME_DIR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const B0_HAS_FENC: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const STACK_INCR: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 static lowest_marked: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-static e_pointer_block_id_wrong_three: GlobalCell<[::core::ffi::c_char; 31]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-            *b"E317: Pointer block id wrong 3\0",
-        )
-    });
-static e_pointer_block_id_wrong_four: GlobalCell<[::core::ffi::c_char; 31]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 31], [::core::ffi::c_char; 31]>(
-            *b"E317: Pointer block id wrong 4\0",
-        )
-    });
 static e_warning_pointer_block_corrupted: GlobalCell<[::core::ffi::c_char; 40]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
