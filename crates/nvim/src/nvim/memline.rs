@@ -1,3 +1,15 @@
+//! The memline: a buffer's lines, stored in a B-tree of blocks that a
+//! [`memfile`](super::memfile) keeps paged to a swap file.
+//!
+//! Pointer blocks branch by line count and data blocks hold the text; block
+//! zero is the header that makes a swap file recognisable to another Nvim.
+//! This module owns opening and closing one; the children own the rest —
+//! [`tree`] the walk, [`edit`] the insert and delete, [`lines`] the API the
+//! editor calls, [`offsets`] byte offsets, [`block0`] the header,
+//! [`swapname`] where the swap file goes and [`recover`] reading one back.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::autocmd::{
     EVENT_BUFREADPOST, EVENT_BUFWINENTER, EVENT_SWAPEXISTS, apply_autocmds, has_autocmd,
