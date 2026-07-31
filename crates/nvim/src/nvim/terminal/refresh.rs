@@ -28,20 +28,21 @@ use crate::src::nvim::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
 };
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::main::{curtab, curwin, exiting, first_tabpage, firstwin, main_loop};
+use crate::src::nvim::main::{curwin, exiting, main_loop};
 use crate::src::nvim::mbyte::mb_check_adjust_col;
 use crate::src::nvim::memline::{ml_append_buf, ml_replace_buf};
 use crate::src::nvim::r#move::{curs_columns, set_topline};
 use crate::src::nvim::types::{
-    MultiQueue, Terminal, TimeWatcher, WinInfo, buf_T, colnr_T, linenr_T, size_t, tabpage_T,
-    uint16_t, uint64_t, win_T,
+    MultiQueue, Terminal, TimeWatcher, WinInfo, buf_T, colnr_T, linenr_T, size_t, uint16_t,
+    uint64_t, win_T,
 };
 use crate::src::nvim::ui::{ui_busy_start, ui_busy_stop, ui_mode_info_set};
 use crate::src::nvim::vterm::vterm::vterm_get_size;
 use core::ffi::{c_int, c_void};
 
+use super::mode::terminal_check_cursor;
 use super::scrollback::{fetch_row, refresh_scrollback};
-use super::{buf_for_handle, is_focused, row_to_linenr, terminal_check_cursor};
+use super::{all_windows, buf_for_handle, is_focused, row_to_linenr};
 
 /// How long to let damage accumulate before mirroring it into the buffer,
 /// in milliseconds.
@@ -241,19 +242,20 @@ pub unsafe fn refresh_screen(term: *mut Terminal, buf: *mut buf_T) {
             return;
         }
 
-        let mut linenr = row_to_linenr(term, (*term).invalid_start);
-        for row in (*term).invalid_start..(*term).invalid_end {
-            let _ = row;
+        let first_linenr = row_to_linenr(term, (*term).invalid_start);
+        for (offset, row) in ((*term).invalid_start..(*term).invalid_end).enumerate() {
+            let linenr = (first_linenr + offset as c_int) as linenr_T;
             fetch_row(term, row, width);
             let text = (*term).textbuf.as_mut_ptr();
-            if linenr as linenr_T <= (*buf).b_ml.ml_line_count {
-                ml_replace_buf(buf, linenr as linenr_T, text, true, false);
+            // Past the end of the buffer means the terminal is still
+            // filling out its first screen.
+            if linenr <= (*buf).b_ml.ml_line_count {
+                ml_replace_buf(buf, linenr, text, true, false);
                 changed += 1;
             } else {
-                ml_append_buf(buf, linenr as linenr_T - 1, text, 0 as colnr_T, false);
+                ml_append_buf(buf, linenr - 1, text, 0 as colnr_T, false);
                 added += 1;
             }
-            linenr += 1;
         }
 
         (*term).old_height = height;
@@ -280,38 +282,10 @@ unsafe fn clear_invalid(term: *mut Terminal) {
     }
 }
 
-/// Every window showing `buf`, across all tabpages.
-///
-/// The current tabpage's window list lives in `firstwin` rather than in the
-/// tabpage itself, which is why it cannot simply be `tp->tp_firstwin`.
+/// Every window showing `buf`.
 unsafe fn windows_showing(buf: *mut buf_T) -> impl Iterator<Item = *mut win_T> {
-    let mut tp = first_tabpage.get() as *mut tabpage_T;
-    let mut wp: *mut win_T = ::core::ptr::null_mut();
-    ::core::iter::from_fn(move || {
-        // SAFETY: walking the editor's window lists, which only the main
-        // thread mutates and which the callers below do not restructure.
-        unsafe {
-            loop {
-                if wp.is_null() {
-                    if tp.is_null() {
-                        return None;
-                    }
-                    wp = if tp == curtab.get() {
-                        firstwin.get()
-                    } else {
-                        (*tp).tp_firstwin
-                    };
-                    tp = (*tp).tp_next as *mut tabpage_T;
-                    continue;
-                }
-                let found = wp;
-                wp = (*found).w_next;
-                if (*found).w_buffer == buf {
-                    return Some(found);
-                }
-            }
-        }
-    })
+    // SAFETY: as `all_windows`; the predicate only reads `w_buffer`.
+    unsafe { all_windows().filter(move |&wp| (*wp).w_buffer == buf) }
 }
 
 /// Keep every window on `buf` looking at the bottom of the terminal.

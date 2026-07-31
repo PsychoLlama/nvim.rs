@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::change::{appended_lines_buf, deleted_lines_buf};
-use crate::src::nvim::grid::schar_get_adv;
+use crate::src::nvim::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::src::nvim::mark::mark_adjust_buf;
 use crate::src::nvim::memline::{ml_append_buf, ml_delete_buf};
 use crate::src::nvim::types::{
@@ -138,10 +138,18 @@ pub unsafe extern "C" fn term_sb_clear(data: *mut ::core::ffi::c_void) -> ::core
 /// terminating at the last cell that actually held something.
 pub unsafe fn fetch_row(term: *mut Terminal, row: ::core::ffi::c_int, end_col: ::core::ffi::c_int) {
     unsafe {
-        let mut col = 0;
-        let mut line_len = 0usize;
-        let start = &raw mut (*term).textbuf as *mut ::core::ffi::c_char;
+        // Worst case is one maximum-length grapheme cluster per column,
+        // plus the terminator. C sized this buffer once, at 8191 bytes,
+        // which a wide enough terminal full of clusters overruns.
+        let needed = end_col.max(0) as usize * MAX_SCHAR_SIZE as usize + 1;
+        if (*term).textbuf.len() < needed {
+            (*term).textbuf.resize(needed, 0);
+        }
+        // Stable for the whole loop: nothing below touches `textbuf`.
+        let start = (*term).textbuf.as_mut_ptr();
         let mut ptr = start;
+        let mut line_len = 0usize;
+        let mut col = 0;
         while col < end_col {
             let mut cell = blank_cell();
             fetch_cell(term, row, col, &raw mut cell);
@@ -149,12 +157,14 @@ pub unsafe fn fetch_row(term: *mut Terminal, row: ::core::ffi::c_int, end_col: :
                 schar_get_adv(&raw mut ptr, cell.schar);
                 line_len = ptr.offset_from(start) as usize;
             } else {
+                // Written but not counted, so that trailing blanks are
+                // dropped by terminating at the last cell with content.
                 *ptr = b' ' as ::core::ffi::c_char;
                 ptr = ptr.add(1);
             }
             col += cell.width as ::core::ffi::c_int;
         }
-        (*term).textbuf[line_len] = NUL as ::core::ffi::c_char;
+        *start.add(line_len) = NUL as ::core::ffi::c_char;
     }
 }
 
@@ -273,7 +283,7 @@ pub unsafe fn refresh_scrollback(term: *mut Terminal, buf: *mut buf_T) {
             ml_append_buf(
                 buf,
                 at as linenr_T,
-                &raw mut (*term).textbuf as *mut ::core::ffi::c_char,
+                (*term).textbuf.as_mut_ptr(),
                 0 as colnr_T,
                 false,
             );

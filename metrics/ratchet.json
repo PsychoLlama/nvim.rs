@@ -1,7 +1,7 @@
 {
   "internal_exports": 70,
-  "files_without_forbid_unsafe": 452,
-  "files_without_deny_unsafe_op": 230,
+  "files_without_forbid_unsafe": 454,
+  "files_without_deny_unsafe_op": 229,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -389,8 +389,10 @@
     "crates/nvim/src/nvim/strings.rs": {"lines": 4007, "no_mangle": 1, "unsafe": 113, "variadic": 5},
     "crates/nvim/src/nvim/syntax.rs": {"lines": 7795, "unsafe": 148},
     "crates/nvim/src/nvim/tag.rs": {"lines": 5868, "unsafe": 61},
-    "crates/nvim/src/nvim/terminal.rs": {"lines": 2520, "unsafe": 48},
+    "crates/nvim/src/nvim/terminal.rs": {"unsafe": 24},
     "crates/nvim/src/nvim/terminal/callbacks.rs": {"unsafe": 11},
+    "crates/nvim/src/nvim/terminal/input.rs": {"unsafe": 5},
+    "crates/nvim/src/nvim/terminal/mode.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/terminal/refresh.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/terminal/scrollback.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/terminal/termrequest.rs": {"unsafe": 10},

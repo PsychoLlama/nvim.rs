@@ -24,7 +24,10 @@ pub struct terminal {
     pub opts: TerminalOptions,
     pub vt: *mut VTerm,
     pub vts: *mut VTermScreen,
-    pub textbuf: [::core::ffi::c_char; 8191],
+    /// Where a screen row is rendered to text before being written into
+    /// the buffer's lines. Grown to fit the widest row seen and then
+    /// reused, so the refresh does not allocate per line.
+    pub textbuf: Vec<::core::ffi::c_char>,
     pub sb: Scrollback,
     pub old_sb_deleted: usize,
     pub old_height: ::core::ffi::c_int,
@@ -70,7 +73,7 @@ impl terminal {
             buf_handle,
             vt: ::core::ptr::null_mut(),
             vts: ::core::ptr::null_mut(),
-            textbuf: [0; 8191],
+            textbuf: Vec::new(),
             sb: Scrollback::default(),
             old_sb_deleted: 0,
             old_height: 0,

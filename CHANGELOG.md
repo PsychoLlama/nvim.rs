@@ -7,6 +7,13 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote `:terminal` buffers, covering the emulator's screen and
+  scrollback, terminal mode and its key translation, mouse forwarding,
+  `TermRequest` and the other terminal autocommands, `b:term_title`, and
+  OSC 52 clipboard writes.
+
 ## [2026.07.30-4b9dee25d3]
 
 Ongoing migration of the transpiled code toward safe, idiomatic Rust.

@@ -254,10 +254,11 @@ unsafe extern "C" fn term_selection_set(
         }
         (*term).selection.extend_from_slice(fragment_bytes(&frag));
         if frag.final_0() {
+            // The event handler hands this to a list, which frees it.
             let data = xmemdupz(
                 (*term).selection.as_ptr().cast::<c_void>(),
                 (*term).selection.len(),
-            ) as *mut c_void;
+            );
             multiqueue_put_event(
                 (*main_loop.ptr()).events,
                 Event::new(

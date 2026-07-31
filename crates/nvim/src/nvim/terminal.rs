@@ -1,4 +1,35 @@
+//! `:terminal` buffers.
+//!
+//! Each one pairs a libvterm emulator with a buffer whose lines mirror what
+//! that emulator holds. Bytes the child program writes go into vterm
+//! ([`terminal_receive`]); vterm reports what changed
+//! ([`callbacks`](self::callbacks)); a timer mirrors the changes into the
+//! buffer's lines ([`refresh`](self::refresh)). Keys go the other way, from
+//! the editor's terminal mode ([`mode`](self::mode)) through the key
+//! translation in [`input`](self::input) and out of vterm's output
+//! callback.
+//!
+//! What lives where: the scrollback and its buffer mirroring in
+//! [`scrollback`](self::scrollback), unrecognised escape sequences in
+//! [`termrequest`](self::termrequest). This module keeps the lifecycle —
+//! allocating, opening, closing and destroying a terminal — and the one
+//! thing the editor asks a terminal for while drawing:
+//! [`terminal_get_line_attributes`], which turns a row of vterm cells into
+//! the highlight ids the screen painter wants.
+//!
+//! A `Terminal` and its buffer can outlive each other in both directions.
+//! The buffer can be wiped while the child is still running, and the child
+//! can exit while the buffer is still on screen, so nothing here holds a
+//! `buf_T` across anything that might run autocommands — `buf_handle` plus
+//! [`buf_for_handle`] is the pattern throughout. `refcount` is the other
+//! half: it is raised around anything that can run Vimscript, and
+//! [`terminal_destroy`] only frees at zero.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 pub mod callbacks;
+pub mod input;
+pub mod mode;
 pub mod refresh;
 pub mod scrollback;
 pub mod termrequest;
@@ -7,120 +38,42 @@ use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_object, cstr_as_string, dict_get_value,
 };
 use crate::src::nvim::autocmd::{
-    apply_autocmds, apply_autocmds_group, aucmd_prepbuf, aucmd_restbuf, is_aucmd_win,
+    apply_autocmds, apply_autocmds_group, aucmd_prepbuf, aucmd_restbuf, block_autocmds,
+    is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
 };
-use crate::src::nvim::autocmd::{block_autocmds, has_event, is_autocmd_blocked, unblock_autocmds};
-use crate::src::nvim::buffer::buf_get_changedtick;
-use crate::src::nvim::buffer::do_buffer;
 use crate::src::nvim::change::deleted_lines_buf;
-use crate::src::nvim::cursor::coladvance;
-use crate::src::nvim::cursor_shape::{parse_shape_opt, shape_table};
-use crate::src::nvim::drawscreen::{redraw_buf_line_later, redraw_later};
-use crate::src::nvim::drawscreen::{
-    redraw_statuslines, setcursor, show_cursor_info_later, showmode, unshowmode, update_screen,
-};
+use crate::src::nvim::cursor_shape::{SHAPE_IDX_TERM, shape_table};
+use crate::src::nvim::drawscreen::redraw_buf_line_later;
 use crate::src::nvim::eval::typval::{tv_dict_add_nr, tv_dict_set_keys_readonly};
 use crate::src::nvim::eval::vars::get_globvar_dict;
 use crate::src::nvim::eval::{get_v_event, restore_v_event};
 use crate::src::nvim::event::multiqueue::{multiqueue_free, multiqueue_new, multiqueue_put_event};
-use crate::src::nvim::ex_docmd::do_cmdline;
-use crate::src::nvim::getchar::{
-    getcmdkeycmd, ins_char_typebuf, map_execute_lua, merge_modifiers, paste_repeat, ungetchars,
+use crate::src::nvim::highlight::{
+    HL_BG_INDEXED, HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DIM, HL_FG_INDEXED, HL_INVERSE, HL_ITALIC,
+    HL_OVERLINE, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDOUBLE, HL_UNDERLINE, hl_combine_attr,
+    hl_get_term_attr,
 };
-use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::highlight::{hl_combine_attr, hl_get_term_attr};
 use crate::src::nvim::highlight_group::name_to_color;
 use crate::src::nvim::main::{
-    KeyTyped, RedrawingDisabled, State, buffer_handles, clear_cmdline, exiting, got_int, main_loop,
-    mapped_ctrl_c, mod_mask, mouse_col, mouse_grid, mouse_row, must_redraw, redraw_cmdline,
-    redraw_mode, restart_edit, stop_insert_mode, tpf_flags, vgetc_char, vgetc_mod_mask,
-    window_handles,
+    State, buffer_handles, curbuf, curtab, curwin, exiting, first_tabpage, firstwin, main_loop,
 };
-use crate::src::nvim::main::{curbuf, curtab, curwin, first_tabpage, firstwin};
 use crate::src::nvim::map::mh_get_int;
-use crate::src::nvim::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::src::nvim::memline::ml_delete_buf;
-use crate::src::nvim::memory::{strequal, xfree, xmalloc, xrealloc, xstrdup};
-use crate::src::nvim::mouse::do_mousescroll;
-use crate::src::nvim::mouse::mouse_find_win_inner;
-use crate::src::nvim::r#move::{set_topline, validate_cursor, win_col_off};
-use crate::src::nvim::ops::clear_oparg;
+use crate::src::nvim::memory::xfree;
+use crate::src::nvim::r#move::win_col_off;
 use crate::src::nvim::option::set_option_value;
-use crate::src::nvim::options::{
-    kOptBuftype, kOptCuloptFlagNumber, kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1, kOptTpfFlagDEL,
-    kOptTpfFlagESC, kOptTpfFlagFF, kOptTpfFlagHT,
+use crate::src::nvim::options::kOptBuftype;
+use crate::src::nvim::os::libc::{abort, strlen};
+use crate::src::nvim::types::builders::{DictBuf, static_cstring};
+use crate::src::nvim::types::terminal_defs::SELECTIONBUF_SIZE;
+use crate::src::nvim::types::{
+    Arena, Buffer, Error, ErrorType, Event, ExtmarkOp, HlAttrs, Map_int_ptr_t, MarkAdjustMode,
+    Object, OptVal, OptValData, OptValType, RgbValue, Terminal, TerminalOptions, VTermAttr,
+    VTermColor, VTermColor_rgb, VTermDamageSize, VTermScreenCell, VTermScreenCellAttrs, VTermState,
+    VTermTerminator, VTermValue, VTermValueType, VimVarIndex, aco_save_T, auto_event, buf_T,
+    colnr_T, exarg_T, handle_T, int16_t, kObjectTypeNil, kObjectTypeString, linenr_T, pos_T, ptr_t,
+    save_v_event_T, size_t, tabpage_T, uint8_t, varnumber_T, win_T,
 };
-use crate::src::nvim::optionstr::free_string_option;
-use crate::src::nvim::os::libc::{__assert_fail, abort, memcpy, memset, snprintf, strlen};
-use crate::src::nvim::state::{may_trigger_modechanged, state_enter, state_handle_k_event};
-pub use crate::src::nvim::types::{
-    __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __time_t, AdditionalData, AlignTextPos, Arena, Array, BoolVarValue, Boolean,
-    BufUpdateCallbacks, Buffer, CMD_index, Callback, Callback_data as C2Rust_Unnamed_9,
-    CallbackType, ChangedtickDictItem, CursorShape, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
-    Error, ErrorType, Event, ExtmarkOp, ExtmarkUndoObject, FileID, Float, FloatAnchor,
-    FloatRelative, GridView, HlAttrs, Integer, Intersection, KeyValuePair, LineGetter, Loop,
-    LuaRef, MHPutStatus, MTKey, MTNode, MTPos, Map_int_ptr_t, Map_int64_t_int64_t,
-    Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkAdjustMode,
-    MarkTree, MotionType, MultiQueue, Object, ObjectType, OptIndex, OptInt, OptVal, OptValData,
-    OptValType, Proc, ProcType, PutCallback, QUEUE, RStream, RgbValue, ScopeDictDictItem,
-    ScopeType, ScreenCell, ScreenGrid, ScreenPen, Set_int, Set_int64_t, Set_ptr_t, Set_uint32_t,
-    Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_16, Stream, String_0, StringBuilder, Terminal,
-    TerminalCursor, TerminalOptions, TerminalPending, TimeWatcher, Timestamp, TriState, VTerm,
-    VTermAttr, VTermColor, VTermColor_indexed as C2Rust_Unnamed_5,
-    VTermColor_rgb as C2Rust_Unnamed_6, VTermDamageSize, VTermKey, VTermModifier,
-    VTermOutputCallback, VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks,
-    VTermScreenCell, VTermScreenCellAttrs, VTermSelectionCallbacks, VTermSelectionMask, VTermState,
-    VTermStateFallbacks, VTermStringFragment, VTermTerminator, VTermValue, VTermValueType,
-    VarLockStatus, VarType, VimState, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    WinConfig, WinInfo, WinSplit, WinStyle, Window, aco_save_T, alist_T, argv_callback, auto_event,
-    bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufref_T, bufstate_T, chunksize_T, cmd_addr_T,
-    cmdarg_T, cmdidx_T, colnr_T, cstack_T, cstack_T_cs_pend as C2Rust_Unnamed_34, cursorentry_T,
-    dict_T, dictvar_S, diff_T, diffblock_S, disptick_T, dobuf_action_values, dobuf_start_values,
-    eslist_T, eslist_elem, event_T, exarg, exarg_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols, file_buffer_b_wininfo, file_buffer_update_callbacks,
-    file_buffer_update_channels, float_T, fmark_T, fmarkv_T, frame_S, funccall_S,
-    funccall_S_fc_fixvar as C2Rust_Unnamed_10, funccall_T, garray_T, handle_T, hash_T, hashitem_T,
-    hashtab_T, infoptr_T, int16_t, int32_t, int64_t, internal_proc_cb, intptr_t, kObjectTypeArray,
-    kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_extra,
-    key_value_pair, lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S,
-    listwatch_T, llpos_T, loop_0, lpos_T, mapblock, mapblock_T, match_T, matchitem, matchitem_T,
-    memfile_T, memline_T, mfdirty_T, mtnode_inner_s, mtnode_s, multiqueue, object,
-    object_data as C2Rust_Unnamed, oparg_T, partial_S, partial_T, pos_T, pos_save_T, proc,
-    proc_exit_cb, proc_state_cb, proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, ptrdiff_t,
-    qf_info_S, qf_info_T, queue, reg_extmatch_T, regmmatch_T, regprog, regprog_T, rstream, sattr_T,
-    save_v_event_T, schar_T, scid_T, sctx_T, size_t, ssize_t, state_check_callback,
-    state_execute_callback, stream, stream_close_cb, stream_read_cb,
-    stream_uv as C2Rust_Unnamed_27, stream_write_cb, syn_state,
-    syn_state_sst_union as C2Rust_Unnamed_8, syn_time_T, synblock_T, synstate_T, tabpage_S,
-    tabpage_T, taggy_T, terminal, terminal_close_cb, terminal_read_pause_cb, terminal_resize_cb,
-    terminal_resume_cb, terminal_write_cb, time_cb, time_t, time_watcher, typval_T,
-    typval_vval_union, u_entry, u_entry_T, u_header, u_header_T,
-    u_header_uh_alt_next as C2Rust_Unnamed_12, u_header_uh_alt_prev as C2Rust_Unnamed_11,
-    u_header_uh_next as C2Rust_Unnamed_14, u_header_uh_prev as C2Rust_Unnamed_13, ufunc_S, ufunc_T,
-    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue,
-    uv_alloc_cb, uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_22, uv_async_t, uv_buf_t,
-    uv_close_cb, uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_file, uv_handle_s,
-    uv_handle_s_u as C2Rust_Unnamed_17, uv_handle_t, uv_handle_type, uv_idle_cb, uv_idle_s,
-    uv_idle_s_u as C2Rust_Unnamed_28, uv_idle_t, uv_loop_s,
-    uv_loop_s_active_reqs as C2Rust_Unnamed_21, uv_loop_s_timer_heap as C2Rust_Unnamed_20,
-    uv_loop_t, uv_mutex_t, uv_pipe_s, uv_pipe_s_u as C2Rust_Unnamed_30, uv_pipe_t, uv_read_cb,
-    uv_req_type, uv_rwlock_t, uv_shutdown_cb, uv_shutdown_s, uv_shutdown_t, uv_signal_cb,
-    uv_signal_s, uv_signal_s_tree_entry as C2Rust_Unnamed_18, uv_signal_s_u as C2Rust_Unnamed_19,
-    uv_signal_t, uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_26, uv_stream_t, uv_tcp_s,
-    uv_tcp_s_u as C2Rust_Unnamed_29, uv_tcp_t, uv_timer_cb, uv_timer_s,
-    uv_timer_s_node as C2Rust_Unnamed_23, uv_timer_s_u as C2Rust_Unnamed_24, uv_timer_t,
-    varnumber_T, vim_state, virt_line, visualinfo_T, window_S, wininfo_S, winopt_T, wline_T,
-    xfmark_T,
-};
-use crate::src::nvim::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
-use crate::src::nvim::vterm::keyboard::{
-    vterm_keyboard_end_paste, vterm_keyboard_key, vterm_keyboard_start_paste,
-    vterm_keyboard_unichar,
-};
-use crate::src::nvim::vterm::mouse::{vterm_mouse_button, vterm_mouse_move};
 use crate::src::nvim::vterm::parser::vterm_input_write;
 use crate::src::nvim::vterm::pen::{convert_color_to_rgb, set_palette_color};
 use crate::src::nvim::vterm::screen::{
@@ -129,1144 +82,484 @@ use crate::src::nvim::vterm::screen::{
     vterm_screen_set_damage_merge, vterm_screen_set_unrecognised_fallbacks,
 };
 use crate::src::nvim::vterm::state::{
-    vterm_obtain_state, vterm_state_focus_in, vterm_state_focus_out,
-    vterm_state_set_selection_callbacks, vterm_state_set_termprop,
+    vterm_obtain_state, vterm_state_set_selection_callbacks, vterm_state_set_termprop,
 };
 use crate::src::nvim::vterm::vterm::{
-    vterm_free, vterm_get_size, vterm_new, vterm_output_set_callback, vterm_set_size,
-    vterm_set_utf8,
+    VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE, vterm_free, vterm_get_size, vterm_new,
+    vterm_output_set_callback, vterm_set_size, vterm_set_utf8,
 };
-use crate::src::nvim::window::may_trigger_win_scrolled_resized;
-use crate::src::nvim::window::win_valid;
+use core::ffi::{c_char, c_int, c_void};
+
 use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
 
+pub use input::{terminal_paste, terminal_set_streamed_paste};
+pub use mode::terminal_enter;
 pub use refresh::{
     on_scrollback_option_changed, terminal_check_refresh, terminal_init, terminal_teardown,
 };
 
-pub const kErrorTypeNone: ErrorType = -1;
-pub const VTERM_TERMINATOR_BEL: VTermTerminator = 0;
-pub const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
-pub const VTERM_PROP_CURSORSHAPE: VTermProp = 7;
-pub const VTERM_PROP_CURSORBLINK: VTermProp = 2;
-pub type win_T = window_S;
-pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
-pub const MAXLNUM: C2Rust_Unnamed_31 = 2147483647;
-pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub const HL_FG_INDEXED: C2Rust_Unnamed_32 = 4096;
-pub const HL_BG_INDEXED: C2Rust_Unnamed_32 = 2048;
-pub const HL_OVERLINE: C2Rust_Unnamed_32 = 131072;
-pub const HL_CONCEALED: C2Rust_Unnamed_32 = 65536;
-pub const HL_BLINK: C2Rust_Unnamed_32 = 32768;
-pub const HL_DIM: C2Rust_Unnamed_32 = 512;
-pub const HL_STRIKETHROUGH: C2Rust_Unnamed_32 = 128;
-pub const HL_UNDERDOUBLE: C2Rust_Unnamed_32 = 24;
-pub const HL_UNDERCURL: C2Rust_Unnamed_32 = 16;
-pub const HL_UNDERLINE: C2Rust_Unnamed_32 = 8;
-pub const HL_ITALIC: C2Rust_Unnamed_32 = 4;
-pub const HL_BOLD: C2Rust_Unnamed_32 = 2;
-pub const HL_INVERSE: C2Rust_Unnamed_32 = 1;
-pub const kMHExisting: MHPutStatus = 0;
-pub type C2Rust_Unnamed_33 = ::core::ffi::c_int;
-pub const FORWARD: C2Rust_Unnamed_33 = 1;
-pub const kOptValTypeString: OptValType = 2;
-pub const kExtmarkUndo: ExtmarkOp = 1;
-pub const kMarkAdjustTerm: MarkAdjustMode = 2;
-pub const EVENT_TEXTCHANGEDT: auto_event = 127;
-pub const EVENT_TERMREQUEST: auto_event = 122;
-pub const EVENT_TERMOPEN: auto_event = 121;
-pub const EVENT_TERMLEAVE: auto_event = 120;
-pub const EVENT_TERMENTER: auto_event = 119;
-pub const EVENT_TERMCLOSE: auto_event = 118;
-pub type C2Rust_Unnamed_35 = ::core::ffi::c_int;
-pub const AUGROUP_ALL: C2Rust_Unnamed_35 = -3;
-pub const DOBUF_WIPE: dobuf_action_values = 4;
-pub const DOBUF_FIRST: dobuf_start_values = 1;
-pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
-pub const SHAPE_IDX_TERM: C2Rust_Unnamed_36 = 17;
-pub const SHAPE_VER: CursorShape = 2;
-pub const SHAPE_HOR: CursorShape = 1;
-pub const SHAPE_BLOCK: CursorShape = 0;
-pub type C2Rust_Unnamed_37 = ::core::ffi::c_uint;
-pub const TERM_ATTRS_MAX: C2Rust_Unnamed_37 = 1024;
-pub type C2Rust_Unnamed_38 = ::core::ffi::c_uint;
-pub const UPD_NOT_VALID: C2Rust_Unnamed_38 = 40;
-pub const UPD_SOME_VALID: C2Rust_Unnamed_38 = 35;
-pub const UPD_VALID: C2Rust_Unnamed_38 = 10;
-pub const VV_TERMREQUEST: VimVarIndex = 10;
-pub type C2Rust_Unnamed_39 = ::core::ffi::c_uint;
-pub const MODE_TERMINAL: C2Rust_Unnamed_39 = 128;
-pub const KE_MOUSEMOVE: key_extra = 100;
-pub const KE_MOUSERIGHT: key_extra = 78;
-pub const KE_MOUSELEFT: key_extra = 77;
-pub const KE_MOUSEUP: key_extra = 76;
-pub const KE_MOUSEDOWN: key_extra = 75;
-pub const KE_LEFTRELEASE: key_extra = 46;
-pub const kMTCharWise: MotionType = 0;
-pub type C2Rust_Unnamed_43 = ::core::ffi::c_int;
-pub const MSCR_RIGHT: C2Rust_Unnamed_43 = -2;
-pub const MSCR_LEFT: C2Rust_Unnamed_43 = -1;
-pub const MSCR_UP: C2Rust_Unnamed_43 = 1;
-pub const MSCR_DOWN: C2Rust_Unnamed_43 = 0;
-pub type C2Rust_Unnamed_44 = ::core::ffi::c_uint;
-pub const OPT_LOCAL: C2Rust_Unnamed_44 = 2;
-pub const VTERM_PROP_CURSORSHAPE_BAR_LEFT: C2Rust_Unnamed_45 = 3;
-pub const VTERM_PROP_CURSORSHAPE_UNDERLINE: C2Rust_Unnamed_45 = 2;
-pub const VTERM_PROP_CURSORSHAPE_BLOCK: C2Rust_Unnamed_45 = 1;
-pub const VTERM_VALUETYPE_INT: VTermValueType = 2;
-pub const VTERM_ATTR_URI: VTermAttr = 13;
-pub const VTERM_COLOR_RGB: C2Rust_Unnamed_46 = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct TerminalState {
-    pub state: VimState,
-    pub term: *mut Terminal,
-    pub save_rd: ::core::ffi::c_int,
-    pub close: bool,
-    pub got_bsl: bool,
-    pub got_bsl_o: bool,
-    pub cursor_visible: bool,
-    pub save_curwin_handle: handle_T,
-    pub save_w_p_cul: bool,
-    pub save_w_p_culopt: *mut ::core::ffi::c_char,
-    pub save_w_p_culopt_flags: uint8_t,
-    pub save_w_p_cuc: ::core::ffi::c_int,
-    pub save_w_p_so: OptInt,
-    pub save_w_p_siso: OptInt,
+/// An `Error` that carries no error. The API calls made here cannot fail in
+/// a way any caller could act on, so their errors are cleared and dropped.
+const kErrorTypeNone: ErrorType = -1;
+
+/// "To the end of the buffer", for the mark adjustments.
+const MAXLNUM: linenr_T = 2147483647;
+const NUL: c_int = 0;
+/// `ml_flags` bit meaning the buffer holds one empty line and nothing else.
+const ML_EMPTY: c_int = 0x1;
+/// The largest `'scrollback'` that means anything; the option's negative
+/// "unlimited" spelling becomes this.
+const SB_MAX: c_int = 1000000;
+/// Marks in trimmed scrollback move the way a terminal's do, not an edit's.
+const kMarkAdjustTerm: MarkAdjustMode = 2;
+const kExtmarkUndo: ExtmarkOp = 1;
+/// `set_option_value` spellings.
+const kOptValTypeString: OptValType = 2;
+const OPT_LOCAL: c_int = 2;
+/// The most columns [`terminal_get_line_attributes`] will resolve;
+/// `drawline` sizes its array to match.
+const TERM_ATTRS_MAX: c_int = 1024;
+/// `State` bit set while terminal mode is running.
+const MODE_TERMINAL: c_int = 128;
+/// `redraw_later` levels.
+const UPD_VALID: c_int = 10;
+const UPD_SOME_VALID: c_int = 35;
+const AUGROUP_ALL: c_int = -3;
+const EVENT_TERMCLOSE: auto_event = 118;
+const EVENT_TERMENTER: auto_event = 119;
+const EVENT_TERMLEAVE: auto_event = 120;
+const EVENT_TERMOPEN: auto_event = 121;
+const EVENT_TERMREQUEST: auto_event = 122;
+const EVENT_TEXTCHANGEDT: auto_event = 127;
+/// `v:termrequest`.
+const VV_TERMREQUEST: VimVarIndex = 10;
+
+/// vterm's cursor shapes, which are DECSCUSR's rather than the editor's.
+const VTERM_PROP_CURSORSHAPE_BLOCK: c_int = 1;
+const VTERM_PROP_CURSORSHAPE_UNDERLINE: c_int = 2;
+const VTERM_PROP_CURSORSHAPE_BAR_LEFT: c_int = 3;
+const VTERM_VALUETYPE_INT: VTermValueType = 2;
+const VTERM_ATTR_URI: VTermAttr = 13;
+/// Merge damage reports up to a whole scrolled region before delivering
+/// them; the refresh works in row ranges anyway.
+const VTERM_DAMAGE_SCROLL: VTermDamageSize = 3;
+/// An escape sequence ended with BEL rather than ST.
+const VTERM_TERMINATOR_BEL: VTermTerminator = 0;
+
+const VTERM_COLOR_TYPE_MASK: c_int = 1;
+const VTERM_COLOR_RGB: c_int = 0;
+const VTERM_COLOR_INDEXED: c_int = 1;
+const VTERM_COLOR_DEFAULT_FG: c_int = 2;
+const VTERM_COLOR_DEFAULT_BG: c_int = 4;
+
+/// One entry of an `int -> ptr` map, or null.
+///
+/// The generated `map.h` accessor, of which this is the only instantiation
+/// the terminal needs.
+unsafe fn map_get_int_ptr_t(map: *mut Map_int_ptr_t, key: c_int) -> ptr_t {
+    unsafe {
+        let slot = mh_get_int(&raw mut (*map).set, key);
+        // A miss is reported as the tombstone index.
+        if slot == u32::MAX {
+            // Nothing is stored under a missing key.
+            ::core::ptr::null_mut()
+        } else {
+            *(*map).values.add(slot as usize)
+        }
+    }
 }
-pub const VTERM_MOD_CTRL: VTermModifier = 4;
-pub const VTERM_MOD_ALT: VTermModifier = 2;
-pub const VTERM_MOD_SHIFT: VTermModifier = 1;
-pub const VTERM_MOD_NONE: VTermModifier = 0;
-pub const VTERM_KEY_KP_ENTER: VTermKey = 528;
-pub const VTERM_KEY_KP_DIVIDE: VTermKey = 527;
-pub const VTERM_KEY_KP_PERIOD: VTermKey = 526;
-pub const VTERM_KEY_KP_MINUS: VTermKey = 525;
-pub const VTERM_KEY_KP_PLUS: VTermKey = 523;
-pub const VTERM_KEY_KP_MULT: VTermKey = 522;
-pub const VTERM_KEY_KP_9: VTermKey = 521;
-pub const VTERM_KEY_KP_8: VTermKey = 520;
-pub const VTERM_KEY_KP_7: VTermKey = 519;
-pub const VTERM_KEY_KP_6: VTermKey = 518;
-pub const VTERM_KEY_KP_5: VTermKey = 517;
-pub const VTERM_KEY_KP_4: VTermKey = 516;
-pub const VTERM_KEY_KP_3: VTermKey = 515;
-pub const VTERM_KEY_KP_2: VTermKey = 514;
-pub const VTERM_KEY_KP_1: VTermKey = 513;
-pub const VTERM_KEY_KP_0: VTermKey = 512;
-pub const VTERM_KEY_FUNCTION_0: VTermKey = 256;
-pub const VTERM_KEY_PAGEDOWN: VTermKey = 14;
-pub const VTERM_KEY_PAGEUP: VTermKey = 13;
-pub const VTERM_KEY_END: VTermKey = 12;
-pub const VTERM_KEY_HOME: VTermKey = 11;
-pub const VTERM_KEY_DEL: VTermKey = 10;
-pub const VTERM_KEY_INS: VTermKey = 9;
-pub const VTERM_KEY_RIGHT: VTermKey = 8;
-pub const VTERM_KEY_LEFT: VTermKey = 7;
-pub const VTERM_KEY_DOWN: VTermKey = 6;
-pub const VTERM_KEY_UP: VTermKey = 5;
-pub const VTERM_KEY_ESCAPE: VTermKey = 4;
-pub const VTERM_KEY_BACKSPACE: VTermKey = 3;
-pub const VTERM_KEY_TAB: VTermKey = 2;
-pub const VTERM_KEY_ENTER: VTermKey = 1;
-pub const VTERM_KEY_NONE: VTermKey = 0;
-pub const VTERM_COLOR_DEFAULT_BG: C2Rust_Unnamed_46 = 4;
-pub const VTERM_COLOR_DEFAULT_FG: C2Rust_Unnamed_46 = 2;
-pub const VTERM_COLOR_INDEXED: C2Rust_Unnamed_46 = 1;
-pub const VTERM_COLOR_TYPE_MASK: C2Rust_Unnamed_46 = 1;
-pub type C2Rust_Unnamed_45 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_46 = ::core::ffi::c_uint;
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
-};
-pub const SET_INIT: Set_ptr_t = Set_ptr_t {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut::<ptr_t>(),
-};
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe fn map_get_int_ptr_t(mut map: *mut Map_int_ptr_t, mut key: ::core::ffi::c_int) -> ptr_t {
-    let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
-    return if k == MH_TOMBSTONE as uint32_t {
-        value_init_ptr_t.get()
-    } else {
-        *(*map).values.offset(k as isize)
-    };
-}
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const TAB: ::core::ffi::c_int = 9;
-pub const ESC: ::core::ffi::c_int = 27;
-pub const Ctrl_AT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const Ctrl_M: ::core::ffi::c_int = 13;
-pub const Ctrl_N: ::core::ffi::c_int = 14;
-pub const Ctrl_O: ::core::ffi::c_int = 15;
-pub const Ctrl_BSL: ::core::ffi::c_int = 28 as ::core::ffi::c_int;
-pub const REFRESH_DELAY: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-pub const SELECTIONBUF_SIZE: ::core::ffi::c_int = 0x400 as ::core::ffi::c_int;
+
 /// The buffer a handle names, or null once it has been wiped.
 unsafe fn buf_for_handle(handle: handle_T) -> *mut buf_T {
-    map_get_int_ptr_t(buffer_handles.ptr(), handle as ::core::ffi::c_int) as *mut buf_T
+    unsafe { map_get_int_ptr_t(buffer_handles.ptr(), handle) as *mut buf_T }
 }
-unsafe extern "C" fn term_output_callback(
-    mut s: *const ::core::ffi::c_char,
-    mut len: size_t,
-    mut user_data: *mut ::core::ffi::c_void,
-) {
-    terminal_send(user_data as *mut Terminal, s, len);
+
+/// Every window in every tabpage.
+///
+/// The current tabpage keeps its window list in `firstwin` rather than in
+/// the tabpage struct, which is why this is not a plain walk of
+/// `tp_firstwin`.
+unsafe fn all_windows() -> impl Iterator<Item = *mut win_T> {
+    let mut tp = first_tabpage.get() as *mut tabpage_T;
+    let mut wp: *mut win_T = ::core::ptr::null_mut();
+    ::core::iter::from_fn(move || {
+        // SAFETY: walking the editor's window lists on the main thread. No
+        // caller restructures them while iterating.
+        unsafe {
+            while wp.is_null() {
+                if tp.is_null() {
+                    return None;
+                }
+                wp = if tp == curtab.get() {
+                    firstwin.get()
+                } else {
+                    (*tp).tp_firstwin
+                };
+                tp = (*tp).tp_next as *mut tabpage_T;
+            }
+            let found = wp;
+            wp = (*found).w_next;
+            Some(found)
+        }
+    })
 }
-pub unsafe fn terminal_alloc(mut buf: *mut buf_T, mut opts: TerminalOptions) -> *mut Terminal {
-    // Leaked here and reclaimed by terminal_destroy. The buffer is the
-    // owner; every other reference reaches it through `buf_T::terminal`.
-    let mut term: *mut Terminal = Box::into_raw(Box::new(Terminal::new(opts, (*buf).handle)));
-    (*buf).terminal = term;
-    (*term).vt = vterm_new(
-        opts.height as ::core::ffi::c_int,
-        opts.width as ::core::ffi::c_int,
-    );
-    vterm_set_utf8((*term).vt, 1 as ::core::ffi::c_int);
-    let mut state: *mut VTermState = vterm_obtain_state((*term).vt);
-    (*term).vts = vterm_obtain_screen((*term).vt);
-    vterm_screen_enable_altscreen((*term).vts, true_0);
-    vterm_screen_enable_reflow((*term).vts, true_0 != 0);
-    vterm_screen_set_callbacks(
-        (*term).vts,
-        &raw const callbacks::SCREEN_CALLBACKS,
-        term as *mut ::core::ffi::c_void,
-    );
-    vterm_screen_set_unrecognised_fallbacks(
-        (*term).vts,
-        &raw const termrequest::FALLBACKS,
-        term as *mut ::core::ffi::c_void,
-    );
-    vterm_screen_set_damage_merge((*term).vts, VTERM_DAMAGE_SCROLL);
-    vterm_screen_reset((*term).vts, 1 as ::core::ffi::c_int);
-    vterm_output_set_callback(
-        (*term).vt,
-        Some(
-            term_output_callback
-                as unsafe extern "C" fn(
-                    *const ::core::ffi::c_char,
-                    size_t,
-                    *mut ::core::ffi::c_void,
-                ) -> (),
-        ),
-        term as *mut ::core::ffi::c_void,
-    );
-    vterm_state_set_selection_callbacks(
-        state,
-        &raw const callbacks::SELECTION_CALLBACKS,
-        term as *mut ::core::ffi::c_void,
-        (*term).selection_buffer.as_mut_ptr(),
-        SELECTIONBUF_SIZE as size_t,
-    );
-    let mut cursor_shape: VTermValue = VTermValue { boolean: 0 };
-    match (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].shape
-        as ::core::ffi::c_uint
-    {
-        0 => {
-            cursor_shape.number = VTERM_PROP_CURSORSHAPE_BLOCK as ::core::ffi::c_int;
-        }
-        1 => {
-            cursor_shape.number = VTERM_PROP_CURSORSHAPE_UNDERLINE as ::core::ffi::c_int;
-        }
-        2 => {
-            cursor_shape.number = VTERM_PROP_CURSORSHAPE_BAR_LEFT as ::core::ffi::c_int;
-        }
-        _ => {}
-    }
-    vterm_state_set_termprop(state, VTERM_PROP_CURSORSHAPE, &raw mut cursor_shape);
-    let mut cursor_blink: VTermValue = VTermValue { boolean: 0 };
-    if (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkon
-        != 0 as ::core::ffi::c_int
-        && (*shape_table.ptr())[SHAPE_IDX_TERM as ::core::ffi::c_int as usize].blinkoff
-            != 0 as ::core::ffi::c_int
-    {
-        cursor_blink.boolean = true_0;
-    } else {
-        cursor_blink.boolean = false_0;
-    }
-    vterm_state_set_termprop(state, VTERM_PROP_CURSORBLINK, &raw mut cursor_blink);
-    (*term).invalid_start = 0 as ::core::ffi::c_int;
-    (*term).invalid_end = opts.height as ::core::ffi::c_int;
-    (*term).pending.events = multiqueue_new(None, NULL_0);
-    if (*buf).b_ml.ml_flags & ML_EMPTY == 0 {
-        let mut line_count: linenr_T = (*buf).b_ml.ml_line_count;
-        // Not immutable: ml_delete_buf() mutates (*buf).b_ml behind the raw pointer.
-        #[allow(clippy::while_immutable_condition)]
-        while (*buf).b_ml.ml_flags & ML_EMPTY == 0 {
-            ml_delete_buf(buf, 1 as linenr_T, false_0 != 0);
-        }
-        deleted_lines_buf(buf, 1 as linenr_T, line_count);
-    }
-    (*term).old_height = 1 as ::core::ffi::c_int;
-    return term;
+
+/// vterm's "here are bytes for the child" callback.
+unsafe extern "C" fn term_output_callback(s: *const c_char, len: size_t, user_data: *mut c_void) {
+    unsafe { terminal_send(user_data as *mut Terminal, s, len) };
 }
-pub unsafe fn terminal_open(mut termpp: *mut *mut Terminal, mut buf: *mut buf_T) {
-    let mut term: *mut Terminal = *termpp;
-    '_c2rust_label: {
-        if !term.is_null() {
+
+/// Create a terminal for `buf` and wire it to vterm.
+///
+/// The buffer is emptied: its lines are about to become a mirror of the
+/// emulator's screen, and anything already there would be taken for
+/// scrollback.
+pub unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Terminal {
+    unsafe {
+        // Leaked here and reclaimed by terminal_destroy. The buffer is the
+        // owner; every other reference reaches it through `buf_T::terminal`.
+        let term: *mut Terminal = Box::into_raw(Box::new(Terminal::new(opts, (*buf).handle)));
+        (*buf).terminal = term;
+
+        (*term).vt = vterm_new(opts.height as c_int, opts.width as c_int);
+        vterm_set_utf8((*term).vt, 1);
+        let state: *mut VTermState = vterm_obtain_state((*term).vt);
+        (*term).vts = vterm_obtain_screen((*term).vt);
+        vterm_screen_enable_altscreen((*term).vts, 1);
+        vterm_screen_enable_reflow((*term).vts, true);
+        vterm_screen_set_callbacks(
+            (*term).vts,
+            &raw const callbacks::SCREEN_CALLBACKS,
+            term as *mut c_void,
+        );
+        vterm_screen_set_unrecognised_fallbacks(
+            (*term).vts,
+            &raw const termrequest::FALLBACKS,
+            term as *mut c_void,
+        );
+        vterm_screen_set_damage_merge((*term).vts, VTERM_DAMAGE_SCROLL);
+        vterm_screen_reset((*term).vts, 1);
+        vterm_output_set_callback((*term).vt, Some(term_output_callback), term as *mut c_void);
+        vterm_state_set_selection_callbacks(
+            state,
+            &raw const callbacks::SELECTION_CALLBACKS,
+            term as *mut c_void,
+            (*term).selection_buffer.as_mut_ptr(),
+            SELECTIONBUF_SIZE as size_t,
+        );
+
+        // Start the child off with the cursor the user configured for
+        // terminal mode; it is free to change it.
+        let shape = shape_table.ptr();
+        let mut cursor_shape = VTermValue { boolean: 0 };
+        cursor_shape.number = match (*shape)[SHAPE_IDX_TERM as usize].shape {
+            0 => VTERM_PROP_CURSORSHAPE_BLOCK,
+            1 => VTERM_PROP_CURSORSHAPE_UNDERLINE,
+            2 => VTERM_PROP_CURSORSHAPE_BAR_LEFT,
+            // Not a shape vterm knows; leave its default alone.
+            _ => 0,
+        };
+        vterm_state_set_termprop(state, VTERM_PROP_CURSORSHAPE, &raw mut cursor_shape);
+        let mut cursor_blink = VTermValue { boolean: 0 };
+        cursor_blink.boolean = ((*shape)[SHAPE_IDX_TERM as usize].blinkon != 0
+            && (*shape)[SHAPE_IDX_TERM as usize].blinkoff != 0)
+            as c_int;
+        vterm_state_set_termprop(state, VTERM_PROP_CURSORBLINK, &raw mut cursor_blink);
+
+        (*term).invalid_start = 0;
+        (*term).invalid_end = opts.height as c_int;
+        (*term).pending.events = multiqueue_new(None, ::core::ptr::null_mut());
+
+        if (*buf).b_ml.ml_flags & ML_EMPTY == 0 {
+            let line_count = (*buf).b_ml.ml_line_count;
+            // Not immutable: ml_delete_buf() mutates (*buf).b_ml behind the raw pointer.
+            #[allow(clippy::while_immutable_condition)]
+            while (*buf).b_ml.ml_flags & ML_EMPTY == 0 {
+                ml_delete_buf(buf, 1 as linenr_T, false);
+            }
+            deleted_lines_buf(buf, 1 as linenr_T, line_count);
+        }
+        (*term).old_height = 1;
+        term
+    }
+}
+
+/// Make `buf` look and behave like a terminal buffer, and announce it.
+///
+/// Runs `TermOpen`, which can wipe the buffer or close the terminal
+/// outright — hence the re-check before touching either again.
+pub unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
+    unsafe {
+        let term: *mut Terminal = *termpp;
+        assert!(!term.is_null(), "terminal_open without a terminal");
+
+        let mut aco: aco_save_T = ::core::mem::zeroed();
+        aucmd_prepbuf(&raw mut aco, buf);
+        if (*term).sb.is_sized() {
+            refresh_scrollback(term, buf);
         } else {
-            __assert_fail(
-                b"term != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                588 as ::core::ffi::c_uint,
-                b"void terminal_open(Terminal **, buf_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
+            debug_assert!((*term).invalid_start >= 0);
+        }
+        refresh::refresh_screen(term, buf);
+
+        // Locked because setting 'buftype' can run OptionSet, and the
+        // buffer's lines are the emulator's to write.
+        (*buf).b_locked += 1;
+        set_option_value(
+            kOptBuftype,
+            OptVal {
+                type_0: kOptValTypeString,
+                data: OptValData {
+                    string: static_cstring(c"terminal"),
+                },
+            },
+            OPT_LOCAL,
+        );
+        (*buf).b_locked -= 1;
+
+        if !(*buf).b_ffname.is_null() {
+            callbacks::buf_set_term_title(
+                buf,
+                ::core::slice::from_raw_parts(
+                    (*buf).b_ffname.cast::<u8>(),
+                    strlen((*buf).b_ffname),
+                ),
             );
         }
-    };
-    let mut aco: aco_save_T = aco_save_T {
-        use_aucmd_win_idx: 0,
-        save_curwin_handle: 0,
-        new_curwin_handle: 0,
-        save_prevwin_handle: 0,
-        new_curbuf: bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        },
-        tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        save_VIsual_active: false,
-        save_prompt_insert: 0,
-    };
-    aucmd_prepbuf(&raw mut aco, buf);
-    if (*term).sb.is_sized() {
-        refresh_scrollback(term, buf);
-    } else {
-        '_c2rust_label_0: {
-            if (*term).invalid_start >= 0 as ::core::ffi::c_int {
-            } else {
-                __assert_fail(
-                    b"term->invalid_start >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    598 as ::core::ffi::c_uint,
-                    b"void terminal_open(Terminal **, buf_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
+        // Both would tie the terminal window's scroll position to another
+        // window's, which fights the emulator for the topline.
+        (*curwin.get()).w_onebuf_opt.wo_scb = 0;
+        (*curwin.get()).w_onebuf_opt.wo_crb = 0;
+        (*curwin.get()).w_cursor = pos_T {
+            lnum: 1 as linenr_T,
+            col: 0 as colnr_T,
+            coladd: 0 as colnr_T,
         };
-    }
-    refresh::refresh_screen(term, buf);
-    (*buf).b_locked += 1;
-    set_option_value(
-        kOptBuftype,
-        OptVal {
-            type_0: kOptValTypeString,
-            data: OptValData {
-                string: String_0 {
-                    data: b"terminal\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                        .wrapping_sub(1 as size_t),
-                },
-            },
-        },
-        OPT_LOCAL as ::core::ffi::c_int,
-    );
-    (*buf).b_locked -= 1;
-    if !(*buf).b_ffname.is_null() {
-        callbacks::buf_set_term_title(
+        apply_autocmds(
+            EVENT_TERMOPEN,
+            ::core::ptr::null_mut(),
+            ::core::ptr::null_mut(),
+            false,
             buf,
-            ::core::slice::from_raw_parts((*buf).b_ffname.cast::<u8>(), strlen((*buf).b_ffname)),
         );
-    }
-    (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
-    (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
-    (*curwin.get()).w_cursor = pos_T {
-        lnum: 1 as linenr_T,
-        col: 0 as colnr_T,
-        coladd: 0 as colnr_T,
-    };
-    apply_autocmds(
-        EVENT_TERMOPEN,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        false_0 != 0,
-        buf,
-    );
-    aucmd_restbuf(&raw mut aco);
-    if (*termpp).is_null() || (*term).buf_handle == 0 as ::core::ffi::c_int {
-        return;
-    }
-    if !term_may_alloc_scrollback(term, buf) {
-        abort();
-    }
-    let mut state: *mut VTermState = vterm_obtain_state((*term).vt);
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < 16 as ::core::ffi::c_int {
-        let mut var: [::core::ffi::c_char; 64] = [0; 64];
-        snprintf(
-            &raw mut var as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 64]>(),
-            b"terminal_color_%d\0".as_ptr() as *const ::core::ffi::c_char,
-            i,
-        );
-        let mut name: *mut ::core::ffi::c_char =
-            get_config_string(buf, &raw mut var as *mut ::core::ffi::c_char);
-        if !name.is_null() {
-            let mut dummy: ::core::ffi::c_int = 0;
-            let mut color_val: RgbValue = name_to_color(name, &raw mut dummy);
-            if color_val != -1 as RgbValue {
-                let mut color: VTermColor = VTermColor { type_0: 0 };
-                vterm_color_rgb(
-                    &raw mut color,
-                    (color_val >> 16 as ::core::ffi::c_int & 0xff as RgbValue) as uint8_t,
-                    (color_val >> 8 as ::core::ffi::c_int & 0xff as RgbValue) as uint8_t,
-                    (color_val >> 0 as ::core::ffi::c_int & 0xff as RgbValue) as uint8_t,
-                );
-                set_palette_color(&mut *state, i, &color);
-                (*term).color_set[i as usize] = true_0 != 0;
-            }
+        aucmd_restbuf(&raw mut aco);
+        if (*termpp).is_null() || (*term).buf_handle == 0 {
+            return;
         }
-        i += 1;
+        if !term_may_alloc_scrollback(term, buf) {
+            abort();
+        }
+
+        // `g:terminal_color_0` .. `_15`, or a buffer-local override, set the
+        // emulator's palette. Only the ones actually configured are taken:
+        // the rest stay at vterm's defaults, and `color_set` records which,
+        // so that the attribute code knows to leave them indexed for the UI
+        // to resolve.
+        let state: *mut VTermState = vterm_obtain_state((*term).vt);
+        for i in 0..16 {
+            let key = format!("terminal_color_{i}\0");
+            let name = get_config_string(buf, key.as_ptr().cast::<c_char>());
+            if name.is_null() {
+                continue;
+            }
+            let mut dummy: c_int = 0;
+            let rgb = name_to_color(name, &raw mut dummy);
+            xfree(name as *mut c_void);
+            if rgb == -1 as RgbValue {
+                continue;
+            }
+            let color = VTermColor {
+                rgb: VTermColor_rgb {
+                    type_0: VTERM_COLOR_RGB as uint8_t,
+                    red: (rgb >> 16 & 0xff) as uint8_t,
+                    green: (rgb >> 8 & 0xff) as uint8_t,
+                    blue: (rgb & 0xff) as uint8_t,
+                },
+            };
+            set_palette_color(&mut *state, i, &color);
+            (*term).color_set[i as usize] = true;
+        }
     }
 }
-pub unsafe fn terminal_close(mut termpp: *mut *mut Terminal, mut status: ::core::ffi::c_int) {
-    let mut term: *mut Terminal = *termpp;
-    if (*term).destroy {
-        return;
-    }
-    let mut only_destroy: bool = false_0 != 0;
-    let mut buf: *mut buf_T = map_get_int_ptr_t(
-        buffer_handles.ptr(),
-        (*term).buf_handle as ::core::ffi::c_int,
-    ) as *mut buf_T;
-    if (*term).closed {
-        only_destroy = true_0 != 0;
-    } else {
-        if !exiting.get() {
-            block_autocmds();
-            refresh::refresh_terminal(term);
-            unblock_autocmds();
+
+/// The child exited, or the terminal is being torn down.
+///
+/// `status` is the child's exit status, or -1 when there was no child to
+/// wait for. Runs `TermClose` unless autocommands are blocked; the buffer
+/// stays, showing whatever the child left on screen, until something wipes
+/// it.
+pub unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
+    unsafe {
+        let term: *mut Terminal = *termpp;
+        if (*term).destroy {
+            return;
         }
-        (*term).closed = true_0 != 0;
-    }
-    let mut pos: ::core::ffi::c_int = if !buf.is_null() {
-        (*buf).b_ml.ml_line_count as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-    } else {
-        0 as ::core::ffi::c_int
-    };
-    if status == -1 as ::core::ffi::c_int || exiting.get() as ::core::ffi::c_int != 0 {
-        (*term).buf_handle = 0 as ::core::ffi::c_int as handle_T;
-        if !buf.is_null() {
-            (*buf).terminal = ::core::ptr::null_mut::<Terminal>();
-        }
-        if (*term).refcount == 0 {
-            (*term).destroy = true_0 != 0;
-            (*term).opts.close_cb.expect("non-null function pointer")((*term).opts.data);
-        }
-    } else if !only_destroy {
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
-            if (*wp).w_buffer == buf {
-                (*wp).w_redr_status = true_0 != 0;
+        let buf = buf_for_handle((*term).buf_handle);
+
+        // Closing an already-closed terminal leaves only the freeing half.
+        let only_destroy = (*term).closed;
+        if !only_destroy {
+            if !exiting.get() {
+                // Show the child's last output before announcing its death.
+                block_autocmds();
+                refresh::refresh_terminal(term);
+                unblock_autocmds();
             }
-            wp = (*wp).w_next;
+            (*term).closed = true;
         }
-        pos = if row_to_linenr(term, (*term).cursor.row) < pos {
-            row_to_linenr(term, (*term).cursor.row)
+
+        // Where the child left off, reported to `TermClose` as
+        // `v:event`-adjacent data.
+        let mut pos = if buf.is_null() {
+            0
         } else {
-            pos
+            (*buf).b_ml.ml_line_count as c_int - 1
         };
-    }
-    if only_destroy {
-        return;
-    }
-    if !buf.is_null() && !is_autocmd_blocked() {
-        let mut save_v_event: save_v_event_T = save_v_event_T {
-            sve_did_save: false,
-            sve_hashtab: hashtab_T {
-                ht_mask: 0,
-                ht_used: 0,
-                ht_filled: 0,
-                ht_changed: 0,
-                ht_locked: 0,
-                ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-                ht_smallarray: [hashitem_T {
-                    hi_hash: 0,
-                    hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                }; 16],
-            },
-        };
-        let mut dict: *mut dict_T = get_v_event(&raw mut save_v_event);
-        tv_dict_add_nr(
-            dict,
-            b"status\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-            status as varnumber_T,
-        );
+        if status == -1 || exiting.get() {
+            // Nothing to report on: detach from the buffer straight away.
+            (*term).buf_handle = 0 as handle_T;
+            if !buf.is_null() {
+                (*buf).terminal = ::core::ptr::null_mut();
+            }
+            if (*term).refcount == 0 {
+                (*term).destroy = true;
+                (*term).opts.close_cb.expect("non-null function pointer")((*term).opts.data);
+            }
+        } else if !only_destroy {
+            // The status line says "running"; it no longer is.
+            let mut wp = firstwin.get();
+            while !wp.is_null() {
+                if (*wp).w_buffer == buf {
+                    (*wp).w_redr_status = true;
+                }
+                wp = (*wp).w_next;
+            }
+            pos = pos.min(row_to_linenr(term, (*term).cursor.row));
+        }
+
+        if only_destroy || buf.is_null() || is_autocmd_blocked() {
+            return;
+        }
+        let mut save_v_event: save_v_event_T = ::core::mem::zeroed();
+        let dict = get_v_event(&raw mut save_v_event);
+        tv_dict_add_nr(dict, c"status".as_ptr(), 6, status as varnumber_T);
         tv_dict_set_keys_readonly(dict);
-        let mut data: Dict = Dict {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<KeyValuePair>(),
-        };
-        let mut data__items: [KeyValuePair; 1] = [KeyValuePair {
-            key: String_0 {
-                data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                size: 0,
-            },
-            value: Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed { boolean: false },
-            },
-        }; 1];
-        data.capacity = 1 as size_t;
-        data.items = &raw mut data__items as *mut KeyValuePair;
-        let c2rust_fresh7 = data.size;
-        data.size = data.size.wrapping_add(1);
-        *data.items.offset(c2rust_fresh7 as isize) = key_value_pair {
-            key: cstr_as_string(b"pos\0".as_ptr() as *const ::core::ffi::c_char),
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed {
-                    integer: pos as Integer,
-                },
-            },
-        };
-        let mut c2rust_lvalue: Object = object {
-            type_0: kObjectTypeDict,
-            data: C2Rust_Unnamed { dict: data },
-        };
+        let mut data = DictBuf::<1>::new();
+        data.insert(c"pos", Object::integer(pos as i64));
         apply_autocmds_group(
             EVENT_TERMCLOSE,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            status >= 0 as ::core::ffi::c_int,
-            AUGROUP_ALL as ::core::ffi::c_int,
+            ::core::ptr::null_mut(),
+            ::core::ptr::null_mut(),
+            status >= 0,
+            AUGROUP_ALL,
             buf,
             ::core::ptr::null_mut::<exarg_T>(),
-            &raw mut c2rust_lvalue,
+            &mut data.object(),
         );
         restore_v_event(dict, &raw mut save_v_event);
     }
 }
-unsafe extern "C" fn terminal_state_change_event(mut argv: *mut *mut ::core::ffi::c_void) {
-    let mut buf_handle: handle_T = (*argv.offset(0 as ::core::ffi::c_int as isize))
-        .expose_provenance() as intptr_t as handle_T;
-    let mut buf: *mut buf_T =
-        map_get_int_ptr_t(buffer_handles.ptr(), buf_handle as ::core::ffi::c_int) as *mut buf_T;
-    if !buf.is_null() && !(*buf).terminal.is_null() {
-        redraw_buf_line_later(buf, (*buf).b_ml.ml_line_count, false_0 != 0);
+
+/// Redraw the last line of a terminal's buffer, where the "running" /
+/// "suspended" marker is drawn.
+unsafe extern "C" fn terminal_state_change_event(argv: *mut *mut c_void) {
+    unsafe {
+        let buf = buf_for_handle((*argv.offset(0)).expose_provenance() as handle_T);
+        if !buf.is_null() && !(*buf).terminal.is_null() {
+            redraw_buf_line_later(buf, (*buf).b_ml.ml_line_count, false);
+        }
     }
 }
-pub unsafe fn terminal_set_state(mut term: *mut Terminal, mut suspended: bool) {
-    if (*term).suspended as ::core::ffi::c_int != suspended as ::core::ffi::c_int {
-        multiqueue_put_event(
-            refresh::refresh_queue(),
-            Event {
-                handler: Some(
-                    terminal_state_change_event
-                        as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+
+/// Record that the child was stopped or resumed.
+///
+/// The redraw is deferred: this is reached from a process-status callback,
+/// which is no place to touch the screen.
+pub unsafe fn terminal_set_state(term: *mut Terminal, suspended: bool) {
+    unsafe {
+        if (*term).suspended != suspended {
+            multiqueue_put_event(
+                refresh::refresh_queue(),
+                Event::new(
+                    Some(terminal_state_change_event),
+                    [::core::ptr::with_exposed_provenance_mut::<c_void>(
+                        (*term).buf_handle as usize,
+                    )],
                 ),
-                argv: [
-                    ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                        (*term).buf_handle as intptr_t as usize,
-                    ),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ],
-            },
-        );
-    }
-    (*term).suspended = suspended;
-}
-pub unsafe fn terminal_check_size(mut term: *mut Terminal) {
-    if (*term).closed {
-        return;
-    }
-    let mut curwidth: ::core::ffi::c_int = 0;
-    let mut curheight: ::core::ffi::c_int = 0;
-    vterm_get_size((*term).vt, &raw mut curheight, &raw mut curwidth);
-    let mut width: uint16_t = 0 as uint16_t;
-    let mut height: uint16_t = 0 as uint16_t;
-    let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-    while !tp.is_null() {
-        let mut wp: *mut win_T = if tp == curtab.get() {
-            firstwin.get()
-        } else {
-            (*tp).tp_firstwin
-        };
-        while !wp.is_null() {
-            if !is_aucmd_win(wp) {
-                if !(*wp).w_buffer.is_null() && (*(*wp).w_buffer).terminal == term {
-                    let win_width: uint16_t =
-                        (if 0 as ::core::ffi::c_int > (*wp).w_view_width - win_col_off(wp) {
-                            0 as ::core::ffi::c_int
-                        } else {
-                            (*wp).w_view_width - win_col_off(wp)
-                        }) as uint16_t;
-                    width = (if width as ::core::ffi::c_int > win_width as ::core::ffi::c_int {
-                        width as ::core::ffi::c_int
-                    } else {
-                        win_width as ::core::ffi::c_int
-                    }) as uint16_t;
-                    height = (if height as ::core::ffi::c_int > (*wp).w_view_height {
-                        height as ::core::ffi::c_int
-                    } else {
-                        (*wp).w_view_height
-                    }) as uint16_t;
-                }
-            }
-            wp = (*wp).w_next;
-        }
-        tp = (*tp).tp_next as *mut tabpage_T;
-    }
-    if curheight == height as ::core::ffi::c_int && curwidth == width as ::core::ffi::c_int
-        || height as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-        || width as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-    {
-        return;
-    }
-    vterm_set_size(
-        (*term).vt,
-        height as ::core::ffi::c_int,
-        width as ::core::ffi::c_int,
-    );
-    vterm_screen_flush_damage((*term).vts);
-    (*term).pending.resize = true_0 != 0;
-    refresh::invalidate_terminal(term, None);
-}
-unsafe fn set_terminal_winopts(s: *mut TerminalState) {
-    '_c2rust_label: {
-        if (*s).save_curwin_handle == 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"s->save_curwin_handle == 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                812 as ::core::ffi::c_uint,
-                b"void set_terminal_winopts(TerminalState *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
             );
         }
-    };
-    (*s).save_curwin_handle = (*curwin.get()).handle;
-    (*s).save_w_p_cul = (*curwin.get()).w_onebuf_opt.wo_cul != 0;
-    (*s).save_w_p_culopt = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    (*s).save_w_p_culopt_flags = (*curwin.get()).w_p_culopt_flags;
-    (*s).save_w_p_cuc = (*curwin.get()).w_onebuf_opt.wo_cuc;
-    (*s).save_w_p_so = (*curwin.get()).w_onebuf_opt.wo_so;
-    (*s).save_w_p_siso = (*curwin.get()).w_onebuf_opt.wo_siso;
-    if (*curwin.get()).w_onebuf_opt.wo_cul != 0
-        && (*curwin.get()).w_p_culopt_flags as ::core::ffi::c_int
-            & kOptCuloptFlagNumber as ::core::ffi::c_int
-            != 0
-    {
-        if !strequal(
-            (*curwin.get()).w_onebuf_opt.wo_culopt,
-            b"number\0".as_ptr() as *const ::core::ffi::c_char,
-        ) {
-            (*s).save_w_p_culopt = (*curwin.get()).w_onebuf_opt.wo_culopt;
-            (*curwin.get()).w_onebuf_opt.wo_culopt =
-                xstrdup(b"number\0".as_ptr() as *const ::core::ffi::c_char);
-        }
-        (*curwin.get()).w_p_culopt_flags = kOptCuloptFlagNumber as ::core::ffi::c_int as uint8_t;
-    } else {
-        (*curwin.get()).w_onebuf_opt.wo_cul = false_0;
-    }
-    (*curwin.get()).w_onebuf_opt.wo_cuc = false_0;
-    (*curwin.get()).w_onebuf_opt.wo_so = 0 as OptInt;
-    (*curwin.get()).w_onebuf_opt.wo_siso = 0 as OptInt;
-    if (*curwin.get()).w_onebuf_opt.wo_cuc != (*s).save_w_p_cuc {
-        redraw_later(curwin.get(), UPD_SOME_VALID as ::core::ffi::c_int);
-    } else if (*curwin.get()).w_onebuf_opt.wo_cul != (*s).save_w_p_cul as ::core::ffi::c_int
-        || (*curwin.get()).w_onebuf_opt.wo_cul != 0
-            && (*curwin.get()).w_p_culopt_flags as ::core::ffi::c_int
-                != (*s).save_w_p_culopt_flags as ::core::ffi::c_int
-    {
-        redraw_later(curwin.get(), UPD_VALID as ::core::ffi::c_int);
+        (*term).suspended = suspended;
     }
 }
-unsafe fn unset_terminal_winopts(s: *mut TerminalState) {
-    let mut winopts: *mut winopt_T = ::core::ptr::null_mut::<winopt_T>();
-    '_c2rust_label: {
-        if (*s).save_curwin_handle != 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"s->save_curwin_handle != 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                848 as ::core::ffi::c_uint,
-                b"void unset_terminal_winopts(TerminalState *const)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
+
+/// Resize the emulator to fit the windows showing it.
+///
+/// The largest of them, not the smallest: a narrower window scrolls
+/// sideways rather than making the child reflow for everyone else.
+pub unsafe fn terminal_check_size(term: *mut Terminal) {
+    unsafe {
+        if (*term).closed {
+            return;
         }
-    };
-    let wp: *mut win_T = map_get_int_ptr_t(
-        window_handles.ptr(),
-        (*s).save_curwin_handle as ::core::ffi::c_int,
-    ) as *mut win_T;
-    '_end: {
-        if !wp.is_null() {
-            winopts = ::core::ptr::null_mut::<winopt_T>();
-            if (*(*wp).w_buffer).handle != (*(*s).term).buf_handle {
-                let mut buf: *mut buf_T = map_get_int_ptr_t(
-                    buffer_handles.ptr(),
-                    (*(*s).term).buf_handle as ::core::ffi::c_int,
-                ) as *mut buf_T;
-                if buf.is_null() {
-                    break '_end;
-                } else {
-                    let mut i: size_t = 0 as size_t;
-                    while i < (*buf).b_wininfo.size {
-                        let mut wip: *mut WinInfo = *(*buf).b_wininfo.items.offset(i as isize);
-                        if (*wip).wi_win == wp && (*wip).wi_optset as ::core::ffi::c_int != 0 {
-                            winopts = &raw mut (*wip).wi_opt;
-                            break;
-                        } else {
-                            i = i.wrapping_add(1);
-                        }
-                    }
-                    if winopts.is_null() {
-                        break '_end;
-                    }
-                }
-            } else {
-                winopts = &raw mut (*wp).w_onebuf_opt;
-                if win_valid(wp) {
-                    if (*s).save_w_p_cuc != (*wp).w_onebuf_opt.wo_cuc {
-                        redraw_later(wp, UPD_SOME_VALID as ::core::ffi::c_int);
-                    } else if (*s).save_w_p_cul as ::core::ffi::c_int != (*wp).w_onebuf_opt.wo_cul
-                        || (*s).save_w_p_cul as ::core::ffi::c_int != 0
-                            && (*s).save_w_p_culopt_flags as ::core::ffi::c_int
-                                != (*wp).w_p_culopt_flags as ::core::ffi::c_int
-                    {
-                        redraw_later(wp, UPD_VALID as ::core::ffi::c_int);
-                    }
-                }
-                (*wp).w_p_culopt_flags = (*s).save_w_p_culopt_flags;
+        let mut curheight = 0;
+        let mut curwidth = 0;
+        vterm_get_size((*term).vt, &raw mut curheight, &raw mut curwidth);
+
+        let mut width = 0;
+        let mut height = 0;
+        for wp in all_windows() {
+            // The autocommand window is a fiction with a nominal size.
+            if is_aucmd_win(wp) || (*wp).w_buffer.is_null() {
+                continue;
             }
-            if !(*s).save_w_p_culopt.is_null() {
-                free_string_option((*winopts).wo_culopt);
-                (*winopts).wo_culopt = (*s).save_w_p_culopt;
-                (*s).save_w_p_culopt = ::core::ptr::null_mut::<::core::ffi::c_char>();
+            if (*(*wp).w_buffer).terminal != term {
+                continue;
             }
-            (*winopts).wo_cul = (*s).save_w_p_cul as ::core::ffi::c_int;
-            (*winopts).wo_cuc = (*s).save_w_p_cuc;
-            (*winopts).wo_so = (*s).save_w_p_so;
-            (*winopts).wo_siso = (*s).save_w_p_siso;
+            width = width.max(((*wp).w_view_width - win_col_off(wp)).max(0));
+            height = height.max((*wp).w_view_height);
         }
+
+        // Zero means no window is showing it; keep whatever size it had.
+        if (curheight == height && curwidth == width) || height == 0 || width == 0 {
+            return;
+        }
+        vterm_set_size((*term).vt, height, width);
+        vterm_screen_flush_damage((*term).vts);
+        (*term).pending.resize = true;
+        refresh::invalidate_terminal(term, None);
     }
-    free_string_option((*s).save_w_p_culopt);
-    (*s).save_curwin_handle = 0 as ::core::ffi::c_int as handle_T;
 }
-pub unsafe fn terminal_enter() -> bool {
-    let mut buf: *mut buf_T = curbuf.get();
-    '_c2rust_label: {
-        if !(*buf).terminal.is_null() {
-        } else {
-            __assert_fail(
-                b"buf->terminal\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                903 as ::core::ffi::c_uint,
-                b"_Bool terminal_enter(void)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
+
+/// Free the terminal, if nothing is still standing on it.
+///
+/// Reached repeatedly — from the close callback, from the buffer being
+/// wiped — and does nothing until `refcount` reaches zero.
+pub unsafe fn terminal_destroy(termpp: *mut *mut Terminal) {
+    unsafe {
+        let term: *mut Terminal = *termpp;
+        let buf = buf_for_handle((*term).buf_handle);
+        if !buf.is_null() {
+            (*term).buf_handle = 0 as handle_T;
+            (*buf).terminal = ::core::ptr::null_mut();
         }
-    };
-    let mut s: [TerminalState; 1] = [TerminalState {
-        state: vim_state {
-            check: None,
-            execute: None,
-        },
-        term: ::core::ptr::null_mut::<Terminal>(),
-        save_rd: 0,
-        close: false,
-        got_bsl: false,
-        got_bsl_o: false,
-        cursor_visible: false,
-        save_curwin_handle: 0,
-        save_w_p_cul: false,
-        save_w_p_culopt: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        save_w_p_culopt_flags: 0,
-        save_w_p_cuc: 0,
-        save_w_p_so: 0,
-        save_w_p_siso: 0,
-    }];
-    (*(&raw mut s as *mut TerminalState)).term = (*buf).terminal;
-    (*(&raw mut s as *mut TerminalState)).cursor_visible = true_0 != 0;
-    stop_insert_mode.set(false_0 != 0);
-    terminal_check_size((*(&raw mut s as *mut TerminalState)).term);
-    let mut save_state: ::core::ffi::c_int = State.get();
-    (*(&raw mut s as *mut TerminalState)).save_rd = RedrawingDisabled.get();
-    State.set(MODE_TERMINAL as ::core::ffi::c_int);
-    (*mapped_ctrl_c.ptr()) |= MODE_TERMINAL as ::core::ffi::c_int;
-    RedrawingDisabled.set(false_0);
-    set_terminal_winopts(&raw mut s as *mut TerminalState);
-    (*(*(&raw mut s as *mut TerminalState)).term).pending.cursor = true_0 != 0;
-    refresh::adjust_topline_cursor(
-        (*(&raw mut s as *mut TerminalState)).term,
-        buf,
-        0 as ::core::ffi::c_int,
-    );
-    showmode();
-    ui_cursor_shape();
-    terminal_focus((*(&raw mut s as *mut TerminalState)).term, true_0 != 0);
-    (*curbuf.get()).b_last_changedtick_i = buf_get_changedtick(curbuf.get());
-    (*(*(&raw mut s as *mut TerminalState)).term).refcount =
-        (*(*(&raw mut s as *mut TerminalState)).term)
-            .refcount
-            .wrapping_add(1);
-    apply_autocmds(
-        EVENT_TERMENTER,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        false_0 != 0,
-        curbuf.get(),
-    );
-    may_trigger_modechanged();
-    (*(*(&raw mut s as *mut TerminalState)).term).refcount =
-        (*(*(&raw mut s as *mut TerminalState)).term)
-            .refcount
-            .wrapping_sub(1);
-    if (*(*(&raw mut s as *mut TerminalState)).term).buf_handle == 0 as ::core::ffi::c_int {
-        (*(&raw mut s as *mut TerminalState)).close = true_0 != 0;
-    }
-    (*(&raw mut s as *mut TerminalState)).state.execute = Some(
-        terminal_execute
-            as unsafe extern "C" fn(*mut VimState, ::core::ffi::c_int) -> ::core::ffi::c_int,
-    ) as state_execute_callback;
-    (*(&raw mut s as *mut TerminalState)).state.check =
-        Some(terminal_check as unsafe extern "C" fn(*mut VimState) -> ::core::ffi::c_int)
-            as state_check_callback;
-    state_enter(&raw mut (*(&raw mut s as *mut TerminalState)).state);
-    if !(*(&raw mut s as *mut TerminalState)).got_bsl_o {
-        restart_edit.set(0 as ::core::ffi::c_int);
-    }
-    State.set(save_state);
-    RedrawingDisabled.set((*(&raw mut s as *mut TerminalState)).save_rd);
-    if !(*(&raw mut s as *mut TerminalState)).cursor_visible {
-        ui_busy_stop();
-    }
-    parse_shape_opt(SHAPE_CURSOR);
-    unset_terminal_winopts(&raw mut s as *mut TerminalState);
-    terminal_focus((*(&raw mut s as *mut TerminalState)).term, false_0 != 0);
-    (*curbuf.get()).b_last_changedtick = buf_get_changedtick(curbuf.get());
-    if (*curbuf.get()).terminal == (*(&raw mut s as *mut TerminalState)).term
-        && !(*(&raw mut s as *mut TerminalState)).close
-    {
-        terminal_check_cursor();
-    }
-    if restart_edit.get() != 0 {
-        showmode();
-    } else {
-        unshowmode(true_0 != 0);
-    }
-    ui_cursor_shape();
-    if (*(&raw mut s as *mut TerminalState)).close {
-        (*(*(&raw mut s as *mut TerminalState)).term).refcount =
-            (*(*(&raw mut s as *mut TerminalState)).term)
-                .refcount
-                .wrapping_add(1);
-    }
-    apply_autocmds(
-        EVENT_TERMLEAVE,
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        false_0 != 0,
-        curbuf.get(),
-    );
-    if (*(&raw mut s as *mut TerminalState)).close {
-        (*(*(&raw mut s as *mut TerminalState)).term).refcount =
-            (*(*(&raw mut s as *mut TerminalState)).term)
-                .refcount
-                .wrapping_sub(1);
-        let buf_handle: handle_T = (*(*(&raw mut s as *mut TerminalState)).term).buf_handle;
-        (*(*(&raw mut s as *mut TerminalState)).term).destroy = true_0 != 0;
-        (*(*(&raw mut s as *mut TerminalState)).term)
-            .opts
-            .close_cb
-            .expect("non-null function pointer")(
-            (*(*(&raw mut s as *mut TerminalState)).term).opts.data,
-        );
-        if buf_handle != 0 as ::core::ffi::c_int {
-            do_buffer(
-                DOBUF_WIPE as ::core::ffi::c_int,
-                DOBUF_FIRST as ::core::ffi::c_int,
-                FORWARD as ::core::ffi::c_int,
-                buf_handle as ::core::ffi::c_int,
-                true_0,
-            );
+        if (*term).refcount != 0 {
+            return;
         }
-    }
-    return (*(&raw mut s as *mut TerminalState)).got_bsl_o;
-}
-unsafe fn terminal_check_cursor() {
-    let mut term: *mut Terminal = (*curbuf.get()).terminal;
-    (*curwin.get()).w_cursor.lnum = if (*curbuf.get()).b_ml.ml_line_count
-        < row_to_linenr(term, (*term).cursor.row) as linenr_T
-    {
-        (*curbuf.get()).b_ml.ml_line_count
-    } else {
-        row_to_linenr(term, (*term).cursor.row) as linenr_T
-    };
-    let topline: linenr_T = if (*curbuf.get()).b_ml.ml_line_count
-        - (*curwin.get()).w_view_height as linenr_T
-        + 1 as linenr_T
-        > 1 as linenr_T
-    {
-        (*curbuf.get()).b_ml.ml_line_count - (*curwin.get()).w_view_height as linenr_T
-            + 1 as linenr_T
-    } else {
-        1 as linenr_T
-    };
-    if topline != (*curwin.get()).w_topline {
-        set_topline(curwin.get(), topline);
-    }
-    if (*term).suspended as ::core::ffi::c_int != 0
-        && State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
-    {
-        (*curwin.get()).w_cursor = pos_T {
-            lnum: (*curbuf.get()).b_ml.ml_line_count,
-            col: 0,
-            coladd: 0,
-        };
-    } else {
-        let mut off: ::core::ffi::c_int = if State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
-        {
-            0 as ::core::ffi::c_int
-        } else if (*curwin.get()).w_onebuf_opt.wo_rl != 0 {
-            1 as ::core::ffi::c_int
-        } else {
-            -1 as ::core::ffi::c_int
-        };
-        coladvance(
-            curwin.get(),
-            if 0 as ::core::ffi::c_int > (*term).cursor.col + off {
-                0 as colnr_T
-            } else {
-                (*term).cursor.col as colnr_T + off as colnr_T
-            },
-        );
-    };
-}
-unsafe fn terminal_check_focus(s: *mut TerminalState) -> bool {
-    if (*curbuf.get()).terminal.is_null() {
-        return false_0 != 0;
-    }
-    if (*s).save_curwin_handle != (*curwin.get()).handle {
-        unset_terminal_winopts(s);
-        set_terminal_winopts(s);
-    }
-    if (*s).term != (*curbuf.get()).terminal {
-        terminal_focus((*s).term, false_0 != 0);
-        if (*s).close {
-            (*(*s).term).destroy = true_0 != 0;
-            (*(*s).term)
-                .opts
-                .close_cb
-                .expect("non-null function pointer")((*(*s).term).opts.data);
-            (*s).close = false_0 != 0;
-        }
-        (*s).term = (*curbuf.get()).terminal;
-        (*(*s).term).pending.cursor = true_0 != 0;
-        refresh::invalidate_terminal((*s).term, None);
-        terminal_focus((*s).term, true_0 != 0);
-    }
-    return true_0 != 0;
-}
-unsafe extern "C" fn terminal_check(mut state: *mut VimState) -> ::core::ffi::c_int {
-    let s: *mut TerminalState = state as *mut TerminalState;
-    '_c2rust_label: {
-        if !(*s).close
-            || (*(*s).term).buf_handle == 0 as ::core::ffi::c_int
-                && (*s).term != (*curbuf.get()).terminal
-        {
-        } else {
-            __assert_fail(
-                b"!s->close || (s->term->buf_handle == 0 && s->term != curbuf->terminal)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1053 as ::core::ffi::c_uint,
-                b"int terminal_check(VimState *)\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    if stop_insert_mode.get() as ::core::ffi::c_int != 0 || !terminal_check_focus(s) {
-        return 0 as ::core::ffi::c_int;
-    }
-    refresh::terminal_check_refresh();
-    terminal_check_cursor();
-    validate_cursor(curwin.get());
-    (*(*s).term).refcount = (*(*s).term).refcount.wrapping_add(1);
-    if has_event(EVENT_TEXTCHANGEDT) as ::core::ffi::c_int != 0
-        && (*curbuf.get()).b_last_changedtick_i != buf_get_changedtick(curbuf.get())
-    {
-        apply_autocmds(
-            EVENT_TEXTCHANGEDT,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            false_0 != 0,
-            curbuf.get(),
-        );
-        (*curbuf.get()).b_last_changedtick_i = buf_get_changedtick(curbuf.get());
-    }
-    may_trigger_win_scrolled_resized();
-    (*(*s).term).refcount = (*(*s).term).refcount.wrapping_sub(1);
-    if (*(*s).term).buf_handle == 0 as ::core::ffi::c_int {
-        (*s).close = true_0 != 0;
-    }
-    if !terminal_check_focus(s) {
-        return 0 as ::core::ffi::c_int;
-    }
-    terminal_check_cursor();
-    validate_cursor(curwin.get());
-    show_cursor_info_later(false_0 != 0);
-    if must_redraw.get() != 0 {
-        update_screen();
-    } else {
-        redraw_statuslines();
-        if clear_cmdline.get() as ::core::ffi::c_int != 0
-            || redraw_cmdline.get() as ::core::ffi::c_int != 0
-            || redraw_mode.get() as ::core::ffi::c_int != 0
-        {
-            showmode();
-        }
-    }
-    setcursor();
-    refresh::refresh_cursor((*s).term, &mut (*s).cursor_visible);
-    ui_flush();
-    return 1 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn terminal_execute(
-    mut state: *mut VimState,
-    mut key: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut s: *mut TerminalState = state as *mut TerminalState;
-    let mut tmp_mod_mask: ::core::ffi::c_int = mod_mask.get();
-    let mut mod_key: ::core::ffi::c_int = merge_modifiers(key, &raw mut tmp_mod_mask);
-    's_214: {
-        'c_47026: {
-            match mod_key {
-                K_LEFTMOUSE | K_LEFTDRAG | -12029 | K_MIDDLEMOUSE | K_MIDDLEDRAG
-                | K_MIDDLERELEASE | K_RIGHTMOUSE | K_RIGHTDRAG | K_RIGHTRELEASE | K_X1MOUSE
-                | K_X1DRAG | K_X1RELEASE | K_X2MOUSE | K_X2DRAG | K_X2RELEASE | -19453 | -19709
-                | -19965 | -20221 | -25853 => {
-                    if send_mouse_event((*s).term, key) {
-                        return 0 as ::core::ffi::c_int;
-                    }
-                    break 's_214;
-                }
-                K_PASTE_START => {
-                    paste_repeat(1 as ::core::ffi::c_int);
-                    break 's_214;
-                }
-                K_EVENT => {
-                    (*(*s).term).refcount = (*(*s).term).refcount.wrapping_add(1);
-                    state_handle_k_event();
-                    (*(*s).term).refcount = (*(*s).term).refcount.wrapping_sub(1);
-                    if (*(*s).term).buf_handle == 0 as ::core::ffi::c_int {
-                        (*s).close = true_0 != 0;
-                    }
-                    break 's_214;
-                }
-                K_COMMAND => {
-                    do_cmdline(
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        Some(
-                            getcmdkeycmd
-                                as unsafe extern "C" fn(
-                                    ::core::ffi::c_int,
-                                    *mut ::core::ffi::c_void,
-                                    ::core::ffi::c_int,
-                                    bool,
-                                )
-                                    -> *mut ::core::ffi::c_char,
-                        ),
-                        NULL_0,
-                        0 as ::core::ffi::c_int,
-                    );
-                    break 's_214;
-                }
-                K_LUA => {
-                    map_execute_lua(false_0 != 0, false_0 != 0);
-                    break 's_214;
-                }
-                K_IGNORE | K_NOP => {
-                    break 's_214;
-                }
-                Ctrl_N => {
-                    if (*s).got_bsl {
-                        return 0 as ::core::ffi::c_int;
-                    }
-                }
-                Ctrl_O => {}
-                _ => {
-                    break 'c_47026;
-                }
-            }
-            if (*s).got_bsl {
-                (*s).got_bsl_o = true_0 != 0;
-                restart_edit.set('I' as ::core::ffi::c_int);
-                return 0 as ::core::ffi::c_int;
-            }
-        }
-        if mod_key == Ctrl_C {
-            got_int.set(false_0 != 0);
-        }
-        if mod_key == Ctrl_BSL && !(*s).got_bsl {
-            (*s).got_bsl = true_0 != 0;
-        } else if (*(*s).term).suspended {
-            (*(*s).term)
-                .opts
-                .resume_cb
-                .expect("non-null function pointer")((*(*s).term).opts.data);
-            terminal_set_state((*s).term, false_0 != 0);
-        } else {
-            if (*(*s).term).closed {
-                (*s).close = true_0 != 0;
-                return 0 as ::core::ffi::c_int;
-            }
-            (*s).got_bsl = false_0 != 0;
-            terminal_send_key((*s).term, key);
-        }
-    }
-    return 1 as ::core::ffi::c_int;
-}
-pub unsafe fn terminal_destroy(mut termpp: *mut *mut Terminal) {
-    let mut term: *mut Terminal = *termpp;
-    let mut buf: *mut buf_T = map_get_int_ptr_t(
-        buffer_handles.ptr(),
-        (*term).buf_handle as ::core::ffi::c_int,
-    ) as *mut buf_T;
-    if !buf.is_null() {
-        (*term).buf_handle = 0 as ::core::ffi::c_int as handle_T;
-        (*buf).terminal = ::core::ptr::null_mut::<Terminal>();
-    }
-    if (*term).refcount == 0 {
         refresh::refresh_before_destroy(term);
         vterm_free((*term).vt);
         multiqueue_free((*term).pending.events);
+        // The other half of terminal_alloc's `Box::into_raw`; everything
+        // the terminal owns goes with it.
         drop(Box::from_raw(term));
-        *termpp = ::core::ptr::null_mut::<Terminal>();
+        *termpp = ::core::ptr::null_mut();
     }
 }
+
 /// Write `data` to the child, or hold it if a `TermRequest` handler is
-/// running. See [`TerminalPending::send`].
-unsafe fn terminal_send(term: *mut Terminal, data: *const ::core::ffi::c_char, size: size_t) {
+/// running.
+///
+/// See [`TerminalPending::send`](crate::src::nvim::types::TerminalPending).
+unsafe fn terminal_send(term: *mut Terminal, data: *const c_char, size: size_t) {
     unsafe {
         if (*term).closed {
             return;
@@ -1280,1241 +573,270 @@ unsafe fn terminal_send(term: *mut Terminal, data: *const ::core::ffi::c_char, s
         (*term).opts.write_cb.expect("non-null function pointer")(data, size, (*term).opts.data);
     }
 }
-unsafe fn is_filter_char(mut c: ::core::ffi::c_int) -> bool {
-    let mut flag: ::core::ffi::c_uint = 0 as ::core::ffi::c_uint;
-    match c {
-        8 => {
-            flag = kOptTpfFlagBS as ::core::ffi::c_int as ::core::ffi::c_uint;
+
+/// Redraw after the child closed a synchronized-output frame.
+unsafe extern "C" fn on_sync_flush(argv: *mut *mut c_void) {
+    unsafe {
+        if exiting.get() {
+            return;
         }
-        9 => {
-            flag = kOptTpfFlagHT as ::core::ffi::c_int as ::core::ffi::c_uint;
+        let buf = buf_for_handle((*argv.offset(0)).expose_provenance() as handle_T);
+        if buf.is_null() || (*buf).terminal.is_null() {
+            return;
         }
-        10 | 13 => {}
-        12 => {
-            flag = kOptTpfFlagFF as ::core::ffi::c_int as ::core::ffi::c_uint;
-        }
-        27 => {
-            flag = kOptTpfFlagESC as ::core::ffi::c_int as ::core::ffi::c_uint;
-        }
-        127 => {
-            flag = kOptTpfFlagDEL as ::core::ffi::c_int as ::core::ffi::c_uint;
-        }
-        _ => {
-            if c < ' ' as ::core::ffi::c_int {
-                flag = kOptTpfFlagC0 as ::core::ffi::c_int as ::core::ffi::c_uint;
-            } else if c >= 0x80 as ::core::ffi::c_int && c <= 0x9f as ::core::ffi::c_int {
-                flag = kOptTpfFlagC1 as ::core::ffi::c_int as ::core::ffi::c_uint;
-            }
-        }
-    }
-    return tpf_flags.get() & flag != 0;
-}
-pub unsafe fn terminal_set_streamed_paste(mut term: *mut Terminal, mut streamed: bool) {
-    if (*term).streamed_paste as ::core::ffi::c_int != streamed as ::core::ffi::c_int {
-        if streamed {
-            vterm_keyboard_start_paste((*(*curbuf.get()).terminal).vt);
-        } else {
-            vterm_keyboard_end_paste((*(*curbuf.get()).terminal).vt);
-        }
-    }
-    (*term).streamed_paste = streamed;
-}
-pub unsafe fn terminal_paste(
-    mut count: ::core::ffi::c_int,
-    mut y_array: *mut String_0,
-    mut y_size: size_t,
-) {
-    if y_size == 0 as size_t {
-        return;
-    }
-    if !(*(*curbuf.get()).terminal).streamed_paste {
-        vterm_keyboard_start_paste((*(*curbuf.get()).terminal).vt);
-    }
-    let mut buff_len: size_t = (*y_array.offset(0 as ::core::ffi::c_int as isize)).size;
-    let mut buff: *mut ::core::ffi::c_char = xmalloc(buff_len) as *mut ::core::ffi::c_char;
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < count {
-        let mut j: size_t = 0 as size_t;
-        while j < y_size {
-            if j != 0 {
-                terminal_send(
-                    (*curbuf.get()).terminal,
-                    b"\n\0".as_ptr() as *const ::core::ffi::c_char,
-                    1 as size_t,
-                );
-            }
-            let mut len: size_t = (*y_array.offset(j as isize)).size;
-            if len > buff_len {
-                buff = xrealloc(buff as *mut ::core::ffi::c_void, len) as *mut ::core::ffi::c_char;
-                buff_len = len;
-            }
-            let mut dst: *mut ::core::ffi::c_char = buff;
-            let mut src: *mut ::core::ffi::c_char = (*y_array.offset(j as isize)).data;
-            while *src as ::core::ffi::c_int != NUL {
-                len = utf_ptr2len(src) as size_t;
-                let mut c: ::core::ffi::c_int = utf_ptr2char(src);
-                if !is_filter_char(c) {
-                    memcpy(
-                        dst as *mut ::core::ffi::c_void,
-                        src as *const ::core::ffi::c_void,
-                        len,
-                    );
-                    dst = dst.offset(len as isize);
-                }
-                src = src.offset(len as isize);
-            }
-            terminal_send(
-                (*curbuf.get()).terminal,
-                buff,
-                dst.offset_from(buff) as size_t,
-            );
-            j = j.wrapping_add(1);
-        }
-        i += 1;
-    }
-    xfree(buff as *mut ::core::ffi::c_void);
-    if !(*(*curbuf.get()).terminal).streamed_paste {
-        vterm_keyboard_end_paste((*(*curbuf.get()).terminal).vt);
+        block_autocmds();
+        refresh::refresh_terminal((*buf).terminal);
+        unblock_autocmds();
     }
 }
-unsafe fn terminal_send_key(mut term: *mut Terminal, mut c: ::core::ffi::c_int) {
-    let mut mod_0: VTermModifier = VTERM_MOD_NONE;
-    if c == K_ZERO {
-        c = Ctrl_AT;
-    }
-    let mut key: VTermKey = convert_key(&raw mut c, &raw mut mod_0);
-    if key as ::core::ffi::c_uint != VTERM_KEY_NONE as ::core::ffi::c_int as ::core::ffi::c_uint {
-        vterm_keyboard_key((*term).vt, key, mod_0);
-    } else if !(c < 0 as ::core::ffi::c_int) {
-        vterm_keyboard_unichar((*term).vt, c as uint32_t, mod_0);
-    }
-}
-unsafe extern "C" fn on_sync_flush(mut argv: *mut *mut ::core::ffi::c_void) {
-    if exiting.get() {
-        return;
-    }
-    let mut buf_handle: handle_T = (*argv.offset(0 as ::core::ffi::c_int as isize))
-        .expose_provenance() as intptr_t as handle_T;
-    let mut buf: *mut buf_T =
-        map_get_int_ptr_t(buffer_handles.ptr(), buf_handle as ::core::ffi::c_int) as *mut buf_T;
-    if buf.is_null() || (*buf).terminal.is_null() {
-        return;
-    }
-    block_autocmds();
-    refresh::refresh_terminal((*buf).terminal);
-    unblock_autocmds();
-}
-pub unsafe fn terminal_receive(
-    mut term: *mut Terminal,
-    mut data: *const ::core::ffi::c_char,
-    mut len: size_t,
-) {
-    if data.is_null() {
-        return;
-    }
-    if (*term).opts.force_crlf {
-        let mut crlf_data: StringBuilder = StringBuilder {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        };
-        let mut i: size_t = 0 as size_t;
-        while i < len {
-            if *data.offset(i as isize) as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-                && (i == 0 as size_t
-                    || i > 0 as size_t
-                        && *data.offset(i.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
-                            != '\r' as ::core::ffi::c_int)
-            {
-                if crlf_data.size == crlf_data.capacity {
-                    crlf_data.capacity = if crlf_data.capacity != 0 {
-                        crlf_data.capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        8 as size_t
-                    };
-                    crlf_data.items = xrealloc(
-                        crlf_data.items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<::core::ffi::c_char>()
-                            .wrapping_mul(crlf_data.capacity),
-                    ) as *mut ::core::ffi::c_char;
-                } else {
-                };
-                let c2rust_fresh8 = crlf_data.size;
-                crlf_data.size = crlf_data.size.wrapping_add(1);
-                *crlf_data.items.offset(c2rust_fresh8 as isize) = '\r' as ::core::ffi::c_char;
-            }
-            if crlf_data.size == crlf_data.capacity {
-                crlf_data.capacity = if crlf_data.capacity != 0 {
-                    crlf_data.capacity << 1 as ::core::ffi::c_int
-                } else {
-                    8 as size_t
-                };
-                crlf_data.items = xrealloc(
-                    crlf_data.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<::core::ffi::c_char>().wrapping_mul(crlf_data.capacity),
-                ) as *mut ::core::ffi::c_char;
-            } else {
-            };
-            let c2rust_fresh9 = crlf_data.size;
-            crlf_data.size = crlf_data.size.wrapping_add(1);
-            *crlf_data.items.offset(c2rust_fresh9 as isize) = *data.offset(i as isize);
-            i = i.wrapping_add(1);
-        }
-        vterm_input_write((*term).vt, crlf_data.items, crlf_data.size);
-        xfree(crlf_data.items as *mut ::core::ffi::c_void);
-        crlf_data.capacity = 0 as size_t;
-        crlf_data.size = crlf_data.capacity;
-        crlf_data.items = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    } else {
-        vterm_input_write((*term).vt, data, len);
-    }
-    vterm_screen_flush_damage((*term).vts);
-    if (*term).sync_flush_pending {
-        (*term).sync_flush_pending = false_0 != 0;
-        let mut height: ::core::ffi::c_int = 0;
-        vterm_get_size(
-            (*term).vt,
-            &raw mut height,
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-        );
-        (*term).invalid_start = 0 as ::core::ffi::c_int;
-        (*term).invalid_end = height;
-        multiqueue_put_event(
-            (*main_loop.ptr()).events,
-            Event {
-                handler: Some(
-                    on_sync_flush as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
-                ),
-                argv: [
-                    ::core::ptr::with_exposed_provenance_mut::<::core::ffi::c_void>(
-                        (*term).buf_handle as intptr_t as usize,
-                    ),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                ],
-            },
-        );
-    }
-}
-unsafe fn get_rgb(mut state: *mut VTermState, mut color: VTermColor) -> ::core::ffi::c_int {
-    convert_color_to_rgb(&*state, &mut color);
-    return (color.rgb.red as ::core::ffi::c_int) << 16 as ::core::ffi::c_int
-        | (color.rgb.green as ::core::ffi::c_int) << 8 as ::core::ffi::c_int
-        | color.rgb.blue as ::core::ffi::c_int;
-}
-unsafe fn get_underline_hl_flag(mut attrs: VTermScreenCellAttrs) -> ::core::ffi::c_int {
-    match attrs.underline() as ::core::ffi::c_int {
-        0 => return 0 as ::core::ffi::c_int,
-        1 => return HL_UNDERLINE as ::core::ffi::c_int,
-        2 => return HL_UNDERDOUBLE as ::core::ffi::c_int,
-        3 => return HL_UNDERCURL as ::core::ffi::c_int,
-        _ => return HL_UNDERLINE as ::core::ffi::c_int,
-    };
-}
-pub unsafe fn terminal_get_line_attributes(
-    mut term: *mut Terminal,
-    mut _wp: *mut win_T,
-    mut linenr: ::core::ffi::c_int,
-    mut term_attrs: *mut ::core::ffi::c_int,
-) {
-    let mut height: ::core::ffi::c_int = 0;
-    let mut width: ::core::ffi::c_int = 0;
-    vterm_get_size((*term).vt, &raw mut height, &raw mut width);
-    let mut state: *mut VTermState = vterm_obtain_state((*term).vt);
-    '_c2rust_label: {
-        if linenr != 0 {
-        } else {
-            __assert_fail(
-                b"linenr\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1448 as ::core::ffi::c_uint,
-                b"void terminal_get_line_attributes(Terminal *, win_T *, int, int *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut row: ::core::ffi::c_int = linenr_to_row(term, linenr);
-    if row >= height {
-        return;
-    }
-    width = if (TERM_ATTRS_MAX as ::core::ffi::c_int) < width {
-        TERM_ATTRS_MAX as ::core::ffi::c_int
-    } else {
-        width
-    };
-    let mut col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while col < width {
-        let mut cell: VTermScreenCell = VTermScreenCell {
-            schar: 0,
-            width: 0,
-            attrs: VTermScreenCellAttrs {
-                bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [0; 3],
-                c2rust_padding: [0; 1],
-            },
-            fg: VTermColor { type_0: 0 },
-            bg: VTermColor { type_0: 0 },
-            uri: 0,
-        };
-        let mut color_valid: bool = fetch_cell(term, row, col, &raw mut cell);
-        let mut fg_default: bool = !color_valid
-            || cell.fg.type_0 as ::core::ffi::c_int & VTERM_COLOR_DEFAULT_FG as ::core::ffi::c_int
-                != 0;
-        let mut bg_default: bool = !color_valid
-            || cell.bg.type_0 as ::core::ffi::c_int & VTERM_COLOR_DEFAULT_BG as ::core::ffi::c_int
-                != 0;
-        let mut vt_fg: ::core::ffi::c_int = if fg_default as ::core::ffi::c_int != 0 {
-            -1 as ::core::ffi::c_int
-        } else {
-            get_rgb(state, cell.fg)
-        };
-        let mut vt_bg: ::core::ffi::c_int = if bg_default as ::core::ffi::c_int != 0 {
-            -1 as ::core::ffi::c_int
-        } else {
-            get_rgb(state, cell.bg)
-        };
-        let mut fg_indexed: bool = cell.fg.type_0 as ::core::ffi::c_int
-            & VTERM_COLOR_TYPE_MASK as ::core::ffi::c_int
-            == VTERM_COLOR_INDEXED as ::core::ffi::c_int;
-        let mut bg_indexed: bool = cell.bg.type_0 as ::core::ffi::c_int
-            & VTERM_COLOR_TYPE_MASK as ::core::ffi::c_int
-            == VTERM_COLOR_INDEXED as ::core::ffi::c_int;
-        let mut vt_fg_idx: int16_t = (if !fg_default && fg_indexed as ::core::ffi::c_int != 0 {
-            cell.fg.indexed.idx as ::core::ffi::c_int + 1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        }) as int16_t;
-        let mut vt_bg_idx: int16_t = (if !bg_default && bg_indexed as ::core::ffi::c_int != 0 {
-            cell.bg.indexed.idx as ::core::ffi::c_int + 1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        }) as int16_t;
-        let mut fg_set: bool = vt_fg_idx as ::core::ffi::c_int != 0
-            && vt_fg_idx as ::core::ffi::c_int <= 16 as ::core::ffi::c_int
-            && (*term).color_set
-                [(vt_fg_idx as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize]
-                as ::core::ffi::c_int
-                != 0;
-        let mut bg_set: bool = vt_bg_idx as ::core::ffi::c_int != 0
-            && vt_bg_idx as ::core::ffi::c_int <= 16 as ::core::ffi::c_int
-            && (*term).color_set
-                [(vt_bg_idx as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as usize]
-                as ::core::ffi::c_int
-                != 0;
-        let mut hl_attrs: ::core::ffi::c_int =
-            (if cell.attrs.bold() as ::core::ffi::c_int != 0 {
-                HL_BOLD as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) | (if cell.attrs.dim() as ::core::ffi::c_int != 0 {
-                HL_DIM as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) | (if cell.attrs.blink() as ::core::ffi::c_int != 0 {
-                HL_BLINK as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) | (if cell.attrs.conceal() as ::core::ffi::c_int != 0 {
-                HL_CONCEALED as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) | (if cell.attrs.overline() as ::core::ffi::c_int != 0 {
-                HL_OVERLINE as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) | (if cell.attrs.italic() as ::core::ffi::c_int != 0 {
-                HL_ITALIC as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) | (if cell.attrs.reverse() as ::core::ffi::c_int != 0 {
-                HL_INVERSE as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            }) | get_underline_hl_flag(cell.attrs)
-                | (if cell.attrs.strike() as ::core::ffi::c_int != 0 {
-                    HL_STRIKETHROUGH as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                })
-                | (if fg_indexed as ::core::ffi::c_int != 0 && !fg_set {
-                    HL_FG_INDEXED as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                })
-                | (if bg_indexed as ::core::ffi::c_int != 0 && !bg_set {
-                    HL_BG_INDEXED as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                });
-        let mut attr_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if hl_attrs != 0 || !fg_default || !bg_default {
-            let mut c2rust_lvalue: HlAttrs = HlAttrs {
-                rgb_ae_attr: hl_attrs as int32_t,
-                cterm_ae_attr: hl_attrs as int32_t,
-                rgb_fg_color: vt_fg as RgbValue,
-                rgb_bg_color: vt_bg as RgbValue,
-                rgb_sp_color: -1 as RgbValue,
-                cterm_fg_color: vt_fg_idx,
-                cterm_bg_color: vt_bg_idx,
-                hl_blend: -1 as int32_t,
-                url: -1 as int32_t,
-            };
-            attr_id = hl_get_term_attr(&raw mut c2rust_lvalue);
-        }
-        if cell.uri > 0 as ::core::ffi::c_int {
-            attr_id = hl_combine_attr(attr_id, cell.uri);
-        }
-        *term_attrs.offset(col as isize) = attr_id;
-        col += 1;
-    }
-}
-pub unsafe fn terminal_buf(mut term: *const Terminal) -> Buffer {
-    return (*term).buf_handle as Buffer;
-}
-pub unsafe fn terminal_running(mut term: *const Terminal) -> bool {
-    return !(*term).closed;
-}
-pub unsafe fn terminal_suspended(mut term: *const Terminal) -> bool {
-    return (*term).suspended;
-}
-pub unsafe fn terminal_notify_theme(mut term: *mut Terminal, mut dark: bool) {
-    if !(*term).theme_updates {
-        return;
-    }
-    let mut buf: [::core::ffi::c_char; 10] = [0; 10];
-    let mut ret: ssize_t = snprintf(
-        &raw mut buf as *mut ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 10]>(),
-        b"\x1B[997;%cn\0".as_ptr() as *const ::core::ffi::c_char,
-        if dark as ::core::ffi::c_int != 0 {
-            '1' as ::core::ffi::c_int
-        } else {
-            '2' as ::core::ffi::c_int
-        },
-    ) as ssize_t;
-    '_c2rust_label: {
-        if ret > 0 as ssize_t {
-        } else {
-            __assert_fail(
-                b"ret > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1539 as ::core::ffi::c_uint,
-                b"void terminal_notify_theme(Terminal *, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    '_c2rust_label_0: {
-        if ret as size_t <= ::core::mem::size_of::<[::core::ffi::c_char; 10]>() {
-        } else {
-            __assert_fail(
-                b"(size_t)ret <= sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/terminal.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                1540 as ::core::ffi::c_uint,
-                b"void terminal_notify_theme(Terminal *, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    terminal_send(
-        term,
-        &raw mut buf as *mut ::core::ffi::c_char,
-        ret as size_t,
-    );
-}
-unsafe fn terminal_focus(mut term: *const Terminal, mut focus: bool) {
-    let mut state: *mut VTermState = vterm_obtain_state((*term).vt);
-    if focus {
-        vterm_state_focus_in(state);
-    } else {
-        vterm_state_focus_out(state);
-    };
-}
-unsafe fn convert_modifiers(mut key: *mut ::core::ffi::c_int, mut statep: *mut VTermModifier) {
-    if mod_mask.get() & MOD_MASK_SHIFT != 0 {
-        *statep = (*statep as ::core::ffi::c_uint
-            | VTERM_MOD_SHIFT as ::core::ffi::c_int as ::core::ffi::c_uint)
-            as VTermModifier;
-    }
-    if mod_mask.get() & MOD_MASK_CTRL != 0 {
-        *statep = (*statep as ::core::ffi::c_uint
-            | VTERM_MOD_CTRL as ::core::ffi::c_int as ::core::ffi::c_uint)
-            as VTermModifier;
-        if mod_mask.get() & MOD_MASK_SHIFT == 0
-            && *key >= 'A' as ::core::ffi::c_int
-            && *key <= 'Z' as ::core::ffi::c_int
-        {
-            *key += 'a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int;
-        }
-    }
-    if mod_mask.get() & MOD_MASK_ALT != 0 {
-        *statep = (*statep as ::core::ffi::c_uint
-            | VTERM_MOD_ALT as ::core::ffi::c_int as ::core::ffi::c_uint)
-            as VTermModifier;
-    }
-    match *key {
-        K_S_TAB | K_S_UP | K_S_DOWN | K_S_LEFT | K_S_RIGHT | K_S_HOME | K_S_END | K_S_F1
-        | K_S_F2 | K_S_F3 | K_S_F4 | K_S_F5 | K_S_F6 | K_S_F7 | K_S_F8 | K_S_F9 | K_S_F10
-        | K_S_F11 | K_S_F12 => {
-            *statep = (*statep as ::core::ffi::c_uint
-                | VTERM_MOD_SHIFT as ::core::ffi::c_int as ::core::ffi::c_uint)
-                as VTermModifier;
-        }
-        K_C_LEFT | K_C_RIGHT | K_C_HOME | K_C_END => {
-            *statep = (*statep as ::core::ffi::c_uint
-                | VTERM_MOD_CTRL as ::core::ffi::c_int as ::core::ffi::c_uint)
-                as VTermModifier;
-        }
-        _ => {}
-    };
-}
-unsafe fn convert_key(
-    mut key: *mut ::core::ffi::c_int,
-    mut statep: *mut VTermModifier,
-) -> VTermKey {
-    convert_modifiers(key, statep);
-    match *key {
-        K_BS => return VTERM_KEY_BACKSPACE,
-        K_S_TAB | TAB => return VTERM_KEY_TAB,
-        Ctrl_M => return VTERM_KEY_ENTER,
-        ESC => return VTERM_KEY_ESCAPE,
-        K_S_UP | K_UP => return VTERM_KEY_UP,
-        K_S_DOWN | K_DOWN => return VTERM_KEY_DOWN,
-        K_S_LEFT | K_C_LEFT | K_LEFT => return VTERM_KEY_LEFT,
-        K_S_RIGHT | K_C_RIGHT | K_RIGHT => return VTERM_KEY_RIGHT,
-        K_INS => return VTERM_KEY_INS,
-        K_DEL => return VTERM_KEY_DEL,
-        K_S_HOME | K_C_HOME | K_HOME => return VTERM_KEY_HOME,
-        K_S_END | K_C_END | K_END => return VTERM_KEY_END,
-        K_PAGEUP => return VTERM_KEY_PAGEUP,
-        K_PAGEDOWN => return VTERM_KEY_PAGEDOWN,
-        K_K0 | K_KINS => return VTERM_KEY_KP_0,
-        K_K1 | K_KEND => return VTERM_KEY_KP_1,
-        K_K2 | K_KDOWN => return VTERM_KEY_KP_2,
-        K_K3 | K_KPAGEDOWN => return VTERM_KEY_KP_3,
-        K_K4 | K_KLEFT => return VTERM_KEY_KP_4,
-        K_K5 | K_KORIGIN => return VTERM_KEY_KP_5,
-        K_K6 | K_KRIGHT => return VTERM_KEY_KP_6,
-        K_K7 | K_KHOME => return VTERM_KEY_KP_7,
-        K_K8 | K_KUP => return VTERM_KEY_KP_8,
-        K_K9 | K_KPAGEUP => return VTERM_KEY_KP_9,
-        K_KDEL | K_KPOINT => return VTERM_KEY_KP_PERIOD,
-        K_KENTER => return VTERM_KEY_KP_ENTER,
-        K_KPLUS => return VTERM_KEY_KP_PLUS,
-        K_KMINUS => return VTERM_KEY_KP_MINUS,
-        K_KMULTIPLY => return VTERM_KEY_KP_MULT,
-        K_KDIVIDE => return VTERM_KEY_KP_DIVIDE,
-        K_S_F1 | K_F1 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_S_F2 | K_F2 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 2 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_S_F3 | K_F3 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 3 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_S_F4 | K_F4 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 4 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_S_F5 | K_F5 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 5 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_S_F6 | K_F6 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 6 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_S_F7 | K_F7 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 7 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_S_F8 | K_F8 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 8 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_S_F9 | K_F9 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 9 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_S_F10 | K_F10 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 10 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_S_F11 | K_F11 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 11 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_S_F12 | K_F12 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 12 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F13 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 13 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F14 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 14 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F15 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 15 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F16 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 16 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F17 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 17 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F18 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 18 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F19 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 19 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F20 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 20 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F21 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 21 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F22 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 22 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F23 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 23 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F24 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 24 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F25 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 25 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F26 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 26 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F27 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 27 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F28 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 28 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F29 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 29 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F30 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 30 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F31 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 31 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F32 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 32 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F33 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 33 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F34 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 34 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F35 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 35 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F36 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 36 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F37 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 37 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F38 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 38 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F39 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 39 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F40 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 40 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F41 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 41 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F42 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 42 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F43 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 43 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F44 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 44 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F45 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 45 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F46 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 46 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F47 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 47 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F48 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 48 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F49 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 49 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F50 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 50 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F51 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 51 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F52 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 52 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F53 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 53 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F54 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 54 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F55 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 55 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F56 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 56 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F57 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 57 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F58 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 58 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F59 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 59 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F60 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 60 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F61 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 61 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F62 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 62 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        K_F63 => {
-            return (VTERM_KEY_FUNCTION_0 as ::core::ffi::c_int + 63 as ::core::ffi::c_int)
-                as VTermKey;
-        }
-        _ => return VTERM_KEY_NONE,
-    };
-}
-unsafe fn mouse_action(
-    mut term: *mut Terminal,
-    mut button: ::core::ffi::c_int,
-    mut row: ::core::ffi::c_int,
-    mut col: ::core::ffi::c_int,
-    mut pressed: bool,
-    mut mod_0: VTermModifier,
-) {
-    vterm_mouse_move((*term).vt, row, col, mod_0);
-    if button != 0 {
-        vterm_mouse_button((*term).vt, button, pressed, mod_0);
-    }
-}
-unsafe fn send_mouse_event(mut term: *mut Terminal, mut c: ::core::ffi::c_int) -> bool {
-    let mut offset: ::core::ffi::c_int = 0;
-    let mut row: ::core::ffi::c_int = mouse_row.get();
-    let mut col: ::core::ffi::c_int = mouse_col.get();
-    let mut grid: ::core::ffi::c_int = mouse_grid.get();
-    let mut mouse_win: *mut win_T = mouse_find_win_inner(&raw mut grid, &raw mut row, &raw mut col);
-    if !mouse_win.is_null() {
-        offset = 0;
-        if !(*term).suspended
-            && !(*term).closed
-            && (*term).forward_mouse as ::core::ffi::c_int != 0
-            && (*(*mouse_win).w_buffer).terminal == term
-            && row >= 0 as ::core::ffi::c_int
-            && (grid > 1 as ::core::ffi::c_int
-                || row + (*mouse_win).w_winbar_height < (*mouse_win).w_height)
-            && {
-                offset = win_col_off(mouse_win);
-                col >= offset
-            }
-            && (grid > 1 as ::core::ffi::c_int || col < (*mouse_win).w_width)
-        {
-            let mut button: ::core::ffi::c_int = 0;
-            let mut pressed: bool = false_0 != 0;
-            's_184: {
-                'c_50995: {
-                    'c_50990: {
-                        'c_50985: {
-                            'c_50980: {
-                                match c {
-                                    K_LEFTDRAG | K_LEFTMOUSE => {
-                                        pressed = true_0 != 0;
-                                    }
-                                    -12029 => {}
-                                    K_MIDDLEDRAG | K_MIDDLEMOUSE => {
-                                        pressed = true_0 != 0;
-                                        break 'c_50980;
-                                    }
-                                    K_MIDDLERELEASE => {
-                                        break 'c_50980;
-                                    }
-                                    K_RIGHTDRAG | K_RIGHTMOUSE => {
-                                        pressed = true_0 != 0;
-                                        break 'c_50985;
-                                    }
-                                    K_RIGHTRELEASE => {
-                                        break 'c_50985;
-                                    }
-                                    K_X1DRAG | K_X1MOUSE => {
-                                        pressed = true_0 != 0;
-                                        break 'c_50990;
-                                    }
-                                    K_X1RELEASE => {
-                                        break 'c_50990;
-                                    }
-                                    K_X2DRAG | K_X2MOUSE => {
-                                        pressed = true_0 != 0;
-                                        break 'c_50995;
-                                    }
-                                    K_X2RELEASE => {
-                                        break 'c_50995;
-                                    }
-                                    -19453 => {
-                                        pressed = true_0 != 0;
-                                        button = 4 as ::core::ffi::c_int;
-                                        break 's_184;
-                                    }
-                                    -19709 => {
-                                        pressed = true_0 != 0;
-                                        button = 5 as ::core::ffi::c_int;
-                                        break 's_184;
-                                    }
-                                    -19965 => {
-                                        pressed = true_0 != 0;
-                                        button = 7 as ::core::ffi::c_int;
-                                        break 's_184;
-                                    }
-                                    -20221 => {
-                                        pressed = true_0 != 0;
-                                        button = 6 as ::core::ffi::c_int;
-                                        break 's_184;
-                                    }
-                                    -25853 => {
-                                        button = 0 as ::core::ffi::c_int;
-                                        break 's_184;
-                                    }
-                                    _ => return false_0 != 0,
-                                }
-                                button = 1 as ::core::ffi::c_int;
-                                break 's_184;
-                            }
-                            button = 2 as ::core::ffi::c_int;
-                            break 's_184;
-                        }
-                        button = 3 as ::core::ffi::c_int;
-                        break 's_184;
-                    }
-                    button = 8 as ::core::ffi::c_int;
-                    break 's_184;
-                }
-                button = 9 as ::core::ffi::c_int;
-            }
-            let mut mod_0: VTermModifier = VTERM_MOD_NONE;
-            convert_modifiers(&raw mut c, &raw mut mod_0);
-            mouse_action(term, button, row, col - offset, pressed, mod_0);
-            return false_0 != 0;
-        }
-        if c == -(253 as ::core::ffi::c_int
-            + ((KE_MOUSEUP as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || c == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSEDOWN as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || c == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSELEFT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-            || c == -(253 as ::core::ffi::c_int
-                + ((KE_MOUSERIGHT as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        {
-            let mut save_curwin: *mut win_T = curwin.get();
-            curwin.set(mouse_win);
-            curbuf.set((*curwin.get()).w_buffer);
-            let mut cap: cmdarg_T = cmdarg_T {
-                oap: ::core::ptr::null_mut::<oparg_T>(),
-                prechar: 0,
-                cmdchar: 0,
-                nchar: 0,
-                nchar_composing: [0; 32],
-                nchar_len: 0,
-                extra_char: 0,
-                opcount: 0,
-                count0: 0,
-                count1: 0,
-                arg: 0,
-                retval: 0,
-                searchbuf: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            };
-            let mut oa: oparg_T = oparg_T {
-                op_type: 0,
-                regname: 0,
-                motion_type: kMTCharWise,
-                motion_force: 0,
-                use_reg_one: false,
-                inclusive: false,
-                end_adjusted: false,
-                start: pos_T {
-                    lnum: 0,
-                    col: 0,
-                    coladd: 0,
-                },
-                end: pos_T {
-                    lnum: 0,
-                    col: 0,
-                    coladd: 0,
-                },
-                cursor_start: pos_T {
-                    lnum: 0,
-                    col: 0,
-                    coladd: 0,
-                },
-                line_count: 0,
-                empty: false,
-                is_VIsual: false,
-                start_vcol: 0,
-                end_vcol: 0,
-                prev_opcount: 0,
-                prev_count0: 0,
-                excl_tr_ws: false,
-            };
-            memset(
-                &raw mut cap as *mut ::core::ffi::c_void,
-                0 as ::core::ffi::c_int,
-                ::core::mem::size_of::<cmdarg_T>(),
-            );
-            clear_oparg(&raw mut oa);
-            cap.oap = &raw mut oa;
-            cap.cmdchar = c;
-            match cap.cmdchar {
-                -19709 => {
-                    cap.arg = MSCR_UP as ::core::ffi::c_int;
-                }
-                -19453 => {
-                    cap.arg = MSCR_DOWN as ::core::ffi::c_int;
-                }
-                -19965 => {
-                    cap.arg = MSCR_LEFT as ::core::ffi::c_int;
-                }
-                -20221 => {
-                    cap.arg = MSCR_RIGHT as ::core::ffi::c_int;
-                }
-                _ => {
-                    abort();
-                }
-            }
-            do_mousescroll(&raw mut cap);
-            (*curwin.get()).w_redr_status = true_0 != 0;
-            curwin.set(save_curwin);
-            curbuf.set((*curwin.get()).w_buffer);
-            redraw_later(mouse_win, UPD_NOT_VALID as ::core::ffi::c_int);
-            refresh::invalidate_terminal(term, None);
-            return mouse_win == curwin.get();
-        }
-    }
-    if c == -(253 as ::core::ffi::c_int
-        + ((KE_LEFTRELEASE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-        && !mouse_win.is_null()
-        && (*(*mouse_win).w_buffer).terminal == term
-        || c == -(253 as ::core::ffi::c_int
-            + ((KE_MOUSEMOVE as ::core::ffi::c_int) << 8 as ::core::ffi::c_int))
-    {
-        return false_0 != 0;
-    }
-    let mut len: ::core::ffi::c_int =
-        ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true_0 != 0);
-    if KeyTyped.get() {
-        ungetchars(len);
-    }
-    return true_0 != 0;
-}
-/// Mark `rows` as needing a redraw and schedule one.
+
+/// Feed `len` bytes of the child's output to the emulator.
 ///
-/// `None` means nothing changed on screen but the terminal still needs to
-/// be looked at — the cursor moved, or a row left the scrollback.
-unsafe fn row_to_linenr(
-    mut term: *mut Terminal,
-    mut row: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    return if row != INT_MAX {
-        row + (*term).sb.len() as ::core::ffi::c_int + 1
-    } else {
-        INT_MAX
-    };
+/// `force_crlf` is for channels that are not a pty: a bare newline from
+/// those means "next line, column zero", which to a terminal is CR LF.
+pub unsafe fn terminal_receive(term: *mut Terminal, data: *const c_char, len: size_t) {
+    unsafe {
+        if data.is_null() {
+            return;
+        }
+        if (*term).opts.force_crlf {
+            let bytes = ::core::slice::from_raw_parts(data.cast::<u8>(), len);
+            let mut crlf = Vec::with_capacity(len);
+            for (i, &byte) in bytes.iter().enumerate() {
+                if byte == b'\n' && (i == 0 || bytes[i - 1] != b'\r') {
+                    crlf.push(b'\r');
+                }
+                crlf.push(byte);
+            }
+            vterm_input_write((*term).vt, crlf.as_ptr().cast::<c_char>(), crlf.len());
+        } else {
+            vterm_input_write((*term).vt, data, len);
+        }
+        vterm_screen_flush_damage((*term).vts);
+
+        if (*term).sync_flush_pending {
+            // The frame the child was assembling is complete: invalidate
+            // all of it and redraw once, from the main loop rather than
+            // from the middle of parsing its output.
+            (*term).sync_flush_pending = false;
+            let mut height = 0;
+            vterm_get_size((*term).vt, &raw mut height, ::core::ptr::null_mut());
+            (*term).invalid_start = 0;
+            (*term).invalid_end = height;
+            multiqueue_put_event(
+                (*main_loop.ptr()).events,
+                Event::new(
+                    Some(on_sync_flush),
+                    [::core::ptr::with_exposed_provenance_mut::<c_void>(
+                        (*term).buf_handle as usize,
+                    )],
+                ),
+            );
+        }
+    }
 }
-unsafe fn linenr_to_row(
-    mut term: *mut Terminal,
-    mut linenr: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    return linenr - (*term).sb.len() as ::core::ffi::c_int - 1;
+
+/// A vterm colour as a packed 24-bit RGB value, resolving the palette.
+unsafe fn get_rgb(state: *mut VTermState, mut color: VTermColor) -> c_int {
+    unsafe {
+        convert_color_to_rgb(&*state, &mut color);
+        ((color.rgb.red as c_int) << 16)
+            | ((color.rgb.green as c_int) << 8)
+            | color.rgb.blue as c_int
+    }
 }
-unsafe fn is_focused(mut term: *mut Terminal) -> bool {
-    return State.get() & MODE_TERMINAL as ::core::ffi::c_int != 0
-        && (*curbuf.get()).terminal == term;
+
+/// The highlight bit for a cell's underline style. vterm names more styles
+/// than the editor draws, so anything else becomes a plain underline.
+fn get_underline_hl_flag(attrs: VTermScreenCellAttrs) -> c_int {
+    match attrs.underline() {
+        0 => 0,
+        2 => HL_UNDERDOUBLE as c_int,
+        3 => HL_UNDERCURL as c_int,
+        _ => HL_UNDERLINE as c_int,
+    }
 }
-unsafe fn get_config_string(
-    mut buf: *mut buf_T,
-    mut key: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    let mut err: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
-    let mut obj: Object = dict_get_value(
-        (*buf).b_vars,
-        cstr_as_string(key),
-        ::core::ptr::null_mut::<Arena>(),
-        &raw mut err,
-    );
-    api_clear_error(&raw mut err);
-    if obj.type_0 as ::core::ffi::c_uint
-        == kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        obj = dict_get_value(
-            get_globvar_dict(),
+
+/// Resolve one buffer line of a terminal into per-column highlight ids.
+///
+/// The screen painter calls this for every visible line of a terminal
+/// buffer; `term_attrs` is its scratch array, `TERM_ATTRS_MAX` wide. Lines
+/// that are scrollback rather than screen resolve through the scrollback,
+/// and lines below the screen are left alone.
+pub unsafe fn terminal_get_line_attributes(
+    term: *mut Terminal,
+    _wp: *mut win_T,
+    linenr: c_int,
+    term_attrs: *mut c_int,
+) {
+    unsafe {
+        let mut height = 0;
+        let mut width = 0;
+        vterm_get_size((*term).vt, &raw mut height, &raw mut width);
+        let state: *mut VTermState = vterm_obtain_state((*term).vt);
+        debug_assert!(linenr != 0, "buffer line numbers are one-based");
+
+        let row = linenr_to_row(term, linenr);
+        if row >= height {
+            return;
+        }
+        let width = width.min(TERM_ATTRS_MAX);
+
+        for col in 0..width {
+            let mut cell: VTermScreenCell = ::core::mem::zeroed();
+            // False for a scrollback cell past the end of a row stored while
+            // the terminal was narrower; such a cell has no colours at all.
+            let color_valid = fetch_cell(term, row, col, &raw mut cell);
+            let fg_default = !color_valid || cell.fg.type_0 as c_int & VTERM_COLOR_DEFAULT_FG != 0;
+            let bg_default = !color_valid || cell.bg.type_0 as c_int & VTERM_COLOR_DEFAULT_BG != 0;
+            let fg_indexed = cell.fg.type_0 as c_int & VTERM_COLOR_TYPE_MASK == VTERM_COLOR_INDEXED;
+            let bg_indexed = cell.bg.type_0 as c_int & VTERM_COLOR_TYPE_MASK == VTERM_COLOR_INDEXED;
+
+            // The cterm colour is one-based so that zero can mean "unset".
+            let vt_fg_idx: int16_t = if !fg_default && fg_indexed {
+                cell.fg.indexed.idx as int16_t + 1
+            } else {
+                0
+            };
+            let vt_bg_idx: int16_t = if !bg_default && bg_indexed {
+                cell.bg.indexed.idx as int16_t + 1
+            } else {
+                0
+            };
+            // A palette entry the user configured resolves to a real RGB
+            // value here; one they did not stays indexed, so that the UI's
+            // own palette applies instead.
+            let fg_set =
+                vt_fg_idx != 0 && vt_fg_idx <= 16 && (*term).color_set[(vt_fg_idx - 1) as usize];
+            let bg_set =
+                vt_bg_idx != 0 && vt_bg_idx <= 16 && (*term).color_set[(vt_bg_idx - 1) as usize];
+
+            let attrs = cell.attrs;
+            let mut hl_attrs = get_underline_hl_flag(attrs);
+            for (set, bit) in [
+                (attrs.bold() != 0, HL_BOLD),
+                (attrs.dim() != 0, HL_DIM),
+                (attrs.blink() != 0, HL_BLINK),
+                (attrs.conceal() != 0, HL_CONCEALED),
+                (attrs.overline() != 0, HL_OVERLINE),
+                (attrs.italic() != 0, HL_ITALIC),
+                (attrs.reverse() != 0, HL_INVERSE),
+                (attrs.strike() != 0, HL_STRIKETHROUGH),
+                (fg_indexed && !fg_set, HL_FG_INDEXED),
+                (bg_indexed && !bg_set, HL_BG_INDEXED),
+            ] {
+                if set {
+                    hl_attrs |= bit as c_int;
+                }
+            }
+
+            let mut attr_id = 0;
+            if hl_attrs != 0 || !fg_default || !bg_default {
+                let mut resolved = HlAttrs {
+                    rgb_ae_attr: hl_attrs,
+                    cterm_ae_attr: hl_attrs,
+                    rgb_fg_color: if fg_default {
+                        -1
+                    } else {
+                        get_rgb(state, cell.fg)
+                    },
+                    rgb_bg_color: if bg_default {
+                        -1
+                    } else {
+                        get_rgb(state, cell.bg)
+                    },
+                    rgb_sp_color: -1 as RgbValue,
+                    cterm_fg_color: vt_fg_idx,
+                    cterm_bg_color: vt_bg_idx,
+                    hl_blend: -1,
+                    url: -1,
+                };
+                attr_id = hl_get_term_attr(&raw mut resolved);
+            }
+            // A hyperlink is its own attribute, layered over the colours.
+            if cell.uri > 0 {
+                attr_id = hl_combine_attr(attr_id, cell.uri);
+            }
+            *term_attrs.add(col as usize) = attr_id;
+        }
+    }
+}
+
+pub unsafe fn terminal_buf(term: *const Terminal) -> Buffer {
+    unsafe { (*term).buf_handle as Buffer }
+}
+
+pub unsafe fn terminal_running(term: *const Terminal) -> bool {
+    unsafe { !(*term).closed }
+}
+
+pub unsafe fn terminal_suspended(term: *const Terminal) -> bool {
+    unsafe { (*term).suspended }
+}
+
+/// Tell a child that asked for theme updates that `'background'` changed.
+pub unsafe fn terminal_notify_theme(term: *mut Terminal, dark: bool) {
+    unsafe {
+        if !(*term).theme_updates {
+            return;
+        }
+        let report: &[u8] = if dark { b"\x1b[997;1n" } else { b"\x1b[997;2n" };
+        terminal_send(term, report.as_ptr().cast::<c_char>(), report.len());
+    }
+}
+
+/// The buffer line an emulator row appears on, counting the scrollback
+/// above it. The "nothing invalid" sentinel passes through unchanged.
+unsafe fn row_to_linenr(term: *mut Terminal, row: c_int) -> c_int {
+    unsafe {
+        if row == c_int::MAX {
+            c_int::MAX
+        } else {
+            row + (*term).sb.len() as c_int + 1
+        }
+    }
+}
+
+/// The inverse of [`row_to_linenr`]. Negative for a scrollback line.
+unsafe fn linenr_to_row(term: *mut Terminal, linenr: c_int) -> c_int {
+    unsafe { linenr - (*term).sb.len() as c_int - 1 }
+}
+
+/// Whether the user is typing at this terminal right now.
+unsafe fn is_focused(term: *mut Terminal) -> bool {
+    unsafe { State.get() & MODE_TERMINAL != 0 && (*curbuf.get()).terminal == term }
+}
+
+/// `b:<key>`, falling back to `g:<key>`, if it is a string.
+///
+/// The result is an owned C string the caller frees, or null.
+unsafe fn get_config_string(buf: *mut buf_T, key: *const c_char) -> *mut c_char {
+    unsafe {
+        let mut err = Error {
+            type_0: kErrorTypeNone,
+            msg: ::core::ptr::null_mut(),
+        };
+        let mut obj = dict_get_value(
+            (*buf).b_vars,
             cstr_as_string(key),
             ::core::ptr::null_mut::<Arena>(),
             &raw mut err,
         );
         api_clear_error(&raw mut err);
+        if obj.type_0 == kObjectTypeNil {
+            obj = dict_get_value(
+                get_globvar_dict(),
+                cstr_as_string(key),
+                ::core::ptr::null_mut::<Arena>(),
+                &raw mut err,
+            );
+            api_clear_error(&raw mut err);
+        }
+        if obj.type_0 == kObjectTypeString {
+            // The string outlives the object; the caller owns it now.
+            return obj.data.string.data;
+        }
+        api_free_object(obj);
+        ::core::ptr::null_mut()
     }
-    if obj.type_0 as ::core::ffi::c_uint
-        == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        return obj.data.string.data;
-    }
-    api_free_object(obj);
-    return ::core::ptr::null_mut::<::core::ffi::c_char>();
 }
-pub const SHAPE_CURSOR: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const SB_MAX: ::core::ffi::c_int = 1000000 as ::core::ffi::c_int;
-pub const K_ZERO: ::core::ffi::c_int =
-    -(255 as ::core::ffi::c_int + (('X' as ::core::ffi::c_int) << 8 as ::core::ffi::c_int));
-pub const K_UP: ::core::ffi::c_int = -30059;
-pub const K_KUP: ::core::ffi::c_int = -30027;
-pub const K_DOWN: ::core::ffi::c_int = -25707;
-pub const K_KDOWN: ::core::ffi::c_int = -25675;
-pub const K_LEFT: ::core::ffi::c_int = -27755;
-pub const K_KLEFT: ::core::ffi::c_int = -27723;
-pub const K_RIGHT: ::core::ffi::c_int = -29291;
-pub const K_KRIGHT: ::core::ffi::c_int = -29259;
-pub const K_S_UP: ::core::ffi::c_int = -1277;
-pub const K_S_DOWN: ::core::ffi::c_int = -1533;
-pub const K_S_LEFT: ::core::ffi::c_int = -13347;
-pub const K_C_LEFT: ::core::ffi::c_int = -22013;
-pub const K_S_RIGHT: ::core::ffi::c_int = -26917;
-pub const K_C_RIGHT: ::core::ffi::c_int = -22269;
-pub const K_S_HOME: ::core::ffi::c_int = -12835;
-pub const K_C_HOME: ::core::ffi::c_int = -22525;
-pub const K_S_END: ::core::ffi::c_int = -14122;
-pub const K_C_END: ::core::ffi::c_int = -22781;
-pub const K_S_TAB: ::core::ffi::c_int = -17003;
-pub const K_F1: ::core::ffi::c_int = -12651;
-pub const K_F2: ::core::ffi::c_int = -12907;
-pub const K_F3: ::core::ffi::c_int = -13163;
-pub const K_F4: ::core::ffi::c_int = -13419;
-pub const K_F5: ::core::ffi::c_int = -13675;
-pub const K_F6: ::core::ffi::c_int = -13931;
-pub const K_F7: ::core::ffi::c_int = -14187;
-pub const K_F8: ::core::ffi::c_int = -14443;
-pub const K_F9: ::core::ffi::c_int = -14699;
-pub const K_F10: ::core::ffi::c_int = -15211;
-pub const K_F11: ::core::ffi::c_int = -12614;
-pub const K_F12: ::core::ffi::c_int = -12870;
-pub const K_F13: ::core::ffi::c_int = -13126;
-pub const K_F14: ::core::ffi::c_int = -13382;
-pub const K_F15: ::core::ffi::c_int = -13638;
-pub const K_F16: ::core::ffi::c_int = -13894;
-pub const K_F17: ::core::ffi::c_int = -14150;
-pub const K_F18: ::core::ffi::c_int = -14406;
-pub const K_F19: ::core::ffi::c_int = -14662;
-pub const K_F20: ::core::ffi::c_int = -16710;
-pub const K_F21: ::core::ffi::c_int = -16966;
-pub const K_F22: ::core::ffi::c_int = -17222;
-pub const K_F23: ::core::ffi::c_int = -17478;
-pub const K_F24: ::core::ffi::c_int = -17734;
-pub const K_F25: ::core::ffi::c_int = -17990;
-pub const K_F26: ::core::ffi::c_int = -18246;
-pub const K_F27: ::core::ffi::c_int = -18502;
-pub const K_F28: ::core::ffi::c_int = -18758;
-pub const K_F29: ::core::ffi::c_int = -19014;
-pub const K_F30: ::core::ffi::c_int = -19270;
-pub const K_F31: ::core::ffi::c_int = -19526;
-pub const K_F32: ::core::ffi::c_int = -19782;
-pub const K_F33: ::core::ffi::c_int = -20038;
-pub const K_F34: ::core::ffi::c_int = -20294;
-pub const K_F35: ::core::ffi::c_int = -20550;
-pub const K_F36: ::core::ffi::c_int = -20806;
-pub const K_F37: ::core::ffi::c_int = -21062;
-pub const K_F38: ::core::ffi::c_int = -21318;
-pub const K_F39: ::core::ffi::c_int = -21574;
-pub const K_F40: ::core::ffi::c_int = -21830;
-pub const K_F41: ::core::ffi::c_int = -22086;
-pub const K_F42: ::core::ffi::c_int = -22342;
-pub const K_F43: ::core::ffi::c_int = -22598;
-pub const K_F44: ::core::ffi::c_int = -22854;
-pub const K_F45: ::core::ffi::c_int = -23110;
-pub const K_F46: ::core::ffi::c_int = -24902;
-pub const K_F47: ::core::ffi::c_int = -25158;
-pub const K_F48: ::core::ffi::c_int = -25414;
-pub const K_F49: ::core::ffi::c_int = -25670;
-pub const K_F50: ::core::ffi::c_int = -25926;
-pub const K_F51: ::core::ffi::c_int = -26182;
-pub const K_F52: ::core::ffi::c_int = -26438;
-pub const K_F53: ::core::ffi::c_int = -26694;
-pub const K_F54: ::core::ffi::c_int = -26950;
-pub const K_F55: ::core::ffi::c_int = -27206;
-pub const K_F56: ::core::ffi::c_int = -27462;
-pub const K_F57: ::core::ffi::c_int = -27718;
-pub const K_F58: ::core::ffi::c_int = -27974;
-pub const K_F59: ::core::ffi::c_int = -28230;
-pub const K_F60: ::core::ffi::c_int = -28486;
-pub const K_F61: ::core::ffi::c_int = -28742;
-pub const K_F62: ::core::ffi::c_int = -28998;
-pub const K_F63: ::core::ffi::c_int = -29254;
-pub const K_S_F1: ::core::ffi::c_int = -1789;
-pub const K_S_F2: ::core::ffi::c_int = -2045;
-pub const K_S_F3: ::core::ffi::c_int = -2301;
-pub const K_S_F4: ::core::ffi::c_int = -2557;
-pub const K_S_F5: ::core::ffi::c_int = -2813;
-pub const K_S_F6: ::core::ffi::c_int = -3069;
-pub const K_S_F7: ::core::ffi::c_int = -3325;
-pub const K_S_F8: ::core::ffi::c_int = -3581;
-pub const K_S_F9: ::core::ffi::c_int = -3837;
-pub const K_S_F10: ::core::ffi::c_int = -4093;
-pub const K_S_F11: ::core::ffi::c_int = -4349;
-pub const K_S_F12: ::core::ffi::c_int = -4605;
-pub const K_BS: ::core::ffi::c_int = -25195;
-pub const K_INS: ::core::ffi::c_int = -18795;
-pub const K_KINS: ::core::ffi::c_int = -20477;
-pub const K_DEL: ::core::ffi::c_int = -17515;
-pub const K_KDEL: ::core::ffi::c_int = -20733;
-pub const K_HOME: ::core::ffi::c_int = -26731;
-pub const K_KHOME: ::core::ffi::c_int = -12619;
-pub const K_END: ::core::ffi::c_int = -14144;
-pub const K_KEND: ::core::ffi::c_int = -13387;
-pub const K_PAGEUP: ::core::ffi::c_int = -20587;
-pub const K_PAGEDOWN: ::core::ffi::c_int = -20075;
-pub const K_KPAGEUP: ::core::ffi::c_int = -13131;
-pub const K_KPAGEDOWN: ::core::ffi::c_int = -13643;
-pub const K_KORIGIN: ::core::ffi::c_int = -12875;
-pub const K_KPLUS: ::core::ffi::c_int = -13899;
-pub const K_KMINUS: ::core::ffi::c_int = -14155;
-pub const K_KDIVIDE: ::core::ffi::c_int = -14411;
-pub const K_KMULTIPLY: ::core::ffi::c_int = -14667;
-pub const K_KENTER: ::core::ffi::c_int = -16715;
-pub const K_KPOINT: ::core::ffi::c_int = -16971;
-pub const K_PASTE_START: ::core::ffi::c_int = -21328;
-pub const K_K0: ::core::ffi::c_int = -17227;
-pub const K_K1: ::core::ffi::c_int = -17483;
-pub const K_K2: ::core::ffi::c_int = -17739;
-pub const K_K3: ::core::ffi::c_int = -17995;
-pub const K_K4: ::core::ffi::c_int = -18251;
-pub const K_K5: ::core::ffi::c_int = -18507;
-pub const K_K6: ::core::ffi::c_int = -18763;
-pub const K_K7: ::core::ffi::c_int = -19019;
-pub const K_K8: ::core::ffi::c_int = -19275;
-pub const K_K9: ::core::ffi::c_int = -19531;
-pub const K_LEFTMOUSE: ::core::ffi::c_int = -11517;
-pub const K_LEFTDRAG: ::core::ffi::c_int = -11773;
-pub const K_MIDDLEMOUSE: ::core::ffi::c_int = -12285;
-pub const K_MIDDLEDRAG: ::core::ffi::c_int = -12541;
-pub const K_MIDDLERELEASE: ::core::ffi::c_int = -12797;
-pub const K_RIGHTMOUSE: ::core::ffi::c_int = -13053;
-pub const K_RIGHTDRAG: ::core::ffi::c_int = -13309;
-pub const K_RIGHTRELEASE: ::core::ffi::c_int = -13565;
-pub const K_X1MOUSE: ::core::ffi::c_int = -23037;
-pub const K_X1DRAG: ::core::ffi::c_int = -23293;
-pub const K_X1RELEASE: ::core::ffi::c_int = -23549;
-pub const K_X2MOUSE: ::core::ffi::c_int = -23805;
-pub const K_X2DRAG: ::core::ffi::c_int = -24061;
-pub const K_X2RELEASE: ::core::ffi::c_int = -24317;
-pub const K_IGNORE: ::core::ffi::c_int = -13821;
-pub const K_NOP: ::core::ffi::c_int = -25085;
-pub const K_EVENT: ::core::ffi::c_int = -26365;
-pub const K_COMMAND: ::core::ffi::c_int = -26877;
-pub const K_LUA: ::core::ffi::c_int = -26621;
-pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const MOD_MASK_ALT: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-#[inline]
-unsafe fn vterm_color_rgb(
-    mut col: *mut VTermColor,
-    mut red: uint8_t,
-    mut green: uint8_t,
-    mut blue: uint8_t,
-) {
-    (*col).type_0 = VTERM_COLOR_RGB as ::core::ffi::c_int as uint8_t;
-    (*col).rgb.red = red;
-    (*col).rgb.green = green;
-    (*col).rgb.blue = blue;
-}
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
