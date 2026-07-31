@@ -11,7 +11,7 @@ use crate::src::nvim::ex_docmd::ends_excmd;
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_grow, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::{
-    hl_get_syn_attr, hl_get_ui_attr, hlattrs2dict, ns_get_hl, syn_attr2entry,
+    HLATTRS_INIT, hl_get_syn_attr, hl_get_ui_attr, hlattrs2dict, ns_get_hl, syn_attr2entry,
 };
 use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
@@ -638,17 +638,6 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
     ga_data: NULL_0,
 };
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const HLATTRS_INIT: HlAttrs = HlAttrs {
-    rgb_ae_attr: 0 as int32_t,
-    cterm_ae_attr: 0 as int32_t,
-    rgb_fg_color: -1 as RgbValue,
-    rgb_bg_color: -1 as RgbValue,
-    rgb_sp_color: -1 as RgbValue,
-    cterm_fg_color: 0 as int16_t,
-    cterm_bg_color: 0 as int16_t,
-    hl_blend: -1 as int32_t,
-    url: -1 as int32_t,
-};
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const MAX_SYN_NAME: ::core::ffi::c_int = 200 as ::core::ffi::c_int;
 static highlight_ga: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
