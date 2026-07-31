@@ -21,7 +21,6 @@ pub struct RemoteUI {
     pub pum_height: ::core::ffi::c_double,
     pub pum_width: ::core::ffi::c_double,
     pub term_name: *mut ::core::ffi::c_char,
-    pub term_background: *mut ::core::ffi::c_char,
     pub term_colors: ::core::ffi::c_int,
     pub stdin_tty: bool,
     pub stdout_tty: bool,

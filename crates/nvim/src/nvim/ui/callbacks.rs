@@ -154,7 +154,7 @@ pub unsafe fn ui_call_event(name: &'static CStr, args: Array) {
         let mut any_call = false;
         let mut i = 0;
         while i < ui_count() {
-            unsafe { remote_ui_event(ui_at(i), name.as_ptr().cast_mut(), args) };
+            unsafe { remote_ui_event(ui_at(i), name, args) };
             any_call = true;
             i += 1;
         }

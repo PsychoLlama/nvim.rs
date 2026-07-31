@@ -18,7 +18,6 @@
     "crates/nvim/src/nvim/api/private/converter.rs": 116,
     "crates/nvim/src/nvim/api/private/validate.rs": 21,
     "crates/nvim/src/nvim/api/tabpage.rs": 7,
-    "crates/nvim/src/nvim/api/ui.rs": 203,
     "crates/nvim/src/nvim/api/vim.rs": 213,
     "crates/nvim/src/nvim/api/vimscript.rs": 94,
     "crates/nvim/src/nvim/api/win_config.rs": 168,
