@@ -9,6 +9,11 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Rewrote spell checking, covering the `.aff`/`.dic` compiler behind
+  `:mkspell`, the `.spl` and `.sug` file formats on both the reading and
+  writing side, word lookup with its prefixes and compounding, `'spelllang'`
+  and `'spellfile'` handling, `]s` navigation, `z=` suggestions, `zg` and
+  friends, and `:spelldump`.
 - Rewrote the user interface, covering the built-in terminal UI (terminfo
   resolution and quirks, painting, cursor shapes, and the input parser
   behind mouse reporting, bracketed paste and the kitty keyboard
