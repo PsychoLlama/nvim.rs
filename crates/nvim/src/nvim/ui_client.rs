@@ -80,8 +80,10 @@ const LOGLVL_ERR: c_int = 4;
 /// take slot 0.
 const FORWARDED_STDIN_FD: Integer = 3;
 
-/// How long to wait for the server's socket, in milliseconds.
-const CONNECT_TIMEOUT_MS: c_int = 50;
+/// How long to wait for the server's socket, in milliseconds. Shorter than
+/// `--server`'s own timeout: the server here was either just spawned by
+/// this process or named by a `:restart` that has already bound it.
+const UI_CONNECT_TIMEOUT_MS: c_int = 50;
 
 /// The TUI this client draws through, and the size and terminal it was
 /// started with. Attaching needs all four, and so does re-attaching after
@@ -858,7 +860,7 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
             server_addr,
             true,
             no_reader(),
-            CONNECT_TIMEOUT_MS,
+            UI_CONNECT_TIMEOUT_MS,
             &raw mut err,
         );
         if !strequal(err, c"".as_ptr()) {
@@ -948,7 +950,7 @@ pub unsafe fn ui_client_attach_to_restarted_server() {
                     listen_addr,
                     true,
                     no_reader(),
-                    CONNECT_TIMEOUT_MS,
+                    UI_CONNECT_TIMEOUT_MS,
                     &raw mut err,
                 );
                 if !strequal(err, c"".as_ptr()) {
