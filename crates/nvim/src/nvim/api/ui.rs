@@ -25,42 +25,13 @@ use crate::src::nvim::msgpack_rpc::packer::{
 use crate::src::nvim::msgpack_rpc::packer::{mpack_array_dyn16, mpack_str_small};
 use crate::src::nvim::option::set_tty_option;
 use crate::src::nvim::os::libc::{__assert_fail, memset, strlen};
-pub use crate::src::nvim::types::{
-    __gid_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    __uid_t, Arena, ArenaMem, Array, BoolVarValue, Boolean, Callback,
-    Callback_data as C2Rust_Unnamed_0, CallbackReader, CallbackType, Channel,
-    Channel_stream as C2Rust_Unnamed_21, ChannelCallFrame, ChannelStreamType, ClientType, Dict,
-    Error, ErrorType, Float, HlAttrs, Integer, InternalState, KeyValuePair, LibuvProc, LineFlags,
-    Loop, LuaRef, Map_uint64_t_ptr_t, MapHash, MultiQueue, Object, ObjectType, PackerBuffer,
-    PackerBufferFlush, Proc, ProcType, PtyProc, QUEUE, RStream, RemoteUI, RgbValue, RpcState,
-    ScopeDictDictItem, ScopeType, Set_uint64_t, SpecialVarValue, StderrState, StdioPair, Stream,
-    String_0, Terminal, UIExtension, Unpacker, VarLockStatus, VarType, WBuffer, Window, blob_T,
-    blobvar_S, consumed_blk, dict_T, dictvar_S, float_T, funccall_S,
-    funccall_S_fc_fixvar as C2Rust_Unnamed_1, funccall_T, garray_T, gid_t, handle_T, hash_T,
-    hashitem_T, hashtab_T, int16_t, int32_t, int64_t, internal_proc_cb, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
-    kObjectTypeWindow, key_value_pair, linenr_T, list_T, listitem_S, listitem_T, listvar_S,
-    listwatch_S, listwatch_T, loop_0, multiqueue, object, object_data as C2Rust_Unnamed,
-    packer_buffer_t, partial_S, partial_T, proc, proc_exit_cb, proc_state_cb, proftime_T,
-    pthread_mutex_t, pthread_rwlock_t, ptr_t, queue, rstream, sattr_T, schar_T, scid_T, sctx_T,
-    size_t, ssize_t, stream, stream_close_cb, stream_read_cb, stream_uv as C2Rust_Unnamed_12,
-    stream_write_cb, terminal, typval_T, typval_vval_union, ufunc_S, ufunc_T, uid_t, uint8_t,
-    uint16_t, uint32_t, uint64_t, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv_alloc_cb,
-    uv_async_cb, uv_async_s, uv_async_s_u as C2Rust_Unnamed_7, uv_async_t, uv_buf_t, uv_close_cb,
-    uv_connect_cb, uv_connect_s, uv_connect_t, uv_connection_cb, uv_exit_cb, uv_file, uv_gid_t,
-    uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_2, uv_handle_t, uv_handle_type, uv_idle_cb,
-    uv_idle_s, uv_idle_s_u as C2Rust_Unnamed_13, uv_idle_t, uv_loop_s,
-    uv_loop_s_active_reqs as C2Rust_Unnamed_6, uv_loop_s_timer_heap as C2Rust_Unnamed_5, uv_loop_t,
-    uv_mutex_t, uv_pipe_s, uv_pipe_s_u as C2Rust_Unnamed_15, uv_pipe_t, uv_process_options_s,
-    uv_process_options_t, uv_process_s, uv_process_s_u as C2Rust_Unnamed_17, uv_process_t,
-    uv_read_cb, uv_req_type, uv_rwlock_t, uv_shutdown_cb, uv_shutdown_s, uv_shutdown_t,
-    uv_signal_cb, uv_signal_s, uv_signal_s_tree_entry as C2Rust_Unnamed_3,
-    uv_signal_s_u as C2Rust_Unnamed_4, uv_signal_t, uv_stdio_container_s,
-    uv_stdio_container_s_data as C2Rust_Unnamed_18, uv_stdio_container_t, uv_stdio_flags,
-    uv_stream_s, uv_stream_s_u as C2Rust_Unnamed_11, uv_stream_t, uv_tcp_s,
-    uv_tcp_s_u as C2Rust_Unnamed_14, uv_tcp_t, uv_timer_cb, uv_timer_s,
-    uv_timer_s_node as C2Rust_Unnamed_8, uv_timer_s_u as C2Rust_Unnamed_9, uv_timer_t, uv_uid_t,
-    varnumber_T, wbuffer, wbuffer_data_finalizer, winsize,
+use crate::src::nvim::types::{
+    Arena, Array, Boolean, Channel, Dict, Error, ErrorType, Float, HlAttrs, Integer, KeyValuePair,
+    LineFlags, Map_uint64_t_ptr_t, MapHash, Object, PackerBuffer, RemoteUI, Set_uint64_t, String_0,
+    UIExtension, WBuffer, Window, handle_T, int32_t, int64_t, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeWindow,
+    key_value_pair, object, object_data as C2Rust_Unnamed, packer_buffer_t, ptr_t, sattr_T,
+    schar_T, size_t, uint32_t, uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_active, ui_attach_impl, ui_call_ui_send, ui_can_attach_more, ui_detach_impl, ui_grid_resize,
@@ -69,99 +40,19 @@ use crate::src::nvim::ui::{
 pub const kErrorTypeValidation: ErrorType = 1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeNone: ErrorType = -1;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
-pub const UV_FILE: uv_handle_type = 17;
-pub const UV_SIGNAL: uv_handle_type = 16;
-pub const UV_UDP: uv_handle_type = 15;
-pub const UV_TTY: uv_handle_type = 14;
-pub const UV_TIMER: uv_handle_type = 13;
-pub const UV_TCP: uv_handle_type = 12;
-pub const UV_STREAM: uv_handle_type = 11;
-pub const UV_PROCESS: uv_handle_type = 10;
-pub const UV_PREPARE: uv_handle_type = 9;
-pub const UV_POLL: uv_handle_type = 8;
-pub const UV_NAMED_PIPE: uv_handle_type = 7;
-pub const UV_IDLE: uv_handle_type = 6;
-pub const UV_HANDLE: uv_handle_type = 5;
-pub const UV_FS_POLL: uv_handle_type = 4;
-pub const UV_FS_EVENT: uv_handle_type = 3;
-pub const UV_CHECK: uv_handle_type = 2;
-pub const UV_ASYNC: uv_handle_type = 1;
-pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
-pub const UV_RANDOM: uv_req_type = 10;
-pub const UV_GETNAMEINFO: uv_req_type = 9;
-pub const UV_GETADDRINFO: uv_req_type = 8;
-pub const UV_WORK: uv_req_type = 7;
-pub const UV_FS: uv_req_type = 6;
-pub const UV_UDP_SEND: uv_req_type = 5;
-pub const UV_SHUTDOWN: uv_req_type = 4;
-pub const UV_WRITE: uv_req_type = 3;
-pub const UV_CONNECT: uv_req_type = 2;
-pub const UV_REQ: uv_req_type = 1;
-pub const UV_UNKNOWN_REQ: uv_req_type = 0;
-pub const kProcTypePty: ProcType = 1;
-pub const kProcTypeUv: ProcType = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const HLATTRS_DICT_SIZE: C2Rust_Unnamed_16 = 24;
-pub const UV_OVERLAPPED_PIPE: uv_stdio_flags = 64;
-pub const UV_NONBLOCK_PIPE: uv_stdio_flags = 64;
-pub const UV_WRITABLE_PIPE: uv_stdio_flags = 32;
-pub const UV_READABLE_PIPE: uv_stdio_flags = 16;
-pub const UV_INHERIT_STREAM: uv_stdio_flags = 4;
-pub const UV_INHERIT_FD: uv_stdio_flags = 2;
-pub const UV_CREATE_PIPE: uv_stdio_flags = 1;
-pub const UV_IGNORE: uv_stdio_flags = 0;
 pub const kUIExtCount: UIExtension = 10;
-pub const kUIFloatDebug: UIExtension = 9;
 pub const kUITermColors: UIExtension = 8;
 pub const kUIHlState: UIExtension = 7;
 pub const kUIMultigrid: UIExtension = 6;
 pub const kUILinegrid: UIExtension = 5;
 pub const kUIMessages: UIExtension = 4;
 pub const kUIWildmenu: UIExtension = 3;
-pub const kUITabline: UIExtension = 2;
 pub const kUIPopupmenu: UIExtension = 1;
 pub const kUICmdline: UIExtension = 0;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kLineFlagInvalid: C2Rust_Unnamed_19 = 2;
 pub const kLineFlagWrap: C2Rust_Unnamed_19 = 1;
-pub const kClientTypePlugin: ClientType = 4;
-pub const kClientTypeHost: ClientType = 3;
-pub const kClientTypeEmbedder: ClientType = 2;
-pub const kClientTypeUi: ClientType = 1;
-pub const kClientTypeMsgpackRpc: ClientType = 5;
-pub const kClientTypeRemote: ClientType = 0;
-pub const kClientTypeUnknown: ClientType = -1;
-pub const kChannelStreamInternal: ChannelStreamType = 4;
-pub const kChannelStreamStderr: ChannelStreamType = 3;
-pub const kChannelStreamStdio: ChannelStreamType = 2;
-pub const kChannelStreamSocket: ChannelStreamType = 1;
-pub const kChannelStreamProc: ChannelStreamType = 0;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
