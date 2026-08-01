@@ -3366,7 +3366,6 @@ pub unsafe extern "C" fn number_width(mut wp: *mut win_T) -> ::core::ffi::c_int 
     (*wp).w_nrwidth_width = n;
     return n;
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn redraw_later(mut wp: *mut win_T, mut type_0: ::core::ffi::c_int) {
     '_c2rust_label: {
         if !wp.is_null() || exiting.get() as ::core::ffi::c_int != 0 {
@@ -3427,7 +3426,6 @@ pub unsafe extern "C" fn screen_invalidate_highlights() {
 pub unsafe extern "C" fn redraw_curbuf_later(mut type_0: ::core::ffi::c_int) {
     redraw_buf_later(curbuf.get(), type_0);
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn redraw_buf_later(mut buf: *mut buf_T, mut type_0: ::core::ffi::c_int) {
     let mut wp: *mut win_T = if curtab.get() == curtab.get() {
         firstwin.get()
@@ -3441,7 +3439,6 @@ pub unsafe extern "C" fn redraw_buf_later(mut buf: *mut buf_T, mut type_0: ::cor
         wp = (*wp).w_next;
     }
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn redraw_buf_line_later(
     mut buf: *mut buf_T,
     mut line: linenr_T,
@@ -3543,7 +3540,6 @@ pub unsafe extern "C" fn status_redraw_all() {
 pub unsafe extern "C" fn status_redraw_curbuf() {
     status_redraw_buf(curbuf.get());
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn status_redraw_buf(mut buf: *mut buf_T) {
     let mut is_stl_global: bool = global_stl_height() != 0 as ::core::ffi::c_int;
     let mut wp: *mut win_T = if curtab.get() == curtab.get() {

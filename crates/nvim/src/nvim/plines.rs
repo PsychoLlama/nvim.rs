@@ -245,7 +245,6 @@ pub unsafe extern "C" fn linetabsize_eol(
         });
 }
 static inline_filter: GlobalCell<[uint32_t; 5]> = GlobalCell::new([kMTFilterSelect, 0, 0, 0, 0]);
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn init_charsize_arg(
     mut csarg: *mut CharsizeArg,
     mut wp: *mut win_T,
@@ -605,7 +604,6 @@ unsafe extern "C" fn in_win_border(mut wp: *mut win_T, mut vcol: colnr_T) -> boo
     }
     return (vcol as ::core::ffi::c_int - width1) % width2 == width2 - 1 as ::core::ffi::c_int;
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn linesize_regular(
     csarg: *mut CharsizeArg,
     mut vcol_arg: ::core::ffi::c_int,
@@ -639,7 +637,6 @@ pub unsafe extern "C" fn linesize_regular(
     }
     return vcol_arg;
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn linesize_fast(
     csarg: *const CharsizeArg,
     mut vcol_arg: ::core::ffi::c_int,
@@ -803,7 +800,6 @@ pub unsafe extern "C" fn getvcol_nolist(mut posp: *mut pos_T) -> colnr_T {
     (*curwin.get()).w_onebuf_opt.wo_list = list_save;
     return vcol;
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn getvvcol(
     mut wp: *mut win_T,
     mut pos: *mut pos_T,
