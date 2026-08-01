@@ -61,6 +61,7 @@ use crate::src::nvim::main::{
 use crate::src::nvim::main::{curbuf, curtab, curwin, first_tabpage, firstwin, lastwin, prevwin};
 use crate::src::nvim::mark::setpcmark;
 use crate::src::nvim::mbyte::{convert_setup, remove_bom, string_convert};
+use crate::src::nvim::memfile::mf_fname;
 use crate::src::nvim::memline::{check_need_swap, ml_delete};
 use crate::src::nvim::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len, ml_open};
 use crate::src::nvim::memory::{
@@ -7208,8 +7209,8 @@ unsafe extern "C" fn vgr_jump_to_match(
     }
 }
 unsafe extern "C" fn existing_swapfile(mut buf: *const buf_T) -> bool {
-    if !(*buf).b_ml.ml_mfp.is_null() && !(*(*buf).b_ml.ml_mfp).mf_fname.is_null() {
-        let fname: *const ::core::ffi::c_char = (*(*buf).b_ml.ml_mfp).mf_fname;
+    if !(*buf).b_ml.ml_mfp.is_null() && !mf_fname((*buf).b_ml.ml_mfp).is_null() {
+        let fname: *const ::core::ffi::c_char = mf_fname((*buf).b_ml.ml_mfp);
         let len: size_t = strlen(fname);
         return *fname.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
             != 'p' as ::core::ffi::c_int

@@ -37,6 +37,7 @@ use crate::src::nvim::main::{
     p_shada, pending_exmode_active, readonlymode, recoverymode,
 };
 use crate::src::nvim::mark::setpcmark;
+use crate::src::nvim::memfile::mf_fname;
 use crate::src::nvim::memline::{ml_delete, ml_get, ml_preserve, ml_recover};
 use crate::src::nvim::memory::xfree;
 use crate::src::nvim::message::{emsg, msg, semsg};
@@ -480,10 +481,10 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
 pub(crate) unsafe fn ex_swapname(_eap: *mut exarg_T) {
     unsafe {
         let mfp = (*curbuf.get()).b_ml.ml_mfp;
-        if mfp.is_null() || (*mfp).mf_fname.is_null() {
+        if mfp.is_null() || mf_fname(mfp).is_null() {
             msg(gettext(c"No swap file".as_ptr()), 0);
         } else {
-            msg((*mfp).mf_fname, 0);
+            msg(mf_fname(mfp), 0);
         }
     }
 }

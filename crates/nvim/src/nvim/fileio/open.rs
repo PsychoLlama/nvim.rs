@@ -16,6 +16,7 @@
 use core::ffi::{c_char, c_int};
 
 use crate::src::nvim::bufwrite::translate;
+use crate::src::nvim::memfile::mf_fname;
 
 #[allow(unused_imports)]
 use super::*;
@@ -359,8 +360,8 @@ pub(crate) unsafe fn open_source(
             }
             // Set the swap file's protection bits now that it exists.
             let mfp = (*curbuf.get()).b_ml.ml_mfp;
-            if swap_mode > 0 && !mfp.is_null() && !(*mfp).mf_fname.is_null() {
-                let swap_fname = (*mfp).mf_fname;
+            if swap_mode > 0 && !mfp.is_null() && !mf_fname(mfp).is_null() {
+                let swap_fname = mf_fname(mfp);
                 // If the group-read bit is set but not the world-read bit,
                 // the group must equal the group of the original file. If
                 // we can't make that happen, reset the group-read bit;

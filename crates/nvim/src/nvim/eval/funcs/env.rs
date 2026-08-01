@@ -20,6 +20,7 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::ex_cmds::check_secure;
 use crate::src::nvim::ex_docmd::{eval_vars, expand_filename};
 use crate::src::nvim::main::{e_invarg2, emsg_off, p_verbose, p_wic};
+use crate::src::nvim::memfile::mf_fname;
 use crate::src::nvim::memline::{recover_names, swapfile_dict};
 use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::src::nvim::message::{emsg, semsg};
@@ -426,11 +427,11 @@ pub unsafe extern "C" fn f_swapname(
         let buf = tv_get_buf(args.ptr(0), 0);
         rettv.vval.v_string = if buf.is_null()
             || (*buf).b_ml.ml_mfp.is_null()
-            || (*(*buf).b_ml.ml_mfp).mf_fname.is_null()
+            || mf_fname((*buf).b_ml.ml_mfp).is_null()
         {
             ptr::null_mut()
         } else {
-            xstrdup((*(*buf).b_ml.ml_mfp).mf_fname)
+            xstrdup(mf_fname((*buf).b_ml.ml_mfp))
         };
     }
 }

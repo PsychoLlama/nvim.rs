@@ -34,6 +34,7 @@ use crate::src::nvim::main::{
     p_shada, p_title, p_titleold, stderr_isatty, stdout_isatty, ui_client_channel_id,
     ui_client_exit_status, used_stdin, v_dying,
 };
+use crate::src::nvim::memfile::mf_fname;
 use crate::src::nvim::memline::{ml_close_all, ml_close_notmod, ml_sync_all};
 use crate::src::nvim::message::wait_return;
 use crate::src::nvim::os::libc::{exit, fprintf, stderr, strlen, tcdrain};
@@ -310,7 +311,7 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
         let mut buf = firstbuf.get();
         while !buf.is_null() {
             let memfile = (*buf).b_ml.ml_mfp;
-            if !memfile.is_null() && !(*memfile).mf_fname.is_null() {
+            if !memfile.is_null() && !mf_fname(memfile).is_null() {
                 if !errmsg.is_null() {
                     fprintf(stderr, c"Nvim: preserving files...\n".as_ptr());
                 }

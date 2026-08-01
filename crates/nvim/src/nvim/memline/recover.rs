@@ -98,7 +98,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                     hl_id,
                     true,
                 );
-                msg_outtrans((*mfp).mf_fname, hl_id, true);
+                msg_outtrans(mf_fname(mfp), hl_id, true);
                 msg_puts_hl(
                     gettext(
                         c"\nMaybe no changes were made or Nvim did not update the swap file."
@@ -113,7 +113,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             let mut b0p = (*hp).bh_data as *mut ZeroBlock;
             if strncmp((*b0p).b0_version.as_ptr(), c"VIM 3.0".as_ptr(), 7) == 0 {
                 msg_start();
-                msg_outtrans((*mfp).mf_fname, 0, true);
+                msg_outtrans(mf_fname(mfp), 0, true);
                 msg_puts_hl(
                     gettext(c" cannot be used with this version of Nvim.\n".as_ptr()),
                     0,
@@ -126,13 +126,13 @@ pub unsafe fn ml_recover(checkext: bool) {
             if !ml_check_b0_id(&*b0p) {
                 semsg(
                     gettext(c"E307: %s does not look like a Nvim swap file".as_ptr()),
-                    (*mfp).mf_fname,
+                    mf_fname(mfp),
                 );
                 break 'theend;
             }
             if b0_magic_wrong(&*b0p) {
                 msg_start();
-                msg_outtrans((*mfp).mf_fname, hl_id, true);
+                msg_outtrans(mf_fname(mfp), hl_id, true);
                 msg_puts_hl(
                     gettext(c" cannot be used on this computer.\n".as_ptr()),
                     hl_id,
@@ -160,7 +160,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 mf_new_page_size(mfp, recorded_page_size);
                 if (*mfp).mf_page_size < previous_page_size {
                     msg_start();
-                    msg_outtrans((*mfp).mf_fname, hl_id, true);
+                    msg_outtrans(mf_fname(mfp), hl_id, true);
                     msg_puts_hl(
                         gettext(
                             c" has been damaged (page size is smaller than minimum value).\n"
@@ -212,7 +212,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             msg_ext_skip_flush.set(true);
             home_replace(
                 core::ptr::null(),
-                (*mfp).mf_fname,
+                mf_fname(mfp),
                 NameBuff.ptr().cast(),
                 MAXPATHL as size_t,
                 true,
@@ -252,7 +252,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             let mut swp_file_info: FileInfo = core::mem::zeroed();
             if !(*curbuf.get()).b_ffname.is_null()
                 && os_fileinfo((*curbuf.get()).b_ffname, &raw mut org_file_info)
-                && ((os_fileinfo((*mfp).mf_fname, &raw mut swp_file_info)
+                && ((os_fileinfo(mf_fname(mfp), &raw mut swp_file_info)
                     && org_file_info.stat.st_mtim.tv_sec > swp_file_info.stat.st_mtim.tv_sec)
                     || org_file_info.stat.st_mtim.tv_sec != mtime as _)
             {
@@ -379,7 +379,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             if !hp.is_null() {
                 mf_put(mfp, hp, false, false);
             }
-            mf_close(mfp, false); // also frees mfp->mf_fname
+            mf_close(mfp, false); // also frees the swap file's name
         }
         if !buf.is_null() {
             // May be null: the swap file was never found.
@@ -508,7 +508,7 @@ unsafe fn recover_lines(
                     if bnum == 1 {
                         semsg(
                             gettext(c"E309: Unable to read block 1 from %s".as_ptr()),
-                            (*mfp).mf_fname,
+                            mf_fname(mfp),
                         );
                         return Err(());
                     }
@@ -627,7 +627,7 @@ unsafe fn recover_lines(
                         if bnum == 1 {
                             semsg(
                                 gettext(c"E310: Block 1 ID wrong (%s not a .swp file?)".as_ptr()),
-                                (*mfp).mf_fname,
+                                mf_fname(mfp),
                             );
                             return Err(());
                         }
@@ -795,7 +795,7 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
     unsafe {
         let mut buf = firstbuf.get();
         while !buf.is_null() {
-            if !(*buf).b_ml.ml_mfp.is_null() && !(*(*buf).b_ml.ml_mfp).mf_fname.is_null() {
+            if !(*buf).b_ml.ml_mfp.is_null() && !mf_fname((*buf).b_ml.ml_mfp).is_null() {
                 ml_flush_line(buf, false); // flush the buffered line
                 ml_find_line(buf, 0, ML_FLUSH as c_int); // flush the locked block
 
@@ -849,7 +849,7 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
 pub unsafe fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool) {
     unsafe {
         let mfp = (*buf).b_ml.ml_mfp;
-        if mfp.is_null() || (*mfp).mf_fname.is_null() {
+        if mfp.is_null() || mf_fname(mfp).is_null() {
             if message {
                 emsg(gettext(
                     c"E313: Cannot preserve, there is no swap file".as_ptr(),

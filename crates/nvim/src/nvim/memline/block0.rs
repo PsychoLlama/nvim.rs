@@ -212,7 +212,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buf: *mut buf_T) {
 /// Fail safe: anything short of proof leaves the flag clear.
 pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buf: *mut buf_T) {
     unsafe {
-        let same = same_directory((*(*buf).b_ml.ml_mfp).mf_fname, (*buf).b_ffname);
+        let same = same_directory(mf_fname((*buf).b_ml.ml_mfp).cast_mut(), (*buf).b_ffname);
         (*b0p).set_flag(B0_SAME_DIR, same);
     }
 }

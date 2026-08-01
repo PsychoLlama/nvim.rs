@@ -46,9 +46,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::hash::{BuildHasherDefault, Hasher};
 use std::collections::HashMap;
+use std::ffi::CString;
 
 use crate::src::nvim::fileio::{read_eintr, write_eintr};
 use crate::src::nvim::main::{did_swapwrite_msg, e_swapclose, firstbuf, got_int, main_loop};
@@ -234,14 +235,12 @@ impl BlockTable {
 }
 
 /// A memory file: the blocks of one buffer's swap file, and the file.
-///
-/// `mf_fname`/`mf_ffname` are still C strings because every reader of them
-/// is still transpiled; both are owned and released by [`mf_free_fnames`].
 pub struct memfile_T {
-    /// Name of the swap file, as given.
-    pub mf_fname: *mut c_char,
-    /// The same name, as a full path.
-    pub mf_ffname: *mut c_char,
+    /// Name of the swap file, as given, or `None` for memory only. Private:
+    /// readers go through [`mf_fname`], which is all any of them need.
+    fname: Option<CString>,
+    /// The same name, as a full path. Only [`mf_fullname`] ever reads it.
+    ffname: Option<CString>,
     /// Descriptor of the open swap file, or −1 for memory only.
     pub mf_fd: c_int,
     /// The flags `mf_fd` was opened with, for reopening it.
@@ -273,8 +272,8 @@ pub struct memfile_T {
 /// which answers null.
 pub unsafe fn mf_open(fname: *mut c_char, flags: c_int) -> *mut memfile_T {
     let mfp = Box::into_raw(Box::new(memfile_T {
-        mf_fname: core::ptr::null_mut(),
-        mf_ffname: core::ptr::null_mut(),
+        fname: None,
+        ffname: None,
         mf_fd: -1,
         mf_flags: 0,
         mf_reopen: false,
@@ -351,8 +350,8 @@ pub unsafe fn mf_close(mfp: *mut memfile_T, del_file: bool) {
         if (*mfp).mf_fd >= 0 && close((*mfp).mf_fd) < 0 {
             emsg(gettext(e_swapclose.ptr().cast::<c_char>()));
         }
-        if del_file && !(*mfp).mf_fname.is_null() {
-            os_remove((*mfp).mf_fname);
+        if del_file && !mf_fname(mfp).is_null() {
+            os_remove(mf_fname(mfp));
         }
         mf_free_fnames(mfp);
         // Dropping the memfile drops every block it still owns.
@@ -383,8 +382,8 @@ pub unsafe fn mf_close_file(buf: *mut buf_T, getlines: bool) {
         }
         (*mfp).mf_fd = -1;
 
-        if !(*mfp).mf_fname.is_null() {
-            os_remove((*mfp).mf_fname);
+        if !mf_fname(mfp).is_null() {
+            os_remove(mf_fname(mfp));
             mf_free_fnames(mfp);
         }
     }
@@ -731,7 +730,7 @@ unsafe fn mf_write(mfp: *mut memfile_T, hp: *mut bhdr_T) -> c_int {
                     if (*mfp).mf_fd >= 0 {
                         close((*mfp).mf_fd);
                     }
-                    (*mfp).mf_fd = os_open((*mfp).mf_fname, (*mfp).mf_flags, SWAPFILE_MODE);
+                    (*mfp).mf_fd = os_open(mf_fname(mfp), (*mfp).mf_flags, SWAPFILE_MODE);
                     (*mfp).mf_reopen = (*mfp).mf_fd < 0;
                 }
                 if attempt == 2 || (*mfp).mf_fd < 0 {
@@ -816,13 +815,32 @@ pub unsafe fn mf_trans_del(mfp: *mut memfile_T, old_nr: blocknr_T) -> blocknr_T 
     }
 }
 
+/// The swap file's name as it was given, or null when the memfile is memory
+/// only. It stays valid until the name is changed or the memfile closed.
+///
+/// # Safety
+/// `mfp` must point at a memfile.
+pub unsafe fn mf_fname(mfp: *const memfile_T) -> *const c_char {
+    match unsafe { &(*mfp).fname } {
+        Some(fname) => fname.as_ptr(),
+        None => core::ptr::null(),
+    }
+}
+
+/// Take over an allocated C string, which is released.
+unsafe fn take_cstring(p: *mut c_char) -> CString {
+    unsafe {
+        let owned = CStr::from_ptr(p).to_owned();
+        xfree(p.cast::<c_void>());
+        owned
+    }
+}
+
 /// Release the swap file's names.
 pub unsafe fn mf_free_fnames(mfp: *mut memfile_T) {
     unsafe {
-        xfree((*mfp).mf_fname.cast::<c_void>());
-        (*mfp).mf_fname = core::ptr::null_mut();
-        xfree((*mfp).mf_ffname.cast::<c_void>());
-        (*mfp).mf_ffname = core::ptr::null_mut();
+        (*mfp).fname = None;
+        (*mfp).ffname = None;
     }
 }
 
@@ -832,8 +850,9 @@ pub unsafe fn mf_free_fnames(mfp: *mut memfile_T) {
 /// worked out afresh.
 pub unsafe fn mf_set_fnames(mfp: *mut memfile_T, fname: *mut c_char) {
     unsafe {
-        (*mfp).mf_fname = fname;
-        (*mfp).mf_ffname = FullName_save((*mfp).mf_fname, false);
+        let full = FullName_save(fname, false);
+        (*mfp).fname = Some(take_cstring(fname));
+        (*mfp).ffname = (!full.is_null()).then(|| take_cstring(full));
     }
 }
 
@@ -841,18 +860,16 @@ pub unsafe fn mf_set_fnames(mfp: *mut memfile_T, fname: *mut c_char) {
 /// one mean something else.
 pub unsafe fn mf_fullname(mfp: *mut memfile_T) {
     unsafe {
-        if mfp.is_null() || (*mfp).mf_fname.is_null() || (*mfp).mf_ffname.is_null() {
+        if mfp.is_null() || (*mfp).fname.is_none() || (*mfp).ffname.is_none() {
             return;
         }
-        xfree((*mfp).mf_fname.cast::<c_void>());
-        (*mfp).mf_fname = (*mfp).mf_ffname;
-        (*mfp).mf_ffname = core::ptr::null_mut();
+        (*mfp).fname = (*mfp).ffname.take();
     }
 }
 
 /// Whether any block still owes the file a number.
 pub unsafe fn mf_need_trans(mfp: *mut memfile_T) -> bool {
-    unsafe { !(*mfp).mf_fname.is_null() && (*mfp).mf_neg_count > 0 }
+    unsafe { (*mfp).fname.is_some() && (*mfp).mf_neg_count > 0 }
 }
 
 /// Open the swap file. `fname` must be allocated, and is consumed — also
@@ -861,12 +878,12 @@ unsafe fn mf_do_open(mfp: *mut memfile_T, fname: *mut c_char, mut flags: c_int) 
     unsafe {
         // `fname` cannot be NameBuff: it has to have been allocated.
         mf_set_fnames(mfp, fname);
-        assert!(!(*mfp).mf_fname.is_null());
+        assert!(!mf_fname(mfp).is_null());
 
         // A swap file being created really should not exist yet. If it does
         // and it is a symlink, this is most likely an attack.
         let mut file_info: FileInfo = core::mem::zeroed();
-        if flags & O_CREAT != 0 && os_fileinfo_link((*mfp).mf_fname, &raw mut file_info) {
+        if flags & O_CREAT != 0 && os_fileinfo_link(mf_fname(mfp), &raw mut file_info) {
             (*mfp).mf_fd = -1;
             emsg(gettext(
                 c"E300: Swap file already exists (symlink attack?)".as_ptr(),
@@ -874,7 +891,7 @@ unsafe fn mf_do_open(mfp: *mut memfile_T, fname: *mut c_char, mut flags: c_int) 
         } else {
             flags |= O_NOFOLLOW;
             (*mfp).mf_flags = flags;
-            (*mfp).mf_fd = os_open((*mfp).mf_fname, flags, SWAPFILE_MODE);
+            (*mfp).mf_fd = os_open(mf_fname(mfp), flags, SWAPFILE_MODE);
         }
 
         if (*mfp).mf_fd < 0 {

@@ -42,7 +42,7 @@ pub unsafe fn ml_setname(buf: *mut buf_T) {
             let fname = findswapname(
                 buf,
                 &raw mut dirp,
-                (*mfp).mf_fname,
+                mf_fname(mfp),
                 &raw mut found_existing_dir,
             );
             if dirp.is_null() {
@@ -53,7 +53,7 @@ pub unsafe fn ml_setname(buf: *mut buf_T) {
             }
 
             // Already called that: nothing to do.
-            if path_fnamecmp(fname, (*mfp).mf_fname) == 0 {
+            if path_fnamecmp(fname, mf_fname(mfp)) == 0 {
                 xfree(fname.cast());
                 success = true;
                 break;
@@ -63,7 +63,7 @@ pub unsafe fn ml_setname(buf: *mut buf_T) {
                 close((*mfp).mf_fd);
                 (*mfp).mf_fd = -1;
             }
-            if vim_rename((*mfp).mf_fname, fname) == 0 {
+            if vim_rename(mf_fname(mfp), fname) == 0 {
                 success = true;
                 mf_free_fnames(mfp);
                 mf_set_fnames(mfp, fname);
@@ -74,7 +74,7 @@ pub unsafe fn ml_setname(buf: *mut buf_T) {
         }
 
         if (*mfp).mf_fd == -1 {
-            (*mfp).mf_fd = os_open((*mfp).mf_fname, O_RDWR, 0);
+            (*mfp).mf_fd = os_open(mf_fname(mfp), O_RDWR, 0);
             if (*mfp).mf_fd < 0 {
                 // Could not reopen the swap file. Nothing can be done.
                 emsg(gettext(c"E301: Oops, lost the swap file!!!".as_ptr()));
@@ -513,7 +513,7 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_
 pub(crate) unsafe fn findswapname(
     buf: *mut buf_T,
     dirp: *mut *mut c_char,
-    old_fname: *mut c_char,
+    old_fname: *const c_char,
     found_existing_dir: *mut bool,
 ) -> *mut c_char {
     unsafe {
@@ -728,16 +728,17 @@ pub unsafe fn recover_names(
             // The current buffer's own swap file is not interesting — except
             // to swapfilelist(), which wants everything.
             let mine = if (*curbuf.get()).b_ml.ml_mfp.is_null() {
-                core::ptr::null_mut()
+                core::ptr::null()
             } else {
-                (*(*curbuf.get()).b_ml.ml_mfp).mf_fname
+                mf_fname((*curbuf.get()).b_ml.ml_mfp)
             };
             if !mine.is_null() && ret_list.is_null() {
                 let mut i = 0;
                 while i < num_files {
                     // Do not expand wildcards: on Windows that would try to
                     // expand the "%tmp%" in "%tmp%file".
-                    if path_full_compare(mine, *files.offset(i as isize), true, false) as c_uint
+                    if path_full_compare(mine.cast_mut(), *files.offset(i as isize), true, false)
+                        as c_uint
                         & kEqualFiles as c_uint
                         != 0
                     {

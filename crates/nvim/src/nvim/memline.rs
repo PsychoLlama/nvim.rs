@@ -40,8 +40,8 @@ use crate::src::nvim::mbyte::{
     mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len,
 };
 use crate::src::nvim::memfile::{
-    mf_close, mf_close_file, mf_find, mf_free, mf_free_fnames, mf_get, mf_need_trans, mf_new,
-    mf_new_page_size, mf_open, mf_open_file, mf_put, mf_set_dirty, mf_set_fnames, mf_sync,
+    mf_close, mf_close_file, mf_find, mf_fname, mf_free, mf_free_fnames, mf_get, mf_need_trans,
+    mf_new, mf_new_page_size, mf_open, mf_open_file, mf_put, mf_set_dirty, mf_set_fnames, mf_sync,
     mf_trans_del,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstpcpy, xstrdup, xstrlcpy};
@@ -316,7 +316,7 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
             if !hp.is_null() {
                 mf_put(mfp, hp, false, false);
             }
-            mf_close(mfp, true); // also frees mfp->mf_fname
+            mf_close(mfp, true); // also frees the swap file's name
         }
         (*buf).b_ml.ml_mfp = ::core::ptr::null_mut();
         FAIL
@@ -433,7 +433,7 @@ pub unsafe fn ml_open_files() {
 
 /// Open a swap file for `buf`'s memfile, if it has none yet.
 ///
-/// If no usable file name can be found `mf_fname` stays NULL and the memfile
+/// If no usable file name can be found the memfile keeps no name and
 /// remains memory-only, with no recovery possible.
 ///
 /// # Safety
@@ -497,7 +497,7 @@ pub unsafe fn ml_open_file(buf: *mut buf_T) {
             mf_close_file(buf, false);
         }
 
-        if *p_dir.get() != NUL as ::core::ffi::c_char && (*mfp).mf_fname.is_null() {
+        if *p_dir.get() != NUL as ::core::ffi::c_char && mf_fname(mfp).is_null() {
             need_wait_return.set(true); // call wait_return() later
             (*no_wait_return.ptr()) += 1;
             semsg(
