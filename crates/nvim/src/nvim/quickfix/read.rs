@@ -485,8 +485,7 @@ pub(crate) unsafe fn qf_init_ext(
     // SAFETY: forwarded from the caller.
     unsafe {
         // Do not use the cached buffer, it may have been wiped out.
-        xfree(qf_last_bufname.get().cast());
-        qf_last_bufname.set(ptr::null_mut());
+        forget_last_buffer();
 
         let mut old_last: *mut qfline_T = ptr::null_mut();
         let mut retval = -1;

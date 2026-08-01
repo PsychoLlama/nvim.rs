@@ -657,7 +657,7 @@ pub(crate) unsafe extern "C" fn qf_jump_newwin(
         let mut old_qf_ptr: *mut qfline_T = qf_ptr;
         let mut qf_index: ::core::ffi::c_int = (*qfl).qf_index;
         let mut old_qf_index: ::core::ffi::c_int = qf_index;
-        qf_ptr = qf_get_entry(qfl, errornr, dir, &raw mut qf_index);
+        qf_ptr = qf_get_entry(qfl, errornr, dir, &mut qf_index);
         '_theend: {
             if qf_ptr.is_null() {
                 qf_ptr = old_qf_ptr;

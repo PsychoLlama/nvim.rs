@@ -105,13 +105,13 @@ use crate::src::nvim::search::{
 };
 use crate::src::nvim::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::{
-    CMD_index, Callback, Callback_data as C2Rust_Unnamed_6, Direction, EvalFuncData, ExtmarkOp,
-    FILE, FileInfo, ListLenSpecials, OptInt, OptVal, OptValData, OptValType, QFLT_INTERNAL,
-    QFLT_LOCATION, QFLT_QUICKFIX, String_0, TriState, VarLockStatus, VarType, aco_save_T, bcount_t,
-    bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T, dict_T,
-    dictitem_T, dir_stack_T, dobuf_action_values, exarg, exarg_T, except_T, garray_T, getf_values,
-    handle_T, ht_stack_T, linenr_T, list_T, list_stack_T, listitem_T, lpos_T, oparg_T, optset_T,
-    pos_T, proftime_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T,
+    CMD_index, Callback, Callback_data as C2Rust_Unnamed_6, DirStack, Direction, EvalFuncData,
+    ExtmarkOp, FILE, FileInfo, ListLenSpecials, OptInt, OptVal, OptValData, OptValType,
+    QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, String_0, TriState, VarLockStatus, VarType,
+    aco_save_T, bcount_t, bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, cmdidx_T, colnr_T,
+    cstack_T, dict_T, dictitem_T, dobuf_action_values, exarg, exarg_T, except_T, garray_T,
+    getf_values, handle_T, ht_stack_T, linenr_T, list_T, list_stack_T, listitem_T, lpos_T, oparg_T,
+    optset_T, pos_T, proftime_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T,
     regmmatch_T, regprog_T, scid_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T,
     typval_vval_union, uint8_t, uint32_t, uv_stat_t, uv_timespec_t, varnumber_T, vimconv_T, win_T,
 };

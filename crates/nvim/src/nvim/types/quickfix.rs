@@ -3,6 +3,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::src::nvim::file_search::Name;
 
 pub type qf_info_T = qf_info_S;
 /// A stack of quickfix (or location) lists. Windows and buffers point at one.
@@ -71,21 +72,23 @@ pub struct qf_list_T {
     pub qf_title: *mut ::core::ffi::c_char,
     pub qf_ctx: *mut typval_T,
     pub qf_qftf_cb: Callback,
-    pub qf_dir_stack: *mut dir_stack_T,
+    pub qf_dir_stack: *mut DirStack,
     pub qf_directory: *mut ::core::ffi::c_char,
-    pub qf_file_stack: *mut dir_stack_T,
+    pub qf_file_stack: *mut DirStack,
     pub qf_currfile: *mut ::core::ffi::c_char,
     pub qf_multiline: bool,
     pub qf_multiignore: bool,
     pub qf_multiscan: bool,
     pub qf_changedtick: ::core::ffi::c_int,
 }
-/// A directory name pushed while parsing `make` output.
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct dir_stack_T {
-    pub next: *mut dir_stack_T,
-    pub dirname: *mut ::core::ffi::c_char,
+/// The directories `%D`/`%X` (or `%O`/`%P`/`%Q`) pushed while parsing, the
+/// one most recently entered last.
+///
+/// A list holds two of these, as raw pointers rather than by value, because
+/// a list slot is created by zeroing it. Null means "no directory was ever
+/// pushed"; see `quickfix::entry` for the operations.
+pub struct DirStack {
+    pub(crate) dirs: Vec<Name>,
 }
 pub type qfline_T = qfline_S;
 /// One entry in a quickfix list.

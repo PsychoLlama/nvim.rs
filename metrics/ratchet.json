@@ -378,7 +378,7 @@
     "crates/nvim/src/nvim/quickfix/cmds.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/quickfix/display.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/quickfix/efm.rs": {"unsafe": 13},
-    "crates/nvim/src/nvim/quickfix/entry.rs": {"unsafe": 17},
+    "crates/nvim/src/nvim/quickfix/entry.rs": {"unsafe": 19},
     "crates/nvim/src/nvim/quickfix/eval.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/quickfix/getprops.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/quickfix/helpgrep.rs": {"unsafe": 5},

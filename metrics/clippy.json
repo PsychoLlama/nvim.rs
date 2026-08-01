@@ -126,7 +126,6 @@
     "crates/nvim/src/nvim/quickfix.rs": 3,
     "crates/nvim/src/nvim/quickfix/cmds.rs": 23,
     "crates/nvim/src/nvim/quickfix/display.rs": 40,
-    "crates/nvim/src/nvim/quickfix/entry.rs": 12,
     "crates/nvim/src/nvim/quickfix/eval.rs": 6,
     "crates/nvim/src/nvim/quickfix/getprops.rs": 87,
     "crates/nvim/src/nvim/quickfix/helpgrep.rs": 12,

@@ -555,7 +555,7 @@ pub(crate) unsafe extern "C" fn qf_setprop_curidx(
             (*qfl).qf_count
         };
         let old_qfidx: ::core::ffi::c_int = (*qfl).qf_index;
-        let qf_ptr: *mut qfline_T = get_nth_entry(qfl, newidx, &raw mut newidx);
+        let qf_ptr: *mut qfline_T = get_nth_entry(qfl, newidx, &mut newidx);
         if qf_ptr.is_null() {
             return FAIL;
         }
