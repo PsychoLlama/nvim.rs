@@ -1,978 +1,956 @@
 //! Matching brackets.
 //!
 //! [`findmatchlimit`] is the walk `%` and its neighbours share: from a
-//! position it looks for the other half of a `'matchpairs'` pair, a `#if`
-//! /`#endif` triple, or the end of a comment or string, skipping anything
-//! that a comment, a string or a backslash makes not count
-//! ([`check_linecomment`], [`find_rawstring_end`], [`check_prevcol`]).
+//! position it looks for the other half of a `'matchpairs'` pair, a
+//! `#if`/`#endif` partner, or the end of a C comment or raw string. What
+//! it has to get right is everything that makes a bracket *not* count —
+//! a `//` or Lisp `;` comment ([`check_linecomment`]), a string, an
+//! escaping backslash, a raw-string delimiter ([`find_rawstring_end`]) —
+//! and the `'cpoptions'` flags `%` and `M` that switch those rules off.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
-pub unsafe extern "C" fn findmatch(
-    mut oap: *mut oparg_T,
-    mut initc: ::core::ffi::c_int,
+const MAXCOL: c_int = super::MAXCOL as c_int;
+const FM_BACKWARD: c_int = super::FM_BACKWARD as c_int;
+const FM_FORWARD: c_int = super::FM_FORWARD as c_int;
+const FM_BLOCKSTOP: c_int = super::FM_BLOCKSTOP as c_int;
+const FORWARD: c_int = super::FORWARD as c_int;
+const BACKWARD: c_int = super::BACKWARD as c_int;
+
+/// The position [`findmatchlimit`] answers. It is a static because every
+/// caller takes the pointer rather than the value; the next call
+/// overwrites it.
+static match_at: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+    lnum: 0,
+    col: 0,
+    coladd: 0,
+});
+
+/// Find the match for the bracket under the cursor.
+///
+/// # Safety
+/// `oap` must be null or valid; the current window and buffer must be
+/// valid.
+pub unsafe extern "C" fn findmatch(oap: *mut oparg_T, initc: c_int) -> *mut pos_T {
+    unsafe { findmatchlimit(oap, initc, 0, 0) }
+}
+
+/// Find the matching paren or brace, if it is within `maxtravel` lines of
+/// the cursor. A `maxtravel` of 0 means "search until falling off the
+/// edge of the file".
+///
+/// `initc` is the character to find a match for; NUL means the character
+/// at or after the cursor. Four values are special: `'*'` looks for the
+/// other end of a `/* */` comment, `'/'` does the same but ignores a
+/// comment end, `'#'` looks for a preprocessor directive, and `'R'` looks
+/// for the start of a raw string `R"delim(text)delim"` (backwards only).
+///
+/// `flags` is `FM_BACKWARD`/`FM_FORWARD` (which way to look, for the
+/// `'/'`, `'*'` and `'#'` forms) and `FM_BLOCKSTOP` (stop at a `{` or `}`
+/// in column 0).
+///
+/// `oap` is used only to set `oap->motion_type` for the linewise `#if`
+/// case; it may be null.
+///
+/// # Safety
+/// `oap` must be null or valid; the current window and buffer must be
+/// valid. The answer points at a static and is invalidated by the next
+/// call.
+pub unsafe extern "C" fn findmatchlimit(
+    oap: *mut oparg_T,
+    initc: c_int,
+    flags: c_int,
+    maxtravel: int64_t,
 ) -> *mut pos_T {
     unsafe {
-        return findmatchlimit(oap, initc, 0 as ::core::ffi::c_int, 0 as int64_t);
+        match find_match(oap, initc, flags, maxtravel) {
+            Some(pos) => {
+                match_at.set(pos);
+                match_at.ptr()
+            }
+            None => ptr::null_mut(),
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn check_prevcol(
-    mut linep: *mut ::core::ffi::c_char,
-    mut col: ::core::ffi::c_int,
-    mut ch: ::core::ffi::c_int,
-    mut prevcol: *mut ::core::ffi::c_int,
+// ---------------------------------------------------------------------
+// Deciding what to look for.
+// ---------------------------------------------------------------------
+
+/// Whether the character before `linep[col]` is `ch`, reporting the
+/// column of that previous character through `prev`.
+///
+/// False when `col` is zero. Handles multi-byte characters.
+///
+/// # Safety
+/// `linep` must be a NUL-terminated line and `col` a column in it.
+unsafe fn check_prevcol(
+    linep: *mut c_char,
+    col: c_int,
+    ch: c_int,
+    prev: Option<&mut c_int>,
 ) -> bool {
     unsafe {
-        col -= 1;
-        if col > 0 as ::core::ffi::c_int {
+        let mut col = col - 1;
+        if col > 0 {
             col -= utf_head_off(linep, linep.offset(col as isize));
         }
-        if !prevcol.is_null() {
-            *prevcol = col;
+        if let Some(prev) = prev {
+            *prev = col;
         }
-        return col >= 0 as ::core::ffi::c_int
-            && *linep.offset(col as isize) as uint8_t as ::core::ffi::c_int == ch;
+        col >= 0 && *linep.offset(col as isize) as u8 as c_int == ch
     }
 }
 
-pub(crate) unsafe extern "C" fn find_rawstring_end(
-    mut linep: *mut ::core::ffi::c_char,
-    mut startpos: *mut pos_T,
-    mut endpos: *mut pos_T,
-) -> bool {
+/// How many backslashes immediately precede `linep[col]`.
+///
+/// An odd number means the character there is escaped. `'cpoptions'` "M"
+/// switches the whole idea off, and both callers check that first.
+///
+/// # Safety
+/// As [`check_prevcol`].
+unsafe fn backslash_count(linep: *mut c_char, col: c_int) -> c_int {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut lnum: linenr_T = 0;
-        p = linep
-            .offset((*startpos).col as isize)
-            .offset(1 as ::core::ffi::c_int as isize);
-        while *p as ::core::ffi::c_int != 0 && *p as ::core::ffi::c_int != '(' as ::core::ffi::c_int
-        {
-            p = p.offset(1);
+        let mut count = 0;
+        let mut col = col;
+        while check_prevcol(linep, col, '\\' as c_int, Some(&mut col)) {
+            count += 1;
         }
-        let mut delim_len: size_t =
-            (p.offset_from(linep) - (*startpos).col as isize - 1 as isize) as size_t;
-        let mut delim_copy: *mut ::core::ffi::c_char = xmemdupz(
-            linep
-                .offset((*startpos).col as isize)
-                .offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
-            delim_len,
-        ) as *mut ::core::ffi::c_char;
-        let mut found: bool = false_0 != 0;
-        lnum = (*startpos).lnum;
-        while lnum <= (*endpos).lnum {
-            let mut line: *mut ::core::ffi::c_char = ml_get(lnum);
-            p = line.offset(
-                (if lnum == (*startpos).lnum {
-                    (*startpos).col as ::core::ffi::c_int + 1 as ::core::ffi::c_int
-                } else {
-                    0 as ::core::ffi::c_int
-                }) as isize,
-            );
-            while *p != 0 {
-                if lnum == (*endpos).lnum && p.offset_from(line) as colnr_T >= (*endpos).col {
-                    break;
-                }
-                if *p as ::core::ffi::c_int == ')' as ::core::ffi::c_int
-                    && strncmp(
-                        delim_copy,
-                        p.offset(1 as ::core::ffi::c_int as isize),
-                        delim_len,
-                    ) == 0 as ::core::ffi::c_int
-                    && *p.offset(delim_len.wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
-                        == '"' as ::core::ffi::c_int
-                {
-                    found = true_0 != 0;
-                    break;
-                } else {
-                    p = p.offset(1);
-                }
-            }
-            if found {
-                break;
-            }
-            lnum += 1;
-        }
-        xfree(delim_copy as *mut ::core::ffi::c_void);
-        return found;
+        count
     }
 }
 
-pub(crate) unsafe extern "C" fn find_mps_values(
-    mut initc: *mut ::core::ffi::c_int,
-    mut findc: *mut ::core::ffi::c_int,
-    mut backwards: *mut bool,
-    mut switchit: bool,
+/// Look `*initc` up in `'matchpairs'`.
+///
+/// `'matchpairs'` is `"x:y,x:y"`. On a hit, `*findc` becomes the opposite
+/// character and `*backwards` the direction to look in; with `switchit`
+/// the roles are swapped, which is how `%` on a closing bracket comes to
+/// look backwards for the opening one. Everything is left alone when the
+/// character is not in the option.
+///
+/// # Safety
+/// The current buffer must be valid.
+unsafe fn find_mps_values(
+    initc: &mut c_int,
+    findc: &mut c_int,
+    backwards: &mut bool,
+    switchit: bool,
 ) {
     unsafe {
-        let mut ptr: *mut ::core::ffi::c_char = (*curbuf.get()).b_p_mps;
-        while *ptr as ::core::ffi::c_int != NUL {
+        let mut ptr = (*curbuf.get()).b_p_mps;
+        while *ptr as c_int != NUL {
+            // The opening half of this pair.
             if utf_ptr2char(ptr) == *initc {
+                let other = utf_ptr2char(ptr.offset(utfc_ptr2len(ptr) as isize + 1));
                 if switchit {
                     *findc = *initc;
-                    *initc = utf_ptr2char(
-                        ptr.offset(utfc_ptr2len(ptr) as isize)
-                            .offset(1 as ::core::ffi::c_int as isize),
-                    );
-                    *backwards = true_0 != 0;
+                    *initc = other;
+                    *backwards = true;
                 } else {
-                    *findc = utf_ptr2char(
-                        ptr.offset(utfc_ptr2len(ptr) as isize)
-                            .offset(1 as ::core::ffi::c_int as isize),
-                    );
-                    *backwards = false_0 != 0;
+                    *findc = other;
+                    *backwards = false;
                 }
                 return;
             }
-            let mut prev: *mut ::core::ffi::c_char = ptr;
-            ptr = ptr.offset((utfc_ptr2len(ptr) + 1 as ::core::ffi::c_int) as isize);
+            // The closing half.
+            let prev = ptr;
+            ptr = ptr.offset((utfc_ptr2len(ptr) + 1) as isize);
             if utf_ptr2char(ptr) == *initc {
                 if switchit {
                     *findc = *initc;
                     *initc = utf_ptr2char(prev);
-                    *backwards = false_0 != 0;
+                    *backwards = false;
                 } else {
                     *findc = utf_ptr2char(prev);
-                    *backwards = true_0 != 0;
+                    *backwards = true;
                 }
                 return;
             }
             ptr = ptr.offset(utfc_ptr2len(ptr) as isize);
-            if *ptr as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
+            if *ptr as c_int == ',' as c_int {
                 ptr = ptr.offset(1);
             }
         }
     }
 }
 
-pub unsafe extern "C" fn findmatchlimit(
-    mut oap: *mut oparg_T,
-    mut initc: ::core::ffi::c_int,
-    mut flags: ::core::ffi::c_int,
-    mut maxtravel: int64_t,
-) -> *mut pos_T {
+/// Whether `ptr` begins with `word`.
+///
+/// # Safety
+/// `ptr` must be NUL-terminated.
+unsafe fn starts_with(ptr: *const c_char, word: &str) -> bool {
+    unsafe { strncmp(ptr, word.as_ptr() as *const c_char, word.len() as size_t) == 0 }
+}
+
+/// What the walk is looking for, once `initc` and the text under the
+/// cursor have been interpreted.
+struct Target {
+    /// The character that opens; NUL when looking for a comment end.
+    initc: c_int,
+    /// The character that closes.
+    findc: c_int,
+    backwards: bool,
+    /// Which way a comment end is being looked for; 0 when the target is
+    /// a bracket pair.
+    comment_dir: c_int,
+    /// `[/` ignores running backwards into a `*/`: for that command any
+    /// comment will do.
+    ignore_cend: bool,
+    /// `'R'`: the target is a raw-string start.
+    raw_string: bool,
+    /// Whether the bracket the walk started on was itself escaped; only a
+    /// match with the same escaping counts.
+    match_escaped: c_int,
+}
+
+/// What interpreting `initc` decided to do.
+enum Plan {
+    /// Walk the buffer looking for this target.
+    Walk(Target),
+    /// Walk lines looking for a `#if`/`#else`/`#endif` partner, in this
+    /// direction.
+    Hash(c_int),
+    /// There is nothing to look for.
+    Nothing,
+}
+
+/// Interpret `initc` and, when it is NUL, the text under the cursor.
+///
+/// May move `pos` — onto the other half of a `/*` or `*/`, or forward
+/// along the line to the first bracket after the cursor.
+///
+/// # Safety
+/// `pos` and `linep` must address the current buffer; `oap` must be null
+/// or valid.
+unsafe fn make_plan(
+    oap: *mut oparg_T,
+    initc: c_int,
+    dir: c_int,
+    pos: &mut pos_T,
+    linep: *mut c_char,
+    cpo_match: bool,
+    cpo_bsl: bool,
+) -> Plan {
     unsafe {
-        static pos: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        });
-        let mut findc: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut backwards: bool = false_0 != 0;
-        let mut raw_string: bool = false_0 != 0;
-        let mut inquote: bool = false_0 != 0;
-        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut hash_dir: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut comment_dir: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut traveled: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut ignore_cend: bool = false_0 != 0;
-        let mut match_escaped: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut dir: ::core::ffi::c_int = 0;
-        let mut comment_col: ::core::ffi::c_int = MAXCOL as ::core::ffi::c_int;
-        let mut lispcomm: bool = false_0 != 0;
-        let mut lisp: bool = (*curbuf.get()).b_p_lisp != 0;
-        pos.set((*curwin.get()).w_cursor);
-        (*pos.ptr()).coladd = 0 as ::core::ffi::c_int as colnr_T;
-        let mut linep: *mut ::core::ffi::c_char = ml_get((*pos.ptr()).lnum);
-        let mut cpo_match: bool = !vim_strchr(p_cpo.get(), CPO_MATCH).is_null();
-        let mut cpo_bsl: bool = !vim_strchr(p_cpo.get(), CPO_MATCHBSL).is_null();
-        if flags & FM_BACKWARD as ::core::ffi::c_int != 0 {
-            dir = BACKWARD as ::core::ffi::c_int;
-        } else if flags & FM_FORWARD as ::core::ffi::c_int != 0 {
-            dir = FORWARD as ::core::ffi::c_int;
-        } else {
-            dir = 0 as ::core::ffi::c_int;
+        let mut target = Target {
+            initc,
+            findc: 0,
+            backwards: false,
+            comment_dir: 0,
+            ignore_cend: false,
+            raw_string: false,
+            match_escaped: 0,
+        };
+
+        // '/' and '*' are special cases: look for the start or end of a
+        // comment. When '/' is used, running backwards into a "*/" is
+        // ignored, because for the "[*" command any comment will do.
+        if initc == '/' as c_int || initc == '*' as c_int || initc == 'R' as c_int {
+            target.comment_dir = dir;
+            target.ignore_cend = initc == '/' as c_int;
+            target.backwards = dir != FORWARD;
+            target.raw_string = initc == 'R' as c_int;
+            target.initc = NUL;
+            return Plan::Walk(target);
         }
-        if initc == '/' as ::core::ffi::c_int
-            || initc == '*' as ::core::ffi::c_int
-            || initc == 'R' as ::core::ffi::c_int
-        {
-            comment_dir = dir;
-            if initc == '/' as ::core::ffi::c_int {
-                ignore_cend = true_0 != 0;
-            }
-            backwards = if dir == FORWARD as ::core::ffi::c_int {
-                false_0
-            } else {
-                true_0
-            } != 0;
-            raw_string = initc == 'R' as ::core::ffi::c_int;
-            initc = NUL;
-        } else if initc != '#' as ::core::ffi::c_int && initc != NUL {
+
+        if initc != '#' as c_int && initc != NUL {
+            // A given character: look it up in the table.
             find_mps_values(
-                &raw mut initc,
-                &raw mut findc,
-                &raw mut backwards,
-                true_0 != 0,
+                &mut target.initc,
+                &mut target.findc,
+                &mut target.backwards,
+                true,
             );
             if dir != 0 {
-                backwards = if dir == FORWARD as ::core::ffi::c_int {
-                    false_0
-                } else {
-                    true_0
-                } != 0;
+                target.backwards = dir != FORWARD;
             }
-            if findc == NUL {
-                return ::core::ptr::null_mut::<pos_T>();
+            if target.findc == NUL {
+                return Plan::Nothing;
             }
-        } else {
-            if initc == '#' as ::core::ffi::c_int {
-                hash_dir = dir;
-            } else {
-                if !cpo_match {
-                    ptr = skipwhite(linep);
-                    if *ptr as ::core::ffi::c_int == '#' as ::core::ffi::c_int
-                        && (*pos.ptr()).col <= ptr.offset_from(linep) as colnr_T
-                    {
-                        ptr = skipwhite(ptr.offset(1 as ::core::ffi::c_int as isize));
-                        if strncmp(
-                            ptr,
-                            b"if\0".as_ptr() as *const ::core::ffi::c_char,
-                            2 as size_t,
-                        ) == 0 as ::core::ffi::c_int
-                            || strncmp(
-                                ptr,
-                                b"endif\0".as_ptr() as *const ::core::ffi::c_char,
-                                5 as size_t,
-                            ) == 0 as ::core::ffi::c_int
-                            || strncmp(
-                                ptr,
-                                b"el\0".as_ptr() as *const ::core::ffi::c_char,
-                                2 as size_t,
-                            ) == 0 as ::core::ffi::c_int
-                        {
-                            hash_dir = 1 as ::core::ffi::c_int;
-                        }
-                    } else if *linep.offset((*pos.ptr()).col as isize) as ::core::ffi::c_int
-                        == '/' as ::core::ffi::c_int
-                    {
-                        if *linep.offset(
-                            ((*pos.ptr()).col as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                                as isize,
-                        ) as ::core::ffi::c_int
-                            == '*' as ::core::ffi::c_int
-                        {
-                            comment_dir = FORWARD as ::core::ffi::c_int;
-                            backwards = false_0 != 0;
-                            (*pos.ptr()).col += 1;
-                        } else if (*pos.ptr()).col > 0 as ::core::ffi::c_int
-                            && *linep.offset(
-                                ((*pos.ptr()).col as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                                    as isize,
-                            ) as ::core::ffi::c_int
-                                == '*' as ::core::ffi::c_int
-                        {
-                            comment_dir = BACKWARD as ::core::ffi::c_int;
-                            backwards = true_0 != 0;
-                            (*pos.ptr()).col -= 1;
-                        }
-                    } else if *linep.offset((*pos.ptr()).col as isize) as ::core::ffi::c_int
-                        == '*' as ::core::ffi::c_int
-                    {
-                        if *linep.offset(
-                            ((*pos.ptr()).col as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                                as isize,
-                        ) as ::core::ffi::c_int
-                            == '/' as ::core::ffi::c_int
-                        {
-                            comment_dir = BACKWARD as ::core::ffi::c_int;
-                            backwards = true_0 != 0;
-                        } else if (*pos.ptr()).col > 0 as ::core::ffi::c_int
-                            && *linep.offset(
-                                ((*pos.ptr()).col as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                                    as isize,
-                            ) as ::core::ffi::c_int
-                                == '/' as ::core::ffi::c_int
-                        {
-                            comment_dir = FORWARD as ::core::ffi::c_int;
-                            backwards = false_0 != 0;
-                        }
-                    }
-                }
-                if hash_dir == 0 && comment_dir == 0 {
-                    if *linep.offset((*pos.ptr()).col as isize) as ::core::ffi::c_int == NUL
-                        && (*pos.ptr()).col != 0
-                    {
-                        (*pos.ptr()).col -= 1;
-                    }
-                    loop {
-                        initc = utf_ptr2char(linep.offset((*pos.ptr()).col as isize));
-                        if initc == NUL {
-                            break;
-                        }
-                        find_mps_values(
-                            &raw mut initc,
-                            &raw mut findc,
-                            &raw mut backwards,
-                            false_0 != 0,
-                        );
-                        if findc != 0 {
-                            break;
-                        }
-                        (*pos.ptr()).col += utfc_ptr2len(linep.offset((*pos.ptr()).col as isize));
-                    }
-                    if findc == 0 {
-                        if !cpo_match
-                            && *skipwhite(linep) as ::core::ffi::c_int == '#' as ::core::ffi::c_int
-                        {
-                            hash_dir = 1 as ::core::ffi::c_int;
-                        } else {
-                            return ::core::ptr::null_mut::<pos_T>();
-                        }
-                    } else if !cpo_bsl {
-                        let mut bslcnt: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        let mut col: ::core::ffi::c_int = (*pos.ptr()).col as ::core::ffi::c_int;
-                        while check_prevcol(linep, col, '\\' as ::core::ffi::c_int, &raw mut col) {
-                            bslcnt += 1;
-                        }
-                        match_escaped = bslcnt & 1 as ::core::ffi::c_int;
-                    }
-                }
-            }
-            if hash_dir != 0 {
-                if !oap.is_null() {
-                    (*oap).motion_type = kMTLineWise;
-                }
-                if initc != '#' as ::core::ffi::c_int {
-                    ptr = skipwhite(skipwhite(linep).offset(1 as ::core::ffi::c_int as isize));
-                    if strncmp(
-                        ptr,
-                        b"if\0".as_ptr() as *const ::core::ffi::c_char,
-                        2 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                        || strncmp(
-                            ptr,
-                            b"el\0".as_ptr() as *const ::core::ffi::c_char,
-                            2 as size_t,
-                        ) == 0 as ::core::ffi::c_int
-                    {
-                        hash_dir = 1 as ::core::ffi::c_int;
-                    } else if strncmp(
-                        ptr,
-                        b"endif\0".as_ptr() as *const ::core::ffi::c_char,
-                        5 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        hash_dir = -1 as ::core::ffi::c_int;
-                    } else {
-                        return ::core::ptr::null_mut::<pos_T>();
-                    }
-                }
-                (*pos.ptr()).col = 0 as ::core::ffi::c_int as colnr_T;
-                while !got_int.get() {
-                    if hash_dir > 0 as ::core::ffi::c_int {
-                        if (*pos.ptr()).lnum == (*curbuf.get()).b_ml.ml_line_count {
-                            break;
-                        }
-                    } else if (*pos.ptr()).lnum == 1 as linenr_T {
-                        break;
-                    }
-                    (*pos.ptr()).lnum =
-                        ((*pos.ptr()).lnum as ::core::ffi::c_int + hash_dir) as linenr_T;
-                    linep = ml_get((*pos.ptr()).lnum);
-                    line_breakcheck();
-                    ptr = skipwhite(linep);
-                    if *ptr as ::core::ffi::c_int != '#' as ::core::ffi::c_int {
-                        continue;
-                    }
-                    (*pos.ptr()).col = ptr.offset_from(linep) as colnr_T;
-                    ptr = skipwhite(ptr.offset(1 as ::core::ffi::c_int as isize));
-                    if hash_dir > 0 as ::core::ffi::c_int {
-                        if strncmp(
-                            ptr,
-                            b"if\0".as_ptr() as *const ::core::ffi::c_char,
-                            2 as size_t,
-                        ) == 0 as ::core::ffi::c_int
-                        {
-                            count += 1;
-                        } else if strncmp(
-                            ptr,
-                            b"el\0".as_ptr() as *const ::core::ffi::c_char,
-                            2 as size_t,
-                        ) == 0 as ::core::ffi::c_int
-                        {
-                            if count == 0 as ::core::ffi::c_int {
-                                return pos.ptr();
-                            }
-                        } else if strncmp(
-                            ptr,
-                            b"endif\0".as_ptr() as *const ::core::ffi::c_char,
-                            5 as size_t,
-                        ) == 0 as ::core::ffi::c_int
-                        {
-                            if count == 0 as ::core::ffi::c_int {
-                                return pos.ptr();
-                            }
-                            count -= 1;
-                        }
-                    } else if strncmp(
-                        ptr,
-                        b"if\0".as_ptr() as *const ::core::ffi::c_char,
-                        2 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        if count == 0 as ::core::ffi::c_int {
-                            return pos.ptr();
-                        }
-                        count -= 1;
-                    } else if initc == '#' as ::core::ffi::c_int
-                        && strncmp(
-                            ptr,
-                            b"el\0".as_ptr() as *const ::core::ffi::c_char,
-                            2 as size_t,
-                        ) == 0 as ::core::ffi::c_int
-                    {
-                        if count == 0 as ::core::ffi::c_int {
-                            return pos.ptr();
-                        }
-                    } else if strncmp(
-                        ptr,
-                        b"endif\0".as_ptr() as *const ::core::ffi::c_char,
-                        5 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        count += 1;
-                    }
-                }
-                return ::core::ptr::null_mut::<pos_T>();
-            }
+            return Plan::Walk(target);
         }
-        if (*curwin.get()).w_onebuf_opt.wo_rl != 0
-            && !vim_strchr(b"()[]{}<>\0".as_ptr() as *const ::core::ffi::c_char, initc).is_null()
-        {
-            backwards = !backwards;
-        }
-        let mut do_quotes: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        let mut at_start: ::core::ffi::c_int = 0;
-        let mut start_in_quotes: TriState = kNone;
-        let mut match_pos: pos_T = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        clearpos(&mut match_pos);
-        if backwards as ::core::ffi::c_int != 0 && comment_dir != 0
-            || lisp as ::core::ffi::c_int != 0
-        {
-            comment_col = check_linecomment(linep);
-        }
-        if lisp as ::core::ffi::c_int != 0
-            && comment_col != MAXCOL as ::core::ffi::c_int
-            && (*pos.ptr()).col > comment_col
-        {
-            lispcomm = true_0 != 0;
-        }
-        while !got_int.get() {
-            if backwards {
-                if lispcomm as ::core::ffi::c_int != 0 && (*pos.ptr()).col < comment_col {
-                    break;
-                }
-                if (*pos.ptr()).col == 0 as ::core::ffi::c_int {
-                    if (*pos.ptr()).lnum == 1 as linenr_T {
-                        break;
-                    }
-                    (*pos.ptr()).lnum -= 1;
-                    if maxtravel > 0 as int64_t && {
-                        traveled += 1;
-                        traveled as int64_t > maxtravel
-                    } {
-                        break;
-                    }
-                    linep = ml_get((*pos.ptr()).lnum);
-                    (*pos.ptr()).col = ml_get_len((*pos.ptr()).lnum);
-                    do_quotes = -1 as ::core::ffi::c_int;
-                    line_breakcheck();
-                    if comment_dir != 0 || lisp as ::core::ffi::c_int != 0 {
-                        comment_col = check_linecomment(linep);
-                    }
-                    if lisp as ::core::ffi::c_int != 0
-                        && comment_col != MAXCOL as ::core::ffi::c_int
-                    {
-                        (*pos.ptr()).col = comment_col as colnr_T;
-                    }
-                } else {
-                    (*pos.ptr()).col -= 1;
-                    (*pos.ptr()).col -=
-                        utf_head_off(linep, linep.offset((*pos.ptr()).col as isize));
-                }
-            } else if *linep.offset((*pos.ptr()).col as isize) as ::core::ffi::c_int == NUL
-                || lisp as ::core::ffi::c_int != 0
-                    && comment_col != MAXCOL as ::core::ffi::c_int
-                    && (*pos.ptr()).col == comment_col
-            {
-                if (*pos.ptr()).lnum == (*curbuf.get()).b_ml.ml_line_count
-                    || lispcomm as ::core::ffi::c_int != 0
-                {
-                    break;
-                }
-                (*pos.ptr()).lnum += 1;
-                if maxtravel != 0 && {
-                    let c2rust_fresh8 = traveled;
-                    traveled = traveled + 1;
-                    c2rust_fresh8 as int64_t > maxtravel
-                } {
-                    break;
-                }
-                linep = ml_get((*pos.ptr()).lnum);
-                (*pos.ptr()).col = 0 as ::core::ffi::c_int as colnr_T;
-                do_quotes = -1 as ::core::ffi::c_int;
-                line_breakcheck();
-                if lisp {
-                    comment_col = check_linecomment(linep);
-                }
-            } else {
-                (*pos.ptr()).col += utfc_ptr2len(linep.offset((*pos.ptr()).col as isize));
-            }
-            if (*pos.ptr()).col == 0 as ::core::ffi::c_int
-                && flags & FM_BLOCKSTOP as ::core::ffi::c_int != 0
-                && (*linep.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '{' as ::core::ffi::c_int
-                    || *linep.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '}' as ::core::ffi::c_int)
-            {
-                if *linep.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == findc
-                    && count == 0 as ::core::ffi::c_int
-                {
-                    return pos.ptr();
-                }
-                break;
-            } else if comment_dir != 0 {
-                if comment_dir == FORWARD as ::core::ffi::c_int {
-                    if *linep.offset((*pos.ptr()).col as isize) as ::core::ffi::c_int
-                        == '*' as ::core::ffi::c_int
-                        && *linep.offset(
-                            ((*pos.ptr()).col as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                                as isize,
-                        ) as ::core::ffi::c_int
-                            == '/' as ::core::ffi::c_int
-                    {
-                        (*pos.ptr()).col += 1;
-                        return pos.ptr();
-                    }
-                } else {
-                    if (*pos.ptr()).col == 0 as ::core::ffi::c_int {
-                        continue;
-                    }
-                    if raw_string {
-                        if *linep.offset(
-                            ((*pos.ptr()).col as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                                as isize,
-                        ) as ::core::ffi::c_int
-                            == 'R' as ::core::ffi::c_int
-                            && *linep.offset((*pos.ptr()).col as isize) as ::core::ffi::c_int
-                                == '"' as ::core::ffi::c_int
-                            && !vim_strchr(
-                                linep
-                                    .offset((*pos.ptr()).col as isize)
-                                    .offset(1 as ::core::ffi::c_int as isize),
-                                '(' as ::core::ffi::c_int,
-                            )
-                            .is_null()
-                        {
-                            if !find_rawstring_end(
-                                linep,
-                                pos.ptr(),
-                                if count > 0 as ::core::ffi::c_int {
-                                    &raw mut match_pos
-                                } else {
-                                    &raw mut (*curwin.get()).w_cursor
-                                },
-                            ) {
-                                count += 1;
-                                match_pos = pos.get();
-                                match_pos.col -= 1;
-                            }
-                            linep = ml_get((*pos.ptr()).lnum);
-                        }
-                    } else if *linep.offset(
-                        ((*pos.ptr()).col as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as isize,
-                    ) as ::core::ffi::c_int
-                        == '/' as ::core::ffi::c_int
-                        && *linep.offset((*pos.ptr()).col as isize) as ::core::ffi::c_int
-                            == '*' as ::core::ffi::c_int
-                        && ((*pos.ptr()).col == 1 as ::core::ffi::c_int
-                            || *linep.offset(
-                                ((*pos.ptr()).col as ::core::ffi::c_int - 2 as ::core::ffi::c_int)
-                                    as isize,
-                            ) as ::core::ffi::c_int
-                                != '*' as ::core::ffi::c_int)
-                        && (*pos.ptr()).col < comment_col
-                    {
-                        count += 1;
-                        match_pos = pos.get();
-                        match_pos.col -= 1;
-                    } else {
-                        if !(*linep.offset(
-                            ((*pos.ptr()).col as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                                as isize,
-                        ) as ::core::ffi::c_int
-                            == '*' as ::core::ffi::c_int
-                            && *linep.offset((*pos.ptr()).col as isize) as ::core::ffi::c_int
-                                == '/' as ::core::ffi::c_int)
-                        {
-                            continue;
-                        }
-                        if count > 0 as ::core::ffi::c_int {
-                            pos.set(match_pos);
-                        } else if (*pos.ptr()).col > 1 as ::core::ffi::c_int
-                            && *linep.offset(
-                                ((*pos.ptr()).col as ::core::ffi::c_int - 2 as ::core::ffi::c_int)
-                                    as isize,
-                            ) as ::core::ffi::c_int
-                                == '/' as ::core::ffi::c_int
-                            && (*pos.ptr()).col <= comment_col
-                        {
-                            (*pos.ptr()).col -= 2 as ::core::ffi::c_int;
-                        } else {
-                            if ignore_cend {
-                                continue;
-                            }
-                            return ::core::ptr::null_mut::<pos_T>();
-                        }
-                        return pos.ptr();
-                    }
-                }
-            } else {
-                if cpo_match {
-                    do_quotes = 0 as ::core::ffi::c_int;
-                } else if do_quotes == -1 as ::core::ffi::c_int {
-                    at_start = do_quotes;
-                    ptr = linep;
-                    while *ptr != 0 {
-                        if ptr
-                            == linep
-                                .offset((*pos.ptr()).col as isize)
-                                .offset(backwards as ::core::ffi::c_int as isize)
-                        {
-                            at_start = do_quotes & 1 as ::core::ffi::c_int;
-                        }
-                        if *ptr as ::core::ffi::c_int == '"' as ::core::ffi::c_int
-                            && (ptr == linep
-                                || *ptr.offset(-1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int
-                                    != '\'' as ::core::ffi::c_int
-                                || *ptr.offset(1 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int
-                                    != '\'' as ::core::ffi::c_int)
-                        {
-                            do_quotes += 1;
-                        }
-                        if *ptr as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                            && *ptr.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                                != NUL
-                        {
-                            ptr = ptr.offset(1);
-                        }
-                        ptr = ptr.offset(1);
-                    }
-                    do_quotes &= 1 as ::core::ffi::c_int;
-                    if do_quotes == 0 {
-                        inquote = false_0 != 0;
-                        if *ptr.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            == '\\' as ::core::ffi::c_int
-                        {
-                            do_quotes = 1 as ::core::ffi::c_int;
-                            if start_in_quotes as ::core::ffi::c_int == kNone as ::core::ffi::c_int
-                            {
-                                inquote = true_0 != 0;
-                                start_in_quotes = kTrue;
-                            } else if backwards {
-                                inquote = true_0 != 0;
-                            }
-                        }
-                        if (*pos.ptr()).lnum > 1 as linenr_T {
-                            ptr = ml_get((*pos.ptr()).lnum - 1 as linenr_T);
-                            if *ptr as ::core::ffi::c_int != 0
-                                && *ptr
-                                    .offset(ml_get_len((*pos.ptr()).lnum - 1 as linenr_T) as isize)
-                                    .offset(-(1 as ::core::ffi::c_int as isize))
-                                    as ::core::ffi::c_int
-                                    == '\\' as ::core::ffi::c_int
-                            {
-                                do_quotes = 1 as ::core::ffi::c_int;
-                                if start_in_quotes as ::core::ffi::c_int
-                                    == kNone as ::core::ffi::c_int
-                                {
-                                    inquote = at_start != 0;
-                                    if inquote {
-                                        start_in_quotes = kTrue;
-                                    }
-                                } else if !backwards {
-                                    inquote = true_0 != 0;
-                                }
-                            }
-                            linep = ml_get((*pos.ptr()).lnum);
-                        }
-                    }
-                }
-                if start_in_quotes as ::core::ffi::c_int == kNone as ::core::ffi::c_int {
-                    start_in_quotes = kFalse;
-                }
-                let c: ::core::ffi::c_int = utf_ptr2char(linep.offset((*pos.ptr()).col as isize));
-                's_1456: {
-                    match c {
-                        NUL => {
-                            if (*pos.ptr()).col == 0 as ::core::ffi::c_int
-                                || *linep.offset(
-                                    ((*pos.ptr()).col as ::core::ffi::c_int
-                                        - 1 as ::core::ffi::c_int)
-                                        as isize,
-                                ) as ::core::ffi::c_int
-                                    != '\\' as ::core::ffi::c_int
-                            {
-                                inquote = false_0 != 0;
-                                start_in_quotes = kFalse;
-                            }
-                            break 's_1456;
-                        }
-                        34 => {
-                            if do_quotes != 0 {
-                                let mut col_0: ::core::ffi::c_int = 0;
-                                col_0 = (*pos.ptr()).col as ::core::ffi::c_int
-                                    - 1 as ::core::ffi::c_int;
-                                while col_0 >= 0 as ::core::ffi::c_int {
-                                    if *linep.offset(col_0 as isize) as ::core::ffi::c_int
-                                        != '\\' as ::core::ffi::c_int
-                                    {
-                                        break;
-                                    }
-                                    col_0 -= 1;
-                                }
-                                if (*pos.ptr()).col - 1 as ::core::ffi::c_int - col_0
-                                    & 1 as ::core::ffi::c_int
-                                    == 0 as ::core::ffi::c_int
-                                {
-                                    inquote = !inquote;
-                                    start_in_quotes = kFalse;
-                                }
-                            }
-                            break 's_1456;
-                        }
-                        39 => {
-                            if !cpo_match
-                                && initc != '\'' as ::core::ffi::c_int
-                                && findc != '\'' as ::core::ffi::c_int
-                            {
-                                if backwards {
-                                    if (*pos.ptr()).col > 1 as ::core::ffi::c_int {
-                                        if *linep.offset(
-                                            ((*pos.ptr()).col as ::core::ffi::c_int
-                                                - 2 as ::core::ffi::c_int)
-                                                as isize,
-                                        )
-                                            as ::core::ffi::c_int
-                                            == '\'' as ::core::ffi::c_int
-                                        {
-                                            (*pos.ptr()).col -= 2 as ::core::ffi::c_int;
-                                            break 's_1456;
-                                        } else if *linep.offset(
-                                            ((*pos.ptr()).col as ::core::ffi::c_int
-                                                - 2 as ::core::ffi::c_int)
-                                                as isize,
-                                        )
-                                            as ::core::ffi::c_int
-                                            == '\\' as ::core::ffi::c_int
-                                            && (*pos.ptr()).col > 2 as ::core::ffi::c_int
-                                            && *linep.offset(
-                                                ((*pos.ptr()).col as ::core::ffi::c_int
-                                                    - 3 as ::core::ffi::c_int)
-                                                    as isize,
-                                            )
-                                                as ::core::ffi::c_int
-                                                == '\'' as ::core::ffi::c_int
-                                        {
-                                            (*pos.ptr()).col -= 3 as ::core::ffi::c_int;
-                                            break 's_1456;
-                                        }
-                                    }
-                                } else if *linep.offset(
-                                    ((*pos.ptr()).col as ::core::ffi::c_int
-                                        + 1 as ::core::ffi::c_int)
-                                        as isize,
-                                ) != 0
-                                {
-                                    if *linep.offset(
-                                        ((*pos.ptr()).col as ::core::ffi::c_int
-                                            + 1 as ::core::ffi::c_int)
-                                            as isize,
-                                    ) as ::core::ffi::c_int
-                                        == '\\' as ::core::ffi::c_int
-                                        && *linep.offset(
-                                            ((*pos.ptr()).col as ::core::ffi::c_int
-                                                + 2 as ::core::ffi::c_int)
-                                                as isize,
-                                        )
-                                            as ::core::ffi::c_int
-                                            != 0
-                                        && *linep.offset(
-                                            ((*pos.ptr()).col as ::core::ffi::c_int
-                                                + 3 as ::core::ffi::c_int)
-                                                as isize,
-                                        )
-                                            as ::core::ffi::c_int
-                                            == '\'' as ::core::ffi::c_int
-                                    {
-                                        (*pos.ptr()).col += 3 as ::core::ffi::c_int;
-                                        break 's_1456;
-                                    } else if *linep.offset(
-                                        ((*pos.ptr()).col as ::core::ffi::c_int
-                                            + 2 as ::core::ffi::c_int)
-                                            as isize,
-                                    )
-                                        as ::core::ffi::c_int
-                                        == '\'' as ::core::ffi::c_int
-                                    {
-                                        (*pos.ptr()).col += 2 as ::core::ffi::c_int;
-                                        break 's_1456;
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                    if !((*curbuf.get()).b_p_lisp != 0
-                        && !vim_strchr(b"(){}[]\0".as_ptr() as *const ::core::ffi::c_char, c)
-                            .is_null()
-                        && (*pos.ptr()).col > 1 as ::core::ffi::c_int
-                        && check_prevcol(
-                            linep,
-                            (*pos.ptr()).col as ::core::ffi::c_int,
-                            '\\' as ::core::ffi::c_int,
-                            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                        ) as ::core::ffi::c_int
-                            != 0
-                        && check_prevcol(
-                            linep,
-                            (*pos.ptr()).col as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                            '#' as ::core::ffi::c_int,
-                            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                        ) as ::core::ffi::c_int
-                            != 0)
-                    {
-                        if (!inquote
-                            || start_in_quotes as ::core::ffi::c_int == kTrue as ::core::ffi::c_int)
-                            && (c == initc || c == findc)
-                        {
-                            let mut bslcnt_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            if !cpo_bsl {
-                                let mut col_1: ::core::ffi::c_int =
-                                    (*pos.ptr()).col as ::core::ffi::c_int;
-                                while check_prevcol(
-                                    linep,
-                                    col_1,
-                                    '\\' as ::core::ffi::c_int,
-                                    &raw mut col_1,
-                                ) {
-                                    bslcnt_0 += 1;
-                                }
-                            }
-                            if cpo_bsl as ::core::ffi::c_int != 0
-                                || bslcnt_0 & 1 as ::core::ffi::c_int == match_escaped
-                            {
-                                if c == initc {
-                                    count += 1;
-                                } else {
-                                    if count == 0 as ::core::ffi::c_int {
-                                        return pos.ptr();
-                                    }
-                                    count -= 1;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if comment_dir == BACKWARD as ::core::ffi::c_int && count > 0 as ::core::ffi::c_int {
-            pos.set(match_pos);
-            return pos.ptr();
-        }
-        return NULL_0 as *mut pos_T;
-    }
-}
 
-pub unsafe extern "C" fn check_linecomment(
-    mut line: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut p: *const ::core::ffi::c_char = line;
-        if (*curbuf.get()).b_p_lisp != 0 {
-            if !vim_strchr(p, ';' as ::core::ffi::c_int).is_null() {
-                let mut in_str: bool = false_0 != 0;
+        // Either initc is '#', or no initc was given and something under
+        // or near the cursor has to be matched.
+        let mut hash_dir = if initc == '#' as c_int { dir } else { 0 };
+        if initc != '#' as c_int {
+            // Only check for the special things when 'cpo' has no '%'.
+            if !cpo_match {
+                let ptr = skipwhite(linep);
+                let col = pos.col as isize;
+                let at = |off: isize| *linep.offset(col + off) as c_int;
+                if *ptr as c_int == '#' as c_int && pos.col <= ptr.offset_from(linep) as colnr_T {
+                    // Are we before or at #if, #else etc.?
+                    let ptr = skipwhite(ptr.offset(1));
+                    if starts_with(ptr, "if") || starts_with(ptr, "endif") || starts_with(ptr, "el")
+                    {
+                        hash_dir = 1;
+                    }
+                } else if at(0) == '/' as c_int {
+                    // Are we on a comment?
+                    if at(1) == '*' as c_int {
+                        target.comment_dir = FORWARD;
+                        target.backwards = false;
+                        pos.col += 1;
+                    } else if pos.col > 0 && at(-1) == '*' as c_int {
+                        target.comment_dir = BACKWARD;
+                        target.backwards = true;
+                        pos.col -= 1;
+                    }
+                } else if at(0) == '*' as c_int {
+                    if at(1) == '/' as c_int {
+                        target.comment_dir = BACKWARD;
+                        target.backwards = true;
+                    } else if pos.col > 0 && at(-1) == '/' as c_int {
+                        target.comment_dir = FORWARD;
+                        target.backwards = false;
+                    }
+                }
+            }
+
+            // Not on a comment or on the # at the start of a line: look
+            // for a brace anywhere on this line at or after the cursor.
+            if hash_dir == 0 && target.comment_dir == 0 {
+                // Beyond the end of the line, use its last character.
+                if *linep.offset(pos.col as isize) as c_int == NUL && pos.col != 0 {
+                    pos.col -= 1;
+                }
                 loop {
-                    p = strpbrk(p, b"\";\0".as_ptr() as *const ::core::ffi::c_char);
-                    if p.is_null() {
+                    target.initc = utf_ptr2char(linep.offset(pos.col as isize));
+                    if target.initc == NUL {
                         break;
                     }
-                    if *p as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
-                        if in_str {
-                            if *p.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
-                                != '\\' as ::core::ffi::c_int
-                            {
-                                in_str = false_0 != 0;
-                            }
-                        } else if p == line
-                            || p.offset_from(line) >= 2 as isize
-                                && *p.offset(-(1 as ::core::ffi::c_int as isize))
-                                    as ::core::ffi::c_int
-                                    != '\\' as ::core::ffi::c_int
-                                && *p.offset(-(2 as ::core::ffi::c_int as isize))
-                                    as ::core::ffi::c_int
-                                    != '#' as ::core::ffi::c_int
-                        {
-                            in_str = true_0 != 0;
-                        }
-                    } else if !in_str
-                        && (p.offset_from(line) < 2 as isize
-                            || *p.offset(-(1 as ::core::ffi::c_int as isize)) as ::core::ffi::c_int
-                                != '\\' as ::core::ffi::c_int
-                                && *p.offset(-(2 as ::core::ffi::c_int as isize))
-                                    as ::core::ffi::c_int
-                                    != '#' as ::core::ffi::c_int)
-                        && is_pos_in_string(line, p.offset_from(line) as colnr_T) == 0
-                    {
+                    find_mps_values(
+                        &mut target.initc,
+                        &mut target.findc,
+                        &mut target.backwards,
+                        false,
+                    );
+                    if target.findc != 0 {
                         break;
                     }
-                    p = p.offset(1);
+                    pos.col += utfc_ptr2len(linep.offset(pos.col as isize));
                 }
+                if target.findc == 0 {
+                    // No brace in the line; maybe use "  #if" then.
+                    if !cpo_match && *skipwhite(linep) as c_int == '#' as c_int {
+                        hash_dir = 1;
+                    } else {
+                        return Plan::Nothing;
+                    }
+                } else if !cpo_bsl {
+                    target.match_escaped = backslash_count(linep, pos.col) & 1;
+                }
+            }
+        }
+
+        if hash_dir == 0 {
+            return Plan::Walk(target);
+        }
+
+        // Look for a matching #if, #else, #elif or #endif.
+        if !oap.is_null() {
+            (*oap).motion_type = kMTLineWise; // linewise for this case only
+        }
+        if initc != '#' as c_int {
+            let ptr = skipwhite(skipwhite(linep).offset(1));
+            hash_dir = if starts_with(ptr, "if") || starts_with(ptr, "el") {
+                1
+            } else if starts_with(ptr, "endif") {
+                -1
             } else {
-                p = ::core::ptr::null::<::core::ffi::c_char>();
-            }
-        } else {
-            loop {
-                p = vim_strchr(p, '/' as ::core::ffi::c_int);
-                if p.is_null() {
-                    break;
-                }
-                if *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '/' as ::core::ffi::c_int
-                    && (p == line
-                        || *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            != '*' as ::core::ffi::c_int
-                        || *p.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            != '*' as ::core::ffi::c_int)
-                    && is_pos_in_string(line, p.offset_from(line) as colnr_T) == 0
-                {
-                    break;
-                }
-                p = p.offset(1);
-            }
+                return Plan::Nothing;
+            };
         }
-        if p.is_null() {
-            return MAXCOL as ::core::ffi::c_int;
-        }
-        return p.offset_from(line) as ::core::ffi::c_int;
+        Plan::Hash(hash_dir)
     }
 }
 
-pub unsafe extern "C" fn linewhite(mut lnum: linenr_T) -> bool {
+/// Walk lines looking for the `#if`/`#else`/`#endif` that partners the
+/// one the cursor is on.
+///
+/// # Safety
+/// `pos` must address the current buffer.
+unsafe fn find_hash_match(mut pos: pos_T, hash_dir: c_int, initc: c_int) -> Option<pos_T> {
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = skipwhite(ml_get(lnum));
-        return *p as ::core::ffi::c_int == NUL;
+        let mut count = 0;
+        pos.col = 0;
+        while !got_int.get() {
+            if hash_dir > 0 {
+                if pos.lnum == (*curbuf.get()).b_ml.ml_line_count {
+                    break;
+                }
+            } else if pos.lnum == 1 {
+                break;
+            }
+            pos.lnum += hash_dir;
+            let linep = ml_get(pos.lnum);
+            line_breakcheck(); // check for CTRL-C typed
+            let ptr = skipwhite(linep);
+            if *ptr as c_int != '#' as c_int {
+                continue;
+            }
+            pos.col = ptr.offset_from(linep) as colnr_T;
+            let ptr = skipwhite(ptr.offset(1));
+            if hash_dir > 0 {
+                if starts_with(ptr, "if") {
+                    count += 1;
+                } else if starts_with(ptr, "el") {
+                    if count == 0 {
+                        return Some(pos);
+                    }
+                } else if starts_with(ptr, "endif") {
+                    if count == 0 {
+                        return Some(pos);
+                    }
+                    count -= 1;
+                }
+            } else if starts_with(ptr, "if") {
+                if count == 0 {
+                    return Some(pos);
+                }
+                count -= 1;
+            } else if initc == '#' as c_int && starts_with(ptr, "el") {
+                if count == 0 {
+                    return Some(pos);
+                }
+            } else if starts_with(ptr, "endif") {
+                count += 1;
+            }
+        }
+        None
+    }
+}
+
+// ---------------------------------------------------------------------
+// The walk itself.
+// ---------------------------------------------------------------------
+
+/// What looking at one position decided.
+enum Step {
+    /// Look at the next position.
+    Next,
+    /// The match is here.
+    Found(pos_T),
+    /// Give up: there is no match at all.
+    Nothing,
+}
+
+/// Everything the walk carries from one position to the next.
+struct Walk {
+    pos: pos_T,
+    /// The line `pos` is on. `ml_get` keeps only one line, so this is
+    /// re-derived at every line boundary and after anything that may
+    /// have released it.
+    linep: *mut c_char,
+    backwards: bool,
+    lisp: bool,
+    /// Where a `//` (or Lisp `;`) comment starts on this line, or MAXCOL.
+    comment_col: c_int,
+    /// The start position is inside a Lisp comment, so the match has to
+    /// be inside it too.
+    lispcomm: bool,
+    /// Lines stepped over so far, against `maxtravel`.
+    traveled: c_int,
+    maxtravel: int64_t,
+    /// Whether quoted text on this line can be skipped: -1 = not counted
+    /// yet, 0 = no (an odd number of quotes, or `'cpo'` has `%`),
+    /// 1 = yes.
+    do_quotes: c_int,
+    inquote: bool,
+    /// Whether the *start* position was inside quotes; `kNone` until the
+    /// first line has been counted.
+    start_in_quotes: TriState,
+    /// Nesting depth, and where the innermost `/*` was found.
+    count: c_int,
+    match_pos: pos_T,
+}
+
+impl Walk {
+    /// Step one character backwards, answering false at the start of the
+    /// buffer or when the travel limit is reached.
+    ///
+    /// # Safety
+    /// The current buffer must be the one `self.pos` addresses.
+    unsafe fn step_back(&mut self, comment_dir: c_int) -> bool {
+        unsafe {
+            // The character to match is inside a comment; don't look
+            // outside it.
+            if self.lispcomm && self.pos.col < self.comment_col {
+                return false;
+            }
+            if self.pos.col != 0 {
+                self.pos.col -= 1;
+                self.pos.col -= utf_head_off(self.linep, self.linep.offset(self.pos.col as isize));
+                return true;
+            }
+            // At the start of the line, go to the previous one.
+            if self.pos.lnum == 1 {
+                return false; // start of file
+            }
+            self.pos.lnum -= 1;
+            self.traveled += 1;
+            if self.maxtravel > 0 && self.traveled as int64_t > self.maxtravel {
+                return false;
+            }
+            self.linep = ml_get(self.pos.lnum);
+            self.pos.col = ml_get_len(self.pos.lnum); // pos.col on the trailing NUL
+            self.do_quotes = -1;
+            line_breakcheck();
+            // Does this line hold a single-line comment?
+            if comment_dir != 0 || self.lisp {
+                self.comment_col = check_linecomment(self.linep);
+            }
+            if self.lisp && self.comment_col != MAXCOL {
+                self.pos.col = self.comment_col; // skip the comment
+            }
+            true
+        }
+    }
+
+    /// Step one character forwards, answering false at the end of the
+    /// buffer or when the travel limit is reached.
+    ///
+    /// # Safety
+    /// As [`Walk::step_back`].
+    unsafe fn step_forward(&mut self) -> bool {
+        unsafe {
+            let at_end = *self.linep.offset(self.pos.col as isize) as c_int == NUL
+                // For Lisp don't look for a match inside a comment.
+                || (self.lisp && self.comment_col != MAXCOL && self.pos.col == self.comment_col);
+            if !at_end {
+                self.pos.col += utfc_ptr2len(self.linep.offset(self.pos.col as isize));
+                return true;
+            }
+            // End of file, or the line is exhausted and the comment with
+            // it — then don't look for a match out in the code.
+            if self.pos.lnum == (*curbuf.get()).b_ml.ml_line_count || self.lispcomm {
+                return false;
+            }
+            self.pos.lnum += 1;
+            // Upstream compares the count *before* the increment here and
+            // *after* it when going backwards; preserved.
+            let before = self.traveled;
+            self.traveled += 1;
+            if self.maxtravel != 0 && before as int64_t > self.maxtravel {
+                return false;
+            }
+            self.linep = ml_get(self.pos.lnum);
+            self.pos.col = 0;
+            self.do_quotes = -1;
+            line_breakcheck();
+            if self.lisp {
+                self.comment_col = check_linecomment(self.linep); // in the new line
+            }
+            true
+        }
+    }
+
+    /// Look at one position while hunting for the other end of a comment
+    /// or of a raw string.
+    ///
+    /// Comments do not nest, and quotes inside them are ignored.
+    ///
+    /// # Safety
+    /// As [`Walk::step_back`].
+    unsafe fn comment_step(&mut self, target: &Target) -> Step {
+        unsafe {
+            let linep = self.linep;
+            let col = self.pos.col as isize;
+            let at = |off: isize| *linep.offset(col + off) as c_int;
+
+            if target.comment_dir == FORWARD {
+                if at(0) == '*' as c_int && at(1) == '/' as c_int {
+                    self.pos.col += 1;
+                    return Step::Found(self.pos);
+                }
+                return Step::Next;
+            }
+
+            // Searching backwards. A comment may contain "/*" or "//",
+            // and may start or end with "/*/". Ignore a "/*" after "//"
+            // and after "*".
+            if self.pos.col == 0 {
+                return Step::Next;
+            }
+            if target.raw_string {
+                if at(-1) == 'R' as c_int
+                    && at(0) == '"' as c_int
+                    && !vim_strchr(linep.offset(col + 1), '(' as c_int).is_null()
+                {
+                    // A possible start of a raw string. Now that the
+                    // delimiter is known, check whether it ends before
+                    // where the search started, or before the previously
+                    // found raw-string start.
+                    let mut end = if self.count > 0 {
+                        self.match_pos
+                    } else {
+                        (*curwin.get()).w_cursor
+                    };
+                    if !find_rawstring_end(linep, &raw mut self.pos, &raw mut end) {
+                        self.count += 1;
+                        self.match_pos = self.pos;
+                        self.match_pos.col -= 1;
+                    }
+                    self.linep = ml_get(self.pos.lnum); // may have been released
+                }
+                return Step::Next;
+            }
+            if at(-1) == '/' as c_int
+                && at(0) == '*' as c_int
+                && (self.pos.col == 1 || at(-2) != '*' as c_int)
+                && self.pos.col < self.comment_col
+            {
+                self.count += 1;
+                self.match_pos = self.pos;
+                self.match_pos.col -= 1;
+            } else if at(-1) == '*' as c_int && at(0) == '/' as c_int {
+                if self.count > 0 {
+                    self.pos = self.match_pos;
+                } else if self.pos.col > 1
+                    && at(-2) == '/' as c_int
+                    && self.pos.col <= self.comment_col
+                {
+                    self.pos.col -= 2;
+                } else if target.ignore_cend {
+                    return Step::Next;
+                } else {
+                    return Step::Nothing;
+                }
+                return Step::Found(self.pos);
+            }
+            Step::Next
+        }
+    }
+
+    /// Count the quotes on the current line, deciding whether quoted text
+    /// on it can be skipped at all.
+    ///
+    /// Braces inside quotes are ignored, but only when the line holds an
+    /// even number of quotes — with an odd count there is no telling
+    /// which half to ignore. A line ending in a backslash continues the
+    /// string onto the next one, which is what rescues the odd case.
+    /// Complicated, isn't it?
+    ///
+    /// # Safety
+    /// As [`Walk::step_back`]. Only called with `do_quotes == -1`, which
+    /// is also where the count starts: after N quotes it holds `N - 1`,
+    /// so masking with 1 answers "the count was even".
+    unsafe fn count_quotes(&mut self) {
+        unsafe {
+            // A walk that never reaches the start position leaves
+            // `at_start` at -1, i.e. *true*. Upstream.
+            let mut at_start = self.do_quotes;
+            let stop = self
+                .linep
+                .offset(self.pos.col as isize + self.backwards as isize);
+            // Count the quotes, skipping \" and '"'. Watch out for "\\".
+            let mut ptr = self.linep;
+            while *ptr as c_int != NUL {
+                if ptr == stop {
+                    at_start = self.do_quotes & 1;
+                }
+                if *ptr as c_int == '"' as c_int
+                    && (ptr == self.linep
+                        || *ptr.offset(-1) as c_int != '\'' as c_int
+                        || *ptr.offset(1) as c_int != '\'' as c_int)
+                {
+                    self.do_quotes += 1;
+                }
+                if *ptr as c_int == '\\' as c_int && *ptr.offset(1) as c_int != NUL {
+                    ptr = ptr.offset(1);
+                }
+                ptr = ptr.offset(1);
+            }
+            self.do_quotes &= 1; // 1 with an even number of quotes
+
+            if self.do_quotes != 0 {
+                return;
+            }
+            // An uneven count: check this line and the previous one for a
+            // trailing '\'.
+            self.inquote = false;
+            if *ptr.offset(-1) as c_int == '\\' as c_int {
+                self.do_quotes = 1;
+                if self.start_in_quotes == kNone {
+                    // Do we need to use at_start here?
+                    self.inquote = true;
+                    self.start_in_quotes = kTrue;
+                } else if self.backwards {
+                    self.inquote = true;
+                }
+            }
+            if self.pos.lnum <= 1 {
+                return;
+            }
+            let prev = ml_get(self.pos.lnum - 1);
+            if *prev as c_int != NUL
+                && *prev.offset(ml_get_len(self.pos.lnum - 1) as isize - 1) as c_int
+                    == '\\' as c_int
+            {
+                self.do_quotes = 1;
+                if self.start_in_quotes == kNone {
+                    self.inquote = at_start != 0;
+                    if self.inquote {
+                        self.start_in_quotes = kTrue;
+                    }
+                } else if !self.backwards {
+                    self.inquote = true;
+                }
+            }
+            // ml_get() keeps only one line; get linep back.
+            self.linep = ml_get(self.pos.lnum);
+        }
+    }
+
+    /// Skip over a single-quoted character constant: `'x'` or `'\x'`.
+    ///
+    /// Careful with a lone single quote, as in "jon's". Things like
+    /// `'\233'` and `'\x3f'` are not skipped — there is never a brace in
+    /// them. Answers whether the position moved.
+    ///
+    /// # Safety
+    /// As [`Walk::step_back`].
+    unsafe fn skip_char_constant(&mut self) -> bool {
+        unsafe {
+            let linep = self.linep;
+            let col = self.pos.col as isize;
+            let at = |off: isize| *linep.offset(col + off) as c_int;
+            if self.backwards {
+                if self.pos.col > 1 {
+                    if at(-2) == '\'' as c_int {
+                        self.pos.col -= 2;
+                        return true;
+                    }
+                    if at(-2) == '\\' as c_int && self.pos.col > 2 && at(-3) == '\'' as c_int {
+                        self.pos.col -= 3;
+                        return true;
+                    }
+                }
+            } else if at(1) != NUL {
+                // Forward search.
+                if at(1) == '\\' as c_int && at(2) != NUL && at(3) == '\'' as c_int {
+                    self.pos.col += 3;
+                    return true;
+                }
+                if at(2) == '\'' as c_int {
+                    self.pos.col += 2;
+                    return true;
+                }
+            }
+            false
+        }
+    }
+
+    /// Look at the character under `pos` and decide whether it is the
+    /// match, keeping the "am I inside a string?" state up to date.
+    ///
+    /// # Safety
+    /// As [`Walk::step_back`].
+    unsafe fn match_char(&mut self, target: &Target, cpo_match: bool, cpo_bsl: bool) -> Step {
+        unsafe {
+            let c = utf_ptr2char(self.linep.offset(self.pos.col as isize));
+            if c == NUL {
+                // At the end of a line without a trailing backslash,
+                // reset inquote.
+                if self.pos.col == 0
+                    || *self.linep.offset(self.pos.col as isize - 1) as c_int != '\\' as c_int
+                {
+                    self.inquote = false;
+                    self.start_in_quotes = kFalse;
+                }
+                return Step::Next;
+            }
+            if c == '"' as c_int {
+                // A quote preceded by an odd number of backslashes is
+                // ignored.
+                if self.do_quotes != 0 {
+                    let mut col = self.pos.col - 1;
+                    while col >= 0 && *self.linep.offset(col as isize) as c_int == '\\' as c_int {
+                        col -= 1;
+                    }
+                    if ((self.pos.col - 1 - col) & 1) == 0 {
+                        self.inquote = !self.inquote;
+                        self.start_in_quotes = kFalse;
+                    }
+                }
+                return Step::Next;
+            }
+            // Skipping a character constant does not apply when the quote
+            // itself is what is being matched.
+            if c == '\'' as c_int
+                && !cpo_match
+                && target.initc != '\'' as c_int
+                && target.findc != '\'' as c_int
+                && self.skip_char_constant()
+            {
+                return Step::Next;
+            }
+
+            // For Lisp skip over backslashed (), {} and [] — actually
+            // over "#\(" and friends.
+            if (*curbuf.get()).b_p_lisp != 0
+                && !vim_strchr(c"(){}[]".as_ptr(), c).is_null()
+                && self.pos.col > 1
+                && check_prevcol(self.linep, self.pos.col, '\\' as c_int, None)
+                && check_prevcol(self.linep, self.pos.col - 1, '#' as c_int, None)
+            {
+                return Step::Next;
+            }
+
+            // Check for a match outside of quotes, and inside of quotes
+            // when the start position is inside quotes too.
+            if (!self.inquote || self.start_in_quotes == kTrue)
+                && (c == target.initc || c == target.findc)
+            {
+                let bslcnt = if cpo_bsl {
+                    0
+                } else {
+                    backslash_count(self.linep, self.pos.col)
+                };
+                // Only accept a match when 'M' is in 'cpo', or when the
+                // escaping is what it was at the start.
+                if cpo_bsl || (bslcnt & 1) == target.match_escaped {
+                    if c == target.initc {
+                        self.count += 1;
+                    } else {
+                        if self.count == 0 {
+                            return Step::Found(self.pos);
+                        }
+                        self.count -= 1;
+                    }
+                }
+            }
+            Step::Next
+        }
+    }
+}
+
+/// The body of [`findmatchlimit`], answering the position by value.
+///
+/// # Safety
+/// As [`findmatchlimit`].
+unsafe fn find_match(
+    oap: *mut oparg_T,
+    initc: c_int,
+    flags: c_int,
+    maxtravel: int64_t,
+) -> Option<pos_T> {
+    unsafe {
+        let mut pos = (*curwin.get()).w_cursor;
+        pos.coladd = 0;
+        let linep = ml_get(pos.lnum);
+        let lisp = (*curbuf.get()).b_p_lisp != 0; // engage Lisp-specific hacks ;)
+
+        // vi compatible matching, and "don't recognise backslashes".
+        let cpo_match = !vim_strchr(p_cpo.get(), CPO_MATCH).is_null();
+        let cpo_bsl = !vim_strchr(p_cpo.get(), CPO_MATCHBSL).is_null();
+
+        // Direction to search when initc is '/', '*' or '#'.
+        let dir = if flags & FM_BACKWARD != 0 {
+            BACKWARD
+        } else if flags & FM_FORWARD != 0 {
+            FORWARD
+        } else {
+            0
+        };
+
+        let mut target = match make_plan(oap, initc, dir, &mut pos, linep, cpo_match, cpo_bsl) {
+            Plan::Nothing => return None,
+            Plan::Hash(hash_dir) => return find_hash_match(pos, hash_dir, initc),
+            Plan::Walk(target) => target,
+        };
+
+        // This is just guessing: with 'rightleft' set, look for the
+        // matching paren or brace in the other direction.
+        if (*curwin.get()).w_onebuf_opt.wo_rl != 0
+            && !vim_strchr(c"()[]{}<>".as_ptr(), target.initc).is_null()
+        {
+            target.backwards = !target.backwards;
+        }
+
+        let mut walk = Walk {
+            pos,
+            linep,
+            backwards: target.backwards,
+            lisp,
+            comment_col: MAXCOL,
+            lispcomm: false,
+            traveled: 0,
+            maxtravel,
+            do_quotes: -1,
+            inquote: false,
+            start_in_quotes: kNone,
+            count: 0,
+            match_pos: pos_T::default(),
+        };
+
+        // Backward search: does this line hold a single-line comment?
+        if (walk.backwards && target.comment_dir != 0) || lisp {
+            walk.comment_col = check_linecomment(walk.linep);
+        }
+        if lisp && walk.comment_col != MAXCOL && walk.pos.col > walk.comment_col {
+            walk.lispcomm = true; // find the match inside this comment
+        }
+
+        while !got_int.get() {
+            // Go to the next position. inc() and dec() would do, but they
+            // are much slower.
+            let moved = if walk.backwards {
+                walk.step_back(target.comment_dir)
+            } else {
+                walk.step_forward()
+            };
+            if !moved {
+                break;
+            }
+
+            // With FM_BLOCKSTOP, stop at a '{' or '}' in column 0.
+            if walk.pos.col == 0
+                && flags & FM_BLOCKSTOP != 0
+                && (*walk.linep as c_int == '{' as c_int || *walk.linep as c_int == '}' as c_int)
+            {
+                if *walk.linep as c_int == target.findc && walk.count == 0 {
+                    return Some(walk.pos); // match!
+                }
+                break; // out of scope
+            }
+
+            if target.comment_dir != 0 {
+                match walk.comment_step(&target) {
+                    Step::Next => continue,
+                    Step::Found(pos) => return Some(pos),
+                    Step::Nothing => return None,
+                }
+            }
+
+            // With smart matching ('cpoptions' without '%'), braces
+            // inside quotes are ignored.
+            if cpo_match {
+                walk.do_quotes = 0;
+            } else if walk.do_quotes == -1 {
+                walk.count_quotes();
+            }
+            if walk.start_in_quotes == kNone {
+                walk.start_in_quotes = kFalse;
+            }
+
+            match walk.match_char(&target, cpo_match, cpo_bsl) {
+                Step::Next => continue,
+                Step::Found(pos) => return Some(pos),
+                Step::Nothing => return None,
+            }
+        }
+
+        if target.comment_dir == BACKWARD && walk.count > 0 {
+            return Some(walk.match_pos);
+        }
+        None // never found it
     }
 }

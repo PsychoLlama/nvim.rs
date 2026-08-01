@@ -91,6 +91,8 @@ mod charsearch;
 pub use self::charsearch::*;
 mod command;
 pub use self::command::*;
+mod comment;
+pub use self::comment::*;
 mod select;
 pub use self::select::*;
 mod matchpair;
