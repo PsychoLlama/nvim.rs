@@ -170,7 +170,7 @@ pub(crate) unsafe fn expand_in_path(
 ///
 /// # Safety
 /// There must be a current buffer.
-unsafe fn buffer_path() -> *mut c_char {
+pub(crate) unsafe fn buffer_path() -> *mut c_char {
     unsafe {
         if *(*curbuf.get()).b_p_path == 0 {
             p_path.get()

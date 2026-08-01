@@ -13,7 +13,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::main::{
     NameBuff, VIsual_active, curbuf, current_sctx, curwin, e_cant_find_directory_str_in_cdpath,
     e_cant_find_file_str_in_path, e_no_more_directory_str_found_in_cdpath,
-    e_no_more_file_str_found_in_path, got_int, line_msg, p_cdpath, p_cpo, p_fic, p_path,
+    e_no_more_file_str_found_in_path, got_int, line_msg, p_cdpath, p_cpo, p_fic,
 };
 use crate::src::nvim::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc, xstrlcpy};
@@ -27,7 +27,7 @@ use crate::src::nvim::os::fs::{
 };
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, gettext, memmove, strcpy, strlen, strncmp, strtol,
+    __assert_fail, abort, gettext, memmove, strcpy, strlen, strncmp, strtol,
 };
 use crate::src::nvim::path::{
     FreeWild, FullName_save, after_pathsep, expand_wildcards, path_fnamecmp, path_fnamencmp,
@@ -37,7 +37,7 @@ use crate::src::nvim::path::{
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
     Arena, BoolVarValue, CdCause, CdScope, FileID, String_0, VimVarIndex, cmdarg_T, event_T,
-    int32_t, int64_t, linenr_T, ptrdiff_t, save_v_event_T, sctx_T, size_t, uint8_t,
+    int64_t, linenr_T, ptrdiff_t, save_v_event_T, size_t,
 };
 
 // The carve of the transpiled module; see each child's docs.

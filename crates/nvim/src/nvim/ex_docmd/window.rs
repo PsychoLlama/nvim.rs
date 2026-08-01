@@ -133,7 +133,7 @@ pub unsafe fn ex_splitview(eap: *mut exarg_T) {
                         ea.arg,
                         strlen(ea.arg),
                         FNAME_MESS as c_int,
-                        1,
+                        true,
                         (*curbuf.get()).b_ffname,
                         &raw mut file_to_find,
                         &raw mut search_ctx,

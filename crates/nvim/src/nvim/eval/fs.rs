@@ -1015,7 +1015,7 @@ unsafe extern "C" fn findfilendir(
                     0 as size_t
                 },
                 0 as ::core::ffi::c_int,
-                first as ::core::ffi::c_int,
+                first,
                 path,
                 find_what,
                 (*curbuf.get()).b_ffname,

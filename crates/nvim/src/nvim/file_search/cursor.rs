@@ -11,345 +11,348 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int, c_long};
+use core::ptr;
+use std::ffi::CStr;
 
-pub unsafe extern "C" fn grab_file_name(
-    mut count: ::core::ffi::c_int,
-    mut file_lnum: *mut linenr_T,
-) -> *mut ::core::ffi::c_char {
+/// The file name at the cursor, or the Visual selection when there is one.
+///
+/// Returns the name in allocated memory, NULL for failure.
+pub unsafe extern "C" fn grab_file_name(count: c_int, file_lnum: *mut linenr_T) -> *mut c_char {
     unsafe {
-        let mut options: ::core::ffi::c_int = FNAME_MESS as ::core::ffi::c_int
-            | FNAME_EXP as ::core::ffi::c_int
-            | FNAME_REL as ::core::ffi::c_int
-            | FNAME_UNESC as ::core::ffi::c_int;
-        if VIsual_active.get() {
-            let mut len: size_t = 0;
-            let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            if get_visual_text(
-                ::core::ptr::null_mut::<cmdarg_T>(),
-                &raw mut ptr,
-                &raw mut len,
-            ) as ::core::ffi::c_int
-                == FAIL
-            {
-                return ::core::ptr::null_mut::<::core::ffi::c_char>();
-            }
-            if !file_lnum.is_null()
-                && *ptr.offset(len as isize) as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-                && *(*__ctype_b_loc()).offset(*ptr.offset(len.wrapping_add(1 as size_t) as isize)
-                    as uint8_t as ::core::ffi::c_int
-                    as isize) as ::core::ffi::c_int
-                    & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                    != 0
-            {
-                let mut p: *mut ::core::ffi::c_char = ptr
-                    .offset(len as isize)
-                    .offset(1 as ::core::ffi::c_int as isize);
-                *file_lnum = getdigits_int32(&raw mut p, false_0 != 0, 0 as int32_t) as linenr_T;
-            }
-            return find_file_name_in_path(
-                ptr,
-                len,
-                options,
-                count as ::core::ffi::c_long,
-                (*curbuf.get()).b_ffname,
-            );
+        let options = (FNAME_MESS | FNAME_EXP | FNAME_REL | FNAME_UNESC) as c_int;
+        if !VIsual_active.get() {
+            return file_name_at_cursor(options | FNAME_HYP as c_int, count, file_lnum);
         }
-        return file_name_at_cursor(options | FNAME_HYP as ::core::ffi::c_int, count, file_lnum);
+
+        let mut len: size_t = 0;
+        let mut ptr: *mut c_char = ptr::null_mut();
+        if get_visual_text(ptr::null_mut::<cmdarg_T>(), &raw mut ptr, &raw mut len) as c_int == FAIL
+        {
+            return ptr::null_mut();
+        }
+        // Only recognize ":123" here.
+        if !file_lnum.is_null()
+            && *ptr.add(len) == b':' as c_char
+            && (*ptr.add(len + 1) as u8).is_ascii_digit()
+        {
+            let mut p = ptr.add(len + 1);
+            *file_lnum = getdigits_int32(&raw mut p, false, 0) as linenr_T;
+        }
+        find_file_name_in_path(ptr, len, options, count as c_long, (*curbuf.get()).b_ffname)
     }
 }
 
+/// The file name under or after the cursor.
+///
+/// `'path'` is searched when the name is not absolute. The string returned
+/// has been allocated and should be freed by the caller; NULL is returned
+/// if the file name or the file is not found.
+///
+/// options:
+/// - `FNAME_MESS`  give error messages
+/// - `FNAME_EXP`   expand to path
+/// - `FNAME_HYP`   check for hypertext link
+/// - `FNAME_INCL`  apply `'includeexpr'`
 pub unsafe extern "C" fn file_name_at_cursor(
-    mut options: ::core::ffi::c_int,
-    mut count: ::core::ffi::c_int,
-    mut file_lnum: *mut linenr_T,
-) -> *mut ::core::ffi::c_char {
+    options: c_int,
+    count: c_int,
+    file_lnum: *mut linenr_T,
+) -> *mut c_char {
     unsafe {
-        return file_name_in_line(
+        file_name_in_line(
             get_cursor_line_ptr(),
-            (*curwin.get()).w_cursor.col as ::core::ffi::c_int,
+            (*curwin.get()).w_cursor.col as c_int,
             options,
             count,
             (*curbuf.get()).b_ffname,
             file_lnum,
-        );
+        )
     }
 }
 
-pub unsafe extern "C" fn file_name_in_line(
-    mut line: *mut ::core::ffi::c_char,
-    mut col: ::core::ffi::c_int,
-    mut options: ::core::ffi::c_int,
-    mut count: ::core::ffi::c_int,
-    mut rel_fname: *mut ::core::ffi::c_char,
-    mut file_lnum: *mut linenr_T,
-) -> *mut ::core::ffi::c_char {
+/// The start of the file name around `line[col]`, or NULL when the rest of
+/// the line holds no `'isfname'` character at all.
+///
+/// Goes one character back to the `":"` before `"//"`, or to the drive letter
+/// before `":\"`, even when `":"` is not in `'isfname'`.
+unsafe fn name_start(line: *mut c_char, col: c_int, options: c_int) -> *mut c_char {
     unsafe {
-        let mut ptr: *mut ::core::ffi::c_char = line.offset(col as isize);
-        while *ptr as ::core::ffi::c_int != NUL
-            && !vim_isfilec(*ptr as uint8_t as ::core::ffi::c_int)
-        {
+        // Search forward for what could be the start of a file name.
+        let mut ptr = line.offset(col as isize);
+        while *ptr != 0 && !vim_isfilec(*ptr as u8 as c_int) {
             ptr = ptr.offset(utfc_ptr2len(ptr) as isize);
         }
-        if *ptr as ::core::ffi::c_int == NUL {
-            if options & FNAME_MESS as ::core::ffi::c_int != 0 {
-                emsg(gettext(
-                    b"E446: No file name under cursor\0".as_ptr() as *const ::core::ffi::c_char
-                ));
-            }
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        if *ptr == 0 {
+            return ptr::null_mut();
         }
-        let mut len: size_t = 0;
-        let mut in_type: bool = true_0 != 0;
-        let mut is_url: bool = false_0 != 0;
+
+        // Search backward for the first character of the file name.
         while ptr > line {
-            len = utf_head_off(line, ptr.offset(-(1 as ::core::ffi::c_int as isize))) as size_t;
-            if len > 0 as size_t {
-                ptr = ptr.offset(-(len.wrapping_add(1 as size_t) as isize));
+            let head_off = utf_head_off(line, ptr.sub(1)) as usize;
+            if head_off > 0 {
+                ptr = ptr.sub(head_off + 1);
+            } else if vim_isfilec(*ptr.sub(1) as u8 as c_int)
+                || (options & FNAME_HYP as c_int != 0 && path_is_url(ptr.sub(1)) != 0)
+            {
+                ptr = ptr.sub(1);
             } else {
-                if !(vim_isfilec(
-                    *ptr.offset(-1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-                ) as ::core::ffi::c_int
-                    != 0
-                    || options & FNAME_HYP as ::core::ffi::c_int != 0
-                        && path_is_url(ptr.offset(-(1 as ::core::ffi::c_int as isize))) != 0)
-                {
-                    break;
-                }
-                ptr = ptr.offset(-1);
+                break;
             }
         }
-        len = (if path_has_drive_letter(ptr, strlen(ptr)) as ::core::ffi::c_int != 0 {
-            2 as ::core::ffi::c_int
+        ptr
+    }
+}
+
+/// How many bytes of `ptr` belong to the file name that starts there.
+///
+/// `":"`, `"?"`, `"&"` and `"="` join the name once a `type://` prefix has
+/// been seen, so that `http://google.com:8080?q=this&that=ok` comes out
+/// whole. `"\ "` is an escaped space and counts as two.
+unsafe fn name_length(ptr: *const c_char, options: c_int) -> usize {
+    unsafe {
+        let hyp = options & FNAME_HYP as c_int != 0;
+        // TODO(justinmk): Check for driveletter "x:/" at start, regardless of
+        // 'isfname'.
+        let mut len = if path_has_drive_letter(ptr, strlen(ptr)) {
+            2
         } else {
-            0 as ::core::ffi::c_int
-        }) as size_t;
-        while vim_isfilec(*ptr.offset(len as isize) as uint8_t as ::core::ffi::c_int)
-            as ::core::ffi::c_int
-            != 0
-            || *ptr.offset(len as isize) as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                && *ptr.offset(len.wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
-                    == ' ' as ::core::ffi::c_int
-            || options & FNAME_HYP as ::core::ffi::c_int != 0
-                && path_is_url(ptr.offset(len as isize)) != 0
-            || is_url as ::core::ffi::c_int != 0
-                && !vim_strchr(
-                    b":?&=\0".as_ptr() as *const ::core::ffi::c_char,
-                    *ptr.offset(len as isize) as uint8_t as ::core::ffi::c_int,
-                )
-                .is_null()
-        {
-            if *ptr.offset(len as isize) as ::core::ffi::c_int >= 'A' as ::core::ffi::c_int
-                && *ptr.offset(len as isize) as ::core::ffi::c_int <= 'Z' as ::core::ffi::c_int
-                || *ptr.offset(len as isize) as ::core::ffi::c_int >= 'a' as ::core::ffi::c_int
-                    && *ptr.offset(len as isize) as ::core::ffi::c_int <= 'z' as ::core::ffi::c_int
+            0
+        };
+        let mut in_type = true;
+        let mut is_url = false;
+        loop {
+            let at = |i: usize| *ptr.add(i) as u8;
+            let escaped_space = at(len) == b'\\' && at(len + 1) == b' ';
+            if !(vim_isfilec(at(len) as c_int)
+                || escaped_space
+                || (hyp && path_is_url(ptr.add(len)) != 0)
+                || (is_url && !vim_strchr(c":?&=".as_ptr(), at(len) as c_int).is_null()))
             {
-                if in_type as ::core::ffi::c_int != 0
-                    && path_is_url(
-                        ptr.offset(len as isize)
-                            .offset(1 as ::core::ffi::c_int as isize),
-                    ) != 0
-                {
-                    is_url = true_0 != 0;
+                break;
+            }
+            if at(len).is_ascii_alphabetic() {
+                if in_type && path_is_url(ptr.add(len + 1)) != 0 {
+                    is_url = true;
                 }
             } else {
-                in_type = false_0 != 0;
+                in_type = false;
             }
-            if *ptr.offset(len as isize) as ::core::ffi::c_int == '\\' as ::core::ffi::c_int
-                && *ptr.offset(len.wrapping_add(1 as size_t) as isize) as ::core::ffi::c_int
-                    == ' ' as ::core::ffi::c_int
-            {
-                len = len.wrapping_add(1);
+            if escaped_space {
+                len += 1; // skip over the "\" in "\ "
             }
-            len = len.wrapping_add(utfc_ptr2len(ptr.offset(len as isize)) as size_t);
+            len += utfc_ptr2len(ptr.add(len)) as usize;
         }
-        if len > 2 as size_t
-            && !vim_strchr(
-                b".,:;!\0".as_ptr() as *const ::core::ffi::c_char,
-                *ptr.offset(len.wrapping_sub(1 as size_t) as isize) as uint8_t
-                    as ::core::ffi::c_int,
-            )
-            .is_null()
-            && *ptr.offset(len.wrapping_sub(2 as size_t) as isize) as ::core::ffi::c_int
-                != '.' as ::core::ffi::c_int
+
+        // If there is trailing punctuation, remove it. But don't remove "..",
+        // which could be a directory name.
+        if len > 2
+            && !vim_strchr(c".,:;!".as_ptr(), *ptr.add(len - 1) as u8 as c_int).is_null()
+            && *ptr.add(len - 2) != b'.' as c_char
         {
-            len = len.wrapping_sub(1);
+            len -= 1;
         }
-        if !file_lnum.is_null() {
-            let mut match_text: *const ::core::ffi::c_char =
-                b" line \0".as_ptr() as *const ::core::ffi::c_char;
-            let mut match_textlen: size_t = 6 as size_t;
-            let mut p: *mut ::core::ffi::c_char = ptr.offset(len as isize);
-            if strncmp(p, match_text, match_textlen) == 0 as ::core::ffi::c_int {
-                p = p.offset(match_textlen as isize);
-            } else {
-                match_text = gettext(&raw const line_msg as *const ::core::ffi::c_char);
-                match_textlen = strlen(match_text);
-                if strncmp(p, match_text, match_textlen) == 0 as ::core::ffi::c_int {
-                    p = p.offset(match_textlen as isize);
-                } else {
-                    p = skipwhite(p);
-                }
-            }
-            if *p as ::core::ffi::c_int != NUL {
-                if *(*__ctype_b_loc()).offset(*p as uint8_t as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int
-                    & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                    == 0
-                {
-                    p = p.offset(1);
-                }
-                p = skipwhite(p);
-                if *(*__ctype_b_loc()).offset(*p as uint8_t as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int
-                    & _ISdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                    != 0
-                {
-                    *file_lnum = getdigits_long(&raw mut p, false_0 != 0, 0 as ::core::ffi::c_long)
-                        as linenr_T;
-                }
-            }
-        }
-        return find_file_name_in_path(ptr, len, options, count as ::core::ffi::c_long, rel_fname);
+        len
     }
 }
 
-pub(crate) unsafe extern "C" fn eval_includeexpr(
-    ptr: *const ::core::ffi::c_char,
-    len: size_t,
-) -> *mut ::core::ffi::c_char {
+/// The line number written after a file name, as `" line 99"` or after any
+/// single separator character. Both the English spelling and the translated
+/// one are accepted, as `last_set_msg()` writes the latter.
+unsafe fn trailing_line_number(after_name: *const c_char) -> Option<c_long> {
     unsafe {
-        let save_sctx: sctx_T = current_sctx.get();
+        let english = c" line ";
+        let localized = CStr::from_ptr(gettext(line_msg.ptr().cast::<c_char>()));
+
+        let mut p = after_name.cast_mut();
+        if strncmp(p, english.as_ptr(), english.count_bytes()) == 0 {
+            p = p.add(english.count_bytes());
+        } else if strncmp(p, localized.as_ptr(), localized.count_bytes()) == 0 {
+            p = p.add(localized.count_bytes());
+        } else {
+            p = skipwhite(p);
+        }
+
+        if *p == 0 {
+            return None;
+        }
+        if !(*p as u8).is_ascii_digit() {
+            p = p.add(1); // skip the separator
+        }
+        p = skipwhite(p);
+        (*p as u8)
+            .is_ascii_digit()
+            .then(|| getdigits_long(&raw mut p, false, 0))
+    }
+}
+
+/// The name of the file under or after `line[col]`, looked up in `'path'`.
+///
+/// @param rel_fname  file we are searching relative to
+/// @param file_lnum  line number after the file name
+///
+/// Otherwise like [`file_name_at_cursor`].
+pub unsafe extern "C" fn file_name_in_line(
+    line: *mut c_char,
+    col: c_int,
+    options: c_int,
+    count: c_int,
+    rel_fname: *mut c_char,
+    file_lnum: *mut linenr_T,
+) -> *mut c_char {
+    unsafe {
+        let ptr = name_start(line, col, options);
+        if ptr.is_null() {
+            if options & FNAME_MESS as c_int != 0 {
+                emsg(gettext(c"E446: No file name under cursor".as_ptr()));
+            }
+            return ptr::null_mut();
+        }
+
+        let len = name_length(ptr, options);
+        if !file_lnum.is_null()
+            && let Some(lnum) = trailing_line_number(ptr.add(len))
+        {
+            *file_lnum = lnum as linenr_T;
+        }
+
+        find_file_name_in_path(ptr, len, options, count as c_long, rel_fname)
+    }
+}
+
+/// Run `'includeexpr'` over `ptr[len]`, with the name in `v:fname`.
+pub(crate) unsafe fn eval_includeexpr(ptr: *const c_char, len: size_t) -> *mut c_char {
+    unsafe {
+        let save_sctx = current_sctx.get();
         set_vim_var_string(VV_FNAME, ptr, len as ptrdiff_t);
-        current_sctx
-            .set((*curbuf.get()).b_p_script_ctx[kBufOptIncludeexpr as ::core::ffi::c_int as usize]);
-        let mut res: *mut ::core::ffi::c_char = eval_to_string_safe(
+        current_sctx.set((*curbuf.get()).b_p_script_ctx[kBufOptIncludeexpr as usize]);
+
+        let res = eval_to_string_safe(
             (*curbuf.get()).b_p_inex,
-            was_set_insecurely(
-                curwin.get(),
-                kOptIncludeexpr,
-                OPT_LOCAL as ::core::ffi::c_int,
-            ),
-            true_0 != 0,
+            was_set_insecurely(curwin.get(), kOptIncludeexpr, OPT_LOCAL as c_int),
+            true,
         );
-        set_vim_var_string(
-            VV_FNAME,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            0 as ptrdiff_t,
-        );
+
+        set_vim_var_string(VV_FNAME, ptr::null(), 0);
         current_sctx.set(save_sctx);
-        return res;
+        res
     }
 }
 
+/// The name of the file `ptr[len]` in `'path'`.
+///
+/// Otherwise like [`file_name_at_cursor`].
+///
+/// @param rel_fname  file we are searching relative to
 pub unsafe extern "C" fn find_file_name_in_path(
-    mut ptr: *mut ::core::ffi::c_char,
-    mut len: size_t,
-    mut options: ::core::ffi::c_int,
-    mut count: ::core::ffi::c_long,
-    mut rel_fname: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+    ptr: *mut c_char,
+    len: size_t,
+    options: c_int,
+    count: c_long,
+    rel_fname: *mut c_char,
+) -> *mut c_char {
     unsafe {
-        let mut file_name: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut tofree: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if len == 0 as size_t {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        let mut ptr = ptr;
+        let mut len = len;
+        let mut count = count;
+        if len == 0 {
+            return ptr::null_mut();
         }
-        if options & FNAME_HYP as ::core::ffi::c_int != 0
-            && len > 6 as size_t
-            && strncmp(
-                ptr,
-                b"file:/\0".as_ptr() as *const ::core::ffi::c_char,
-                6 as size_t,
-            ) == 0 as ::core::ffi::c_int
-            && !vim_ispathsep(*ptr.offset(6 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
+
+        // "file:/name" and "file://name" both name "/name"; a drive letter
+        // after "file:/" keeps the slash.
+        if options & FNAME_HYP as c_int != 0
+            && len > 6
+            && strncmp(ptr, c"file:/".as_ptr(), 6) == 0
+            && !vim_ispathsep(*ptr.add(6) as c_int)
         {
-            let mut off: size_t = (if path_has_drive_letter(
-                ptr.offset(6 as ::core::ffi::c_int as isize),
-                len.wrapping_sub(6 as size_t),
-            ) as ::core::ffi::c_int
-                != 0
-            {
-                6 as ::core::ffi::c_int
+            let off = if path_has_drive_letter(ptr.add(6), len - 6) {
+                6
             } else {
-                5 as ::core::ffi::c_int
-            }) as size_t;
-            ptr = ptr.offset(off as isize);
-            len = len.wrapping_sub(off);
+                5
+            };
+            ptr = ptr.add(off);
+            len -= off;
         }
-        if options & FNAME_INCL as ::core::ffi::c_int != 0
-            && *(*curbuf.get()).b_p_inex as ::core::ffi::c_int != NUL
-        {
+
+        let mut tofree: *mut c_char = ptr::null_mut();
+        if options & FNAME_INCL as c_int != 0 && *(*curbuf.get()).b_p_inex != 0 {
             tofree = eval_includeexpr(ptr, len);
             if !tofree.is_null() {
                 ptr = tofree;
                 len = strlen(ptr);
             }
         }
-        if options & FNAME_EXP as ::core::ffi::c_int != 0 {
-            let mut file_to_find: *mut ::core::ffi::c_char =
-                ::core::ptr::null_mut::<::core::ffi::c_char>();
-            let mut search_ctx: *mut ::core::ffi::c_char =
-                ::core::ptr::null_mut::<::core::ffi::c_char>();
-            file_name = find_file_in_path(
-                ptr,
-                len,
-                options & !(FNAME_MESS as ::core::ffi::c_int),
-                true_0,
-                rel_fname,
-                &raw mut file_to_find,
-                &raw mut search_ctx,
-            );
+
+        let mut file_name: *mut c_char = ptr::null_mut();
+        if options & FNAME_EXP as c_int != 0 {
+            let mut file_to_find: *mut c_char = ptr::null_mut();
+            let mut search_ctx: *mut c_char = ptr::null_mut();
+            let quiet = options & !(FNAME_MESS as c_int);
+            let mut look = |ptr, len, first| {
+                find_file_in_path(
+                    ptr,
+                    len,
+                    quiet,
+                    first,
+                    rel_fname,
+                    &raw mut file_to_find,
+                    &raw mut search_ctx,
+                )
+            };
+            file_name = look(ptr, len, true);
+
+            // If the file could not be found in a normal way, try applying
+            // 'includeexpr' (unless done already).
             if file_name.is_null()
-                && options & FNAME_INCL as ::core::ffi::c_int == 0
-                && *(*curbuf.get()).b_p_inex as ::core::ffi::c_int != NUL
+                && options & FNAME_INCL as c_int == 0
+                && *(*curbuf.get()).b_p_inex != 0
             {
                 tofree = eval_includeexpr(ptr, len);
                 if !tofree.is_null() {
                     ptr = tofree;
                     len = strlen(ptr);
-                    file_name = find_file_in_path(
-                        ptr,
-                        len,
-                        options & !(FNAME_MESS as ::core::ffi::c_int),
-                        true_0,
-                        rel_fname,
-                        &raw mut file_to_find,
-                        &raw mut search_ctx,
-                    );
+                    file_name = look(ptr, len, true);
                 }
             }
-            if file_name.is_null() && options & FNAME_MESS as ::core::ffi::c_int != 0 {
-                let mut c: ::core::ffi::c_char = *ptr.offset(len as isize);
-                *ptr.offset(len as isize) = NUL as ::core::ffi::c_char;
+            if file_name.is_null() && options & FNAME_MESS as c_int != 0 {
+                let c = *ptr.add(len);
+                *ptr.add(len) = 0;
                 semsg(
-                    gettext(b"E447: Can't find file \"%s\" in path\0".as_ptr()
-                        as *const ::core::ffi::c_char),
+                    gettext(c"E447: Can't find file \"%s\" in path".as_ptr()),
                     ptr,
                 );
-                *ptr.offset(len as isize) = c;
+                *ptr.add(len) = c;
             }
+
+            // Repeat finding the file "count" times. This matters when it
+            // appears several times in the path.
+            //
+            // Note the repeats pass `options` unmasked, so FNAME_MESS reaches
+            // find_file_in_path and its "No more file" message. Upstream.
             while !file_name.is_null() && {
                 count -= 1;
-                count > 0 as ::core::ffi::c_long
+                count > 0
             } {
-                xfree(file_name as *mut ::core::ffi::c_void);
+                xfree(file_name.cast());
                 file_name = find_file_in_path(
                     ptr,
                     len,
                     options,
-                    false_0,
+                    false,
                     rel_fname,
                     &raw mut file_to_find,
                     &raw mut search_ctx,
                 );
             }
-            xfree(file_to_find as *mut ::core::ffi::c_void);
-            vim_findfile_cleanup(search_ctx as *mut ::core::ffi::c_void);
+
+            xfree(file_to_find.cast());
+            vim_findfile_cleanup(search_ctx.cast());
         } else {
             file_name = xstrnsave(ptr, len);
         }
-        xfree(tofree as *mut ::core::ffi::c_void);
-        return file_name;
+
+        xfree(tofree.cast());
+        file_name
     }
 }
