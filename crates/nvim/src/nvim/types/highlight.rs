@@ -13,7 +13,7 @@ pub struct ColorItem {
     pub is_default: bool,
     pub link_global: bool,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct ColorKey {
     pub ns_id: ::core::ffi::c_int,

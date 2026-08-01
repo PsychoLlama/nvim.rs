@@ -806,16 +806,11 @@ pub unsafe extern "C" fn nvim_set_hl(
         hl_blend: 0,
         url: 0,
     };
-    if update as ::core::ffi::c_int != 0
-        && hl_ns_get_attrs(
-            ns_id as ::core::ffi::c_int,
-            hl_id,
-            ::core::ptr::null_mut::<bool>(),
-            &raw mut base_attrs,
-        ) as ::core::ffi::c_int
-            != 0
-    {
-        base = Some(&base_attrs);
+    if update as ::core::ffi::c_int != 0 {
+        if let Some(attrs) = hl_ns_get_attrs(ns_id as ::core::ffi::c_int, hl_id, None) {
+            base_attrs = attrs;
+            base = Some(&base_attrs);
+        }
     }
     let mut attrs: HlAttrs = dict2hlattrs(&*val, true_0 != 0, Some(&mut link_id), base, err);
     if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {

@@ -2317,7 +2317,7 @@ unsafe extern "C" fn hlgroup2dict(
     let mut link: ::core::ffi::c_int = if ns_id == 0 as ::core::ffi::c_int {
         (*sgp).sg_link
     } else {
-        ns_get_hl(&raw mut ns, hl_id, true_0 != 0, (*sgp).sg_set != 0)
+        ns_get_hl(&mut ns, hl_id, true_0 != 0, (*sgp).sg_set != 0)
     };
     if link == -1 as ::core::ffi::c_int {
         return false_0 != 0;
@@ -2332,7 +2332,7 @@ unsafe extern "C" fn hlgroup2dict(
     let mut attr: HlAttrs = syn_attr2entry(if ns_id == 0 as ::core::ffi::c_int {
         (*sgp).sg_attr
     } else {
-        ns_get_hl(&raw mut ns, hl_id, false_0 != 0, (*sgp).sg_set != 0)
+        ns_get_hl(&mut ns, hl_id, false_0 != 0, (*sgp).sg_set != 0)
     });
     *hl = arena_dict(
         arena,
@@ -3066,7 +3066,7 @@ pub unsafe extern "C" fn syn_ns_id2attr(
     let mut sgp: *mut HlGroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
         .offset((hl_id - 1 as ::core::ffi::c_int) as isize);
     let mut attr: ::core::ffi::c_int =
-        ns_get_hl(&raw mut ns_id, hl_id, false_0 != 0, (*sgp).sg_set != 0);
+        ns_get_hl(&mut ns_id, hl_id, false_0 != 0, (*sgp).sg_set != 0);
     if attr >= 0 as ::core::ffi::c_int
         || *optional as ::core::ffi::c_int != 0 && ns_id > 0 as ::core::ffi::c_int
     {
@@ -3098,7 +3098,7 @@ pub unsafe extern "C" fn syn_ns_get_final_id(
         let mut sgp: *mut HlGroup = ((*highlight_ga.ptr()).ga_data as *mut HlGroup)
             .offset((hl_id - 1 as ::core::ffi::c_int) as isize);
         let mut check: ::core::ffi::c_int =
-            ns_get_hl(ns_id as *mut NS, hl_id, true_0 != 0, (*sgp).sg_set != 0);
+            ns_get_hl(&mut *ns_id, hl_id, true_0 != 0, (*sgp).sg_set != 0);
         if check == 0 as ::core::ffi::c_int {
             *hl_idp = hl_id;
             return true_0 != 0;
