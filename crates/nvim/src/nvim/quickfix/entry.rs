@@ -165,7 +165,9 @@ pub(crate) unsafe fn qf_push_dir(
             *stack.dirs.last_mut().unwrap() = Name::from_ptr(joined);
         }
         // Nothing matched, so it must be a top-level directory: the name
-        // pushed above is already the right one.
+        // pushed above is already the right one. Upstream ends with a
+        // "dirname is still NULL, pop the entry and answer NULL" branch,
+        // which no path can reach — every branch above stores a name.
         xfree(joined.cast());
         stack.top()
     }
