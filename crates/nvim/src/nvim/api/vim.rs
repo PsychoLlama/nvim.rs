@@ -794,7 +794,7 @@ pub unsafe extern "C" fn nvim_set_hl(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_highlight__update
         != 0 as ::core::ffi::c_ulonglong
         && (*val).update as ::core::ffi::c_int != 0;
-    let mut base: *mut HlAttrs = ::core::ptr::null_mut::<HlAttrs>();
+    let mut base: Option<&HlAttrs> = None;
     let mut base_attrs: HlAttrs = HlAttrs {
         rgb_ae_attr: 0,
         cterm_ae_attr: 0,
@@ -815,9 +815,9 @@ pub unsafe extern "C" fn nvim_set_hl(
         ) as ::core::ffi::c_int
             != 0
     {
-        base = &raw mut base_attrs;
+        base = Some(&base_attrs);
     }
-    let mut attrs: HlAttrs = dict2hlattrs(val, true_0 != 0, &raw mut link_id, base, err);
+    let mut attrs: HlAttrs = dict2hlattrs(&*val, true_0 != 0, Some(&mut link_id), base, err);
     if !((*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         let save_current_sctx: sctx_T = api_set_sctx(channel_id);
         ns_hl_def(ns_id as NS, hl_id, attrs, link_id, val);

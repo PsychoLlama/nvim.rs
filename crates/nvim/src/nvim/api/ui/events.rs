@@ -293,16 +293,10 @@ pub(super) unsafe fn remote_ui_highlight_set(ui: *mut RemoteUI, id: c_int) {
         (*ui).hl_id = id;
     }
 
-    let mut buf = DictBuf::<{ HLATTRS_DICT_SIZE as usize }>::new();
+    let mut buf = DictBuf::<HLATTRS_DICT_SIZE>::new();
     let mut dict = buf.dict();
     unsafe {
-        hlattrs2dict(
-            &raw mut dict,
-            core::ptr::null_mut(),
-            syn_attr2entry(id),
-            (*ui).rgb,
-            false,
-        );
+        hlattrs2dict(&mut dict, None, syn_attr2entry(id), (*ui).rgb, false);
     }
     send!(ui, c"highlight_set", Object::dict(dict));
 }

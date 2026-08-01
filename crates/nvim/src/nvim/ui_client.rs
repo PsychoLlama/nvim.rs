@@ -783,13 +783,7 @@ unsafe fn dict_to_hlattrs(d: Dict, rgb: bool) -> HlAttrs {
         ) {
             return HLATTRS_INIT;
         }
-        let mut attrs = dict2hlattrs(
-            &raw mut dict,
-            rgb,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-            &raw mut err,
-        );
+        let mut attrs = dict2hlattrs(&dict, rgb, None, None, &raw mut err);
         // A URL is not an attribute the terminal understands; the TUI
         // interns it and the entry keeps the index.
         if dict.is_set__highlight_ & (1 << KEYSET_OPTIDX_highlight__url) != 0 {

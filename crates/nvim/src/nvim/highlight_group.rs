@@ -2379,14 +2379,14 @@ unsafe extern "C" fn hlgroup2dict(
         };
     }
     let mut hl_cterm: Dict = arena_dict(arena, HLATTRS_DICT_SIZE as ::core::ffi::c_int as size_t);
+    hlattrs2dict(&mut *hl, None, attr, true_0 != 0, true_0 != 0);
     hlattrs2dict(
-        hl,
-        ::core::ptr::null_mut::<Dict>(),
+        &mut *hl,
+        Some(&mut hl_cterm),
         attr,
-        true_0 != 0,
+        false_0 != 0,
         true_0 != 0,
     );
-    hlattrs2dict(hl, &raw mut hl_cterm, attr, false_0 != 0, true_0 != 0);
     if hl_cterm.size != 0 {
         let c2rust_fresh3 = (*hl).size;
         (*hl).size = (*hl).size.wrapping_add(1);

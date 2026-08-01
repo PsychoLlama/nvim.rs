@@ -1,6 +1,6 @@
 {
   "internal_exports": 47,
-  "files_without_forbid_unsafe": 573,
+  "files_without_forbid_unsafe": 574,
   "files_without_deny_unsafe_op": 211,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -224,7 +224,8 @@
     "crates/nvim/src/nvim/grid/schar.rs": {"no_mangle": 2, "unsafe": 15},
     "crates/nvim/src/nvim/hashtab.rs": {"no_mangle": 1, "unsafe": 14},
     "crates/nvim/src/nvim/help.rs": {"lines": 2324, "unsafe": 19},
-    "crates/nvim/src/nvim/highlight.rs": {"lines": 2667, "unsafe": 47},
+    "crates/nvim/src/nvim/highlight.rs": {"lines": 1480, "unsafe": 44},
+    "crates/nvim/src/nvim/highlight/dict.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/highlight_group.rs": {"lines": 4316, "no_mangle": 1, "unsafe": 51},
     "crates/nvim/src/nvim/indent.rs": {"no_mangle": 2, "unsafe": 22},
     "crates/nvim/src/nvim/indent/breakindent.rs": {"unsafe": 2},

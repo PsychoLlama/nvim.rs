@@ -358,6 +358,97 @@ pub struct KeyDict_highlight_cterm {
     pub overline: Boolean,
     pub nocombine: Boolean,
 }
+
+impl KeyDict_highlight {
+    /// Every key absent. `api_dict_to_keydict` fills in what the caller
+    /// named and records it in `is_set__highlight_`, so this is the state a
+    /// keydict must start in for that mask to mean anything.
+    pub const fn new() -> Self {
+        const NO_DICT: Dict = Dict {
+            size: 0,
+            capacity: 0,
+            items: core::ptr::null_mut(),
+        };
+        Self {
+            is_set__highlight_: 0,
+            altfont: false,
+            blink: false,
+            bold: false,
+            conceal: false,
+            dim: false,
+            italic: false,
+            nocombine: false,
+            overline: false,
+            reverse: false,
+            standout: false,
+            strikethrough: false,
+            undercurl: false,
+            underdashed: false,
+            underdotted: false,
+            underdouble: false,
+            underline: false,
+            default_: false,
+            cterm: NO_DICT,
+            foreground: Object::NIL,
+            fg: Object::NIL,
+            background: Object::NIL,
+            bg: Object::NIL,
+            ctermfg: Object::NIL,
+            ctermbg: Object::NIL,
+            special: Object::NIL,
+            sp: Object::NIL,
+            link: 0,
+            link_global: 0,
+            fallback: false,
+            blend: 0,
+            fg_indexed: false,
+            bg_indexed: false,
+            force: false,
+            update: false,
+            url: String_0 {
+                data: core::ptr::null_mut(),
+                size: 0,
+            },
+        }
+    }
+}
+
+impl Default for KeyDict_highlight {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl KeyDict_highlight_cterm {
+    /// Every attribute off. See [`KeyDict_highlight::new`].
+    pub const fn new() -> Self {
+        Self {
+            bold: false,
+            standout: false,
+            strikethrough: false,
+            underline: false,
+            undercurl: false,
+            underdouble: false,
+            underdotted: false,
+            underdashed: false,
+            italic: false,
+            reverse: false,
+            altfont: false,
+            dim: false,
+            blink: false,
+            conceal: false,
+            overline: false,
+            nocombine: false,
+        }
+    }
+}
+
+impl Default for KeyDict_highlight_cterm {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_keymap {

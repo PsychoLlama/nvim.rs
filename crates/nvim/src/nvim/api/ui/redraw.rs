@@ -55,19 +55,13 @@ pub unsafe fn remote_ui_hl_attr_define(
     }
 
     // One spare entry past what `hlattrs2dict` fills, for the URL below.
-    let mut rgb_buf = DictBuf::<{ HLATTRS_DICT_SIZE as usize + 1 }>::new();
-    let mut cterm_buf = DictBuf::<{ HLATTRS_DICT_SIZE as usize }>::new();
+    let mut rgb_buf = DictBuf::<{ HLATTRS_DICT_SIZE + 1 }>::new();
+    let mut cterm_buf = DictBuf::<HLATTRS_DICT_SIZE>::new();
     let mut rgb = rgb_buf.dict();
     let mut cterm = cterm_buf.dict();
     unsafe {
-        hlattrs2dict(&raw mut rgb, core::ptr::null_mut(), rgb_attrs, true, false);
-        hlattrs2dict(
-            &raw mut cterm,
-            core::ptr::null_mut(),
-            rgb_attrs,
-            false,
-            false,
-        );
+        hlattrs2dict(&mut rgb, None, rgb_attrs, true, false);
+        hlattrs2dict(&mut cterm, None, rgb_attrs, false, false);
         if rgb_attrs.url >= 0 {
             let url = hl_get_url(rgb_attrs.url as u32);
             *rgb.items.add(rgb.size) = KeyValuePair {
@@ -244,14 +238,8 @@ unsafe fn translate_contents(ui: *mut RemoteUI, contents: Array, arena: *mut Are
             let mut new_item = arena_array(arena, 2);
             let attr = (*item.items).data.integer as core::ffi::c_int;
             let attrs = if attr != 0 {
-                let mut dict = arena_dict(arena, HLATTRS_DICT_SIZE as usize);
-                hlattrs2dict(
-                    &raw mut dict,
-                    core::ptr::null_mut(),
-                    syn_attr2entry(attr),
-                    (*ui).rgb,
-                    false,
-                );
+                let mut dict = arena_dict(arena, HLATTRS_DICT_SIZE);
+                hlattrs2dict(&mut dict, None, syn_attr2entry(attr), (*ui).rgb, false);
                 dict
             } else {
                 Dict {
