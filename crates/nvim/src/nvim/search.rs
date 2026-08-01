@@ -74,10 +74,9 @@ use crate::src::nvim::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsav
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     Direction, EvalFuncData, FILE, MotionType, OptInt, SearchOffset, SearchPattern, TriState,
-    VarType, VimVarIndex, buf_T, cmdarg_T, colnr_T, dict_T, dictitem_T, file_comparison, int64_t,
-    linenr_T, listitem_T, lpos_T, magic_T, oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T,
-    regmmatch_T, regprog_T, searchit_arg_T, size_t, typval_T, uint8_t, uint64_t, varnumber_T,
-    win_T,
+    VarType, VimVarIndex, buf_T, cmdarg_T, colnr_T, dict_T, file_comparison, int64_t, linenr_T,
+    list_T, lpos_T, magic_T, oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T,
+    regprog_T, searchit_arg_T, size_t, typval_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep,
@@ -169,15 +168,6 @@ pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const SEARCH_STAT_DEF_TIMEOUT: C2Rust_Unnamed_27 = 40;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub const SEARCH_STAT_BUF_LEN: C2Rust_Unnamed_28 = 16;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct searchstat_T {
-    pub cur: ::core::ffi::c_int,
-    pub cnt: ::core::ffi::c_int,
-    pub exact_match: bool,
-    pub incomplete: ::core::ffi::c_int,
-    pub last_maxcount: ::core::ffi::c_int,
-}
 pub const LSIZE: C2Rust_Unnamed_29 = 512;
 #[derive(Copy, Clone)]
 #[repr(C)]

@@ -382,6 +382,29 @@ pub fn last_search_pat() -> *mut c_char {
     spat(last_idx.get()).pat
 }
 
+/// Whichever of the two patterns was used last, with its length — what
+/// the search-count cache compares itself against.
+pub(crate) fn last_used_pattern() -> SearchPattern {
+    spat(last_idx.get())
+}
+
+/// Replace the last used pattern's string, keeping its flags and offset.
+/// Only `searchcount()` does this, and only under
+/// [`save_last_search_pattern`], which puts the real one back.
+///
+/// # Safety
+/// `s` must be a NUL-terminated string.
+pub(crate) unsafe fn replace_last_used_pattern(s: *const c_char) {
+    unsafe {
+        let idx = last_idx.get();
+        let mut pat = spat(idx);
+        xfree(pat.pat as *mut c_void);
+        pat.patlen = strlen(s);
+        pat.pat = xstrnsave(s, pat.patlen);
+        put_spat(idx, pat);
+    }
+}
+
 /// Whether case should be ignored for pattern `pat`, per `'ignorecase'`
 /// and `'smartcase'`.
 ///

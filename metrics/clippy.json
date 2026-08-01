@@ -132,7 +132,6 @@
     "crates/nvim/src/nvim/search.rs": 30,
     "crates/nvim/src/nvim/search/command.rs": 10,
     "crates/nvim/src/nvim/search/matchpair.rs": 20,
-    "crates/nvim/src/nvim/search/stat.rs": 22,
     "crates/nvim/src/nvim/shada/parse.rs": 1,
     "crates/nvim/src/nvim/shada/read.rs": 1,
     "crates/nvim/src/nvim/sign.rs": 132,
