@@ -210,7 +210,7 @@ pub(crate) unsafe fn skip_grep_pat(eap: *mut exarg_T) -> *mut c_char {
             || cmdidx == CMD_lvimgrep as c_int
             || cmdidx == CMD_vimgrepadd as c_int
             || cmdidx == CMD_lvimgrepadd as c_int
-            || grep_internal(ea.cmdidx) != 0;
+            || grep_internal(ea.cmdidx);
         if *ea.arg as c_int == NUL || !is_grep {
             return ea.arg;
         }

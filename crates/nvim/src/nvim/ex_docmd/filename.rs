@@ -68,7 +68,7 @@ pub unsafe fn replace_makeprg(
         let is_make = idx == CMD_make as c_int || idx == CMD_lmake as c_int;
         // `grep_internal` means 'grepprg' is `internal`, which is not a
         // program at all.
-        if !(is_make || is_grep) || grep_internal((*eap).cmdidx) != 0 {
+        if !(is_make || is_grep) || grep_internal((*eap).cmdidx) {
             return arg;
         }
 

@@ -9,285 +9,262 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
-pub unsafe extern "C" fn grep_internal(mut cmdidx: cmdidx_T) -> ::core::ffi::c_int {
+/// True when `:grep` is to be run by `:vimgrep`, which is what `'grepprg'`
+/// set to `internal` asks for. Only the `:grep` family can say it; `:make`
+/// always runs a shell command.
+///
+/// # Safety
+///
+/// Reads the current buffer's options, so there must be one.
+pub unsafe fn grep_internal(cmdidx: cmdidx_T) -> bool {
+    if !matches!(cmdidx, CMD_grep | CMD_lgrep | CMD_grepadd | CMD_lgrepadd) {
+        return false;
+    }
+    // SAFETY: the option strings of a live buffer are NUL-terminated.
     unsafe {
-        return ((cmdidx as ::core::ffi::c_int == CMD_grep as ::core::ffi::c_int
-            || cmdidx as ::core::ffi::c_int == CMD_lgrep as ::core::ffi::c_int
-            || cmdidx as ::core::ffi::c_int == CMD_grepadd as ::core::ffi::c_int
-            || cmdidx as ::core::ffi::c_int == CMD_lgrepadd as ::core::ffi::c_int)
-            && strcmp(
-                b"internal\0".as_ptr() as *const ::core::ffi::c_char,
-                if *(*curbuf.get()).b_p_gp as ::core::ffi::c_int == NUL {
-                    p_gp.get()
-                } else {
-                    (*curbuf.get()).b_p_gp
-                },
-            ) == 0 as ::core::ffi::c_int) as ::core::ffi::c_int;
+        let local = (*curbuf.get()).b_p_gp;
+        let grepprg = if *local as c_int == NUL {
+            p_gp.get()
+        } else {
+            local
+        };
+        CStr::from_ptr(grepprg) == c"internal"
     }
 }
 
-pub(crate) unsafe extern "C" fn make_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c_char {
-    match cmdidx as ::core::ffi::c_int {
-        274 => {
-            return b"make\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        248 => {
-            return b"lmake\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        172 => {
-            return b"grep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        239 => {
-            return b"lgrep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        173 => {
-            return b"grepadd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        240 => {
-            return b"lgrepadd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        _ => return ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
+/// The name the `QuickFixCmdPre`/`QuickFixCmdPost` autocommands are matched
+/// against, which is the command without its leading colon.
+fn make_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
+    Some(match cmdidx {
+        CMD_make => c"make",
+        CMD_lmake => c"lmake",
+        CMD_grep => c"grep",
+        CMD_lgrep => c"lgrep",
+        CMD_grepadd => c"grepadd",
+        CMD_lgrepadd => c"lgrepadd",
+        _ => return None,
+    })
 }
 
-pub(crate) unsafe extern "C" fn make_get_fullcmd(
-    mut makecmd: *const ::core::ffi::c_char,
-    mut fname: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+/// Form the complete command line to invoke `'makeprg'`/`'grepprg'`: quote
+/// it with `'shellquote'` and append the `'shellpipe'` redirection to
+/// `fname`. Echoes the result, so that the user sees what is being run.
+///
+/// Answers an `xmalloc`ed string the caller frees.
+///
+/// # Safety
+///
+/// Both strings must be NUL-terminated.
+unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> *mut c_char {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut len: size_t = strlen(p_shq.get())
-            .wrapping_mul(2 as size_t)
-            .wrapping_add(strlen(makecmd))
-            .wrapping_add(1 as size_t);
-        if *p_sp.get() as ::core::ffi::c_int != NUL {
-            len = len.wrapping_add(
-                strlen(p_sp.get())
-                    .wrapping_add(strlen(fname))
-                    .wrapping_add(3 as size_t),
-            );
+        let quote = p_shq.get();
+        let mut len = strlen(quote) * 2 + strlen(makecmd) + 1;
+        // If 'shellpipe' is empty the output is not redirected at all.
+        let redirect = *p_sp.get() as c_int != NUL;
+        if redirect {
+            len += strlen(p_sp.get()) + strlen(fname) + 3;
         }
-        let cmd: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
-        snprintf(
-            cmd,
-            len,
-            b"%s%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-            p_shq.get(),
-            makecmd,
-            p_shq.get(),
-        );
-        if *p_sp.get() as ::core::ffi::c_int != NUL {
+
+        let cmd: *mut c_char = xmalloc(len).cast();
+        snprintf(cmd, len, c"%s%s%s".as_ptr(), quote, makecmd, quote);
+        if redirect {
             append_redir(cmd, len, p_sp.get(), fname);
         }
-        if msg_col.get() == 0 as ::core::ffi::c_int {
-            msg_didout.set(false_0 != 0);
+
+        // Display the fully formed command. Output a newline if there is
+        // something else than the :make command that was typed, in which
+        // case the cursor is in column 0.
+        if msg_col.get() == 0 {
+            msg_didout.set(false);
         }
         msg_start();
-        msg_puts(b":!\0".as_ptr() as *const ::core::ffi::c_char);
-        msg_outtrans(cmd, 0 as ::core::ffi::c_int, false_0 != 0);
-        return cmd;
+        msg_puts(c":!".as_ptr());
+        msg_outtrans(cmd, 0, false);
+
+        cmd
     }
 }
 
-pub unsafe fn ex_make(mut eap: *mut exarg_T) {
+/// `:make`, `:lmake`, `:grep`, `:lgrep`, `:grepadd` and `:lgrepadd`.
+///
+/// # Safety
+///
+/// `eap` must be a live command.
+pub unsafe fn ex_make(eap: *mut exarg_T) {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut save_qfid: ::core::ffi::c_uint = 0;
-        let mut enc: *mut ::core::ffi::c_char =
-            if *(*curbuf.get()).b_p_menc as ::core::ffi::c_int != NUL {
-                (*curbuf.get()).b_p_menc
-            } else {
-                p_menc.get()
-            };
-        if grep_internal((*eap).cmdidx) != 0 {
+        // Redirect ":grep" to ":vimgrep" if 'grepprg' is "internal".
+        if grep_internal((*eap).cmdidx) {
             ex_vimgrep(eap);
             return;
         }
-        let au_name: *mut ::core::ffi::c_char = make_get_auname((*eap).cmdidx);
-        if !au_name.is_null()
-            && apply_autocmds(
+
+        let local_enc = (*curbuf.get()).b_p_menc;
+        let enc = if *local_enc as c_int != NUL {
+            local_enc
+        } else {
+            p_menc.get()
+        };
+
+        let au_name = make_get_auname((*eap).cmdidx);
+        if let Some(name) = au_name {
+            let claimed = apply_autocmds(
                 EVENT_QUICKFIXCMDPRE,
-                au_name,
+                name.as_ptr().cast_mut(),
                 (*curbuf.get()).b_fname,
-                true_0 != 0,
+                true,
                 curbuf.get(),
-            ) as ::core::ffi::c_int
-                != 0
-        {
-            if aborting() {
+            );
+            if claimed && aborting() {
                 return;
             }
         }
-        let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        if is_loclist_cmd((*eap).cmdidx as ::core::ffi::c_int) {
-            wp = curwin.get();
-        }
+
+        let wp = if is_loclist_cmd((*eap).cmdidx as c_int) {
+            curwin.get()
+        } else {
+            ptr::null_mut()
+        };
+
         autowrite_all();
-        let mut fname: *mut ::core::ffi::c_char = get_mef_name();
+        let fname = get_mef_name();
         if fname.is_null() {
             return;
         }
+        // In case the name is not unique after all.
         os_remove(fname);
-        let cmd: *mut ::core::ffi::c_char = make_get_fullcmd((*eap).arg, fname);
-        do_shell(cmd, 0 as ::core::ffi::c_int);
+
+        let cmd = make_get_fullcmd((*eap).arg, fname);
+        do_shell(cmd, 0);
+
         incr_quickfix_busy();
-        let mut errorformat: *mut ::core::ffi::c_char = if (*eap).cmdidx as ::core::ffi::c_int
-            != CMD_make as ::core::ffi::c_int
-            && (*eap).cmdidx as ::core::ffi::c_int != CMD_lmake as ::core::ffi::c_int
-        {
-            if *(*curbuf.get()).b_p_gefm as ::core::ffi::c_int != NUL {
-                (*curbuf.get()).b_p_gefm
+
+        let is_make = matches!((*eap).cmdidx, CMD_make | CMD_lmake);
+        let errorformat = if is_make {
+            p_efm.get()
+        } else {
+            let local = (*curbuf.get()).b_p_gefm;
+            if *local as c_int != NUL {
+                local
             } else {
                 p_gefm.get()
             }
-        } else {
-            p_efm.get()
         };
-        let mut newlist: bool = (*eap).cmdidx as ::core::ffi::c_int
-            != CMD_grepadd as ::core::ffi::c_int
-            && (*eap).cmdidx as ::core::ffi::c_int != CMD_lgrepadd as ::core::ffi::c_int;
-        let mut res: ::core::ffi::c_int = qf_init(
+        let newlist = !matches!((*eap).cmdidx, CMD_grepadd | CMD_lgrepadd);
+
+        let res = qf_init(
             wp,
             fname,
             errorformat,
-            newlist as ::core::ffi::c_int,
+            newlist as c_int,
             qf_cmdtitle(*(*eap).cmdlinep),
             enc,
         );
-        let mut qi: *mut qf_info_T = ql_info.get();
-        '_c2rust_label: {
-            if !qi.is_null() {
-            } else {
-                __assert_fail(
-                    b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    4655 as ::core::ffi::c_uint,
-                    b"void ex_make(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        '_cleanup: {
-            if !wp.is_null() {
-                qi = if bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
-                    && !(*wp).w_llist_ref.is_null()
-                {
-                    (*wp).w_llist_ref
-                } else {
-                    (*wp).w_llist
-                };
-                if qi.is_null() {
-                    break '_cleanup;
-                }
-            }
-            if res >= 0 as ::core::ffi::c_int {
+
+        let mut qi = ql_info.get();
+        debug_assert!(!qi.is_null());
+        // A location list command may have found no list to add to, in
+        // which case there is nothing left to do but clean up.
+        if !wp.is_null() {
+            qi = win_loclist(wp);
+        }
+        if !qi.is_null() {
+            if res >= 0 {
                 qf_list_changed(qf_get_curlist(qi));
             }
-            save_qfid = (*qf_get_curlist(qi)).qf_id;
-            if !au_name.is_null() {
+            // Remember the current quickfix list identifier, so that a
+            // QuickFixCmdPost autocommand changing the list is noticed.
+            let save_qfid = (*qf_get_curlist(qi)).qf_id;
+            if let Some(name) = au_name {
                 apply_autocmds(
                     EVENT_QUICKFIXCMDPOST,
-                    au_name,
+                    name.as_ptr().cast_mut(),
                     (*curbuf.get()).b_fname,
-                    true_0 != 0,
+                    true,
                     curbuf.get(),
                 );
             }
-            if res > 0 as ::core::ffi::c_int
-                && (*eap).forceit == 0
-                && qflist_valid(wp, save_qfid) as ::core::ffi::c_int != 0
-            {
-                qf_jump_first(qi, save_qfid, false_0);
+            if res > 0 && (*eap).forceit == 0 && qflist_valid(wp, save_qfid) {
+                // Display the first error.
+                qf_jump_first(qi, save_qfid, false as c_int);
             }
         }
+
         decr_quickfix_busy();
         os_remove(fname);
-        xfree(fname as *mut ::core::ffi::c_void);
-        xfree(cmd as *mut ::core::ffi::c_void);
+        xfree(fname.cast());
+        xfree(cmd.cast());
     }
 }
 
-pub(crate) unsafe extern "C" fn get_mef_name() -> *mut ::core::ffi::c_char {
+/// The name of the error file `:make` redirects into, in allocated memory,
+/// or null when there is none to be had. An empty `'makeef'` asks for a
+/// temporary name; a `'makeef'` holding `##` has that replaced by a number
+/// pair chosen so that the file does not exist yet.
+///
+/// # Safety
+///
+/// Reads the options, so the editor must be initialised.
+unsafe fn get_mef_name() -> *mut c_char {
+    /// The process id, picked up once and then reused, with `off` counting
+    /// up so that repeated calls in one session choose different names.
+    static START: GlobalCell<c_int> = GlobalCell::new(-1);
+    static OFF: GlobalCell<c_int> = GlobalCell::new(0);
+
+    // SAFETY: the option strings are NUL-terminated.
     unsafe {
-        let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        static start: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-        static off: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-        if *p_mef.get() as ::core::ffi::c_int == NUL {
-            name = vim_tempname();
+        if *p_mef.get() as c_int == NUL {
+            let name = vim_tempname();
             if name.is_null() {
-                emsg(gettext(&raw const e_notmp as *const ::core::ffi::c_char));
+                emsg(gettext(&raw const e_notmp as *const c_char));
             }
             return name;
         }
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        p = p_mef.get();
-        while *p != 0 {
-            if *p.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '#' as ::core::ffi::c_int
-                && *p.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '#' as ::core::ffi::c_int
-            {
-                break;
-            }
-            p = p.offset(1);
-        }
-        if *p as ::core::ffi::c_int == NUL {
+
+        let makeef = CStr::from_ptr(p_mef.get()).to_bytes();
+        let Some(at) = makeef.windows(2).position(|pair| pair == b"##") else {
             return xstrdup(p_mef.get());
-        }
+        };
+
+        // Keep trying until the name doesn't exist yet.
         loop {
-            if start.get() == -1 as ::core::ffi::c_int {
-                start.set(os_get_pid() as ::core::ffi::c_int);
+            if START.get() == -1 {
+                START.set(os_get_pid() as c_int);
             } else {
-                (*off.ptr()) += 19 as ::core::ffi::c_int;
+                OFF.set(OFF.get() + 19);
             }
-            name =
-                xmalloc(strlen(p_mef.get()).wrapping_add(30 as size_t)) as *mut ::core::ffi::c_char;
-            strcpy(name, p_mef.get());
-            snprintf(
-                name.offset(p.offset_from(p_mef.get()) as isize),
-                strlen(name),
-                b"%d%d\0".as_ptr() as *const ::core::ffi::c_char,
-                start.get(),
-                off.get(),
+
+            let mut digits = [0u8; 32];
+            let written = snprintf(
+                digits.as_mut_ptr().cast(),
+                digits.len(),
+                c"%d%d".as_ptr(),
+                START.get(),
+                OFF.get(),
             );
-            strcat(name, p.offset(2 as ::core::ffi::c_int as isize));
-            let mut file_info: FileInfo = FileInfo {
-                stat: uv_stat_t {
-                    st_dev: 0,
-                    st_mode: 0,
-                    st_nlink: 0,
-                    st_uid: 0,
-                    st_gid: 0,
-                    st_rdev: 0,
-                    st_ino: 0,
-                    st_size: 0,
-                    st_blksize: 0,
-                    st_blocks: 0,
-                    st_flags: 0,
-                    st_gen: 0,
-                    st_atim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_mtim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_ctim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_birthtim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                },
-            };
-            let mut file_or_link_found: bool = os_fileinfo_link(name, &raw mut file_info);
-            if !file_or_link_found {
-                break;
+            debug_assert!(written > 0 && (written as usize) < digits.len());
+            // Upstream writes the digits into the copy of 'makeef' with
+            // `strlen(name)` as the bound, i.e. the length of 'makeef'
+            // itself rather than the room left at `at`, so the pair is
+            // truncated to one byte short of that. `'makeef'` of "##" thus
+            // names a file after the first digit of the process id alone.
+            let kept = (written as usize).min(makeef.len() - 1);
+
+            let mut name = Vec::with_capacity(makeef.len() + 30);
+            name.extend_from_slice(&makeef[..at]);
+            name.extend_from_slice(&digits[..kept]);
+            name.extend_from_slice(&makeef[at + 2..]);
+            name.push(0);
+
+            // Don't accept a symbolic link, it's a security risk.
+            let mut file_info = FileInfo::default();
+            if !os_fileinfo_link(name.as_ptr().cast(), &raw mut file_info) {
+                return xstrdup(name.as_ptr().cast());
             }
-            xfree(name as *mut ::core::ffi::c_void);
         }
-        return name;
     }
 }

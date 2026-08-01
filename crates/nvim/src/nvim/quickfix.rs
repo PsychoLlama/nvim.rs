@@ -91,7 +91,7 @@ use crate::src::nvim::os::fs::{
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
     __assert_fail, __errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets,
-    gettext, memset, snprintf, strcat, strcmp, strcpy, strlen, strncasecmp, time,
+    gettext, memset, snprintf, strcat, strcmp, strlen, strncasecmp, time,
 };
 use crate::src::nvim::path::{
     FreeWild, add_pathsep, concat_fnames, fix_fname, gen_expand_wildcards, path_fnamecmp,
@@ -112,8 +112,7 @@ use crate::src::nvim::types::{
     dictitem_T, dobuf_action_values, exarg, exarg_T, except_T, getf_values, handle_T, ht_stack_T,
     linenr_T, list_T, list_stack_T, listitem_T, lpos_T, optset_T, pos_T, proftime_T, ptrdiff_t,
     qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T, regprog_T, scid_T, size_t,
-    tabpage_T, time_t, typval_T, typval_vval_union, uint32_t, uv_stat_t, uv_timespec_t,
-    varnumber_T, vimconv_T, win_T,
+    tabpage_T, time_t, typval_T, typval_vval_union, uint32_t, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::u_clearallandblockfree;
