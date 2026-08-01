@@ -148,7 +148,6 @@
     "crates/nvim/src/nvim/tag/query.rs": 20,
     "crates/nvim/src/nvim/tag/scan.rs": 12,
     "crates/nvim/src/nvim/tag/stack.rs": 13,
-    "crates/nvim/src/nvim/tag/tagfile.rs": 3,
     "crates/nvim/src/nvim/tag/tagfunc.rs": 27,
     "crates/nvim/src/nvim/terminal.rs": 2,
     "crates/nvim/src/nvim/terminal/input.rs": 2,

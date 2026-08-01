@@ -556,14 +556,6 @@ pub unsafe extern "C" fn find_tags(
                 }; 16],
             }; 16],
         };
-        let mut tn: tagname_T = tagname_T {
-            tn_tags: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tn_np: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tn_did_filefind_init: 0,
-            tn_hf_idx: 0,
-            tn_search_ctx: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        };
-        let mut first_file: ::core::ffi::c_int = 0;
         let mut retval: ::core::ffi::c_int = FAIL;
         let mut i: ::core::ffi::c_int = 0;
         let mut saved_pat: *mut ::core::ffi::c_char =
@@ -677,17 +669,16 @@ pub unsafe extern "C" fn find_tags(
                     st.linear = (*st.orgpat).headlen == 0 as ::core::ffi::c_int
                         || p_tbs.get() == 0
                         || round == 2 as ::core::ffi::c_int;
-                    first_file = true_0;
-                    while get_tagfname(&raw mut tn, first_file, st.tag_fname) == OK {
+                    let mut tag_files = TagFiles::new();
+                    while let Some(name) = tag_files.next() {
+                        xstrlcpy(st.tag_fname, name.as_ptr(), MAXPATHL as size_t);
                         findtags_in_file(&raw mut st, flags, buf_ffname);
                         if st.stop_searching {
                             retval = OK;
                             break;
-                        } else {
-                            first_file = false_0;
                         }
                     }
-                    tagname_free(&raw mut tn);
+                    drop(tag_files);
                     if st.stop_searching as ::core::ffi::c_int != 0
                         || st.linear as ::core::ffi::c_int != 0
                         || p_ic.get() == 0 && noic != 0

@@ -20,7 +20,7 @@ use crate::src::nvim::file_search::{
 };
 use crate::src::nvim::fileio::vim_fgets;
 use crate::src::nvim::fold::foldOpenCursor;
-use crate::src::nvim::garray::{ga_clear, ga_clear_strings, ga_grow, ga_init};
+use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::hashtab::hash_removed;
 use crate::src::nvim::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup};
@@ -59,8 +59,7 @@ use crate::src::nvim::os::libc::{
     memset, snprintf, strcasecmp, strcat, strcmp, strcpy, strlen, strncasecmp, strncmp, strstr,
 };
 use crate::src::nvim::path::{
-    FreeWild, FullName_save, path_full_compare, path_has_wildcard, path_tail, simplify_filename,
-    vim_isAbsName,
+    FreeWild, FullName_save, path_full_compare, path_has_wildcard, simplify_filename, vim_isAbsName,
 };
 use crate::src::nvim::pos::{MAXLNUM, clearpos};
 use crate::src::nvim::quickfix::set_errorlist;
@@ -76,8 +75,8 @@ use crate::src::nvim::types::{
     dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, garray_T, getf_retvalues,
     getf_values, hash_T, hashitem_T, hashtab_T, ht_stack_T, int64_t, linenr_T, list_T,
     list_stack_T, listitem_T, off_T, oparg_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T,
-    regprog_T, sctx_T, searchit_arg_T, size_t, taggy_T, tagname_T, typval_T, typval_vval_union,
-    uint8_t, uint64_t, varnumber_T, vimconv_T, win_T, xp_prefix_T,
+    regprog_T, searchit_arg_T, size_t, taggy_T, typval_T, typval_vval_union, uint8_t, uint64_t,
+    varnumber_T, vimconv_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::window::{
@@ -93,7 +92,7 @@ pub(crate) use self::parse::*;
 mod collect;
 pub(crate) use self::collect::*;
 mod tagfile;
-pub use self::tagfile::*;
+pub(crate) use self::tagfile::*;
 mod jump;
 pub(crate) use self::jump::*;
 mod list;
@@ -1053,7 +1052,6 @@ pub unsafe extern "C" fn tag_freematch() {
     let _ = *ptr_;
 }
 pub const ML_EXTRA: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-static tag_fnames: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

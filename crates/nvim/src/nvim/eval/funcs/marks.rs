@@ -2,7 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
-use super::{FAIL, MAXPATHL, NUL, OK, kListLenMayKnow, kListLenUnknown, tv_get_buf};
+use super::{FAIL, NUL, OK, kListLenMayKnow, kListLenUnknown, tv_get_buf};
 use crate::src::nvim::eval::typval::{
     tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc,
     tv_dict_alloc_ret, tv_get_number, tv_get_string, tv_get_string_chk, tv_list_alloc,
@@ -12,14 +12,13 @@ use crate::src::nvim::eval::typval::{
 use crate::src::nvim::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::src::nvim::main::{curbuf, curwin, emsg_off, vim_ignored};
 use crate::src::nvim::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks};
-use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::message::semsg;
 use crate::src::nvim::os::libc::gettext;
-use crate::src::nvim::tag::{get_tagfname, get_tags, get_tagstack, set_tagstack, tagname_free};
+use crate::src::nvim::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::src::nvim::types::{
-    EvalFuncData, buf_T, dict_T, list_T, pos_T, tagname_T, typval_T, varnumber_T, win_T,
+    EvalFuncData, buf_T, dict_T, list_T, pos_T, typval_T, varnumber_T, win_T,
 };
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// `changenr()` — the sequence number of the change the undo tree is at.
@@ -231,26 +230,14 @@ pub unsafe extern "C" fn f_tagfiles(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
-    // SAFETY: `rettv` is the cleared return value. `fname` is a
-    // `MAXPATHL` buffer the walker fills each round and is freed here;
-    // `tn` is a live local the walker owns until `tagname_free`.
+    // SAFETY: `rettv` is the cleared return value; each name the walk
+    // answers is NUL-terminated and lives until the next round.
     unsafe {
         let out = tv_list_alloc_ret(rettv, kListLenUnknown as isize);
-        let fname = xmalloc(MAXPATHL as usize).cast::<c_char>();
-        let mut tn = tagname_T {
-            tn_tags: ptr::null_mut(),
-            tn_np: ptr::null_mut(),
-            tn_did_filefind_init: 0,
-            tn_hf_idx: 0,
-            tn_search_ctx: ptr::null_mut(),
-        };
-        let mut first = true;
-        while get_tagfname(&raw mut tn, first as c_int, fname) == OK {
-            tv_list_append_string(out, fname, -1);
-            first = false;
+        let mut files = TagFiles::new();
+        while let Some(name) = files.next() {
+            tv_list_append_string(out, name.as_ptr(), -1);
         }
-        tagname_free(&raw mut tn);
-        xfree(fname.cast::<c_void>());
     }
 }
 

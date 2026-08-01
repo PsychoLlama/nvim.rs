@@ -154,6 +154,12 @@ impl Name {
         self.0.as_ptr().cast()
     }
 
+    /// For the C functions that rewrite a name in place. They only ever
+    /// shorten it, so [`truncate`](Name::truncate) puts the length back.
+    pub(crate) fn as_mut_ptr(&mut self) -> *mut c_char {
+        self.0.as_mut_ptr().cast()
+    }
+
     /// Forget everything from `at` on.
     pub(crate) fn truncate(&mut self, at: usize) {
         self.0.truncate(at);
