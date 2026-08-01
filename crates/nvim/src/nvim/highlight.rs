@@ -31,92 +31,16 @@ use crate::src::nvim::option::check_blending;
 use crate::src::nvim::os::libc::{gettext, memset, strcasecmp, strlen};
 use crate::src::nvim::popupmenu::pum_drawn;
 use crate::src::nvim::types::api::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
-pub use crate::src::nvim::types::{
-    __time_t, AdditionalData, AlignTextPos, Arena, ArenaMem, Array, BoolVarValue, Boolean,
-    BufUpdateCallbacks, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
-    ChangedtickDictItem, ColorItem, ColorKey, DecorExt, DecorHighlightInline, DecorInlineData,
-    DecorPriority, DecorProvider, DecorProvider_state as C2Rust_Unnamed_13, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Error, ErrorType, ExtmarkUndoObject, FieldHashfn,
-    FileID, Float, FloatAnchor, FloatRelative, GridView, HLGroupID, HlAttrs, HlEntry, HlKind,
-    Integer, Intersection, KeyDict_highlight, KeyDict_highlight_cterm, KeySetLink, KeyValuePair,
-    LuaRef, LuaRetMode, MHPutStatus, MTKey, MTNode, MTPos, Map_ColorKey_ColorItem, Map_int_ptr_t,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_int,
-    Map_uint64_t_ptr_t, MapHash, MarkTree, NS, Object, ObjectType, OptInt, OptionalKeys,
-    PackerBuffer, PackerBufferFlush, QUEUE, RemoteUI, RgbValue, ScopeDictDictItem, ScopeType,
-    ScreenGrid, Set_ColorKey, Set_HlEntry, Set_cstr_t, Set_int, Set_int64_t, Set_uint32_t,
-    Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_12, String_0, Terminal, Timestamp, VarLockStatus,
-    VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit,
-    WinStyle, Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
-    chunksize_T, colnr_T, consumed_blk, cstr_t, dict_T, dictvar_S, disptick_T, extmark_undo_vec_t,
-    fcs_chars_T, file_buffer, file_buffer_b_signcols as C2Rust_Unnamed_3,
-    file_buffer_b_wininfo as C2Rust_Unnamed_11, file_buffer_update_callbacks as C2Rust_Unnamed_0,
-    file_buffer_update_channels as C2Rust_Unnamed_1, float_T, fmark_T, fmarkv_T, frame_S, frame_T,
-    funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_6, funccall_T, garray_T, handle_T, hash_T,
-    hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, kObjectTypeBoolean,
-    kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_value_pair,
-    lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T,
-    llpos_T, lpos_T, mapblock, mapblock_T, match_T, matchitem, matchitem_T, memfile_T, memline_T,
-    mfdirty_T, mtnode_inner_s, mtnode_s, object, object_data as C2Rust_Unnamed, packer_buffer_t,
-    partial_S, partial_T, pos_T, pos_save_T, proftime_T, ptr_t, qf_info_S, qf_info_T, queue,
-    reg_extmatch_T, regmmatch_T, regprog, regprog_T, sattr_T, schar_T, scid_T, sctx_T, size_t,
-    syn_state, syn_state_sst_union as C2Rust_Unnamed_4, syn_time_T, synblock_T, synstate_T,
-    taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T, u_header,
-    u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_8, u_header_uh_alt_prev as C2Rust_Unnamed_7,
-    u_header_uh_next as C2Rust_Unnamed_10, u_header_uh_prev as C2Rust_Unnamed_9, ufunc_S, ufunc_T,
-    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, varnumber_T, virt_line, visualinfo_T,
-    win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
+use crate::src::nvim::types::{
+    Arena, Array, Boolean, ColorItem, ColorKey, DecorProvider, Dict, Error, HlAttrs, HlEntry,
+    HlKind, Integer, KeyDict_highlight, KeyDict_highlight_cterm, KeySetLink, KeyValuePair,
+    LuaRetMode, MHPutStatus, Map_ColorKey_ColorItem, Map_int_ptr_t, Map_uint64_t_int, MapHash, NS,
+    Object, OptInt, OptionalKeys, RemoteUI, RgbValue, Set_ColorKey, Set_HlEntry, Set_cstr_t,
+    Set_int, Set_uint64_t, String_0, cstr_t, int16_t, int32_t, int64_t, kObjectTypeBoolean,
+    kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, key_value_pair, object,
+    object_data as C2Rust_Unnamed, ptr_t, size_t, uint8_t, uint32_t, uint64_t, win_T,
 };
 use crate::src::nvim::ui::ui_call_hl_attr_define;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_12 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_12 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_12 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_12 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const kDecorProviderDisabled: C2Rust_Unnamed_13 = 4;
-pub const kDecorProviderRedrawDisabled: C2Rust_Unnamed_13 = 3;
-pub const kDecorProviderWinDisabled: C2Rust_Unnamed_13 = 2;
-pub const kDecorProviderActive: C2Rust_Unnamed_13 = 1;
 /// The attribute bits an `HlAttrs`' `rgb_ae_attr`/`cterm_ae_attr` carry.
 pub type HlAttrFlags = ::core::ffi::c_int;
 pub const HL_GLOBAL: HlAttrFlags = 16384;
@@ -142,81 +66,11 @@ pub const HL_BOLD: HlAttrFlags = 2;
 pub const HL_INVERSE: HlAttrFlags = 1;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const HLF_COUNT: C2Rust_Unnamed_15 = 76;
-pub const HLF_PRE: C2Rust_Unnamed_15 = 75;
-pub const HLF_OK: C2Rust_Unnamed_15 = 74;
-pub const HLF_SO: C2Rust_Unnamed_15 = 73;
-pub const HLF_SE: C2Rust_Unnamed_15 = 72;
-pub const HLF_TSNC: C2Rust_Unnamed_15 = 71;
-pub const HLF_TS: C2Rust_Unnamed_15 = 70;
-pub const HLF_BFOOTER: C2Rust_Unnamed_15 = 69;
-pub const HLF_BTITLE: C2Rust_Unnamed_15 = 68;
-pub const HLF_CU: C2Rust_Unnamed_15 = 67;
-pub const HLF_WBRNC: C2Rust_Unnamed_15 = 66;
-pub const HLF_WBR: C2Rust_Unnamed_15 = 65;
 pub const HLF_BORDER: C2Rust_Unnamed_15 = 64;
-pub const HLF_MSG: C2Rust_Unnamed_15 = 63;
 pub const HLF_NFLOAT: C2Rust_Unnamed_15 = 62;
-pub const HLF_MSGSEP: C2Rust_Unnamed_15 = 61;
 pub const HLF_INACTIVE: C2Rust_Unnamed_15 = 60;
-pub const HLF_0: C2Rust_Unnamed_15 = 59;
-pub const HLF_QFL: C2Rust_Unnamed_15 = 58;
-pub const HLF_MC: C2Rust_Unnamed_15 = 57;
-pub const HLF_CUL: C2Rust_Unnamed_15 = 56;
-pub const HLF_CUC: C2Rust_Unnamed_15 = 55;
-pub const HLF_TPF: C2Rust_Unnamed_15 = 54;
-pub const HLF_TPS: C2Rust_Unnamed_15 = 53;
-pub const HLF_TP: C2Rust_Unnamed_15 = 52;
-pub const HLF_PBR: C2Rust_Unnamed_15 = 51;
 pub const HLF_PST: C2Rust_Unnamed_15 = 50;
-pub const HLF_PSB: C2Rust_Unnamed_15 = 49;
-pub const HLF_PSX: C2Rust_Unnamed_15 = 48;
-pub const HLF_PNX: C2Rust_Unnamed_15 = 47;
-pub const HLF_PSK: C2Rust_Unnamed_15 = 46;
-pub const HLF_PNK: C2Rust_Unnamed_15 = 45;
-pub const HLF_PMSI: C2Rust_Unnamed_15 = 44;
-pub const HLF_PMNI: C2Rust_Unnamed_15 = 43;
-pub const HLF_PSI: C2Rust_Unnamed_15 = 42;
 pub const HLF_PNI: C2Rust_Unnamed_15 = 41;
-pub const HLF_SPL: C2Rust_Unnamed_15 = 40;
-pub const HLF_SPR: C2Rust_Unnamed_15 = 39;
-pub const HLF_SPC: C2Rust_Unnamed_15 = 38;
-pub const HLF_SPB: C2Rust_Unnamed_15 = 37;
-pub const HLF_CONCEAL: C2Rust_Unnamed_15 = 36;
-pub const HLF_SC: C2Rust_Unnamed_15 = 35;
-pub const HLF_TXA: C2Rust_Unnamed_15 = 34;
-pub const HLF_TXD: C2Rust_Unnamed_15 = 33;
-pub const HLF_DED: C2Rust_Unnamed_15 = 32;
-pub const HLF_CHD: C2Rust_Unnamed_15 = 31;
-pub const HLF_ADD: C2Rust_Unnamed_15 = 30;
-pub const HLF_FC: C2Rust_Unnamed_15 = 29;
-pub const HLF_FL: C2Rust_Unnamed_15 = 28;
-pub const HLF_WM: C2Rust_Unnamed_15 = 27;
-pub const HLF_W: C2Rust_Unnamed_15 = 26;
-pub const HLF_VNC: C2Rust_Unnamed_15 = 25;
-pub const HLF_V: C2Rust_Unnamed_15 = 24;
-pub const HLF_T: C2Rust_Unnamed_15 = 23;
-pub const HLF_VSP: C2Rust_Unnamed_15 = 22;
-pub const HLF_C: C2Rust_Unnamed_15 = 21;
-pub const HLF_SNC: C2Rust_Unnamed_15 = 20;
-pub const HLF_S: C2Rust_Unnamed_15 = 19;
-pub const HLF_R: C2Rust_Unnamed_15 = 18;
-pub const HLF_CLF: C2Rust_Unnamed_15 = 17;
-pub const HLF_CLS: C2Rust_Unnamed_15 = 16;
-pub const HLF_CLN: C2Rust_Unnamed_15 = 15;
-pub const HLF_LNB: C2Rust_Unnamed_15 = 14;
-pub const HLF_LNA: C2Rust_Unnamed_15 = 13;
-pub const HLF_N: C2Rust_Unnamed_15 = 12;
-pub const HLF_CM: C2Rust_Unnamed_15 = 11;
-pub const HLF_M: C2Rust_Unnamed_15 = 10;
-pub const HLF_LC: C2Rust_Unnamed_15 = 9;
-pub const HLF_L: C2Rust_Unnamed_15 = 8;
-pub const HLF_I: C2Rust_Unnamed_15 = 7;
-pub const HLF_E: C2Rust_Unnamed_15 = 6;
-pub const HLF_D: C2Rust_Unnamed_15 = 5;
-pub const HLF_AT: C2Rust_Unnamed_15 = 4;
-pub const HLF_TERM: C2Rust_Unnamed_15 = 3;
-pub const HLF_EOB: C2Rust_Unnamed_15 = 2;
-pub const HLF_8: C2Rust_Unnamed_15 = 1;
 pub const HLF_NONE: C2Rust_Unnamed_15 = 0;
 pub const kHlInvalid: HlKind = 7;
 pub const kHlBlendThrough: HlKind = 6;
@@ -228,12 +82,7 @@ pub const kHlUI: HlKind = 1;
 pub const kHlUnknown: HlKind = 0;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const HLATTRS_DICT_SIZE: C2Rust_Unnamed_16 = 24;
-pub const kMHNewKeyRealloc: MHPutStatus = 2;
-pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;
-pub const kRetMulti: LuaRetMode = 3;
-pub const kRetLuaref: LuaRetMode = 2;
-pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 pub type NSHlAttr = [::core::ffi::c_int; 76];
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
