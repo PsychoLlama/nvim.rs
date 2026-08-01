@@ -1,314 +1,312 @@
 //! The Vimscript and completion views of a tag.
 //!
-//! [`get_tags`] is `taglist()`: every match as a dictionary, built up by
-//! [`add_tag_field`] and [`get_tag_details`]. [`expand_tags`] is the
-//! command-line completion of tag names.
+//! [`get_tags`] is `taglist()`: every match as a dictionary, one entry per
+//! field of the tags line. [`expand_tags`] is the command-line completion
+//! of tag names, which reshapes each match in place into the three
+//! NUL-separated parts the completion display wants.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
-pub unsafe extern "C" fn expand_tags(
-    mut tagnames: bool,
-    mut pat: *mut ::core::ffi::c_char,
-    mut num_file: *mut ::core::ffi::c_int,
-    mut file: *mut *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// A field's value is copied into a buffer this big; anything longer is
+/// truncated, as upstream truncates it.
+const MAXPATHL: usize = super::MAXPATHL as usize;
+
+/// Command-line completion of tag names.
+///
+/// With `tagnames`, the matches are bare names (`:tag <Tab>`). Otherwise
+/// each match is rewritten in place as `<name>NUL<kind>NUL<file name>NUL`,
+/// which is the form the completion menu displays and matches against.
+///
+/// # Safety
+/// `pat` must be NUL-terminated, and the two out-parameters must be
+/// writable.
+pub unsafe fn expand_tags(
+    tagnames: bool,
+    pat: *mut c_char,
+    num_file: *mut c_int,
+    file: *mut *mut *mut c_char,
+) -> c_int {
+    // SAFETY: the caller's promise; `find_tags` fills both out-parameters,
+    // and the matches it answers are ours to rewrite and free.
     unsafe {
-        let mut name_buf_size: size_t = 100 as size_t;
-        let mut ret: ::core::ffi::c_int = 0;
-        let mut name_buf: *mut ::core::ffi::c_char =
-            xmalloc(name_buf_size) as *mut ::core::ffi::c_char;
-        let mut extra_flag: ::core::ffi::c_int = if tagnames as ::core::ffi::c_int != 0 {
-            TAG_NAMES as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        };
-        if *pat.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '/' as ::core::ffi::c_int
-        {
-            ret = find_tags(
-                pat.offset(1 as ::core::ffi::c_int as isize),
-                num_file,
-                file,
-                TAG_REGEXP as ::core::ffi::c_int
-                    | extra_flag
-                    | TAG_VERBOSE as ::core::ffi::c_int
-                    | TAG_NO_TAGFUNC as ::core::ffi::c_int,
-                TAG_MANY as ::core::ffi::c_int,
-                (*curbuf.get()).b_ffname,
-            );
-        } else {
-            ret = find_tags(
-                pat,
-                num_file,
-                file,
-                TAG_REGEXP as ::core::ffi::c_int
-                    | extra_flag
-                    | TAG_VERBOSE as ::core::ffi::c_int
-                    | TAG_NO_TAGFUNC as ::core::ffi::c_int
-                    | TAG_NOIC as ::core::ffi::c_int,
-                TAG_MANY as ::core::ffi::c_int,
-                (*curbuf.get()).b_ffname,
-            );
+        let mut flags = (TAG_REGEXP | TAG_VERBOSE | TAG_NO_TAGFUNC) as c_int;
+        if tagnames {
+            flags |= TAG_NAMES as c_int;
         }
+        // A leading '/' asks for the rest to be read as a regexp; without
+        // one the pattern is a literal name, and case is then not folded.
+        let pat = if *pat == b'/' as c_char {
+            pat.add(1)
+        } else {
+            flags |= TAG_NOIC as c_int;
+            pat
+        };
+
+        let ret = find_tags(
+            pat,
+            num_file,
+            file,
+            flags,
+            TAG_MANY as c_int,
+            (*curbuf.get()).b_ffname,
+        );
         if ret == OK && !tagnames {
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < *num_file {
-                let mut t_p: TagParts = TagParts::default();
-                parse_match(*(*file).offset(i as isize), &mut t_p);
-                let mut len: size_t = t_p.tagname_end.offset_from(t_p.tagname) as size_t;
-                if len > name_buf_size.wrapping_sub(3 as size_t) {
-                    name_buf_size = len.wrapping_add(3 as size_t);
-                    let mut buf: *mut ::core::ffi::c_char =
-                        xrealloc(name_buf as *mut ::core::ffi::c_void, name_buf_size)
-                            as *mut ::core::ffi::c_char;
-                    name_buf = buf;
-                }
-                memmove(
-                    name_buf as *mut ::core::ffi::c_void,
-                    t_p.tagname as *const ::core::ffi::c_void,
-                    len,
-                );
-                let c2rust_fresh14 = len;
-                len = len.wrapping_add(1);
-                *name_buf.offset(c2rust_fresh14 as isize) = 0 as ::core::ffi::c_char;
-                let c2rust_fresh15 = len;
-                len = len.wrapping_add(1);
-                *name_buf.offset(c2rust_fresh15 as isize) =
-                    (if !t_p.tagkind.is_null() && *t_p.tagkind as ::core::ffi::c_int != 0 {
-                        *t_p.tagkind as ::core::ffi::c_int
-                    } else {
-                        'f' as ::core::ffi::c_int
-                    }) as ::core::ffi::c_char;
-                let c2rust_fresh16 = len;
-                len = len.wrapping_add(1);
-                *name_buf.offset(c2rust_fresh16 as isize) = 0 as ::core::ffi::c_char;
-                memmove(
-                    (*(*file).offset(i as isize)).offset(len as isize) as *mut ::core::ffi::c_void,
-                    t_p.fname as *const ::core::ffi::c_void,
-                    t_p.fname_end.offset_from(t_p.fname) as size_t,
-                );
-                *(*(*file).offset(i as isize)).offset(
-                    len.wrapping_add(t_p.fname_end.offset_from(t_p.fname) as size_t) as isize,
-                ) = 0 as ::core::ffi::c_char;
-                memmove(
-                    *(*file).offset(i as isize) as *mut ::core::ffi::c_void,
-                    name_buf as *const ::core::ffi::c_void,
-                    len,
-                );
-                i += 1;
+            for i in 0..*num_file as usize {
+                reshape_match(*(*file).add(i));
             }
         }
-        xfree(name_buf as *mut ::core::ffi::c_void);
-        return ret;
+        ret
     }
 }
 
-pub(crate) unsafe extern "C" fn add_tag_field(
-    mut dict: *mut dict_T,
-    mut field_name: *const ::core::ffi::c_char,
-    mut start: *const ::core::ffi::c_char,
-    mut end: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// Rewrite one match in place as `<name>NUL<kind>NUL<file name>NUL`.
+///
+/// What replaces the match is built out of the match itself, and its tags
+/// file name and command are dropped, so it always fits.
+///
+/// # Safety
+/// `entry` must be a match [`find_tags`] answered, and ours to write.
+unsafe fn reshape_match(entry: *mut c_char) {
+    // SAFETY: the caller's promise. The two moves may overlap, which is
+    // why they are `copy` and not `copy_nonoverlapping`.
     unsafe {
-        if !tv_dict_find(dict, field_name, -1 as ptrdiff_t).is_null() {
-            if p_verbose.get() > 0 as OptInt {
+        let mut parts = TagParts::default();
+        if !parse_match(entry, &mut parts) {
+            // Not a tag line at all; upstream reads uninitialised pointers
+            // here. Leaving it alone is the same answer without the crash.
+            return;
+        }
+
+        // Built before anything is written, because it is read out of the
+        // match itself.
+        let name_len = parts.tagname_end.offset_from(parts.tagname) as usize;
+        let mut head = Vec::with_capacity(name_len + 3);
+        head.extend_from_slice(core::slice::from_raw_parts(parts.tagname, name_len));
+        head.push(0);
+        // A match with no kind of its own is reported as a function.
+        head.push(if !parts.tagkind.is_null() && *parts.tagkind != 0 {
+            *parts.tagkind
+        } else {
+            b'f' as c_char
+        });
+        head.push(0);
+
+        let fname_len = parts.fname_end.offset_from(parts.fname) as usize;
+        ptr::copy(parts.fname, entry.add(head.len()), fname_len);
+        *entry.add(head.len() + fname_len) = 0;
+        ptr::copy(head.as_ptr(), entry, head.len());
+    }
+}
+
+/// `taglist()` — append a dictionary per match of `pat` to `list`.
+///
+/// `buf_fname` names the buffer whose matches sort first, or is NULL.
+/// Answers `OK`, or `FAIL` when a field could not be recorded.
+///
+/// # Safety
+/// `list` must be live and `pat` NUL-terminated.
+pub unsafe fn get_tags(list: *mut list_T, pat: *mut c_char, buf_fname: *mut c_char) -> c_int {
+    // SAFETY: the caller's promise; `find_tags` fills both locals, and the
+    // matches it answers become ours.
+    unsafe {
+        let mut num_matches = 0;
+        let mut matches = ptr::null_mut::<*mut c_char>();
+        let mut ret = find_tags(
+            pat,
+            &raw mut num_matches,
+            &raw mut matches,
+            (TAG_REGEXP | TAG_NOIC) as c_int,
+            MAXCOL as c_int,
+            buf_fname,
+        );
+        if ret != OK || num_matches <= 0 {
+            return ret;
+        }
+
+        for i in 0..num_matches as usize {
+            let entry = *matches.add(i);
+            if !describe_match(list, entry) {
+                ret = FAIL;
+            }
+            xfree(entry.cast());
+        }
+        xfree(matches.cast());
+        ret
+    }
+}
+
+/// Append one match to `list` as a dictionary.
+///
+/// Answers `false` only when a field could not be recorded. A match that
+/// is not a tag line, or is one of a tags file's own `!_TAG_` header
+/// lines, is silently passed over.
+///
+/// # Safety
+/// `list` must be live and `entry` must be a match [`find_tags`] answered.
+unsafe fn describe_match(list: *mut list_T, entry: *mut c_char) -> bool {
+    // SAFETY: the caller's promise. Everything written into the dict is
+    // copied out of the match, which outlives the call.
+    unsafe {
+        let mut tp = TagParts::default();
+        if !parse_match(entry, &mut tp) {
+            return true;
+        }
+        let is_static = test_for_static(&tp);
+        if strncmp(tp.tagname, c"!_TAG_".as_ptr(), 6) == 0 {
+            // A pseudo-tag line: the file's own metadata, not a tag.
+            return true;
+        }
+
+        let dict = tv_dict_alloc();
+        tv_list_append_dict(list, dict);
+
+        // Short-circuiting is upstream's: once one field fails, the rest
+        // of these are not tried.
+        let full_fname = tag_full_fname(&tp);
+        let mut ok = add_tag_field(dict, c"name".as_ptr(), tp.tagname, tp.tagname_end) == OK
+            && add_tag_field(dict, c"filename".as_ptr(), full_fname, ptr::null()) == OK
+            && add_tag_field(dict, c"cmd".as_ptr(), tp.command, tp.command_end) == OK
+            && add_tag_field(
+                dict,
+                c"kind".as_ptr(),
+                tp.tagkind,
+                if tp.tagkind.is_null() {
+                    ptr::null()
+                } else {
+                    tp.tagkind_end
+                },
+            ) == OK
+            && tv_dict_add_nr(
+                dict,
+                c"static".as_ptr(),
+                c"static".count_bytes(),
+                is_static as varnumber_T,
+            ) == OK;
+        xfree(full_fname.cast());
+
+        ok &= add_extra_fields(dict, &tp);
+        ok
+    }
+}
+
+/// Record the `field:value` pairs after a tag's command as dict entries.
+///
+/// The kind and the `file:` marker are passed over: both are already
+/// reported under their own keys.
+///
+/// # Safety
+/// `dict` must be live and `tp` must describe a live match.
+unsafe fn add_extra_fields(dict: *mut dict_T, tp: &TagParts) -> bool {
+    if tp.command_end.is_null() {
+        return true;
+    }
+    let mut ok = true;
+    // SAFETY: the caller's promise; every scan stops at the terminator,
+    // and the NUL written over a field name's colon is put back.
+    unsafe {
+        // Past the `;"` and the separator after it.
+        let mut p = tp.command_end.wrapping_add(3);
+        while !matches!(*p as u8, 0 | b'\n' | b'\r') {
+            if p == tp.tagkind
+                || (p.wrapping_add(5) == tp.tagkind && strncmp(p, c"kind:".as_ptr(), 5) == 0)
+            {
+                // "kind:<kind>" or a bare "<kind>": already reported.
+                p = tp.tagkind_end.sub(1);
+            } else if strncmp(p, c"file:".as_ptr(), 5) == 0 {
+                // The static-tag marker, already reported.
+                p = p.add(4);
+            } else if !ascii_iswhite(*p as c_int) {
+                let name = p;
+                // The field name, read through a *signed* char: a byte
+                // above 0x7f reads negative and ends the name. The value
+                // below is read unsigned; the two really do differ.
+                while *p != 0
+                    && (*p as c_int) >= b' ' as c_int
+                    && (*p as c_int) < 127
+                    && *p != b':' as c_char
+                {
+                    p = p.add(1);
+                }
+                let len = p.offset_from(name) as usize;
+                if *p == b':' as c_char && len > 0 {
+                    p = p.add(1);
+                    let value = p;
+                    while *p != 0 && *p as u8 >= b' ' {
+                        p = p.add(1);
+                    }
+                    // Terminate the name for the call, then put the colon
+                    // back: the match is read on for the next field.
+                    let colon = *name.add(len);
+                    *name.add(len) = 0;
+                    if add_tag_field(dict, name, value, p) != OK {
+                        ok = false;
+                    }
+                    *name.add(len) = colon;
+                } else {
+                    // A field with no colon: pass over its text.
+                    while *p != 0 && *p as u8 >= b' ' {
+                        p = p.add(1);
+                    }
+                }
+                if *p == 0 {
+                    break;
+                }
+            }
+            p = p.add(utfc_ptr2len(p) as usize);
+        }
+    }
+    ok
+}
+
+/// Add one field of a tag to the dictionary describing it.
+///
+/// `start` and `end` bracket the value; a NULL `end` means "to the end of
+/// the string", less any trailing CR/NL. A NULL `start` records an empty
+/// value. Answers `OK` or `FAIL`.
+///
+/// # Safety
+/// `dict` must be live, `field_name` NUL-terminated, and `start` either
+/// NULL or a readable string reaching `end`.
+unsafe fn add_tag_field(
+    dict: *mut dict_T,
+    field_name: *const c_char,
+    start: *const c_char,
+    end: *const c_char,
+) -> c_int {
+    // SAFETY: the caller's promise.
+    unsafe {
+        // A dictionary holds one value per key, so a field name the tags
+        // line repeats is dropped rather than replacing the first.
+        if !tv_dict_find(dict, field_name, -1).is_null() {
+            if p_verbose.get() > 0 {
                 verbose_enter();
-                smsg(
-                    0 as ::core::ffi::c_int,
-                    gettext(b"Duplicate field name: %s\0".as_ptr() as *const ::core::ffi::c_char),
-                    field_name,
-                );
+                smsg(0, gettext(c"Duplicate field name: %s".as_ptr()), field_name);
                 verbose_leave();
             }
             return FAIL;
         }
-        let mut len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut buf: *mut ::core::ffi::c_char =
-            xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-        if !start.is_null() {
-            if end.is_null() {
-                end = start.offset(strlen(start) as isize);
-                while end > start
-                    && (*end.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '\r' as ::core::ffi::c_int
-                        || *end.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            == '\n' as ::core::ffi::c_int)
-                {
-                    end = end.offset(-1);
-                }
-            }
-            len = if (end.offset_from(start) as ::core::ffi::c_int)
-                < 4096 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-            {
-                end.offset_from(start) as ::core::ffi::c_int
-            } else {
-                4096 as ::core::ffi::c_int - 1 as ::core::ffi::c_int
-            };
-            xmemcpyz(
-                buf as *mut ::core::ffi::c_void,
-                start as *const ::core::ffi::c_void,
-                len as size_t,
-            );
-        }
-        *buf.offset(len as isize) = NUL as ::core::ffi::c_char;
-        let mut retval: ::core::ffi::c_int =
-            tv_dict_add_str(dict, field_name, strlen(field_name), buf);
-        xfree(buf as *mut ::core::ffi::c_void);
-        return retval;
-    }
-}
 
-pub unsafe extern "C" fn get_tags(
-    mut list: *mut list_T,
-    mut pat: *mut ::core::ffi::c_char,
-    mut buf_fname: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut num_matches: ::core::ffi::c_int = 0;
-        let mut matches: *mut *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        let mut tp: TagParts = TagParts::default();
-        let mut ret: ::core::ffi::c_int = find_tags(
-            pat,
-            &raw mut num_matches,
-            &raw mut matches,
-            TAG_REGEXP as ::core::ffi::c_int | TAG_NOIC as ::core::ffi::c_int,
-            MAXCOL as ::core::ffi::c_int,
-            buf_fname,
-        );
-        if ret != OK || num_matches <= 0 as ::core::ffi::c_int {
-            return ret;
-        }
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < num_matches {
-            if !parse_match(*matches.offset(i as isize), &mut tp) {
-                xfree(*matches.offset(i as isize) as *mut ::core::ffi::c_void);
-            } else {
-                let mut is_static: bool = test_for_static(&mut tp);
-                if strncmp(
-                    tp.tagname,
-                    b"!_TAG_\0".as_ptr() as *const ::core::ffi::c_char,
-                    6 as size_t,
-                ) == 0 as ::core::ffi::c_int
-                {
-                    xfree(*matches.offset(i as isize) as *mut ::core::ffi::c_void);
-                } else {
-                    let mut dict: *mut dict_T = tv_dict_alloc();
-                    tv_list_append_dict(list, dict);
-                    let mut full_fname: *mut ::core::ffi::c_char = tag_full_fname(&mut tp);
-                    if add_tag_field(
-                        dict,
-                        b"name\0".as_ptr() as *const ::core::ffi::c_char,
-                        tp.tagname,
-                        tp.tagname_end,
-                    ) == FAIL
-                        || add_tag_field(
-                            dict,
-                            b"filename\0".as_ptr() as *const ::core::ffi::c_char,
-                            full_fname,
-                            ::core::ptr::null::<::core::ffi::c_char>(),
-                        ) == FAIL
-                        || add_tag_field(
-                            dict,
-                            b"cmd\0".as_ptr() as *const ::core::ffi::c_char,
-                            tp.command,
-                            tp.command_end,
-                        ) == FAIL
-                        || add_tag_field(
-                            dict,
-                            b"kind\0".as_ptr() as *const ::core::ffi::c_char,
-                            tp.tagkind,
-                            if !tp.tagkind.is_null() {
-                                tp.tagkind_end
-                            } else {
-                                ::core::ptr::null_mut::<::core::ffi::c_char>()
-                            },
-                        ) == FAIL
-                        || tv_dict_add_nr(
-                            dict,
-                            b"static\0".as_ptr() as *const ::core::ffi::c_char,
-                            ::core::mem::size_of::<[::core::ffi::c_char; 7]>()
-                                .wrapping_sub(1 as size_t),
-                            is_static as varnumber_T,
-                        ) == FAIL
-                    {
-                        ret = FAIL;
-                    }
-                    xfree(full_fname as *mut ::core::ffi::c_void);
-                    if !tp.command_end.is_null() {
-                        let mut p: *mut ::core::ffi::c_char =
-                            tp.command_end.offset(3 as ::core::ffi::c_int as isize);
-                        while *p as ::core::ffi::c_int != NUL
-                            && *p as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
-                            && *p as ::core::ffi::c_int != '\r' as ::core::ffi::c_int
-                        {
-                            if p == tp.tagkind
-                                || p.offset(5 as ::core::ffi::c_int as isize) == tp.tagkind
-                                    && strncmp(
-                                        p,
-                                        b"kind:\0".as_ptr() as *const ::core::ffi::c_char,
-                                        5 as size_t,
-                                    ) == 0 as ::core::ffi::c_int
-                            {
-                                p = tp.tagkind_end.offset(-(1 as ::core::ffi::c_int as isize));
-                            } else if strncmp(
-                                p,
-                                b"file:\0".as_ptr() as *const ::core::ffi::c_char,
-                                5 as size_t,
-                            ) == 0 as ::core::ffi::c_int
-                            {
-                                p = p.offset(4 as ::core::ffi::c_int as isize);
-                            } else if !ascii_iswhite(*p as ::core::ffi::c_int) {
-                                let mut len: ::core::ffi::c_int = 0;
-                                let mut n: *mut ::core::ffi::c_char = p;
-                                while *p as ::core::ffi::c_int != NUL
-                                    && *p as ::core::ffi::c_int >= ' ' as ::core::ffi::c_int
-                                    && (*p as ::core::ffi::c_int) < 127 as ::core::ffi::c_int
-                                    && *p as ::core::ffi::c_int != ':' as ::core::ffi::c_int
-                                {
-                                    p = p.offset(1);
-                                }
-                                len = p.offset_from(n) as ::core::ffi::c_int;
-                                if *p as ::core::ffi::c_int == ':' as ::core::ffi::c_int
-                                    && len > 0 as ::core::ffi::c_int
-                                {
-                                    p = p.offset(1);
-                                    let mut s: *mut ::core::ffi::c_char = p;
-                                    while *p as ::core::ffi::c_int != NUL
-                                        && *p as uint8_t as ::core::ffi::c_int
-                                            >= ' ' as ::core::ffi::c_int
-                                    {
-                                        p = p.offset(1);
-                                    }
-                                    *n.offset(len as isize) = NUL as ::core::ffi::c_char;
-                                    if add_tag_field(dict, n, s, p) == FAIL {
-                                        ret = FAIL;
-                                    }
-                                    *n.offset(len as isize) = ':' as ::core::ffi::c_char;
-                                } else {
-                                    while *p as ::core::ffi::c_int != NUL
-                                        && *p as uint8_t as ::core::ffi::c_int
-                                            >= ' ' as ::core::ffi::c_int
-                                    {
-                                        p = p.offset(1);
-                                    }
-                                }
-                                if *p as ::core::ffi::c_int == NUL {
-                                    break;
-                                }
-                            }
-                            p = p.offset(utfc_ptr2len(p) as isize);
-                        }
-                    }
-                    xfree(*matches.offset(i as isize) as *mut ::core::ffi::c_void);
+        let mut value = Vec::with_capacity(MAXPATHL);
+        if !start.is_null() {
+            let end = if end.is_null() {
+                // Only an unbracketed value has its line ending trimmed.
+                let mut end = start.add(strlen(start));
+                while end > start && matches!(*end.sub(1) as u8, b'\r' | b'\n') {
+                    end = end.sub(1);
                 }
-            }
-            i += 1;
+                end
+            } else {
+                end
+            };
+            let len = (end.offset_from(start) as usize).min(MAXPATHL - 1);
+            value.extend_from_slice(core::slice::from_raw_parts(start, len));
         }
-        xfree(matches as *mut ::core::ffi::c_void);
-        return ret;
+        value.push(0);
+        tv_dict_add_str(dict, field_name, strlen(field_name), value.as_ptr())
     }
 }

@@ -474,7 +474,7 @@
     "crates/nvim/src/nvim/tag/jump.rs": {"unsafe": 24},
     "crates/nvim/src/nvim/tag/list.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/tag/parse.rs": {"unsafe": 9},
-    "crates/nvim/src/nvim/tag/query.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/tag/query.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/tag/scan.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/tag/stack.rs": {"unsafe": 20},
     "crates/nvim/src/nvim/tag/tagfile.rs": {"unsafe": 10},
