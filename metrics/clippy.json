@@ -123,7 +123,6 @@
     "crates/nvim/src/nvim/path/names.rs": 3,
     "crates/nvim/src/nvim/popupmenu.rs": 30,
     "crates/nvim/src/nvim/profile.rs": 7,
-    "crates/nvim/src/nvim/quickfix.rs": 3,
     "crates/nvim/src/nvim/quickfix/parse.rs": 1,
     "crates/nvim/src/nvim/quickfix/read.rs": 1,
     "crates/nvim/src/nvim/regexp/nfa/list.rs": 1,

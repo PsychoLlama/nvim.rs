@@ -453,7 +453,7 @@ pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
         if errornr > 0 {
             qf_jump(qi, 0, errornr, false as c_int);
         } else {
-            emsg(gettext(e_no_more_items.get()));
+            emsg(gettext(E_NO_MORE_ITEMS.as_ptr()));
         }
     }
 }

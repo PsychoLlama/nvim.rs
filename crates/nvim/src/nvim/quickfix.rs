@@ -1,3 +1,19 @@
+//! The quickfix and location list stacks.
+//!
+//! A `qf_info_T` is a stack of up to ten `qf_list_T`s; a list is a chain of
+//! `qfline_T` entries. There is one quickfix stack for the editor and one
+//! location list stack per window. This file holds the glue — the constant
+//! families and the shared statics — and the children hold the work:
+//!
+//! - Building a list: `efm` compiles `'errorformat'`, `parse` applies it to
+//!   a line, `read` drives the whole read, `list` and `entry` own the
+//!   entries, `stack` owns the stacks.
+//! - The commands that build one: `cmds` (`:cfile`/`:cbuffer`/`:cexpr`),
+//!   `make` (`:make`/`:grep`), `vimgrep` with `dummy`, and `helpgrep`.
+//! - Using a list: `navigate` picks an entry, `jump` and `switchbuf` go
+//!   there, `display` and `window` with `fill` show it.
+//! - Vimscript: `getprops`, `setprops` and the `eval` bridges.
+
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::arglist::get_arglist_exp;
 use crate::src::nvim::ascii::ascii_iswhite;
@@ -105,13 +121,13 @@ use crate::src::nvim::search::{
 use crate::src::nvim::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::builders::static_cstring;
 use crate::src::nvim::types::{
-    CMD_index, Callback, Callback_data as C2Rust_Unnamed_6, DirStack, Direction, EvalFuncData,
-    ExtmarkOp, FILE, FileInfo, ListLenSpecials, OptInt, OptVal, OptValData, OptValType,
-    QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, TriState, VarLockStatus, VarType, aco_save_T,
-    bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, dictitem_T,
-    dobuf_action_values, exarg_T, getf_values, handle_T, linenr_T, list_T, listitem_T, optset_T,
-    pos_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T,
-    regprog_T, scid_T, size_t, time_t, typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
+    CMD_index, Callback, Callback_data, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE,
+    FileInfo, ListLenSpecials, OptInt, OptVal, OptValData, OptValType, QFLT_INTERNAL,
+    QFLT_LOCATION, QFLT_QUICKFIX, TriState, VarLockStatus, VarType, aco_save_T, bln_values, buf_T,
+    bufref_T, cleanup_T, cmdidx_T, colnr_T, dict_T, dictitem_T, dobuf_action_values, exarg_T,
+    getf_values, handle_T, linenr_T, list_T, listitem_T, optset_T, pos_T, ptrdiff_t, qf_info_T,
+    qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T, regprog_T, scid_T, size_t, time_t,
+    typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::u_clearallandblockfree;
@@ -120,6 +136,7 @@ use crate::src::nvim::window::{
     win_split,
 };
 use crate::src::nvim::window::{goto_tabpage_win, win_close, win_enter, win_goto, win_valid};
+use core::ffi::{CStr, c_int, c_uint};
 
 // The carve of the transpiled module; see each child's docs.
 mod efm;
@@ -172,7 +189,6 @@ pub const VAR_STRING: VarType = 2;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const kDirectionNotSet: Direction = 0;
 pub const CMD_vimgrep: CMD_index = 510;
 pub const CMD_vimgrepadd: CMD_index = 511;
 pub const CMD_lvimgrep: CMD_index = 267;
@@ -236,13 +252,10 @@ pub const CMD_caddbuffer: CMD_index = 49;
 pub const CMD_cabove: CMD_index = 48;
 pub const CMD_cNfile: CMD_index = 45;
 pub const CMD_cNext: CMD_index = 44;
-pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const CMOD_HIDE: C2Rust_Unnamed_16 = 32;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const HLF_QFL: C2Rust_Unnamed_17 = 58;
-pub const HLF_N: C2Rust_Unnamed_17 = 12;
-pub const HLF_D: C2Rust_Unnamed_17 = 5;
+pub const CMOD_HIDE: c_uint = 32;
+pub const HLF_QFL: c_uint = 58;
+pub const HLF_N: c_uint = 12;
+pub const HLF_D: c_uint = 5;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
@@ -252,126 +265,79 @@ pub const BLN_NOOPT: bln_values = 16;
 pub const BLN_DUMMY: bln_values = 4;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const SHM_OVERALL: C2Rust_Unnamed_20 = 79;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const BL_FIX: C2Rust_Unnamed_22 = 4;
-pub const BL_WHITE: C2Rust_Unnamed_22 = 1;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const CONV_NONE: C2Rust_Unnamed_23 = 0;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const ECMD_NOWINENTER: C2Rust_Unnamed_24 = 64;
-pub const ECMD_OLDBUF: C2Rust_Unnamed_24 = 4;
-pub const ECMD_SET_HELP: C2Rust_Unnamed_24 = 2;
-pub const ECMD_HIDE: C2Rust_Unnamed_24 = 1;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_int;
-pub const ECMD_ONE: C2Rust_Unnamed_25 = 1;
-pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
-pub const READ_DUMMY: C2Rust_Unnamed_26 = 16;
-pub const READ_NEW: C2Rust_Unnamed_26 = 1;
-pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const FUZZY_MATCH_MAX_LEN: C2Rust_Unnamed_27 = 1024;
-pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
-pub const BCO_NOHELP: C2Rust_Unnamed_28 = 4;
-pub const BCO_ENTER: C2Rust_Unnamed_28 = 1;
-pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub const OPT_NOWIN: C2Rust_Unnamed_29 = 16;
-pub const OPT_LOCAL: C2Rust_Unnamed_29 = 2;
-pub type C2Rust_Unnamed_30 = ::core::ffi::c_uint;
-pub const EW_SILENT: C2Rust_Unnamed_30 = 32;
-pub const EW_FILE: C2Rust_Unnamed_30 = 2;
-pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
-pub const VGR_FUZZY: C2Rust_Unnamed_31 = 4;
-pub const VGR_NOJUMP: C2Rust_Unnamed_31 = 2;
-pub const VGR_GLOBAL: C2Rust_Unnamed_31 = 1;
-pub const QF_FAIL: C2Rust_Unnamed_34 = 0;
-pub const QF_OK: C2Rust_Unnamed_34 = 1;
-pub const QF_END_OF_INPUT: C2Rust_Unnamed_34 = 2;
-pub const QF_IGNORE_LINE: C2Rust_Unnamed_34 = 4;
-pub const QF_MULTISCAN: C2Rust_Unnamed_34 = 5;
-pub const QF_NOMEM: C2Rust_Unnamed_34 = 3;
-pub const QF_ABORT: C2Rust_Unnamed_34 = 6;
-pub const WSP_ABOVE: C2Rust_Unnamed_33 = 128;
-pub const WSP_NEWLOC: C2Rust_Unnamed_33 = 256;
-pub const WSP_HELP: C2Rust_Unnamed_33 = 32;
-pub const WSP_TOP: C2Rust_Unnamed_33 = 8;
-pub const SEARCH_KEEP: C2Rust_Unnamed_32 = 1024;
-pub const WSP_QUICKFIX: C2Rust_Unnamed_33 = 1024;
-pub const WSP_BELOW: C2Rust_Unnamed_33 = 64;
-pub const WSP_BOT: C2Rust_Unnamed_33 = 16;
-pub const WSP_VERT: C2Rust_Unnamed_33 = 2;
-pub const QF_WINHEIGHT: C2Rust_Unnamed_35 = 10;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct vgr_args_T {
-    pub tomatch: ::core::ffi::c_int,
-    pub spat: *mut ::core::ffi::c_char,
-    pub flags: ::core::ffi::c_int,
-    pub fnames: *mut *mut ::core::ffi::c_char,
-    pub fcount: ::core::ffi::c_int,
-    pub regmatch: regmmatch_T,
-    pub qf_title: *mut ::core::ffi::c_char,
-}
-pub const QF_GETLIST_QFTF: C2Rust_Unnamed_36 = 2048;
-pub const QF_GETLIST_NONE: C2Rust_Unnamed_36 = 0;
-pub const QF_GETLIST_QFBUFNR: C2Rust_Unnamed_36 = 1024;
-pub const QF_GETLIST_FILEWINID: C2Rust_Unnamed_36 = 512;
-pub const QF_GETLIST_TICK: C2Rust_Unnamed_36 = 256;
-pub const QF_GETLIST_SIZE: C2Rust_Unnamed_36 = 128;
-pub const QF_GETLIST_IDX: C2Rust_Unnamed_36 = 64;
-pub const QF_GETLIST_ITEMS: C2Rust_Unnamed_36 = 2;
-pub const QF_GETLIST_ID: C2Rust_Unnamed_36 = 32;
-pub const QF_GETLIST_CONTEXT: C2Rust_Unnamed_36 = 16;
-pub const QF_GETLIST_WINID: C2Rust_Unnamed_36 = 8;
-pub const QF_GETLIST_NR: C2Rust_Unnamed_36 = 4;
-pub const QF_GETLIST_TITLE: C2Rust_Unnamed_36 = 1;
-pub const QF_GETLIST_ALL: C2Rust_Unnamed_36 = 4095;
-pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
-pub const CMDBUFFSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const INVALID_QFIDX: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const INVALID_QFBUFNR: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static e_no_more_items: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(b"E553: No more items\0".as_ptr() as *const ::core::ffi::c_char);
-static e_current_quickfix_list_was_changed: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(
-        b"E925: Current quickfix list was changed\0".as_ptr() as *const ::core::ffi::c_char
-    );
-static e_current_location_list_was_changed: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(
-        b"E926: Current location list was changed\0".as_ptr() as *const ::core::ffi::c_char
-    );
+pub const SHM_OVERALL: c_uint = 79;
+pub const BL_FIX: c_uint = 4;
+pub const BL_WHITE: c_uint = 1;
+pub const CONV_NONE: c_uint = 0;
+pub const ECMD_NOWINENTER: c_uint = 64;
+pub const ECMD_OLDBUF: c_uint = 4;
+pub const ECMD_SET_HELP: c_uint = 2;
+pub const ECMD_HIDE: c_uint = 1;
+pub const ECMD_ONE: c_int = 1;
+pub const READ_DUMMY: c_uint = 16;
+pub const READ_NEW: c_uint = 1;
+pub const FUZZY_MATCH_MAX_LEN: c_uint = 1024;
+pub const BCO_NOHELP: c_uint = 4;
+pub const BCO_ENTER: c_uint = 1;
+pub const OPT_NOWIN: c_uint = 16;
+pub const OPT_LOCAL: c_uint = 2;
+pub const EW_SILENT: c_uint = 32;
+pub const EW_FILE: c_uint = 2;
+pub const VGR_FUZZY: c_uint = 4;
+pub const VGR_NOJUMP: c_uint = 2;
+pub const VGR_GLOBAL: c_uint = 1;
+pub const WSP_ABOVE: c_uint = 128;
+pub const WSP_NEWLOC: c_uint = 256;
+pub const WSP_HELP: c_uint = 32;
+pub const WSP_TOP: c_uint = 8;
+pub const SEARCH_KEEP: c_uint = 1024;
+pub const WSP_QUICKFIX: c_uint = 1024;
+pub const WSP_BELOW: c_uint = 64;
+pub const WSP_BOT: c_uint = 16;
+pub const WSP_VERT: c_uint = 2;
+pub const QF_WINHEIGHT: c_uint = 10;
+pub const QF_GETLIST_QFTF: c_uint = 2048;
+pub const QF_GETLIST_NONE: c_uint = 0;
+pub const QF_GETLIST_QFBUFNR: c_uint = 1024;
+pub const QF_GETLIST_FILEWINID: c_uint = 512;
+pub const QF_GETLIST_TICK: c_uint = 256;
+pub const QF_GETLIST_SIZE: c_uint = 128;
+pub const QF_GETLIST_IDX: c_uint = 64;
+pub const QF_GETLIST_ITEMS: c_uint = 2;
+pub const QF_GETLIST_ID: c_uint = 32;
+pub const QF_GETLIST_CONTEXT: c_uint = 16;
+pub const QF_GETLIST_WINID: c_uint = 8;
+pub const QF_GETLIST_NR: c_uint = 4;
+pub const QF_GETLIST_TITLE: c_uint = 1;
+pub const QF_GETLIST_ALL: c_uint = 4095;
+pub const MAXPATHL: c_int = 4096;
+pub const CMDBUFFSIZE: c_int = 1024;
+pub const NUL: c_int = '\0' as c_int;
+pub const TAB: c_int = '\t' as c_int;
+pub const ML_EMPTY: c_int = 0x1;
+pub const INVALID_QFIDX: c_int = -1;
+pub const INVALID_QFBUFNR: c_int = 0;
+/// Messages more than one child reports.
+pub(crate) const E_NO_MORE_ITEMS: &CStr = c"E553: No more items";
+pub(crate) const E_QUICKFIX_LIST_CHANGED: &CStr = c"E925: Current quickfix list was changed";
+pub(crate) const E_LOCATION_LIST_CHANGED: &CStr = c"E926: Current location list was changed";
 static qftf_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: C2Rust_Unnamed_6 {
-        funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    data: Callback_data {
+        funcref: core::ptr::null_mut(),
     },
     type_0: kCallbackNone,
 });
-static qfFile_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static qfSep_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static qfLine_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const BF_NEW: ::core::ffi::c_int = 0x10 as ::core::ffi::c_int;
-pub const BF_DUMMY: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;
-pub const BUF_HAS_QF_ENTRY: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const BUF_HAS_LL_ENTRY: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const RE_STRING: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
+static qfFile_hl_id: GlobalCell<c_int> = GlobalCell::new(0);
+static qfSep_hl_id: GlobalCell<c_int> = GlobalCell::new(0);
+static qfLine_hl_id: GlobalCell<c_int> = GlobalCell::new(0);
+pub const OK: c_int = 1;
+pub const FAIL: c_int = 0;
+pub const BF_NEW: c_int = 0x10;
+pub const BF_DUMMY: c_int = 0x80;
+pub const BUF_HAS_QF_ENTRY: c_int = 1;
+pub const BUF_HAS_LL_ENTRY: c_int = 2;
+pub const IOSIZE: c_int = 1024 + 1;
+pub const EINTR: c_int = 4;
+pub const INT_MAX: c_int = 2147483647;
+pub const RE_MAGIC: c_int = 1;
+pub const RE_STRING: c_int = 2;

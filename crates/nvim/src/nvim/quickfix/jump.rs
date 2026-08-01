@@ -124,7 +124,7 @@ unsafe fn qf_jump_edit_buffer(
             }
         }
         if qfl_type == QFLT_QUICKFIX && !qflist_valid(ptr::null_mut(), save_qfid) {
-            emsg(gettext(e_current_quickfix_list_was_changed.get()));
+            emsg(gettext(E_QUICKFIX_LIST_CHANGED.as_ptr()));
             return Jumped::Aborted;
         }
         if !list_still_current(qi, qfl, qf_ptr, old_curlist, old_changedtick) {

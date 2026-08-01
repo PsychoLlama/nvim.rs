@@ -36,7 +36,7 @@ unsafe fn qf_setprop_qftf(qfl: *mut qf_list_T, di: *mut dictitem_T) -> c_int {
         }
         callback_free(&raw mut (*qfl).qf_qftf_cb);
         let mut cb = Callback {
-            data: C2Rust_Unnamed_6 {
+            data: Callback_data {
                 funcref: ptr::null_mut(),
             },
             type_0: kCallbackNone,

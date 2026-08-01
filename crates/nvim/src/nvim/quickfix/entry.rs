@@ -402,7 +402,7 @@ unsafe fn get_nth_valid_entry(
                 qf_ptr = prev_ptr;
                 qf_idx = prev_idx;
                 if first {
-                    emsg(gettext(e_no_more_items.get()));
+                    emsg(gettext(E_NO_MORE_ITEMS.as_ptr()));
                     return ptr::null_mut();
                 }
                 break;

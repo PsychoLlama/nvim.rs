@@ -186,7 +186,7 @@ unsafe fn display_fname(fname: *mut c_char) {
     // SAFETY: forwarded from the caller.
     unsafe {
         msg_start();
-        let truncated = msg_strtrunc(fname, true_0);
+        let truncated = msg_strtrunc(fname, 1);
         if truncated.is_null() {
             msg_outtrans(fname, 0, false);
         } else {
@@ -242,7 +242,7 @@ unsafe fn list_still_usable(
     unsafe {
         if !qflist_valid(wp, qfid) {
             if !wp.is_null() {
-                emsg(gettext(e_current_location_list_was_changed.get()));
+                emsg(gettext(E_LOCATION_LIST_CHANGED.as_ptr()));
                 return false;
             }
             qf_new_list(qi, title);

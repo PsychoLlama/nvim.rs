@@ -59,9 +59,9 @@ pub(crate) unsafe fn emsg_list_changed(qfl_type: qfltype_T) {
     // SAFETY: both messages are static NUL-terminated strings.
     unsafe {
         if qfl_type == QFLT_QUICKFIX {
-            emsg(gettext(e_current_quickfix_list_was_changed.get()));
+            emsg(gettext(E_QUICKFIX_LIST_CHANGED.as_ptr()));
         } else {
-            emsg(gettext(e_current_location_list_was_changed.get()));
+            emsg(gettext(E_LOCATION_LIST_CHANGED.as_ptr()));
         }
     }
 }
