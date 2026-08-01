@@ -824,50 +824,6 @@ pub(crate) unsafe extern "C" fn shada_pack_pfreed_entry(
     }
 }
 
-pub(crate) unsafe extern "C" fn shada_check_status(
-    mut initial_fpos: uintmax_t,
-    mut status: ::core::ffi::c_int,
-    mut remaining: size_t,
-) -> ShaDaReadResult {
-    unsafe {
-        match status {
-            0 => {
-                if remaining != 0 {
-                    semsg(
-                    gettext(
-                        b"E576: Failed to parse ShaDa file: extra bytes in msgpack string at position %lu\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    ),
-                    initial_fpos as uint64_t,
-                );
-                    return kSDReadStatusNotShaDa;
-                }
-                return kSDReadStatusSuccess;
-            }
-            1 => {
-                semsg(
-                gettext(
-                    b"E576: Failed to parse ShaDa file: incomplete msgpack string at position %lu\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                ),
-                initial_fpos as uint64_t,
-            );
-                return kSDReadStatusNotShaDa;
-            }
-            _ => {
-                semsg(
-                gettext(
-                    b"E576: Failed to parse ShaDa file due to a msgpack parser error at position %lu\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                ),
-                initial_fpos as uint64_t,
-            );
-                return kSDReadStatusNotShaDa;
-            }
-        };
-    }
-}
-
 pub(crate) unsafe extern "C" fn packer_buffer_for_file(
     mut file: *mut FileDescriptor,
 ) -> PackerBuffer {
