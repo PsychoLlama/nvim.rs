@@ -175,12 +175,11 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
             let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
             let mut csarg: CharsizeArg = CharsizeArg::default();
             let mut cstype: CharsizeKind =
-                init_charsize_arg(&raw mut csarg, curwin.get(), (*pos).lnum, line);
+                init_charsize_arg(&mut csarg, curwin.get(), (*pos).lnum, line);
             let mut sci: StrCharInfo = utf_ptr2StrCharInfo(line);
             amount = 0 as ::core::ffi::c_int;
             while *sci.ptr as ::core::ffi::c_int != NUL && col > 0 as ::core::ffi::c_int {
-                amount +=
-                    win_charsize(cstype, amount, sci.ptr, sci.chr.value, &raw mut csarg).width;
+                amount += win_charsize(cstype, amount, sci.ptr, sci.chr.value, &mut csarg).width;
                 sci = utfc_next(sci);
                 col -= 1;
             }
@@ -202,7 +201,7 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
                         amount,
                         that_0,
                         *that_0 as uint8_t as int32_t,
-                        &raw mut csarg,
+                        &mut csarg,
                     )
                     .width;
                     that_0 = that_0.offset(1);
@@ -247,7 +246,7 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
                                     != NUL
                             {
                                 amount +=
-                                    win_charsize(cstype, amount, that_0, ci.value, &raw mut csarg)
+                                    win_charsize(cstype, amount, that_0, ci.value, &mut csarg)
                                         .width;
                                 let mut next_sci: StrCharInfo = utfc_next(StrCharInfo {
                                     ptr: that_0,
@@ -257,8 +256,7 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
                                 ci = next_sci.chr;
                             }
                             amount +=
-                                win_charsize(cstype, amount, that_0, ci.value, &raw mut csarg)
-                                    .width;
+                                win_charsize(cstype, amount, that_0, ci.value, &mut csarg).width;
                             let mut next_sci_0: StrCharInfo = utfc_next(StrCharInfo {
                                 ptr: that_0,
                                 chr: ci,
@@ -273,7 +271,7 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
                             amount,
                             that_0,
                             *that_0 as uint8_t as int32_t,
-                            &raw mut csarg,
+                            &mut csarg,
                         )
                         .width;
                         that_0 = that_0.offset(1);

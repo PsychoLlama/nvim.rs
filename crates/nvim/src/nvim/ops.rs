@@ -914,7 +914,7 @@ unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi:
         }
         let mut csarg: CharsizeArg = CharsizeArg::default();
         let mut cstype: CharsizeKind = init_charsize_arg(
-            &raw mut csarg,
+            &mut csarg,
             curwin.get(),
             (*curwin.get()).w_cursor.lnum,
             bd.textstart,
@@ -922,7 +922,7 @@ unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi:
         let mut ci: StrCharInfo = utf_ptr2StrCharInfo(bd.textstart);
         let mut vcol: ::core::ffi::c_int = bd.start_vcol as ::core::ffi::c_int;
         while ascii_iswhite(ci.chr.value as ::core::ffi::c_int) {
-            incr = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &raw mut csarg).width;
+            incr = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;
             ci = utfc_next(ci);
             total += incr;
             vcol += incr;
@@ -999,7 +999,7 @@ unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi:
         let mut non_white_col: colnr_T = bd.start_vcol;
         let mut csarg_0: CharsizeArg = CharsizeArg::default();
         let mut cstype_0: CharsizeKind = init_charsize_arg(
-            &raw mut csarg_0,
+            &mut csarg_0,
             curwin.get(),
             (*curwin.get()).w_cursor.lnum,
             bd.textstart,
@@ -1010,7 +1010,7 @@ unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi:
                 non_white_col as ::core::ffi::c_int,
                 non_white,
                 *non_white as uint8_t as int32_t,
-                &raw mut csarg_0,
+                &mut csarg_0,
             )
             .width;
             non_white_col += incr;
@@ -1028,7 +1028,7 @@ unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi:
         if bd.startspaces != 0 {
             verbatim_copy_width -= bd.start_char_vcols;
         }
-        cstype_0 = init_charsize_arg(&raw mut csarg_0, curwin.get(), 0 as linenr_T, bd.textstart);
+        cstype_0 = init_charsize_arg(&mut csarg_0, curwin.get(), 0 as linenr_T, bd.textstart);
         let mut ci_0: StrCharInfo = utf_ptr2StrCharInfo(verbatim_copy_end);
         while verbatim_copy_width < destination_col {
             incr = win_charsize(
@@ -1036,7 +1036,7 @@ unsafe extern "C" fn shift_block(mut oap: *mut oparg_T, mut amount: ::core::ffi:
                 verbatim_copy_width as ::core::ffi::c_int,
                 ci_0.ptr,
                 ci_0.chr.value,
-                &raw mut csarg_0,
+                &mut csarg_0,
             )
             .width;
             if verbatim_copy_width as ::core::ffi::c_int + incr > destination_col {
@@ -2844,11 +2844,11 @@ pub unsafe extern "C" fn block_prep(
     let mut line: *mut ::core::ffi::c_char = ml_get(lnum);
     let mut prev_pstart: *mut ::core::ffi::c_char = line;
     let mut csarg: CharsizeArg = CharsizeArg::default();
-    let mut cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, curwin.get(), lnum, line);
+    let mut cstype: CharsizeKind = init_charsize_arg(&mut csarg, curwin.get(), lnum, line);
     let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
     let mut vcol: ::core::ffi::c_int = (*bdp).start_vcol as ::core::ffi::c_int;
     while vcol < (*oap).start_vcol && *ci.ptr as ::core::ffi::c_int != NUL {
-        incr = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &raw mut csarg).width;
+        incr = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;
         vcol += incr;
         if ascii_iswhite(ci.chr.value as ::core::ffi::c_int) {
             (*bdp).pre_whitesp += incr;
@@ -2905,13 +2905,13 @@ pub unsafe extern "C" fn block_prep(
                 }
             }
         } else {
-            cstype = init_charsize_arg(&raw mut csarg, curwin.get(), lnum, line);
+            cstype = init_charsize_arg(&mut csarg, curwin.get(), lnum, line);
             ci = utf_ptr2StrCharInfo(pend);
             vcol = (*bdp).end_vcol as ::core::ffi::c_int;
             let mut prev_pend: *mut ::core::ffi::c_char = pend;
             while vcol <= (*oap).end_vcol && *ci.ptr as ::core::ffi::c_int != NUL {
                 prev_pend = ci.ptr;
-                incr = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &raw mut csarg).width;
+                incr = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;
                 vcol += incr;
                 ci = utfc_next(ci);
             }

@@ -3131,7 +3131,7 @@ pub unsafe extern "C" fn do_put(
                         let mut oldlen: colnr_T = get_cursor_line_len();
                         let mut csarg: CharsizeArg = CharsizeArg::default();
                         let mut cstype: CharsizeKind = init_charsize_arg(
-                            &raw mut csarg,
+                            &mut csarg,
                             curwin.get(),
                             (*curwin.get()).w_cursor.lnum,
                             oldp,
@@ -3144,7 +3144,7 @@ pub unsafe extern "C" fn do_put(
                                 vcol as ::core::ffi::c_int,
                                 ci.ptr,
                                 ci.chr.value,
-                                &raw mut csarg,
+                                &mut csarg,
                             )
                             .width;
                             vcol += incr;
@@ -3173,7 +3173,7 @@ pub unsafe extern "C" fn do_put(
                         {
                             spaces = y_width + 1 as ::core::ffi::c_int;
                             cstype = init_charsize_arg(
-                                &raw mut csarg,
+                                &mut csarg,
                                 curwin.get(),
                                 0 as linenr_T,
                                 (*y_array.offset(i as isize)).data,
@@ -3185,7 +3185,7 @@ pub unsafe extern "C" fn do_put(
                                     0 as ::core::ffi::c_int,
                                     ci.ptr,
                                     ci.chr.value,
-                                    &raw mut csarg,
+                                    &mut csarg,
                                 )
                                 .width;
                                 ci = utfc_next(ci);

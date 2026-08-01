@@ -341,11 +341,11 @@ pub unsafe extern "C" fn change_indent(
         if *line as ::core::ffi::c_int != NUL {
             let mut csarg: CharsizeArg = CharsizeArg::default();
             let mut cstype: CharsizeKind =
-                init_charsize_arg(&raw mut csarg, curwin.get(), 0 as linenr_T, line);
+                init_charsize_arg(&mut csarg, curwin.get(), 0 as linenr_T, line);
             let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
             loop {
                 let mut next_vcol: ::core::ffi::c_int =
-                    vcol + win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &raw mut csarg).width;
+                    vcol + win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;
                 if next_vcol > end_vcol {
                     break;
                 }

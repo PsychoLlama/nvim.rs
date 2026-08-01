@@ -176,10 +176,10 @@ unsafe fn coladvance2(
         }
 
         let mut csarg: CharsizeArg = ::core::mem::zeroed();
-        let cstype = init_charsize_arg(&raw mut csarg, wp, (*pos).lnum, line);
+        let cstype = init_charsize_arg(&mut csarg, wp, (*pos).lnum, line);
         let mut ci = utf_ptr2StrCharInfo(line);
         while col <= wcol && *ci.ptr != 0 {
-            let cs = win_charsize(cstype, col, ci.ptr, ci.chr.value, &raw mut csarg);
+            let cs = win_charsize(cstype, col, ci.ptr, ci.chr.value, &mut csarg);
             csize = cs.width;
             head = cs.head;
             col += cs.width;

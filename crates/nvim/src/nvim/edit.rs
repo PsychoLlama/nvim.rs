@@ -4417,16 +4417,10 @@ unsafe extern "C" fn ins_tab() -> bool {
         let mut tab_v: int32_t = *tab as uint8_t as int32_t;
         let mut csarg: CharsizeArg = CharsizeArg::default();
         let mut cstype: CharsizeKind =
-            init_charsize_arg(&raw mut csarg, curwin.get(), 0 as linenr_T, tab);
+            init_charsize_arg(&mut csarg, curwin.get(), 0 as linenr_T, tab);
         while ascii_iswhite(*ptr as ::core::ffi::c_int) {
-            let mut i: ::core::ffi::c_int = win_charsize(
-                cstype,
-                vcol as ::core::ffi::c_int,
-                tab,
-                tab_v,
-                &raw mut csarg,
-            )
-            .width;
+            let mut i: ::core::ffi::c_int =
+                win_charsize(cstype, vcol as ::core::ffi::c_int, tab, tab_v, &mut csarg).width;
             if vcol as ::core::ffi::c_int + i > want_vcol {
                 break;
             }
@@ -4445,14 +4439,14 @@ unsafe extern "C" fn ins_tab() -> bool {
         }
         if change_col >= 0 as ::core::ffi::c_int {
             let mut repl_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            cstype = init_charsize_arg(&raw mut csarg, curwin.get(), 0 as linenr_T, ptr);
+            cstype = init_charsize_arg(&mut csarg, curwin.get(), 0 as linenr_T, ptr);
             while vcol < want_vcol && *ptr as ::core::ffi::c_int == ' ' as ::core::ffi::c_int {
                 vcol += win_charsize(
                     cstype,
                     vcol as ::core::ffi::c_int,
                     ptr,
                     ' ' as ::core::ffi::c_int as uint8_t as int32_t,
-                    &raw mut csarg,
+                    &mut csarg,
                 )
                 .width;
                 ptr = ptr.offset(1);
@@ -4625,11 +4619,11 @@ pub unsafe extern "C" fn ins_copychar(mut lnum: linenr_T) -> ::core::ffi::c_int 
     let end_vcol: ::core::ffi::c_int = (*curwin.get()).w_virtcol as ::core::ffi::c_int;
     let mut line: *mut ::core::ffi::c_char = ml_get(lnum);
     let mut csarg: CharsizeArg = CharsizeArg::default();
-    let mut cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, curwin.get(), lnum, line);
+    let mut cstype: CharsizeKind = init_charsize_arg(&mut csarg, curwin.get(), lnum, line);
     let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
     let mut vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while vcol < end_vcol && *ci.ptr as ::core::ffi::c_int != NUL {
-        vcol += win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &raw mut csarg).width;
+        vcol += win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg).width;
         if vcol > end_vcol {
             break;
         }

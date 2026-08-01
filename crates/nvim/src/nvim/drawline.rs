@@ -2115,12 +2115,12 @@ pub unsafe extern "C" fn win_line(
             head: 0,
         };
         let mut csarg: CharsizeArg = CharsizeArg::default();
-        let mut cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, lnum, line_1);
+        let mut cstype: CharsizeKind = init_charsize_arg(&mut csarg, wp, lnum, line_1);
         csarg.max_head_vcol = start_vcol;
         let mut vcol: ::core::ffi::c_int = wlv.vcol as ::core::ffi::c_int;
         let mut ci: StrCharInfo = utf_ptr2StrCharInfo(ptr_0);
         while vcol < start_vcol {
-            cs = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &raw mut csarg);
+            cs = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg);
             vcol += cs.width;
             prev_ptr = ci.ptr;
             if *prev_ptr as ::core::ffi::c_int == NUL {
@@ -3218,13 +3218,13 @@ pub unsafe extern "C" fn win_line(
                                 ptr_0.offset(-((mb_off + 1 as ::core::ffi::c_int) as isize));
                             let mut csarg_0: CharsizeArg = CharsizeArg::default();
                             let mut cstype_0: CharsizeKind =
-                                init_charsize_arg(&raw mut csarg_0, wp, 0 as linenr_T, line_1);
+                                init_charsize_arg(&mut csarg_0, wp, 0 as linenr_T, line_1);
                             wlv.n_extra = win_charsize(
                                 cstype_0,
                                 wlv.vcol as ::core::ffi::c_int,
                                 p_0,
                                 utf_ptr2CharInfo(p_0).value,
-                                &raw mut csarg_0,
+                                &mut csarg_0,
                             )
                             .width
                                 - 1 as ::core::ffi::c_int;

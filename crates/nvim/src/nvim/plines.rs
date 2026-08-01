@@ -1,3 +1,21 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
+//! How much room text takes up in a window.
+//!
+//! Two halves, in the order the original `plines.c` has them:
+//!
+//! * **Horizontal** — how many screen cells a character or a line occupies.
+//!   `init_charsize_arg` looks at the line once and answers whether the
+//!   cheap measure ([`charsize_fast`]) is enough or the line needs the full
+//!   one ([`charsize_regular`], which handles inline virtual text,
+//!   'linebreak', 'breakindent' and 'showbreak'). Everything else here walks
+//!   a line with one of those two.
+//! * **Vertical** — how many window lines a buffer line occupies, built on
+//!   the horizontal half plus folds, diff filler and virtual lines.
+//!
+//! This runs per character on every redraw. Prefer plain loops and keep the
+//! small helpers inlined.
+
 use crate::src::nvim::buffer::buf_meta_total;
 use crate::src::nvim::charset::vim_isbreak;
 use crate::src::nvim::charset::{ptr2cells, vim_isprintc, vim_strsize};
@@ -19,1119 +37,739 @@ use crate::src::nvim::option::get_showbreak_value;
 use crate::src::nvim::pos::{lt, ltoreq};
 use crate::src::nvim::state::{MODE_NORMAL, virtual_active};
 use crate::src::nvim::types::{
-    CharSize, CharsizeArg, CharsizeKind, DecorInline, DecorVirtText, MTKey, MarkTree, MarkTreeIter,
-    MetaFilter, MetaIndex, Set_uint32_t, StrCharInfo, VirtLines, VirtTextPos, buf_T, colnr_T,
-    foldinfo_T, int32_t, int64_t, linenr_T, pos_T, schar_T, uint8_t, uint32_t, win_T,
+    CharSize, CharsizeArg, CharsizeKind, MarkTree, MarkTreeIter, MetaFilter, MetaIndex,
+    Set_uint32_t, StrCharInfo, VirtLines, buf_T, colnr_T, foldinfo_T, int32_t, int64_t, linenr_T,
+    pos_T, uint32_t, win_T,
 };
-pub const kVPosInline: VirtTextPos = 2;
-pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_12 = 2147483647;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const kVTIsLines: C2Rust_Unnamed_13 = 1;
-pub const kMTMetaLines: MetaIndex = 1;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const kInvalidByteCells: C2Rust_Unnamed_16 = 4;
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe extern "C" fn set_has_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> bool {
-    return mh_get_uint32_t(set, key) != MH_TOMBSTONE as uint32_t;
+
+use ::core::ffi::{c_char, c_int, c_long};
+
+/// The largest column number, and the "no limit" argument to every function
+/// here that takes a byte length.
+const MAXCOL: c_int = c_int::MAX;
+/// Cells a byte that is not part of a valid UTF-8 sequence occupies: it is
+/// shown as `<xx>`.
+const INVALID_BYTE_CELLS: c_int = 4;
+/// `kVTIsLines` — the virtual text is a block of whole lines, not inline.
+const VT_IS_LINES: c_int = 1;
+/// `kVPosInline` — the virtual text sits between two characters of the line.
+const VPOS_INLINE: uint32_t = 2;
+/// `kMTMetaLines` — the marktree's per-node count of virtual-line marks.
+const MT_META_LINES: MetaIndex = 1;
+const TAB: int32_t = b'\t' as int32_t;
+const NUL: c_char = 0;
+
+/// The marktree filter that selects inline virtual text and nothing else.
+static INLINE_FILTER: GlobalCell<[uint32_t; 5]> = GlobalCell::new([kMTFilterSelect, 0, 0, 0, 0]);
+
+fn inline_filter() -> MetaFilter {
+    INLINE_FILTER.ptr().cast::<uint32_t>()
 }
-#[inline]
-unsafe extern "C" fn ns_in_win(mut ns_id: uint32_t, mut wp: *mut win_T) -> bool {
-    if !set_has_uint32_t(namespace_localscope.ptr(), ns_id) {
-        return true_0 != 0;
-    }
-    return set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id);
+
+/// # Safety
+/// `set` must point to a live `Set_uint32_t`.
+unsafe fn set_has(set: *mut Set_uint32_t, key: uint32_t) -> bool {
+    unsafe { mh_get_uint32_t(set, key) != uint32_t::MAX }
 }
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-/// The display size of the character at `ptr`, taking the fast path when
-/// `init_charsize_arg` decided the line has nothing that needs the slow one.
+
+/// Whether marks in namespace `ns_id` are visible in `wp`. A namespace that
+/// is not window-local is visible everywhere.
 ///
 /// # Safety
-/// `ptr` must point into the line `csarg` was initialised for.
-#[inline(always)]
-pub unsafe fn win_charsize(
-    cstype: CharsizeKind,
-    vcol: ::core::ffi::c_int,
-    ptr: *mut ::core::ffi::c_char,
-    chr: int32_t,
-    csarg: *mut CharsizeArg,
-) -> CharSize {
-    if cstype == CharsizeKind::Fast {
-        charsize_fast(csarg, ptr, vcol as colnr_T, chr)
-    } else {
-        charsize_regular(csarg, ptr, vcol as colnr_T, chr)
+/// `wp` must point to a live window.
+unsafe fn ns_in_win(ns_id: uint32_t, wp: *mut win_T) -> bool {
+    unsafe {
+        if !set_has(namespace_localscope.ptr(), ns_id) {
+            return true;
+        }
+        set_has(&raw mut (*wp).w_ns_set, ns_id)
     }
 }
-#[inline(always)]
-pub unsafe fn win_linetabsize(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut line: *mut ::core::ffi::c_char,
-    mut len: colnr_T,
-) -> ::core::ffi::c_int {
-    let mut csarg: CharsizeArg = CharsizeArg::default();
-    let cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, lnum, line);
-    if cstype == CharsizeKind::Fast {
-        return linesize_fast(&raw mut csarg, 0 as ::core::ffi::c_int, len);
-    } else {
-        return linesize_regular(&raw mut csarg, 0 as ::core::ffi::c_int, len);
-    };
-}
-pub unsafe extern "C" fn win_chartabsize(
-    mut wp: *mut win_T,
-    mut p: *mut ::core::ffi::c_char,
-    mut col: colnr_T,
-) -> ::core::ffi::c_int {
-    let mut buf: *mut buf_T = (*wp).w_buffer;
-    if *p as ::core::ffi::c_int == TAB
-        && ((*wp).w_onebuf_opt.wo_list == 0 || (*wp).w_p_lcs_chars.tab1 != 0)
-    {
-        return tabstop_padding(col, (*buf).b_p_ts, (*buf).b_p_vts_array);
+
+// ---------------------------------------------------------------------------
+// Horizontal size
+// ---------------------------------------------------------------------------
+
+/// Cells the first character of `p` takes on the screen, given that it starts
+/// at virtual column `col` (which only matters for a tab).
+///
+/// # Safety
+/// `wp` must be live and `p` must point into a NUL-terminated line.
+pub unsafe fn win_chartabsize(wp: *mut win_T, p: *mut c_char, col: colnr_T) -> c_int {
+    unsafe {
+        let buf: *mut buf_T = (*wp).w_buffer;
+        if *p as int32_t == TAB
+            && ((*wp).w_onebuf_opt.wo_list == 0 || (*wp).w_p_lcs_chars.tab1 != 0)
+        {
+            return tabstop_padding(col, (*buf).b_p_ts, (*buf).b_p_vts_array);
+        }
+        ptr2cells(p)
     }
-    return ptr2cells(p);
 }
-pub unsafe extern "C" fn linetabsize_col(
-    mut startvcol: ::core::ffi::c_int,
-    mut s: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut csarg: CharsizeArg = CharsizeArg::default();
-    let cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, curwin.get(), 0 as linenr_T, s);
-    if cstype == CharsizeKind::Fast {
-        return linesize_fast(&raw mut csarg, startvcol, MAXCOL as ::core::ffi::c_int);
-    } else {
-        return linesize_regular(&raw mut csarg, startvcol, MAXCOL as ::core::ffi::c_int);
-    };
-}
-pub unsafe extern "C" fn linetabsize(mut wp: *mut win_T, mut lnum: linenr_T) -> ::core::ffi::c_int {
-    return win_linetabsize(
-        wp,
-        lnum,
-        ml_get_buf((*wp).w_buffer, lnum),
-        MAXCOL as ::core::ffi::c_int,
-    );
-}
-pub unsafe extern "C" fn linetabsize_eol(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-) -> ::core::ffi::c_int {
-    return linetabsize(wp, lnum)
-        + (if (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.eol != NUL as schar_T {
-            1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        });
-}
-static inline_filter: GlobalCell<[uint32_t; 5]> = GlobalCell::new([kMTFilterSelect, 0, 0, 0, 0]);
-pub unsafe extern "C" fn init_charsize_arg(
-    mut csarg: *mut CharsizeArg,
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut line: *mut ::core::ffi::c_char,
-) -> CharsizeKind {
-    (*csarg).win = wp;
-    (*csarg).line = line;
-    (*csarg).max_head_vcol = 0 as ::core::ffi::c_int;
-    (*csarg).cur_text_width_left = 0 as ::core::ffi::c_int;
-    (*csarg).cur_text_width_right = 0 as ::core::ffi::c_int;
-    (*csarg).virt_row = -1 as ::core::ffi::c_int;
-    (*csarg).indent_width = INT_MIN;
-    (*csarg).use_tabstop = (*wp).w_onebuf_opt.wo_list == 0 || (*wp).w_p_lcs_chars.tab1 != 0;
-    if lnum > 0 as linenr_T {
-        if marktree_itr_get_filter(
-            &raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree,
-            lnum as int32_t - 1 as int32_t,
-            0 as ::core::ffi::c_int,
-            lnum as ::core::ffi::c_int,
-            0 as ::core::ffi::c_int,
-            (inline_filter.ptr() as *const _) as MetaFilter,
-            &raw mut (*csarg).iter as *mut MarkTreeIter,
-        ) {
-            (*csarg).virt_row = (lnum - 1 as linenr_T) as ::core::ffi::c_int;
+
+/// Cells the string `s` takes, as if it began at virtual column `startvcol`
+/// of the current window.
+///
+/// # Safety
+/// `s` must be a NUL-terminated string.
+pub unsafe fn linetabsize_col(startvcol: c_int, s: *mut c_char) -> c_int {
+    unsafe {
+        let mut csarg = CharsizeArg::default();
+        match init_charsize_arg(&mut csarg, curwin.get(), 0, s) {
+            CharsizeKind::Fast => linesize_fast(&csarg, startvcol, MAXCOL),
+            CharsizeKind::Regular => linesize_regular(&mut csarg, startvcol, MAXCOL),
         }
     }
-    if (*csarg).virt_row >= 0 as ::core::ffi::c_int
-        || (*wp).w_onebuf_opt.wo_wrap != 0
-            && ((*wp).w_onebuf_opt.wo_lbr != 0
-                || (*wp).w_onebuf_opt.wo_bri != 0
-                || *get_showbreak_value(wp) as ::core::ffi::c_int != NUL)
-    {
-        return CharsizeKind::Regular;
-    } else {
-        return CharsizeKind::Fast;
-    };
 }
-pub unsafe extern "C" fn charsize_regular(
-    mut csarg: *mut CharsizeArg,
-    cur: *mut ::core::ffi::c_char,
-    vcol: colnr_T,
-    cur_char: int32_t,
-) -> CharSize {
-    (*csarg).cur_text_width_left = 0 as ::core::ffi::c_int;
-    (*csarg).cur_text_width_right = 0 as ::core::ffi::c_int;
-    let mut wp: *mut win_T = (*csarg).win;
-    let mut buf: *mut buf_T = (*wp).w_buffer;
-    let mut line: *mut ::core::ffi::c_char = (*csarg).line;
-    let use_tabstop: bool =
-        cur_char == TAB as int32_t && (*csarg).use_tabstop as ::core::ffi::c_int != 0;
-    let mut mb_added: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut has_lcs_eol: bool =
-        (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.eol != NUL as schar_T;
-    let mut size: ::core::ffi::c_int = 0;
-    let mut is_doublewidth: ::core::ffi::c_int = false_0;
-    if use_tabstop {
-        size = tabstop_padding(vcol, (*buf).b_p_ts, (*buf).b_p_vts_array);
-    } else if *cur as ::core::ffi::c_int == NUL {
-        size = if has_lcs_eol as ::core::ffi::c_int != 0 {
-            1 as ::core::ffi::c_int
-        } else {
-            0 as ::core::ffi::c_int
-        };
-    } else if cur_char < 0 as int32_t {
-        size = kInvalidByteCells as ::core::ffi::c_int;
-    } else {
-        size = ptr2cells(cur);
-        is_doublewidth =
-            (size == 2 as ::core::ffi::c_int && cur_char >= 0x80 as int32_t) as ::core::ffi::c_int;
+
+/// The screen width of a whole line, starting from virtual column zero.
+///
+/// # Safety
+/// `s` must be a NUL-terminated string.
+pub unsafe fn linetabsize_str(s: *mut c_char) -> c_int {
+    unsafe { linetabsize_col(0, s) }
+}
+
+/// Cells the first `len` bytes of `line` take in `wp`, counting inline
+/// virtual text. Pass `MAXCOL` for the whole line.
+///
+/// # Safety
+/// `wp` must be live; `line` must be line `lnum` of its buffer, or any
+/// NUL-terminated string when `lnum` is 0 (which skips virtual text).
+#[inline(always)]
+pub unsafe fn win_linetabsize(
+    wp: *mut win_T,
+    lnum: linenr_T,
+    line: *mut c_char,
+    len: colnr_T,
+) -> c_int {
+    unsafe {
+        let mut csarg = CharsizeArg::default();
+        match init_charsize_arg(&mut csarg, wp, lnum, line) {
+            CharsizeKind::Fast => linesize_fast(&csarg, 0, len),
+            CharsizeKind::Regular => linesize_regular(&mut csarg, 0, len),
+        }
     }
-    if (*csarg).virt_row >= 0 as ::core::ffi::c_int {
-        let mut tab_size: ::core::ffi::c_int = size;
-        let mut col: ::core::ffi::c_int = cur.offset_from(line) as ::core::ffi::c_int;
+}
+
+/// Cells line `lnum` takes in `wp`, counting inline virtual text but not the
+/// 'listchars' "eol".
+///
+/// # Safety
+/// `wp` must be live and `lnum` must be a line of its buffer.
+pub unsafe fn linetabsize(wp: *mut win_T, lnum: linenr_T) -> c_int {
+    unsafe { win_linetabsize(wp, lnum, ml_get_buf((*wp).w_buffer, lnum), MAXCOL) }
+}
+
+/// Like [`linetabsize`], but counts the 'listchars' "eol".
+///
+/// # Safety
+/// `wp` must be live and `lnum` must be a line of its buffer.
+pub unsafe fn linetabsize_eol(wp: *mut win_T, lnum: linenr_T) -> c_int {
+    unsafe {
+        let eol = (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.eol != 0;
+        linetabsize(wp, lnum) + c_int::from(eol)
+    }
+}
+
+/// Prepare `csarg` for a walk over `line`, and answer which charsize function
+/// that walk has to use.
+///
+/// `lnum` of 0 means "do not consider inline virtual text", which is how the
+/// callers that measure a bare string rather than a buffer line ask for it.
+///
+/// # Safety
+/// `wp` must be live; `line` must be NUL-terminated, and must be line `lnum`
+/// of `wp`'s buffer when `lnum` is not 0.
+pub unsafe fn init_charsize_arg(
+    csarg: &mut CharsizeArg,
+    wp: *mut win_T,
+    lnum: linenr_T,
+    line: *mut c_char,
+) -> CharsizeKind {
+    unsafe {
+        csarg.win = wp;
+        csarg.line = line;
+        csarg.max_head_vcol = 0;
+        csarg.cur_text_width_left = 0;
+        csarg.cur_text_width_right = 0;
+        csarg.virt_row = -1;
+        csarg.indent_width = c_int::MIN;
+        csarg.use_tabstop = (*wp).w_onebuf_opt.wo_list == 0 || (*wp).w_p_lcs_chars.tab1 != 0;
+
+        if lnum > 0
+            && marktree_itr_get_filter(
+                &raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree,
+                lnum - 1,
+                0,
+                lnum,
+                0,
+                inline_filter(),
+                (&raw mut csarg.iter).cast::<MarkTreeIter>(),
+            )
+        {
+            csarg.virt_row = lnum - 1;
+        }
+
+        let needs_regular = csarg.virt_row >= 0
+            || ((*wp).w_onebuf_opt.wo_wrap != 0
+                && ((*wp).w_onebuf_opt.wo_lbr != 0
+                    || (*wp).w_onebuf_opt.wo_bri != 0
+                    || *get_showbreak_value(wp) != NUL));
+        if needs_regular {
+            CharsizeKind::Regular
+        } else {
+            CharsizeKind::Fast
+        }
+    }
+}
+
+/// Virtual columns the inline virtual text around the cursor shifts it by.
+///
+/// `csarg` must hold the widths [`charsize_regular`] left in it.
+fn virt_text_cursor_off(csarg: &CharsizeArg, on_nul: bool) -> c_int {
+    let mut off = 0;
+    if !on_nul || State.get() & MODE_NORMAL == 0 {
+        off += csarg.cur_text_width_left;
+    }
+    if !on_nul && State.get() & MODE_NORMAL != 0 {
+        off += csarg.cur_text_width_right;
+    }
+    off
+}
+
+/// Extra cells 'showbreak' and 'breakindent' contribute around one character.
+struct BreakHead {
+    /// Added to the character's width.
+    added: c_int,
+    /// Of `added`, the part that precedes the character.
+    head: c_int,
+}
+
+/// Width of 'showbreak' plus 'breakindent', computed once per line and
+/// memoised in `csarg`.
+///
+/// # Safety
+/// `sbr` must be NUL-terminated and `csarg` must be initialised.
+unsafe fn wrapped_indent_width(csarg: &mut CharsizeArg, sbr: *mut c_char) -> c_int {
+    unsafe {
+        if csarg.indent_width == c_int::MIN {
+            let mut width = 0;
+            if *sbr != NUL {
+                width += vim_strsize(sbr);
+            }
+            if (*csarg.win).w_onebuf_opt.wo_bri != 0 {
+                width += get_breakindent_win(csarg.win, csarg.line);
+            }
+            csarg.indent_width = width;
+        }
+        csarg.indent_width
+    }
+}
+
+/// The 'showbreak'/'breakindent' half of [`charsize_regular`].
+///
+/// A wrapped screen line starts with 'showbreak' and/or a 'breakindent',
+/// which cost cells that belong to no character. They are charged to the
+/// character that crosses onto the new screen line: `added` widens it, and
+/// `head` says how much of that sits before it.
+///
+/// `csarg.max_head_vcol` selects who is asking. Zero means "count all of it";
+/// a positive value means "only what falls before that virtual column";
+/// negative means "only what falls before where the cursor goes", which is
+/// the one case that has to know about inline virtual text.
+///
+/// # Safety
+/// All pointers must be live and `csarg` initialised for the line `cur`
+/// points into.
+unsafe fn showbreak_head(
+    csarg: &mut CharsizeArg,
+    cur: *mut c_char,
+    vcol: colnr_T,
+    size: c_int,
+    mb_added: c_int,
+    sbr: *mut c_char,
+) -> BreakHead {
+    unsafe {
+        let wp = csarg.win;
+        let view_width = (*wp).w_view_width;
+        let mut col_off_prev = win_col_off(wp);
+        let width2 = view_width - col_off_prev + win_col_off2(wp);
+        let mut wcol = vcol + col_off_prev;
+        let max_head_vcol = csarg.max_head_vcol;
+        let mut added = 0;
+        let mut head = 0;
+
+        // Cells taken by 'showbreak'/'breakindent' before the current char.
+        let mut head_prev = 0;
+        if wcol >= view_width {
+            wcol -= view_width;
+            col_off_prev = view_width - width2;
+            if wcol >= width2 && width2 > 0 {
+                wcol %= width2;
+            }
+            head_prev = wrapped_indent_width(csarg, sbr);
+            if wcol < head_prev {
+                head_prev -= wcol;
+                wcol += head_prev;
+                added += head_prev;
+                if max_head_vcol <= 0 || vcol < max_head_vcol {
+                    head += head_prev;
+                }
+            } else {
+                head_prev = 0;
+            }
+            wcol += col_off_prev;
+        }
+
+        if wcol + size > view_width {
+            // Cells taken by 'showbreak'/'breakindent' partway through it.
+            let head_mid = wrapped_indent_width(csarg, sbr);
+            if head_mid > 0 {
+                // Effective width of the screen lines it spans.
+                let prev_rem = view_width - wcol;
+                let mut width = width2 - head_mid;
+                if width <= 0 {
+                    width = 1;
+                }
+                // Divide "size - prev_rem" by "width", rounding up.
+                let cnt = (size - prev_rem + width - 1) / width;
+                added += cnt * head_mid;
+
+                if max_head_vcol == 0 || vcol + size + added < max_head_vcol {
+                    head += cnt * head_mid;
+                } else if width2 > 0 && max_head_vcol > vcol + head_prev + prev_rem {
+                    head += (max_head_vcol - (vcol + head_prev + prev_rem) + width2 - 1) / width2
+                        * head_mid;
+                } else if max_head_vcol < 0 {
+                    let off = mb_added + virt_text_cursor_off(csarg, *cur == NUL);
+                    if off >= prev_rem {
+                        head += if size > off {
+                            (1 + (off - prev_rem) / width) * head_mid
+                        } else {
+                            (off - prev_rem + width - 1) / width * head_mid
+                        };
+                    }
+                }
+            }
+        }
+
+        BreakHead { added, head }
+    }
+}
+
+/// Widen the character at `cur` by the inline virtual text attached at its
+/// byte position, advancing `csarg`'s marktree iterator past that position.
+///
+/// A tab is re-measured after each chunk: inserting text moves the tab's end
+/// to a different tabstop.
+///
+/// # Safety
+/// `csarg` must be initialised with `virt_row >= 0` and `cur` must point into
+/// its line.
+unsafe fn add_inline_virt_text(
+    csarg: &mut CharsizeArg,
+    cur: *mut c_char,
+    vcol: colnr_T,
+    mut size: c_int,
+    expand_tab: bool,
+) -> c_int {
+    unsafe {
+        let wp = csarg.win;
+        let buf: *mut buf_T = (*wp).w_buffer;
+        let mut tab_size = size;
+        let col = cur.offset_from(csarg.line) as int32_t;
+        let iter = (&raw mut csarg.iter).cast::<MarkTreeIter>();
+
         loop {
-            let mut mark: MTKey = marktree_itr_current(&raw mut (*csarg).iter as *mut MarkTreeIter);
-            if mark.pos.row != (*csarg).virt_row as int32_t || mark.pos.col > col as int32_t {
+            let mark = marktree_itr_current(iter);
+            if mark.pos.row != csarg.virt_row || mark.pos.col > col {
                 break;
             }
-            if mark.pos.col == col as int32_t {
-                if !mt_invalid(mark) && ns_in_win(mark.ns, wp) as ::core::ffi::c_int != 0 {
-                    let mut decor: DecorInline = mt_decor(mark);
-                    let mut vt: *mut DecorVirtText = if decor.ext as ::core::ffi::c_int != 0 {
-                        decor.data.ext.vt
-                    } else {
-                        ::core::ptr::null_mut::<DecorVirtText>()
-                    };
-                    while !vt.is_null() {
-                        if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int == 0
-                            && (*vt).pos as ::core::ffi::c_uint
-                                == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            if mt_right(mark) {
-                                (*csarg).cur_text_width_right += (*vt).width;
-                            } else {
-                                (*csarg).cur_text_width_left += (*vt).width;
-                            }
-                            size += (*vt).width;
-                            if use_tabstop {
-                                size -= tab_size;
-                                tab_size = tabstop_padding(
-                                    vcol + size as colnr_T,
-                                    (*buf).b_p_ts,
-                                    (*buf).b_p_vts_array,
-                                );
-                                size += tab_size;
-                            }
+            if mark.pos.col == col && !mt_invalid(mark) && ns_in_win(mark.ns, wp) {
+                let decor = mt_decor(mark);
+                let mut vt = if decor.ext {
+                    decor.data.ext.vt
+                } else {
+                    ::core::ptr::null_mut()
+                };
+                while !vt.is_null() {
+                    if (*vt).flags as c_int & VT_IS_LINES == 0
+                        && (*vt).pos as uint32_t == VPOS_INLINE
+                    {
+                        if mt_right(mark) {
+                            csarg.cur_text_width_right += (*vt).width;
+                        } else {
+                            csarg.cur_text_width_left += (*vt).width;
                         }
-                        vt = (*vt).next;
+                        size += (*vt).width;
+                        if expand_tab {
+                            // The tab's width changes with the inserted text.
+                            size -= tab_size;
+                            tab_size =
+                                tabstop_padding(vcol + size, (*buf).b_p_ts, (*buf).b_p_vts_array);
+                            size += tab_size;
+                        }
                     }
+                    vt = (*vt).next;
                 }
             }
             marktree_itr_next_filter(
                 &raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree,
-                &raw mut (*csarg).iter as *mut MarkTreeIter,
-                (*csarg).virt_row + 1 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
-                (inline_filter.ptr() as *const _) as MetaFilter,
+                iter,
+                csarg.virt_row + 1,
+                0,
+                inline_filter(),
             );
         }
+        size
     }
-    if is_doublewidth != 0
-        && (*wp).w_onebuf_opt.wo_wrap != 0
-        && in_win_border(wp, vcol + size as colnr_T - 2 as colnr_T) as ::core::ffi::c_int != 0
-    {
-        size += 1;
-        mb_added = 1 as ::core::ffi::c_int;
-    }
-    let sbr: *mut ::core::ffi::c_char = get_showbreak_value(wp);
-    let mut head: ::core::ffi::c_int = mb_added;
-    if size > 0 as ::core::ffi::c_int
-        && (*wp).w_onebuf_opt.wo_wrap != 0
-        && (*sbr as ::core::ffi::c_int != NUL || (*wp).w_onebuf_opt.wo_bri != 0)
-    {
-        let mut col_off_prev: ::core::ffi::c_int = win_col_off(wp);
-        let mut width2: ::core::ffi::c_int = (*wp).w_view_width - col_off_prev + win_col_off2(wp);
-        let mut wcol: colnr_T = vcol + col_off_prev as colnr_T;
-        let mut max_head_vcol: colnr_T = (*csarg).max_head_vcol as colnr_T;
-        let mut added: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut head_prev: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if wcol >= (*wp).w_view_width {
-            wcol -= (*wp).w_view_width;
-            col_off_prev = (*wp).w_view_width - width2;
-            if wcol >= width2 && width2 > 0 as ::core::ffi::c_int {
-                wcol %= width2;
-            }
-            head_prev = (*csarg).indent_width;
-            if head_prev == INT_MIN {
-                head_prev = 0 as ::core::ffi::c_int;
-                if *sbr as ::core::ffi::c_int != NUL {
-                    head_prev += vim_strsize(sbr);
-                }
-                if (*wp).w_onebuf_opt.wo_bri != 0 {
-                    head_prev += get_breakindent_win(wp, line);
-                }
-                (*csarg).indent_width = head_prev;
-            }
-            if wcol < head_prev {
-                head_prev -= wcol as ::core::ffi::c_int;
-                wcol += head_prev;
-                added += head_prev;
-                if max_head_vcol <= 0 as ::core::ffi::c_int || vcol < max_head_vcol {
-                    head += head_prev;
-                }
-            } else {
-                head_prev = 0 as ::core::ffi::c_int;
-            }
-            wcol += col_off_prev;
+}
+
+/// Whether the character at `cur` is where 'linebreak' would break the line:
+/// a blank followed by a non-blank, outside the leading whitespace.
+///
+/// # Safety
+/// `cur` must point into `csarg`'s NUL-terminated line.
+unsafe fn breaks_here(csarg: &CharsizeArg, cur: *mut c_char) -> bool {
+    unsafe {
+        let wp = csarg.win;
+        if (*wp).w_onebuf_opt.wo_lbr == 0
+            || (*wp).w_onebuf_opt.wo_wrap == 0
+            || (*wp).w_view_width == 0
+            || !vim_isbreak(*cur as u8 as c_int)
+            || vim_isbreak(*cur.offset(1) as u8 as c_int)
+        {
+            return false;
         }
-        if wcol as ::core::ffi::c_int + size > (*wp).w_view_width {
-            let mut head_mid: ::core::ffi::c_int = (*csarg).indent_width;
-            if head_mid == INT_MIN {
-                head_mid = 0 as ::core::ffi::c_int;
-                if *sbr as ::core::ffi::c_int != NUL {
-                    head_mid += vim_strsize(sbr);
-                }
-                if (*wp).w_onebuf_opt.wo_bri != 0 {
-                    head_mid += get_breakindent_win(wp, line);
-                }
-                (*csarg).indent_width = head_mid;
-            }
-            if head_mid > 0 as ::core::ffi::c_int {
-                let mut prev_rem: ::core::ffi::c_int =
-                    (*wp).w_view_width - wcol as ::core::ffi::c_int;
-                let mut width: ::core::ffi::c_int = width2 - head_mid;
-                if width <= 0 as ::core::ffi::c_int {
-                    width = 1 as ::core::ffi::c_int;
-                }
-                let mut cnt: ::core::ffi::c_int =
-                    (size - prev_rem + width - 1 as ::core::ffi::c_int) / width;
-                added += cnt * head_mid;
-                if max_head_vcol == 0 as ::core::ffi::c_int
-                    || vcol as ::core::ffi::c_int + size + added < max_head_vcol
-                {
-                    head += cnt * head_mid;
-                } else if width2 > 0 as ::core::ffi::c_int
-                    && max_head_vcol > vcol as ::core::ffi::c_int + head_prev + prev_rem
-                {
-                    head += (max_head_vcol as ::core::ffi::c_int
-                        - (vcol as ::core::ffi::c_int + head_prev + prev_rem)
-                        + width2
-                        - 1 as ::core::ffi::c_int)
-                        / width2
-                        * head_mid;
-                } else if max_head_vcol < 0 as ::core::ffi::c_int {
-                    let mut off: ::core::ffi::c_int =
-                        mb_added + virt_text_cursor_off(csarg, *cur as ::core::ffi::c_int == NUL);
-                    if off >= prev_rem {
-                        if size > off {
-                            head += (1 as ::core::ffi::c_int + (off - prev_rem) / width) * head_mid;
-                        } else {
-                            head += (off - prev_rem + width - 1 as ::core::ffi::c_int) / width
-                                * head_mid;
-                        }
-                    }
-                }
-            }
-        }
-        size += added;
-    }
-    let mut need_lbr: bool = false_0 != 0;
-    if (*wp).w_onebuf_opt.wo_lbr != 0
-        && (*wp).w_onebuf_opt.wo_wrap != 0
-        && (*wp).w_view_width != 0 as ::core::ffi::c_int
-        && vim_isbreak(
-            *cur.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-        ) as ::core::ffi::c_int
-            != 0
-        && !vim_isbreak(
-            *cur.offset(1 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-        )
-    {
-        let mut t: *mut ::core::ffi::c_char = (*csarg).line;
-        while vim_isbreak(
-            *t.offset(0 as ::core::ffi::c_int as isize) as uint8_t as ::core::ffi::c_int
-        ) {
+        // 'linebreak' is only needed when not in leading whitespace.
+        let mut t = csarg.line;
+        while vim_isbreak(*t as u8 as c_int) {
             t = t.offset(1);
         }
-        need_lbr = cur >= t;
+        cur >= t
     }
-    if need_lbr {
-        let mut s: *mut ::core::ffi::c_char = cur;
-        let mut numberextra: ::core::ffi::c_int = win_col_off(wp);
-        let mut col_adj: colnr_T = size as colnr_T - 1 as colnr_T;
-        let mut colmax: colnr_T = (*wp).w_view_width as colnr_T - numberextra as colnr_T - col_adj;
+}
+
+/// The 'linebreak' half of [`charsize_regular`]: the blank at `cur` is
+/// stretched so that the following word starts on the next screen line.
+///
+/// # Safety
+/// `wp` must be live and `cur` must point into a NUL-terminated line.
+unsafe fn linebreak_size(wp: *mut win_T, cur: *mut c_char, vcol: colnr_T, size: c_int) -> c_int {
+    unsafe {
+        // Count all characters from the first non-blank after a blank up to
+        // the next non-blank after a blank.
+        let numberextra = win_col_off(wp);
+        let col_adj = size - 1;
+        let mut colmax = (*wp).w_view_width - numberextra - col_adj;
         if vcol >= colmax {
             colmax += col_adj;
-            let mut n: ::core::ffi::c_int = colmax as ::core::ffi::c_int + win_col_off2(wp);
-            if n > 0 as ::core::ffi::c_int {
-                colmax += (((vcol - colmax) / n as colnr_T + 1 as colnr_T) * n as colnr_T - col_adj)
-                    as ::core::ffi::c_int;
+            let n = colmax + win_col_off2(wp);
+            if n > 0 {
+                colmax += ((vcol - colmax) / n + 1) * n - col_adj;
             }
         }
-        let mut vcol2: colnr_T = vcol;
+
+        let mut s = cur;
+        let mut vcol2 = vcol;
         loop {
-            let mut ps: *mut ::core::ffi::c_char = s;
+            let ps = s;
             s = s.offset(utfc_ptr2len(s) as isize);
-            let mut c: ::core::ffi::c_int = *s as uint8_t as ::core::ffi::c_int;
-            if !(c != NUL
-                && (vim_isbreak(c) as ::core::ffi::c_int != 0
-                    || vcol2 == vcol
-                    || !vim_isbreak(*ps as uint8_t as ::core::ffi::c_int)))
+            let c = *s as u8 as c_int;
+            if c == NUL as c_int
+                || !(vim_isbreak(c) || vcol2 == vcol || !vim_isbreak(*ps as u8 as c_int))
             {
-                break;
+                return size;
             }
             vcol2 += win_chartabsize(wp, s, vcol2);
-            if vcol2 < colmax {
-                continue;
+            if vcol2 >= colmax {
+                // Doesn't fit.
+                return colmax - vcol + col_adj;
             }
-            size = (colmax - vcol + col_adj) as ::core::ffi::c_int;
-            break;
         }
     }
-    return CharSize {
-        width: size,
-        head: head,
-    };
 }
-#[inline(always)]
-unsafe extern "C" fn charsize_fast_impl(
-    wp: *mut win_T,
-    mut cur: *const ::core::ffi::c_char,
-    mut use_tabstop: bool,
+
+/// Cells the character at `cur` takes, with everything accounted for.
+///
+/// Sets `csarg.cur_text_width_left`/`_right` to the inline virtual text
+/// widths on either side of it. See [`showbreak_head`] for what
+/// `csarg.max_head_vcol` selects.
+///
+/// # Safety
+/// `csarg` must be initialised for the line `cur` points into, and `cur_char`
+/// must be the codepoint `cur` decodes to (negative for an invalid byte).
+pub unsafe fn charsize_regular(
+    csarg: &mut CharsizeArg,
+    cur: *mut c_char,
     vcol: colnr_T,
     cur_char: int32_t,
 ) -> CharSize {
-    if cur_char == TAB as int32_t && use_tabstop as ::core::ffi::c_int != 0 {
-        return CharSize {
-            width: tabstop_padding(
-                vcol,
-                (*(*wp).w_buffer).b_p_ts,
-                (*(*wp).w_buffer).b_p_vts_array,
-            ),
-            head: 0,
-        };
-    } else {
-        let mut width: ::core::ffi::c_int = 0;
-        if cur_char < 0 as int32_t {
-            width = kInvalidByteCells as ::core::ffi::c_int;
+    unsafe {
+        csarg.cur_text_width_left = 0;
+        csarg.cur_text_width_right = 0;
+
+        let wp = csarg.win;
+        let buf: *mut buf_T = (*wp).w_buffer;
+        let expand_tab = cur_char == TAB && csarg.use_tabstop;
+        let has_lcs_eol = (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.eol != 0;
+
+        // First the plain size, without 'linebreak' or inline virtual text.
+        let mut size;
+        let mut is_doublewidth = false;
+        if expand_tab {
+            size = tabstop_padding(vcol, (*buf).b_p_ts, (*buf).b_p_vts_array);
+        } else if *cur == NUL {
+            // One cell for the "eol" list char if there is one, as opposed to
+            // the two-cell ^@ a NUL *in the text* would get.
+            size = c_int::from(has_lcs_eol);
+        } else if cur_char < 0 {
+            size = INVALID_BYTE_CELLS;
         } else {
-            width = ptr2cells(cur);
+            size = ptr2cells(cur);
+            is_doublewidth = size == 2 && cur_char >= 0x80;
         }
-        if width == 2 as ::core::ffi::c_int
-            && cur_char >= 0x80 as int32_t
+
+        if csarg.virt_row >= 0 {
+            size = add_inline_virt_text(csarg, cur, vcol, size, expand_tab);
+        }
+
+        let mut mb_added = 0;
+        if is_doublewidth && (*wp).w_onebuf_opt.wo_wrap != 0 && in_win_border(wp, vcol + size - 2) {
+            // Count the ">" in the last column.
+            size += 1;
+            mb_added = 1;
+        }
+
+        let sbr = get_showbreak_value(wp);
+        let mut head = mb_added;
+        // When "size" is 0 no new screen line is started, so nothing to add.
+        if size > 0
             && (*wp).w_onebuf_opt.wo_wrap != 0
-            && in_win_border(wp, vcol) as ::core::ffi::c_int != 0
+            && (*sbr != NUL || (*wp).w_onebuf_opt.wo_bri != 0)
         {
+            let extra = showbreak_head(csarg, cur, vcol, size, mb_added, sbr);
+            head += extra.head;
+            size += extra.added;
+        }
+
+        if breaks_here(csarg, cur) {
+            size = linebreak_size(wp, cur, vcol, size);
+        }
+
+        CharSize { width: size, head }
+    }
+}
+
+/// Like [`charsize_regular`] but with no inline virtual text, 'linebreak',
+/// 'breakindent' or 'showbreak' to worry about: normal characters, tabs and
+/// wrapping only. Always inlined — it is the per-character hot path.
+///
+/// # Safety
+/// `wp` must be live and `cur` must point into a NUL-terminated line.
+#[inline(always)]
+unsafe fn charsize_fast_impl(
+    wp: *mut win_T,
+    cur: *const c_char,
+    use_tabstop: bool,
+    vcol: colnr_T,
+    cur_char: int32_t,
+) -> CharSize {
+    unsafe {
+        // A tab is expanded according to the column it starts at.
+        if cur_char == TAB && use_tabstop {
             return CharSize {
-                width: 3 as ::core::ffi::c_int,
-                head: 1 as ::core::ffi::c_int,
-            };
-        } else {
-            return CharSize {
-                width: width,
+                width: tabstop_padding(
+                    vcol,
+                    (*(*wp).w_buffer).b_p_ts,
+                    (*(*wp).w_buffer).b_p_vts_array,
+                ),
                 head: 0,
             };
         }
-    };
-}
-pub unsafe extern "C" fn charsize_fast(
-    mut csarg: *mut CharsizeArg,
-    mut cur: *const ::core::ffi::c_char,
-    mut vcol: colnr_T,
-    mut cur_char: int32_t,
-) -> CharSize {
-    return charsize_fast_impl((*csarg).win, cur, (*csarg).use_tabstop, vcol, cur_char);
-}
-pub unsafe extern "C" fn charsize_nowrap(
-    mut buf: *mut buf_T,
-    mut cur: *const ::core::ffi::c_char,
-    mut use_tabstop: bool,
-    mut vcol: colnr_T,
-    mut cur_char: int32_t,
-) -> ::core::ffi::c_int {
-    if cur_char == TAB as int32_t && use_tabstop as ::core::ffi::c_int != 0 {
-        return tabstop_padding(vcol, (*buf).b_p_ts, (*buf).b_p_vts_array);
-    } else if cur_char < 0 as int32_t {
-        return kInvalidByteCells as ::core::ffi::c_int;
-    } else {
-        return ptr2cells(cur);
-    };
-}
-unsafe extern "C" fn in_win_border(mut wp: *mut win_T, mut vcol: colnr_T) -> bool {
-    if (*wp).w_view_width == 0 as ::core::ffi::c_int {
-        return false_0 != 0;
-    }
-    let mut width1: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
-    if vcol < width1 - 1 as ::core::ffi::c_int {
-        return false_0 != 0;
-    }
-    if vcol == width1 - 1 as ::core::ffi::c_int {
-        return true_0 != 0;
-    }
-    let mut width2: ::core::ffi::c_int = width1 + win_col_off2(wp);
-    if width2 <= 0 as ::core::ffi::c_int {
-        return false_0 != 0;
-    }
-    return (vcol as ::core::ffi::c_int - width1) % width2 == width2 - 1 as ::core::ffi::c_int;
-}
-pub unsafe extern "C" fn linesize_regular(
-    csarg: *mut CharsizeArg,
-    mut vcol_arg: ::core::ffi::c_int,
-    len: colnr_T,
-) -> ::core::ffi::c_int {
-    let line: *mut ::core::ffi::c_char = (*csarg).line;
-    let mut vcol: int64_t = vcol_arg as int64_t;
-    let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
-    while ci.ptr.offset_from(line) < len as isize && *ci.ptr as ::core::ffi::c_int != NUL {
-        vcol += charsize_regular(csarg, ci.ptr, vcol_arg as colnr_T, ci.chr.value).width as int64_t;
-        ci = utfc_next(ci);
-        if vcol > MAXCOL as ::core::ffi::c_int as int64_t {
-            vcol_arg = MAXCOL as ::core::ffi::c_int;
-            break;
-        } else {
-            vcol_arg = vcol as ::core::ffi::c_int;
-        }
-    }
-    if len == MAXCOL as ::core::ffi::c_int
-        && (*csarg).virt_row >= 0 as ::core::ffi::c_int
-        && *ci.ptr as ::core::ffi::c_int == NUL
-    {
-        let mut head: ::core::ffi::c_int =
-            charsize_regular(csarg, ci.ptr, vcol_arg as colnr_T, ci.chr.value).head;
-        vcol += ((*csarg).cur_text_width_left + (*csarg).cur_text_width_right + head) as int64_t;
-        vcol_arg = if vcol > MAXCOL as ::core::ffi::c_int as int64_t {
-            MAXCOL as ::core::ffi::c_int
-        } else {
-            vcol as ::core::ffi::c_int
-        };
-    }
-    return vcol_arg;
-}
-pub unsafe extern "C" fn linesize_fast(
-    csarg: *const CharsizeArg,
-    mut vcol_arg: ::core::ffi::c_int,
-    len: colnr_T,
-) -> ::core::ffi::c_int {
-    let wp: *mut win_T = (*csarg).win;
-    let use_tabstop: bool = (*csarg).use_tabstop;
-    let line: *mut ::core::ffi::c_char = (*csarg).line;
-    let mut vcol: int64_t = vcol_arg as int64_t;
-    let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
-    while ci.ptr.offset_from(line) < len as isize && *ci.ptr as ::core::ffi::c_int != NUL {
-        vcol += charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol_arg as colnr_T, ci.chr.value).width
-            as int64_t;
-        ci = utfc_next(ci);
-        if vcol > MAXCOL as ::core::ffi::c_int as int64_t {
-            vcol_arg = MAXCOL as ::core::ffi::c_int;
-            break;
-        } else {
-            vcol_arg = vcol as ::core::ffi::c_int;
-        }
-    }
-    return vcol_arg;
-}
-unsafe extern "C" fn virt_text_cursor_off(
-    mut csarg: *const CharsizeArg,
-    mut on_NUL: bool,
-) -> ::core::ffi::c_int {
-    let mut off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if !on_NUL || State.get() & MODE_NORMAL == 0 {
-        off += (*csarg).cur_text_width_left;
-    }
-    if !on_NUL && State.get() & MODE_NORMAL != 0 {
-        off += (*csarg).cur_text_width_right;
-    }
-    return off;
-}
-pub unsafe extern "C" fn getvcol(
-    mut wp: *mut win_T,
-    mut pos: *mut pos_T,
-    mut start: *mut colnr_T,
-    mut cursor: *mut colnr_T,
-    mut end: *mut colnr_T,
-) {
-    let line: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, (*pos).lnum);
-    let end_col: colnr_T = (*pos).col;
-    let mut csarg: CharsizeArg = CharsizeArg::default();
-    let mut on_NUL: bool = false_0 != 0;
-    let cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, (*pos).lnum, line);
-    csarg.max_head_vcol = -1 as ::core::ffi::c_int;
-    let mut vcol: colnr_T = 0 as colnr_T;
-    let mut char_size: CharSize = CharSize { width: 0, head: 0 };
-    let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
-    if cstype == CharsizeKind::Fast {
-        let use_tabstop: bool = csarg.use_tabstop;
-        loop {
-            if *ci.ptr as ::core::ffi::c_int == NUL {
-                char_size = CharSize {
-                    width: 1 as ::core::ffi::c_int,
-                    head: 0,
-                };
-                break;
-            } else {
-                char_size = charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol, ci.chr.value);
-                let next: StrCharInfo = utfc_next(ci);
-                if next.ptr.offset_from(line) > end_col as isize {
-                    break;
-                }
-                ci = next;
-                vcol += char_size.width;
-            }
-        }
-    } else {
-        loop {
-            char_size = charsize_regular(&raw mut csarg, ci.ptr, vcol, ci.chr.value);
-            if *ci.ptr as ::core::ffi::c_int == NUL {
-                char_size.width = 1 as ::core::ffi::c_int
-                    + csarg.cur_text_width_left
-                    + csarg.cur_text_width_right;
-                on_NUL = true_0 != 0;
-                break;
-            } else {
-                let next_0: StrCharInfo = utfc_next(ci);
-                if next_0.ptr.offset_from(line) > end_col as isize {
-                    break;
-                }
-                ci = next_0;
-                vcol += char_size.width;
-            }
-        }
-    }
-    if *ci.ptr as ::core::ffi::c_int == NUL
-        && end_col < MAXCOL as ::core::ffi::c_int
-        && end_col as isize > ci.ptr.offset_from(line)
-    {
-        (*pos).col = ci.ptr.offset_from(line) as colnr_T;
-    }
-    let mut head: ::core::ffi::c_int = char_size.head;
-    let mut incr: ::core::ffi::c_int = char_size.width;
-    if !start.is_null() {
-        *start = (vcol as ::core::ffi::c_int + head) as colnr_T;
-    }
-    if !end.is_null() {
-        *end = (vcol as ::core::ffi::c_int + incr - 1 as ::core::ffi::c_int) as colnr_T;
-    }
-    if !cursor.is_null() {
-        if ci.chr.value == TAB as int32_t
-            && State.get() & MODE_NORMAL != 0
-            && (*wp).w_onebuf_opt.wo_list == 0
-            && !virtual_active(wp)
-            && !(VIsual_active.get() as ::core::ffi::c_int != 0
-                && (*p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
-                    || ltoreq(*pos, VIsual.get()) as ::core::ffi::c_int != 0))
-        {
-            *cursor = (vcol as ::core::ffi::c_int + incr - 1 as ::core::ffi::c_int) as colnr_T;
-        } else {
-            vcol += virt_text_cursor_off(&raw mut csarg, on_NUL);
-            *cursor = (vcol as ::core::ffi::c_int + head) as colnr_T;
-        }
-    }
-}
-pub unsafe extern "C" fn getvcol_nolist(mut posp: *mut pos_T) -> colnr_T {
-    let mut list_save: ::core::ffi::c_int = (*curwin.get()).w_onebuf_opt.wo_list;
-    let mut vcol: colnr_T = 0;
-    (*curwin.get()).w_onebuf_opt.wo_list = false_0;
-    if (*posp).coladd != 0 {
-        getvvcol(
-            curwin.get(),
-            posp,
-            ::core::ptr::null_mut::<colnr_T>(),
-            &raw mut vcol,
-            ::core::ptr::null_mut::<colnr_T>(),
-        );
-    } else {
-        getvcol(
-            curwin.get(),
-            posp,
-            ::core::ptr::null_mut::<colnr_T>(),
-            &raw mut vcol,
-            ::core::ptr::null_mut::<colnr_T>(),
-        );
-    }
-    (*curwin.get()).w_onebuf_opt.wo_list = list_save;
-    return vcol;
-}
-pub unsafe extern "C" fn getvvcol(
-    mut wp: *mut win_T,
-    mut pos: *mut pos_T,
-    mut start: *mut colnr_T,
-    mut cursor: *mut colnr_T,
-    mut end: *mut colnr_T,
-) {
-    let mut col: colnr_T = 0;
-    if virtual_active(wp) {
-        getvcol(
-            wp,
-            pos,
-            &raw mut col,
-            ::core::ptr::null_mut::<colnr_T>(),
-            ::core::ptr::null_mut::<colnr_T>(),
-        );
-        let mut coladd: colnr_T = (*pos).coladd;
-        let mut endadd: colnr_T = 0 as colnr_T;
-        let mut ptr: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, (*pos).lnum);
-        if (*pos).col < ml_get_buf_len((*wp).w_buffer, (*pos).lnum) {
-            let mut c: ::core::ffi::c_int = utf_ptr2char(ptr.offset((*pos).col as isize));
-            if c != TAB && vim_isprintc(c) as ::core::ffi::c_int != 0 {
-                endadd = ptr2cells(ptr.offset((*pos).col as isize)) - 1 as ::core::ffi::c_int;
-                if coladd > endadd {
-                    endadd = 0 as ::core::ffi::c_int as colnr_T;
-                } else {
-                    coladd = 0 as ::core::ffi::c_int as colnr_T;
-                }
-            }
-        }
-        col += coladd;
-        if !start.is_null() {
-            *start = col;
-        }
-        if !cursor.is_null() {
-            *cursor = col;
-        }
-        if !end.is_null() {
-            *end = col + endadd;
-        }
-    } else {
-        getvcol(wp, pos, start, cursor, end);
-    };
-}
-pub unsafe extern "C" fn getvcols(
-    mut wp: *mut win_T,
-    mut pos1: *mut pos_T,
-    mut pos2: *mut pos_T,
-    mut left: *mut colnr_T,
-    mut right: *mut colnr_T,
-) {
-    let mut from1: colnr_T = 0;
-    let mut from2: colnr_T = 0;
-    let mut to1: colnr_T = 0;
-    let mut to2: colnr_T = 0;
-    if lt(*pos1, *pos2) {
-        getvvcol(
-            wp,
-            pos1,
-            &raw mut from1,
-            ::core::ptr::null_mut::<colnr_T>(),
-            &raw mut to1,
-        );
-        getvvcol(
-            wp,
-            pos2,
-            &raw mut from2,
-            ::core::ptr::null_mut::<colnr_T>(),
-            &raw mut to2,
-        );
-    } else {
-        getvvcol(
-            wp,
-            pos2,
-            &raw mut from1,
-            ::core::ptr::null_mut::<colnr_T>(),
-            &raw mut to1,
-        );
-        getvvcol(
-            wp,
-            pos1,
-            &raw mut from2,
-            ::core::ptr::null_mut::<colnr_T>(),
-            &raw mut to2,
-        );
-    }
-    if from2 < from1 {
-        *left = from2;
-    } else {
-        *left = from1;
-    }
-    if to2 > to1 {
-        if *p_sel.get() as ::core::ffi::c_int == 'e' as ::core::ffi::c_int
-            && from2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int >= to1
-        {
-            *right = (from2 as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as colnr_T;
-        } else {
-            *right = to2;
-        }
-    } else {
-        *right = to1;
-    };
-}
-pub unsafe extern "C" fn win_may_fill(mut wp: *mut win_T) -> bool {
-    return (*wp).w_onebuf_opt.wo_diff != 0 && diffopt_filler() as ::core::ffi::c_int != 0
-        || buf_meta_total((*wp).w_buffer, kMTMetaLines) != 0;
-}
-pub unsafe extern "C" fn win_get_fill(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-) -> ::core::ffi::c_int {
-    let mut virt_lines: ::core::ffi::c_int = decor_virt_lines(
-        wp,
-        lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-        lnum as ::core::ffi::c_int,
-        ::core::ptr::null_mut::<::core::ffi::c_int>(),
-        ::core::ptr::null_mut::<VirtLines>(),
-        true_0 != 0,
-    );
-    if diffopt_filler() {
-        let mut n: ::core::ffi::c_int = diff_check_fill(wp, lnum);
-        if n > 0 as ::core::ffi::c_int {
-            return virt_lines + n;
-        }
-    }
-    return virt_lines;
-}
-pub unsafe extern "C" fn plines_win(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut limit_winheight: bool,
-) -> ::core::ffi::c_int {
-    return plines_win_nofill(wp, lnum, limit_winheight) + win_get_fill(wp, lnum);
-}
-pub unsafe extern "C" fn plines_win_nofill(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut limit_winheight: bool,
-) -> ::core::ffi::c_int {
-    if decor_conceal_line(
-        wp,
-        lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-        false_0 != 0,
-    ) {
-        return 0 as ::core::ffi::c_int;
-    }
-    if (*wp).w_onebuf_opt.wo_wrap == 0 {
-        return 1 as ::core::ffi::c_int;
-    }
-    if (*wp).w_view_width == 0 as ::core::ffi::c_int {
-        return 1 as ::core::ffi::c_int;
-    }
-    if lineFolded(wp, lnum) {
-        return 1 as ::core::ffi::c_int;
-    }
-    let lines: ::core::ffi::c_int = plines_win_nofold(wp, lnum);
-    if limit_winheight as ::core::ffi::c_int != 0 && lines > (*wp).w_view_height {
-        return (*wp).w_view_height;
-    }
-    return lines;
-}
-pub unsafe extern "C" fn plines_win_nofold(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-) -> ::core::ffi::c_int {
-    let mut s: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, lnum);
-    let mut csarg: CharsizeArg = CharsizeArg::default();
-    let cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, lnum, s);
-    if *s as ::core::ffi::c_int == NUL && csarg.virt_row < 0 as ::core::ffi::c_int {
-        return 1 as ::core::ffi::c_int;
-    }
-    let mut col: int64_t = 0;
-    if cstype == CharsizeKind::Fast {
-        col = linesize_fast(
-            &raw mut csarg,
-            0 as ::core::ffi::c_int,
-            MAXCOL as ::core::ffi::c_int,
-        ) as int64_t;
-    } else {
-        col = linesize_regular(
-            &raw mut csarg,
-            0 as ::core::ffi::c_int,
-            MAXCOL as ::core::ffi::c_int,
-        ) as int64_t;
-    }
-    if (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.eol != NUL as schar_T {
-        col += 1 as int64_t;
-    }
-    let mut width: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
-    if width <= 0 as ::core::ffi::c_int {
-        return 32000 as ::core::ffi::c_int;
-    }
-    if col <= width as int64_t {
-        return 1 as ::core::ffi::c_int;
-    }
-    col -= width as int64_t;
-    width += win_col_off2(wp);
-    let lines: int64_t =
-        (col + (width - 1 as ::core::ffi::c_int) as int64_t) / width as int64_t + 1 as int64_t;
-    return if lines > 0 as int64_t && lines <= INT_MAX as int64_t {
-        lines as ::core::ffi::c_int
-    } else {
-        INT_MAX
-    };
-}
-pub unsafe extern "C" fn plines_win_col(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut column: ::core::ffi::c_long,
-) -> ::core::ffi::c_int {
-    let mut lines: ::core::ffi::c_int = win_get_fill(wp, lnum);
-    if (*wp).w_onebuf_opt.wo_wrap == 0 {
-        return lines + 1 as ::core::ffi::c_int;
-    }
-    if (*wp).w_view_width == 0 as ::core::ffi::c_int {
-        return lines + 1 as ::core::ffi::c_int;
-    }
-    let mut line: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, lnum);
-    let mut csarg: CharsizeArg = CharsizeArg::default();
-    let cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, lnum, line);
-    let mut vcol: colnr_T = 0 as colnr_T;
-    let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
-    if cstype == CharsizeKind::Fast {
-        let use_tabstop: bool = csarg.use_tabstop;
-        while *ci.ptr as ::core::ffi::c_int != NUL && {
-            column -= 1;
-            column >= 0 as ::core::ffi::c_long
-        } {
-            vcol += charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol, ci.chr.value).width;
-            ci = utfc_next(ci);
-        }
-    } else {
-        while *ci.ptr as ::core::ffi::c_int != NUL && {
-            column -= 1;
-            column >= 0 as ::core::ffi::c_long
-        } {
-            vcol += charsize_regular(&raw mut csarg, ci.ptr, vcol, ci.chr.value).width;
-            ci = utfc_next(ci);
-        }
-    }
-    let mut col: colnr_T = vcol;
-    if ci.chr.value == TAB as int32_t
-        && State.get() & MODE_NORMAL != 0
-        && csarg.use_tabstop as ::core::ffi::c_int != 0
-    {
-        col += win_charsize(
-            cstype,
-            col as ::core::ffi::c_int,
-            ci.ptr,
-            ci.chr.value,
-            &raw mut csarg,
-        )
-        .width
-            - 1 as ::core::ffi::c_int;
-    }
-    let mut width: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
-    if width <= 0 as ::core::ffi::c_int {
-        return 9999 as ::core::ffi::c_int;
-    }
-    lines += 1 as ::core::ffi::c_int;
-    if col > width {
-        lines += (col as ::core::ffi::c_int - width) / (width + win_col_off2(wp))
-            + 1 as ::core::ffi::c_int;
-    }
-    return lines;
-}
-pub unsafe extern "C" fn plines_win_full(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    nextp: *mut linenr_T,
-    foldedp: *mut bool,
-    cache: bool,
-    limit_winheight: bool,
-) -> ::core::ffi::c_int {
-    let mut folded: bool = hasFoldingWin(
-        wp,
-        lnum,
-        &raw mut lnum,
-        nextp,
-        cache,
-        ::core::ptr::null_mut::<foldinfo_T>(),
-    );
-    if !foldedp.is_null() {
-        *foldedp = folded;
-    }
-    let mut filler_lines: ::core::ffi::c_int = if lnum == (*wp).w_topline {
-        (*wp).w_topfill
-    } else {
-        win_get_fill(wp, lnum)
-    };
-    if decor_conceal_line(
-        wp,
-        lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-        false_0 != 0,
-    ) {
-        return filler_lines;
-    }
-    return (if folded as ::core::ffi::c_int != 0 {
-        1 as ::core::ffi::c_int
-    } else {
-        plines_win_nofill(wp, lnum, limit_winheight)
-    }) + filler_lines;
-}
-pub unsafe extern "C" fn plines_m_win(
-    mut wp: *mut win_T,
-    mut first: linenr_T,
-    mut last: linenr_T,
-    mut max: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while first <= last && count < max {
-        let mut next: linenr_T = first;
-        count += plines_win_full(
-            wp,
-            first,
-            &raw mut next,
-            ::core::ptr::null_mut::<bool>(),
-            false_0 != 0,
-            false_0 != 0,
-        );
-        first = next + 1 as linenr_T;
-    }
-    if first == (*(*wp).w_buffer).b_ml.ml_line_count + 1 as linenr_T {
-        count += win_get_fill(wp, first);
-    }
-    return if max < count { max } else { count };
-}
-pub unsafe extern "C" fn plines_m_win_fill(
-    mut wp: *mut win_T,
-    mut first: linenr_T,
-    mut last: linenr_T,
-) -> ::core::ffi::c_int {
-    let mut count: ::core::ffi::c_int = last as ::core::ffi::c_int - first as ::core::ffi::c_int
-        + 1 as ::core::ffi::c_int
-        + decor_virt_lines(
-            wp,
-            first as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-            last as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<::core::ffi::c_int>(),
-            ::core::ptr::null_mut::<VirtLines>(),
-            false_0 != 0,
-        );
-    if diffopt_filler() {
-        let mut lnum: ::core::ffi::c_int = first as ::core::ffi::c_int;
-        while lnum as linenr_T <= last {
-            let mut n: ::core::ffi::c_int = diff_check_fill(wp, lnum as linenr_T);
-            count += if n > 0 as ::core::ffi::c_int {
-                n
-            } else {
-                0 as ::core::ffi::c_int
-            };
-            lnum += 1;
-        }
-    }
-    return if count > 0 as ::core::ffi::c_int {
-        count
-    } else {
-        0 as ::core::ffi::c_int
-    };
-}
-pub unsafe extern "C" fn win_text_height(
-    wp: *mut win_T,
-    start_lnum: linenr_T,
-    start_vcol: int64_t,
-    end_lnum: *mut linenr_T,
-    end_vcol: *mut int64_t,
-    fill: *mut int64_t,
-    max: int64_t,
-) -> int64_t {
-    let mut width1: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
-    let mut width2: ::core::ffi::c_int = width1 + win_col_off2(wp);
-    width1 = if width1 > 0 as ::core::ffi::c_int {
-        width1
-    } else {
-        0 as ::core::ffi::c_int
-    };
-    width2 = if width2 > 0 as ::core::ffi::c_int {
-        width2
-    } else {
-        0 as ::core::ffi::c_int
-    };
-    let mut height_sum_fill: int64_t = 0 as int64_t;
-    let mut height_cur_nofill: int64_t = 0 as int64_t;
-    let mut height_sum_nofill: int64_t = 0 as int64_t;
-    let mut lnum: linenr_T = start_lnum;
-    let mut cur_lnum: linenr_T = lnum;
-    let mut cur_folded: bool = false_0 != 0;
-    if start_vcol >= 0 as int64_t {
-        let mut lnum_next: linenr_T = lnum;
-        cur_folded = hasFolding(wp, lnum, &raw mut lnum, &raw mut lnum_next);
-        height_cur_nofill = plines_win_nofill(wp, lnum, false_0 != 0) as int64_t;
-        height_sum_nofill += height_cur_nofill;
-        let row_off: int64_t =
-            if start_vcol < width1 as int64_t || width2 <= 0 as ::core::ffi::c_int {
-                0 as int64_t
-            } else {
-                1 as int64_t + (start_vcol - width1 as int64_t) / width2 as int64_t
-            };
-        height_sum_nofill -= if row_off < height_cur_nofill {
-            row_off
-        } else {
-            height_cur_nofill
-        };
-        lnum = lnum_next + 1 as linenr_T;
-    }
-    while lnum <= *end_lnum && height_sum_nofill + height_sum_fill < max {
-        let mut lnum_next_0: linenr_T = lnum;
-        cur_folded = hasFolding(wp, lnum, &raw mut lnum, &raw mut lnum_next_0);
-        height_sum_fill += win_get_fill(wp, lnum) as int64_t;
-        height_cur_nofill = plines_win_nofill(wp, lnum, false_0 != 0) as int64_t;
-        height_sum_nofill += height_cur_nofill;
-        cur_lnum = lnum;
-        lnum = lnum_next_0 + 1 as linenr_T;
-    }
-    let mut vcol_end: int64_t = *end_vcol;
-    let mut use_vcol: bool = vcol_end >= 0 as int64_t && lnum > *end_lnum;
-    if use_vcol {
-        height_sum_nofill -= height_cur_nofill;
-        let row_off_0: int64_t = if vcol_end == 0 as int64_t {
-            0 as int64_t
-        } else if vcol_end <= width1 as int64_t || width2 <= 0 as ::core::ffi::c_int {
-            1 as int64_t
-        } else {
-            1 as int64_t
-                + (vcol_end - width1 as int64_t + width2 as int64_t - 1 as int64_t)
-                    / width2 as int64_t
-        };
-        height_sum_nofill += if row_off_0 < height_cur_nofill {
-            row_off_0
-        } else {
-            height_cur_nofill
-        };
-    }
-    if cur_folded {
-        vcol_end = 0 as int64_t;
-    } else {
-        let mut linesize: ::core::ffi::c_int = linetabsize_eol(wp, cur_lnum);
-        vcol_end = if (if use_vcol as ::core::ffi::c_int != 0 {
-            vcol_end
-        } else {
-            9223372036854775807 as int64_t
-        }) < linesize as int64_t
-        {
-            if use_vcol as ::core::ffi::c_int != 0 {
-                vcol_end
-            } else {
-                9223372036854775807 as int64_t
-            }
-        } else {
-            linesize as int64_t
-        };
-    }
-    let mut overflow: int64_t = height_sum_nofill + height_sum_fill - max;
-    if overflow > 0 as int64_t && width2 > 0 as ::core::ffi::c_int && vcol_end > width2 as int64_t {
-        vcol_end -= (vcol_end - width1 as int64_t) % width2 as int64_t
-            + (overflow - 1 as int64_t) * width2 as int64_t;
-    }
-    *end_lnum = cur_lnum;
-    *end_vcol = vcol_end;
-    if !fill.is_null() {
-        *fill = height_sum_fill;
-    }
-    return height_sum_fill + height_sum_nofill;
-}
-pub const INT_MIN: ::core::ffi::c_int = -INT_MAX - 1 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 
-/// The screen width of a whole line, starting from virtual column zero.
-pub unsafe fn linetabsize_str(s: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    linetabsize_col(0 as ::core::ffi::c_int, s)
+        let width = if cur_char < 0 {
+            INVALID_BYTE_CELLS
+        } else {
+            ptr2cells(cur)
+        };
+
+        // A double-width char that does not fit at the end of a screen line
+        // wraps to the next one, and the last column shows a '>'.
+        if width == 2
+            && cur_char >= 0x80
+            && (*wp).w_onebuf_opt.wo_wrap != 0
+            && in_win_border(wp, vcol)
+        {
+            CharSize { width: 3, head: 1 }
+        } else {
+            CharSize { width, head: 0 }
+        }
+    }
 }
+
+/// [`charsize_fast_impl`] for callers holding a [`CharsizeArg`]. Only valid
+/// when `init_charsize_arg` answered [`CharsizeKind::Fast`].
+///
+/// # Safety
+/// As `charsize_fast_impl`.
+#[inline]
+pub unsafe fn charsize_fast(
+    csarg: &CharsizeArg,
+    cur: *const c_char,
+    vcol: colnr_T,
+    cur_char: int32_t,
+) -> CharSize {
+    unsafe { charsize_fast_impl(csarg.win, cur, csarg.use_tabstop, vcol, cur_char) }
+}
+
+/// Dispatch to whichever charsize function `init_charsize_arg` chose.
+///
+/// # Safety
+/// As [`charsize_regular`].
+#[inline(always)]
+pub unsafe fn win_charsize(
+    cstype: CharsizeKind,
+    vcol: c_int,
+    ptr: *mut c_char,
+    chr: int32_t,
+    csarg: &mut CharsizeArg,
+) -> CharSize {
+    unsafe {
+        if cstype == CharsizeKind::Fast {
+            charsize_fast(csarg, ptr, vcol, chr)
+        } else {
+            charsize_regular(csarg, ptr, vcol, chr)
+        }
+    }
+}
+
+/// Cells the character at `cur` takes when there is no wrapping to consider.
+///
+/// # Safety
+/// `buf` must be live and `cur` must point into a NUL-terminated line.
+pub unsafe fn charsize_nowrap(
+    buf: *mut buf_T,
+    cur: *const c_char,
+    use_tabstop: bool,
+    vcol: colnr_T,
+    cur_char: int32_t,
+) -> c_int {
+    unsafe {
+        if cur_char == TAB && use_tabstop {
+            tabstop_padding(vcol, (*buf).b_p_ts, (*buf).b_p_vts_array)
+        } else if cur_char < 0 {
+            INVALID_BYTE_CELLS
+        } else {
+            ptr2cells(cur)
+        }
+    }
+}
+
+/// Whether `vcol` lands in the rightmost column of `wp`.
+///
+/// # Safety
+/// `wp` must be live.
+#[inline]
+unsafe fn in_win_border(wp: *mut win_T, vcol: colnr_T) -> bool {
+    unsafe {
+        if (*wp).w_view_width == 0 {
+            // There is no border.
+            return false;
+        }
+        // Width of the first screen line, after the line number.
+        let width1 = (*wp).w_view_width - win_col_off(wp);
+        if vcol < width1 - 1 {
+            return false;
+        }
+        if vcol == width1 - 1 {
+            return true;
+        }
+        // Width of the wrapped screen lines after it.
+        let width2 = width1 + win_col_off2(wp);
+        if width2 <= 0 {
+            return false;
+        }
+        (vcol - width1) % width2 == width2 - 1
+    }
+}
+
+/// Virtual column reached after walking `csarg`'s line up to byte `len`,
+/// starting from `vcol_arg`. Pass `MAXCOL` for the whole line, which also
+/// counts inline virtual text sitting past its end.
+///
+/// # Safety
+/// `csarg` must be initialised.
+pub unsafe fn linesize_regular(
+    csarg: &mut CharsizeArg,
+    mut vcol_arg: c_int,
+    len: colnr_T,
+) -> c_int {
+    unsafe {
+        let line = csarg.line;
+        let mut vcol = vcol_arg as int64_t;
+
+        let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
+        while ci.ptr.offset_from(line) < len as isize && *ci.ptr != NUL {
+            vcol += charsize_regular(csarg, ci.ptr, vcol_arg, ci.chr.value).width as int64_t;
+            ci = utfc_next(ci);
+            if vcol > MAXCOL as int64_t {
+                vcol_arg = MAXCOL;
+                break;
+            }
+            vcol_arg = vcol as c_int;
+        }
+
+        // Inline virtual text after the end of the line.
+        if len == MAXCOL && csarg.virt_row >= 0 && *ci.ptr == NUL {
+            let head = charsize_regular(csarg, ci.ptr, vcol_arg, ci.chr.value).head;
+            vcol += (csarg.cur_text_width_left + csarg.cur_text_width_right + head) as int64_t;
+            vcol_arg = if vcol > MAXCOL as int64_t {
+                MAXCOL
+            } else {
+                vcol as c_int
+            };
+        }
+
+        vcol_arg
+    }
+}
+
+/// [`linesize_regular`] for a line `init_charsize_arg` called
+/// [`CharsizeKind::Fast`].
+///
+/// # Safety
+/// `csarg` must be initialised.
+pub unsafe fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len: colnr_T) -> c_int {
+    unsafe {
+        let wp = csarg.win;
+        let use_tabstop = csarg.use_tabstop;
+        let line = csarg.line;
+        let mut vcol = vcol_arg as int64_t;
+
+        let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
+        while ci.ptr.offset_from(line) < len as isize && *ci.ptr != NUL {
+            vcol += charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol_arg, ci.chr.value).width
+                as int64_t;
+            ci = utfc_next(ci);
+            if vcol > MAXCOL as int64_t {
+                vcol_arg = MAXCOL;
+                break;
+            }
+            vcol_arg = vcol as c_int;
+        }
+
+        vcol_arg
+    }
+}
+
+// Split out for size; the rest of the tree calls all of it as `plines::*`.
+pub mod lines;
+pub mod vcol;
+
+pub use lines::{
+    plines_m_win, plines_m_win_fill, plines_win, plines_win_col, plines_win_full,
+    plines_win_nofill, plines_win_nofold, win_get_fill, win_may_fill, win_text_height,
+};
+pub use vcol::{getvcol, getvcol_nolist, getvcols, getvvcol};

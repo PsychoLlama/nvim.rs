@@ -2235,12 +2235,12 @@ pub unsafe extern "C" fn vcol2col(
 ) -> colnr_T {
     let mut line: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, lnum);
     let mut csarg: CharsizeArg = CharsizeArg::default();
-    let mut cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, lnum, line);
+    let mut cstype: CharsizeKind = init_charsize_arg(&mut csarg, wp, lnum, line);
     let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
     let mut cur_vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while cur_vcol < vcol && *ci.ptr as ::core::ffi::c_int != NUL {
         let mut next_vcol: ::core::ffi::c_int =
-            cur_vcol + win_charsize(cstype, cur_vcol, ci.ptr, ci.chr.value, &raw mut csarg).width;
+            cur_vcol + win_charsize(cstype, cur_vcol, ci.ptr, ci.chr.value, &mut csarg).width;
         if next_vcol > vcol {
             break;
         }

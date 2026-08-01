@@ -3698,7 +3698,7 @@ unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
                                         ptr.offset((*curwin.get()).w_cursor.col as isize);
                                     let mut csarg: CharsizeArg = CharsizeArg::default();
                                     let mut cstype: CharsizeKind = init_charsize_arg(
-                                        &raw mut csarg,
+                                        &mut csarg,
                                         curwin.get(),
                                         (*curwin.get()).w_cursor.lnum,
                                         ptr,
@@ -3714,7 +3714,7 @@ unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
                                             vcol,
                                             ci.ptr,
                                             ci.chr.value,
-                                            &raw mut csarg,
+                                            &mut csarg,
                                         )
                                         .width;
                                         ci = utfc_next(ci);
