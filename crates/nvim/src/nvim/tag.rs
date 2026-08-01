@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::src::nvim::autocmd::{EVENT_BUFREADCMD, has_autocmd};
 use crate::src::nvim::buffer::{bt_help, buflist_findname_exp, buflist_findnr, buflist_getfile};
@@ -239,38 +241,6 @@ static mt_names: GlobalCell<[*mut ::core::ffi::c_char; 8]> = GlobalCell::new([
 pub const NOTAGFILE: ::core::ffi::c_int = 99 as ::core::ffi::c_int;
 static nofile_fname: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-static e_tag_stack_empty: GlobalCell<[::core::ffi::c_char; 21]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 21], [::core::ffi::c_char; 21]>(*b"E73: Tag stack empty\0")
-});
-static e_tag_not_found_str: GlobalCell<[::core::ffi::c_char; 24]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 24], [::core::ffi::c_char; 24]>(*b"E426: Tag not found: %s\0")
-});
-static e_at_bottom_of_tag_stack: GlobalCell<[::core::ffi::c_char; 29]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
-        *b"E555: At bottom of tag stack\0",
-    )
-});
-static e_at_top_of_tag_stack: GlobalCell<[::core::ffi::c_char; 26]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"E556: At top of tag stack\0")
-});
-static e_cannot_modify_tag_stack_within_tagfunc: GlobalCell<[::core::ffi::c_char; 49]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-            *b"E986: Cannot modify the tag stack within tagfunc\0",
-        )
-    });
-static e_invalid_return_value_from_tagfunc: GlobalCell<[::core::ffi::c_char; 40]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
-            *b"E987: Invalid return value from tagfunc\0",
-        )
-    });
-static e_window_unexpectedly_close_while_searching_for_tags: GlobalCell<[::core::ffi::c_char; 59]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 59], [::core::ffi::c_char; 59]>(
-            *b"E1299: Window unexpectedly closed while searching for tags\0",
-        )
-    });
 static tagmatchname: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static ptag_entry: GlobalCell<taggy_T> = GlobalCell::new(taggy_T {
@@ -294,12 +264,14 @@ static ptag_entry: GlobalCell<taggy_T> = GlobalCell::new(taggy_T {
     user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
 });
 pub const TAG_SEP: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub unsafe extern "C" fn tag_freematch() {
-    let mut ptr_: *mut *mut ::core::ffi::c_void =
-        tagmatchname.ptr() as *mut *mut ::core::ffi::c_void;
-    xfree(*ptr_);
-    *ptr_ = NULL_0;
-    let _ = *ptr_;
+/// Forget which tag the remembered matches are for.
+///
+/// # Safety
+/// Must not be called while a match is still being read.
+pub unsafe fn tag_freematch() {
+    // SAFETY: the name is ours, or NULL.
+    unsafe { xfree(tagmatchname.get().cast()) };
+    tagmatchname.set(::core::ptr::null_mut());
 }
 pub const ML_EXTRA: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

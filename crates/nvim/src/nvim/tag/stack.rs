@@ -343,7 +343,7 @@ pub unsafe fn set_tagstack(wp: *mut win_T, d: *const dict_T, action: c_int) -> c
             // 'tagfunc' is running: it is the tag stack's own contents
             // that are being computed.
             emsg(gettext(
-                e_cannot_modify_tag_stack_within_tagfunc.ptr().cast(),
+                c"E986: Cannot modify the tag stack within tagfunc".as_ptr(),
             ));
             return FAIL;
         }
