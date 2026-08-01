@@ -12,579 +12,444 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::os::libc::strtol;
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
+use core::slice;
 
-pub unsafe extern "C" fn vim_findfile_init(
-    mut path: *mut ::core::ffi::c_char,
-    mut filename: *mut ::core::ffi::c_char,
-    mut filenamelen: size_t,
-    mut stopdirs: *mut ::core::ffi::c_char,
-    mut level: ::core::ffi::c_int,
-    mut free_visited: ::core::ffi::c_int,
-    mut find_what: ::core::ffi::c_int,
-    mut search_ctx_arg: *mut ::core::ffi::c_void,
-    mut tagfile: ::core::ffi::c_int,
-    mut rel_fname: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_void {
+/// A name held for `len` bytes at `p`.
+///
+/// # Safety
+/// `p` must hold `len` readable bytes.
+unsafe fn name_of(p: *const c_char, len: usize) -> Name {
+    // SAFETY: the caller's promise.
+    Name::from_bytes(unsafe { slice::from_raw_parts(p.cast::<u8>(), len) })
+}
+
+/// `FullName_save`'s answer, owned.
+///
+/// # Safety
+/// `p` must be a NUL-terminated string.
+unsafe fn full_name_of(p: *const c_char, force: bool) -> Name {
     unsafe {
-        let mut wc_part: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut add_sep: bool = false;
-        let mut sptr: *mut ff_stack_T = ::core::ptr::null_mut::<ff_stack_T>();
-        let mut search_ctx: *mut ff_search_ctx_T = ::core::ptr::null_mut::<ff_search_ctx_T>();
-        if !search_ctx_arg.is_null() {
-            search_ctx = search_ctx_arg as *mut ff_search_ctx_T;
-        } else {
-            search_ctx = xcalloc(1 as size_t, ::core::mem::size_of::<ff_search_ctx_T>())
-                as *mut ff_search_ctx_T;
-        }
-        (*search_ctx).ffsc_find_what = find_what;
-        (*search_ctx).ffsc_tagfile = tagfile;
-        ff_clear(search_ctx);
-        '_error_return: {
-            if free_visited == true_0 {
-                vim_findfile_free_visited(search_ctx as *mut ::core::ffi::c_void);
-            } else {
-                (*search_ctx).ffsc_visited_list = ff_get_visited_list(
-                    filename,
-                    filenamelen,
-                    &raw mut (*search_ctx).ffsc_visited_lists_list,
-                );
-                if (*search_ctx).ffsc_visited_list.is_null() {
-                    break '_error_return;
-                } else {
-                    (*search_ctx).ffsc_dir_visited_list = ff_get_visited_list(
-                        filename,
-                        filenamelen,
-                        &raw mut (*search_ctx).ffsc_dir_visited_lists_list,
-                    );
-                    if (*search_ctx).ffsc_dir_visited_list.is_null() {
-                        break '_error_return;
-                    }
-                }
-            }
-            if (*ff_expand_buffer.ptr()).data.is_null() {
-                (*ff_expand_buffer.ptr()).size = 0 as size_t;
-                (*ff_expand_buffer.ptr()).data =
-                    xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-            }
-            if *path.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '.' as ::core::ffi::c_int
-                && (vim_ispathsep(
-                    *path.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                ) as ::core::ffi::c_int
-                    != 0
-                    || *path.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL)
-                && (tagfile == 0 || vim_strchr(p_cpo.get(), CPO_DOTTAG).is_null())
-                && !rel_fname.is_null()
-            {
-                let mut len: size_t = path_tail(rel_fname).offset_from(rel_fname) as size_t;
-                if !vim_isAbsName(rel_fname) && len.wrapping_add(1 as size_t) < MAXPATHL as size_t {
-                    xmemcpyz(
-                        (*ff_expand_buffer.ptr()).data as *mut ::core::ffi::c_void,
-                        rel_fname as *const ::core::ffi::c_void,
-                        len,
-                    );
-                    (*ff_expand_buffer.ptr()).size = len;
-                    (*search_ctx).ffsc_start_dir =
-                        cstr_as_string(FullName_save((*ff_expand_buffer.ptr()).data, false_0 != 0));
-                } else {
-                    (*search_ctx).ffsc_start_dir = cbuf_to_string(rel_fname, len);
-                }
-                path = path.offset(1);
-                if *path as ::core::ffi::c_int != NUL {
-                    path = path.offset(1);
-                }
-            } else if *path as ::core::ffi::c_int == NUL || !vim_isAbsName(path) {
-                if os_dirname((*ff_expand_buffer.ptr()).data, MAXPATHL as size_t) == FAIL {
-                    break '_error_return;
-                } else {
-                    (*ff_expand_buffer.ptr()).size = strlen((*ff_expand_buffer.ptr()).data);
-                    (*search_ctx).ffsc_start_dir =
-                        copy_string(ff_expand_buffer.get(), ::core::ptr::null_mut::<Arena>());
-                }
-            }
-            if !stopdirs.is_null() {
-                let mut walker: *mut ::core::ffi::c_char = stopdirs;
-                while *walker as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
-                    walker = walker.offset(1);
-                }
-                let mut dircount: size_t = 1 as size_t;
-                (*search_ctx).ffsc_stopdirs_v =
-                    xmalloc(::core::mem::size_of::<String_0>()) as *mut String_0;
-                loop {
-                    let mut helper: *mut ::core::ffi::c_char = walker;
-                    let mut ptr: *mut ::core::ffi::c_void = xrealloc(
-                        (*search_ctx).ffsc_stopdirs_v as *mut ::core::ffi::c_void,
-                        dircount
-                            .wrapping_add(1 as size_t)
-                            .wrapping_mul(::core::mem::size_of::<String_0>()),
-                    );
-                    (*search_ctx).ffsc_stopdirs_v = ptr as *mut String_0;
-                    walker = vim_strchr(walker, ';' as ::core::ffi::c_int);
-                    '_c2rust_label: {
-                        if walker.is_null() || walker.offset_from(helper) >= 0 as isize {
-                        } else {
-                            __assert_fail(
-                            b"!walker || walker - helper >= 0\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                            b"src/nvim/file_search.rs\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            359 as ::core::ffi::c_uint,
-                            b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                        }
-                    };
-                    let mut len_0: size_t = if !walker.is_null() {
-                        walker.offset_from(helper) as size_t
-                    } else {
-                        strlen(helper)
-                    };
-                    if *helper as ::core::ffi::c_int != NUL
-                        && !vim_isAbsName(helper)
-                        && len_0.wrapping_add(1 as size_t) < MAXPATHL as size_t
-                    {
-                        xmemcpyz(
-                            (*ff_expand_buffer.ptr()).data as *mut ::core::ffi::c_void,
-                            helper as *const ::core::ffi::c_void,
-                            len_0,
-                        );
-                        (*ff_expand_buffer.ptr()).size = len_0;
-                        *(*search_ctx)
-                            .ffsc_stopdirs_v
-                            .offset(dircount.wrapping_sub(1 as size_t) as isize) =
-                            cstr_as_string(FullName_save(helper, len_0 != 0));
-                    } else {
-                        *(*search_ctx)
-                            .ffsc_stopdirs_v
-                            .offset(dircount.wrapping_sub(1 as size_t) as isize) =
-                            cbuf_to_string(helper, len_0);
-                    }
-                    if !walker.is_null() {
-                        walker = walker.offset(1);
-                    }
-                    dircount = dircount.wrapping_add(1);
-                    if walker.is_null() {
-                        break;
-                    }
-                }
-                *(*search_ctx)
-                    .ffsc_stopdirs_v
-                    .offset(dircount.wrapping_sub(1 as size_t) as isize) = NULL_STRING;
-            }
-            (*search_ctx).ffsc_level = level;
-            wc_part = vim_strchr(path, '*' as ::core::ffi::c_int);
-            if !wc_part.is_null() {
-                let mut llevel: int64_t = 0;
-                let mut errpt: *mut ::core::ffi::c_char =
-                    ::core::ptr::null_mut::<::core::ffi::c_char>();
-                '_c2rust_label_0: {
-                    if wc_part.offset_from(path) >= 0 as isize {
-                    } else {
-                        __assert_fail(
-                        b"wc_part - path >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/file_search.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        390 as ::core::ffi::c_uint,
-                        b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                    }
-                };
-                (*search_ctx).ffsc_fix_path =
-                    cbuf_to_string(path, wc_part.offset_from(path) as size_t);
-                (*ff_expand_buffer.ptr()).size = 0 as size_t;
-                while *wc_part as ::core::ffi::c_int != NUL {
-                    if (*ff_expand_buffer.ptr()).size.wrapping_add(5 as size_t)
-                        >= MAXPATHL as size_t
-                    {
-                        emsg(gettext(
-                            (e_path_too_long_for_completion.ptr() as *const _)
-                                as *const ::core::ffi::c_char,
-                        ));
-                        break;
-                    } else if strncmp(
-                        wc_part,
-                        b"**\0".as_ptr() as *const ::core::ffi::c_char,
-                        2 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        let c2rust_fresh0 = wc_part;
-                        wc_part = wc_part.offset(1);
-                        let c2rust_fresh1 = (*ff_expand_buffer.ptr()).size;
-                        (*ff_expand_buffer.ptr()).size =
-                            (*ff_expand_buffer.ptr()).size.wrapping_add(1);
-                        *(*ff_expand_buffer.ptr())
-                            .data
-                            .offset(c2rust_fresh1 as isize) = *c2rust_fresh0;
-                        let c2rust_fresh2 = wc_part;
-                        wc_part = wc_part.offset(1);
-                        let c2rust_fresh3 = (*ff_expand_buffer.ptr()).size;
-                        (*ff_expand_buffer.ptr()).size =
-                            (*ff_expand_buffer.ptr()).size.wrapping_add(1);
-                        *(*ff_expand_buffer.ptr())
-                            .data
-                            .offset(c2rust_fresh3 as isize) = *c2rust_fresh2;
-                        llevel =
-                            strtol(wc_part, &raw mut errpt, 10 as ::core::ffi::c_int) as int64_t;
-                        if errpt != wc_part && llevel > 0 as int64_t && llevel < 255 as int64_t {
-                            let c2rust_fresh4 = (*ff_expand_buffer.ptr()).size;
-                            (*ff_expand_buffer.ptr()).size =
-                                (*ff_expand_buffer.ptr()).size.wrapping_add(1);
-                            *(*ff_expand_buffer.ptr())
-                                .data
-                                .offset(c2rust_fresh4 as isize) = llevel as ::core::ffi::c_char;
-                        } else if errpt != wc_part && llevel == 0 as int64_t {
-                            (*ff_expand_buffer.ptr()).size =
-                                (*ff_expand_buffer.ptr()).size.wrapping_sub(2 as size_t);
-                        } else {
-                            let c2rust_fresh5 = (*ff_expand_buffer.ptr()).size;
-                            (*ff_expand_buffer.ptr()).size =
-                                (*ff_expand_buffer.ptr()).size.wrapping_add(1);
-                            *(*ff_expand_buffer.ptr())
-                                .data
-                                .offset(c2rust_fresh5 as isize) =
-                                FF_MAX_STAR_STAR_EXPAND as ::core::ffi::c_char;
-                        }
-                        wc_part = errpt;
-                        if !(*wc_part as ::core::ffi::c_int != NUL
-                            && !vim_ispathsep(*wc_part as ::core::ffi::c_int))
-                        {
-                            continue;
-                        }
-                        semsg(
-                        gettext(
-                            b"E343: Invalid path: '**[number]' must be at the end of the path or be followed by '%s'.\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        ),
-                        PATHSEPSTR.as_ptr(),
-                    );
-                        break '_error_return;
-                    } else {
-                        let c2rust_fresh6 = wc_part;
-                        wc_part = wc_part.offset(1);
-                        let c2rust_fresh7 = (*ff_expand_buffer.ptr()).size;
-                        (*ff_expand_buffer.ptr()).size =
-                            (*ff_expand_buffer.ptr()).size.wrapping_add(1);
-                        *(*ff_expand_buffer.ptr())
-                            .data
-                            .offset(c2rust_fresh7 as isize) = *c2rust_fresh6;
-                    }
-                }
-                *(*ff_expand_buffer.ptr())
-                    .data
-                    .offset((*ff_expand_buffer.ptr()).size as isize) = NUL as ::core::ffi::c_char;
-                (*search_ctx).ffsc_wc_path =
-                    copy_string(ff_expand_buffer.get(), ::core::ptr::null_mut::<Arena>());
-            } else {
-                (*search_ctx).ffsc_fix_path = cstr_to_string(path);
-            }
-            if (*search_ctx).ffsc_start_dir.data.is_null() {
-                (*search_ctx).ffsc_start_dir = copy_string(
-                    (*search_ctx).ffsc_fix_path,
-                    ::core::ptr::null_mut::<Arena>(),
-                );
-                *(*search_ctx)
-                    .ffsc_fix_path
-                    .data
-                    .offset(0 as ::core::ffi::c_int as isize) = NUL as ::core::ffi::c_char;
-                (*search_ctx).ffsc_fix_path.size = 0 as size_t;
-            }
-            if (*search_ctx)
-                .ffsc_start_dir
-                .size
-                .wrapping_add((*search_ctx).ffsc_fix_path.size)
-                .wrapping_add(3 as size_t)
-                >= MAXPATHL as size_t
-            {
-                emsg(gettext(
-                    (e_path_too_long_for_completion.ptr() as *const _)
-                        as *const ::core::ffi::c_char,
-                ));
-            } else {
-                add_sep = after_pathsep(
-                    (*search_ctx).ffsc_start_dir.data,
-                    (*search_ctx)
-                        .ffsc_start_dir
-                        .data
-                        .offset((*search_ctx).ffsc_start_dir.size as isize),
-                ) == 0;
-                (*ff_expand_buffer.ptr()).size = vim_snprintf(
-                    (*ff_expand_buffer.ptr()).data,
-                    MAXPATHL as size_t,
-                    b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*search_ctx).ffsc_start_dir.data,
-                    if add_sep as ::core::ffi::c_int != 0 {
-                        PATHSEPSTR.as_ptr()
-                    } else {
-                        b"\0".as_ptr() as *const ::core::ffi::c_char
-                    },
-                ) as size_t;
-                '_c2rust_label_1: {
-                    if (*ff_expand_buffer.ptr()).size < 4096 as size_t {
-                    } else {
-                        __assert_fail(
-                        b"ff_expand_buffer.size < MAXPATHL\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                        b"src/nvim/file_search.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        458 as ::core::ffi::c_uint,
-                        b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                    }
-                };
-                let mut bufsize: size_t = (*ff_expand_buffer.ptr())
-                    .size
-                    .wrapping_add((*search_ctx).ffsc_fix_path.size)
-                    .wrapping_add(1 as size_t);
-                let mut buf: *mut ::core::ffi::c_char =
-                    xmalloc(bufsize) as *mut ::core::ffi::c_char;
-                vim_snprintf(
-                    buf,
-                    bufsize,
-                    b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*ff_expand_buffer.ptr()).data,
-                    (*search_ctx).ffsc_fix_path.data,
-                );
-                if os_isdir(buf) {
-                    if (*search_ctx).ffsc_fix_path.size > 0 as size_t {
-                        add_sep = after_pathsep(
-                            (*search_ctx).ffsc_fix_path.data,
-                            (*search_ctx)
-                                .ffsc_fix_path
-                                .data
-                                .offset((*search_ctx).ffsc_fix_path.size as isize),
-                        ) == 0;
-                        (*ff_expand_buffer.ptr()).size = (*ff_expand_buffer.ptr())
-                            .size
-                            .wrapping_add(vim_snprintf(
-                                (*ff_expand_buffer.ptr())
-                                    .data
-                                    .offset((*ff_expand_buffer.ptr()).size as isize),
-                                (MAXPATHL as size_t).wrapping_sub((*ff_expand_buffer.ptr()).size),
-                                b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                (*search_ctx).ffsc_fix_path.data,
-                                if add_sep as ::core::ffi::c_int != 0 {
-                                    PATHSEPSTR.as_ptr()
-                                } else {
-                                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                                },
-                            ) as size_t);
-                        '_c2rust_label_2: {
-                            if (*ff_expand_buffer.ptr()).size < 4096 as size_t {
-                            } else {
-                                __assert_fail(
-                                b"ff_expand_buffer.size < MAXPATHL\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                b"src/nvim/file_search.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                478 as ::core::ffi::c_uint,
-                                b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                            );
-                            }
-                        };
-                    }
-                } else {
-                    let mut p: *mut ::core::ffi::c_char =
-                        path_tail((*search_ctx).ffsc_fix_path.data);
-                    let mut len_1: ::core::ffi::c_int =
-                        (*search_ctx).ffsc_fix_path.size as ::core::ffi::c_int;
-                    if p > (*search_ctx).ffsc_fix_path.data {
-                        len_1 = p.offset_from((*search_ctx).ffsc_fix_path.data)
-                            as ::core::ffi::c_int
-                            - 1 as ::core::ffi::c_int;
-                        if len_1 >= 2 as ::core::ffi::c_int
-                            && strncmp(
-                                (*search_ctx).ffsc_fix_path.data,
-                                b"..\0".as_ptr() as *const ::core::ffi::c_char,
-                                2 as size_t,
-                            ) == 0 as ::core::ffi::c_int
-                            && (len_1 == 2 as ::core::ffi::c_int
-                                || *(*search_ctx)
-                                    .ffsc_fix_path
-                                    .data
-                                    .offset(2 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int
-                                    == PATHSEP)
-                        {
-                            xfree(buf as *mut ::core::ffi::c_void);
-                            break '_error_return;
-                        } else {
-                            add_sep = after_pathsep(
-                                (*search_ctx).ffsc_fix_path.data,
-                                (*search_ctx)
-                                    .ffsc_fix_path
-                                    .data
-                                    .offset((*search_ctx).ffsc_fix_path.size as isize),
-                            ) == 0;
-                            (*ff_expand_buffer.ptr()).size = (*ff_expand_buffer.ptr())
-                                .size
-                                .wrapping_add(vim_snprintf(
-                                    (*ff_expand_buffer.ptr())
-                                        .data
-                                        .offset((*ff_expand_buffer.ptr()).size as isize),
-                                    (MAXPATHL as size_t)
-                                        .wrapping_sub((*ff_expand_buffer.ptr()).size),
-                                    b"%.*s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                    len_1,
-                                    (*search_ctx).ffsc_fix_path.data,
-                                    if add_sep as ::core::ffi::c_int != 0 {
-                                        PATHSEPSTR.as_ptr()
-                                    } else {
-                                        b"\0".as_ptr() as *const ::core::ffi::c_char
-                                    },
-                                ) as size_t);
-                            '_c2rust_label_3: {
-                                if (*ff_expand_buffer.ptr()).size < 4096 as size_t {
-                                } else {
-                                    __assert_fail(
-                                    b"ff_expand_buffer.size < MAXPATHL\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                    b"src/nvim/file_search.rs\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
-                                    501 as ::core::ffi::c_uint,
-                                    b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
-                                        .as_ptr() as *const ::core::ffi::c_char,
-                                );
-                                }
-                            };
-                        }
-                    }
-                    if !(*search_ctx).ffsc_wc_path.data.is_null() {
-                        let mut tempsize: size_t = (*search_ctx)
-                            .ffsc_fix_path
-                            .size
-                            .wrapping_sub(len_1 as size_t)
-                            .wrapping_add((*search_ctx).ffsc_wc_path.size)
-                            .wrapping_add(1 as size_t);
-                        let mut temp: *mut ::core::ffi::c_char =
-                            xmalloc(tempsize) as *mut ::core::ffi::c_char;
-                        (*search_ctx).ffsc_wc_path.size = vim_snprintf(
-                            temp,
-                            tempsize,
-                            b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                            (*search_ctx).ffsc_fix_path.data.offset(len_1 as isize),
-                            (*search_ctx).ffsc_wc_path.data,
-                        ) as size_t;
-                        '_c2rust_label_4: {
-                            if (*search_ctx).ffsc_wc_path.size < tempsize {
-                            } else {
-                                __assert_fail(
-                                b"search_ctx->ffsc_wc_path.size < tempsize\0".as_ptr()
-                                    as *const ::core::ffi::c_char,
-                                b"src/nvim/file_search.rs\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                                513 as ::core::ffi::c_uint,
-                                b"void *vim_findfile_init(char *, char *, size_t, char *, int, int, int, void *, int, char *)\0"
-                                    .as_ptr() as *const ::core::ffi::c_char,
-                            );
-                            }
-                        };
-                        xfree((*search_ctx).ffsc_wc_path.data as *mut ::core::ffi::c_void);
-                        (*search_ctx).ffsc_wc_path.data = temp;
-                    }
-                }
-                xfree(buf as *mut ::core::ffi::c_void);
-                sptr = ff_create_stack_element(
-                    (*ff_expand_buffer.ptr()).data,
-                    (*ff_expand_buffer.ptr()).size,
-                    (*search_ctx).ffsc_wc_path.data,
-                    (*search_ctx).ffsc_wc_path.size,
-                    level,
-                    0 as ::core::ffi::c_int,
-                );
-                ff_push(search_ctx, sptr);
-                (*search_ctx).ffsc_file_to_search = cbuf_to_string(filename, filenamelen);
-                return search_ctx as *mut ::core::ffi::c_void;
-            }
-        }
-        vim_findfile_cleanup(search_ctx as *mut ::core::ffi::c_void);
-        return NULL;
+        let full = FullName_save(p, force);
+        let name = Name::from_ptr(full);
+        xfree(full.cast());
+        name
     }
 }
 
-pub unsafe extern "C" fn vim_findfile_stopdir(
-    mut buf: *mut ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
+/// Does `name` need a path separator adding before something else goes
+/// after it?
+///
+/// # Safety
+/// There is nothing to promise; `name` carries its own length.
+unsafe fn needs_separator(name: &Name) -> bool {
+    // SAFETY: a `Name` holds `len()` bytes and a terminator.
+    unsafe { after_pathsep(name.as_ptr(), name.as_ptr().add(name.len())) == 0 }
+}
+
+/// Where the search should start when the given path is relative.
+///
+/// A leading `"./"` means the current *file*'s directory, unless this is a
+/// `'tags'` search and `'cpoptions'` holds `"d"`. Anything else relative
+/// starts from the current directory. An absolute path has its own starting
+/// directory worked out later, from its fixed part.
+///
+/// Answers where the path proper begins, which is past the `"./"`.
+///
+/// # Safety
+/// `path` and `rel_fname` must be NUL-terminated strings, `rel_fname` may be
+/// NULL.
+unsafe fn starting_dir(
+    ctx: &mut FindContext,
+    path: *mut c_char,
+    rel_fname: *const c_char,
+    tagfile: bool,
+) -> Result<*mut c_char, ()> {
     unsafe {
-        while *buf as ::core::ffi::c_int != NUL
-            && *buf as ::core::ffi::c_int != ';' as ::core::ffi::c_int
-            && (*buf.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != '\\' as ::core::ffi::c_int
-                || *buf.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != ';' as ::core::ffi::c_int)
+        let dot_slash =
+            *path == b'.' as c_char && (vim_ispathsep(*path.add(1) as c_int) || *path.add(1) == 0);
+        if dot_slash
+            && (!tagfile || vim_strchr(p_cpo.get(), CPO_DOTTAG).is_null())
+            && !rel_fname.is_null()
         {
-            buf = buf.offset(1);
+            let len = path_tail(rel_fname.cast_mut()).offset_from(rel_fname) as usize;
+            ctx.start_dir = Some(if !vim_isAbsName(rel_fname) && len + 1 < MAXPATHL {
+                // Make the start dir an absolute path name.
+                full_name_of(name_of(rel_fname, len).as_ptr(), false)
+            } else {
+                name_of(rel_fname, len)
+            });
+            // Step over the "." and the separator after it, if any.
+            let path = path.add(1);
+            return Ok(if *path != 0 { path.add(1) } else { path });
         }
-        let mut dst: *mut ::core::ffi::c_char = buf;
-        's_91: {
-            '_is_semicolon: {
-                if *buf as ::core::ffi::c_int != ';' as ::core::ffi::c_int {
-                    if *buf as ::core::ffi::c_int != NUL {
-                        's_61: loop {
-                            let c2rust_fresh8 = dst;
-                            dst = dst.offset(1);
-                            *c2rust_fresh8 = ';' as ::core::ffi::c_char;
-                            buf = buf.offset(2 as ::core::ffi::c_int as isize);
-                            loop {
-                                if !(*buf as ::core::ffi::c_int != NUL
-                                    && *buf as ::core::ffi::c_int != ';' as ::core::ffi::c_int)
-                                {
-                                    break 's_61;
-                                }
-                                if *buf.offset(0 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int
-                                    == '\\' as ::core::ffi::c_int
-                                    && *buf.offset(1 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int
-                                        == ';' as ::core::ffi::c_int
-                                {
-                                    break;
-                                }
-                                let c2rust_fresh9 = buf;
-                                buf = buf.offset(1);
-                                let c2rust_fresh10 = dst;
-                                dst = dst.offset(1);
-                                *c2rust_fresh10 = *c2rust_fresh9;
-                            }
-                        }
-                        '_c2rust_label: {
-                            if dst < buf {
-                            } else {
-                                __assert_fail(
-                                    b"dst < buf\0".as_ptr() as *const ::core::ffi::c_char,
-                                    b"src/nvim/file_search.rs\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                    561 as ::core::ffi::c_uint,
-                                    b"char *vim_findfile_stopdir(char *)\0".as_ptr()
-                                        as *const ::core::ffi::c_char,
-                                );
-                            }
-                        };
-                        *dst = NUL as ::core::ffi::c_char;
-                        if *buf as ::core::ffi::c_int == ';' as ::core::ffi::c_int {
-                            break '_is_semicolon;
-                        }
-                    }
-                    buf = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                    break 's_91;
-                }
+
+        if *path == 0 || !vim_isAbsName(path) {
+            let mut curdir = [0 as c_char; MAXPATHL];
+            if os_dirname(curdir.as_mut_ptr(), MAXPATHL) == FAIL {
+                return Err(());
             }
-            *buf = NUL as ::core::ffi::c_char;
-            buf = buf.offset(1);
+            ctx.start_dir = Some(Name::from_ptr(curdir.as_ptr()));
         }
-        return buf;
+        Ok(path)
     }
 }
 
-pub unsafe extern "C" fn vim_findfile_cleanup(mut ctx: *mut ::core::ffi::c_void) {
+/// Split `stopdirs` into the directories the upward search stops at.
+///
+/// An empty entry means "ascend to the top of the directory tree", which is
+/// why `";"` and `""` both give an unlimited upward search.
+///
+/// # Safety
+/// `stopdirs` must be a NUL-terminated string.
+unsafe fn stop_directories(stopdirs: *mut c_char) -> Vec<Name> {
     unsafe {
-        if ctx.is_null() {
-            return;
+        let mut walker = stopdirs;
+        while *walker == b';' as c_char {
+            walker = walker.add(1);
         }
-        vim_findfile_free_visited(ctx);
-        ff_clear(ctx as *mut ff_search_ctx_T);
-        xfree(ctx);
+
+        let mut dirs = Vec::new();
+        loop {
+            let entry = walker;
+            let next = vim_strchr(walker, c_int::from(b';'));
+            let len = if next.is_null() {
+                strlen(entry)
+            } else {
+                next.offset_from(entry) as usize
+            };
+
+            dirs.push(
+                if *entry != 0 && !vim_isAbsName(entry) && len + 1 < MAXPATHL {
+                    // Upstream copies the entry into a scratch buffer and then
+                    // resolves `entry` instead, which is not NUL-terminated at
+                    // the ';': a relative stop directory with another after it
+                    // resolves the whole rest of the string. It also passes the
+                    // entry's length where `force` goes. Preserved — this is
+                    // what the option means today.
+                    full_name_of(entry, len != 0)
+                } else {
+                    name_of(entry, len)
+                },
+            );
+
+            let Some(next) = (!next.is_null()).then(|| next.add(1)) else {
+                return dirs;
+            };
+            walker = next;
+        }
     }
+}
+
+/// Copy the wildcard tail, encoding each `**`'s descent limit.
+///
+/// The octet after a `**` is used as a binary counter, so `**3` becomes
+/// `**` and a byte holding 3, and `**76` becomes `**` and an `L`. `**0`
+/// removes the `**` altogether, and no number at all means
+/// [`FF_MAX_STAR_STAR_EXPAND`]. Because of this technique the path looks
+/// awful if you print it as a string.
+///
+/// # Safety
+/// `wc_part` must be a NUL-terminated string.
+unsafe fn wildcard_tail(wc_part: *mut c_char) -> Result<Name, ()> {
+    unsafe {
+        let mut tail = Vec::<u8>::new();
+        let mut at = wc_part;
+        while *at != 0 {
+            if tail.len() + 5 >= MAXPATHL {
+                emsg(gettext(c"E854: Path too long for completion".as_ptr()));
+                break;
+            }
+            if !(*at == b'*' as c_char && *at.add(1) == b'*' as c_char) {
+                tail.push(*at as u8);
+                at = at.add(1);
+                continue;
+            }
+
+            tail.extend_from_slice(b"**");
+            at = at.add(2);
+            let mut errpt: *mut c_char = ptr::null_mut();
+            let limit = strtol(at, &raw mut errpt, 10);
+            if errpt != at && limit > 0 && limit < 255 {
+                tail.push(limit as u8);
+            } else if errpt != at && limit == 0 {
+                // A restrict of 0: remove the '**' already added.
+                tail.truncate(tail.len() - 2);
+            } else {
+                tail.push(FF_MAX_STAR_STAR_EXPAND);
+            }
+
+            at = errpt;
+            if *at != 0 && !vim_ispathsep(*at as c_int) {
+                semsg(
+                    gettext(
+                        c"E343: Invalid path: '**[number]' must be at the end of the path or be followed by '%s'."
+                            .as_ptr(),
+                    ),
+                    c"/".as_ptr(),
+                );
+                return Err(());
+            }
+        }
+        Ok(Name::from_bytes(&tail))
+    }
+}
+
+/// The directory the first stack frame should search, and the wildcards it
+/// should search with.
+///
+/// The fixed part of the path may name a directory, in which case it all
+/// belongs to the starting directory; otherwise its last component is a name
+/// pattern and moves to the front of the wildcards.
+///
+/// # Safety
+/// There must be a current buffer.
+unsafe fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
+    unsafe {
+        let start_dir = ctx.start_dir.as_ref().expect("set above");
+        // Create an absolute path.
+        if start_dir.len() + ctx.fix_path.len() + 3 >= MAXPATHL {
+            emsg(gettext(c"E854: Path too long for completion".as_ptr()));
+            return Err(());
+        }
+
+        let mut dir = start_dir.bytes().to_vec();
+        if needs_separator(start_dir) {
+            dir.push(b'/');
+        }
+
+        let mut whole = dir.clone();
+        whole.extend_from_slice(ctx.fix_path.bytes());
+        if os_isdir(Name::from_bytes(&whole).as_ptr()) {
+            if !ctx.fix_path.is_empty() {
+                dir.extend_from_slice(ctx.fix_path.bytes());
+                if needs_separator(&ctx.fix_path) {
+                    dir.push(b'/');
+                }
+            }
+            return Ok(Name::from_bytes(&dir));
+        }
+
+        // The fixed part's last component is a name, not a directory.
+        let tail = path_tail(ctx.fix_path.as_ptr().cast_mut());
+        let mut kept = ctx.fix_path.len();
+        if tail.cast_const() > ctx.fix_path.as_ptr() {
+            // Do not add '..' to the path and start upwards searching.
+            kept = tail.offset_from(ctx.fix_path.as_ptr()) as usize - 1;
+            if kept >= 2
+                && ctx.fix_path.bytes().starts_with(b"..")
+                && (kept == 2 || ctx.fix_path.at(2) == b'/')
+            {
+                return Err(());
+            }
+            dir.extend_from_slice(&ctx.fix_path.bytes()[..kept]);
+            // The separator test is upstream's, and it asks about the whole
+            // fixed part rather than the piece just written.
+            if needs_separator(&ctx.fix_path) {
+                dir.push(b'/');
+            }
+        }
+
+        if let Some(wc_path) = &ctx.wc_path {
+            let mut moved = ctx.fix_path.bytes()[kept..].to_vec();
+            moved.extend_from_slice(wc_path.bytes());
+            ctx.wc_path = Some(Name::from_bytes(&moved));
+        }
+        Ok(Name::from_bytes(&dir))
+    }
+}
+
+/// Create or reinitialise a search context for [`vim_findfile`].
+///
+/// Don't forget to clean up by calling [`vim_findfile_cleanup`] when you are
+/// done with the search context.
+///
+/// Find the file `filename` in the directory `path`. `path` may contain
+/// wildcards; if so only search `level` directories deep. `level` is the
+/// absolute maximum and is not related to the restriction given to the `**`
+/// wildcard: with a level of 100 and a `**200`, the search still stops after
+/// 100 levels.
+///
+/// `filename` cannot contain wildcards. It is used as-is, with no
+/// backslashes to escape special characters.
+///
+/// If `stopdirs` is not NULL and nothing is found downward, the search is
+/// restarted on the next higher directory level, repeatedly, until the
+/// starting directory of a search is contained in `stopdirs`. `stopdirs` has
+/// the format `";*<dirname>*\(;<dirname>\)*;\=$"`.
+///
+/// If `path` is relative, the search starts in Vim's current directory, or
+/// in the current file's directory when it starts with `"./"`. If `path` is
+/// absolute, the search starts at the part of it before the first wildcard.
+/// Upward search is only done on the starting dir.
+///
+/// If `free_visited` is true the list of already visited files and
+/// directories is cleared. Set it false if you just want to search from
+/// another directory but want to be sure no directory from a previous search
+/// is searched again — useful when looking for a file in several places.
+///
+/// A search context returned by a previous call can be passed in
+/// `search_ctx_arg`; it is reused and reinitialised, and its list of
+/// already visited directories is only deleted when `free_visited` is true.
+/// Be aware that `search_ctx_arg` is freed if the reinitialisation fails. If
+/// you don't have a search context from a previous call it must be NULL.
+///
+/// This function silently ignores a few errors; [`vim_findfile`] will have
+/// limited functionality then.
+///
+/// @param tagfile  expanding names of tags files
+/// @param rel_fname  file name to use for "."
+///
+/// @return  the newly allocated search context, or NULL if an error occurred.
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn vim_findfile_init(
+    path: *mut c_char,
+    filename: *mut c_char,
+    filenamelen: size_t,
+    stopdirs: *mut c_char,
+    level: c_int,
+    free_visited: bool,
+    find_what: c_int,
+    search_ctx_arg: *mut c_void,
+    tagfile: bool,
+    rel_fname: *mut c_char,
+) -> *mut c_void {
+    unsafe {
+        // If a search context is given by the caller, reuse it, else make a
+        // new one.
+        let mut ctx = if search_ctx_arg.is_null() {
+            Box::new(FindContext::default())
+        } else {
+            Box::from_raw(search_ctx_arg.cast::<FindContext>())
+        };
+        ctx.find_what = find_what;
+        ctx.tagfile = tagfile;
+        // Clear the search context, but NOT the visited lists.
+        ctx.reset();
+
+        if free_visited {
+            ctx.visited.clear();
+            ctx.dir_visited.clear();
+        } else {
+            // Reuse the old visited lists: get the list for the given
+            // filename, creating one if none exists yet.
+            ctx.visited.select(filename, filenamelen);
+            ctx.dir_visited.select(filename, filenamelen);
+        }
+
+        // Store information on the starting dir now if the path is relative.
+        // If it is absolute we do that below, from the fixed part.
+        let Ok(path) = starting_dir(&mut ctx, path, rel_fname, tagfile) else {
+            return ptr::null_mut();
+        };
+
+        // If stopdirs are given, split them into an array. If a stop
+        // directory is not recognized there is no upward search at all;
+        // see ff_path_in_stoplist() for the details.
+        if !stopdirs.is_null() {
+            ctx.stopdirs = Some(stop_directories(stopdirs));
+        }
+
+        ctx.level = level;
+
+        // Split into the fixed part and the wildcard part.
+        let wc_part = vim_strchr(path, c_int::from(b'*'));
+        if wc_part.is_null() {
+            ctx.fix_path = Name::from_ptr(path);
+        } else {
+            ctx.fix_path = name_of(path, wc_part.offset_from(path) as usize);
+            let Ok(tail) = wildcard_tail(wc_part) else {
+                return ptr::null_mut();
+            };
+            ctx.wc_path = Some(tail);
+        }
+
+        if ctx.start_dir.is_none() {
+            // Store the fixed part as the starting dir. This is needed when
+            // the given path is fully qualified.
+            ctx.start_dir = Some(ctx.fix_path.clone());
+            ctx.fix_path.clear();
+        }
+
+        let Ok(fix_path) = first_frame(&mut ctx) else {
+            return ptr::null_mut();
+        };
+        let wc_path = ctx.wc_path.clone().unwrap_or_default();
+        ctx.stack
+            .push(StackFrame::new(fix_path, wc_path, level, false));
+        ctx.file_to_search = name_of(filename, filenamelen);
+        Box::into_raw(ctx).cast()
+    }
+}
+
+/// Split a `'path'` entry at its first unescaped `;`, answering the stop
+/// directories after it — or NULL when there are none.
+///
+/// The entry itself is left in `buf`, NUL-terminated at the `;` and with
+/// every `"\;"` in it collapsed to a plain `;`.
+///
+/// # Safety
+/// `buf` must be a writable NUL-terminated string.
+pub unsafe extern "C" fn vim_findfile_stopdir(buf: *mut c_char) -> *mut c_char {
+    unsafe {
+        let at = |i: usize| *buf.add(i);
+        // Nothing before the first escape needs moving.
+        let mut read = 0;
+        while at(read) != 0
+            && at(read) != b';' as c_char
+            && !(at(read) == b'\\' as c_char && at(read + 1) == b';' as c_char)
+        {
+            read += 1;
+        }
+
+        // From here every "\;" loses its backslash, so the entry shortens
+        // as it is copied over itself.
+        let mut write = read;
+        while at(read) != 0 && at(read) != b';' as c_char {
+            if at(read) == b'\\' as c_char && at(read + 1) == b';' as c_char {
+                *buf.add(write) = b';' as c_char;
+                read += 2;
+            } else {
+                *buf.add(write) = at(read);
+                read += 1;
+            }
+            write += 1;
+        }
+
+        let ends_at_semicolon = at(read) == b';' as c_char;
+        if write < read {
+            *buf.add(write) = 0;
+        }
+        if ends_at_semicolon {
+            *buf.add(read) = 0;
+            return buf.add(read + 1);
+        }
+        ptr::null_mut()
+    }
+}
+
+/// Free the lists of visited files and directories. Can handle a NULL
+/// pointer.
+///
+/// # Safety
+/// `ctx` must be a search context, or NULL.
+pub(crate) unsafe fn vim_findfile_free_visited(ctx: *mut c_void) {
+    if ctx.is_null() {
+        return;
+    }
+    // SAFETY: the caller's context came from `vim_findfile_init`.
+    let ctx = unsafe { &mut *ctx.cast::<FindContext>() };
+    ctx.visited.clear();
+    ctx.dir_visited.clear();
+}
+
+/// Clean up the given search context. Can handle a NULL pointer.
+pub unsafe extern "C" fn vim_findfile_cleanup(ctx: *mut c_void) {
+    if ctx.is_null() {
+        return;
+    }
+    // SAFETY: the caller's context came from `vim_findfile_init`.
+    drop(unsafe { Box::from_raw(ctx.cast::<FindContext>()) });
 }

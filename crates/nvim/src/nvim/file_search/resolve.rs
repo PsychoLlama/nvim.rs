@@ -264,7 +264,7 @@ unsafe fn find_along_option(
     rel_fname: *mut c_char,
     file_to_find: *const c_char,
     file_to_findlen: size_t,
-    search_ctx: *mut *mut ff_search_ctx_T,
+    search_ctx: *mut *mut FindContext,
 ) -> *mut c_char {
     unsafe {
         // Where the last call had got to in the option.
@@ -313,10 +313,10 @@ unsafe fn find_along_option(
                 file_to_findlen,
                 stopdirs,
                 100,
-                false_0,
+                false,
                 find_what,
                 (*search_ctx).cast(),
-                false_0,
+                false,
                 rel_fname,
             )
             .cast();
@@ -365,7 +365,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
     search_ctx_arg: *mut *mut c_char,
 ) -> *mut c_char {
     unsafe {
-        let search_ctx = search_ctx_arg.cast::<*mut ff_search_ctx_T>();
+        let search_ctx = search_ctx_arg.cast::<*mut FindContext>();
         // Do not attempt to search "relative" to a URL. #6009
         let rel_fname = if !rel_fname.is_null() && path_with_url(rel_fname) != 0 {
             ptr::null_mut()

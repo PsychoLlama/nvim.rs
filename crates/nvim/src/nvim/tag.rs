@@ -3399,10 +3399,10 @@ pub unsafe extern "C" fn get_tagfname(
                 strlen(filename),
                 r_ptr,
                 100 as ::core::ffi::c_int,
-                false_0,
+                false,
                 FINDFILE_FILE as ::core::ffi::c_int,
                 (*tnp).tn_search_ctx,
-                true_0,
+                true,
                 (*curbuf.get()).b_ffname,
             );
             if !(*tnp).tn_search_ctx.is_null() {

@@ -1,6 +1,19 @@
-use crate::src::nvim::api::private::helpers::{
-    cbuf_to_string, copy_string, cstr_as_string, cstr_to_string,
-};
+//! Searching for a file along `'path'`, `'tags'` and `'cdpath'`.
+//!
+//! A caller builds a search context with [`vim_findfile_init`], then calls
+//! [`vim_findfile`] until it answers NULL, then hands the context to
+//! [`vim_findfile_cleanup`]. Re-initialising an existing context keeps its
+//! list of directories already visited, which is what lets a `'tags'`
+//! setting like `"./**/tags,./**/TAGS,**/tags"` share work between its three
+//! searches.
+//!
+//! The walk is depth first over [`FindContext::stack`]. The `'path'` grammar
+//! it understands beyond plain wildcards lives only here: a `;` asks for the
+//! search to be restarted one directory higher until a stop directory is
+//! reached, and `**N` limits how far down `**` descends.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::autocmd::{EVENT_DIRCHANGED, EVENT_DIRCHANGEDPRE, apply_autocmds, has_event};
 use crate::src::nvim::charset::{getdigits_int32, getdigits_long, skipwhite, vim_isfilec};
 use crate::src::nvim::cursor::get_cursor_line_ptr;
@@ -16,7 +29,7 @@ use crate::src::nvim::main::{
     e_no_more_file_str_found_in_path, got_int, line_msg, p_cdpath, p_cpo, p_fic,
 };
 use crate::src::nvim::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
-use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc, xstrlcpy};
+use crate::src::nvim::memory::{xfree, xmemdupz, xstrlcpy};
 use crate::src::nvim::message::{emsg, semsg};
 use crate::src::nvim::normal::get_visual_text;
 use crate::src::nvim::option::{copy_option_part, was_set_insecurely};
@@ -26,9 +39,7 @@ use crate::src::nvim::os::fs::{
     os_chdir, os_dirname, os_fileid, os_fileid_equal, os_isdir, os_path_exists,
 };
 use crate::src::nvim::os::input::os_breakcheck;
-use crate::src::nvim::os::libc::{
-    __assert_fail, abort, gettext, memmove, strcpy, strlen, strncmp, strtol,
-};
+use crate::src::nvim::os::libc::{abort, gettext, strcpy, strlen, strncmp};
 use crate::src::nvim::path::{
     FreeWild, FullName_save, after_pathsep, expand_wildcards, path_fnamecmp, path_fnamencmp,
     path_has_drive_letter, path_is_url, path_shorten_fname, path_tail, path_tail_with_sep,
@@ -36,23 +47,25 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
-    Arena, BoolVarValue, CdCause, CdScope, FileID, String_0, VimVarIndex, cmdarg_T, event_T,
-    int64_t, linenr_T, ptrdiff_t, save_v_event_T, size_t,
+    BoolVarValue, CdCause, CdScope, FileID, VimVarIndex, cmdarg_T, event_T, linenr_T, ptrdiff_t,
+    save_v_event_T, size_t,
 };
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr;
+use std::ffi::CStr;
 
-// The carve of the transpiled module; see each child's docs.
-mod init;
-pub use self::init::*;
-mod visited;
-pub(crate) use self::visited::*;
-mod resolve;
-pub use self::resolve::*;
-mod cursor;
-pub use self::cursor::*;
 mod chdir;
+mod cursor;
+mod init;
+mod resolve;
+mod visited;
+
 pub use self::chdir::*;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISdigit: C2Rust_Unnamed = 2048;
+pub use self::cursor::*;
+pub use self::init::*;
+pub use self::resolve::*;
+pub(crate) use self::visited::*;
+
 pub const kCdScopeGlobal: CdScope = 2;
 pub const kCdScopeTabpage: CdScope = 1;
 pub const kCdScopeWindow: CdScope = 0;
@@ -60,649 +73,742 @@ pub const kCdScopeInvalid: CdScope = -1;
 pub const kCdCauseAuto: CdCause = 2;
 pub const kCdCauseWindow: CdCause = 1;
 pub const kCdCauseOther: CdCause = -1;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
-pub const kBufOptIncludeexpr: C2Rust_Unnamed_13 = 46;
+pub const kBufOptIncludeexpr: c_int = 46;
 pub const VV_FNAME: VimVarIndex = 12;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const FINDFILE_BOTH: C2Rust_Unnamed_14 = 2;
-pub const FINDFILE_DIR: C2Rust_Unnamed_14 = 1;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const FNAME_UNESC: C2Rust_Unnamed_15 = 32;
-pub const FNAME_REL: C2Rust_Unnamed_15 = 16;
-pub const FNAME_INCL: C2Rust_Unnamed_15 = 8;
-pub const FNAME_HYP: C2Rust_Unnamed_15 = 4;
-pub const FNAME_EXP: C2Rust_Unnamed_15 = 2;
-pub const FNAME_MESS: C2Rust_Unnamed_15 = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ff_search_ctx_T {
-    pub ffsc_stack_ptr: *mut ff_stack_T,
-    pub ffsc_visited_list: *mut ff_visited_list_hdr_T,
-    pub ffsc_dir_visited_list: *mut ff_visited_list_hdr_T,
-    pub ffsc_visited_lists_list: *mut ff_visited_list_hdr_T,
-    pub ffsc_dir_visited_lists_list: *mut ff_visited_list_hdr_T,
-    pub ffsc_file_to_search: String_0,
-    pub ffsc_start_dir: String_0,
-    pub ffsc_fix_path: String_0,
-    pub ffsc_wc_path: String_0,
-    pub ffsc_level: ::core::ffi::c_int,
-    pub ffsc_stopdirs_v: *mut String_0,
-    pub ffsc_find_what: ::core::ffi::c_int,
-    pub ffsc_tagfile: ::core::ffi::c_int,
-}
-pub type ff_visited_list_hdr_T = ff_visited_list_hdr;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ff_visited_list_hdr {
-    pub ffvl_next: *mut ff_visited_list_hdr,
-    pub ffvl_filename: *mut ::core::ffi::c_char,
-    pub ffvl_visited_list: *mut ff_visited_T,
-}
-pub type ff_visited_T = ff_visited;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ff_visited {
-    pub ffv_next: *mut ff_visited,
-    pub ffv_wc_path: *mut ::core::ffi::c_char,
-    pub file_id_valid: bool,
-    pub file_id: FileID,
-    pub ffv_fname: [::core::ffi::c_char; 0],
-}
-pub type ff_stack_T = ff_stack;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ff_stack {
-    pub ffs_prev: *mut ff_stack,
-    pub ffs_fix_path: String_0,
-    pub ffs_wc_path: String_0,
-    pub ffs_filearray: *mut *mut ::core::ffi::c_char,
-    pub ffs_filearray_size: ::core::ffi::c_int,
-    pub ffs_filearray_cur: ::core::ffi::c_int,
-    pub ffs_stage: ::core::ffi::c_int,
-    pub ffs_level: ::core::ffi::c_int,
-    pub ffs_star_star_empty: ::core::ffi::c_int,
-}
-pub const EW_NOTWILD: C2Rust_Unnamed_17 = 1024;
-pub const EW_SILENT: C2Rust_Unnamed_17 = 32;
-pub const EW_ADDSLASH: C2Rust_Unnamed_17 = 8;
-pub const EW_DIR: C2Rust_Unnamed_17 = 1;
-pub const OPT_LOCAL: C2Rust_Unnamed_16 = 2;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+
+/// What a search should accept as a match.
+pub const FINDFILE_DIR: c_int = 1;
+pub const FINDFILE_BOTH: c_int = 2;
+
+pub const FNAME_MESS: c_int = 1;
+pub const FNAME_EXP: c_int = 2;
+pub const FNAME_HYP: c_int = 4;
+pub const FNAME_INCL: c_int = 8;
+pub const FNAME_REL: c_int = 16;
+pub const FNAME_UNESC: c_int = 32;
+
+pub const EW_DIR: c_int = 1;
+pub const EW_ADDSLASH: c_int = 8;
+pub const EW_SILENT: c_int = 32;
+pub const EW_NOTWILD: c_int = 1024;
+pub const OPT_LOCAL: c_int = 2;
+
+pub const OK: c_int = 1;
+pub const FAIL: c_int = 0;
+/// `'cpoptions'` flag: a `'tags'` entry starting with `"./"` is relative to
+/// the current directory rather than to the current file.
+pub const CPO_DOTTAG: c_int = 'd' as c_int;
+
 /// The longest path name the searcher will build, buffers included.
 pub const MAXPATHL: usize = 4096;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const NULL_STRING: String_0 = String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-};
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
-pub const PATHSEPSTR: [::core::ffi::c_char; 2] =
-    unsafe { ::core::mem::transmute::<[u8; 2], [::core::ffi::c_char; 2]>(*b"/\0") };
-pub const CPO_DOTTAG: ::core::ffi::c_int = 'd' as ::core::ffi::c_int;
-static ff_expand_buffer: GlobalCell<String_0> = GlobalCell::new(String_0 {
-    data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    size: 0 as size_t,
-});
-pub const FF_MAX_STAR_STAR_EXPAND: ::core::ffi::c_int = 30 as ::core::ffi::c_int;
-static e_path_too_long_for_completion: GlobalCell<[::core::ffi::c_char; 35]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 35], [::core::ffi::c_char; 35]>(
-            *b"E854: Path too long for completion\0",
-        )
-    });
-pub unsafe extern "C" fn vim_findfile(
-    mut search_ctx_arg: *mut ::core::ffi::c_void,
-) -> *mut ::core::ffi::c_char {
-    let mut rest_of_wildcards: String_0 = String_0 {
-        data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        size: 0,
-    };
-    let mut path_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut stackp: *mut ff_stack_T = ::core::ptr::null_mut::<ff_stack_T>();
-    if search_ctx_arg.is_null() {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+
+/// How far `**` descends when the pattern does not say.
+pub const FF_MAX_STAR_STAR_EXPAND: u8 = 30;
+
+/// An owned NUL-terminated byte string.
+///
+/// The searcher hands nearly every name it builds to a C function, so the
+/// terminator is part of the value; [`len`](Name::len) and
+/// [`bytes`](Name::bytes) count only what comes before it.
+#[derive(Clone, Default)]
+pub(crate) struct Name(Vec<u8>);
+
+impl Name {
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Self {
+        let mut owned = Vec::with_capacity(bytes.len() + 1);
+        owned.extend_from_slice(bytes);
+        owned.push(0);
+        Name(owned)
     }
-    let mut search_ctx: *mut ff_search_ctx_T = search_ctx_arg as *mut ff_search_ctx_T;
-    let mut file_path: String_0 = String_0 {
-        data: xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char,
-        size: 0,
-    };
-    if !(*search_ctx).ffsc_start_dir.data.is_null() {
-        path_end = (*search_ctx)
-            .ffsc_start_dir
-            .data
-            .offset((*search_ctx).ffsc_start_dir.size as isize);
+
+    /// # Safety
+    /// `p` must point at a NUL-terminated string.
+    pub(crate) unsafe fn from_ptr(p: *const c_char) -> Self {
+        // SAFETY: the caller's promise.
+        Self::from_bytes(unsafe { CStr::from_ptr(p) }.to_bytes())
     }
-    '_fail: loop {
-        os_breakcheck();
-        if !got_int.get() {
-            stackp = ff_pop(search_ctx);
-            if !stackp.is_null() {
-                if (*stackp).ffs_filearray.is_null()
-                    && ff_check_visited(
-                        &raw mut (*(*search_ctx).ffsc_dir_visited_list).ffvl_visited_list,
-                        (*stackp).ffs_fix_path.data,
-                        (*stackp).ffs_fix_path.size,
-                        (*stackp).ffs_wc_path.data,
-                        (*stackp).ffs_wc_path.size,
-                    ) == FAIL
-                {
-                    ff_free_stack_element(stackp);
-                    continue;
-                } else if (*stackp).ffs_level <= 0 as ::core::ffi::c_int {
-                    ff_free_stack_element(stackp);
-                    continue;
-                } else {
-                    *file_path.data.offset(0 as ::core::ffi::c_int as isize) =
-                        NUL as ::core::ffi::c_char;
-                    file_path.size = 0 as size_t;
-                    if (*stackp).ffs_filearray.is_null() {
-                        let mut dirptrs: [*mut ::core::ffi::c_char; 2] =
-                            [::core::ptr::null_mut::<::core::ffi::c_char>(); 2];
-                        dirptrs[0 as ::core::ffi::c_int as usize] = file_path.data;
-                        dirptrs[1 as ::core::ffi::c_int as usize] =
-                            ::core::ptr::null_mut::<::core::ffi::c_char>();
-                        if !vim_isAbsName((*stackp).ffs_fix_path.data)
-                            && !(*search_ctx).ffsc_start_dir.data.is_null()
-                        {
-                            if (*search_ctx).ffsc_start_dir.size.wrapping_add(1 as size_t)
-                                >= MAXPATHL as size_t
-                            {
-                                ff_free_stack_element(stackp);
-                                break;
-                            } else {
-                                let mut add_sep: bool = after_pathsep(
-                                    (*search_ctx).ffsc_start_dir.data,
-                                    (*search_ctx)
-                                        .ffsc_start_dir
-                                        .data
-                                        .offset((*search_ctx).ffsc_start_dir.size as isize),
-                                ) == 0;
-                                file_path.size = vim_snprintf(
-                                    file_path.data,
-                                    MAXPATHL as size_t,
-                                    b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                    (*search_ctx).ffsc_start_dir.data,
-                                    if add_sep as ::core::ffi::c_int != 0 {
-                                        PATHSEPSTR.as_ptr()
-                                    } else {
-                                        b"\0".as_ptr() as *const ::core::ffi::c_char
-                                    },
-                                ) as size_t;
-                                if file_path.size >= MAXPATHL as size_t {
-                                    ff_free_stack_element(stackp);
-                                    break;
-                                }
-                            }
-                        }
-                        if file_path
-                            .size
-                            .wrapping_add((*stackp).ffs_fix_path.size)
-                            .wrapping_add(1 as size_t)
-                            >= MAXPATHL as size_t
-                        {
-                            ff_free_stack_element(stackp);
-                            break;
-                        } else {
-                            let mut add_sep_0: bool = after_pathsep(
-                                (*stackp).ffs_fix_path.data,
-                                (*stackp)
-                                    .ffs_fix_path
-                                    .data
-                                    .offset((*stackp).ffs_fix_path.size as isize),
-                            ) == 0;
-                            file_path.size = file_path.size.wrapping_add(vim_snprintf(
-                                file_path.data.offset(file_path.size as isize),
-                                (MAXPATHL as size_t).wrapping_sub(file_path.size),
-                                b"%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                (*stackp).ffs_fix_path.data,
-                                if add_sep_0 as ::core::ffi::c_int != 0 {
-                                    PATHSEPSTR.as_ptr()
-                                } else {
-                                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                                },
-                            )
-                                as size_t);
-                            if file_path.size >= MAXPATHL as size_t {
-                                ff_free_stack_element(stackp);
-                                break;
-                            } else {
-                                rest_of_wildcards = (*stackp).ffs_wc_path;
-                                if *rest_of_wildcards.data as ::core::ffi::c_int != NUL {
-                                    if strncmp(
-                                        rest_of_wildcards.data,
-                                        b"**\0".as_ptr() as *const ::core::ffi::c_char,
-                                        2 as size_t,
-                                    ) == 0 as ::core::ffi::c_int
-                                    {
-                                        let mut p: *mut ::core::ffi::c_char = rest_of_wildcards
-                                            .data
-                                            .offset(2 as ::core::ffi::c_int as isize);
-                                        if *p as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
-                                            *p -= 1;
-                                            if file_path.size.wrapping_add(1 as size_t)
-                                                >= MAXPATHL as size_t
-                                            {
-                                                ff_free_stack_element(stackp);
-                                                break;
-                                            } else {
-                                                let c2rust_fresh11 = file_path.size;
-                                                file_path.size = file_path.size.wrapping_add(1);
-                                                *file_path.data.offset(c2rust_fresh11 as isize) =
-                                                    '*' as ::core::ffi::c_char;
-                                            }
-                                        }
-                                        if *p as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-                                            memmove(
-                                                rest_of_wildcards.data as *mut ::core::ffi::c_void,
-                                                rest_of_wildcards
-                                                    .data
-                                                    .offset(3 as ::core::ffi::c_int as isize)
-                                                    as *const ::core::ffi::c_void,
-                                                rest_of_wildcards
-                                                    .size
-                                                    .wrapping_sub(3 as size_t)
-                                                    .wrapping_add(1 as size_t),
-                                            );
-                                            rest_of_wildcards.size =
-                                                rest_of_wildcards.size.wrapping_sub(3 as size_t);
-                                            (*stackp).ffs_wc_path.size = rest_of_wildcards.size;
-                                        } else {
-                                            rest_of_wildcards.data = rest_of_wildcards
-                                                .data
-                                                .offset(3 as ::core::ffi::c_int as isize);
-                                            rest_of_wildcards.size =
-                                                rest_of_wildcards.size.wrapping_sub(3 as size_t);
-                                        }
-                                        if (*stackp).ffs_star_star_empty == 0 as ::core::ffi::c_int
-                                        {
-                                            (*stackp).ffs_star_star_empty = 1 as ::core::ffi::c_int;
-                                            dirptrs[1 as ::core::ffi::c_int as usize] =
-                                                (*stackp).ffs_fix_path.data;
-                                        }
-                                    }
-                                    while *rest_of_wildcards.data as ::core::ffi::c_int != 0
-                                        && !vim_ispathsep(
-                                            *rest_of_wildcards.data as ::core::ffi::c_int,
-                                        )
-                                    {
-                                        if file_path.size.wrapping_add(1 as size_t)
-                                            >= MAXPATHL as size_t
-                                        {
-                                            ff_free_stack_element(stackp);
-                                            break '_fail;
-                                        } else {
-                                            let c2rust_fresh12 = rest_of_wildcards.data;
-                                            rest_of_wildcards.data =
-                                                rest_of_wildcards.data.offset(1);
-                                            let c2rust_fresh13 = file_path.size;
-                                            file_path.size = file_path.size.wrapping_add(1);
-                                            *file_path.data.offset(c2rust_fresh13 as isize) =
-                                                *c2rust_fresh12;
-                                            rest_of_wildcards.size =
-                                                rest_of_wildcards.size.wrapping_sub(1);
-                                        }
-                                    }
-                                    *file_path.data.offset(file_path.size as isize) =
-                                        NUL as ::core::ffi::c_char;
-                                    if vim_ispathsep(*rest_of_wildcards.data as ::core::ffi::c_int)
-                                    {
-                                        rest_of_wildcards.data = rest_of_wildcards.data.offset(1);
-                                        rest_of_wildcards.size =
-                                            rest_of_wildcards.size.wrapping_sub(1);
-                                    }
-                                }
-                                if path_with_url(dirptrs[0 as ::core::ffi::c_int as usize]) != 0 {
-                                    (*stackp).ffs_filearray =
-                                        xmalloc(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                                            as *mut *mut ::core::ffi::c_char;
-                                    *(*stackp)
-                                        .ffs_filearray
-                                        .offset(0 as ::core::ffi::c_int as isize) = xmemdupz(
-                                        dirptrs[0 as ::core::ffi::c_int as usize]
-                                            as *const ::core::ffi::c_void,
-                                        file_path.size,
-                                    )
-                                        as *mut ::core::ffi::c_char;
-                                    (*stackp).ffs_filearray_size = 1 as ::core::ffi::c_int;
-                                } else {
-                                    expand_wildcards(
-                                        if dirptrs[1 as ::core::ffi::c_int as usize].is_null() {
-                                            1 as ::core::ffi::c_int
-                                        } else {
-                                            2 as ::core::ffi::c_int
-                                        },
-                                        &raw mut dirptrs as *mut *mut ::core::ffi::c_char,
-                                        &raw mut (*stackp).ffs_filearray_size,
-                                        &raw mut (*stackp).ffs_filearray,
-                                        EW_DIR as ::core::ffi::c_int
-                                            | EW_ADDSLASH as ::core::ffi::c_int
-                                            | EW_SILENT as ::core::ffi::c_int
-                                            | EW_NOTWILD as ::core::ffi::c_int,
-                                    );
-                                }
-                                (*stackp).ffs_filearray_cur = 0 as ::core::ffi::c_int;
-                                (*stackp).ffs_stage = 0 as ::core::ffi::c_int;
-                            }
-                        }
-                    } else {
-                        rest_of_wildcards.data = (*stackp)
-                            .ffs_wc_path
-                            .data
-                            .offset((*stackp).ffs_wc_path.size as isize);
-                        rest_of_wildcards.size = 0 as size_t;
-                    }
-                    if (*stackp).ffs_stage == 0 as ::core::ffi::c_int {
-                        's_500: {
-                            if *rest_of_wildcards.data as ::core::ffi::c_int == NUL {
-                                let mut i: ::core::ffi::c_int = (*stackp).ffs_filearray_cur;
-                                loop {
-                                    if i >= (*stackp).ffs_filearray_size {
-                                        break 's_500;
-                                    }
-                                    if !(path_with_url(*(*stackp).ffs_filearray.offset(i as isize))
-                                        == 0
-                                        && !os_isdir(*(*stackp).ffs_filearray.offset(i as isize)))
-                                    {
-                                        let mut len: size_t =
-                                            strlen(*(*stackp).ffs_filearray.offset(i as isize));
-                                        if len
-                                            .wrapping_add(1 as size_t)
-                                            .wrapping_add((*search_ctx).ffsc_file_to_search.size)
-                                            >= MAXPATHL as size_t
-                                        {
-                                            ff_free_stack_element(stackp);
-                                            break '_fail;
-                                        } else {
-                                            let mut add_sep_1: bool = after_pathsep(
-                                                *(*stackp).ffs_filearray.offset(i as isize),
-                                                (*(*stackp).ffs_filearray.offset(i as isize))
-                                                    .offset(len as isize),
-                                            ) == 0;
-                                            file_path.size = vim_snprintf(
-                                                file_path.data,
-                                                MAXPATHL as size_t,
-                                                b"%s%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-                                                *(*stackp).ffs_filearray.offset(i as isize),
-                                                if add_sep_1 as ::core::ffi::c_int != 0 {
-                                                    PATHSEPSTR.as_ptr()
-                                                } else {
-                                                    b"\0".as_ptr() as *const ::core::ffi::c_char
-                                                },
-                                                (*search_ctx).ffsc_file_to_search.data,
-                                            )
-                                                as size_t;
-                                            if file_path.size >= MAXPATHL as size_t {
-                                                ff_free_stack_element(stackp);
-                                                break '_fail;
-                                            } else {
-                                                len = file_path.size;
-                                                let mut suf: *mut ::core::ffi::c_char =
-                                                    (if (*search_ctx).ffsc_tagfile != 0 {
-                                                        b"\0".as_ptr() as *const ::core::ffi::c_char
-                                                    } else {
-                                                        (*curbuf.get()).b_p_sua
-                                                            as *const ::core::ffi::c_char
-                                                    })
-                                                        as *mut ::core::ffi::c_char;
-                                                loop {
-                                                    if (path_with_url(file_path.data) != 0
-                                                        || os_path_exists(file_path.data)
-                                                            as ::core::ffi::c_int
-                                                            != 0
-                                                            && ((*search_ctx).ffsc_find_what
-                                                                == FINDFILE_BOTH
-                                                                    as ::core::ffi::c_int
-                                                                || ((*search_ctx).ffsc_find_what
-                                                                    == FINDFILE_DIR
-                                                                        as ::core::ffi::c_int)
-                                                                    as ::core::ffi::c_int
-                                                                    == os_isdir(file_path.data)
-                                                                        as ::core::ffi::c_int))
-                                                        && ff_check_visited(
-                                                            &raw mut (*(*search_ctx)
-                                                                .ffsc_visited_list)
-                                                                .ffvl_visited_list,
-                                                            file_path.data,
-                                                            file_path.size,
-                                                            b"\0".as_ptr()
-                                                                as *const ::core::ffi::c_char
-                                                                as *mut ::core::ffi::c_char,
-                                                            0 as size_t,
-                                                        ) == OK
-                                                    {
-                                                        '_c2rust_label: {
-                                                            if i < 2147483647 as ::core::ffi::c_int
-                                                            {
-                                                            } else {
-                                                                __assert_fail(
-                                                                    b"i < INT_MAX\0".as_ptr() as *const ::core::ffi::c_char,
-                                                                    b"src/nvim/file_search.rs\0"
-                                                                        .as_ptr() as *const ::core::ffi::c_char,
-                                                                    875 as ::core::ffi::c_uint,
-                                                                    b"char *vim_findfile(void *)\0".as_ptr()
-                                                                        as *const ::core::ffi::c_char,
-                                                                );
-                                                            }
-                                                        };
-                                                        (*stackp).ffs_filearray_cur =
-                                                            i + 1 as ::core::ffi::c_int;
-                                                        ff_push(search_ctx, stackp);
-                                                        if path_with_url(file_path.data) == 0 {
-                                                            file_path.size =
-                                                                simplify_filename(file_path.data);
-                                                        }
-                                                        if os_dirname(
-                                                            (*ff_expand_buffer.ptr()).data,
-                                                            MAXPATHL as size_t,
-                                                        ) == OK
-                                                        {
-                                                            (*ff_expand_buffer.ptr()).size = strlen(
-                                                                (*ff_expand_buffer.ptr()).data,
-                                                            );
-                                                            let mut p_0: *mut ::core::ffi::c_char =
-                                                                path_shorten_fname(
-                                                                    file_path.data,
-                                                                    (*ff_expand_buffer.ptr()).data,
-                                                                );
-                                                            if !p_0.is_null() {
-                                                                memmove(
-                                                                    file_path.data as *mut ::core::ffi::c_void,
-                                                                    p_0 as *const ::core::ffi::c_void,
-                                                                    (file_path
-                                                                        .data
-                                                                        .offset(file_path.size as isize)
-                                                                        .offset_from(p_0) as size_t)
-                                                                        .wrapping_add(1 as size_t),
-                                                                );
-                                                                file_path.size =
-                                                                    file_path.size.wrapping_sub(
-                                                                        p_0.offset_from(
-                                                                            file_path.data,
-                                                                        )
-                                                                            as size_t,
-                                                                    );
-                                                            }
-                                                        }
-                                                        return file_path.data;
-                                                    }
-                                                    if *suf as ::core::ffi::c_int == NUL {
-                                                        break;
-                                                    }
-                                                    '_c2rust_label_0: {
-                                                        if 4096 as size_t >= file_path.size {
-                                                        } else {
-                                                            __assert_fail(
-                                                                b"MAXPATHL >= file_path.size\0"
-                                                                    .as_ptr()
-                                                                    as *const ::core::ffi::c_char,
-                                                                b"src/nvim/file_search.rs\0"
-                                                                    .as_ptr()
-                                                                    as *const ::core::ffi::c_char,
-                                                                907 as ::core::ffi::c_uint,
-                                                                b"char *vim_findfile(void *)\0"
-                                                                    .as_ptr()
-                                                                    as *const ::core::ffi::c_char,
-                                                            );
-                                                        }
-                                                    };
-                                                    file_path.size =
-                                                        len.wrapping_add(copy_option_part(
-                                                            &raw mut suf,
-                                                            file_path.data.offset(len as isize),
-                                                            (MAXPATHL as size_t).wrapping_sub(len),
-                                                            b",\0".as_ptr()
-                                                                as *const ::core::ffi::c_char
-                                                                as *mut ::core::ffi::c_char,
-                                                        ));
-                                                }
-                                            }
-                                        }
-                                    }
-                                    i += 1;
-                                }
-                            } else {
-                                let mut i_0: ::core::ffi::c_int = (*stackp).ffs_filearray_cur;
-                                while i_0 < (*stackp).ffs_filearray_size {
-                                    if os_isdir(*(*stackp).ffs_filearray.offset(i_0 as isize)) {
-                                        ff_push(
-                                            search_ctx,
-                                            ff_create_stack_element(
-                                                *(*stackp).ffs_filearray.offset(i_0 as isize),
-                                                strlen(
-                                                    *(*stackp).ffs_filearray.offset(i_0 as isize),
-                                                ),
-                                                rest_of_wildcards.data,
-                                                rest_of_wildcards.size,
-                                                (*stackp).ffs_level - 1 as ::core::ffi::c_int,
-                                                0 as ::core::ffi::c_int,
-                                            ),
-                                        );
-                                    }
-                                    i_0 += 1;
-                                }
-                            }
-                        }
-                        (*stackp).ffs_filearray_cur = 0 as ::core::ffi::c_int;
-                        (*stackp).ffs_stage = 1 as ::core::ffi::c_int;
-                    }
-                    if strncmp(
-                        (*stackp).ffs_wc_path.data,
-                        b"**\0".as_ptr() as *const ::core::ffi::c_char,
-                        2 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        let mut i_1: ::core::ffi::c_int = (*stackp).ffs_filearray_cur;
-                        while i_1 < (*stackp).ffs_filearray_size {
-                            if path_fnamecmp(
-                                *(*stackp).ffs_filearray.offset(i_1 as isize),
-                                (*stackp).ffs_fix_path.data,
-                            ) != 0 as ::core::ffi::c_int
-                            {
-                                if os_isdir(*(*stackp).ffs_filearray.offset(i_1 as isize)) {
-                                    ff_push(
-                                        search_ctx,
-                                        ff_create_stack_element(
-                                            *(*stackp).ffs_filearray.offset(i_1 as isize),
-                                            strlen(*(*stackp).ffs_filearray.offset(i_1 as isize)),
-                                            (*stackp).ffs_wc_path.data,
-                                            (*stackp).ffs_wc_path.size,
-                                            (*stackp).ffs_level - 1 as ::core::ffi::c_int,
-                                            1 as ::core::ffi::c_int,
-                                        ),
-                                    );
-                                }
-                            }
-                            i_1 += 1;
-                        }
-                    }
-                    ff_free_stack_element(stackp);
-                    continue;
+
+    /// The name as it is written, without the terminator.
+    pub(crate) fn bytes(&self) -> &[u8] {
+        &self.0[..self.len()]
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.0.len().saturating_sub(1)
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// The byte at `at`, which may be the terminator.
+    pub(crate) fn at(&self, at: usize) -> u8 {
+        self.0[at]
+    }
+
+    pub(crate) fn set(&mut self, at: usize, byte: u8) {
+        self.0[at] = byte;
+    }
+
+    pub(crate) fn as_ptr(&self) -> *const c_char {
+        self.0.as_ptr().cast()
+    }
+
+    /// Forget everything from `at` on.
+    pub(crate) fn truncate(&mut self, at: usize) {
+        self.0.truncate(at);
+        self.0.push(0);
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.truncate(0);
+    }
+
+    /// Forget the first `n` bytes, keeping the terminator.
+    pub(crate) fn drain_front(&mut self, n: usize) {
+        self.0.drain(..n);
+    }
+}
+
+/// The state of one file search: what is left to look at, and where it has
+/// already been.
+///
+/// Callers hold this as an opaque pointer.
+pub(crate) struct FindContext {
+    /// Directories still to search, deepest last.
+    pub(crate) stack: Vec<StackFrame>,
+    /// Files already answered, one list per name searched for.
+    pub(crate) visited: VisitedLists,
+    /// Directories already searched, one list per name searched for.
+    pub(crate) dir_visited: VisitedLists,
+    /// The file to search for.
+    pub(crate) file_to_search: Name,
+    /// The directory the search starts from, when the search path was
+    /// relative. The upward search shortens it one component at a time.
+    pub(crate) start_dir: Option<Name>,
+    /// The fixed leading part of the given path. Kept for the upward
+    /// search, which rebuilds the first stack frame from it.
+    pub(crate) fix_path: Name,
+    /// The part of the given path holding wildcards; `None` when it had
+    /// none at all.
+    pub(crate) wc_path: Option<Name>,
+    /// How many levels of directories to search downwards.
+    pub(crate) level: c_int,
+    /// Where to stop the upward search. `None` asks for no upward search;
+    /// an empty entry means "ascend to the top of the tree".
+    pub(crate) stopdirs: Option<Vec<Name>>,
+    /// `FINDFILE_BOTH`, `FINDFILE_DIR` or `FINDFILE_FILE`.
+    pub(crate) find_what: c_int,
+    /// Searching for a tags file: do not use `'suffixesadd'`.
+    pub(crate) tagfile: bool,
+}
+
+impl Default for FindContext {
+    fn default() -> Self {
+        FindContext {
+            stack: Vec::new(),
+            visited: VisitedLists::default(),
+            dir_visited: VisitedLists::default(),
+            file_to_search: Name::default(),
+            start_dir: None,
+            fix_path: Name::default(),
+            wc_path: None,
+            level: 0,
+            stopdirs: None,
+            find_what: FINDFILE_BOTH,
+            tagfile: false,
+        }
+    }
+}
+
+impl FindContext {
+    /// Clear the search context, but NOT the visited lists.
+    pub(crate) fn reset(&mut self) {
+        self.stack.clear();
+        self.stopdirs = None;
+        self.file_to_search.clear();
+        self.start_dir = None;
+        self.fix_path.clear();
+        self.wc_path = None;
+        self.level = 0;
+    }
+}
+
+/// The path being built, and handed to the caller when it turns out to name
+/// the file we want.
+///
+/// A fixed `MAXPATHL` buffer that never moves: `expand_wildcards` is given a
+/// pointer into it before the name is finished, and `copy_option_part`
+/// writes `'suffixesadd'` parts straight into its tail.
+pub(crate) struct Candidate {
+    buf: Vec<u8>,
+    len: usize,
+}
+
+/// A name did not fit in `MAXPATHL`. The search gives up rather than
+/// truncating.
+pub(crate) struct TooLong;
+
+impl Candidate {
+    fn new() -> Self {
+        Candidate {
+            buf: vec![0; MAXPATHL],
+            len: 0,
+        }
+    }
+
+    fn clear(&mut self) {
+        self.buf[0] = 0;
+        self.len = 0;
+    }
+
+    fn as_ptr(&self) -> *const c_char {
+        self.buf.as_ptr().cast()
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut c_char {
+        self.buf.as_mut_ptr().cast()
+    }
+
+    /// Write `parts` one after another at `at`, and answer where the whole
+    /// name would have ended — which may be past `MAXPATHL`, and every
+    /// caller tests it, because that is how the search gives up.
+    ///
+    /// # Safety
+    /// Each part must be a NUL-terminated string, and `at` must be no
+    /// greater than `MAXPATHL`.
+    unsafe fn write_at(&mut self, at: usize, parts: [*const c_char; 3]) -> usize {
+        // SAFETY: the caller's promise; `MAXPATHL - at` is the room left.
+        at + unsafe {
+            vim_snprintf(
+                self.as_mut_ptr().add(at),
+                MAXPATHL - at,
+                c"%s%s%s".as_ptr(),
+                parts[0],
+                parts[1],
+                parts[2],
+            )
+        } as usize
+    }
+
+    /// A path separator, unless `part` already ends in one.
+    ///
+    /// # Safety
+    /// `part` must hold `partlen` readable bytes.
+    unsafe fn separator(part: *const c_char, partlen: usize) -> *const c_char {
+        // SAFETY: the caller's promise.
+        if unsafe { after_pathsep(part, part.add(partlen)) } == 0 {
+            c"/".as_ptr()
+        } else {
+            c"".as_ptr()
+        }
+    }
+
+    fn push(&mut self, byte: u8) -> Result<(), TooLong> {
+        if self.len + 1 >= MAXPATHL {
+            return Err(TooLong);
+        }
+        self.buf[self.len] = byte;
+        self.len += 1;
+        Ok(())
+    }
+
+    fn terminate(&mut self) {
+        self.buf[self.len] = 0;
+    }
+
+    /// A copy of the name, for the caller to own and free.
+    fn take(&self) -> *mut c_char {
+        // SAFETY: `self.len` bytes of `self.buf` are initialised.
+        unsafe { xmemdupz(self.buf.as_ptr().cast(), self.len) }.cast()
+    }
+}
+
+/// What one pass of the downward walk ended on.
+enum Down {
+    /// A file was found; it is in the caller's [`Candidate`].
+    Found,
+    /// The stack ran out, or the user interrupted.
+    Exhausted,
+    /// A name grew past `MAXPATHL`; the whole search gives up.
+    TooLong,
+}
+
+impl FindContext {
+    /// Build the directory name this frame stands for and expand its first
+    /// wildcard, answering where in `wc_path` the rest of the wildcards
+    /// start.
+    ///
+    /// # Safety
+    /// There must be a current buffer.
+    unsafe fn expand(
+        &self,
+        frame: &mut StackFrame,
+        file_path: &mut Candidate,
+    ) -> Result<usize, TooLong> {
+        unsafe {
+            // Whether "**" should also expand to nothing here, which is
+            // done by handing expand_wildcards a second pattern.
+            let mut expand_empty = false;
+
+            // If we have a start dir copy it in.
+            if !vim_isAbsName(frame.fix_path.as_ptr())
+                && let Some(start_dir) = &self.start_dir
+            {
+                if start_dir.len() + 1 >= MAXPATHL {
+                    return Err(TooLong);
+                }
+                file_path.len = file_path.write_at(
+                    0,
+                    [
+                        start_dir.as_ptr(),
+                        Candidate::separator(start_dir.as_ptr(), start_dir.len()),
+                        c"".as_ptr(),
+                    ],
+                );
+                if file_path.len >= MAXPATHL {
+                    return Err(TooLong);
                 }
             }
-        }
-        if !(!(*search_ctx).ffsc_start_dir.data.is_null()
-            && !(*search_ctx).ffsc_stopdirs_v.is_null()
-            && !got_int.get())
-        {
-            break;
-        }
-        let mut sptr: *mut ff_stack_T = ::core::ptr::null_mut::<ff_stack_T>();
-        let mut plen: ptrdiff_t = path_end.offset_from((*search_ctx).ffsc_start_dir.data)
-            + (*path_end as ::core::ffi::c_int != NUL) as ::core::ffi::c_int as ptrdiff_t;
-        if ff_path_in_stoplist(
-            (*search_ctx).ffsc_start_dir.data,
-            plen as size_t,
-            (*search_ctx).ffsc_stopdirs_v,
-        ) {
-            break;
-        }
-        while path_end > (*search_ctx).ffsc_start_dir.data
-            && vim_ispathsep(*path_end as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-        {
-            path_end = path_end.offset(-1);
-        }
-        while path_end > (*search_ctx).ffsc_start_dir.data
-            && !vim_ispathsep(
-                *path_end.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            )
-        {
-            path_end = path_end.offset(-1);
-        }
-        *path_end = NUL as ::core::ffi::c_char;
-        (*search_ctx).ffsc_start_dir.size =
-            path_end.offset_from((*search_ctx).ffsc_start_dir.data) as size_t;
-        path_end = path_end.offset(-1);
-        if *(*search_ctx).ffsc_start_dir.data as ::core::ffi::c_int == NUL {
-            break;
-        }
-        if (*search_ctx)
-            .ffsc_start_dir
-            .size
-            .wrapping_add(1 as size_t)
-            .wrapping_add((*search_ctx).ffsc_fix_path.size)
-            >= MAXPATHL as size_t
-        {
-            break;
-        }
-        let mut add_sep_2: bool = after_pathsep(
-            (*search_ctx).ffsc_start_dir.data,
-            (*search_ctx)
-                .ffsc_start_dir
-                .data
-                .offset((*search_ctx).ffsc_start_dir.size as isize),
-        ) == 0;
-        file_path.size = vim_snprintf(
-            file_path.data,
-            MAXPATHL as size_t,
-            b"%s%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-            (*search_ctx).ffsc_start_dir.data,
-            if add_sep_2 as ::core::ffi::c_int != 0 {
-                PATHSEPSTR.as_ptr()
+
+            // Append the fixed part of the search path.
+            let fix_path = &frame.fix_path;
+            if file_path.len + fix_path.len() + 1 >= MAXPATHL {
+                return Err(TooLong);
+            }
+            file_path.len = file_path.write_at(
+                file_path.len,
+                [
+                    fix_path.as_ptr(),
+                    Candidate::separator(fix_path.as_ptr(), fix_path.len()),
+                    c"".as_ptr(),
+                ],
+            );
+            if file_path.len >= MAXPATHL {
+                return Err(TooLong);
+            }
+
+            let mut rest = 0;
+            if !frame.wc_path.is_empty() {
+                if frame.wc_path.bytes().starts_with(b"**") {
+                    // The byte after "**" is the descent counter, not a
+                    // character. Upstream reads it through a `char`, which
+                    // is signed here, so a limit of 128 or more tests as
+                    // negative: `**200` never descends and never counts
+                    // down. Preserved -- it is what those patterns do.
+                    let left = frame.wc_path.at(2) as i8;
+                    if left > 0 {
+                        frame.wc_path.set(2, (left - 1) as u8);
+                        file_path.push(b'*')?;
+                    }
+                    if frame.wc_path.at(2) == 0 {
+                        // The limit is spent: drop "**<count>" for good.
+                        frame.wc_path.drain_front(3);
+                    } else {
+                        rest = 3;
+                    }
+                    if !frame.star_star_empty {
+                        // If not done before, expand '**' to empty.
+                        frame.star_star_empty = true;
+                        expand_empty = true;
+                    }
+                }
+
+                // Copy until the next path separator or the end of the path.
+                // Stopping at a separator means there is still something
+                // left, which is handled below by pushing every directory
+                // expand_wildcards() returned back onto the stack.
+                while rest < frame.wc_path.len() && !vim_ispathsep(frame.wc_path.at(rest) as c_int)
+                {
+                    file_path.push(frame.wc_path.at(rest))?;
+                    rest += 1;
+                }
+                file_path.terminate();
+                if rest < frame.wc_path.len() {
+                    rest += 1; // step over the separator
+                }
+            }
+
+            // Expand wildcards like "*" and "$VAR". If the path is a URL
+            // don't try this. The pointers are taken last: everything above
+            // writes through `file_path`, which would invalidate one taken
+            // earlier.
+            let mut dirptrs: [*mut c_char; 2] = [
+                file_path.as_mut_ptr(),
+                if expand_empty {
+                    frame.fix_path.as_ptr().cast_mut()
+                } else {
+                    ptr::null_mut()
+                },
+            ];
+            let files = if path_with_url(dirptrs[0]) != 0 {
+                FileList::of_one(dirptrs[0], file_path.len)
             } else {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            },
-            (*search_ctx).ffsc_fix_path.data,
-        ) as size_t;
-        if file_path.size >= MAXPATHL as size_t {
-            break;
+                // Add EW_NOTWILD because the expanded path may contain
+                // wildcard characters that are to be taken literally.
+                // This is a bit of a hack.
+                FileList::expand(
+                    if dirptrs[1].is_null() { 1 } else { 2 },
+                    dirptrs.as_mut_ptr(),
+                    EW_DIR | EW_ADDSLASH | EW_SILENT | EW_NOTWILD,
+                )
+            };
+            frame.files = Some(files);
+            frame.files_cur = 0;
+            frame.stage = 0;
+            Ok(rest)
         }
-        sptr = ff_create_stack_element(
-            file_path.data,
-            file_path.size,
-            (*search_ctx).ffsc_wc_path.data,
-            (*search_ctx).ffsc_wc_path.size,
-            (*search_ctx).ffsc_level,
-            0 as ::core::ffi::c_int,
-        );
-        ff_push(search_ctx, sptr);
     }
-    xfree(file_path.data as *mut ::core::ffi::c_void);
-    return ::core::ptr::null_mut::<::core::ffi::c_char>();
+
+    /// Look for the wanted file in each directory this frame expanded to,
+    /// answering the index of the one that had it.
+    ///
+    /// The name is left in `file_path`, shortened relative to the current
+    /// directory when that is possible.
+    ///
+    /// # Safety
+    /// There must be a current buffer.
+    unsafe fn find_hit(
+        &mut self,
+        frame: &StackFrame,
+        file_path: &mut Candidate,
+    ) -> Result<Option<usize>, TooLong> {
+        unsafe {
+            let files = frame.files();
+            for i in frame.files_cur..files.len() {
+                let dir = files.get(i);
+                if path_with_url(dir) == 0 && !os_isdir(dir) {
+                    continue; // not a directory
+                }
+                // Prepare the filename to be checked for existence below.
+                let dirlen = strlen(dir);
+                let wanted = &self.file_to_search;
+                if dirlen + 1 + wanted.len() >= MAXPATHL {
+                    return Err(TooLong);
+                }
+                file_path.len = file_path
+                    .write_at(0, [dir, Candidate::separator(dir, dirlen), wanted.as_ptr()]);
+                if file_path.len >= MAXPATHL {
+                    return Err(TooLong);
+                }
+
+                // Try without extra suffix and then with suffixes from
+                // 'suffixesadd'.
+                let stem = file_path.len;
+                let mut suffix = if self.tagfile {
+                    c"".as_ptr().cast_mut()
+                } else {
+                    (*curbuf.get()).b_p_sua
+                };
+                loop {
+                    let exists = path_with_url(file_path.as_ptr()) != 0
+                        || (os_path_exists(file_path.as_ptr())
+                            && (self.find_what == FINDFILE_BOTH
+                                || (self.find_what == FINDFILE_DIR)
+                                    == os_isdir(file_path.as_ptr())));
+                    // If the file exists and we didn't already find it.
+                    if exists
+                        && self
+                            .visited
+                            .current()
+                            .add(&file_path.buf[..file_path.len], b"")
+                    {
+                        if path_with_url(file_path.as_ptr()) == 0 {
+                            file_path.len = simplify_filename(file_path.as_mut_ptr());
+                        }
+                        self.shorten(file_path);
+                        return Ok(Some(i));
+                    }
+
+                    // Not found or found already, try next suffix.
+                    if *suffix == 0 {
+                        break;
+                    }
+                    debug_assert!(stem <= MAXPATHL);
+                    // `copy_option_part` answers what it wrote, which is at
+                    // most MAXPATHL - stem - 1.
+                    file_path.len = stem
+                        + copy_option_part(
+                            &raw mut suffix,
+                            file_path.as_mut_ptr().add(stem),
+                            MAXPATHL - stem,
+                            c",".as_ptr().cast_mut(),
+                        );
+                }
+            }
+            Ok(None)
+        }
+    }
+
+    /// Drop the current directory's prefix from the answer, so that a hit
+    /// below the working directory reads as a relative name.
+    ///
+    /// # Safety
+    /// `file_path` must hold a NUL-terminated name.
+    unsafe fn shorten(&self, file_path: &mut Candidate) {
+        unsafe {
+            let mut curdir = [0 as c_char; MAXPATHL];
+            if os_dirname(curdir.as_mut_ptr(), MAXPATHL) != OK {
+                return;
+            }
+            let base = file_path.as_mut_ptr();
+            let short = path_shorten_fname(base, curdir.as_mut_ptr());
+            if short.is_null() {
+                return;
+            }
+            // Measured against the pointer `path_shorten_fname` was handed,
+            // so that neither is re-derived through `file_path` first.
+            let at = short.offset_from(base) as usize;
+            file_path.buf.copy_within(at..file_path.len + 1, 0);
+            file_path.len -= at;
+        }
+    }
+
+    /// Push every directory this frame expanded to, to be searched with the
+    /// wildcards that are left.
+    ///
+    /// # Safety
+    /// The frame must have been expanded.
+    unsafe fn push_subdirs(&mut self, frame: &StackFrame, rest: usize) {
+        unsafe {
+            let files = frame.files();
+            for i in frame.files_cur..files.len() {
+                let dir = files.get(i);
+                if !os_isdir(dir) {
+                    continue; // not a directory
+                }
+                self.stack.push(StackFrame::new(
+                    Name::from_ptr(dir),
+                    Name::from_bytes(&frame.wc_path.bytes()[rest..]),
+                    frame.level - 1,
+                    false,
+                ));
+            }
+        }
+    }
+
+    /// `**` descends to the leaves of the tree: push every subdirectory
+    /// again with the same wildcards, one level shallower.
+    ///
+    /// # Safety
+    /// The frame must have been expanded.
+    unsafe fn push_descent(&mut self, frame: &StackFrame) {
+        unsafe {
+            let files = frame.files();
+            for i in frame.files_cur..files.len() {
+                let dir = files.get(i);
+                if path_fnamecmp(dir, frame.fix_path.as_ptr()) == 0 {
+                    continue; // don't repush the same directory
+                }
+                if !os_isdir(dir) {
+                    continue; // not a directory
+                }
+                self.stack.push(StackFrame::new(
+                    Name::from_ptr(dir),
+                    frame.wc_path.clone(),
+                    frame.level - 1,
+                    true,
+                ));
+            }
+        }
+    }
+
+    /// Work the stack until something is found, it runs out, or a name grows
+    /// too long.
+    ///
+    /// # Safety
+    /// There must be a current buffer.
+    unsafe fn search_downwards(&mut self, file_path: &mut Candidate) -> Down {
+        unsafe {
+            loop {
+                // Check if the user wants to stop the search.
+                os_breakcheck();
+                if got_int.get() {
+                    return Down::Exhausted;
+                }
+                let Some(mut frame) = self.stack.pop() else {
+                    return Down::Exhausted;
+                };
+
+                // TODO(vim): decide if we leave this test in
+                //
+                // GOOD: don't search a directory(-tree) twice.
+                // BAD:  - check linked list for every new directory entered.
+                //       - check for double files also done below
+                //
+                // Good if you have links on the same directory via several
+                // ways, or self-references in directories (e.g. SuSE Linux
+                // 6.3: /etc/rc.d/init.d is linked to /etc/rc.d -> endless
+                // loop). Only needed for directories worked on for the first
+                // time, hence the test on `files`.
+                if frame.files.is_none()
+                    && !self
+                        .dir_visited
+                        .current()
+                        .add(frame.fix_path.bytes(), frame.wc_path.bytes())
+                {
+                    continue;
+                }
+
+                // Check depth.
+                if frame.level <= 0 {
+                    continue;
+                }
+
+                file_path.clear();
+
+                // If no file list till now expand wildcards. expand_wildcards
+                // handles an array of paths and returns every expansion in
+                // one array, which is how '**' expands to an empty string.
+                let rest = if frame.files.is_none() {
+                    match self.expand(&mut frame, file_path) {
+                        Ok(rest) => rest,
+                        Err(TooLong) => return Down::TooLong,
+                    }
+                } else {
+                    frame.wc_path.len()
+                };
+
+                if frame.stage == 0 {
+                    // This is the first time we work on this directory.
+                    if rest == frame.wc_path.len() {
+                        // No further wildcards to expand, so check for the
+                        // final file now.
+                        match self.find_hit(&frame, file_path) {
+                            Err(TooLong) => return Down::TooLong,
+                            Ok(Some(i)) => {
+                                // Keep the dir, to examine the rest of its
+                                // entries on the next call.
+                                frame.files_cur = i + 1;
+                                self.stack.push(frame);
+                                return Down::Found;
+                            }
+                            Ok(None) => {}
+                        }
+                    } else {
+                        // Still wildcards left, push the directories for
+                        // further search.
+                        self.push_subdirs(&frame, rest);
+                    }
+                    frame.files_cur = 0;
+                    frame.stage = 1;
+                }
+
+                // If the wildcards contain '**' we have to descend till we
+                // reach the leaves of the directory tree.
+                if frame.wc_path.bytes().starts_with(b"**") {
+                    self.push_descent(&frame);
+                }
+                // We are done with the current directory; dropping the frame
+                // frees its file list.
+            }
+        }
+    }
+
+    /// Shorten the starting directory by one component and push it as a
+    /// fresh frame, so the walk starts again one level higher.
+    ///
+    /// Answers false when the top of the tree, or a stop directory, has been
+    /// reached.
+    ///
+    /// # Safety
+    /// There must be a start directory and a stop list.
+    unsafe fn step_up(
+        &mut self,
+        path_end: &mut usize,
+        file_path: &mut Candidate,
+    ) -> Result<bool, TooLong> {
+        unsafe {
+            let start_dir = self.start_dir.as_mut().expect("checked by the caller");
+            let stopdirs = self.stopdirs.as_deref().expect("checked by the caller");
+
+            // path_end sits on the terminator until the first step up, and
+            // on the last character after that.
+            let plen = *path_end + usize::from(start_dir.at(*path_end) != 0);
+            // Is the last starting directory in the stop list?
+            if ff_path_in_stoplist(start_dir, plen, stopdirs) {
+                return Ok(false);
+            }
+
+            // Cut off the last directory.
+            while *path_end > 0 && vim_ispathsep(start_dir.at(*path_end) as c_int) {
+                *path_end -= 1;
+            }
+            while *path_end > 0 && !vim_ispathsep(start_dir.at(*path_end - 1) as c_int) {
+                *path_end -= 1;
+            }
+            start_dir.truncate(*path_end);
+            // Upstream steps one back even when the name is now empty,
+            // forming a pointer before the string; the test below is what
+            // keeps it from ever being read.
+            *path_end = path_end.saturating_sub(1);
+
+            if start_dir.is_empty() {
+                return Ok(false);
+            }
+            if start_dir.len() + 1 + self.fix_path.len() >= MAXPATHL {
+                return Err(TooLong);
+            }
+
+            file_path.len = file_path.write_at(
+                0,
+                [
+                    start_dir.as_ptr(),
+                    Candidate::separator(start_dir.as_ptr(), start_dir.len()),
+                    self.fix_path.as_ptr(),
+                ],
+            );
+            if file_path.len >= MAXPATHL {
+                return Err(TooLong);
+            }
+
+            // Create a new stack entry.
+            let fix_path = Name::from_bytes(&file_path.buf[..file_path.len]);
+            let wc_path = self.wc_path.clone().unwrap_or_default();
+            self.stack
+                .push(StackFrame::new(fix_path, wc_path, self.level, false));
+            Ok(true)
+        }
+    }
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+/// Find a file in a search context, built by [`vim_findfile_init`].
+///
+/// To get all matching files call this until it answers NULL. If the passed
+/// search context is NULL, NULL is answered.
+///
+/// The search algorithm is depth first. To change this replace the stack
+/// with a list (don't forget to leave partly searched directories on the top
+/// of the list).
+///
+/// @return  a pointer to an allocated file name, or NULL if nothing found.
+pub unsafe extern "C" fn vim_findfile(search_ctx_arg: *mut c_void) -> *mut c_char {
+    unsafe {
+        if search_ctx_arg.is_null() {
+            return ptr::null_mut();
+        }
+        let ctx = &mut *search_ctx_arg.cast::<FindContext>();
+        let mut file_path = Candidate::new();
+
+        // Where the start dir ends -- needed for the upward search.
+        let mut path_end = ctx.start_dir.as_ref().map_or(0, Name::len);
+
+        loop {
+            match ctx.search_downwards(&mut file_path) {
+                Down::Found => return file_path.take(),
+                Down::TooLong => break,
+                Down::Exhausted => {}
+            }
+
+            // We didn't find anything downwards. Should we search upwards?
+            if ctx.start_dir.is_none() || ctx.stopdirs.is_none() || got_int.get() {
+                break;
+            }
+            match ctx.step_up(&mut path_end, &mut file_path) {
+                Ok(true) => {}
+                Ok(false) | Err(TooLong) => break,
+            }
+        }
+        ptr::null_mut()
+    }
+}
