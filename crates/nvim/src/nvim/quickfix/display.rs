@@ -341,8 +341,8 @@ pub(crate) unsafe extern "C" fn qf_msg(
     mut lead: *mut ::core::ffi::c_char,
 ) {
     unsafe {
-        let mut title: *mut ::core::ffi::c_char = (*(*qi).qf_lists.offset(which as isize)).qf_title;
-        let mut count: ::core::ffi::c_int = (*(*qi).qf_lists.offset(which as isize)).qf_count;
+        let mut title: *mut ::core::ffi::c_char = (*qf_get_list(qi, which)).qf_title;
+        let mut count: ::core::ffi::c_int = (*qf_get_list(qi, which)).qf_count;
         let mut buf: [::core::ffi::c_char; 1025] = [0; 1025];
         vim_snprintf(
             &raw mut buf as *mut ::core::ffi::c_char,

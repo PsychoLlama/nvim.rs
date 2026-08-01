@@ -232,7 +232,7 @@ pub(crate) unsafe extern "C" fn qf_get_list_from_lines(
                 0 as ::core::ffi::c_int,
                 l,
             );
-            qf_free((*qi).qf_lists.offset(0 as ::core::ffi::c_int as isize));
+            qf_free(qf_get_list(qi, 0 as ::core::ffi::c_int));
         }
         qf_free_lists(qi);
         tv_dict_add_list(

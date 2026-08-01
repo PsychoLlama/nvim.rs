@@ -130,6 +130,8 @@ mod parse;
 pub(crate) use self::parse::*;
 mod read;
 pub use self::read::*;
+mod stack;
+pub use self::stack::*;
 mod list;
 pub use self::list::*;
 mod entry;
@@ -251,13 +253,6 @@ pub type C2Rust_Unnamed_31 = ::core::ffi::c_uint;
 pub const VGR_FUZZY: C2Rust_Unnamed_31 = 4;
 pub const VGR_NOJUMP: C2Rust_Unnamed_31 = 2;
 pub const VGR_GLOBAL: C2Rust_Unnamed_31 = 1;
-pub type qf_delq_T = qf_delq_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct qf_delq_S {
-    pub next: *mut qf_delq_S,
-    pub qi: *mut qf_info_T,
-}
 pub const QF_FAIL: C2Rust_Unnamed_34 = 0;
 pub const QF_OK: C2Rust_Unnamed_34 = 1;
 pub const QF_END_OF_INPUT: C2Rust_Unnamed_34 = 2;
@@ -315,17 +310,6 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const ML_EMPTY: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const INVALID_QFIDX: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const INVALID_QFBUFNR: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-static ql_info_actual: GlobalCell<qf_info_T> = GlobalCell::new(qf_info_T {
-    qf_refcount: 0,
-    qf_listcount: 0,
-    qf_curlist: 0,
-    qf_maxcount: 0,
-    qf_lists: ::core::ptr::null_mut::<qf_list_T>(),
-    qfl_type: QFLT_QUICKFIX,
-    qf_bufnr: 0,
-});
-static ql_info: GlobalCell<*mut qf_info_T> = GlobalCell::new(::core::ptr::null_mut::<qf_info_T>());
-static last_qf_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::core::ffi::c_uint);
 static e_no_more_items: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(b"E553: No more items\0".as_ptr() as *const ::core::ffi::c_char);
 static e_current_quickfix_list_was_changed: GlobalCell<*const ::core::ffi::c_char> =
@@ -336,9 +320,6 @@ static e_current_location_list_was_changed: GlobalCell<*const ::core::ffi::c_cha
     GlobalCell::new(
         b"E926: Current location list was changed\0".as_ptr() as *const ::core::ffi::c_char
     );
-static qf_last_bufname: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-static qf_last_bufref: GlobalCell<bufref_T> = GlobalCell::new(bufref_T::new());
 static qfga: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0,
     ga_maxlen: 0,
@@ -346,9 +327,6 @@ static qfga: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_growsize: 0,
     ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
 });
-static quickfix_busy: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static qf_delq_head: GlobalCell<*mut qf_delq_T> =
-    GlobalCell::new(::core::ptr::null_mut::<qf_delq_T>());
 static qftf_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: C2Rust_Unnamed_6 {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),

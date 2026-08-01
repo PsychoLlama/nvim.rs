@@ -578,13 +578,11 @@ unsafe fn read_lines(qfl: *mut qf_list_T, reader: &mut Reader, efm: &mut Efm) ->
                 _ => return false,
             }
             let parsed = parse_line(qfl, reader.line(), reader.len, efm, &mut fields);
-            let status = if parsed == Status::Ok {
-                add_entry(qfl, &mut fields)
-            } else {
-                parsed
-            };
-            if status == Status::Fail {
+            if parsed == Status::Fail {
                 return false;
+            }
+            if parsed == Status::Ok {
+                qf_add_entry(qfl, &fields.entry(qfl));
             }
             line_breakcheck();
         }
@@ -606,42 +604,6 @@ unsafe fn read_lines(qfl: *mut qf_list_T, reader: &mut Reader, efm: &mut Efm) ->
         }
     }
     true
-}
-
-/// File what the parser made of one line as an entry.
-///
-/// # Safety
-///
-/// `qfl` must be a live list.
-unsafe fn add_entry(qfl: *mut qf_list_T, fields: &mut Fields) -> Status {
-    // SAFETY: forwarded from the caller; the field buffers are
-    // NUL-terminated.
-    unsafe {
-        let name = entry_file_name(fields, qfl);
-        let status = qf_add_entry(
-            qfl,
-            (*qfl).qf_directory,
-            name,
-            fields.module(),
-            fields.bnr,
-            fields.errmsg(),
-            fields.lnum,
-            fields.end_lnum,
-            fields.col,
-            fields.end_col,
-            fields.use_viscol as c_char,
-            fields.pattern(),
-            fields.enr,
-            fields.kind,
-            fields.user_data,
-            fields.valid as c_char,
-        );
-        if status == QF_OK as c_int {
-            Status::Ok
-        } else {
-            Status::Fail
-        }
-    }
 }
 
 /// Set a list's title, replacing whatever it had.

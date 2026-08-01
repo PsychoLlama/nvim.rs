@@ -10,6 +10,13 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// The file name the last entry was filed under, and the buffer it named.
+/// Consecutive entries usually name the same file, so remembering the last
+/// answer saves a `buflist_new` walk per entry.
+pub(crate) static qf_last_bufname: GlobalCell<*mut ::core::ffi::c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+pub(crate) static qf_last_bufref: GlobalCell<bufref_T> = GlobalCell::new(bufref_T::new());
+
 pub(crate) unsafe extern "C" fn qf_get_fnum(
     mut qfl: *mut qf_list_T,
     mut directory: *mut ::core::ffi::c_char,
@@ -213,7 +220,7 @@ pub(crate) unsafe extern "C" fn qflist_valid(
         }
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < (*qi).qf_listcount {
-            if (*(*qi).qf_lists.offset(i as isize)).qf_id == qf_id {
+            if (*qf_get_list(qi, i)).qf_id == qf_id {
                 return true_0 != 0;
             }
             i += 1;

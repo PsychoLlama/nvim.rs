@@ -52,35 +52,23 @@ pub(crate) unsafe extern "C" fn hgr_search_file(
                     l -= 1;
                     *line.offset(l as isize) = NUL as ::core::ffi::c_char;
                 }
-                if qf_add_entry(
+                qf_add_entry(
                     qfl,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    fname,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    0 as ::core::ffi::c_int,
-                    line,
-                    lnum,
-                    0 as linenr_T,
-                    (*p_regmatch).startp[0 as ::core::ffi::c_int as usize].offset_from(line)
-                        as ::core::ffi::c_int
-                        + 1 as ::core::ffi::c_int,
-                    (*p_regmatch).endp[0 as ::core::ffi::c_int as usize].offset_from(line)
-                        as ::core::ffi::c_int
-                        + 1 as ::core::ffi::c_int,
-                    false_0 as ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    0 as ::core::ffi::c_int,
-                    1 as ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<typval_T>(),
-                    true_0 as ::core::ffi::c_char,
-                ) == QF_FAIL as ::core::ffi::c_int
-                {
-                    got_int.set(true_0 != 0);
-                    if line != IObuff.ptr() as *mut ::core::ffi::c_char {
-                        xfree(line as *mut ::core::ffi::c_void);
-                    }
-                    break;
-                }
+                    &NewEntry {
+                        fname,
+                        lnum,
+                        col: (*p_regmatch).startp[0 as ::core::ffi::c_int as usize]
+                            .offset_from(line) as ::core::ffi::c_int
+                            + 1 as ::core::ffi::c_int,
+                        end_col: (*p_regmatch).endp[0 as ::core::ffi::c_int as usize]
+                            .offset_from(line)
+                            as ::core::ffi::c_int
+                            + 1 as ::core::ffi::c_int,
+                        // A help entry, which `qf_jump` opens as help.
+                        kind: 1 as ::core::ffi::c_char,
+                        ..NewEntry::new(line)
+                    },
+                );
             }
             if line != IObuff.ptr() as *mut ::core::ffi::c_char {
                 xfree(line as *mut ::core::ffi::c_void);

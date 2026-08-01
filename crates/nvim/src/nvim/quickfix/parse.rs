@@ -678,3 +678,34 @@ pub(crate) unsafe fn entry_file_name(fields: &mut Fields, qfl: *mut qf_list_T) -
         }
     }
 }
+
+impl Fields {
+    /// The entry this parsed line makes. The strings stay in the field
+    /// buffers; [`qf_add_entry`] copies what it keeps.
+    ///
+    /// # Safety
+    ///
+    /// `qfl` must be the live list the line was parsed against.
+    pub(crate) unsafe fn entry(&mut self, qfl: *mut qf_list_T) -> NewEntry {
+        // SAFETY: forwarded from the caller.
+        unsafe {
+            NewEntry {
+                dir: (*qfl).qf_directory,
+                fname: entry_file_name(self, qfl),
+                module: self.module(),
+                bufnum: self.bnr,
+                mesg: self.errmsg(),
+                lnum: self.lnum,
+                end_lnum: self.end_lnum,
+                col: self.col,
+                end_col: self.end_col,
+                vis_col: c_char::from(self.use_viscol),
+                pattern: self.pattern(),
+                nr: self.enr,
+                kind: self.kind,
+                user_data: self.user_data,
+                valid: self.valid,
+            }
+        }
+    }
+}

@@ -130,27 +130,28 @@ pub(crate) unsafe extern "C" fn qf_add_entry_from_dict(
                 false_0,
             ) != 0;
         }
-        let status: ::core::ffi::c_int = qf_add_entry(
+        qf_add_entry(
             qfl,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            filename,
-            module,
-            bufnum,
-            text,
-            lnum,
-            end_lnum,
-            col,
-            end_col,
-            vcol,
-            pattern,
-            nr,
-            (if type_0.is_null() {
-                NUL
-            } else {
-                *type_0 as ::core::ffi::c_int
-            }) as ::core::ffi::c_char,
-            &raw mut user_data,
-            valid as ::core::ffi::c_char,
+            &NewEntry {
+                fname: filename,
+                module,
+                bufnum,
+                lnum,
+                end_lnum,
+                col,
+                end_col,
+                vis_col: vcol,
+                pattern,
+                nr,
+                kind: (if type_0.is_null() {
+                    NUL
+                } else {
+                    *type_0 as ::core::ffi::c_int
+                }) as ::core::ffi::c_char,
+                user_data: &raw mut user_data,
+                valid,
+                ..NewEntry::new(text)
+            },
         );
         xfree(filename as *mut ::core::ffi::c_void);
         xfree(module as *mut ::core::ffi::c_void);
@@ -160,7 +161,7 @@ pub(crate) unsafe extern "C" fn qf_add_entry_from_dict(
         if valid {
             *valid_entry = true_0 != 0;
         }
-        return status;
+        return QF_OK as ::core::ffi::c_int;
     }
 }
 
@@ -435,8 +436,7 @@ pub(crate) unsafe extern "C" fn qf_setprop_items(
         {
             return FAIL;
         }
-        let mut title_save: *mut ::core::ffi::c_char =
-            xstrdup((*(*qi).qf_lists.offset(qf_idx as isize)).qf_title);
+        let mut title_save: *mut ::core::ffi::c_char = xstrdup((*qf_get_list(qi, qf_idx)).qf_title);
         let retval: ::core::ffi::c_int = qf_add_entries(
             qi,
             qf_idx,
@@ -486,7 +486,7 @@ pub(crate) unsafe extern "C" fn qf_setprop_items_from_lines(
             return FAIL;
         }
         if action == 'r' as ::core::ffi::c_int || action == 'u' as ::core::ffi::c_int {
-            qf_free_items((*qi).qf_lists.offset(qf_idx as isize));
+            qf_free_items(qf_get_list(qi, qf_idx));
         }
         if qf_init_ext(
             qi,
@@ -561,7 +561,7 @@ pub(crate) unsafe extern "C" fn qf_setprop_curidx(
         }
         (*qfl).qf_ptr = qf_ptr;
         (*qfl).qf_index = newidx;
-        if (*(*qi).qf_lists.offset((*qi).qf_curlist as isize)).qf_id == (*qfl).qf_id {
+        if (*qf_get_curlist(qi)).qf_id == (*qfl).qf_id {
             qf_win_pos_update(qi, old_qfidx);
         }
         return OK;

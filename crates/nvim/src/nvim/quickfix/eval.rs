@@ -17,8 +17,8 @@ pub(crate) unsafe extern "C" fn mark_quickfix_user_data(
     unsafe {
         let mut abort_0: bool = false_0 != 0;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*qi).qf_maxcount && !abort_0 {
-            let mut qfl: *mut qf_list_T = (*qi).qf_lists.offset(i as isize);
+        while i < (*qi).max_count() && !abort_0 {
+            let mut qfl: *mut qf_list_T = qf_get_list(qi, i);
             if (*qfl).qf_has_user_data {
                 let mut qfp: *mut qfline_T = ::core::ptr::null_mut::<qfline_T>();
                 let mut j: ::core::ffi::c_int = 0;
@@ -60,8 +60,8 @@ pub(crate) unsafe extern "C" fn mark_quickfix_ctx(
     unsafe {
         let mut abort_0: bool = false_0 != 0;
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*qi).qf_maxcount && !abort_0 {
-            let mut ctx: *mut typval_T = (*(*qi).qf_lists.offset(i as isize)).qf_ctx;
+        while i < (*qi).max_count() && !abort_0 {
+            let mut ctx: *mut typval_T = (*qf_get_list(qi, i)).qf_ctx;
             if !ctx.is_null()
                 && (*ctx).v_type as ::core::ffi::c_uint
                     != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -77,7 +77,7 @@ pub(crate) unsafe extern "C" fn mark_quickfix_ctx(
                     ::core::ptr::null_mut::<*mut list_stack_T>(),
                 );
             }
-            let mut cb: *mut Callback = &raw mut (*(*qi).qf_lists.offset(i as isize)).qf_qftf_cb;
+            let mut cb: *mut Callback = &raw mut (*qf_get_list(qi, i)).qf_qftf_cb;
             abort_0 = abort_0 as ::core::ffi::c_int != 0
                 || set_ref_in_callback(
                     cb,

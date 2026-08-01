@@ -154,39 +154,32 @@ pub(crate) unsafe extern "C" fn vgr_match_buflines(
                     ::core::ptr::null_mut::<::core::ffi::c_int>(),
                 ) > 0 as ::core::ffi::c_int
                 {
-                    if qf_add_entry(
+                    qf_add_entry(
                         qfl,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        fname,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        if duplicate_name != 0 {
-                            0 as ::core::ffi::c_int
-                        } else {
-                            (*buf).handle as ::core::ffi::c_int
+                        &NewEntry {
+                            fname,
+                            bufnum: if duplicate_name != 0 {
+                                0 as ::core::ffi::c_int
+                            } else {
+                                (*buf).handle as ::core::ffi::c_int
+                            },
+                            lnum: (*regmatch).startpos[0 as ::core::ffi::c_int as usize].lnum
+                                + lnum,
+                            end_lnum: (*regmatch).endpos[0 as ::core::ffi::c_int as usize].lnum
+                                + lnum,
+                            col: (*regmatch).startpos[0 as ::core::ffi::c_int as usize].col
+                                as ::core::ffi::c_int
+                                + 1 as ::core::ffi::c_int,
+                            end_col: (*regmatch).endpos[0 as ::core::ffi::c_int as usize].col
+                                as ::core::ffi::c_int
+                                + 1 as ::core::ffi::c_int,
+                            ..NewEntry::new(ml_get_buf(
+                                buf,
+                                (*regmatch).startpos[0 as ::core::ffi::c_int as usize].lnum + lnum,
+                            ))
                         },
-                        ml_get_buf(
-                            buf,
-                            (*regmatch).startpos[0 as ::core::ffi::c_int as usize].lnum + lnum,
-                        ),
-                        (*regmatch).startpos[0 as ::core::ffi::c_int as usize].lnum + lnum,
-                        (*regmatch).endpos[0 as ::core::ffi::c_int as usize].lnum + lnum,
-                        (*regmatch).startpos[0 as ::core::ffi::c_int as usize].col
-                            as ::core::ffi::c_int
-                            + 1 as ::core::ffi::c_int,
-                        (*regmatch).endpos[0 as ::core::ffi::c_int as usize].col
-                            as ::core::ffi::c_int
-                            + 1 as ::core::ffi::c_int,
-                        false_0 as ::core::ffi::c_char,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        0 as ::core::ffi::c_int,
-                        0 as ::core::ffi::c_char,
-                        ::core::ptr::null_mut::<typval_T>(),
-                        true_0 as ::core::ffi::c_char,
-                    ) == QF_FAIL as ::core::ffi::c_int
+                    );
                     {
-                        got_int.set(true_0 != 0);
-                        break;
-                    } else {
                         found_match = true_0 != 0;
                         *tomatch -= 1;
                         if *tomatch == 0 as ::core::ffi::c_int {
@@ -229,34 +222,23 @@ pub(crate) unsafe extern "C" fn vgr_match_buflines(
                 ) as ::core::ffi::c_int
                     > 0 as ::core::ffi::c_int
                 {
-                    if qf_add_entry(
+                    qf_add_entry(
                         qfl,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        fname,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        if duplicate_name != 0 {
-                            0 as ::core::ffi::c_int
-                        } else {
-                            (*buf).handle as ::core::ffi::c_int
+                        &NewEntry {
+                            fname,
+                            bufnum: if duplicate_name != 0 {
+                                0 as ::core::ffi::c_int
+                            } else {
+                                (*buf).handle as ::core::ffi::c_int
+                            },
+                            lnum,
+                            col: matches[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
+                                + col as ::core::ffi::c_int
+                                + 1 as ::core::ffi::c_int,
+                            ..NewEntry::new(str)
                         },
-                        str,
-                        lnum,
-                        0 as linenr_T,
-                        matches[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-                            + col as ::core::ffi::c_int
-                            + 1 as ::core::ffi::c_int,
-                        0 as ::core::ffi::c_int,
-                        false_0 as ::core::ffi::c_char,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        0 as ::core::ffi::c_int,
-                        0 as ::core::ffi::c_char,
-                        ::core::ptr::null_mut::<typval_T>(),
-                        true_0 as ::core::ffi::c_char,
-                    ) == QF_FAIL as ::core::ffi::c_int
+                    );
                     {
-                        got_int.set(true_0 != 0);
-                        break;
-                    } else {
                         found_match = true_0 != 0;
                         *tomatch -= 1;
                         if *tomatch == 0 as ::core::ffi::c_int {
