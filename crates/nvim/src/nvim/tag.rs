@@ -35,7 +35,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
 use crate::src::nvim::mbyte::{convert_setup, mb_strnicmp, string_convert, utfc_ptr2len};
-use crate::src::nvim::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcat, xstrlcpy};
+use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xstrdup, xstrlcat};
 use crate::src::nvim::message::{
     emsg, give_warning, msg, msg_advance, msg_clr_eos, msg_delay, msg_ext_set_kind, msg_outtrans,
     msg_outtrans_len, msg_outtrans_one, msg_putchar, msg_puts, msg_puts_hl, msg_puts_title,
@@ -51,8 +51,8 @@ use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::fs::{os_fopen, os_path_exists};
 use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, atoi, fclose, fseeko, ftello, gettext, snprintf,
-    strcasecmp, strcat, strcmp, strcpy, strlen, strncmp, strstr,
+    __assert_fail, abort, atoi, fclose, fseeko, ftello, gettext, snprintf, strcasecmp, strcmp,
+    strcpy, strlen, strncmp, strstr,
 };
 use crate::src::nvim::path::{
     FreeWild, FullName_save, path_full_compare, path_has_wildcard, simplify_filename, vim_isAbsName,
@@ -71,8 +71,7 @@ use crate::src::nvim::types::{
     dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, garray_T, getf_retvalues,
     getf_values, hashitem_T, hashtab_T, ht_stack_T, int64_t, linenr_T, list_T, list_stack_T,
     listitem_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, size_t,
-    taggy_T, typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T, vimconv_T, win_T,
-    xp_prefix_T,
+    taggy_T, typval_T, typval_vval_union, uint64_t, varnumber_T, vimconv_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::window::{
