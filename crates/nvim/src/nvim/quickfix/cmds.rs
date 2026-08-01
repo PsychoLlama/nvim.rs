@@ -5,72 +5,60 @@
 //! Vimscript expression ([`ex_cexpr`]) — parses them with `'errorformat'`
 //! and either replaces or adds to a list. The `*_get_auname` helpers name
 //! the `QuickFixCmdPre`/`QuickFixCmdPost` autocommand each one fires.
+//!
+//! All three run the same errand afterwards: fire `QuickFixCmdPost` and,
+//! for the plain form only — not the `get` and `add` variants — jump to the
+//! first error. They keep their own copies of that tail because each fires
+//! the autocommand with a different name and `:cbuffer` also has to notice
+//! a buffer switch.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn cfile_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c_char {
-    match cmdidx as ::core::ffi::c_int {
-        65 => {
-            return b"cfile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        68 => {
-            return b"cgetfile\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        51 => {
-            return b"caddfile\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        233 => {
-            return b"lfile\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        236 => {
-            return b"lgetfile\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        218 => {
-            return b"laddfile\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        _ => return ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
+/// The autocommand name of a `:cfile`-family command.
+fn cfile_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
+    Some(match cmdidx {
+        CMD_cfile => c"cfile",
+        CMD_cgetfile => c"cgetfile",
+        CMD_caddfile => c"caddfile",
+        CMD_lfile => c"lfile",
+        CMD_lgetfile => c"lgetfile",
+        CMD_laddfile => c"laddfile",
+        _ => return None,
+    })
 }
 
-pub unsafe fn ex_cfile(mut eap: *mut exarg_T) {
+/// `:cfile`, `:cgetfile`, `:caddfile` and their `:l…` twins: read
+/// `'errorfile'`, or the file named as the argument.
+///
+/// # Safety
+///
+/// `eap` must be a live command.
+pub unsafe fn ex_cfile(eap: *mut exarg_T) {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        let mut qi: *mut qf_info_T = ql_info.get();
-        '_c2rust_label: {
-            if !qi.is_null() {
-            } else {
-                __assert_fail(
-                    b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    5343 as ::core::ffi::c_uint,
-                    b"void ex_cfile(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        let mut au_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        au_name = cfile_get_auname((*eap).cmdidx);
-        if !au_name.is_null()
-            && apply_autocmds(
+        let mut qi = ql_info.get();
+        debug_assert!(!qi.is_null());
+
+        let au_name = cfile_get_auname((*eap).cmdidx);
+        if let Some(name) = au_name {
+            let claimed = apply_autocmds(
                 EVENT_QUICKFIXCMDPRE,
-                au_name,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
+                name.as_ptr().cast_mut(),
+                ptr::null_mut(),
+                false,
                 curbuf.get(),
-            ) as ::core::ffi::c_int
-                != 0
-        {
-            if aborting() {
+            );
+            if claimed && aborting() {
                 return;
             }
         }
-        if *(*eap).arg as ::core::ffi::c_int != NUL {
+
+        if *(*eap).arg as c_int != NUL {
             set_option_direct(
                 kOptErrorfile,
                 OptVal {
@@ -79,343 +67,335 @@ pub unsafe fn ex_cfile(mut eap: *mut exarg_T) {
                         string: cstr_as_string((*eap).arg),
                     },
                 },
-                0 as ::core::ffi::c_int,
+                0,
                 0 as scid_T,
             );
         }
-        let mut enc: *mut ::core::ffi::c_char =
-            if *(*curbuf.get()).b_p_menc as ::core::ffi::c_int != NUL {
-                (*curbuf.get()).b_p_menc
-            } else {
-                p_menc.get()
-            };
-        if is_loclist_cmd((*eap).cmdidx as ::core::ffi::c_int) {
+
+        let local_enc = (*curbuf.get()).b_p_menc;
+        let enc = if *local_enc as c_int != NUL {
+            local_enc
+        } else {
+            p_menc.get()
+        };
+
+        let mut wp: *mut win_T = ptr::null_mut();
+        if is_loclist_cmd((*eap).cmdidx as c_int) {
             wp = curwin.get();
         }
+
         incr_quickfix_busy();
-        let mut res: ::core::ffi::c_int = qf_init(
+
+        let newlist = !matches!((*eap).cmdidx, CMD_caddfile | CMD_laddfile);
+        let res = qf_init(
             wp,
             p_ef.get(),
             p_efm.get(),
-            ((*eap).cmdidx as ::core::ffi::c_int != CMD_caddfile as ::core::ffi::c_int
-                && (*eap).cmdidx as ::core::ffi::c_int != CMD_laddfile as ::core::ffi::c_int)
-                as ::core::ffi::c_int,
+            newlist as c_int,
             qf_cmdtitle(*(*eap).cmdlinep),
             enc,
         );
+
         if !wp.is_null() {
-            qi = if bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0
-                && !(*wp).w_llist_ref.is_null()
-            {
-                (*wp).w_llist_ref
-            } else {
-                (*wp).w_llist
-            };
+            qi = win_loclist(wp);
             if qi.is_null() {
                 decr_quickfix_busy();
                 return;
             }
         }
-        if res >= 0 as ::core::ffi::c_int {
+        if res >= 0 {
             qf_list_changed(qf_get_curlist(qi));
         }
-        let mut save_qfid: ::core::ffi::c_uint = (*qf_get_curlist(qi)).qf_id;
-        if !au_name.is_null() {
+        // Remember the current list, so that an autocommand replacing it is
+        // noticed before the jump.
+        let save_qfid = (*qf_get_curlist(qi)).qf_id;
+        if let Some(name) = au_name {
             apply_autocmds(
                 EVENT_QUICKFIXCMDPOST,
-                au_name,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
+                name.as_ptr().cast_mut(),
+                ptr::null_mut(),
+                false,
                 curbuf.get(),
             );
         }
-        if res > 0 as ::core::ffi::c_int
-            && ((*eap).cmdidx as ::core::ffi::c_int == CMD_cfile as ::core::ffi::c_int
-                || (*eap).cmdidx as ::core::ffi::c_int == CMD_lfile as ::core::ffi::c_int)
-            && qflist_valid(wp, save_qfid) as ::core::ffi::c_int != 0
-        {
+
+        let jumps = matches!((*eap).cmdidx, CMD_cfile | CMD_lfile);
+        if res > 0 && jumps && qflist_valid(wp, save_qfid) {
             qf_jump_first(qi, save_qfid, (*eap).forceit);
         }
         decr_quickfix_busy();
     }
 }
 
-pub(crate) unsafe extern "C" fn cbuffer_get_auname(
-    mut cmdidx: cmdidx_T,
-) -> *mut ::core::ffi::c_char {
-    match cmdidx as ::core::ffi::c_int {
-        55 => {
-            return b"cbuffer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        69 => {
-            return b"cgetbuffer\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        49 => {
-            return b"caddbuffer\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        221 => {
-            return b"lbuffer\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        237 => {
-            return b"lgetbuffer\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        217 => {
-            return b"laddbuffer\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        _ => return ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
+/// The autocommand name of a `:cbuffer`-family command.
+fn cbuffer_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
+    Some(match cmdidx {
+        CMD_cbuffer => c"cbuffer",
+        CMD_cgetbuffer => c"cgetbuffer",
+        CMD_caddbuffer => c"caddbuffer",
+        CMD_lbuffer => c"lbuffer",
+        CMD_lgetbuffer => c"lgetbuffer",
+        CMD_laddbuffer => c"laddbuffer",
+        _ => return None,
+    })
 }
 
-pub(crate) unsafe extern "C" fn cbuffer_process_args(
-    mut eap: *mut exarg_T,
-    mut bufp: *mut *mut buf_T,
-    mut line1: *mut linenr_T,
-    mut line2: *mut linenr_T,
-) -> ::core::ffi::c_int {
+/// The buffer and line range a `:cbuffer` command names: the current
+/// buffer, or the one whose number is the whole argument, over the
+/// command's range or the whole buffer. Answers `None` after reporting the
+/// error itself.
+///
+/// # Safety
+///
+/// `eap` must be a live command.
+unsafe fn cbuffer_process_args(eap: *mut exarg_T) -> Option<*mut buf_T> {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-        if *(*eap).arg as ::core::ffi::c_int == NUL {
-            buf = curbuf.get();
-        } else if *skipwhite(skipdigits((*eap).arg)) as ::core::ffi::c_int == NUL {
-            buf = buflist_findnr(atoi((*eap).arg));
-        }
+        let buf = if *(*eap).arg as c_int == NUL {
+            curbuf.get()
+        } else if *skipwhite(skipdigits((*eap).arg)) as c_int == NUL {
+            buflist_findnr(atoi((*eap).arg))
+        } else {
+            ptr::null_mut()
+        };
+
         if buf.is_null() {
-            emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char));
-            return FAIL;
+            emsg(gettext(&raw const e_invarg as *const c_char));
+            return None;
         }
         if (*buf).b_ml.ml_mfp.is_null() {
-            emsg(gettext(
-                &raw const e_buffer_is_not_loaded as *const ::core::ffi::c_char,
-            ));
-            return FAIL;
+            emsg(gettext(&raw const e_buffer_is_not_loaded as *const c_char));
+            return None;
         }
-        if (*eap).addr_count == 0 as ::core::ffi::c_int {
-            (*eap).line1 = 1 as ::core::ffi::c_int as linenr_T;
+
+        if (*eap).addr_count == 0 {
+            (*eap).line1 = 1;
             (*eap).line2 = (*buf).b_ml.ml_line_count;
         }
-        if (*eap).line1 < 1 as linenr_T
+        if (*eap).line1 < 1
             || (*eap).line1 > (*buf).b_ml.ml_line_count
-            || (*eap).line2 < 1 as linenr_T
+            || (*eap).line2 < 1
             || (*eap).line2 > (*buf).b_ml.ml_line_count
         {
-            emsg(gettext(&raw const e_invrange as *const ::core::ffi::c_char));
-            return FAIL;
+            emsg(gettext(&raw const e_invrange as *const c_char));
+            return None;
         }
-        *line1 = (*eap).line1;
-        *line2 = (*eap).line2;
-        *bufp = buf;
-        return OK;
+        Some(buf)
     }
 }
 
-pub unsafe fn ex_cbuffer(mut eap: *mut exarg_T) {
+/// `:cbuffer`, `:cgetbuffer`, `:caddbuffer` and their `:l…` twins: parse a
+/// range of lines of a buffer.
+///
+/// # Safety
+///
+/// `eap` must be a live command.
+pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut au_name: *mut ::core::ffi::c_char = cbuffer_get_auname((*eap).cmdidx);
-        if !au_name.is_null()
-            && apply_autocmds(
+        let au_name = cbuffer_get_auname((*eap).cmdidx);
+        if let Some(name) = au_name {
+            let claimed = apply_autocmds(
                 EVENT_QUICKFIXCMDPRE,
-                au_name,
+                name.as_ptr().cast_mut(),
                 (*curbuf.get()).b_fname,
-                true_0 != 0,
+                true,
                 curbuf.get(),
-            ) as ::core::ffi::c_int
-                != 0
-        {
-            if aborting() {
+            );
+            if claimed && aborting() {
                 return;
             }
         }
-        let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        let mut qi: *mut qf_info_T = qf_cmd_get_or_alloc_stack(eap, &raw mut wp);
-        let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-        let mut line1: linenr_T = 0;
-        let mut line2: linenr_T = 0;
-        if cbuffer_process_args(eap, &raw mut buf, &raw mut line1, &raw mut line2) == FAIL {
+
+        let mut wp: *mut win_T = ptr::null_mut();
+        let qi = qf_cmd_get_or_alloc_stack(eap, &raw mut wp);
+        let Some(buf) = cbuffer_process_args(eap) else {
             return;
-        }
-        let mut qf_title: *mut ::core::ffi::c_char = qf_cmdtitle(*(*eap).cmdlinep);
+        };
+
+        // The title names the buffer as well as the command.
+        let mut qf_title = qf_cmdtitle(*(*eap).cmdlinep);
         if !(*buf).b_sfname.is_null() {
             vim_snprintf(
-                IObuff.ptr() as *mut ::core::ffi::c_char,
+                IObuff.ptr().cast(),
                 IOSIZE as size_t,
-                b"%s (%s)\0".as_ptr() as *const ::core::ffi::c_char,
+                c"%s (%s)".as_ptr(),
                 qf_title,
                 (*buf).b_sfname,
             );
-            qf_title = IObuff.ptr() as *mut ::core::ffi::c_char;
+            qf_title = IObuff.ptr().cast();
         }
+
         incr_quickfix_busy();
-        let mut res: ::core::ffi::c_int = qf_init_ext(
+
+        let newlist = !matches!((*eap).cmdidx, CMD_caddbuffer | CMD_laddbuffer);
+        let mut res = qf_init_ext(
             qi,
             (*qi).qf_curlist,
-            ::core::ptr::null::<::core::ffi::c_char>(),
+            ptr::null(),
             buf,
-            ::core::ptr::null_mut::<typval_T>(),
+            ptr::null_mut(),
             p_efm.get(),
-            (*eap).cmdidx as ::core::ffi::c_int != CMD_caddbuffer as ::core::ffi::c_int
-                && (*eap).cmdidx as ::core::ffi::c_int != CMD_laddbuffer as ::core::ffi::c_int,
+            newlist,
             (*eap).line1,
             (*eap).line2,
             qf_title,
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            ptr::null_mut(),
         );
+
         if qf_stack_empty(qi) {
             decr_quickfix_busy();
             return;
         }
-        if res >= 0 as ::core::ffi::c_int {
+        if res >= 0 {
             qf_list_changed(qf_get_curlist(qi));
         }
-        let mut save_qfid: ::core::ffi::c_uint = (*qf_get_curlist(qi)).qf_id;
-        if !au_name.is_null() {
+        let save_qfid = (*qf_get_curlist(qi)).qf_id;
+        if let Some(name) = au_name {
             let curbuf_old: *const buf_T = curbuf.get();
             apply_autocmds(
                 EVENT_QUICKFIXCMDPOST,
-                au_name,
+                name.as_ptr().cast_mut(),
                 (*curbuf.get()).b_fname,
-                true_0 != 0,
+                true,
                 curbuf.get(),
             );
-            if curbuf.get() != curbuf_old as *mut buf_T {
-                res = 0 as ::core::ffi::c_int;
+            // The autocommand switched buffers: do not jump away from
+            // wherever it left the user.
+            if !ptr::eq(curbuf.get(), curbuf_old) {
+                res = 0;
             }
         }
-        if res > 0 as ::core::ffi::c_int
-            && ((*eap).cmdidx as ::core::ffi::c_int == CMD_cbuffer as ::core::ffi::c_int
-                || (*eap).cmdidx as ::core::ffi::c_int == CMD_lbuffer as ::core::ffi::c_int)
-            && qflist_valid(wp, save_qfid) as ::core::ffi::c_int != 0
-        {
+
+        let jumps = matches!((*eap).cmdidx, CMD_cbuffer | CMD_lbuffer);
+        if res > 0 && jumps && qflist_valid(wp, save_qfid) {
             qf_jump_first(qi, save_qfid, (*eap).forceit);
         }
         decr_quickfix_busy();
     }
 }
 
-pub(crate) unsafe extern "C" fn cexpr_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c_char {
-    match cmdidx as ::core::ffi::c_int {
-        64 => {
-            return b"cexpr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        70 => {
-            return b"cgetexpr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        50 => {
-            return b"caddexpr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        232 => {
-            return b"lexpr\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        238 => {
-            return b"lgetexpr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        216 => {
-            return b"laddexpr\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        _ => return ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
+/// The autocommand name of a `:cexpr`-family command.
+fn cexpr_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
+    Some(match cmdidx {
+        CMD_cexpr => c"cexpr",
+        CMD_cgetexpr => c"cgetexpr",
+        CMD_caddexpr => c"caddexpr",
+        CMD_lexpr => c"lexpr",
+        CMD_lgetexpr => c"lgetexpr",
+        CMD_laddexpr => c"laddexpr",
+        _ => return None,
+    })
 }
 
-pub(crate) unsafe extern "C" fn trigger_cexpr_autocmd(
-    mut cmdidx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Fire `QuickFixCmdPre` for a `:cexpr`-family command. Answers false when
+/// an autocommand aborted, in which case the expression is not evaluated at
+/// all — which is why this is separate from [`cexpr_core`], whose callers
+/// hand it a value that has already been computed.
+///
+/// # Safety
+///
+/// There must be a current buffer.
+unsafe fn trigger_cexpr_autocmd(cmdidx: cmdidx_T) -> bool {
+    // SAFETY: the caller's promise.
     unsafe {
-        let mut au_name: *mut ::core::ffi::c_char = cexpr_get_auname(cmdidx as cmdidx_T);
-        if !au_name.is_null()
-            && apply_autocmds(
+        if let Some(name) = cexpr_get_auname(cmdidx) {
+            let claimed = apply_autocmds(
                 EVENT_QUICKFIXCMDPRE,
-                au_name,
+                name.as_ptr().cast_mut(),
                 (*curbuf.get()).b_fname,
-                true_0 != 0,
+                true,
                 curbuf.get(),
-            ) as ::core::ffi::c_int
-                != 0
-        {
-            if aborting() {
-                return FAIL;
-            }
-        }
-        return OK;
-    }
-}
-
-pub unsafe extern "C" fn cexpr_core(
-    mut eap: *const exarg_T,
-    mut tv: *mut typval_T,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        let mut qi: *mut qf_info_T = qf_cmd_get_or_alloc_stack(eap, &raw mut wp);
-        if (*tv).v_type as ::core::ffi::c_uint
-            == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            && !(*tv).vval.v_string.is_null()
-            || (*tv).v_type as ::core::ffi::c_uint
-                == VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut au_name: *mut ::core::ffi::c_char = cexpr_get_auname((*eap).cmdidx);
-            incr_quickfix_busy();
-            let mut res: ::core::ffi::c_int = qf_init_ext(
-                qi,
-                (*qi).qf_curlist,
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<buf_T>(),
-                tv,
-                p_efm.get(),
-                (*eap).cmdidx as ::core::ffi::c_int != CMD_caddexpr as ::core::ffi::c_int
-                    && (*eap).cmdidx as ::core::ffi::c_int != CMD_laddexpr as ::core::ffi::c_int,
-                0 as linenr_T,
-                0 as linenr_T,
-                qf_cmdtitle(*(*eap).cmdlinep),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
             );
-            if qf_stack_empty(qi) {
-                decr_quickfix_busy();
-                return FAIL;
+            if claimed && aborting() {
+                return false;
             }
-            if res >= 0 as ::core::ffi::c_int {
-                qf_list_changed(qf_get_curlist(qi));
-            }
-            let mut save_qfid: ::core::ffi::c_uint = (*qf_get_curlist(qi)).qf_id;
-            if !au_name.is_null() {
-                apply_autocmds(
-                    EVENT_QUICKFIXCMDPOST,
-                    au_name,
-                    (*curbuf.get()).b_fname,
-                    true_0 != 0,
-                    curbuf.get(),
-                );
-            }
-            if res > 0 as ::core::ffi::c_int
-                && ((*eap).cmdidx as ::core::ffi::c_int == CMD_cexpr as ::core::ffi::c_int
-                    || (*eap).cmdidx as ::core::ffi::c_int == CMD_lexpr as ::core::ffi::c_int)
-                && qflist_valid(wp, save_qfid) as ::core::ffi::c_int != 0
-            {
-                qf_jump_first(qi, save_qfid, (*eap).forceit);
-            }
-            decr_quickfix_busy();
-            return OK;
-        } else {
-            emsg(gettext(
-                b"E777: String or List expected\0".as_ptr() as *const ::core::ffi::c_char
-            ));
         }
-        return FAIL;
+        true
     }
 }
 
-pub unsafe fn ex_cexpr(mut eap: *mut exarg_T) {
+/// Build a list out of an already evaluated string or list of strings.
+///
+/// # Safety
+///
+/// `eap` must be a live command and `tv` a live value.
+unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> c_int {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        if trigger_cexpr_autocmd((*eap).cmdidx as ::core::ffi::c_int) == FAIL {
+        // The stack is asked for first, and so allocated for the current
+        // window if it had none, even when the value turns out to be
+        // unusable.
+        let mut wp: *mut win_T = ptr::null_mut();
+        let qi = qf_cmd_get_or_alloc_stack(eap, &raw mut wp);
+
+        let usable = (*tv).v_type == VAR_STRING && !(*tv).vval.v_string.is_null()
+            || (*tv).v_type == VAR_LIST;
+        if !usable {
+            emsg(gettext(c"E777: String or List expected".as_ptr()));
+            return FAIL;
+        }
+
+        let au_name = cexpr_get_auname((*eap).cmdidx);
+
+        incr_quickfix_busy();
+
+        let newlist = !matches!((*eap).cmdidx, CMD_caddexpr | CMD_laddexpr);
+        let res = qf_init_ext(
+            qi,
+            (*qi).qf_curlist,
+            ptr::null(),
+            ptr::null_mut(),
+            tv,
+            p_efm.get(),
+            newlist,
+            0,
+            0,
+            qf_cmdtitle(*(*eap).cmdlinep),
+            ptr::null_mut(),
+        );
+
+        if qf_stack_empty(qi) {
+            decr_quickfix_busy();
+            return FAIL;
+        }
+        if res >= 0 {
+            qf_list_changed(qf_get_curlist(qi));
+        }
+        let save_qfid: c_uint = (*qf_get_curlist(qi)).qf_id;
+        if let Some(name) = au_name {
+            apply_autocmds(
+                EVENT_QUICKFIXCMDPOST,
+                name.as_ptr().cast_mut(),
+                (*curbuf.get()).b_fname,
+                true,
+                curbuf.get(),
+            );
+        }
+
+        let jumps = matches!((*eap).cmdidx, CMD_cexpr | CMD_lexpr);
+        if res > 0 && jumps && qflist_valid(wp, save_qfid) {
+            qf_jump_first(qi, save_qfid, (*eap).forceit);
+        }
+        decr_quickfix_busy();
+        OK
+    }
+}
+
+/// `:cexpr`, `:cgetexpr`, `:caddexpr` and their `:l…` twins.
+///
+/// # Safety
+///
+/// `eap` must be a live command.
+pub unsafe fn ex_cexpr(eap: *mut exarg_T) {
+    // SAFETY: forwarded from the caller.
+    unsafe {
+        if !trigger_cexpr_autocmd((*eap).cmdidx) {
             return;
         }
-        let mut tv: *mut typval_T = eval_expr((*eap).arg, eap);
+        // Evaluate the expression. When the result is a string or a list of
+        // strings, parse each line and add it to the quickfix list.
+        let tv = eval_expr((*eap).arg, eap);
         if tv.is_null() {
             return;
         }
