@@ -14,7 +14,7 @@ use crate::src::nvim::mbyte::{
     mb_isalpha, mb_strcmp_ic, mb_strnicmp, mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len,
 };
 use crate::src::nvim::memory::{
-    xcalloc, xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
+    xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::src::nvim::option::copy_option_part;
 use crate::src::nvim::os::env::{expand_env, expand_env_save_opt, os_getenv, vim_env_iter};
