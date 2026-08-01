@@ -1,712 +1,793 @@
 //! Scanning the tags files for matches.
 //!
 //! [`find_tags`] is the entry point every tag lookup goes through: it
-//! collects the tags files that apply ([`get_tagfname`](super::get_tagfname)),
-//! reads each one, and hands back the matching lines sorted by how good a
-//! match they are. The state it threads through the readers is
-//! `findtags_state_T`; [`prepare_pats`] turns the caller's pattern into the
-//! regexp and the plain prefix the readers compare against.
+//! walks the tags files that apply ([`TagFiles`](super::TagFiles)), reads
+//! each one, and hands back the matching lines grouped by how good a match
+//! they are. [`FindTags`] is the state it threads through the readers in
+//! [`parse`](super::parse) and [`collect`](super::collect).
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::file_search::Name;
+use crate::src::nvim::options::{
+    kOptTcFlagFollowic, kOptTcFlagFollowscs, kOptTcFlagIgnore, kOptTcFlagMatch, kOptTcFlagSmart,
+};
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
+use std::collections::HashSet;
 
-pub(crate) unsafe extern "C" fn prepare_pats(mut pats: *mut pat_T, mut has_re: bool) {
-    unsafe {
-        (*pats).head = (*pats).pat;
-        (*pats).headlen = (*pats).len;
-        if has_re {
-            if *(*pats).pat.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '^' as ::core::ffi::c_int
-            {
-                (*pats).head = (*pats).pat.offset(1 as ::core::ffi::c_int as isize);
-            } else if *(*pats).pat.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '\\' as ::core::ffi::c_int
-                && *(*pats).pat.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '<' as ::core::ffi::c_int
-            {
-                (*pats).head = (*pats).pat.offset(2 as ::core::ffi::c_int as isize);
+/// How many priority buckets a match can land in: four kinds of match,
+/// doubled for an ignore-case match and again for a regexp match.
+const MT_COUNT: usize = super::MT_COUNT as usize;
+/// Static match in the current file.
+const MT_ST_CUR: usize = super::MT_ST_CUR as usize;
+/// Global match in the current file.
+const MT_GL_CUR: usize = super::MT_GL_CUR as usize;
+/// Global match in another file.
+const MT_GL_OTH: usize = super::MT_GL_OTH as usize;
+/// Static match in another file.
+const MT_ST_OTH: usize = super::MT_ST_OTH as usize;
+/// Added when the match only holds with case ignored.
+const MT_IC_OFF: usize = super::MT_IC_OFF as usize;
+/// Added when the match came from the regexp rather than from comparing
+/// the pattern literally.
+const MT_RE_OFF: usize = super::MT_RE_OFF as usize;
+
+/// The line buffer starts this big and doubles whenever a line does not
+/// fit in it.
+const LSIZE: usize = super::LSIZE as usize;
+
+/// How the tags file being read is being read.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Reading {
+    /// At the start of the file, where the header is.
+    Start,
+    /// Forwards to the end of the file, comparing every line.
+    Linear,
+    /// Bisecting a sorted file.
+    Binary,
+    /// Backwards from a bisection hit, to the first line that matches.
+    SkipBack,
+    /// Forwards from there, to the last one.
+    StepForward,
+}
+
+/// The tag pattern, as the caller gave it and as it is searched for.
+pub(crate) struct Pattern {
+    /// What to look for. Points either at the caller's pattern or at the
+    /// copy [`find_tags`] made when it stripped an `@xx` help language off
+    /// the end.
+    pub(crate) pat: *mut c_char,
+    /// How much of `pat` counts, after `'taglength'` has had its say.
+    pub(crate) len: c_int,
+    /// The leading part of `pat` that holds no regexp metacharacter — the
+    /// prefix a sorted tags file can be bisected on.
+    pub(crate) head: *mut c_char,
+    /// How much of `head` counts; zero when there is no usable prefix, in
+    /// which case the file has to be read line by line.
+    pub(crate) headlen: c_int,
+    /// The compiled pattern, when the caller asked for a regexp.
+    pub(crate) regmatch: regmatch_T,
+}
+
+impl Drop for Pattern {
+    fn drop(&mut self) {
+        // SAFETY: `regprog` came from `vim_regcomp`, or is NULL.
+        unsafe { vim_regfree(self.regmatch.regprog) };
+    }
+}
+
+impl Pattern {
+    /// Take the pattern apart: what a bisection can compare on, and the
+    /// compiled regexp when one was asked for.
+    fn prepare(&mut self, has_re: bool) {
+        self.head = self.pat;
+        self.headlen = self.len;
+        if !has_re {
+            self.regmatch.regprog = ptr::null_mut();
+            return;
+        }
+        // SAFETY: `pat` is the caller's NUL-terminated pattern.
+        unsafe {
+            // A pattern anchored with `^` or `\<` still has a plain head
+            // after the anchor, which is what keeps bisection possible.
+            if *self.pat == b'^' as c_char {
+                self.head = self.pat.add(1);
+            } else if *self.pat == b'\\' as c_char && *self.pat.add(1) == b'<' as c_char {
+                self.head = self.pat.add(2);
             }
-            if (*pats).head == (*pats).pat {
-                (*pats).headlen = 0 as ::core::ffi::c_int;
+            if self.head == self.pat {
+                self.headlen = 0;
             } else {
-                (*pats).headlen = 0 as ::core::ffi::c_int;
-                while *(*pats).head.offset((*pats).headlen as isize) as ::core::ffi::c_int != NUL {
-                    if !vim_strchr(
-                        if magic_isset() as ::core::ffi::c_int != 0 {
-                            b".[~*\\$\0".as_ptr() as *const ::core::ffi::c_char
-                        } else {
-                            b"\\$\0".as_ptr() as *const ::core::ffi::c_char
-                        },
-                        *(*pats).head.offset((*pats).headlen as isize) as uint8_t
-                            as ::core::ffi::c_int,
-                    )
-                    .is_null()
-                    {
+                // The head ends at the first metacharacter.
+                let meta = if magic_isset() { c".[~*\\$" } else { c"\\$" };
+                self.headlen = 0;
+                loop {
+                    let at = *self.head.offset(self.headlen as isize) as u8;
+                    if at == 0 || !vim_strchr(meta.as_ptr(), at as c_int).is_null() {
                         break;
                     }
-                    (*pats).headlen += 1;
+                    self.headlen += 1;
                 }
             }
-            if p_tl.get() != 0 as OptInt && (*pats).headlen as OptInt > p_tl.get() {
-                (*pats).headlen = p_tl.get() as ::core::ffi::c_int;
+            if p_tl.get() != 0 && self.headlen as OptInt > p_tl.get() {
+                self.headlen = p_tl.get() as c_int;
             }
-        }
-        if has_re {
-            (*pats).regmatch.regprog = vim_regcomp(
-                (*pats).pat,
-                if magic_isset() as ::core::ffi::c_int != 0 {
-                    RE_MAGIC
-                } else {
-                    0 as ::core::ffi::c_int
-                },
-            );
-        } else {
-            (*pats).regmatch.regprog = ::core::ptr::null_mut::<regprog_T>();
-        };
-    }
-}
-
-pub(crate) unsafe extern "C" fn findtags_state_init(
-    mut st: *mut findtags_state_T,
-    mut pat: *mut ::core::ffi::c_char,
-    mut flags: ::core::ffi::c_int,
-    mut mincount: ::core::ffi::c_int,
-) {
-    unsafe {
-        (*st).tag_fname =
-            xmalloc((MAXPATHL + 1 as ::core::ffi::c_int) as size_t) as *mut ::core::ffi::c_char;
-        (*st).fp = ::core::ptr::null_mut::<FILE>();
-        (*st).orgpat = xmalloc(::core::mem::size_of::<pat_T>()) as *mut pat_T;
-        (*(*st).orgpat).pat = pat;
-        (*(*st).orgpat).len = strlen(pat) as ::core::ffi::c_int;
-        (*(*st).orgpat).regmatch.regprog = ::core::ptr::null_mut::<regprog_T>();
-        (*st).flags = flags;
-        (*st).tag_file_sorted = NUL;
-        (*st).help_lang_find = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        (*st).is_txt = false_0 != 0;
-        (*st).did_open = false_0 != 0;
-        (*st).help_only = flags & TAG_HELP as ::core::ffi::c_int != 0;
-        (*st).get_searchpat = false_0 != 0;
-        (*st).help_lang[0 as ::core::ffi::c_int as usize] = NUL as ::core::ffi::c_char;
-        (*st).help_pri = 0 as ::core::ffi::c_int;
-        (*st).mincount = mincount;
-        (*st).lbuf_size = LSIZE as ::core::ffi::c_int;
-        (*st).lbuf = xmalloc((*st).lbuf_size as size_t) as *mut ::core::ffi::c_char;
-        (*st).match_count = 0 as ::core::ffi::c_int;
-        (*st).stop_searching = false_0 != 0;
-        let mut mtt: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while mtt < MT_COUNT as ::core::ffi::c_int {
-            ga_init(
-                (&raw mut (*st).ga_match as *mut garray_T).offset(mtt as isize),
-                ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int,
-                100 as ::core::ffi::c_int,
-            );
-            hash_init((&raw mut (*st).ht_match as *mut hashtab_T).offset(mtt as isize));
-            mtt += 1;
+            self.regmatch.regprog = vim_regcomp(self.pat, if magic_isset() { RE_MAGIC } else { 0 });
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn findtags_state_free(mut st: *mut findtags_state_T) {
-    unsafe {
-        xfree((*st).tag_fname as *mut ::core::ffi::c_void);
-        xfree((*st).lbuf as *mut ::core::ffi::c_void);
-        vim_regfree((*(*st).orgpat).regmatch.regprog);
-        xfree((*st).orgpat as *mut ::core::ffi::c_void);
-    }
+/// Where a bisection of a sorted tags file has got to.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct SearchInfo {
+    /// Offset of the first line that could still match.
+    pub(crate) low_offset: off_T,
+    /// Offset just past the last line that could still match.
+    pub(crate) high_offset: off_T,
+    /// Where in that range the file is being read.
+    pub(crate) curr_offset: off_T,
+    /// The `curr_offset` the current skip-back round started from; a long
+    /// line would otherwise leave the walk stuck on it.
+    pub(crate) curr_offset_used: off_T,
+    /// Where the bisection found its match.
+    pub(crate) match_offset: off_T,
+    /// The first byte of the line at `low_offset`.
+    pub(crate) low_char: c_int,
+    /// The first byte of the line at `high_offset`. A line whose first
+    /// byte falls outside that range means the file is not sorted after
+    /// all.
+    pub(crate) high_char: c_int,
 }
 
-pub(crate) unsafe extern "C" fn findtags_in_help_init(mut st: *mut findtags_state_T) -> bool {
-    unsafe {
-        let mut i: ::core::ffi::c_int = 0;
-        if (*st).is_txt {
-            strcpy(
-                &raw mut (*st).help_lang as *mut ::core::ffi::c_char,
-                b"en\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            );
-        } else {
-            i = strlen((*st).tag_fname) as ::core::ffi::c_int;
-            if i > 3 as ::core::ffi::c_int
-                && *(*st)
-                    .tag_fname
-                    .offset((i - 3 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_int
-                    == '-' as ::core::ffi::c_int
-            {
-                xmemcpyz(
-                    &raw mut (*st).help_lang as *mut ::core::ffi::c_char
-                        as *mut ::core::ffi::c_void,
-                    (*st)
-                        .tag_fname
-                        .offset(i as isize)
-                        .offset(-(2 as ::core::ffi::c_int as isize))
-                        as *const ::core::ffi::c_void,
-                    2 as size_t,
-                );
-            } else {
-                strcpy(
-                    &raw mut (*st).help_lang as *mut ::core::ffi::c_char,
-                    b"en\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                );
-            }
-        }
-        if !(*st).help_lang_find.is_null()
-            && strcasecmp(
-                &raw mut (*st).help_lang as *mut ::core::ffi::c_char,
-                (*st).help_lang_find,
-            ) != 0 as ::core::ffi::c_int
-        {
-            return false_0 != 0;
-        }
-        if (*st).flags & TAG_KEEP_LANG as ::core::ffi::c_int != 0
-            && (*st).help_lang_find.is_null()
-            && !(*curbuf.get()).b_fname.is_null()
-            && {
-                i = strlen((*curbuf.get()).b_fname) as ::core::ffi::c_int;
-                i > 4 as ::core::ffi::c_int
-            }
-            && *(*curbuf.get())
-                .b_fname
-                .offset((i - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-                == 'x' as ::core::ffi::c_int
-            && *(*curbuf.get())
-                .b_fname
-                .offset((i - 4 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-                == '.' as ::core::ffi::c_int
-            && strncasecmp(
-                (*curbuf.get())
-                    .b_fname
-                    .offset(i as isize)
-                    .offset(-(3 as ::core::ffi::c_int as isize)),
-                &raw mut (*st).help_lang as *mut ::core::ffi::c_char,
-                2 as ::core::ffi::c_int as size_t,
-            ) == 0 as ::core::ffi::c_int
-        {
-            (*st).help_pri = 0 as ::core::ffi::c_int;
-        } else {
-            (*st).help_pri = 1 as ::core::ffi::c_int;
-            let mut s: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            s = p_hlg.get();
-            while *s as ::core::ffi::c_int != NUL {
-                if strncasecmp(
-                    s,
-                    &raw mut (*st).help_lang as *mut ::core::ffi::c_char,
-                    2 as ::core::ffi::c_int as size_t,
-                ) == 0 as ::core::ffi::c_int
-                {
-                    break;
-                }
-                (*st).help_pri += 1;
-                s = vim_strchr(s, ',' as ::core::ffi::c_int);
-                if s.is_null() {
-                    break;
-                }
-                s = s.offset(1);
-            }
-            if s.is_null() || *s as ::core::ffi::c_int == NUL {
-                (*st).help_pri += 1;
-                if strcasecmp(
-                    &raw mut (*st).help_lang as *mut ::core::ffi::c_char,
-                    b"en\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                ) != 0 as ::core::ffi::c_int
-                {
-                    (*st).help_pri += 1;
-                }
-            }
-        }
-        return true_0 != 0;
-    }
+/// What comparing one line against the pattern established.
+pub(crate) struct MatchArgs {
+    /// Where in the tag name the regexp matched.
+    pub(crate) matchoff: c_int,
+    /// The match came from the regexp, not from comparing the pattern
+    /// literally.
+    pub(crate) match_re: bool,
+    /// The match holds even with case taken into account.
+    pub(crate) match_no_ic: bool,
+    /// A regexp is in use.
+    pub(crate) has_re: bool,
+    /// The tags file says it is sorted with case folded.
+    pub(crate) sortic: bool,
+    /// A line turned up that the file's claimed sort order forbids.
+    pub(crate) sort_error: bool,
 }
 
-pub(crate) unsafe extern "C" fn findtags_apply_tfu(
-    mut st: *mut findtags_state_T,
-    mut pat: *mut ::core::ffi::c_char,
-    mut buf_ffname: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let use_tfu: bool =
-            (*st).flags & TAG_NO_TAGFUNC as ::core::ffi::c_int == 0 as ::core::ffi::c_int;
-        if !use_tfu
-            || tfu_in_use.get() as ::core::ffi::c_int != 0
-            || *(*curbuf.get()).b_p_tfu as ::core::ffi::c_int == NUL
-        {
-            return NOTDONE;
-        }
-        tfu_in_use.set(true_0 != 0);
-        let mut retval: ::core::ffi::c_int = find_tagfunc_tags(
-            pat,
-            &raw mut (*st).ga_match as *mut garray_T,
-            &raw mut (*st).match_count,
-            (*st).flags,
-            buf_ffname,
-        );
-        tfu_in_use.set(false_0 != 0);
-        return retval;
-    }
-}
-
-pub(crate) unsafe extern "C" fn findtags_get_all_tags(
-    mut st: *mut findtags_state_T,
-    mut margs: *mut findtags_match_args_T,
-    mut buf_ffname: *mut ::core::ffi::c_char,
-) {
-    unsafe {
-        let mut tagp: tagptrs_T = tagptrs_T {
-            tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            command: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            command_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tag_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagkind: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagkind_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            user_data_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagline: 0,
-        };
-        let mut search_info: tagsearch_info_T = tagsearch_info_T {
-            low_offset: 0,
-            high_offset: 0,
-            curr_offset: 0,
-            curr_offset_used: 0,
-            match_offset: 0,
-            low_char: 0,
-            high_char: 0,
-        };
-        let mut hash: hash_T = 0 as hash_T;
-        memset(
-            &raw mut search_info as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<tagsearch_info_T>(),
-        );
-        let mut retval: ::core::ffi::c_int = 0;
-        loop {
-            if (*st).state as ::core::ffi::c_uint
-                == TS_BINARY as ::core::ffi::c_int as ::core::ffi::c_uint
-                || (*st).state as ::core::ffi::c_uint
-                    == TS_SKIP_BACK as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                line_breakcheck();
-            } else {
-                fast_breakcheck();
-            }
-            if (*st).flags & TAG_INS_COMP as ::core::ffi::c_int != 0 {
-                ins_compl_check_keys(30 as ::core::ffi::c_int, false_0 != 0);
-            }
-            if got_int.get() as ::core::ffi::c_int != 0
-                || ins_compl_interrupted() as ::core::ffi::c_int != 0
-            {
-                (*st).stop_searching = true_0 != 0;
-                break;
-            } else if (*st).mincount == TAG_MANY as ::core::ffi::c_int
-                && (*st).match_count >= TAG_MANY as ::core::ffi::c_int
-            {
-                (*st).stop_searching = true_0 != 0;
-                break;
-            } else {
-                if !(*st).get_searchpat {
-                    retval = findtags_get_next_line(st, &raw mut search_info) as ::core::ffi::c_int;
-                    if retval == TAGS_READ_IGNORE as ::core::ffi::c_int {
-                        continue;
-                    }
-                    if retval == TAGS_READ_EOF as ::core::ffi::c_int {
-                        break;
-                    }
-                }
-                if (*st).vimconv.vc_type != CONV_NONE as ::core::ffi::c_int {
-                    findtags_string_convert(st);
-                }
-                if (*st).state as ::core::ffi::c_uint
-                    == TS_START as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    if !findtags_start_state_handler(
-                        st,
-                        &raw mut (*margs).sortic,
-                        &raw mut search_info,
-                    ) {
-                        continue;
-                    }
-                }
-                if *(*st)
-                    .lbuf
-                    .offset(((*st).lbuf_size - 2 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_int
-                    != NUL
-                {
-                    (*st).lbuf_size *= 2 as ::core::ffi::c_int;
-                    xfree((*st).lbuf as *mut ::core::ffi::c_void);
-                    (*st).lbuf = xmalloc((*st).lbuf_size as size_t) as *mut ::core::ffi::c_char;
-                    if (*st).state as ::core::ffi::c_uint
-                        == TS_STEP_FORWARD as ::core::ffi::c_int as ::core::ffi::c_uint
-                        || (*st).state as ::core::ffi::c_uint
-                            == TS_LINEAR as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        vim_ignored.set(fseeko(
-                            (*st).fp,
-                            search_info.curr_offset as __off_t,
-                            SEEK_SET,
-                        ));
-                    }
-                    search_info.curr_offset = 0 as off_T;
-                } else {
-                    retval = findtags_parse_line(st, &raw mut tagp, margs, &raw mut search_info)
-                        as ::core::ffi::c_int;
-                    if retval == TAG_MATCH_NEXT as ::core::ffi::c_int {
-                        continue;
-                    }
-                    if retval == TAG_MATCH_STOP as ::core::ffi::c_int {
-                        break;
-                    }
-                    if retval == TAG_MATCH_FAIL as ::core::ffi::c_int {
-                        semsg(
-                            gettext(b"E431: Format error in tags file \"%s\"\0".as_ptr()
-                                as *const ::core::ffi::c_char),
-                            (*st).tag_fname,
-                        );
-                        semsg(
-                            gettext(b"Before byte %ld\0".as_ptr() as *const ::core::ffi::c_char),
-                            ftello((*st).fp) as int64_t,
-                        );
-                        (*st).stop_searching = true_0 != 0;
-                        return;
-                    }
-                    if findtags_match_tag(st, &raw mut tagp, margs) {
-                        findtags_add_match(st, &raw mut tagp, margs, buf_ffname, &raw mut hash);
-                    }
-                }
-            }
-        }
-    }
-}
-
-pub(crate) unsafe extern "C" fn findtags_in_file(
-    mut st: *mut findtags_state_T,
-    mut _flags: ::core::ffi::c_int,
-    mut buf_ffname: *mut ::core::ffi::c_char,
-) {
-    unsafe {
-        let mut margs: findtags_match_args_T = findtags_match_args_T {
+impl MatchArgs {
+    fn new(flags: c_int) -> Self {
+        MatchArgs {
             matchoff: 0,
             match_re: false,
             match_no_ic: false,
-            has_re: false,
+            has_re: flags & TAG_REGEXP as c_int != 0,
             sortic: false,
             sort_error: false,
-        };
-        (*st).vimconv.vc_type = CONV_NONE as ::core::ffi::c_int;
-        (*st).tag_file_sorted = NUL;
-        (*st).fp = ::core::ptr::null_mut::<FILE>();
-        findtags_matchargs_init(&raw mut margs, (*st).flags);
-        if (*curbuf.get()).b_help {
-            if !findtags_in_help_init(st) {
-                return;
-            }
-        }
-        (*st).fp = os_fopen(
-            (*st).tag_fname,
-            b"r\0".as_ptr() as *const ::core::ffi::c_char,
-        );
-        if (*st).fp.is_null() {
-            return;
-        }
-        if p_verbose.get() >= 5 as OptInt {
-            verbose_enter();
-            smsg(
-                0 as ::core::ffi::c_int,
-                gettext(b"Searching tags file %s\0".as_ptr() as *const ::core::ffi::c_char),
-                (*st).tag_fname,
-            );
-            verbose_leave();
-        }
-        (*st).did_open = true_0 != 0;
-        (*st).state = TS_START;
-        findtags_get_all_tags(st, &raw mut margs, buf_ffname);
-        if !(*st).fp.is_null() {
-            fclose((*st).fp);
-            (*st).fp = ::core::ptr::null_mut::<FILE>();
-        }
-        if (*st).vimconv.vc_type != CONV_NONE as ::core::ffi::c_int {
-            convert_setup(
-                &raw mut (*st).vimconv,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            );
-        }
-        if margs.sort_error {
-            semsg(
-                gettext(b"E432: Tags file not sorted: %s\0".as_ptr() as *const ::core::ffi::c_char),
-                (*st).tag_fname,
-            );
-        }
-        if (*st).match_count >= (*st).mincount {
-            (*st).stop_searching = true_0 != 0;
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn findtags_copy_matches(
-    mut st: *mut findtags_state_T,
-    mut matchesp: *mut *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let name_only: bool = (*st).flags & TAG_NAMES as ::core::ffi::c_int != 0;
-        let mut matches: *mut *mut ::core::ffi::c_char =
-            (if (*st).match_count > 0 as ::core::ffi::c_int {
-                xmalloc(
-                    ((*st).match_count as size_t)
-                        .wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>()),
-                )
-            } else {
-                NULL_0
-            }) as *mut *mut ::core::ffi::c_char;
-        (*st).match_count = 0 as ::core::ffi::c_int;
-        let mut mtt: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while mtt < MT_COUNT as ::core::ffi::c_int {
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < (*st).ga_match[mtt as usize].ga_len {
-                let mut mfp: *mut ::core::ffi::c_char = *((*st).ga_match[mtt as usize].ga_data
-                    as *mut *mut ::core::ffi::c_char)
-                    .offset(i as isize);
-                if matches.is_null() {
-                    xfree(mfp as *mut ::core::ffi::c_void);
-                } else {
-                    if !name_only {
-                        *mfp = (*mfp as ::core::ffi::c_int - 1 as ::core::ffi::c_int)
-                            as ::core::ffi::c_char;
-                        let mut p: *mut ::core::ffi::c_char =
-                            mfp.offset(1 as ::core::ffi::c_int as isize);
-                        while *p as ::core::ffi::c_int != NUL {
-                            if *p as ::core::ffi::c_int == TAG_SEP {
-                                *p = NUL as ::core::ffi::c_char;
-                            }
-                            p = p.offset(1);
-                        }
-                    }
-                    let c2rust_fresh4 = (*st).match_count;
-                    (*st).match_count = (*st).match_count + 1;
-                    let c2rust_lvalue_ptr = &raw mut *matches.offset(c2rust_fresh4 as isize);
-                    *c2rust_lvalue_ptr = mfp;
-                }
-                i += 1;
-            }
-            ga_clear((&raw mut (*st).ga_match as *mut garray_T).offset(mtt as isize));
-            hash_clear((&raw mut (*st).ht_match as *mut hashtab_T).offset(mtt as isize));
-            mtt += 1;
-        }
-        *matchesp = matches;
-        return (*st).match_count;
+/// One match, in the form [`find_tags`] hands it to its caller.
+///
+/// Everything up to the first NUL is the key duplicates are found by; a
+/// help match carries its sort heuristic after that NUL.
+pub(crate) struct Match(pub(crate) Vec<u8>);
+
+impl Match {
+    /// What two matches are compared on.
+    fn key(&self) -> &[u8] {
+        let end = self.0.iter().position(|&b| b == 0).unwrap_or(self.0.len());
+        &self.0[..end]
     }
 }
 
-pub unsafe extern "C" fn find_tags(
-    mut pat: *mut ::core::ffi::c_char,
-    mut num_matches: *mut ::core::ffi::c_int,
-    mut matchesp: *mut *mut *mut ::core::ffi::c_char,
-    mut flags: ::core::ffi::c_int,
-    mut mincount: ::core::ffi::c_int,
-    mut buf_ffname: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut st: findtags_state_T = findtags_state_T {
-            state: TS_START,
+/// The state one [`find_tags`] call threads through the readers.
+pub(crate) struct FindTags {
+    /// How the file being read is being read.
+    pub(crate) state: Reading,
+    /// Stop as soon as the current file is done — enough matches were
+    /// found, the file was malformed, or the user interrupted.
+    pub(crate) stop_searching: bool,
+    /// What is being looked for.
+    pub(crate) orgpat: Pattern,
+    /// The line last read from the tags file. Its length is the buffer
+    /// size `vim_fgets` is given, and it doubles whenever a line does not
+    /// fit.
+    pub(crate) lbuf: Vec<c_char>,
+    /// The name of the tags file being read.
+    pub(crate) tag_fname: Name,
+    /// The tags file being read.
+    pub(crate) fp: *mut FILE,
+    /// The `TAG_*` flags the caller passed.
+    pub(crate) flags: c_int,
+    /// The `!_TAG_FILE_SORTED` value, NUL when the file had no header.
+    pub(crate) tag_file_sorted: c_int,
+    /// `'showfulltag'`: read the line already in the buffer again, this
+    /// time for its search command rather than its name.
+    pub(crate) get_searchpat: bool,
+    /// Only help tags are wanted.
+    pub(crate) help_only: bool,
+    /// At least one tags file was opened; otherwise E433.
+    did_open: bool,
+    /// `MAXCOL` to find every match, otherwise how many are enough.
+    mincount: c_int,
+    /// Read the file line by line rather than bisecting it.
+    pub(crate) linear: bool,
+    /// The conversion the file's `!_TAG_FILE_ENCODING` asked for.
+    pub(crate) vimconv: vimconv_T,
+    /// The two-letter language of the tags file being read.
+    pub(crate) help_lang: [u8; 2],
+    /// How far down `'helplang'` that language is, which is what orders
+    /// help matches.
+    pub(crate) help_pri: c_int,
+    /// The language the pattern's `@xx` suffix asked for, if any.
+    help_lang_find: *const c_char,
+    /// The current buffer is a `.txt` help file, whose language is "en".
+    is_txt: bool,
+    /// How many matches have been found, over every bucket.
+    pub(crate) match_count: c_int,
+    /// The matches, one bucket per priority, in the order found.
+    found: [Vec<Match>; MT_COUNT],
+    /// The keys already in `found`, so a duplicate can be dropped.
+    seen: [HashSet<Box<[u8]>>; MT_COUNT],
+}
+
+impl FindTags {
+    fn new(pat: *mut c_char, flags: c_int, mincount: c_int) -> Self {
+        FindTags {
+            state: Reading::Start,
             stop_searching: false,
-            orgpat: ::core::ptr::null_mut::<pat_T>(),
-            lbuf: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            lbuf_size: 0,
-            tag_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fp: ::core::ptr::null_mut::<FILE>(),
-            flags: 0,
-            tag_file_sorted: 0,
+            orgpat: Pattern {
+                pat,
+                // SAFETY: the caller's pattern is NUL-terminated.
+                len: unsafe { CStr::from_ptr(pat) }.count_bytes() as c_int,
+                head: ptr::null_mut(),
+                headlen: 0,
+                regmatch: regmatch_T::default(),
+            },
+            lbuf: vec![0; LSIZE],
+            tag_fname: Name::default(),
+            fp: ptr::null_mut(),
+            flags,
+            tag_file_sorted: NUL,
             get_searchpat: false,
-            help_only: false,
+            help_only: flags & TAG_HELP as c_int != 0,
             did_open: false,
-            mincount: 0,
+            mincount,
             linear: false,
             vimconv: vimconv_T {
-                vc_type: 0,
+                vc_type: CONV_NONE as c_int,
                 vc_factor: 0,
-                vc_fd: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+                vc_fd: ptr::null_mut(),
                 vc_fail: false,
             },
-            help_lang: [0; 3],
+            help_lang: *b"\0\0",
             help_pri: 0,
-            help_lang_find: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+            help_lang_find: ptr::null(),
             is_txt: false,
             match_count: 0,
-            ga_match: [garray_T {
-                ga_len: 0,
-                ga_maxlen: 0,
-                ga_itemsize: 0,
-                ga_growsize: 0,
-                ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            }; 16],
-            ht_match: [hashtab_T {
-                ht_mask: 0,
-                ht_used: 0,
-                ht_filled: 0,
-                ht_changed: 0,
-                ht_locked: 0,
-                ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-                ht_smallarray: [hashitem_T {
-                    hi_hash: 0,
-                    hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                }; 16],
-            }; 16],
+            found: [const { Vec::new() }; MT_COUNT],
+            seen: core::array::from_fn(|_| HashSet::new()),
+        }
+    }
+
+    /// File `mfp` under `bucket`, unless one with the same key is already
+    /// there.
+    pub(crate) fn record(&mut self, bucket: usize, mfp: Match) {
+        if self.seen[bucket].insert(mfp.key().into()) {
+            self.found[bucket].push(mfp);
+            self.match_count += 1;
+        }
+    }
+
+    /// Which of the sixteen buckets a match belongs in.
+    pub(crate) fn bucket(&self, is_static: bool, is_current: bool, margs: &MatchArgs) -> usize {
+        let mut mtt = match (is_static, is_current) {
+            (true, true) => MT_ST_CUR,
+            (true, false) => MT_ST_OTH,
+            (false, true) => MT_GL_CUR,
+            (false, false) => MT_GL_OTH,
         };
-        let mut retval: ::core::ffi::c_int = FAIL;
-        let mut i: ::core::ffi::c_int = 0;
-        let mut saved_pat: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut findall: ::core::ffi::c_int = (mincount == MAXCOL as ::core::ffi::c_int
-            || mincount == TAG_MANY as ::core::ffi::c_int)
-            as ::core::ffi::c_int;
-        let mut has_re: bool = flags & TAG_REGEXP as ::core::ffi::c_int != 0;
-        let mut noic: ::core::ffi::c_int = flags & TAG_NOIC as ::core::ffi::c_int;
-        let mut verbose: ::core::ffi::c_int = flags & TAG_VERBOSE as ::core::ffi::c_int;
-        let mut save_p_ic: ::core::ffi::c_int = p_ic.get();
-        match if (*curbuf.get()).b_tc_flags != 0 {
-            (*curbuf.get()).b_tc_flags
-        } else {
-            tc_flags.get()
-        } {
-            1 => {}
-            2 => {
-                p_ic.set(true_0);
-            }
-            4 => {
-                p_ic.set(false_0);
-            }
-            8 => {
-                p_ic.set(ignorecase(pat));
-            }
-            16 => {
-                p_ic.set(ignorecase_opt(pat, true_0, true_0));
-            }
-            _ => {
-                abort();
-            }
+        if self.orgpat.regmatch.rm_ic && !margs.match_no_ic {
+            mtt += MT_IC_OFF;
         }
-        let mut help_save: ::core::ffi::c_int = (*curbuf.get()).b_help as ::core::ffi::c_int;
-        findtags_state_init(&raw mut st, pat, flags, mincount);
-        if st.help_only {
-            (*curbuf.get()).b_help = true_0 != 0;
+        if margs.match_re {
+            mtt += MT_RE_OFF;
         }
-        if (*curbuf.get()).b_help {
-            if (*st.orgpat).len > 3 as ::core::ffi::c_int
-                && *pat.offset(((*st.orgpat).len - 3 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_int
-                    == '@' as ::core::ffi::c_int
-                && (*pat.offset(((*st.orgpat).len - 2 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_uint
-                    >= 'A' as ::core::ffi::c_uint
-                    && *pat.offset(((*st.orgpat).len - 2 as ::core::ffi::c_int) as isize)
-                        as ::core::ffi::c_uint
-                        <= 'Z' as ::core::ffi::c_uint
-                    || *pat.offset(((*st.orgpat).len - 2 as ::core::ffi::c_int) as isize)
-                        as ::core::ffi::c_uint
-                        >= 'a' as ::core::ffi::c_uint
-                        && *pat.offset(((*st.orgpat).len - 2 as ::core::ffi::c_int) as isize)
-                            as ::core::ffi::c_uint
-                            <= 'z' as ::core::ffi::c_uint)
-                && (*pat.offset(((*st.orgpat).len - 1 as ::core::ffi::c_int) as isize)
-                    as ::core::ffi::c_uint
-                    >= 'A' as ::core::ffi::c_uint
-                    && *pat.offset(((*st.orgpat).len - 1 as ::core::ffi::c_int) as isize)
-                        as ::core::ffi::c_uint
-                        <= 'Z' as ::core::ffi::c_uint
-                    || *pat.offset(((*st.orgpat).len - 1 as ::core::ffi::c_int) as isize)
-                        as ::core::ffi::c_uint
-                        >= 'a' as ::core::ffi::c_uint
-                        && *pat.offset(((*st.orgpat).len - 1 as ::core::ffi::c_int) as isize)
-                            as ::core::ffi::c_uint
-                            <= 'z' as ::core::ffi::c_uint)
+        mtt
+    }
+
+    /// Work out the language and priority of the help tags file about to
+    /// be read, answering false to skip the file entirely.
+    fn in_help_init(&mut self) -> bool {
+        // SAFETY: `tag_fname`, the current buffer's name and `'helplang'`
+        // are all NUL-terminated.
+        unsafe {
+            // "doc/tags-xx" names its language; anything else, and a
+            // ".txt" help file, is English.
+            self.help_lang = match self.tag_fname.bytes() {
+                _ if self.is_txt => *b"en",
+                [_, .., b'-', a, b] => [*a, *b],
+                _ => *b"en",
+            };
+
+            // When a language was asked for, skip every other one.
+            if !self.help_lang_find.is_null() && !lang_is(self.help_lang_find, self.help_lang, true)
             {
-                saved_pat = xstrnsave(pat, ((*st.orgpat).len as size_t).wrapping_sub(3 as size_t));
-                st.help_lang_find =
-                    pat.offset(((*st.orgpat).len - 2 as ::core::ffi::c_int) as isize);
-                (*st.orgpat).pat = saved_pat;
-                (*st.orgpat).len -= 3 as ::core::ffi::c_int;
+                return false;
+            }
+
+            // For CTRL-] in a help file prefer a match in the same
+            // language: a help file for language xx is named "*.xxx".
+            let fname = (*curbuf.get()).b_fname;
+            let flen = if fname.is_null() {
+                0
+            } else {
+                CStr::from_ptr(fname).count_bytes()
+            };
+            if self.flags & TAG_KEEP_LANG as c_int != 0
+                && self.help_lang_find.is_null()
+                && flen > 4
+                && *fname.add(flen - 1) == b'x' as c_char
+                && *fname.add(flen - 4) == b'.' as c_char
+                && lang_is(fname.add(flen - 3), self.help_lang, false)
+            {
+                self.help_pri = 0;
+                return true;
+            }
+
+            // Otherwise the position in 'helplang' is the priority.
+            self.help_pri = 1;
+            let mut s = p_hlg.get();
+            while *s != 0 {
+                if lang_is(s, self.help_lang, false) {
+                    break;
+                }
+                self.help_pri += 1;
+                s = vim_strchr(s, b',' as c_int);
+                if s.is_null() {
+                    break;
+                }
+                s = s.add(1);
+            }
+            if s.is_null() || *s == 0 {
+                // Not in 'helplang': sort last, but prefer English.
+                self.help_pri += 1;
+                if !self.help_lang.eq_ignore_ascii_case(b"en") {
+                    self.help_pri += 1;
+                }
+            }
+            true
+        }
+    }
+
+    /// Let `'tagfunc'` answer instead of reading any tags file.
+    ///
+    /// Answers `NOTDONE` when there is no usable `'tagfunc'`, `OK` when it
+    /// found at least one tag and `FAIL` otherwise.
+    fn apply_tagfunc(&mut self, pat: *mut c_char, buf_ffname: *mut c_char) -> c_int {
+        // SAFETY: `'tagfunc'` is a NUL-terminated buffer-local option, and
+        // the growarray holds the allocated matches the callback made.
+        unsafe {
+            if self.flags & TAG_NO_TAGFUNC as c_int != 0
+                || tfu_in_use.get()
+                || *(*curbuf.get()).b_p_tfu == 0
+            {
+                return NOTDONE;
+            }
+            let mut ga = GA_EMPTY_INIT_VALUE;
+            ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 100);
+            tfu_in_use.set(true);
+            let retval = find_tagfunc_tags(
+                pat,
+                &raw mut ga,
+                &raw mut self.match_count,
+                self.flags,
+                buf_ffname,
+            );
+            tfu_in_use.set(false);
+
+            // `'tagfunc'` does its own filtering, so every answer is kept
+            // and none of them is looked at for duplicates. Which bucket
+            // they land in never reaches the caller: each one carries its
+            // own priority in its first byte.
+            let items = ga.ga_data.cast::<*mut c_char>();
+            for i in 0..ga.ga_len as usize {
+                let mfp = *items.add(i);
+                self.found[MT_ST_CUR].push(Match(bytes_of(mfp)));
+                xfree(mfp.cast());
+            }
+            ga_clear(&raw mut ga);
+            retval
+        }
+    }
+
+    /// Read every matching tag out of the file named by `tag_fname`.
+    fn in_file(&mut self, buf_ffname: *mut c_char) {
+        self.vimconv.vc_type = CONV_NONE as c_int;
+        self.tag_file_sorted = NUL;
+        self.fp = ptr::null_mut();
+        let mut margs = MatchArgs::new(self.flags);
+
+        // SAFETY: `tag_fname` is NUL-terminated, and the file this opens
+        // is closed before the block ends.
+        unsafe {
+            // A help tags file for another language is skipped entirely.
+            if (*curbuf.get()).b_help && !self.in_help_init() {
+                return;
+            }
+
+            // A file that does not exist is silently ignored; E433 is
+            // given further on, and only when not one was found.
+            self.fp = os_fopen(self.tag_fname.as_ptr(), c"r".as_ptr());
+            if self.fp.is_null() {
+                return;
+            }
+            if p_verbose.get() >= 5 {
+                verbose_enter();
+                smsg(
+                    0,
+                    gettext(c"Searching tags file %s".as_ptr()),
+                    self.tag_fname.as_ptr(),
+                );
+                verbose_leave();
+            }
+            self.did_open = true;
+            self.state = Reading::Start;
+
+            self.get_all_tags(&mut margs, buf_ffname);
+
+            fclose(self.fp);
+            self.fp = ptr::null_mut();
+            if self.vimconv.vc_type != CONV_NONE as c_int {
+                convert_setup(&raw mut self.vimconv, ptr::null_mut(), ptr::null_mut());
+            }
+            if margs.sort_error {
+                semsg(
+                    gettext(c"E432: Tags file not sorted: %s".as_ptr()),
+                    self.tag_fname.as_ptr(),
+                );
             }
         }
-        if p_tl.get() != 0 as OptInt && (*st.orgpat).len as OptInt > p_tl.get() {
-            (*st.orgpat).len = p_tl.get() as ::core::ffi::c_int;
+
+        // Stop searching once enough tags have been found.
+        if self.match_count >= self.mincount {
+            self.stop_searching = true;
         }
-        let mut save_emsg_off: ::core::ffi::c_int = emsg_off.get();
+    }
+
+    /// Read and parse the lines of the open tags file, one by one.
+    fn get_all_tags(&mut self, margs: &mut MatchArgs, buf_ffname: *mut c_char) {
+        // SAFETY: `fp` is open for the whole loop. Every pointer `tagp`
+        // holds points into `lbuf`, which is only replaced at the two
+        // points below where nothing holds one.
+        unsafe {
+            let mut tagp: tagptrs_T = core::mem::zeroed();
+            let mut sinfo = SearchInfo::default();
+
+            loop {
+                // Check for CTRL-C, more often when jumping around.
+                if matches!(self.state, Reading::Binary | Reading::SkipBack) {
+                    line_breakcheck();
+                } else {
+                    fast_breakcheck();
+                }
+                if self.flags & TAG_INS_COMP as c_int != 0 {
+                    ins_compl_check_keys(30, false);
+                }
+                if got_int.get() || ins_compl_interrupted() {
+                    self.stop_searching = true;
+                    break;
+                }
+                // For completion, stop once there are plenty.
+                if self.mincount == TAG_MANY as c_int && self.match_count >= TAG_MANY as c_int {
+                    self.stop_searching = true;
+                    break;
+                }
+
+                // `'showfulltag'` re-reads the line already in the buffer.
+                if !self.get_searchpat {
+                    match self.next_line(&mut sinfo) {
+                        Line::Ignore => continue,
+                        Line::Eof => break,
+                        Line::Read => {}
+                    }
+                }
+
+                if self.vimconv.vc_type != CONV_NONE as c_int {
+                    self.convert_line();
+                }
+
+                // While still at the start of the file, read the header.
+                if self.state == Reading::Start && !self.start_state(margs, &mut sinfo) {
+                    continue;
+                }
+
+                // A line that did not fit leaves the NUL somewhere other
+                // than the last-but-one byte (see `vim_fgets`). Reported
+                // for Mozilla JS, which has extremely long names.
+                if self.lbuf[self.lbuf.len() - 2] != NUL as c_char {
+                    self.lbuf = vec![0; self.lbuf.len() * 2];
+                    if matches!(self.state, Reading::StepForward | Reading::Linear) {
+                        // Seek back to read the same line again.
+                        vim_ignored.set(fseeko(self.fp, sinfo.curr_offset, SEEK_SET));
+                    }
+                    // The offset has to differ, or the retry reads the
+                    // same line into the same too-small buffer.
+                    sinfo.curr_offset = 0;
+                    continue;
+                }
+
+                match self.parse_line(&mut tagp, margs, &mut sinfo) {
+                    TagMatch::Next => continue,
+                    TagMatch::Stop => break,
+                    TagMatch::Fail => {
+                        semsg(
+                            gettext(c"E431: Format error in tags file \"%s\"".as_ptr()),
+                            self.tag_fname.as_ptr(),
+                        );
+                        semsg(
+                            gettext(c"Before byte %ld".as_ptr()),
+                            ftello(self.fp) as int64_t,
+                        );
+                        self.stop_searching = true;
+                        return;
+                    }
+                    TagMatch::Success => {}
+                }
+
+                if self.match_tag(&tagp, margs) {
+                    self.add_match(&tagp, margs, buf_ffname);
+                }
+            }
+        }
+    }
+
+    /// Hand the matches to the caller, best priority first.
+    ///
+    /// Answers how many there are; `matchesp` is left NULL when there are
+    /// none.
+    ///
+    /// # Safety
+    /// `matchesp` must be writable; the array and its entries become the
+    /// caller's to free.
+    unsafe fn into_matches(mut self, matchesp: *mut *mut *mut c_char) -> c_int {
+        let name_only = self.flags & TAG_NAMES as c_int != 0;
+        // SAFETY: `matches` is `match_count` pointers and every one of
+        // them is filled before the array is handed over.
+        unsafe {
+            if self.match_count <= 0 {
+                *matchesp = ptr::null_mut();
+                return 0;
+            }
+            let matches =
+                xmalloc(self.match_count as usize * size_of::<*mut c_char>()).cast::<*mut c_char>();
+            let mut at = 0;
+            for bucket in core::mem::take(&mut self.found) {
+                for mut mfp in bucket {
+                    if !name_only {
+                        // Put the bucket number back the way the readers
+                        // want it, and the field separators back to NUL.
+                        mfp.0[0] -= 1;
+                        for byte in &mut mfp.0[1..] {
+                            if *byte == TAG_SEP as u8 {
+                                *byte = NUL as u8;
+                            }
+                        }
+                    }
+                    *matches.add(at) = copy_out(&mfp.0);
+                    at += 1;
+                }
+            }
+            debug_assert_eq!(at, self.match_count as usize);
+            *matchesp = matches;
+        }
+        self.match_count
+    }
+}
+
+/// Whether the NUL-terminated `at` names `lang`.
+///
+/// With `whole`, `at` must be exactly the two letters, which is how the
+/// pattern's `@xx` suffix is compared; otherwise only the two letters have
+/// to line up, which is how a file name's suffix and a `'helplang'` entry
+/// are.
+///
+/// # Safety
+/// `at` must be NUL-terminated.
+unsafe fn lang_is(at: *const c_char, lang: [u8; 2], whole: bool) -> bool {
+    // SAFETY: the second byte is only read once the first has proved not
+    // to be the terminator — `lang` never holds one.
+    unsafe {
+        (*at as u8).eq_ignore_ascii_case(&lang[0])
+            && (*at.add(1) as u8).eq_ignore_ascii_case(&lang[1])
+            && (!whole || *at.add(2) == 0)
+    }
+}
+
+/// A NUL-terminated string as owned bytes, terminator included.
+///
+/// # Safety
+/// `p` must be NUL-terminated.
+unsafe fn bytes_of(p: *const c_char) -> Vec<u8> {
+    // SAFETY: the caller's promise.
+    unsafe { CStr::from_ptr(p) }.to_bytes_with_nul().to_vec()
+}
+
+/// A copy of `bytes` for the caller of [`find_tags`] to `xfree`.
+///
+/// What follows the first NUL is copied too: a help match keeps its sort
+/// heuristic there.
+///
+/// # Safety
+/// The answer is allocated and becomes the caller's.
+unsafe fn copy_out(bytes: &[u8]) -> *mut c_char {
+    // SAFETY: the allocation is exactly as long as what goes into it.
+    unsafe {
+        let out = xmalloc(bytes.len()).cast::<u8>();
+        ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len());
+        out.cast()
+    }
+}
+
+/// Search the tags files that apply for tags matching `pat`.
+///
+/// Answers `FAIL` if the search failed completely — `num_matches` is then
+/// zero and `matchesp` NULL — and `OK` otherwise.
+///
+/// There is a priority in which a kind of match is recognised:
+///
+/// 6. a static or global tag fully matching, in the current file;
+/// 5. a global tag fully matching, in another file;
+/// 4. a static tag fully matching, in another file;
+/// 3. a static or global tag matching but for case, in the current file;
+/// 2. a global tag matching but for case, in another file;
+/// 1. a static tag matching but for case, in another file.
+///
+/// `flags` is a set of `TAG_HELP` (only help tags), `TAG_NAMES` (answer
+/// only the names), `TAG_REGEXP` (`pat` is a regexp), `TAG_NOIC` (do not
+/// always ignore case), `TAG_KEEP_LANG` (keep the help language) and
+/// `TAG_NO_TAGFUNC` (do not call `'tagfunc'`).
+///
+/// `mincount` is `MAXCOL` to find every match, otherwise how many are
+/// enough. `buf_ffname` is the buffer whose matches take priority.
+///
+/// # Safety
+/// `pat` must be NUL-terminated and the two out-parameters writable.
+pub unsafe fn find_tags(
+    pat: *mut c_char,
+    num_matches: *mut c_int,
+    matchesp: *mut *mut *mut c_char,
+    flags: c_int,
+    mincount: c_int,
+    buf_ffname: *mut c_char,
+) -> c_int {
+    // SAFETY: the caller's pattern outlives the search, and `saved_pat` is
+    // declared before the state that points into it, so it is dropped
+    // after it.
+    unsafe {
+        // Find every match when the caller wants them all, and also for
+        // completion, where the count is only a cut-off.
+        let findall = mincount == MAXCOL as c_int || mincount == TAG_MANY as c_int;
+        let has_re = flags & TAG_REGEXP as c_int != 0;
+        let noic = flags & TAG_NOIC as c_int != 0;
+
+        // 'tagcase' decides how case is treated for this search.
+        let save_p_ic = p_ic.get();
+        let tagcase = match (*curbuf.get()).b_tc_flags {
+            0 => tc_flags.get(),
+            local => local,
+        };
+        match tagcase {
+            kOptTcFlagFollowic => {}
+            kOptTcFlagIgnore => p_ic.set(true_0),
+            kOptTcFlagMatch => p_ic.set(false_0),
+            kOptTcFlagFollowscs => p_ic.set(ignorecase(pat)),
+            kOptTcFlagSmart => p_ic.set(ignorecase_opt(pat, true_0, true_0)),
+            _ => abort(),
+        }
+
+        let help_save = (*curbuf.get()).b_help;
+        let saved_pat: Option<Name>;
+        let mut st = FindTags::new(pat, flags, mincount);
+        if st.help_only {
+            (*curbuf.get()).b_help = true;
+        }
+
+        // In a help buffer a trailing "@xx" names the language wanted.
+        let bytes = CStr::from_ptr(pat).to_bytes();
+        saved_pat = if (*curbuf.get()).b_help
+            && let [.., b'@', a, b] = bytes
+            && a.is_ascii_alphabetic()
+            && b.is_ascii_alphabetic()
+        {
+            let stripped = Name::from_bytes(&bytes[..bytes.len() - 3]);
+            st.help_lang_find = pat.add(bytes.len() - 2);
+            st.orgpat.pat = stripped.as_ptr().cast_mut();
+            st.orgpat.len -= 3;
+            Some(stripped)
+        } else {
+            None
+        };
+
+        if p_tl.get() != 0 && st.orgpat.len as OptInt > p_tl.get() {
+            st.orgpat.len = p_tl.get() as c_int;
+        }
+
+        // A pattern that does not compile is the caller's problem, not a
+        // message from here.
+        let save_emsg_off = emsg_off.get();
         emsg_off.set(true_0);
-        prepare_pats(st.orgpat, has_re);
+        st.orgpat.prepare(has_re);
         emsg_off.set(save_emsg_off);
-        if !(has_re as ::core::ffi::c_int != 0 && (*st.orgpat).regmatch.regprog.is_null()) {
-            retval = findtags_apply_tfu(&raw mut st, pat, buf_ffname);
+
+        let mut retval = FAIL;
+        if !(has_re && st.orgpat.regmatch.regprog.is_null()) {
+            retval = st.apply_tagfunc(pat, buf_ffname);
             if retval == NOTDONE {
                 retval = FAIL;
-                if flags & TAG_KEEP_LANG as ::core::ffi::c_int != 0
+                // A ".txt" help file keeps "en" as its language.
+                let fname = (*curbuf.get()).b_fname;
+                if flags & TAG_KEEP_LANG as c_int != 0
                     && st.help_lang_find.is_null()
-                    && !(*curbuf.get()).b_fname.is_null()
-                    && {
-                        i = strlen((*curbuf.get()).b_fname) as ::core::ffi::c_int;
-                        i > 4 as ::core::ffi::c_int
-                    }
-                    && strcasecmp(
-                        (*curbuf.get())
-                            .b_fname
-                            .offset(i as isize)
-                            .offset(-(4 as ::core::ffi::c_int as isize)),
-                        b".txt\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                    ) == 0 as ::core::ffi::c_int
+                    && !fname.is_null()
                 {
-                    st.is_txt = true_0 != 0;
+                    let len = CStr::from_ptr(fname).count_bytes();
+                    st.is_txt =
+                        len > 4 && strcasecmp(fname.add(len - 4), c".txt".as_ptr().cast_mut()) == 0;
                 }
-                (*st.orgpat).regmatch.rm_ic = (p_ic.get() != 0 || noic == 0)
-                    && (findall != 0
-                        || (*st.orgpat).headlen == 0 as ::core::ffi::c_int
-                        || p_tbs.get() == 0);
-                let mut round: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                while round <= 2 as ::core::ffi::c_int {
-                    st.linear = (*st.orgpat).headlen == 0 as ::core::ffi::c_int
-                        || p_tbs.get() == 0
-                        || round == 2 as ::core::ffi::c_int;
-                    let mut tag_files = TagFiles::new();
-                    while let Some(name) = tag_files.next() {
-                        xstrlcpy(st.tag_fname, name.as_ptr(), MAXPATHL as size_t);
-                        findtags_in_file(&raw mut st, flags, buf_ffname);
+
+                // Ignoring case rules out bisection, so a search that may
+                // ignore case reads every file twice: once matching case,
+                // and again ignoring it if nothing turned up.
+                st.orgpat.regmatch.rm_ic = (p_ic.get() != 0 || !noic)
+                    && (findall || st.orgpat.headlen == 0 || p_tbs.get() == 0);
+                for round in 1..=2 {
+                    st.linear = st.orgpat.headlen == 0 || p_tbs.get() == 0 || round == 2;
+
+                    let mut files = TagFiles::new();
+                    while let Some(name) = files.next() {
+                        st.tag_fname = name;
+                        st.in_file(buf_ffname);
                         if st.stop_searching {
                             retval = OK;
                             break;
                         }
                     }
-                    drop(tag_files);
-                    if st.stop_searching as ::core::ffi::c_int != 0
-                        || st.linear as ::core::ffi::c_int != 0
-                        || p_ic.get() == 0 && noic != 0
-                        || (*st.orgpat).regmatch.rm_ic as ::core::ffi::c_int != 0
+                    drop(files);
+
+                    if st.stop_searching
+                        || st.linear
+                        || (p_ic.get() == 0 && noic)
+                        || st.orgpat.regmatch.rm_ic
                     {
                         break;
                     }
-                    (*st.orgpat).regmatch.rm_ic = true_0 != 0;
-                    round += 1;
+                    st.orgpat.regmatch.rm_ic = true;
                 }
+
                 if !st.stop_searching {
-                    if !st.did_open && verbose != 0 {
-                        emsg(gettext(
-                            b"E433: No tags file\0".as_ptr() as *const ::core::ffi::c_char
-                        ));
+                    if !st.did_open && flags & TAG_VERBOSE as c_int != 0 {
+                        emsg(gettext(c"E433: No tags file".as_ptr()));
                     }
                     retval = OK;
                 }
             }
         }
-        findtags_state_free(&raw mut st);
+
         if retval == FAIL {
-            st.match_count = 0 as ::core::ffi::c_int;
+            st.match_count = 0;
         }
-        *num_matches = findtags_copy_matches(&raw mut st, matchesp);
-        (*curbuf.get()).b_help = help_save != 0;
-        xfree(saved_pat as *mut ::core::ffi::c_void);
+        *num_matches = st.into_matches(matchesp);
+
+        (*curbuf.get()).b_help = help_save;
         p_ic.set(save_p_ic);
-        return retval;
+        drop(saved_pat);
+        retval
     }
 }

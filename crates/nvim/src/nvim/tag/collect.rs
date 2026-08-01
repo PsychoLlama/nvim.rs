@@ -1,220 +1,194 @@
 //! Recording a match.
 //!
-//! [`findtags_add_match`] files a parsed line under one of the
+//! [`FindTags::add_match`] files a parsed line under one of the sixteen
 //! `MT_*` priorities — whether the match was exact, whether it came from
-//! this file, whether it is static — and deduplicates it against the
-//! matches already found.
+//! this file, whether it is static — in the shape the caller of
+//! [`find_tags`](super::find_tags) will read it back in, and drops it if
+//! an equal one is already there.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn findtags_matchargs_init(
-    mut margs: *mut findtags_match_args_T,
-    mut flags: ::core::ffi::c_int,
-) {
-    unsafe {
-        (*margs).matchoff = 0 as ::core::ffi::c_int;
-        (*margs).match_re = false_0 != 0;
-        (*margs).match_no_ic = false_0 != 0;
-        (*margs).has_re = flags & TAG_REGEXP as ::core::ffi::c_int != 0;
-        (*margs).sortic = false_0 != 0;
-        (*margs).sort_error = false_0 != 0;
-    }
-}
+/// A help match's language and the NUL after it: `{name}@{lang}NUL`.
+const ML_EXTRA: usize = 3;
 
-pub(crate) unsafe extern "C" fn findtags_string_convert(mut st: *mut findtags_state_T) {
-    unsafe {
-        let mut conv_line: *mut ::core::ffi::c_char = string_convert(
-            &raw mut (*st).vimconv,
-            (*st).lbuf,
-            ::core::ptr::null_mut::<size_t>(),
-        );
-        if conv_line.is_null() {
-            return;
-        }
-        let mut len: ::core::ffi::c_int =
-            strlen(conv_line) as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-        if len > (*st).lbuf_size {
-            xfree((*st).lbuf as *mut ::core::ffi::c_void);
-            (*st).lbuf = conv_line;
-            (*st).lbuf_size = len;
-        } else {
-            strcpy((*st).lbuf, conv_line);
-            xfree(conv_line as *mut ::core::ffi::c_void);
-        };
-    }
-}
-
-pub(crate) unsafe extern "C" fn findtags_add_match(
-    mut st: *mut findtags_state_T,
-    mut tagpp: *mut tagptrs_T,
-    mut margs: *mut findtags_match_args_T,
-    mut buf_ffname: *mut ::core::ffi::c_char,
-    mut hash: *mut hash_T,
-) {
-    unsafe {
-        let name_only: bool = (*st).flags & TAG_NAMES as ::core::ffi::c_int != 0;
-        let mut len: size_t = 0 as size_t;
-        let mut mfp_size: size_t = 0 as size_t;
-        let mut mfp: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut is_current: bool = test_for_current(
-            (*tagpp).fname,
-            (*tagpp).fname_end,
-            (*st).tag_fname,
-            buf_ffname,
-        ) != 0;
-        let mut is_static: bool = test_for_static(tagpp);
-        let mut mtt: ::core::ffi::c_int = if is_static as ::core::ffi::c_int != 0 {
-            if is_current as ::core::ffi::c_int != 0 {
-                MT_ST_CUR as ::core::ffi::c_int
-            } else {
-                MT_ST_OTH as ::core::ffi::c_int
+impl FindTags {
+    /// Convert the line just read from the tags file's own encoding.
+    ///
+    /// Converting the pattern the other way does not work, because the
+    /// characters would not be recognised.
+    pub(crate) fn convert_line(&mut self) {
+        // SAFETY: the buffer is NUL-terminated, and what `string_convert`
+        // answers is an allocated NUL-terminated string that is freed
+        // here.
+        unsafe {
+            let line = self.lbuf.as_mut_ptr();
+            let conv = string_convert(&raw const self.vimconv, line, ptr::null_mut());
+            if conv.is_null() {
+                return;
             }
-        } else if is_current as ::core::ffi::c_int != 0 {
-            MT_GL_CUR as ::core::ffi::c_int
-        } else {
-            MT_GL_OTH as ::core::ffi::c_int
-        };
-        if (*(*st).orgpat).regmatch.rm_ic as ::core::ffi::c_int != 0 && !(*margs).match_no_ic {
-            mtt += MT_IC_OFF as ::core::ffi::c_int;
-        }
-        if (*margs).match_re {
-            mtt += MT_RE_OFF as ::core::ffi::c_int;
-        }
-        if (*st).help_only {
-            *(*tagpp).tagname_end = NUL as ::core::ffi::c_char;
-            len = (*tagpp).tagname_end.offset_from((*tagpp).tagname) as size_t;
-            mfp_size = ::core::mem::size_of::<::core::ffi::c_char>()
-                .wrapping_add(len as usize)
-                .wrapping_add(10 as usize)
-                .wrapping_add(ML_EXTRA as usize)
-                .wrapping_add(1 as usize) as size_t;
-            mfp = xmalloc(mfp_size) as *mut ::core::ffi::c_char;
-            let mut p: *mut ::core::ffi::c_char = mfp;
-            strcpy(p, (*tagpp).tagname);
-            *p.offset(len as isize) = '@' as ::core::ffi::c_char;
-            strcpy(
-                p.offset(len as isize)
-                    .offset(1 as ::core::ffi::c_int as isize),
-                &raw mut (*st).help_lang as *mut ::core::ffi::c_char,
-            );
-            snprintf(
-                p.offset(len as isize)
-                    .offset(1 as ::core::ffi::c_int as isize)
-                    .offset(ML_EXTRA as isize),
-                mfp_size.wrapping_sub(
-                    len.wrapping_add(1 as size_t)
-                        .wrapping_add(ML_EXTRA as size_t),
-                ),
-                b"%06d\0".as_ptr() as *const ::core::ffi::c_char,
-                help_heuristic(
-                    (*tagpp).tagname,
-                    if (*margs).match_re as ::core::ffi::c_int != 0 {
-                        (*margs).matchoff
-                    } else {
-                        0 as ::core::ffi::c_int
-                    },
-                    !(*margs).match_no_ic,
-                ) + (*st).help_pri,
-            );
-            *(*tagpp).tagname_end = TAB as ::core::ffi::c_char;
-        } else if name_only {
-            if (*st).get_searchpat {
-                let mut temp_end: *mut ::core::ffi::c_char = (*tagpp).command;
-                if *temp_end as ::core::ffi::c_int == '/' as ::core::ffi::c_int {
-                    while *temp_end as ::core::ffi::c_int != 0
-                        && *temp_end as ::core::ffi::c_int != '\r' as ::core::ffi::c_int
-                        && *temp_end as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
-                        && *temp_end as ::core::ffi::c_int != '$' as ::core::ffi::c_int
-                    {
-                        temp_end = temp_end.offset(1);
-                    }
-                }
-                if (*tagpp).command.offset(2 as ::core::ffi::c_int as isize) < temp_end {
-                    len = (temp_end.offset_from((*tagpp).command) - 2 as isize) as size_t;
-                    mfp = xmalloc(len.wrapping_add(2 as size_t)) as *mut ::core::ffi::c_char;
-                    xmemcpyz(
-                        mfp as *mut ::core::ffi::c_void,
-                        (*tagpp).command.offset(2 as ::core::ffi::c_int as isize)
-                            as *const ::core::ffi::c_void,
-                        len,
-                    );
-                } else {
-                    mfp = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-                (*st).get_searchpat = false_0 != 0;
+            let converted = CStr::from_ptr(conv).to_bytes_with_nul();
+            if converted.len() > self.lbuf.len() {
+                // Upstream sizes the buffer to exactly the converted line,
+                // which leaves its last-but-one byte non-NUL — so the
+                // caller reads that as "the line did not fit" and reads it
+                // again into a buffer twice as big. Preserved.
+                self.lbuf = converted.iter().map(|&b| b as c_char).collect();
             } else {
-                len = (*tagpp).tagname_end.offset_from((*tagpp).tagname) as size_t;
-                mfp = xmalloc(
-                    ::core::mem::size_of::<::core::ffi::c_char>()
-                        .wrapping_add(len)
-                        .wrapping_add(1 as size_t),
-                ) as *mut ::core::ffi::c_char;
-                xmemcpyz(
-                    mfp as *mut ::core::ffi::c_void,
-                    (*tagpp).tagname as *const ::core::ffi::c_void,
-                    len,
-                );
+                for (at, &byte) in converted.iter().enumerate() {
+                    self.lbuf[at] = byte as c_char;
+                }
+            }
+            xfree(conv.cast());
+        }
+    }
+
+    /// File the match the line holds under the priority it deserves.
+    pub(crate) fn add_match(
+        &mut self,
+        tagp: &tagptrs_T,
+        margs: &MatchArgs,
+        buf_ffname: *mut c_char,
+    ) {
+        let name_only = self.flags & TAG_NAMES as c_int != 0;
+        // SAFETY: `tagp`'s pointers bracket the fields of the line in the
+        // buffer, and `tag_fname` is NUL-terminated. The NUL written over
+        // `tagname_end` is put back before returning.
+        unsafe {
+            let is_current = test_for_current(
+                tagp.fname,
+                tagp.fname_end,
+                self.tag_fname.as_ptr().cast_mut(),
+                buf_ffname,
+            ) != 0;
+            let is_static = test_for_static((tagp as *const tagptrs_T).cast_mut());
+            let bucket = self.bucket(is_static, is_current, margs);
+
+            let mfp = if self.help_only {
+                Some(self.help_match(tagp, margs))
+            } else if name_only && self.get_searchpat {
+                self.get_searchpat = false;
+                self.search_pattern_match(tagp)
+            } else if name_only {
+                // If wanted, read the line again to get the long form too.
                 if State.get() & MODE_INSERT != 0 {
-                    (*st).get_searchpat = p_sft.get() != 0;
+                    self.get_searchpat = p_sft.get() != 0;
+                }
+                Some(name_match(tagp))
+            } else {
+                Some(self.whole_match(bucket))
+            };
+
+            if let Some(mfp) = mfp {
+                self.record(bucket, mfp);
+            }
+        }
+    }
+
+    /// A help match: `{name}@{lang}NUL{heuristic}NUL`.
+    ///
+    /// The heuristic is what orders the matches later; it is deliberately
+    /// past the NUL, so that it takes no part in finding duplicates.
+    ///
+    /// # Safety
+    /// `tagp`'s name must lie in the line buffer, ending at a TAB.
+    unsafe fn help_match(&self, tagp: &tagptrs_T, margs: &MatchArgs) -> Match {
+        // SAFETY: the caller's promise; the TAB is put back below.
+        unsafe {
+            *tagp.tagname_end = 0;
+            let name = CStr::from_ptr(tagp.tagname).to_bytes();
+            let len = name.len();
+
+            // One byte for the '@', ten for the number and its NUL, and
+            // `ML_EXTRA` for the language and the NUL after it.
+            let mut mfp = vec![0u8; 1 + len + 10 + ML_EXTRA + 1];
+            mfp[..len].copy_from_slice(name);
+            mfp[len] = b'@';
+            mfp[len + 1..len + 3].copy_from_slice(&self.help_lang);
+
+            let score = help_heuristic(
+                tagp.tagname,
+                if margs.match_re { margs.matchoff } else { 0 },
+                !margs.match_no_ic,
+            ) + self.help_pri;
+            let at = len + 1 + ML_EXTRA;
+            let printed = format!("{score:06}");
+            // What `snprintf` would have had room for: everything left in
+            // the buffer, less its terminator.
+            let room = mfp.len() - at - 1;
+            let printed = &printed.as_bytes()[..printed.len().min(room)];
+            mfp[at..at + printed.len()].copy_from_slice(printed);
+
+            *tagp.tagname_end = TAB as c_char;
+            Match(mfp)
+        }
+    }
+
+    /// `'showfulltag'`: the search pattern of the line, without the `/^`
+    /// that opens it and the `$/` that may close it.
+    ///
+    /// Answers `None` when there is no pattern to take, which is how a
+    /// line addressed by number reads.
+    ///
+    /// # Safety
+    /// `tagp.command` must point into the line buffer.
+    unsafe fn search_pattern_match(&self, tagp: &tagptrs_T) -> Option<Match> {
+        // SAFETY: the caller's promise; the walk stops at the line's NUL.
+        unsafe {
+            let mut end = tagp.command;
+            if *end == b'/' as c_char {
+                while !matches!(*end as u8, 0 | b'\r' | b'\n' | b'$') {
+                    end = end.add(1);
                 }
             }
-        } else {
-            let mut tag_fname_len: size_t = strlen((*st).tag_fname);
-            len = tag_fname_len
-                .wrapping_add(strlen((*st).lbuf))
-                .wrapping_add(3 as size_t);
-            mfp = xmalloc(
-                ::core::mem::size_of::<::core::ffi::c_char>()
-                    .wrapping_add(len)
-                    .wrapping_add(1 as size_t),
-            ) as *mut ::core::ffi::c_char;
-            let mut p_0: *mut ::core::ffi::c_char = mfp;
-            *p_0.offset(0 as ::core::ffi::c_int as isize) =
-                (mtt + 1 as ::core::ffi::c_int) as ::core::ffi::c_char;
-            strcpy(
-                p_0.offset(1 as ::core::ffi::c_int as isize),
-                (*st).tag_fname,
-            );
-            *p_0.offset(tag_fname_len.wrapping_add(1 as size_t) as isize) =
-                TAG_SEP as ::core::ffi::c_char;
-            let mut s: *mut ::core::ffi::c_char = p_0
-                .offset(1 as ::core::ffi::c_int as isize)
-                .offset(tag_fname_len as isize)
-                .offset(1 as ::core::ffi::c_int as isize);
-            strcpy(s, (*st).lbuf);
-        }
-        if !mfp.is_null() {
-            let mut hi: *mut hashitem_T = ::core::ptr::null_mut::<hashitem_T>();
-            *hash = hash_hash(mfp);
-            hi = hash_lookup(
-                (&raw mut (*st).ht_match as *mut hashtab_T).offset(mtt as isize),
-                mfp,
-                strlen(mfp),
-                *hash,
-            );
-            if (*hi).hi_key.is_null()
-                || (*hi).hi_key == &raw const hash_removed as *mut ::core::ffi::c_char
-            {
-                hash_add_item(
-                    (&raw mut (*st).ht_match as *mut hashtab_T).offset(mtt as isize),
-                    hi,
-                    mfp,
-                    *hash,
-                );
-                ga_grow(
-                    (&raw mut (*st).ga_match as *mut garray_T).offset(mtt as isize),
-                    1 as ::core::ffi::c_int,
-                );
-                *((*st).ga_match[mtt as usize].ga_data as *mut *mut ::core::ffi::c_char)
-                    .offset((*st).ga_match[mtt as usize].ga_len as isize) = mfp;
-                (*st).ga_match[mtt as usize].ga_len += 1;
-                (*st).match_count += 1;
-            } else {
-                xfree(mfp as *mut ::core::ffi::c_void);
+            if tagp.command.add(2) >= end {
+                return None;
             }
+            let len = end.offset_from(tagp.command) as usize - 2;
+            let mut mfp = vec![0u8; len + 2];
+            ptr::copy_nonoverlapping(tagp.command.add(2).cast::<u8>(), mfp.as_mut_ptr(), len);
+            Some(Match(mfp))
         }
+    }
+
+    /// The whole line, for a caller that wants to jump to the tag:
+    /// `<bucket><tags file><sep><line>NUL`.
+    ///
+    /// The fields are separated by 0x02 rather than NUL because the key
+    /// duplicates are found by ends at the first NUL; the caller puts them
+    /// back. The bucket is stored one higher so that it is never a NUL.
+    ///
+    /// # Safety
+    /// The line buffer must be NUL-terminated.
+    unsafe fn whole_match(&self, bucket: usize) -> Match {
+        // SAFETY: the caller's promise.
+        let line = unsafe { CStr::from_ptr(self.lbuf.as_ptr()) }.to_bytes();
+        let fname = self.tag_fname.bytes();
+
+        let mut mfp = vec![0u8; fname.len() + line.len() + 5];
+        mfp[0] = bucket as u8 + 1;
+        mfp[1..=fname.len()].copy_from_slice(fname);
+        mfp[fname.len() + 1] = TAG_SEP as u8;
+        let at = fname.len() + 2;
+        mfp[at..at + line.len()].copy_from_slice(line);
+        Match(mfp)
+    }
+}
+
+/// Just the tag's name, for a caller that only wants the names.
+///
+/// # Safety
+/// `tagp`'s name must lie in the line buffer.
+unsafe fn name_match(tagp: &tagptrs_T) -> Match {
+    // SAFETY: the caller's promise.
+    unsafe {
+        let len = tagp.tagname_end.offset_from(tagp.tagname) as usize;
+        let mut mfp = vec![0u8; len + 2];
+        ptr::copy_nonoverlapping(tagp.tagname.cast::<u8>(), mfp.as_mut_ptr(), len);
+        Match(mfp)
     }
 }

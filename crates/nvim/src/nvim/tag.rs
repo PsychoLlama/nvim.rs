@@ -22,8 +22,6 @@ use crate::src::nvim::fileio::vim_fgets;
 use crate::src::nvim::fold::foldOpenCursor;
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::hashtab::hash_removed;
-use crate::src::nvim::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup};
 use crate::src::nvim::help::help_heuristic;
 use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
@@ -55,8 +53,8 @@ use crate::src::nvim::optionstr::free_string_option;
 use crate::src::nvim::os::fs::{os_fopen, os_path_exists};
 use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, atoi, fclose, fseek, fseeko, ftello, gettext, memmove,
-    memset, snprintf, strcasecmp, strcat, strcmp, strcpy, strlen, strncasecmp, strncmp, strstr,
+    __assert_fail, __ctype_b_loc, abort, atoi, fclose, fseeko, ftello, gettext, memmove, snprintf,
+    strcasecmp, strcat, strcmp, strcpy, strlen, strncmp, strstr,
 };
 use crate::src::nvim::path::{
     FreeWild, FullName_save, path_full_compare, path_has_wildcard, simplify_filename, vim_isAbsName,
@@ -67,16 +65,16 @@ use crate::src::nvim::regexp::skip_regexp;
 use crate::src::nvim::runtime::do_in_runtimepath;
 use crate::src::nvim::search::{do_search, ignorecase, ignorecase_opt};
 use crate::src::nvim::state::MODE_INSERT;
-use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr, xstrnsave};
+use crate::src::nvim::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    __off_t, AdditionalData, Callback, Callback_data as C2Rust_Unnamed_5, Direction, FILE, OptInt,
+    AdditionalData, Callback, Callback_data as C2Rust_Unnamed_5, Direction, FILE, OptInt,
     SpecialVarValue, Timestamp, VarLockStatus, VarType, VimVarIndex, buf_T, colnr_T, dict_T,
     dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, garray_T, getf_retvalues,
-    getf_values, hash_T, hashitem_T, hashtab_T, ht_stack_T, int64_t, linenr_T, list_T,
-    list_stack_T, listitem_T, off_T, oparg_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T,
-    regprog_T, searchit_arg_T, size_t, taggy_T, typval_T, typval_vval_union, uint8_t, uint64_t,
-    varnumber_T, vimconv_T, win_T, xp_prefix_T,
+    getf_values, hashitem_T, hashtab_T, ht_stack_T, int64_t, linenr_T, list_T, list_stack_T,
+    listitem_T, off_T, oparg_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, regprog_T,
+    searchit_arg_T, size_t, taggy_T, typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T,
+    vimconv_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::window::{
@@ -90,7 +88,6 @@ pub use self::scan::*;
 mod parse;
 pub(crate) use self::parse::*;
 mod collect;
-pub(crate) use self::collect::*;
 mod tagfile;
 pub(crate) use self::tagfile::*;
 mod jump;
@@ -99,6 +96,8 @@ mod list;
 pub(crate) use self::list::*;
 mod query;
 pub use self::query::*;
+use crate::src::nvim::hashtab::hash_removed;
+
 mod tagfunc;
 pub use self::tagfunc::*;
 mod stack;
@@ -196,83 +195,12 @@ pub struct tagptrs_T {
 pub const WSP_VERT: C2Rust_Unnamed_34 = 2;
 pub const MT_IC_OFF: C2Rust_Unnamed_35 = 4;
 pub const MT_MASK: C2Rust_Unnamed_35 = 7;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct findtags_state_T {
-    pub state: tagsearch_state_T,
-    pub stop_searching: bool,
-    pub orgpat: *mut pat_T,
-    pub lbuf: *mut ::core::ffi::c_char,
-    pub lbuf_size: ::core::ffi::c_int,
-    pub tag_fname: *mut ::core::ffi::c_char,
-    pub fp: *mut FILE,
-    pub flags: ::core::ffi::c_int,
-    pub tag_file_sorted: ::core::ffi::c_int,
-    pub get_searchpat: bool,
-    pub help_only: bool,
-    pub did_open: bool,
-    pub mincount: ::core::ffi::c_int,
-    pub linear: bool,
-    pub vimconv: vimconv_T,
-    pub help_lang: [::core::ffi::c_char; 3],
-    pub help_pri: ::core::ffi::c_int,
-    pub help_lang_find: *mut ::core::ffi::c_char,
-    pub is_txt: bool,
-    pub match_count: ::core::ffi::c_int,
-    pub ga_match: [garray_T; 16],
-    pub ht_match: [hashtab_T; 16],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct pat_T {
-    pub pat: *mut ::core::ffi::c_char,
-    pub len: ::core::ffi::c_int,
-    pub head: *mut ::core::ffi::c_char,
-    pub headlen: ::core::ffi::c_int,
-    pub regmatch: regmatch_T,
-}
-pub type tagsearch_state_T = ::core::ffi::c_uint;
-pub const TS_STEP_FORWARD: tagsearch_state_T = 4;
-pub const TS_SKIP_BACK: tagsearch_state_T = 3;
-pub const TS_BINARY: tagsearch_state_T = 2;
-pub const TS_LINEAR: tagsearch_state_T = 1;
-pub const TS_START: tagsearch_state_T = 0;
 pub const MT_COUNT: C2Rust_Unnamed_35 = 16;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct findtags_match_args_T {
-    pub matchoff: ::core::ffi::c_int,
-    pub match_re: bool,
-    pub match_no_ic: bool,
-    pub has_re: bool,
-    pub sortic: bool,
-    pub sort_error: bool,
-}
 pub const MT_GL_OTH: C2Rust_Unnamed_35 = 2;
 pub const MT_GL_CUR: C2Rust_Unnamed_35 = 1;
 pub const MT_ST_OTH: C2Rust_Unnamed_35 = 3;
 pub const MT_ST_CUR: C2Rust_Unnamed_35 = 0;
 pub const MT_RE_OFF: C2Rust_Unnamed_35 = 8;
-pub const TAG_MATCH_FAIL: tagmatch_status_T = 2;
-pub type tags_read_status_T = ::core::ffi::c_uint;
-pub const TAGS_READ_IGNORE: tags_read_status_T = 3;
-pub const TAGS_READ_EOF: tags_read_status_T = 2;
-pub const TAGS_READ_SUCCESS: tags_read_status_T = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct tagsearch_info_T {
-    pub low_offset: off_T,
-    pub high_offset: off_T,
-    pub curr_offset: off_T,
-    pub curr_offset_used: off_T,
-    pub match_offset: off_T,
-    pub low_char: ::core::ffi::c_int,
-    pub high_char: ::core::ffi::c_int,
-}
-pub const TAG_MATCH_STOP: tagmatch_status_T = 3;
-pub const TAG_MATCH_NEXT: tagmatch_status_T = 4;
-pub type tagmatch_status_T = ::core::ffi::c_uint;
-pub const TAG_MATCH_SUCCESS: tagmatch_status_T = 1;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
