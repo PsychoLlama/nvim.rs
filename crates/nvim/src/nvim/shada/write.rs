@@ -4,921 +4,761 @@
 //! allows, merge in what the old file held (see `merge`), collect the
 //! editor's state (see `collect`), and pack the result (see `pack`) in the
 //! order the format wants.
+//!
+//! The collecting and the packing are two separate passes because of the
+//! merge in between: everything is gathered into a [`WriteMergerState`],
+//! the old file is read over it so that the newer of each pair wins, and
+//! only then is the result written out.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{c_char, c_int, c_uint, c_void};
 
-pub(crate) unsafe extern "C" fn shada_write(
+use super::*;
+use crate::src::nvim::types::Object;
+use crate::src::nvim::types::builders::{DictBuf, static_cstring};
+
+/// What the `'shada'` option allows a write to contain.
+struct Limits {
+    /// `s`: entries whose payload is bigger than this many kilobytes are
+    /// dropped. Zero means nothing is written at all.
+    max_kbyte: size_t,
+    /// `<`, or `"` when `<` is absent: how many lines of a register are
+    /// kept. Zero means no registers.
+    max_reg_lines: c_int,
+    /// `'`: how many files' local marks are kept. Zero also turns off the
+    /// jump list and the change lists.
+    num_marked_files: size_t,
+    /// `!`: whether global variables are written.
+    global_vars: bool,
+    /// `f`: whether global and numbered marks are written.
+    global_marks: bool,
+}
+
+impl Limits {
+    /// Read `'shada'`. `None` when `s0` says the file may hold nothing.
+    unsafe fn from_shada_option() -> Option<Limits> {
+        unsafe {
+            let mut max_kbyte_i = get_shada_parameter('s' as c_int);
+            if max_kbyte_i < 0 {
+                // Not given: the format's own default.
+                max_kbyte_i = 10;
+            }
+            if max_kbyte_i == 0 {
+                return None;
+            }
+            let mut max_reg_lines = get_shada_parameter('<' as c_int);
+            if max_reg_lines < 0 {
+                max_reg_lines = get_shada_parameter('"' as c_int);
+            }
+            Some(Limits {
+                max_kbyte: max_kbyte_i as size_t,
+                max_reg_lines,
+                num_marked_files: get_shada_parameter('\'' as c_int) as size_t,
+                global_vars: !find_shada_parameter('!' as c_int).is_null(),
+                global_marks: get_shada_parameter('f' as c_int) != 0,
+            })
+        }
+    }
+
+    /// Whether any register is written.
+    fn registers(&self) -> bool {
+        self.max_reg_lines != 0
+    }
+}
+
+/// One ShaDa write in progress.
+struct Writing {
+    /// Everything collected so far, and what the merge decides between.
+    /// Heap-allocated because it is some 60 KiB of mark and jump slots.
+    wms: *mut WriteMergerState,
+    /// Buffers whose file is somewhere marks are not kept for — a removable
+    /// medium, or `'viewdir'`-style scratch.
+    removable_bufs: Set_ptr_t,
+    /// The output, buffered in the file's own write buffer.
+    packer: PackerBuffer,
+    limits: Limits,
+    /// Which history types are being written.
+    histories: [bool; HIST_COUNT as usize],
+}
+
+/// Write a ShaDa file, merging `sd_reader`'s contents into it when there is
+/// an old file to merge.
+pub(crate) unsafe fn shada_write(
     sd_writer: *mut FileDescriptor,
     sd_reader: *mut FileDescriptor,
 ) -> ShaDaWriteResult {
     unsafe {
-        let mut file_markss_size: size_t = 0;
-        let mut all_file_markss: *mut *mut FileMarks = ::core::ptr::null_mut::<*mut FileMarks>();
-        let mut cur_file_marks: *mut *mut FileMarks = ::core::ptr::null_mut::<*mut FileMarks>();
-        let mut val_0: ptr_t = ::core::ptr::null_mut::<::core::ffi::c_void>();
-        let mut file_markss_to_dump: size_t = 0;
-        let mut ret: ShaDaWriteResult = kSDWriteSuccessful;
-        let mut max_kbyte_i: ::core::ffi::c_int = get_shada_parameter('s' as ::core::ffi::c_int);
-        if max_kbyte_i < 0 as ::core::ffi::c_int {
-            max_kbyte_i = 10 as ::core::ffi::c_int;
-        }
-        if max_kbyte_i == 0 as ::core::ffi::c_int {
-            return ret;
-        }
-        let wms: *mut WriteMergerState =
-            xcalloc(1 as size_t, ::core::mem::size_of::<WriteMergerState>())
-                as *mut WriteMergerState;
-        let mut dump_one_history: [bool; 5] = [false; 5];
-        let dump_global_vars: bool = !find_shada_parameter('!' as ::core::ffi::c_int).is_null();
-        let mut max_reg_lines: ::core::ffi::c_int = get_shada_parameter('<' as ::core::ffi::c_int);
-        if max_reg_lines < 0 as ::core::ffi::c_int {
-            max_reg_lines = get_shada_parameter('"' as ::core::ffi::c_int);
-        }
-        let dump_registers: bool = max_reg_lines != 0 as ::core::ffi::c_int;
-        let mut removable_bufs: Set_ptr_t = Set_ptr_t {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut::<ptr_t>(),
+        let Some(limits) = Limits::from_shada_option() else {
+            return kSDWriteSuccessful;
         };
-        let max_kbyte: size_t = max_kbyte_i as size_t;
-        let num_marked_files: size_t = get_shada_parameter('\'' as ::core::ffi::c_int) as size_t;
-        let dump_global_marks: bool =
-            get_shada_parameter('f' as ::core::ffi::c_int) != 0 as ::core::ffi::c_int;
-        let mut dump_history: bool = false_0 != 0;
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < HIST_COUNT as ::core::ffi::c_int {
-            let mut num_saved: ::core::ffi::c_int = get_shada_parameter(hist_type2char(i));
-            if num_saved == -1 as ::core::ffi::c_int {
-                num_saved = p_hi.get() as ::core::ffi::c_int;
+
+        let wms = xcalloc(1, size_of::<WriteMergerState>()).cast::<WriteMergerState>();
+        let histories = init_histories(wms, !sd_reader.is_null());
+        let srni_flags = wanted_kinds(&limits, &histories);
+
+        let mut writing = Writing {
+            wms,
+            removable_bufs: Set_ptr_t {
+                h: MAPHASH_INIT,
+                keys: core::ptr::null_mut(),
+            },
+            packer: packer_buffer_for_file(sd_writer),
+            limits,
+            histories,
+        };
+
+        // Recording where the cursor is in every window is what makes the
+        // `"` mark right on exit. It also means `:wshada` moves that mark
+        // to the cursor, as `:wviminfo` did.
+        for wp in all_windows() {
+            set_last_cursor(wp);
+        }
+        find_removable_bufs(&raw mut writing.removable_bufs);
+
+        let ret = writing.run(sd_reader, srni_flags);
+        writing.finish();
+        ret
+    }
+}
+
+/// Start a history merger for each history type `'shada'` keeps something
+/// of, and answer which those are.
+unsafe fn init_histories(wms: *mut WriteMergerState, merging: bool) -> [bool; HIST_COUNT as usize] {
+    unsafe {
+        let mut wanted = [false; HIST_COUNT as usize];
+        for (i, wanted) in wanted.iter_mut().enumerate() {
+            let mut num_saved = get_shada_parameter(hist_type2char(i as c_int));
+            if num_saved == -1 {
+                num_saved = p_hi.get() as c_int;
             }
-            if num_saved > 0 as ::core::ffi::c_int {
-                dump_history = true_0 != 0;
-                dump_one_history[i as usize] = true_0 != 0;
+            if num_saved > 0 {
+                *wanted = true;
                 hms_init(
-                    (&raw mut (*wms).hms as *mut HistoryMergerState).offset(i as isize),
+                    &raw mut (*wms).hms[i],
                     i as uint8_t,
                     num_saved as size_t,
-                    !sd_reader.is_null(),
-                    false_0 != 0,
+                    merging,
+                    false,
                 );
-            } else {
-                dump_one_history[i as usize] = false_0 != 0;
             }
-            i += 1;
         }
-        let srni_flags: ::core::ffi::c_uint = (kSDReadUndisableableData as ::core::ffi::c_int
-            | kSDReadUnknown as ::core::ffi::c_int
-            | (if dump_history as ::core::ffi::c_int != 0 {
-                kSDReadHistory as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            })
-            | (if dump_registers as ::core::ffi::c_int != 0 {
-                kSDReadRegisters as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            })
-            | (if dump_global_vars as ::core::ffi::c_int != 0 {
-                kSDReadVariables as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            })
-            | (if dump_global_marks as ::core::ffi::c_int != 0 {
-                kSDReadGlobalMarks as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            })
-            | (if num_marked_files != 0 {
-                kSDReadLocalMarks as ::core::ffi::c_int | kSDReadChanges as ::core::ffi::c_int
-            } else {
-                0 as ::core::ffi::c_int
-            })) as ::core::ffi::c_uint;
-        let mut packer: PackerBuffer = packer_buffer_for_file(sd_writer);
-        let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
-        while !tp.is_null() {
-            let mut wp: *mut win_T = if tp == curtab.get() {
-                firstwin.get()
-            } else {
-                (*tp).tp_firstwin
-            };
-            while !wp.is_null() {
-                set_last_cursor(wp);
-                wp = (*wp).w_next;
+        wanted
+    }
+}
+
+/// The kinds of entry the merging read wants out of the old file. What is
+/// not asked for is copied straight through rather than merged.
+fn wanted_kinds(limits: &Limits, histories: &[bool; HIST_COUNT as usize]) -> c_uint {
+    let mut kinds = kSDReadUndisableableData | kSDReadUnknown;
+    if histories.contains(&true) {
+        kinds |= kSDReadHistory;
+    }
+    if limits.registers() {
+        kinds |= kSDReadRegisters;
+    }
+    if limits.global_vars {
+        kinds |= kSDReadVariables;
+    }
+    if limits.global_marks {
+        kinds |= kSDReadGlobalMarks;
+    }
+    if limits.num_marked_files != 0 {
+        kinds |= kSDReadLocalMarks | kSDReadChanges;
+    }
+    kinds
+}
+
+impl Writing {
+    /// Collect, merge and pack. A failure to write stops the pass; the
+    /// caller still tears everything down.
+    unsafe fn run(
+        &mut self,
+        sd_reader: *mut FileDescriptor,
+        srni_flags: c_uint,
+    ) -> ShaDaWriteResult {
+        unsafe {
+            if self.write_header() == kSDWriteFailed {
+                return kSDWriteFailed;
             }
-            tp = (*tp).tp_next as *mut tabpage_T;
+            if !find_shada_parameter('%' as c_int).is_null()
+                && self.write_buflist() == kSDWriteFailed
+            {
+                return kSDWriteFailed;
+            }
+            // Variables go out as they are found rather than into `wms`;
+            // only their names are kept, so that the merge knows which of
+            // the old file's variables have already been written.
+            if self.limits.global_vars && self.dump_variables() == kSDWriteFailed {
+                return kSDWriteFailed;
+            }
+
+            self.collect_jumps();
+            self.collect_search_patterns();
+            self.collect_global_marks();
+            if self.limits.registers() {
+                shada_initialize_registers(self.wms, self.limits.max_reg_lines);
+            }
+            self.collect_buffer_marks();
+
+            // Whatever the old file holds that this Nvim has no opinion
+            // about, or a staler one.
+            let mut ret = kSDWriteSuccessful;
+            if !sd_reader.is_null() {
+                let srww_ret = shada_read_when_writing(
+                    sd_reader,
+                    srni_flags,
+                    self.limits.max_kbyte,
+                    self.wms,
+                    &raw mut self.packer,
+                );
+                if srww_ret != kSDWriteSuccessful {
+                    ret = srww_ret;
+                }
+            }
+
+            self.update_numbered_marks();
+            if self.pack_everything() == kSDWriteFailed {
+                return kSDWriteFailed;
+            }
+            ret
         }
-        find_removable_bufs(&raw mut removable_bufs);
-        '_shada_write_exit: {
-            let mut c2rust_lvalue: [KeyValuePair; 5] = [
-                key_value_pair {
-                    key: String_0 {
-                        data: b"generator\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                            .wrapping_sub(1 as size_t),
-                    },
-                    value: object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_1 {
-                            string: String_0 {
-                                data: b"nvim\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 5]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                        },
-                    },
-                },
-                key_value_pair {
-                    key: String_0 {
-                        data: b"version\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
-                            .wrapping_sub(1 as size_t),
-                    },
-                    value: object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_1 {
-                            string: cstr_as_string(longVersion.get()),
-                        },
-                    },
-                },
-                key_value_pair {
-                    key: String_0 {
-                        data: b"max_kbyte\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
-                            .wrapping_sub(1 as size_t),
-                    },
-                    value: object {
-                        type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed_1 {
-                            integer: max_kbyte as Integer,
-                        },
-                    },
-                },
-                key_value_pair {
-                    key: String_0 {
-                        data: b"pid\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 4]>()
-                            .wrapping_sub(1 as size_t),
-                    },
-                    value: object {
-                        type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed_1 {
-                            integer: os_get_pid(),
-                        },
-                    },
-                },
-                key_value_pair {
-                    key: String_0 {
-                        data: b"encoding\0".as_ptr() as *const ::core::ffi::c_char
-                            as *mut ::core::ffi::c_char,
-                        size: ::core::mem::size_of::<[::core::ffi::c_char; 9]>()
-                            .wrapping_sub(1 as size_t),
-                    },
-                    value: object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_1 {
-                            string: cstr_as_string(p_enc.get()),
-                        },
-                    },
-                },
-            ];
-            if shada_pack_entry(
-                &raw mut packer,
+    }
+
+    /// What this Nvim was. Nothing ever reads it back; it is there for
+    /// anyone looking at the file by hand.
+    unsafe fn write_header(&mut self) -> ShaDaWriteResult {
+        unsafe {
+            let mut header = DictBuf::<5>::new();
+            header
+                .insert(c"generator", Object::string(static_cstring(c"nvim")))
+                .insert(
+                    c"version",
+                    Object::string(cstr_as_string(longVersion.get())),
+                )
+                .insert(
+                    c"max_kbyte",
+                    Object::integer(self.limits.max_kbyte as Integer),
+                )
+                .insert(c"pid", Object::integer(os_get_pid()))
+                .insert(c"encoding", Object::string(cstr_as_string(p_enc.get())));
+            self.pack(
                 ShadaEntry {
                     type_0: kSDItemHeader,
                     can_free_entry: false,
                     timestamp: os_time(),
                     data: C2Rust_Unnamed_22 {
-                        header: Dict {
-                            size: 5 as size_t,
-                            capacity: 5 as size_t,
-                            items: &raw mut c2rust_lvalue as *mut KeyValuePair,
+                        header: header.dict(),
+                    },
+                    additional_data: core::ptr::null_mut(),
+                },
+                0,
+            )
+        }
+    }
+
+    /// The list of files this Nvim has buffers for, so that a later start
+    /// can reopen them.
+    unsafe fn write_buflist(&mut self) -> ShaDaWriteResult {
+        unsafe {
+            let entry = shada_get_buflist(&raw mut self.removable_bufs);
+            let ret = self.pack(entry, 0);
+            xfree(entry.data.buffer_list.buffers.cast());
+            ret
+        }
+    }
+
+    /// Every global variable `'shada'` says to keep, written as it is found.
+    ///
+    /// A container that turns out to be part of a cycle is skipped: the
+    /// encoder would not terminate on it.
+    unsafe fn dump_variables(&mut self) -> ShaDaWriteResult {
+        unsafe {
+            let mut var_iter: *const c_void = core::ptr::null();
+            let timestamp = os_time();
+            loop {
+                let mut vartv: typval_T = core::mem::zeroed();
+                let mut name: *const c_char = core::ptr::null();
+                var_iter =
+                    var_shada_iter(var_iter, &raw mut name, &raw mut vartv, VAR_FLAVOUR_SHADA);
+                if name.is_null() {
+                    return kSDWriteSuccessful;
+                }
+
+                if !writable_value(&vartv) {
+                    tv_clear(&raw mut vartv);
+                    if var_iter.is_null() {
+                        return kSDWriteSuccessful;
+                    }
+                    continue;
+                }
+
+                // The entry takes a copy, which the pack frees; the value
+                // the iterator handed over is this function's to release.
+                let mut tgttv: typval_T = core::mem::zeroed();
+                tv_copy(&raw mut vartv, &raw mut tgttv);
+                let ret = self.pack(
+                    ShadaEntry {
+                        type_0: kSDItemVariable,
+                        can_free_entry: false,
+                        timestamp,
+                        data: C2Rust_Unnamed_22 {
+                            global_var: global_var {
+                                name: name.cast_mut(),
+                                value: tgttv,
+                            },
+                        },
+                        additional_data: core::ptr::null_mut(),
+                    },
+                    self.limits.max_kbyte,
+                );
+                tv_clear(&raw mut vartv);
+                tv_clear(&raw mut tgttv);
+                if ret == kSDWriteFailed {
+                    return kSDWriteFailed;
+                }
+                if ret == kSDWriteSuccessful {
+                    set_put_cstr_t(
+                        &raw mut (*self.wms).dumped_variables,
+                        name,
+                        core::ptr::null_mut(),
+                    );
+                }
+                if var_iter.is_null() {
+                    return kSDWriteSuccessful;
+                }
+            }
+        }
+    }
+
+    /// The jump list, as far back as `'shada'` keeps files' marks.
+    unsafe fn collect_jumps(&mut self) {
+        unsafe {
+            if self.limits.num_marked_files > 0 {
+                (*self.wms).jumps_size = shada_init_jumps(
+                    (&raw mut (*self.wms).jumps).cast::<ShadaEntry>(),
+                    &raw mut self.removable_bufs,
+                );
+            }
+        }
+    }
+
+    /// The last search and substitute patterns, and the last `:substitute`
+    /// replacement string. All three ride on the search history's setting.
+    unsafe fn collect_search_patterns(&mut self) {
+        unsafe {
+            if !self.histories[HIST_SEARCH as usize] {
+                return;
+            }
+            let highlighted = !(no_hlsearch.get() || !find_shada_parameter('h' as c_int).is_null());
+            let last_used = search_was_last_used();
+
+            add_search_pattern(
+                &raw mut (*self.wms).search_pattern,
+                Some(get_search_pattern),
+                false,
+                last_used,
+                highlighted,
+            );
+            add_search_pattern(
+                &raw mut (*self.wms).sub_search_pattern,
+                Some(get_substitute_pattern),
+                true,
+                last_used,
+                highlighted,
+            );
+
+            let mut sub: SubReplacementString = core::mem::zeroed();
+            sub_get_replacement(&raw mut sub);
+            // An empty replacement string is not worth storing.
+            if !sub.sub.is_null() {
+                (*self.wms).replacement = ShadaEntry {
+                    type_0: kSDItemSubString,
+                    can_free_entry: false,
+                    timestamp: sub.timestamp,
+                    data: C2Rust_Unnamed_22 {
+                        sub_string: sub_string { sub: sub.sub },
+                    },
+                    additional_data: sub.additional_data,
+                };
+            }
+        }
+    }
+
+    /// The lettered and numbered global marks.
+    ///
+    /// A mark on a file no buffer holds still names the file; one on a
+    /// buffer that has gone, or that sits on a removable medium, is dropped.
+    unsafe fn collect_global_marks(&mut self) {
+        unsafe {
+            if !self.limits.global_marks {
+                return;
+            }
+            let mut mark_iter: *const c_void = core::ptr::null();
+            let mut digit_mark_idx = 0;
+            loop {
+                let mut name: c_char = NUL as c_char;
+                let mut fm: xfmark_T = core::mem::zeroed();
+                mark_iter = mark_global_iter(mark_iter, &raw mut name, &raw mut fm);
+                if name as c_int == NUL {
+                    return;
+                }
+
+                if let Some(fname) = self.mark_fname(&fm) {
+                    let entry = ShadaEntry {
+                        type_0: kSDItemGlobalMark,
+                        can_free_entry: false,
+                        timestamp: fm.fmark.timestamp,
+                        data: C2Rust_Unnamed_22 {
+                            filemark: shada_filemark {
+                                name,
+                                mark: fm.fmark.mark,
+                                fname: fname.cast_mut(),
+                            },
+                        },
+                        additional_data: fm.fmark.additional_data,
+                    };
+                    // The ten numbered marks are simply the ten most
+                    // recent; their names are assigned on the way out.
+                    if ascii_isdigit(name as c_int) {
+                        replace_numbered_mark(self.wms, digit_mark_idx, entry);
+                        digit_mark_idx += 1;
+                    } else {
+                        (*self.wms).global_marks[mark_global_index(name) as usize] = entry;
+                    }
+                }
+
+                if mark_iter.is_null() {
+                    return;
+                }
+            }
+        }
+    }
+
+    /// The file name to record a global mark against, or `None` when the
+    /// mark is not worth keeping.
+    unsafe fn mark_fname(&mut self, fm: &xfmark_T) -> Option<*const c_char> {
+        unsafe {
+            if fm.fmark.fnum == 0 {
+                debug_assert!(!fm.fname.is_null(), "shada: a mark with no buffer or file");
+                return (!shada_removable(fm.fname)).then_some(fm.fname);
+            }
+            let buf = buflist_findnr(fm.fmark.fnum);
+            if buf.is_null()
+                || (*buf).b_ffname.is_null()
+                || set_has_ptr_t(&raw mut self.removable_bufs, buf.cast::<c_void>())
+            {
+                return None;
+            }
+            Some((*buf).b_ffname)
+        }
+    }
+
+    /// Every buffer's local marks and change list, keyed by file name so
+    /// that the merge can find the same file's marks in the old file.
+    unsafe fn collect_buffer_marks(&mut self) {
+        unsafe {
+            if self.limits.num_marked_files == 0 {
+                return;
+            }
+            let mut buf = firstbuf.get();
+            while !buf.is_null() {
+                if !ignore_buf(buf, &raw mut self.removable_bufs) {
+                    self.collect_one_buffer(buf);
+                }
+                buf = (*buf).b_next;
+            }
+        }
+    }
+
+    unsafe fn collect_one_buffer(&mut self, buf: *mut buf_T) {
+        unsafe {
+            let fname = (*buf).b_ffname;
+            let filemarks = self.file_marks_for(fname);
+
+            let mut mark_iter: *const c_void = core::ptr::null();
+            loop {
+                let mut fm: fmark_T = core::mem::zeroed();
+                let mut name: c_char = NUL as c_char;
+                mark_iter = mark_buffer_iter(mark_iter, buf, &raw mut name, &raw mut fm);
+                if name as c_int == NUL {
+                    break;
+                }
+                (*filemarks).marks[mark_local_index(name) as usize] = ShadaEntry {
+                    type_0: kSDItemLocalMark,
+                    can_free_entry: false,
+                    timestamp: fm.timestamp,
+                    data: C2Rust_Unnamed_22 {
+                        filemark: shada_filemark {
+                            name,
+                            mark: fm.mark,
+                            fname,
                         },
                     },
-                    additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-                },
-                0 as size_t,
-            ) as ::core::ffi::c_uint
-                == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                ret = kSDWriteFailed;
-            } else {
-                if !find_shada_parameter('%' as ::core::ffi::c_int).is_null() {
-                    let mut buflist_entry: ShadaEntry = shada_get_buflist(&raw mut removable_bufs);
-                    if shada_pack_entry(&raw mut packer, buflist_entry, 0 as size_t)
-                        as ::core::ffi::c_uint
-                        == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        xfree(buflist_entry.data.buffer_list.buffers as *mut ::core::ffi::c_void);
-                        ret = kSDWriteFailed;
-                        break '_shada_write_exit;
-                    } else {
-                        xfree(buflist_entry.data.buffer_list.buffers as *mut ::core::ffi::c_void);
-                    }
-                }
-                's_310: {
-                    if dump_global_vars {
-                        let mut var_iter: *const ::core::ffi::c_void =
-                            ::core::ptr::null::<::core::ffi::c_void>();
-                        let cur_timestamp: Timestamp = os_time();
-                        loop {
-                            let mut vartv: typval_T = typval_T {
-                                v_type: VAR_UNKNOWN,
-                                v_lock: VAR_UNLOCKED,
-                                vval: typval_vval_union { v_number: 0 },
-                            };
-                            let mut name: *const ::core::ffi::c_char =
-                                ::core::ptr::null::<::core::ffi::c_char>();
-                            var_iter = var_shada_iter(
-                                var_iter,
-                                &raw mut name,
-                                &raw mut vartv,
-                                VAR_FLAVOUR_SHADA,
-                            );
-                            if name.is_null() {
-                                break 's_310;
-                            }
-                            's_190: {
-                                match vartv.v_type as ::core::ffi::c_uint {
-                                    3 | 9 => {
-                                        tv_clear(&raw mut vartv);
-                                        break 's_190;
-                                    }
-                                    5 => {
-                                        let mut di: *mut dict_T = vartv.vval.v_dict;
-                                        let mut copyID: ::core::ffi::c_int = get_copyID();
-                                        if !set_ref_in_ht(
-                                            &raw mut (*di).dv_hashtab,
-                                            copyID,
-                                            ::core::ptr::null_mut::<*mut list_stack_T>(),
-                                        ) && copyID == (*di).dv_copyID
-                                        {
-                                            tv_clear(&raw mut vartv);
-                                            break 's_190;
-                                        }
-                                    }
-                                    4 => {
-                                        let mut l: *mut list_T = vartv.vval.v_list;
-                                        let mut copyID_0: ::core::ffi::c_int = get_copyID();
-                                        if !set_ref_in_list_items(
-                                            l,
-                                            copyID_0,
-                                            ::core::ptr::null_mut::<*mut ht_stack_T>(),
-                                        ) && copyID_0 == (*l).lv_copyID
-                                        {
-                                            tv_clear(&raw mut vartv);
-                                            break 's_190;
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                                let mut tgttv: typval_T = typval_T {
-                                    v_type: VAR_UNKNOWN,
-                                    v_lock: VAR_UNLOCKED,
-                                    vval: typval_vval_union { v_number: 0 },
-                                };
-                                tv_copy(&raw mut vartv, &raw mut tgttv);
-                                let mut spe_ret: ShaDaWriteResult = kSDWriteSuccessful;
-                                spe_ret = shada_pack_entry(
-                                    &raw mut packer,
-                                    ShadaEntry {
-                                        type_0: kSDItemVariable,
-                                        can_free_entry: false,
-                                        timestamp: cur_timestamp,
-                                        data: C2Rust_Unnamed_22 {
-                                            global_var: global_var {
-                                                name: name as *mut ::core::ffi::c_char,
-                                                value: tgttv,
-                                            },
-                                        },
-                                        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-                                    },
-                                    max_kbyte,
-                                );
-                                if spe_ret as ::core::ffi::c_uint
-                                    == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                                {
-                                    tv_clear(&raw mut vartv);
-                                    tv_clear(&raw mut tgttv);
-                                    ret = kSDWriteFailed;
-                                    break '_shada_write_exit;
-                                } else {
-                                    tv_clear(&raw mut vartv);
-                                    tv_clear(&raw mut tgttv);
-                                    if spe_ret as ::core::ffi::c_uint
-                                        == kSDWriteSuccessful as ::core::ffi::c_int
-                                            as ::core::ffi::c_uint
-                                    {
-                                        set_put_cstr_t(
-                                            &raw mut (*wms).dumped_variables,
-                                            name as cstr_t,
-                                            ::core::ptr::null_mut::<*mut cstr_t>(),
-                                        );
-                                    }
-                                }
-                            }
-                            if var_iter.is_null() {
-                                break 's_310;
-                            }
-                        }
-                    }
-                }
-                if num_marked_files > 0 as size_t {
-                    (*wms).jumps_size = shada_init_jumps(
-                        &raw mut (*wms).jumps as *mut ShadaEntry,
-                        &raw mut removable_bufs,
-                    );
-                }
-                if dump_one_history[HIST_SEARCH as ::core::ffi::c_int as usize]
-                    as ::core::ffi::c_int
-                    > 0 as ::core::ffi::c_int
-                {
-                    let search_highlighted: bool = !(no_hlsearch.get() as ::core::ffi::c_int != 0
-                        || !find_shada_parameter('h' as ::core::ffi::c_int).is_null());
-                    let search_last_used: bool = search_was_last_used();
-                    add_search_pattern(
-                        &raw mut (*wms).search_pattern,
-                        Some(get_search_pattern as unsafe extern "C" fn(*mut SearchPattern) -> ()),
-                        false_0 != 0,
-                        search_last_used,
-                        search_highlighted,
-                    );
-                    add_search_pattern(
-                        &raw mut (*wms).sub_search_pattern,
-                        Some(
-                            get_substitute_pattern
-                                as unsafe extern "C" fn(*mut SearchPattern) -> (),
-                        ),
-                        true_0 != 0,
-                        search_last_used,
-                        search_highlighted,
-                    );
-                    let mut sub: SubReplacementString = SubReplacementString {
-                        sub: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        timestamp: 0,
-                        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-                    };
-                    sub_get_replacement(&raw mut sub);
-                    if !sub.sub.is_null() {
-                        (*wms).replacement = ShadaEntry {
-                            type_0: kSDItemSubString,
-                            can_free_entry: false_0 != 0,
-                            timestamp: sub.timestamp,
-                            data: C2Rust_Unnamed_22 {
-                                sub_string: sub_string { sub: sub.sub },
-                            },
-                            additional_data: sub.additional_data,
-                        };
-                    }
-                }
-                if dump_global_marks {
-                    let mut global_mark_iter: *const ::core::ffi::c_void =
-                        ::core::ptr::null::<::core::ffi::c_void>();
-                    let mut digit_mark_idx: size_t = 0 as size_t;
-                    loop {
-                        let mut name_0: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
-                        let mut fm: xfmark_T = xfmark_T {
-                            fmark: fmark_T {
-                                mark: pos_T {
-                                    lnum: 0,
-                                    col: 0,
-                                    coladd: 0,
-                                },
-                                fnum: 0,
-                                timestamp: 0,
-                                view: fmarkv_T {
-                                    topline_offset: 0,
-                                    skipcol: 0,
-                                },
-                                additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-                            },
-                            fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        };
-                        global_mark_iter =
-                            mark_global_iter(global_mark_iter, &raw mut name_0, &raw mut fm);
-                        if name_0 as ::core::ffi::c_int == NUL {
-                            break;
-                        }
-                        let mut fname: *const ::core::ffi::c_char =
-                            ::core::ptr::null::<::core::ffi::c_char>();
-                        's_367: {
-                            if fm.fmark.fnum == 0 as ::core::ffi::c_int {
-                                '_c2rust_label: {
-                                    if !fm.fname.is_null() {
-                                    } else {
-                                        __assert_fail(
-                                        b"fm.fname != NULL\0".as_ptr()
-                                            as *const ::core::ffi::c_char,
-                                        b"src/nvim/shada.rs\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
-                                        2441 as ::core::ffi::c_uint,
-                                        b"ShaDaWriteResult shada_write(FileDescriptor *const, FileDescriptor *const)\0"
-                                            .as_ptr() as *const ::core::ffi::c_char,
-                                    );
-                                    }
-                                };
-                                if shada_removable(fm.fname) {
-                                    break 's_367;
-                                } else {
-                                    fname = fm.fname;
-                                }
-                            } else {
-                                let buf: *const buf_T = buflist_findnr(fm.fmark.fnum);
-                                if buf.is_null()
-                                    || (*buf).b_ffname.is_null()
-                                    || set_has_ptr_t(&raw mut removable_bufs, buf as ptr_t)
-                                        as ::core::ffi::c_int
-                                        != 0
-                                {
-                                    break 's_367;
-                                } else {
-                                    fname = (*buf).b_ffname;
-                                }
-                            }
-                            let entry: ShadaEntry = ShadaEntry {
-                                type_0: kSDItemGlobalMark,
-                                can_free_entry: false_0 != 0,
-                                timestamp: fm.fmark.timestamp,
-                                data: C2Rust_Unnamed_22 {
-                                    filemark: shada_filemark {
-                                        name: name_0,
-                                        mark: fm.fmark.mark,
-                                        fname: fname as *mut ::core::ffi::c_char,
-                                    },
-                                },
-                                additional_data: fm.fmark.additional_data,
-                            };
-                            if ascii_isdigit(name_0 as ::core::ffi::c_int) {
-                                let c2rust_fresh18 = digit_mark_idx;
-                                digit_mark_idx = digit_mark_idx.wrapping_add(1);
-                                replace_numbered_mark(wms, c2rust_fresh18, entry);
-                            } else {
-                                (*wms).global_marks[mark_global_index(name_0) as usize] = entry;
-                            }
-                        }
-                        if global_mark_iter.is_null() {
-                            break;
-                        }
-                    }
-                }
-                if dump_registers {
-                    shada_initialize_registers(wms, max_reg_lines);
-                }
-                if num_marked_files > 0 as size_t {
-                    let mut buf_0: *mut buf_T = firstbuf.get();
-                    while !buf_0.is_null() {
-                        if !ignore_buf(buf_0, &raw mut removable_bufs) {
-                            let mut local_marks_iter: *const ::core::ffi::c_void =
-                                ::core::ptr::null::<::core::ffi::c_void>();
-                            let fname_0: *const ::core::ffi::c_char = (*buf_0).b_ffname;
-                            let mut map_key: *mut cstr_t = ::core::ptr::null_mut::<cstr_t>();
-                            let mut new_item: bool = false_0 != 0;
-                            let mut val: *mut ptr_t = map_put_ref_cstr_t_ptr_t(
-                                &raw mut (*wms).file_marks,
-                                fname_0 as cstr_t,
-                                &raw mut map_key,
-                                &raw mut new_item,
-                            );
-                            if new_item {
-                                *map_key = xstrdup(fname_0) as cstr_t;
-                            }
-                            if (*val).is_null() {
-                                *val = xcalloc(1 as size_t, ::core::mem::size_of::<FileMarks>())
-                                    as ptr_t;
-                            }
-                            let filemarks: *mut FileMarks = *val as *mut FileMarks;
-                            loop {
-                                let mut fm_0: fmark_T = fmark_T {
-                                    mark: pos_T {
-                                        lnum: 0,
-                                        col: 0,
-                                        coladd: 0,
-                                    },
-                                    fnum: 0,
-                                    timestamp: 0,
-                                    view: fmarkv_T {
-                                        topline_offset: 0,
-                                        skipcol: 0,
-                                    },
-                                    additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-                                };
-                                let mut name_1: ::core::ffi::c_char = NUL as ::core::ffi::c_char;
-                                local_marks_iter = mark_buffer_iter(
-                                    local_marks_iter,
-                                    buf_0,
-                                    &raw mut name_1,
-                                    &raw mut fm_0,
-                                );
-                                if name_1 as ::core::ffi::c_int == NUL {
-                                    break;
-                                }
-                                (*filemarks).marks[mark_local_index(name_1) as usize] =
-                                    ShadaEntry {
-                                        type_0: kSDItemLocalMark,
-                                        can_free_entry: false_0 != 0,
-                                        timestamp: fm_0.timestamp,
-                                        data: C2Rust_Unnamed_22 {
-                                            filemark: shada_filemark {
-                                                name: name_1,
-                                                mark: fm_0.mark,
-                                                fname: fname_0 as *mut ::core::ffi::c_char,
-                                            },
-                                        },
-                                        additional_data: fm_0.additional_data,
-                                    };
-                                if fm_0.timestamp > (*filemarks).greatest_timestamp {
-                                    (*filemarks).greatest_timestamp = fm_0.timestamp;
-                                }
-                                if local_marks_iter.is_null() {
-                                    break;
-                                }
-                            }
-                            let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                            while i_0 < (*buf_0).b_changelistlen {
-                                let fm_1: fmark_T = (*buf_0).b_changelist[i_0 as usize];
-                                (*filemarks).changes[i_0 as usize] = ShadaEntry {
-                                    type_0: kSDItemChange,
-                                    can_free_entry: false_0 != 0,
-                                    timestamp: fm_1.timestamp,
-                                    data: C2Rust_Unnamed_22 {
-                                        filemark: shada_filemark {
-                                            name: 0,
-                                            mark: fm_1.mark,
-                                            fname: fname_0 as *mut ::core::ffi::c_char,
-                                        },
-                                    },
-                                    additional_data: fm_1.additional_data,
-                                };
-                                if fm_1.timestamp > (*filemarks).greatest_timestamp {
-                                    (*filemarks).greatest_timestamp = fm_1.timestamp;
-                                }
-                                i_0 += 1;
-                            }
-                            (*filemarks).changes_size = (*buf_0).b_changelistlen as size_t;
-                        }
-                        buf_0 = (*buf_0).b_next;
-                    }
-                }
-                if !sd_reader.is_null() {
-                    let srww_ret: ShaDaWriteResult =
-                        shada_read_when_writing(sd_reader, srni_flags, max_kbyte, wms, &mut packer);
-                    if srww_ret as ::core::ffi::c_uint
-                        != kSDWriteSuccessful as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        ret = srww_ret;
-                    }
-                }
-                if dump_global_marks as ::core::ffi::c_int != 0
-                    && !ignore_buf(curbuf.get(), &raw mut removable_bufs)
-                    && (*curwin.get()).w_cursor.lnum != 0 as linenr_T
-                {
-                    replace_numbered_mark(
-                        wms,
-                        0 as size_t,
-                        ShadaEntry {
-                            type_0: kSDItemGlobalMark,
-                            can_free_entry: false_0 != 0,
-                            timestamp: os_time(),
-                            data: C2Rust_Unnamed_22 {
-                                filemark: shada_filemark {
-                                    name: '0' as ::core::ffi::c_char,
-                                    mark: (*curwin.get()).w_cursor,
-                                    fname: (*curbuf.get()).b_ffname,
-                                },
-                            },
-                            additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-                        },
-                    );
-                }
-                let mut i_: size_t = 0 as size_t;
-                while i_
-                    < ::core::mem::size_of::<[ShadaEntry; 26]>()
-                        .wrapping_div(::core::mem::size_of::<ShadaEntry>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[ShadaEntry; 26]>()
-                                .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        )
-                {
-                    if (*wms).global_marks[i_ as usize].type_0 as ::core::ffi::c_int
-                        != kSDItemMissing as ::core::ffi::c_int
-                    {
-                        if shada_pack_pfreed_entry(
-                            &raw mut packer,
-                            (*wms).global_marks[i_ as usize],
-                            max_kbyte,
-                        ) as ::core::ffi::c_uint
-                            == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            ret = kSDWriteFailed;
-                            break '_shada_write_exit;
-                        }
-                    }
-                    i_ = i_.wrapping_add(1);
-                }
-                let mut i__0: size_t = 0 as size_t;
-                while i__0
-                    < ::core::mem::size_of::<[ShadaEntry; 10]>()
-                        .wrapping_div(::core::mem::size_of::<ShadaEntry>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[ShadaEntry; 10]>()
-                                .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        )
-                {
-                    if (*wms).numbered_marks[i__0 as usize].type_0 as ::core::ffi::c_int
-                        != kSDItemMissing as ::core::ffi::c_int
-                    {
-                        if shada_pack_pfreed_entry(
-                            &raw mut packer,
-                            (*wms).numbered_marks[i__0 as usize],
-                            max_kbyte,
-                        ) as ::core::ffi::c_uint
-                            == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            ret = kSDWriteFailed;
-                            break '_shada_write_exit;
-                        }
-                    }
-                    i__0 = i__0.wrapping_add(1);
-                }
-                let mut i__1: size_t = 0 as size_t;
-                while i__1
-                    < ::core::mem::size_of::<[ShadaEntry; 37]>()
-                        .wrapping_div(::core::mem::size_of::<ShadaEntry>())
-                        .wrapping_div(
-                            (::core::mem::size_of::<[ShadaEntry; 37]>()
-                                .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
-                                == 0) as ::core::ffi::c_int as usize,
-                        )
-                {
-                    if (*wms).registers[i__1 as usize].type_0 as ::core::ffi::c_int
-                        != kSDItemMissing as ::core::ffi::c_int
-                    {
-                        if shada_pack_pfreed_entry(
-                            &raw mut packer,
-                            (*wms).registers[i__1 as usize],
-                            max_kbyte,
-                        ) as ::core::ffi::c_uint
-                            == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            ret = kSDWriteFailed;
-                            break '_shada_write_exit;
-                        }
-                    }
-                    i__1 = i__1.wrapping_add(1);
-                }
-                let mut i_1: size_t = 0 as size_t;
-                while i_1 < (*wms).jumps_size {
-                    if shada_pack_pfreed_entry(
-                        &raw mut packer,
-                        (*wms).jumps[i_1 as usize],
-                        max_kbyte,
-                    ) as ::core::ffi::c_uint
-                        == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        ret = kSDWriteFailed;
-                        break '_shada_write_exit;
-                    } else {
-                        i_1 = i_1.wrapping_add(1);
-                    }
-                }
-                if (*wms).search_pattern.type_0 as ::core::ffi::c_int
-                    != kSDItemMissing as ::core::ffi::c_int
-                {
-                    if shada_pack_pfreed_entry(&raw mut packer, (*wms).search_pattern, max_kbyte)
-                        as ::core::ffi::c_uint
-                        == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        ret = kSDWriteFailed;
-                        break '_shada_write_exit;
-                    }
-                }
-                if (*wms).sub_search_pattern.type_0 as ::core::ffi::c_int
-                    != kSDItemMissing as ::core::ffi::c_int
-                {
-                    if shada_pack_pfreed_entry(
-                        &raw mut packer,
-                        (*wms).sub_search_pattern,
-                        max_kbyte,
-                    ) as ::core::ffi::c_uint
-                        == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        ret = kSDWriteFailed;
-                        break '_shada_write_exit;
-                    }
-                }
-                if (*wms).replacement.type_0 as ::core::ffi::c_int
-                    != kSDItemMissing as ::core::ffi::c_int
-                {
-                    if shada_pack_pfreed_entry(&raw mut packer, (*wms).replacement, max_kbyte)
-                        as ::core::ffi::c_uint
-                        == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        ret = kSDWriteFailed;
-                        break '_shada_write_exit;
-                    }
-                }
-                file_markss_size = (*wms).file_marks.set.h.size as size_t;
-                all_file_markss = xmalloc(
-                    file_markss_size.wrapping_mul(::core::mem::size_of::<*mut FileMarks>()),
-                ) as *mut *mut FileMarks;
-                cur_file_marks = all_file_markss;
-                val_0 = ::core::ptr::null_mut::<::core::ffi::c_void>();
-                let mut __i: uint32_t = 0;
-                __i = 0 as uint32_t;
-                while __i < (*wms).file_marks.set.h.n_keys {
-                    val_0 = *(*wms).file_marks.values.offset(__i as isize);
-                    let c2rust_fresh19 = cur_file_marks;
-                    cur_file_marks = cur_file_marks.offset(1);
-                    let c2rust_lvalue_ptr = &raw mut *c2rust_fresh19;
-                    *c2rust_lvalue_ptr = val_0 as *mut FileMarks;
-                    __i = __i.wrapping_add(1);
-                }
-                qsort(
-                    all_file_markss as *mut ::core::ffi::c_void,
-                    file_markss_size,
-                    ::core::mem::size_of::<*mut FileMarks>(),
-                    Some(
-                        compare_file_marks
-                            as unsafe extern "C" fn(
-                                *const ::core::ffi::c_void,
-                                *const ::core::ffi::c_void,
-                            )
-                                -> ::core::ffi::c_int,
-                    ),
-                );
-                file_markss_to_dump = if num_marked_files < file_markss_size {
-                    num_marked_files
-                } else {
-                    file_markss_size
+                    additional_data: fm.additional_data,
                 };
-                let mut i_2: size_t = 0 as size_t;
-                while i_2 < file_markss_to_dump {
-                    let mut i__2: size_t = 0 as size_t;
-                    while i__2
-                        < ::core::mem::size_of::<[ShadaEntry; 29]>()
-                            .wrapping_div(::core::mem::size_of::<ShadaEntry>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[ShadaEntry; 29]>()
-                                    .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            )
-                    {
-                        if (**all_file_markss.offset(i_2 as isize)).marks[i__2 as usize].type_0
-                            as ::core::ffi::c_int
-                            != kSDItemMissing as ::core::ffi::c_int
-                        {
-                            if shada_pack_pfreed_entry(
-                                &raw mut packer,
-                                (**all_file_markss.offset(i_2 as isize)).marks[i__2 as usize],
-                                max_kbyte,
-                            ) as ::core::ffi::c_uint
-                                == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                ret = kSDWriteFailed;
-                                break '_shada_write_exit;
-                            }
-                        }
-                        i__2 = i__2.wrapping_add(1);
-                    }
-                    let mut j: size_t = 0 as size_t;
-                    while j < (**all_file_markss.offset(i_2 as isize)).changes_size {
-                        if shada_pack_pfreed_entry(
-                            &raw mut packer,
-                            (**all_file_markss.offset(i_2 as isize)).changes[j as usize],
-                            max_kbyte,
-                        ) as ::core::ffi::c_uint
-                            == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            ret = kSDWriteFailed;
-                            break '_shada_write_exit;
-                        } else {
-                            j = j.wrapping_add(1);
-                        }
-                    }
-                    let mut j_0: size_t = 0 as size_t;
-                    while j_0 < (**all_file_markss.offset(i_2 as isize)).additional_marks_size {
-                        if shada_pack_entry(
-                            &raw mut packer,
-                            *(**all_file_markss.offset(i_2 as isize))
-                                .additional_marks
-                                .offset(j_0 as isize),
-                            0 as size_t,
-                        ) as ::core::ffi::c_uint
-                            == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            shada_free_shada_entry(
-                                (**all_file_markss.offset(i_2 as isize))
-                                    .additional_marks
-                                    .offset(j_0 as isize),
-                            );
-                            ret = kSDWriteFailed;
-                            break '_shada_write_exit;
-                        } else {
-                            shada_free_shada_entry(
-                                (**all_file_markss.offset(i_2 as isize))
-                                    .additional_marks
-                                    .offset(j_0 as isize),
-                            );
-                            j_0 = j_0.wrapping_add(1);
-                        }
-                    }
-                    xfree(
-                        (**all_file_markss.offset(i_2 as isize)).additional_marks
-                            as *mut ::core::ffi::c_void,
-                    );
-                    i_2 = i_2.wrapping_add(1);
-                }
-                xfree(all_file_markss as *mut ::core::ffi::c_void);
-                if dump_history {
-                    let mut i_3: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    loop {
-                        if i_3 >= HIST_COUNT as ::core::ffi::c_int {
-                            break '_shada_write_exit;
-                        }
-                        if dump_one_history[i_3 as usize] {
-                            hms_insert_whole_neovim_history(
-                                (&raw mut (*wms).hms as *mut HistoryMergerState)
-                                    .offset(i_3 as isize),
-                            );
-                            let mut cur_entry: *mut HMLListEntry =
-                                (*wms).hms[i_3 as usize].hmll.first as *mut HMLListEntry;
-                            while !cur_entry.is_null() {
-                                if shada_pack_pfreed_entry(
-                                    &raw mut packer,
-                                    (*cur_entry).data,
-                                    max_kbyte,
-                                ) as ::core::ffi::c_uint
-                                    == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                                {
-                                    ret = kSDWriteFailed;
-                                    break;
-                                } else {
-                                    cur_entry = (*cur_entry).next as *mut HMLListEntry;
-                                }
-                            }
-                            if ret as ::core::ffi::c_uint
-                                == kSDWriteFailed as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                break '_shada_write_exit;
-                            }
-                        }
-                        i_3 += 1;
-                    }
+                (*filemarks).greatest_timestamp = (*filemarks).greatest_timestamp.max(fm.timestamp);
+                if mark_iter.is_null() {
+                    break;
                 }
             }
-        }
-        let mut i_4: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i_4 < HIST_COUNT as ::core::ffi::c_int {
-            if dump_one_history[i_4 as usize] {
-                hms_dealloc((&raw mut (*wms).hms as *mut HistoryMergerState).offset(i_4 as isize));
+
+            for i in 0..(*buf).b_changelistlen as usize {
+                let fm = (*buf).b_changelist[i];
+                (*filemarks).changes[i] = ShadaEntry {
+                    type_0: kSDItemChange,
+                    can_free_entry: false,
+                    timestamp: fm.timestamp,
+                    data: C2Rust_Unnamed_22 {
+                        filemark: shada_filemark {
+                            name: 0,
+                            mark: fm.mark,
+                            fname,
+                        },
+                    },
+                    additional_data: fm.additional_data,
+                };
+                (*filemarks).greatest_timestamp = (*filemarks).greatest_timestamp.max(fm.timestamp);
             }
-            i_4 += 1;
+            (*filemarks).changes_size = (*buf).b_changelistlen as size_t;
         }
-        let mut stored_key: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut __i_0: uint32_t = 0;
-        __i_0 = 0 as uint32_t;
-        while __i_0 < (*wms).file_marks.set.h.n_keys {
-            stored_key =
-                *(*wms).file_marks.set.keys.offset(__i_0 as isize) as *const ::core::ffi::c_char;
-            val_0 = *(*wms).file_marks.values.offset(__i_0 as isize);
-            xfree(stored_key as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void);
-            xfree(val_0 as *mut ::core::ffi::c_void);
-            __i_0 = __i_0.wrapping_add(1);
+    }
+
+    /// The slot one file's marks are collected into, made on first use.
+    /// The map owns both its keys and its values.
+    unsafe fn file_marks_for(&mut self, fname: *const c_char) -> *mut FileMarks {
+        unsafe {
+            let mut key_alloc: *mut cstr_t = core::ptr::null_mut();
+            let mut new_item = false;
+            let slot = map_put_ref_cstr_t_ptr_t(
+                &raw mut (*self.wms).file_marks,
+                fname,
+                &raw mut key_alloc,
+                &raw mut new_item,
+            );
+            if new_item {
+                *key_alloc = xstrdup(fname);
+            }
+            if (*slot).is_null() {
+                *slot = xcalloc(1, size_of::<FileMarks>());
+            }
+            (*slot).cast::<FileMarks>()
         }
-        xfree((*wms).file_marks.set.keys as *mut ::core::ffi::c_void);
-        xfree((*wms).file_marks.set.h.hash as *mut ::core::ffi::c_void);
-        (*wms).file_marks.set = Set_cstr_t {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut::<cstr_t>(),
-        };
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut (*wms).file_marks.values as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL_0;
-        let _ = *ptr_;
-        xfree(removable_bufs.keys as *mut ::core::ffi::c_void);
-        xfree(removable_bufs.h.hash as *mut ::core::ffi::c_void);
-        removable_bufs = Set_ptr_t {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut::<ptr_t>(),
-        };
-        packer.packer_flush.expect("non-null function pointer")(&mut packer);
-        xfree((*wms).dumped_variables.keys as *mut ::core::ffi::c_void);
-        xfree((*wms).dumped_variables.h.hash as *mut ::core::ffi::c_void);
-        (*wms).dumped_variables = Set_cstr_t {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut::<cstr_t>(),
-        };
-        xfree(wms as *mut ::core::ffi::c_void);
-        return ret;
+    }
+
+    /// Put the cursor's position in at `'0`, shifting the other numbered
+    /// marks down and dropping `'9`.
+    unsafe fn update_numbered_marks(&mut self) {
+        unsafe {
+            if !self.limits.global_marks
+                || ignore_buf(curbuf.get(), &raw mut self.removable_bufs)
+                || (*curwin.get()).w_cursor.lnum == 0
+            {
+                return;
+            }
+            replace_numbered_mark(
+                self.wms,
+                0,
+                ShadaEntry {
+                    type_0: kSDItemGlobalMark,
+                    can_free_entry: false,
+                    timestamp: os_time(),
+                    data: C2Rust_Unnamed_22 {
+                        filemark: shada_filemark {
+                            name: '0' as c_char,
+                            mark: (*curwin.get()).w_cursor,
+                            fname: (*curbuf.get()).b_ffname,
+                        },
+                    },
+                    additional_data: core::ptr::null_mut(),
+                },
+            );
+        }
+    }
+
+    /// Write everything the merge left in `wms`, in the order the format
+    /// wants it.
+    unsafe fn pack_everything(&mut self) -> ShaDaWriteResult {
+        unsafe {
+            let wms = self.wms;
+            if self.pack_sparse(&raw const (*wms).global_marks) == kSDWriteFailed
+                || self.pack_sparse(&raw const (*wms).numbered_marks) == kSDWriteFailed
+                || self.pack_sparse(&raw const (*wms).registers) == kSDWriteFailed
+                || self.pack_dense((&raw const (*wms).jumps).cast(), (*wms).jumps_size)
+                    == kSDWriteFailed
+            {
+                return kSDWriteFailed;
+            }
+            for entry in [
+                (*wms).search_pattern,
+                (*wms).sub_search_pattern,
+                (*wms).replacement,
+            ] {
+                if entry.type_0 != kSDItemMissing && self.pack_freeing(entry) == kSDWriteFailed {
+                    return kSDWriteFailed;
+                }
+            }
+            if self.pack_file_marks() == kSDWriteFailed {
+                return kSDWriteFailed;
+            }
+            self.pack_histories()
+        }
+    }
+
+    /// Every file's marks, most recently touched file first, as many files
+    /// as `'shada'` keeps.
+    unsafe fn pack_file_marks(&mut self) -> ShaDaWriteResult {
+        unsafe {
+            let mut all: Vec<*mut FileMarks> = Vec::new();
+            let marks = &(*self.wms).file_marks;
+            for i in 0..marks.set.h.n_keys as usize {
+                all.push((*marks.values.add(i)).cast::<FileMarks>());
+            }
+            qsort(
+                all.as_mut_ptr().cast(),
+                all.len(),
+                size_of::<*mut FileMarks>(),
+                Some(compare_file_marks),
+            );
+
+            let to_dump = all.len().min(self.limits.num_marked_files);
+            for &file in &all[..to_dump] {
+                if self.pack_sparse(&raw const (*file).marks) == kSDWriteFailed
+                    || self.pack_dense((&raw const (*file).changes).cast(), (*file).changes_size)
+                        == kSDWriteFailed
+                {
+                    return kSDWriteFailed;
+                }
+                // Marks the old file had for this file that this Nvim has
+                // nowhere to put. They are owned here, so they are freed
+                // whether or not writing them worked.
+                let mut ret = kSDWriteSuccessful;
+                for i in 0..(*file).additional_marks_size {
+                    let entry = (*file).additional_marks.add(i);
+                    if ret != kSDWriteFailed {
+                        ret = shada_pack_entry(&raw mut self.packer, *entry, 0);
+                    }
+                    shada_free_shada_entry(entry);
+                }
+                xfree((*file).additional_marks.cast());
+                if ret == kSDWriteFailed {
+                    return kSDWriteFailed;
+                }
+            }
+            kSDWriteSuccessful
+        }
+    }
+
+    /// The merged histories, oldest entry first.
+    unsafe fn pack_histories(&mut self) -> ShaDaWriteResult {
+        unsafe {
+            for i in 0..HIST_COUNT as usize {
+                if !self.histories[i] {
+                    continue;
+                }
+                hms_insert_whole_neovim_history(&raw mut (*self.wms).hms[i]);
+                let mut cur = (*self.wms).hms[i].hmll.first;
+                while !cur.is_null() {
+                    if self.pack_freeing((*cur).data) == kSDWriteFailed {
+                        return kSDWriteFailed;
+                    }
+                    cur = (*cur).next;
+                }
+            }
+            kSDWriteSuccessful
+        }
+    }
+
+    /// Write a slot-per-name array — the marks and the registers — whose
+    /// empty slots are skipped.
+    ///
+    /// Takes the array by pointer: `&(*wms).field[..]` would be an autoref
+    /// through a raw pointer, and the entries are freed as they go.
+    unsafe fn pack_sparse<const N: usize>(
+        &mut self,
+        entries: *const [ShadaEntry; N],
+    ) -> ShaDaWriteResult {
+        unsafe {
+            let entries = entries.cast::<ShadaEntry>();
+            for i in 0..N {
+                let entry = *entries.add(i);
+                if entry.type_0 != kSDItemMissing && self.pack_freeing(entry) == kSDWriteFailed {
+                    return kSDWriteFailed;
+                }
+            }
+            kSDWriteSuccessful
+        }
+    }
+
+    /// Write a filled-from-the-front array — the jumps and the changes —
+    /// every entry of which is a real one.
+    unsafe fn pack_dense(&mut self, entries: *const ShadaEntry, len: size_t) -> ShaDaWriteResult {
+        unsafe {
+            for i in 0..len {
+                if self.pack_freeing(*entries.add(i)) == kSDWriteFailed {
+                    return kSDWriteFailed;
+                }
+            }
+            kSDWriteSuccessful
+        }
+    }
+
+    /// Write one entry that `wms` owns, and release it.
+    unsafe fn pack_freeing(&mut self, entry: ShadaEntry) -> ShaDaWriteResult {
+        unsafe { shada_pack_pfreed_entry(&raw mut self.packer, entry, self.limits.max_kbyte) }
+    }
+
+    /// Write one entry that belongs to the caller.
+    unsafe fn pack(&mut self, entry: ShadaEntry, max_kbyte: size_t) -> ShaDaWriteResult {
+        unsafe { shada_pack_entry(&raw mut self.packer, entry, max_kbyte) }
+    }
+
+    /// Flush the output and release everything, however the write went.
+    fn finish(&mut self) {
+        // SAFETY: everything here was allocated by this write.
+        unsafe {
+            for i in 0..HIST_COUNT as usize {
+                if self.histories[i] {
+                    hms_dealloc(&raw mut (*self.wms).hms[i]);
+                }
+            }
+            let marks = &raw mut (*self.wms).file_marks;
+            for i in 0..(*marks).set.h.n_keys as usize {
+                xfree((*(*marks).set.keys.add(i)).cast_mut().cast());
+                xfree(*(*marks).values.add(i));
+            }
+            map_destroy_cstr_t_ptr_t(marks);
+            set_destroy_ptr_t(&raw mut self.removable_bufs);
+            self.packer.packer_flush.expect("shada: no flush")(&raw mut self.packer);
+            // Only the names were borrowed; the variables themselves went
+            // out as they were found.
+            set_destroy_cstr_t(&raw mut (*self.wms).dumped_variables);
+            xfree(self.wms.cast());
+        }
+    }
+}
+
+/// Whether a variable's value can be written at all.
+///
+/// Functions have no representation in the format, and a container that
+/// refers to itself would not terminate the encoder.
+unsafe fn writable_value(vartv: &typval_T) -> bool {
+    unsafe {
+        match vartv.v_type {
+            VAR_FUNC | VAR_PARTIAL => false,
+            VAR_DICT => {
+                let di = vartv.vval.v_dict;
+                let copy_id = get_copyID();
+                set_ref_in_ht(&raw mut (*di).dv_hashtab, copy_id, core::ptr::null_mut())
+                    || copy_id != (*di).dv_copyID
+            }
+            VAR_LIST => {
+                let l = vartv.vval.v_list;
+                let copy_id = get_copyID();
+                set_ref_in_list_items(l, copy_id, core::ptr::null_mut())
+                    || copy_id != (*l).lv_copyID
+            }
+            _ => true,
+        }
     }
 }

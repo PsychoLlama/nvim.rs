@@ -410,7 +410,7 @@
     "crates/nvim/src/nvim/shada/parse.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/shada/read.rs": {"unsafe": 17},
     "crates/nvim/src/nvim/shada/unpack.rs": {"unsafe": 16},
-    "crates/nvim/src/nvim/shada/write.rs": {"unsafe": 4},
+    "crates/nvim/src/nvim/shada/write.rs": {"unsafe": 24},
     "crates/nvim/src/nvim/sign.rs": {"lines": 3448, "unsafe": 58},
     "crates/nvim/src/nvim/spell.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/spell/chartab.rs": {"unsafe": 15},
