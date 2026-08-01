@@ -12,46 +12,51 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::CStr;
 
-pub(crate) unsafe extern "C" fn qf_init_process_nextline(
+pub(crate) unsafe fn qf_init_process_nextline(
     mut qfl: *mut qf_list_T,
-    mut fmt_first: *mut efm_T,
+    efm: &mut Efm,
     mut state: *mut qfstate_T,
-    mut fields: *mut qffields_T,
-) -> ::core::ffi::c_int {
+    fields: &mut Fields,
+) -> Status {
     unsafe {
         let mut status: ::core::ffi::c_int = qf_get_nextline(state);
         if status != QF_OK as ::core::ffi::c_int {
-            return status;
+            return if status == QF_END_OF_INPUT as ::core::ffi::c_int {
+                Status::EndOfInput
+            } else {
+                Status::Fail
+            };
         }
-        status = qf_parse_line(qfl, (*state).linebuf, (*state).linelen, fmt_first, fields);
-        if status != QF_OK as ::core::ffi::c_int {
-            return status;
+        let parsed = parse_line(qfl, (*state).linebuf, (*state).linelen, efm, fields);
+        if parsed != Status::Ok {
+            return parsed;
         }
-        return qf_add_entry(
+        let name = entry_file_name(fields, qfl);
+        status = qf_add_entry(
             qfl,
             (*qfl).qf_directory,
-            if *(*fields).namebuf as ::core::ffi::c_int != 0 || !(*qfl).qf_directory.is_null() {
-                (*fields).namebuf
-            } else if !(*qfl).qf_currfile.is_null() && (*fields).valid as ::core::ffi::c_int != 0 {
-                (*qfl).qf_currfile
-            } else {
-                ::core::ptr::null_mut::<::core::ffi::c_char>()
-            },
-            (*fields).module,
-            (*fields).bnr,
-            (*fields).errmsg,
-            (*fields).lnum,
-            (*fields).end_lnum,
-            (*fields).col,
-            (*fields).end_col,
-            (*fields).use_viscol as ::core::ffi::c_char,
-            (*fields).pattern,
-            (*fields).enr,
-            (*fields).type_0,
-            (*fields).user_data,
-            (*fields).valid as ::core::ffi::c_char,
+            name,
+            fields.module(),
+            fields.bnr,
+            fields.errmsg(),
+            fields.lnum,
+            fields.end_lnum,
+            fields.col,
+            fields.end_col,
+            fields.use_viscol as ::core::ffi::c_char,
+            fields.pattern(),
+            fields.enr,
+            fields.kind,
+            fields.user_data,
+            fields.valid as ::core::ffi::c_char,
         );
+        if status == QF_OK as ::core::ffi::c_int {
+            Status::Ok
+        } else {
+            Status::Fail
+        }
     }
 }
 
@@ -503,35 +508,22 @@ pub(crate) unsafe extern "C" fn qf_init_ext(
                 vc_fail: false,
             },
         };
-        let mut fields: qffields_T = qffields_T {
-            namebuf: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            bnr: 0,
-            module: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            errmsglen: 0,
-            lnum: 0,
-            end_lnum: 0,
-            col: 0,
-            end_col: 0,
-            use_viscol: false,
-            pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            enr: 0,
-            type_0: 0,
-            user_data: ::core::ptr::null_mut::<typval_T>(),
-            valid: false,
-        };
+        let mut fields = Fields::new();
         let mut old_last: *mut qfline_T = ::core::ptr::null_mut::<qfline_T>();
-        static fmt_first: GlobalCell<*mut efm_T> =
-            GlobalCell::new(::core::ptr::null_mut::<efm_T>());
-        static last_efm: GlobalCell<*mut ::core::ffi::c_char> =
-            GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
         let mut retval: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
         let mut ptr_: *mut *mut ::core::ffi::c_void =
             qf_last_bufname.ptr() as *mut *mut ::core::ffi::c_void;
         xfree(*ptr_);
         *ptr_ = NULL_0;
         let _ = *ptr_;
-        qf_alloc_fields(&raw mut fields);
+        // The compiled 'errorformat' is taken out of the cache for the
+        // length of this read and put back at the end. Adding an entry can
+        // fire `BufNew`, an autocommand can run another `:cexpr`, and
+        // upstream — which keeps the compiled option in a bare static and
+        // frees it whenever the option text changes — would then free what
+        // this loop is still walking. Owning it here costs the re-entrant
+        // call a recompile and nothing otherwise.
+        let mut compiled = (*EFM_CACHE.ptr()).take();
         '_qf_init_end: {
             if qf_setup_state(&raw mut state, enc, efile, tv, buf, lnumfirst, lnumlast) != FAIL {
                 qfl = ::core::ptr::null_mut::<qf_list_T>();
@@ -556,34 +548,22 @@ pub(crate) unsafe extern "C" fn qf_init_ext(
                 } else {
                     errorformat
                 };
-                if (*last_efm.ptr()).is_null()
-                    || strcmp(last_efm.get(), efm) != 0 as ::core::ffi::c_int
-                {
-                    let mut ptr__0: *mut *mut ::core::ffi::c_void =
-                        last_efm.ptr() as *mut *mut ::core::ffi::c_void;
-                    xfree(*ptr__0);
-                    *ptr__0 = NULL_0;
-                    let _ = *ptr__0;
-                    free_efm_list(fmt_first.ptr());
-                    fmt_first.set(parse_efm_option(efm));
-                    if !(*fmt_first.ptr()).is_null() {
-                        last_efm.set(xstrdup(efm));
-                    }
+                // Reuse the previously compiled option when the text has
+                // not changed; otherwise throw it away and compile again.
+                let text = CStr::from_ptr(efm).to_bytes();
+                if !compiled.as_ref().is_some_and(|(had, _)| had == text) {
+                    compiled = Efm::compile(efm).map(|parsed| (text.to_vec(), parsed));
                 }
                 '_error2: {
-                    if !(*fmt_first.ptr()).is_null() {
+                    if let Some((_, parsed)) = compiled.as_mut() {
                         got_int.set(false_0 != 0);
                         while !got_int.get() {
-                            let mut status: ::core::ffi::c_int = qf_init_process_nextline(
-                                qfl,
-                                fmt_first.get(),
-                                &raw mut state,
-                                &raw mut fields,
-                            );
-                            if status == QF_END_OF_INPUT as ::core::ffi::c_int {
+                            let status =
+                                qf_init_process_nextline(qfl, parsed, &raw mut state, &mut fields);
+                            if status == Status::EndOfInput {
                                 break;
                             }
-                            if status == QF_FAIL as ::core::ffi::c_int {
+                            if status == Status::Fail {
                                 break '_error2;
                             }
                             line_breakcheck();
@@ -619,10 +599,14 @@ pub(crate) unsafe extern "C" fn qf_init_ext(
             qf_update_buffer(qi, old_last);
         }
         qf_cleanup_state(&raw mut state);
-        qf_free_fields(&raw mut fields);
+        *EFM_CACHE.ptr() = compiled;
         return retval;
     }
 }
+
+/// The compiled `'errorformat'`, kept between calls together with the option
+/// text it was compiled from, so a repeated command does not recompile it.
+static EFM_CACHE: GlobalCell<Option<(Vec<u8>, Efm)>> = GlobalCell::new(None);
 
 pub(crate) unsafe extern "C" fn qf_store_title(
     mut qfl: *mut qf_list_T,

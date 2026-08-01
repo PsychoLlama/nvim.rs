@@ -260,25 +260,6 @@ pub struct qf_delq_S {
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct qffields_T {
-    pub namebuf: *mut ::core::ffi::c_char,
-    pub bnr: ::core::ffi::c_int,
-    pub module: *mut ::core::ffi::c_char,
-    pub errmsg: *mut ::core::ffi::c_char,
-    pub errmsglen: size_t,
-    pub lnum: linenr_T,
-    pub end_lnum: linenr_T,
-    pub col: ::core::ffi::c_int,
-    pub end_col: ::core::ffi::c_int,
-    pub use_viscol: bool,
-    pub pattern: *mut ::core::ffi::c_char,
-    pub enr: ::core::ffi::c_int,
-    pub type_0: ::core::ffi::c_char,
-    pub user_data: *mut typval_T,
-    pub valid: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct qfstate_T {
     pub linebuf: *mut ::core::ffi::c_char,
     pub linelen: size_t,
@@ -295,28 +276,11 @@ pub struct qfstate_T {
     pub vc: vimconv_T,
 }
 pub const QF_FAIL: C2Rust_Unnamed_34 = 0;
-pub type efm_T = efm_S;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct efm_S {
-    pub prog: *mut regprog_T,
-    pub next: *mut efm_T,
-    pub addr: [::core::ffi::c_char; 14],
-    pub prefix: ::core::ffi::c_char,
-    pub flags: ::core::ffi::c_char,
-    pub conthere: ::core::ffi::c_int,
-}
 pub const QF_OK: C2Rust_Unnamed_34 = 1;
 pub const QF_END_OF_INPUT: C2Rust_Unnamed_34 = 2;
 pub const QF_IGNORE_LINE: C2Rust_Unnamed_34 = 4;
 pub const QF_MULTISCAN: C2Rust_Unnamed_34 = 5;
 pub const QF_NOMEM: C2Rust_Unnamed_34 = 3;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct fmtpattern {
-    pub convchar: ::core::ffi::c_char,
-    pub pattern: *mut ::core::ffi::c_char,
-}
 pub const QF_ABORT: C2Rust_Unnamed_34 = 6;
 pub const WSP_ABOVE: C2Rust_Unnamed_33 = 128;
 pub const WSP_NEWLOC: C2Rust_Unnamed_33 = 256;
@@ -379,7 +343,6 @@ static ql_info_actual: GlobalCell<qf_info_T> = GlobalCell::new(qf_info_T {
 });
 static ql_info: GlobalCell<*mut qf_info_T> = GlobalCell::new(::core::ptr::null_mut::<qf_info_T>());
 static last_qf_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::core::ffi::c_uint);
-pub const FMT_PATTERNS: ::core::ffi::c_int = 14 as ::core::ffi::c_int;
 static e_no_more_items: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(b"E553: No more items\0".as_ptr() as *const ::core::ffi::c_char);
 static e_current_quickfix_list_was_changed: GlobalCell<*const ::core::ffi::c_char> =
@@ -404,181 +367,12 @@ static quickfix_busy: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::co
 static qf_delq_head: GlobalCell<*mut qf_delq_T> =
     GlobalCell::new(::core::ptr::null_mut::<qf_delq_T>());
 static LINE_MAXLEN: GlobalCell<size_t> = GlobalCell::new(4096 as size_t);
-static fmt_pat: GlobalCell<[fmtpattern; 14]> = GlobalCell::new([
-    fmtpattern {
-        convchar: 'f' as ::core::ffi::c_char,
-        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 'b' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 'n' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 'l' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 'e' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 'c' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 'k' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 't' as ::core::ffi::c_char,
-        pattern: b".\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 'm' as ::core::ffi::c_char,
-        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 'r' as ::core::ffi::c_char,
-        pattern: b".*\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 'p' as ::core::ffi::c_char,
-        pattern: b"[-\t .]*\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 'v' as ::core::ffi::c_char,
-        pattern: b"\\d\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 's' as ::core::ffi::c_char,
-        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-    fmtpattern {
-        convchar: 'o' as ::core::ffi::c_char,
-        pattern: b".\\+\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    },
-]);
-pub const FMT_PATTERN_M: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-pub const FMT_PATTERN_R: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
-static fmt_start: GlobalCell<*mut efm_T> = GlobalCell::new(::core::ptr::null_mut::<efm_T>());
 static qftf_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: C2Rust_Unnamed_6 {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     },
     type_0: kCallbackNone,
 });
-static qf_parse_fmt: GlobalCell<
-    [Option<
-        unsafe extern "C" fn(
-            *mut regmatch_T,
-            ::core::ffi::c_int,
-            *mut qffields_T,
-        ) -> ::core::ffi::c_int,
-    >; 14],
-> = GlobalCell::new([
-    None,
-    Some(
-        qf_parse_fmt_b
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-    Some(
-        qf_parse_fmt_n
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-    Some(
-        qf_parse_fmt_l
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-    Some(
-        qf_parse_fmt_e
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-    Some(
-        qf_parse_fmt_c
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-    Some(
-        qf_parse_fmt_k
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-    Some(
-        qf_parse_fmt_t
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-    Some(
-        qf_parse_fmt_m
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-    None,
-    Some(
-        qf_parse_fmt_p
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-    Some(
-        qf_parse_fmt_v
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-    Some(
-        qf_parse_fmt_s
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-    Some(
-        qf_parse_fmt_o
-            as unsafe extern "C" fn(
-                *mut regmatch_T,
-                ::core::ffi::c_int,
-                *mut qffields_T,
-            ) -> ::core::ffi::c_int,
-    ),
-]);
 static qfFile_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static qfSep_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static qfLine_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
