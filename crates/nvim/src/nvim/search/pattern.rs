@@ -382,6 +382,29 @@ pub fn last_search_pat() -> *mut c_char {
     spat(last_idx.get()).pat
 }
 
+/// The `:substitute` pattern, borrowed — what `/` falls back on when no
+/// search pattern has been used yet.
+pub(crate) fn substitute_pattern() -> SearchPattern {
+    spat(RE_SUBST)
+}
+
+/// The offset `/` and `?` remember alongside the search pattern: the
+/// `e`/`s`/`b` suffix and its `+n`/`-n`.
+///
+/// It lives in `spats[RE_SEARCH]` rather than beside the command that
+/// parsed it because `n` and `N` re-apply it, and because `'cpoptions'`
+/// "o" makes a *line* offset one-shot. [`do_search`](super::do_search)
+/// parses into it and puts the old one back for `SEARCH_KEEP`.
+pub(crate) fn search_offset() -> SearchOffset {
+    spat(RE_SEARCH).off
+}
+
+pub(crate) fn set_search_offset(off: SearchOffset) {
+    let mut pat = spat(RE_SEARCH);
+    pat.off = off;
+    put_spat(RE_SEARCH, pat);
+}
+
 /// Whichever of the two patterns was used last, with its length — what
 /// the search-count cache compares itself against.
 pub(crate) fn last_used_pattern() -> SearchPattern {

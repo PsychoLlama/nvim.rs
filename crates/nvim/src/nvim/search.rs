@@ -59,8 +59,7 @@ use crate::src::nvim::options::{kOptBoFlagShowmatch, kOptFdoFlagSearch};
 use crate::src::nvim::os::fs::os_fopen;
 use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, atol, fclose, gettext, memcpy, memmove, memset, snprintf, strlen, strncmp,
-    strncpy, strpbrk, strstr,
+    __assert_fail, atol, fclose, gettext, snprintf, strlen, strncmp, strncpy, strpbrk, strstr,
 };
 use crate::src::nvim::os::time::{os_delay, os_time};
 use crate::src::nvim::path::path_full_compare;
@@ -76,7 +75,7 @@ use crate::src::nvim::types::{
     Direction, EvalFuncData, FILE, MotionType, OptInt, SearchOffset, SearchPattern, TriState,
     VarType, VimVarIndex, buf_T, cmdarg_T, colnr_T, dict_T, file_comparison, int64_t, linenr_T,
     list_T, lpos_T, magic_T, oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T, regmmatch_T,
-    regprog_T, searchit_arg_T, size_t, typval_T, uint8_t, uint64_t, varnumber_T, win_T,
+    regprog_T, searchit_arg_T, size_t, typval_T, uint8_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep,
@@ -88,8 +87,12 @@ mod pattern;
 pub use self::pattern::*;
 mod find;
 pub use self::find::*;
+mod charsearch;
+pub use self::charsearch::*;
 mod command;
 pub use self::command::*;
+mod select;
+pub use self::select::*;
 mod matchpair;
 pub use self::matchpair::*;
 mod stat;
@@ -190,11 +193,6 @@ pub const CPO_LINEOFF: ::core::ffi::c_int = 'o' as ::core::ffi::c_int;
 pub const CPO_MATCH: ::core::ffi::c_int = '%' as ::core::ffi::c_int;
 pub const CPO_SCOLON: ::core::ffi::c_int = ';' as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-static lastc: GlobalCell<[uint8_t; 2]> = GlobalCell::new([NUL as uint8_t, NUL as uint8_t]);
-static lastcdir: GlobalCell<Direction> = GlobalCell::new(FORWARD);
-static last_t_cmd: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
-static lastc_bytes: GlobalCell<[::core::ffi::c_char; 33]> = GlobalCell::new([0; 33]);
-static lastc_bytelen: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
 unsafe extern "C" fn get_line_and_copy(
     mut lnum: linenr_T,
     mut buf: *mut ::core::ffi::c_char,
