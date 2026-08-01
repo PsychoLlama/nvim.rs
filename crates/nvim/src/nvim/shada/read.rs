@@ -429,9 +429,7 @@ pub(crate) unsafe extern "C" fn shada_read(
                                         );
                                     }
                                     i_0 = marklist_insert(
-                                        &raw mut (*curwin.get()).w_jumplist as *mut xfmark_T
-                                            as *mut ::core::ffi::c_void,
-                                        ::core::mem::size_of::<xfmark_T>(),
+                                        &mut (*curwin.get()).w_jumplist,
                                         (*curwin.get()).w_jumplistlen,
                                         i_0,
                                     );
@@ -601,9 +599,7 @@ pub(crate) unsafe extern "C" fn shada_read(
                                                 );
                                             }
                                             i_2 = marklist_insert(
-                                                &raw mut (*buf_1).b_changelist as *mut fmark_T
-                                                    as *mut ::core::ffi::c_void,
-                                                ::core::mem::size_of::<fmark_T>(),
+                                                &mut (*buf_1).b_changelist,
                                                 (*buf_1).b_changelistlen,
                                                 i_2,
                                             );

@@ -1,218 +1,185 @@
-//! Merging what is already in the file with what Nvim holds.
+//! Merging what is already in the ShaDa file with what Nvim holds.
 //!
-//! Writing a ShaDa file preserves entries the running Nvim has no opinion
-//! about, and merges the ones it does. Two structures do that:
+//! Writing a ShaDa file is not writing this session's state over the old
+//! one: it is a merge. Entries this Nvim has no opinion about are copied
+//! straight through, and the ones it does have an opinion about are decided
+//! by timestamp — the newer of the two wins, and where there is room for
+//! several (histories, jumps, changes) the newest N are kept.
 //!
-//! * `HMLList` — a fixed-size ring of history entries in a doubly linked
-//!   list, so the merger can hold the newest N of a history and drop the
-//!   oldest in constant time. `HistoryMergerState` wraps one per history type
-//!   and remembers which of Nvim's own entries have been folded in yet.
-//! * the file-mark lists, which `marklist_insert` keeps sorted by timestamp
-//!   with the same "keep the newest N" bound.
+//! Two structures do that. [`HMLList`] is a fixed-size ring of history
+//! entries in a doubly linked list, so an entry can be dropped from the
+//! middle in constant time; [`HistoryMergerState`] wraps one per history
+//! type and remembers how much of Nvim's own history has been folded in.
+//! File marks and jumps use plain arrays kept sorted by timestamp, which
+//! [`marklist_insert`] makes room in.
 //!
-//! `shada_read_when_writing` is the pass over the existing file that feeds
-//! both of them, and holds on to everything it decides to copy through.
+//! [`shada_read_when_writing`] is the pass over the existing file that feeds
+//! all of them.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use core::cmp::Ordering;
+use core::ffi::{c_int, c_uint, c_void};
+
 use super::*;
 
-#[inline]
-pub(crate) unsafe extern "C" fn hmll_init(hmll: *mut HMLList, size: size_t) {
+/// Start a ring that holds at most `size` history entries.
+///
+/// The entries live in one array — `entries` — handed out from the front
+/// (`last_free_entry`) until it is full; after that a removal leaves exactly
+/// one hole, which `free_entry` remembers. The array stays a raw allocation
+/// rather than a `Box<[_]>` because `HMLList` is embedded in a
+/// [`WriteMergerState`] that is allocated zeroed.
+pub(crate) unsafe fn hmll_init(hmll: *mut HMLList, size: size_t) {
     unsafe {
-        *hmll = HMLList {
-            entries: xcalloc(size, ::core::mem::size_of::<HMLListEntry>()) as *mut HMLListEntry,
-            first: ::core::ptr::null_mut::<HMLListEntry>(),
-            last: ::core::ptr::null_mut::<HMLListEntry>(),
-            free_entry: ::core::ptr::null_mut::<HMLListEntry>(),
-            last_free_entry: ::core::ptr::null_mut::<HMLListEntry>(),
-            size: size,
-            num_entries: 0 as size_t,
+        let entries = xcalloc(size, size_of::<HMLListEntry>()).cast::<HMLListEntry>();
+        hmll.write(HMLList {
+            entries,
+            first: core::ptr::null_mut(),
+            last: core::ptr::null_mut(),
+            free_entry: core::ptr::null_mut(),
+            last_free_entry: entries,
+            size,
+            num_entries: 0,
             contained_entries: MAP_INIT,
-        };
-        (*hmll).last_free_entry = (*hmll).entries;
+        });
     }
 }
 
-#[inline]
-pub(crate) unsafe extern "C" fn hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HMLListEntry) {
+/// Take one entry out of the ring, freeing what it holds.
+pub(crate) unsafe fn hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HMLListEntry) {
     unsafe {
-        if hmll_entry
-            == (*hmll)
-                .last_free_entry
-                .offset(-(1 as ::core::ffi::c_int as isize))
-        {
-            (*hmll).last_free_entry = (*hmll).last_free_entry.offset(-1);
+        // Removing the slot that was handed out last just gives it back;
+        // anything else leaves the one hole `free_entry` holds.
+        if hmll_entry == (*hmll).last_free_entry.sub(1) {
+            (*hmll).last_free_entry = (*hmll).last_free_entry.sub(1);
         } else {
-            '_c2rust_label: {
-                if (*hmll).free_entry.is_null() {
-                } else {
-                    __assert_fail(
-                        b"hmll->free_entry == NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        449 as ::core::ffi::c_uint,
-                        b"void hmll_remove(HMLList *const, HMLListEntry *const)\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!((*hmll).free_entry.is_null(), "shada: two holes in the ring");
             (*hmll).free_entry = hmll_entry;
         }
-        let mut val: ptr_t = map_del_cstr_t_ptr_t(
+
+        let removed = map_del_cstr_t_ptr_t(
             &raw mut (*hmll).contained_entries,
-            (*hmll_entry).data.data.history_item.string as cstr_t,
-            ::core::ptr::null_mut::<cstr_t>(),
+            (*hmll_entry).data.data.history_item.string,
+            core::ptr::null_mut(),
         );
-        '_c2rust_label_0: {
-            if !val.is_null() {
-            } else {
-                __assert_fail(
-                    b"val\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    454 as ::core::ffi::c_uint,
-                    b"void hmll_remove(HMLList *const, HMLListEntry *const)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
-        };
+        debug_assert!(!removed.is_null(), "shada: ring entry was not in the map");
+
         if (*hmll_entry).next.is_null() {
-            (*hmll).last = (*hmll_entry).prev as *mut HMLListEntry;
+            (*hmll).last = (*hmll_entry).prev;
         } else {
             (*(*hmll_entry).next).prev = (*hmll_entry).prev;
         }
         if (*hmll_entry).prev.is_null() {
-            (*hmll).first = (*hmll_entry).next as *mut HMLListEntry;
+            (*hmll).first = (*hmll_entry).next;
         } else {
             (*(*hmll_entry).prev).next = (*hmll_entry).next;
         }
-        (*hmll).num_entries = (*hmll).num_entries.wrapping_sub(1);
+        (*hmll).num_entries -= 1;
         shada_free_shada_entry(&raw mut (*hmll_entry).data);
     }
 }
 
-#[inline]
-pub(crate) unsafe extern "C" fn hmll_insert(
+/// Put `data` into the ring, just after `after` (or at the front when that
+/// is null). A full ring drops its oldest entry first.
+pub(crate) unsafe fn hmll_insert(
     hmll: *mut HMLList,
-    mut hmll_entry: *mut HMLListEntry,
+    mut after: *mut HMLListEntry,
     data: ShadaEntry,
 ) {
     unsafe {
         if (*hmll).num_entries == (*hmll).size {
-            if hmll_entry == (*hmll).first {
-                hmll_entry = ::core::ptr::null_mut::<HMLListEntry>();
+            // The entry being inserted after may be the one about to go.
+            if after == (*hmll).first {
+                after = core::ptr::null_mut();
             }
-            '_c2rust_label: {
-                if !(*hmll).first.is_null() {
-                } else {
-                    __assert_fail(
-                        b"hmll->first != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        484 as ::core::ffi::c_uint,
-                        b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
+            debug_assert!(!(*hmll).first.is_null(), "shada: a full ring is not empty");
             hmll_remove(hmll, (*hmll).first);
         }
-        let mut target_entry: *mut HMLListEntry = ::core::ptr::null_mut::<HMLListEntry>();
-        if (*hmll).free_entry.is_null() {
-            '_c2rust_label_0: {
-                if (*hmll).last_free_entry.offset_from((*hmll).entries) as size_t
-                    == (*hmll).num_entries
-                {
-                } else {
-                    __assert_fail(
-                        b"(size_t)(hmll->last_free_entry - hmll->entries) == hmll->num_entries\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        490 as ::core::ffi::c_uint,
-                        b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            let c2rust_fresh20 = (*hmll).last_free_entry;
-            (*hmll).last_free_entry = (*hmll).last_free_entry.offset(1);
-            target_entry = c2rust_fresh20;
+
+        let target = if (*hmll).free_entry.is_null() {
+            debug_assert_eq!(
+                (*hmll)
+                    .last_free_entry
+                    .offset_from_unsigned((*hmll).entries),
+                (*hmll).num_entries,
+                "shada: the ring's free slot is not where it should be"
+            );
+            let target = (*hmll).last_free_entry;
+            (*hmll).last_free_entry = target.add(1);
+            target
         } else {
-            '_c2rust_label_1: {
-                if ((*hmll).last_free_entry.offset_from((*hmll).entries) as size_t)
-                    .wrapping_sub(1 as size_t)
-                    == (*hmll).num_entries
-                {
-                } else {
-                    __assert_fail(
-                    b"(size_t)(hmll->last_free_entry - hmll->entries) - 1 == hmll->num_entries\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/shada.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    494 as ::core::ffi::c_uint,
-                    b"void hmll_insert(HMLList *const, HMLListEntry *, const ShadaEntry)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-                }
-            };
-            target_entry = (*hmll).free_entry;
-            (*hmll).free_entry = ::core::ptr::null_mut::<HMLListEntry>();
-        }
-        (*target_entry).data = data;
-        let mut new_item: bool = false_0 != 0;
-        let mut val: *mut ptr_t = map_put_ref_cstr_t_ptr_t(
+            debug_assert_eq!(
+                (*hmll)
+                    .last_free_entry
+                    .offset_from_unsigned((*hmll).entries)
+                    - 1,
+                (*hmll).num_entries,
+                "shada: the ring's hole is not where it should be"
+            );
+            let target = (*hmll).free_entry;
+            (*hmll).free_entry = core::ptr::null_mut();
+            target
+        };
+
+        (*target).data = data;
+        let mut new_item = false;
+        let val = map_put_ref_cstr_t_ptr_t(
             &raw mut (*hmll).contained_entries,
-            data.data.history_item.string as cstr_t,
-            ::core::ptr::null_mut::<*mut cstr_t>(),
+            data.data.history_item.string,
+            core::ptr::null_mut(),
             &raw mut new_item,
         );
         if new_item {
-            *val = target_entry as ptr_t;
+            *val = target.cast::<c_void>();
         }
-        (*hmll).num_entries = (*hmll).num_entries.wrapping_add(1);
-        (*target_entry).prev = hmll_entry as *mut hm_llist_entry;
-        if hmll_entry.is_null() {
-            (*target_entry).next = (*hmll).first as *mut hm_llist_entry;
-            (*hmll).first = target_entry;
+        (*hmll).num_entries += 1;
+
+        (*target).prev = after;
+        if after.is_null() {
+            (*target).next = (*hmll).first;
+            (*hmll).first = target;
         } else {
-            (*target_entry).next = (*hmll_entry).next;
-            (*hmll_entry).next = target_entry as *mut hm_llist_entry;
+            (*target).next = (*after).next;
+            (*after).next = target;
         }
-        if (*target_entry).next.is_null() {
-            (*hmll).last = target_entry;
+        if (*target).next.is_null() {
+            (*hmll).last = target;
         } else {
-            (*(*target_entry).next).prev = target_entry as *mut hm_llist_entry;
-        };
+            (*(*target).next).prev = target;
+        }
     }
 }
 
-#[inline]
-pub(crate) unsafe extern "C" fn hmll_dealloc(hmll: *mut HMLList) {
+/// Release the ring. Whatever the entries in it hold has been given away by
+/// now — to Nvim's history, or to the file.
+pub(crate) unsafe fn hmll_dealloc(hmll: *mut HMLList) {
     unsafe {
-        xfree((*hmll).contained_entries.set.keys as *mut ::core::ffi::c_void);
-        xfree((*hmll).contained_entries.set.h.hash as *mut ::core::ffi::c_void);
-        (*hmll).contained_entries.set = Set_cstr_t {
+        let map = &raw mut (*hmll).contained_entries;
+        xfree((*map).set.keys.cast::<c_void>());
+        xfree((*map).set.h.hash.cast::<c_void>());
+        (*map).set = Set_cstr_t {
             h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut::<cstr_t>(),
+            keys: core::ptr::null_mut(),
         };
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut (*hmll).contained_entries.values as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL_0;
-        let _ = *ptr_;
-        xfree((*hmll).entries as *mut ::core::ffi::c_void);
+        xfree((*map).values.cast::<c_void>());
+        (*map).values = core::ptr::null_mut();
+        xfree((*hmll).entries.cast::<c_void>());
     }
 }
 
-/// Snapshot neovim's own history of `hms_p`'s type into `pending`, oldest
-/// first. When reading (merge-back), the entries are moved out of the
-/// history rings and owned here; when writing, they are borrowed
-/// (`can_free_entry` is false and no free path touches them).
-pub(crate) unsafe extern "C" fn hms_load_pending(hms_p: *mut HistoryMergerState) {
+/// Take a snapshot of Nvim's own history for this merger to fold in.
+///
+/// On the reading path the entries are taken out of the history table (the
+/// merger will put the merged result back); on the writing path they are
+/// only borrowed, so nothing here owns their strings.
+pub(crate) unsafe fn hms_load_pending(hms_p: *mut HistoryMergerState) {
     unsafe {
         let history_type = (*hms_p).history_type;
         let entries = if (*hms_p).reading {
-            hist_shada_take(history_type as ::core::ffi::c_int)
+            hist_shada_take(history_type as c_int)
         } else {
-            hist_shada_view(history_type as ::core::ffi::c_int)
+            hist_shada_view(history_type as c_int)
         };
         let pending: Box<[ShadaEntry]> = entries
             .into_iter()
@@ -230,62 +197,75 @@ pub(crate) unsafe extern "C" fn hms_load_pending(hms_p: *mut HistoryMergerState)
                 additional_data: he.additional_data,
             })
             .collect();
-        (*hms_p).pending_len = pending.len() as size_t;
-        (*hms_p).pending_pos = 0 as size_t;
-        (*hms_p).pending = Box::into_raw(pending) as *mut ShadaEntry;
+        (*hms_p).pending_len = pending.len();
+        (*hms_p).pending_pos = 0;
+        (*hms_p).pending = Box::into_raw(pending).cast::<ShadaEntry>();
     }
 }
 
-pub(crate) unsafe extern "C" fn hms_insert(
-    hms_p: *mut HistoryMergerState,
-    entry: ShadaEntry,
-    do_iter: bool,
-) {
+/// Nvim's next own history entry, if one is still waiting to be merged.
+unsafe fn next_pending(hms_p: *mut HistoryMergerState) -> Option<ShadaEntry> {
+    unsafe {
+        ((*hms_p).pending_pos < (*hms_p).pending_len)
+            .then(|| *(*hms_p).pending.add((*hms_p).pending_pos))
+    }
+}
+
+/// Insert one history entry, keeping the ring ordered by timestamp.
+///
+/// An entry whose text is already in the ring replaces it only if it is
+/// newer — or, for one of Nvim's own entries, if it is as new: a tie goes to
+/// the running session.
+///
+/// `do_iter` says the entry came from the file rather than from Nvim's own
+/// history, in which case everything of Nvim's that is older is folded in
+/// first, so that the two sequences interleave by timestamp.
+pub(crate) unsafe fn hms_insert(hms_p: *mut HistoryMergerState, entry: ShadaEntry, do_iter: bool) {
     unsafe {
         if do_iter {
-            while (*hms_p).pending_pos < (*hms_p).pending_len {
-                let next: ShadaEntry = *(*hms_p).pending.add((*hms_p).pending_pos as usize);
+            while let Some(next) = next_pending(hms_p) {
                 if next.timestamp >= entry.timestamp {
                     break;
                 }
-                (*hms_p).pending_pos = (*hms_p).pending_pos.wrapping_add(1);
-                hms_insert(hms_p, next, false_0 != 0);
+                (*hms_p).pending_pos += 1;
+                hms_insert(hms_p, next, false);
             }
         }
-        let hmll: *mut HMLList = &raw mut (*hms_p).hmll;
-        let mut key_alloc: *mut cstr_t = ::core::ptr::null_mut::<cstr_t>();
-        let mut val: *mut ptr_t = map_ref_cstr_t_ptr_t(
-            &raw mut (*hms_p).hmll.contained_entries,
-            entry.data.history_item.string as cstr_t,
+
+        let hmll = &raw mut (*hms_p).hmll;
+        let mut key_alloc: *mut cstr_t = core::ptr::null_mut();
+        let val = map_ref_cstr_t_ptr_t(
+            &raw mut (*hmll).contained_entries,
+            entry.data.history_item.string,
             &raw mut key_alloc,
         );
         if !val.is_null() {
-            let existing_entry: *mut HMLListEntry = *val as *mut HMLListEntry;
-            if entry.timestamp > (*existing_entry).data.timestamp {
-                hmll_remove(hmll, existing_entry);
-            } else if !do_iter && entry.timestamp == (*existing_entry).data.timestamp {
-                shada_free_shada_entry(&raw mut (*existing_entry).data);
-                (*existing_entry).data = entry;
-                *key_alloc = entry.data.history_item.string as cstr_t;
+            let existing = (*val).cast::<HMLListEntry>();
+            if entry.timestamp > (*existing).data.timestamp {
+                hmll_remove(hmll, existing);
+            } else if !do_iter && entry.timestamp == (*existing).data.timestamp {
+                shada_free_shada_entry(&raw mut (*existing).data);
+                (*existing).data = entry;
+                // Freeing the entry above freed the key the map held.
+                *key_alloc = entry.data.history_item.string;
                 return;
             } else {
                 return;
             }
         }
-        let mut insert_after: *mut HMLListEntry = ::core::ptr::null_mut::<HMLListEntry>();
-        insert_after = (*hmll).last;
-        while !insert_after.is_null() {
-            if (*insert_after).data.timestamp <= entry.timestamp {
-                break;
-            }
-            insert_after = (*insert_after).prev as *mut HMLListEntry;
+
+        // Walk back from the newest to the first entry no newer than this
+        // one; that is what the new entry goes after.
+        let mut after = (*hmll).last;
+        while !after.is_null() && (*after).data.timestamp > entry.timestamp {
+            after = (*after).prev;
         }
-        hmll_insert(hmll, insert_after, entry);
+        hmll_insert(hmll, after, entry);
     }
 }
 
-#[inline]
-pub(crate) unsafe extern "C" fn hms_init(
+/// Start a merger for one history type, holding at most `num_elements`.
+pub(crate) unsafe fn hms_init(
     hms_p: *mut HistoryMergerState,
     history_type: uint8_t,
     num_elements: size_t,
@@ -301,599 +281,447 @@ pub(crate) unsafe extern "C" fn hms_init(
     }
 }
 
-#[inline]
-pub(crate) unsafe extern "C" fn hms_insert_whole_neovim_history(hms_p: *mut HistoryMergerState) {
+/// Fold in everything of Nvim's own history that is left.
+pub(crate) unsafe fn hms_insert_whole_neovim_history(hms_p: *mut HistoryMergerState) {
     unsafe {
-        while (*hms_p).pending_pos < (*hms_p).pending_len {
-            let next: ShadaEntry = *(*hms_p).pending.add((*hms_p).pending_pos as usize);
-            (*hms_p).pending_pos = (*hms_p).pending_pos.wrapping_add(1);
-            hms_insert(hms_p, next, false_0 != 0);
+        while let Some(next) = next_pending(hms_p) {
+            (*hms_p).pending_pos += 1;
+            hms_insert(hms_p, next, false);
         }
     }
 }
 
-/// Hand the merged entries in the HMLL back to cmdhist, oldest first.
-/// String and additional-data ownership transfers to cmdhist; the HMLL
-/// scaffolding is still deallocated by [`hms_dealloc`] afterwards (which
-/// never frees entry payloads).
-#[inline]
-pub(crate) unsafe extern "C" fn hms_to_history(hms_p: *const HistoryMergerState) {
+/// Make the merged ring Nvim's history for this type.
+pub(crate) unsafe fn hms_to_history(hms_p: *const HistoryMergerState) {
     unsafe {
         let mut merged: Vec<HistShadaEntry> = Vec::new();
-        let mut cur_entry: *mut HMLListEntry = (*hms_p).hmll.first as *mut HMLListEntry;
-        while !cur_entry.is_null() {
+        let mut cur = (*hms_p).hmll.first;
+        while !cur.is_null() {
             merged.push(HistShadaEntry {
-                text: (*cur_entry).data.data.history_item.string,
-                sep: (*cur_entry).data.data.history_item.sep,
-                timestamp: (*cur_entry).data.timestamp,
-                additional_data: (*cur_entry).data.additional_data,
+                text: (*cur).data.data.history_item.string,
+                sep: (*cur).data.data.history_item.sep,
+                timestamp: (*cur).data.timestamp,
+                additional_data: (*cur).data.additional_data,
             });
-            cur_entry = (*cur_entry).next as *mut HMLListEntry;
+            cur = (*cur).next;
         }
-        hist_shada_replace((*hms_p).history_type as ::core::ffi::c_int, merged);
+        hist_shada_replace((*hms_p).history_type as c_int, merged);
     }
 }
 
-#[inline]
-pub(crate) unsafe extern "C" fn hms_dealloc(hms_p: *mut HistoryMergerState) {
+/// Release the merger.
+pub(crate) unsafe fn hms_dealloc(hms_p: *mut HistoryMergerState) {
     unsafe {
-        // Free whatever part of the neovim-history snapshot was never merged
-        // (only owned on the reading path; `shada_free_shada_entry` checks
-        // `can_free_entry` itself).
-        while (*hms_p).pending_pos < (*hms_p).pending_len {
-            let mut entry: ShadaEntry = *(*hms_p).pending.add((*hms_p).pending_pos as usize);
+        // Free whatever part of the snapshot was never merged; it is only
+        // owned on the reading path, and `shada_free_shada_entry` checks
+        // `can_free_entry` itself.
+        while let Some(mut entry) = next_pending(hms_p) {
             shada_free_shada_entry(&raw mut entry);
-            (*hms_p).pending_pos = (*hms_p).pending_pos.wrapping_add(1);
+            (*hms_p).pending_pos += 1;
         }
         if !(*hms_p).pending.is_null() {
             drop(Box::from_raw(core::ptr::slice_from_raw_parts_mut(
                 (*hms_p).pending,
-                (*hms_p).pending_len as usize,
+                (*hms_p).pending_len,
             )));
-            (*hms_p).pending = ::core::ptr::null_mut::<ShadaEntry>();
-            (*hms_p).pending_len = 0 as size_t;
+            (*hms_p).pending = core::ptr::null_mut();
+            (*hms_p).pending_len = 0;
         }
         hmll_dealloc(&raw mut (*hms_p).hmll);
     }
 }
 
+/// Whether two marks are at the same place.
 #[inline]
-pub(crate) unsafe extern "C" fn marks_equal(a: pos_T, b: pos_T) -> bool {
-    return a.lnum == b.lnum && a.col == b.col;
+pub(crate) fn marks_equal(a: pos_T, b: pos_T) -> bool {
+    a.lnum == b.lnum && a.col == b.col
 }
 
-pub(crate) unsafe extern "C" fn marklist_insert(
-    mut jumps_arr: *mut ::core::ffi::c_void,
-    mut jump_size: size_t,
-    mut jl_len: ::core::ffi::c_int,
-    mut i: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Order one file's marks by timestamp, newest first — the reverse of the
+/// usual sense, so that the files with the freshest marks come first when
+/// only so many of them fit. Signature for `qsort`.
+pub(crate) unsafe extern "C" fn compare_file_marks(a: *const c_void, b: *const c_void) -> c_int {
     unsafe {
-        let mut jumps: *mut ::core::ffi::c_char = jumps_arr as *mut ::core::ffi::c_char;
-        if i > 0 as ::core::ffi::c_int {
-            if jl_len == JUMPLISTSIZE {
-                i -= 1;
-                if i > 0 as ::core::ffi::c_int {
-                    memmove(
-                        jumps as *mut ::core::ffi::c_void,
-                        jumps.offset(jump_size as isize) as *const ::core::ffi::c_void,
-                        jump_size.wrapping_mul(i as size_t),
-                    );
+        let a = *a.cast::<*const FileMarks>();
+        let b = *b.cast::<*const FileMarks>();
+        match (*a).greatest_timestamp.cmp(&(*b).greatest_timestamp) {
+            Ordering::Equal => 0,
+            Ordering::Greater => -1,
+            Ordering::Less => 1,
+        }
+    }
+}
+
+/// Make room in `list` for an item that belongs just before index `i` (or
+/// after the last item when `i == len`), and answer where to put it.
+///
+/// Higher indices are newer. A full list drops its oldest item to make
+/// room; if the new item is older than everything in a full list there is
+/// nowhere for it to go and this answers −1. So does an `i` of −1, which is
+/// how a caller says the item is one the list already holds.
+pub(crate) fn marklist_insert<T: Copy>(list: &mut [T], len: c_int, i: c_int) -> c_int {
+    let len = len as usize;
+    match i.cmp(&0) {
+        Ordering::Less => -1,
+        Ordering::Greater => {
+            let mut at = i as usize;
+            if len == JUMPLISTSIZE as usize {
+                at -= 1;
+                if at > 0 {
+                    list.copy_within(1..=at, 0); // the oldest item goes
                 }
-            } else if i != jl_len {
-                memmove(
-                    jumps.offset(
-                        ((i + 1 as ::core::ffi::c_int) as size_t).wrapping_mul(jump_size) as isize,
-                    ) as *mut ::core::ffi::c_void,
-                    jumps.offset((i as size_t).wrapping_mul(jump_size) as isize)
-                        as *const ::core::ffi::c_void,
-                    jump_size.wrapping_mul((jl_len - i) as size_t),
-                );
+            } else if at != len {
+                list.copy_within(at..len, at + 1); // newer items shift up
             }
-        } else if i == 0 as ::core::ffi::c_int {
-            if jl_len == JUMPLISTSIZE {
-                return -1 as ::core::ffi::c_int;
-            } else if jl_len > 0 as ::core::ffi::c_int {
-                memmove(
-                    jumps.offset(jump_size as isize) as *mut ::core::ffi::c_void,
-                    jumps as *const ::core::ffi::c_void,
-                    jump_size.wrapping_mul(jl_len as size_t),
-                );
+            at as c_int
+        }
+        Ordering::Equal => {
+            if len == JUMPLISTSIZE as usize {
+                -1 // older than the whole list
+            } else {
+                if len > 0 {
+                    list.copy_within(0..len, 1);
+                }
+                0
             }
         }
-        return i;
     }
 }
 
-pub(crate) unsafe extern "C" fn compare_file_marks(
-    mut a: *const ::core::ffi::c_void,
-    mut b: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
+/// Put `entry` into a jump or change list kept oldest-first, dropping the
+/// oldest item if it is full. `same` recognises an entry the list already
+/// holds, which is then not inserted at all.
+unsafe fn insert_mark_list(
+    list: &mut [ShadaEntry],
+    size: &mut size_t,
+    mut entry: ShadaEntry,
+    same: impl Fn(&ShadaEntry) -> bool,
+) {
     unsafe {
-        let a_fms: *const *const FileMarks = a as *const *const FileMarks;
-        let b_fms: *const *const FileMarks = b as *const *const FileMarks;
-        return if (**a_fms).greatest_timestamp == (**b_fms).greatest_timestamp {
-            0 as ::core::ffi::c_int
-        } else if (**a_fms).greatest_timestamp > (**b_fms).greatest_timestamp {
-            -1 as ::core::ffi::c_int
-        } else {
-            1 as ::core::ffi::c_int
-        };
+        // Walk back to the first entry no newer than this one.
+        let mut i = *size as c_int;
+        while i > 0 {
+            let existing = list[i as usize - 1];
+            if existing.timestamp <= entry.timestamp {
+                if same(&existing) {
+                    i = -1;
+                }
+                break;
+            }
+            i -= 1;
+        }
+        if i > 0 && *size == JUMPLISTSIZE as size_t {
+            shada_free_shada_entry(&raw mut list[0]);
+        }
+        let i = marklist_insert(list, *size as c_int, i);
+        if i == -1 {
+            shada_free_shada_entry(&raw mut entry);
+            return;
+        }
+        list[i as usize] = entry;
+        if *size < JUMPLISTSIZE as size_t {
+            *size += 1;
+        }
     }
 }
 
-#[inline]
-pub(crate) unsafe extern "C" fn shada_read_when_writing(
+/// Keep the newer of the entry already in `slot` and the one just read,
+/// freeing the other. A tie goes to the one already there, which is the
+/// running Nvim's.
+unsafe fn keep_newer(slot: *mut ShadaEntry, mut entry: ShadaEntry) {
+    unsafe {
+        if (*slot).type_0 != kSDItemMissing {
+            if (*slot).timestamp >= entry.timestamp {
+                shada_free_shada_entry(&raw mut entry);
+                return;
+            }
+            shada_free_shada_entry(slot);
+        }
+        *slot = entry;
+    }
+}
+
+/// Read the existing ShaDa file and merge it into `wms`.
+///
+/// Entries this Nvim has nowhere to put — an unknown type, a history it
+/// does not keep, a register or mark name it does not know — go straight to
+/// `packer`, so that writing the file does not lose them.
+pub(crate) unsafe fn shada_read_when_writing(
     sd_reader: *mut FileDescriptor,
-    srni_flags: ::core::ffi::c_uint,
+    srni_flags: c_uint,
     max_kbyte: size_t,
     wms: *mut WriteMergerState,
     packer: *mut PackerBuffer,
 ) -> ShaDaWriteResult {
     unsafe {
-        let mut ret: ShaDaWriteResult = kSDWriteSuccessful;
-        let mut entry: ShadaEntry = ShadaEntry {
-            type_0: kSDItemMissing,
-            can_free_entry: false,
-            timestamp: 0,
-            data: C2Rust_Unnamed_22 {
-                header: Dict {
-                    size: 0,
-                    capacity: 0,
-                    items: ::core::ptr::null_mut::<KeyValuePair>(),
-                },
-            },
-            additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-        };
-        let mut srni_ret: ShaDaReadResult = kSDReadStatusSuccess;
+        let mut ret = kSDWriteSuccessful;
         loop {
-            srni_ret = shada_read_next_item(sd_reader, &raw mut entry, srni_flags, max_kbyte);
-            if srni_ret as ::core::ffi::c_uint
-                == kSDReadStatusFinished as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                break;
+            let mut entry: ShadaEntry = core::mem::zeroed();
+            match shada_read_next_item(sd_reader, &raw mut entry, srni_flags, max_kbyte) {
+                kSDReadStatusSuccess => {}
+                kSDReadStatusFinished => return ret,
+                kSDReadStatusMalformed => continue,
+                // Whatever has been merged so far is still worth writing.
+                kSDReadStatusNotShaDa => return kSDWriteReadNotShada,
+                _ => return ret,
             }
-            match srni_ret as ::core::ffi::c_uint {
-                1 => {
-                    abort();
+
+            match entry.type_0 {
+                kSDItemMissing => {}
+                kSDItemHeader | kSDItemBufferList => {
+                    unreachable!("shada: entry type {} is never merged", entry.type_0)
                 }
-                3 => {
-                    ret = kSDWriteReadNotShada;
+                kSDItemUnknown => {
+                    ret = shada_pack_entry(packer, entry, 0);
+                    shada_free_shada_entry(&raw mut entry);
                 }
-                2 => {}
-                4 => {
-                    continue;
+                kSDItemSearchPattern => {
+                    let slot = if entry.data.search_pattern.is_substitute_pattern {
+                        &raw mut (*wms).sub_search_pattern
+                    } else {
+                        &raw mut (*wms).search_pattern
+                    };
+                    keep_newer(slot, entry);
                 }
-                0 | _ => {
-                    's_781: {
-                        match entry.type_0 as ::core::ffi::c_int {
-                            1 | 9 => {
-                                abort();
-                            }
-                            -1 => {
-                                ret = shada_pack_entry(packer, entry, 0 as size_t);
-                                shada_free_shada_entry(&raw mut entry);
-                            }
-                            2 => {
-                                let wms_entry: *mut ShadaEntry =
-                                    if entry.data.search_pattern.is_substitute_pattern
-                                        as ::core::ffi::c_int
-                                        != 0
-                                    {
-                                        &raw mut (*wms).sub_search_pattern
-                                    } else {
-                                        &raw mut (*wms).search_pattern
-                                    };
-                                's_94: {
-                                    if (*wms_entry).type_0 as ::core::ffi::c_int
-                                        != kSDItemMissing as ::core::ffi::c_int
-                                    {
-                                        if (*wms_entry).timestamp >= entry.timestamp {
-                                            shada_free_shada_entry(&raw mut entry);
-                                            break 's_94;
-                                        } else {
-                                            shada_free_shada_entry(wms_entry);
-                                        }
-                                    }
-                                    *wms_entry = entry;
-                                }
-                            }
-                            3 => {
-                                let wms_entry_0: *mut ShadaEntry = &raw mut (*wms).replacement;
-                                's_132: {
-                                    if (*wms_entry_0).type_0 as ::core::ffi::c_int
-                                        != kSDItemMissing as ::core::ffi::c_int
-                                    {
-                                        if (*wms_entry_0).timestamp >= entry.timestamp {
-                                            shada_free_shada_entry(&raw mut entry);
-                                            break 's_132;
-                                        } else {
-                                            shada_free_shada_entry(wms_entry_0);
-                                        }
-                                    }
-                                    *wms_entry_0 = entry;
-                                }
-                            }
-                            4 => {
-                                if entry.data.history_item.histtype as ::core::ffi::c_int
-                                    >= HIST_COUNT as ::core::ffi::c_int
-                                {
-                                    ret = shada_pack_entry(packer, entry, 0 as size_t);
-                                    shada_free_shada_entry(&raw mut entry);
-                                } else if (*wms).hms[entry.data.history_item.histtype as usize]
-                                    .hmll
-                                    .size
-                                    != 0 as size_t
-                                {
-                                    hms_insert(
-                                        (&raw mut (*wms).hms as *mut HistoryMergerState)
-                                            .offset(entry.data.history_item.histtype as isize),
-                                        entry,
-                                        true_0 != 0,
-                                    );
-                                } else {
-                                    shada_free_shada_entry(&raw mut entry);
-                                }
-                            }
-                            5 => {
-                                let idx: ::core::ffi::c_int =
-                                    op_reg_index(entry.data.reg.name as ::core::ffi::c_int);
-                                if idx < 0 as ::core::ffi::c_int {
-                                    ret = shada_pack_entry(packer, entry, 0 as size_t);
-                                    shada_free_shada_entry(&raw mut entry);
-                                } else {
-                                    let wms_entry_1: *mut ShadaEntry = (&raw mut (*wms).registers
-                                        as *mut ShadaEntry)
-                                        .offset(idx as isize);
-                                    's_223: {
-                                        if (*wms_entry_1).type_0 as ::core::ffi::c_int
-                                            != kSDItemMissing as ::core::ffi::c_int
-                                        {
-                                            if (*wms_entry_1).timestamp >= entry.timestamp {
-                                                shada_free_shada_entry(&raw mut entry);
-                                                break 's_223;
-                                            } else {
-                                                shada_free_shada_entry(wms_entry_1);
-                                            }
-                                        }
-                                        *wms_entry_1 = entry;
-                                    }
-                                }
-                            }
-                            6 => {
-                                if !set_has_cstr_t(
-                                    &raw mut (*wms).dumped_variables,
-                                    entry.data.global_var.name as cstr_t,
-                                ) {
-                                    ret = shada_pack_entry(packer, entry, 0 as size_t);
-                                }
-                                shada_free_shada_entry(&raw mut entry);
-                            }
-                            7 => {
-                                if ascii_isdigit(entry.data.filemark.name as ::core::ffi::c_int) {
-                                    let mut processed_mark: bool = false_0 != 0;
-                                    let mut i: size_t = ::core::mem::size_of::<[ShadaEntry; 10]>()
-                                        .wrapping_div(::core::mem::size_of::<ShadaEntry>())
-                                        .wrapping_div(
-                                            (::core::mem::size_of::<[ShadaEntry; 10]>()
-                                                .wrapping_rem(::core::mem::size_of::<ShadaEntry>())
-                                                == 0)
-                                                as ::core::ffi::c_int
-                                                as size_t,
-                                        );
-                                    while i > 0 as size_t {
-                                        let mut wms_entry_2: ShadaEntry = (*wms).numbered_marks
-                                            [i.wrapping_sub(1 as size_t) as usize];
-                                        if wms_entry_2.type_0 as ::core::ffi::c_int
-                                            == kSDItemGlobalMark as ::core::ffi::c_int
-                                        {
-                                            if wms_entry_2.timestamp == entry.timestamp
-                                                && (wms_entry_2.additional_data.is_null()
-                                                    && entry.additional_data.is_null())
-                                                && marks_equal(
-                                                    wms_entry_2.data.filemark.mark,
-                                                    entry.data.filemark.mark,
-                                                )
-                                                    as ::core::ffi::c_int
-                                                    != 0
-                                                && strcmp(
-                                                    wms_entry_2.data.filemark.fname,
-                                                    entry.data.filemark.fname,
-                                                ) == 0 as ::core::ffi::c_int
-                                            {
-                                                shada_free_shada_entry(&raw mut entry);
-                                                processed_mark = true_0 != 0;
-                                                break;
-                                            } else if wms_entry_2.timestamp >= entry.timestamp {
-                                                processed_mark = true_0 != 0;
-                                                if i < ::core::mem::size_of::<[ShadaEntry; 10]>()
-                                                    .wrapping_div(
-                                                        ::core::mem::size_of::<ShadaEntry>(),
-                                                    )
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<[ShadaEntry; 10]>()
-                                                            .wrapping_rem(::core::mem::size_of::<
-                                                                ShadaEntry,
-                                                            >(
-                                                            ))
-                                                            == 0)
-                                                            as ::core::ffi::c_int
-                                                            as usize,
-                                                    )
-                                                {
-                                                    replace_numbered_mark(wms, i, entry);
-                                                } else {
-                                                    shada_free_shada_entry(&raw mut entry);
-                                                }
-                                                break;
-                                            }
-                                        }
-                                        i = i.wrapping_sub(1);
-                                    }
-                                    if !processed_mark {
-                                        replace_numbered_mark(wms, 0 as size_t, entry);
-                                    }
-                                } else {
-                                    let idx_0: ::core::ffi::c_int =
-                                        mark_global_index(entry.data.filemark.name);
-                                    if idx_0 < 0 as ::core::ffi::c_int {
-                                        ret = shada_pack_entry(packer, entry, 0 as size_t);
-                                        shada_free_shada_entry(&raw mut entry);
-                                    } else {
-                                        let mut mark: *mut ShadaEntry = if idx_0
-                                            < 26 as ::core::ffi::c_int
-                                        {
-                                            (&raw mut (*wms).global_marks as *mut ShadaEntry)
-                                                .offset(idx_0 as isize)
-                                        } else {
-                                            (&raw mut (*wms).numbered_marks as *mut ShadaEntry)
-                                                .offset((idx_0 - 26 as ::core::ffi::c_int) as isize)
-                                        };
-                                        if (*mark).type_0 as ::core::ffi::c_int
-                                            == kSDItemMissing as ::core::ffi::c_int
-                                        {
-                                            if (*namedfm.ptr())[idx_0 as usize].fmark.timestamp
-                                                >= entry.timestamp
-                                            {
-                                                shada_free_shada_entry(&raw mut entry);
-                                                break 's_781;
-                                            }
-                                        }
-                                        let wms_entry_3: *mut ShadaEntry = mark;
-                                        's_401: {
-                                            if (*wms_entry_3).type_0 as ::core::ffi::c_int
-                                                != kSDItemMissing as ::core::ffi::c_int
-                                            {
-                                                if (*wms_entry_3).timestamp >= entry.timestamp {
-                                                    shada_free_shada_entry(&raw mut entry);
-                                                    break 's_401;
-                                                } else {
-                                                    shada_free_shada_entry(wms_entry_3);
-                                                }
-                                            }
-                                            *wms_entry_3 = entry;
-                                        }
-                                    }
-                                }
-                            }
-                            11 | 10 => {
-                                if shada_removable(entry.data.filemark.fname) {
-                                    shada_free_shada_entry(&raw mut entry);
-                                } else {
-                                    let fname: *const ::core::ffi::c_char =
-                                        entry.data.filemark.fname;
-                                    let mut key: *mut cstr_t = ::core::ptr::null_mut::<cstr_t>();
-                                    let mut new_item: bool = false_0 != 0;
-                                    let mut val: *mut ptr_t = map_put_ref_cstr_t_ptr_t(
-                                        &raw mut (*wms).file_marks,
-                                        fname as cstr_t,
-                                        &raw mut key,
-                                        &raw mut new_item,
-                                    );
-                                    if new_item {
-                                        *key = xstrdup(fname) as cstr_t;
-                                    }
-                                    if (*val).is_null() {
-                                        *val = xcalloc(
-                                            1 as size_t,
-                                            ::core::mem::size_of::<FileMarks>(),
-                                        ) as ptr_t;
-                                    }
-                                    let filemarks: *mut FileMarks = *val as *mut FileMarks;
-                                    if entry.timestamp > (*filemarks).greatest_timestamp {
-                                        (*filemarks).greatest_timestamp = entry.timestamp;
-                                    }
-                                    if entry.type_0 as ::core::ffi::c_int
-                                        == kSDItemLocalMark as ::core::ffi::c_int
-                                    {
-                                        let idx_1: ::core::ffi::c_int =
-                                            mark_local_index(entry.data.filemark.name);
-                                        if idx_1 < 0 as ::core::ffi::c_int {
-                                            (*filemarks).additional_marks_size =
-                                                (*filemarks).additional_marks_size.wrapping_add(1);
-                                            (*filemarks).additional_marks = xrealloc(
-                                                (*filemarks).additional_marks
-                                                    as *mut ::core::ffi::c_void,
-                                                (*filemarks).additional_marks_size.wrapping_mul(
-                                                    ::core::mem::size_of::<ShadaEntry>(),
-                                                ),
-                                            )
-                                                as *mut ShadaEntry;
-                                            *(*filemarks).additional_marks.offset(
-                                                (*filemarks)
-                                                    .additional_marks_size
-                                                    .wrapping_sub(1 as size_t)
-                                                    as isize,
-                                            ) = entry;
-                                        } else {
-                                            let wms_entry_4: *mut ShadaEntry =
-                                                (&raw mut (*filemarks).marks as *mut ShadaEntry)
-                                                    .offset(idx_1 as isize);
-                                            let mut set_wms: bool = true_0 != 0;
-                                            if (*wms_entry_4).type_0 as ::core::ffi::c_int
-                                                != kSDItemMissing as ::core::ffi::c_int
-                                            {
-                                                if (*wms_entry_4).timestamp >= entry.timestamp {
-                                                    shada_free_shada_entry(&raw mut entry);
-                                                    break 's_781;
-                                                } else if (*wms_entry_4).can_free_entry {
-                                                    if *key
-                                                        == (*wms_entry_4).data.filemark.fname
-                                                            as cstr_t
-                                                    {
-                                                        *key = entry.data.filemark.fname as cstr_t;
-                                                    }
-                                                    shada_free_shada_entry(wms_entry_4);
-                                                }
-                                            } else {
-                                                let mut buf: *mut buf_T = firstbuf.get();
-                                                while !buf.is_null() {
-                                                    if !(*buf).b_ffname.is_null()
-                                                        && path_fnamecmp(
-                                                            entry.data.filemark.fname,
-                                                            (*buf).b_ffname,
-                                                        ) == 0 as ::core::ffi::c_int
-                                                    {
-                                                        let mut fm: fmark_T = fmark_T {
-                                                            mark: pos_T {
-                                                                lnum: 0,
-                                                                col: 0,
-                                                                coladd: 0,
-                                                            },
-                                                            fnum: 0,
-                                                            timestamp: 0,
-                                                            view: fmarkv_T {
-                                                                topline_offset: 0,
-                                                                skipcol: 0,
-                                                            },
-                                                            additional_data: ::core::ptr::null_mut::<
-                                                                AdditionalData,
-                                                            >(
-                                                            ),
-                                                        };
-                                                        mark_get(
-                                                            buf,
-                                                            curwin.get(),
-                                                            &raw mut fm,
-                                                            kMarkBufLocal,
-                                                            entry.data.filemark.name
-                                                                as ::core::ffi::c_int,
-                                                        );
-                                                        if fm.timestamp >= entry.timestamp {
-                                                            set_wms = false_0 != 0;
-                                                            shada_free_shada_entry(&raw mut entry);
-                                                            break;
-                                                        }
-                                                    }
-                                                    buf = (*buf).b_next;
-                                                }
-                                            }
-                                            if set_wms {
-                                                *wms_entry_4 = entry;
-                                            }
-                                        }
-                                    } else {
-                                        let mut i_0: ::core::ffi::c_int = 0;
-                                        i_0 = (*filemarks).changes_size as ::core::ffi::c_int;
-                                        while i_0 > 0 as ::core::ffi::c_int {
-                                            let jl_entry: ShadaEntry = (*filemarks).changes
-                                                [(i_0 - 1 as ::core::ffi::c_int) as usize];
-                                            if jl_entry.timestamp <= entry.timestamp {
-                                                if marks_equal(
-                                                    jl_entry.data.filemark.mark,
-                                                    entry.data.filemark.mark,
-                                                ) {
-                                                    i_0 = -1 as ::core::ffi::c_int;
-                                                }
-                                                break;
-                                            } else {
-                                                i_0 -= 1;
-                                            }
-                                        }
-                                        if i_0 > 0 as ::core::ffi::c_int
-                                            && (*filemarks).changes_size == JUMPLISTSIZE as size_t
-                                        {
-                                            shada_free_shada_entry(
-                                                (&raw mut (*filemarks).changes as *mut ShadaEntry)
-                                                    .offset(0 as ::core::ffi::c_int as isize),
-                                            );
-                                        }
-                                        i_0 = marklist_insert(
-                                            &raw mut (*filemarks).changes as *mut ShadaEntry
-                                                as *mut ::core::ffi::c_void,
-                                            ::core::mem::size_of::<ShadaEntry>(),
-                                            (*filemarks).changes_size as ::core::ffi::c_int,
-                                            i_0,
-                                        );
-                                        if i_0 != -1 as ::core::ffi::c_int {
-                                            (*filemarks).changes[i_0 as usize] = entry;
-                                            if (*filemarks).changes_size < JUMPLISTSIZE as size_t {
-                                                (*filemarks).changes_size =
-                                                    (*filemarks).changes_size.wrapping_add(1);
-                                            }
-                                        } else {
-                                            shada_free_shada_entry(&raw mut entry);
-                                        }
-                                    }
-                                }
-                            }
-                            8 => {
-                                let mut i_1: ::core::ffi::c_int = 0;
-                                i_1 = (*wms).jumps_size as ::core::ffi::c_int;
-                                while i_1 > 0 as ::core::ffi::c_int {
-                                    let jl_entry_0: ShadaEntry =
-                                        (*wms).jumps[(i_1 - 1 as ::core::ffi::c_int) as usize];
-                                    if jl_entry_0.timestamp <= entry.timestamp {
-                                        if marks_equal(
-                                            jl_entry_0.data.filemark.mark,
-                                            entry.data.filemark.mark,
-                                        )
-                                            as ::core::ffi::c_int
-                                            != 0
-                                            && strcmp(
-                                                jl_entry_0.data.filemark.fname,
-                                                entry.data.filemark.fname,
-                                            ) == 0 as ::core::ffi::c_int
-                                        {
-                                            i_1 = -1 as ::core::ffi::c_int;
-                                        }
-                                        break;
-                                    } else {
-                                        i_1 -= 1;
-                                    }
-                                }
-                                if i_1 > 0 as ::core::ffi::c_int
-                                    && (*wms).jumps_size == JUMPLISTSIZE as size_t
-                                {
-                                    shada_free_shada_entry(
-                                        (&raw mut (*wms).jumps as *mut ShadaEntry)
-                                            .offset(0 as ::core::ffi::c_int as isize),
-                                    );
-                                }
-                                i_1 = marklist_insert(
-                                    &raw mut (*wms).jumps as *mut ShadaEntry
-                                        as *mut ::core::ffi::c_void,
-                                    ::core::mem::size_of::<ShadaEntry>(),
-                                    (*wms).jumps_size as ::core::ffi::c_int,
-                                    i_1,
-                                );
-                                if i_1 != -1 as ::core::ffi::c_int {
-                                    (*wms).jumps[i_1 as usize] = entry;
-                                    if (*wms).jumps_size < JUMPLISTSIZE as size_t {
-                                        (*wms).jumps_size = (*wms).jumps_size.wrapping_add(1);
-                                    }
-                                } else {
-                                    shada_free_shada_entry(&raw mut entry);
-                                }
-                            }
-                            0 | _ => {}
-                        }
+                kSDItemSubString => keep_newer(&raw mut (*wms).replacement, entry),
+                kSDItemHistoryEntry => ret = merge_history(wms, entry, packer, ret),
+                kSDItemRegister => {
+                    let idx = op_reg_index(entry.data.reg.name as c_int);
+                    if idx < 0 {
+                        ret = shada_pack_entry(packer, entry, 0);
+                        shada_free_shada_entry(&raw mut entry);
+                    } else {
+                        keep_newer(&raw mut (*wms).registers[idx as usize], entry);
                     }
-                    continue;
                 }
+                kSDItemVariable => {
+                    // A variable this session has already written wins.
+                    if !set_has_cstr_t(&raw mut (*wms).dumped_variables, entry.data.global_var.name)
+                    {
+                        ret = shada_pack_entry(packer, entry, 0);
+                    }
+                    shada_free_shada_entry(&raw mut entry);
+                }
+                kSDItemGlobalMark => ret = merge_global_mark(wms, entry, packer, ret),
+                kSDItemChange | kSDItemLocalMark => merge_file_mark(wms, entry),
+                kSDItemJump => {
+                    let (mark, fname) = (entry.data.filemark.mark, entry.data.filemark.fname);
+                    insert_mark_list(
+                        &mut (*wms).jumps,
+                        &mut (*wms).jumps_size,
+                        entry,
+                        |existing| {
+                            marks_equal(existing.data.filemark.mark, mark)
+                                && strcmp(existing.data.filemark.fname, fname) == 0
+                        },
+                    );
+                }
+                _ => {}
             }
+        }
+    }
+}
+
+/// One history entry from the file. A history this Nvim does not have goes
+/// straight through; one it has but is keeping nothing of is dropped.
+unsafe fn merge_history(
+    wms: *mut WriteMergerState,
+    mut entry: ShadaEntry,
+    packer: *mut PackerBuffer,
+    ret: ShaDaWriteResult,
+) -> ShaDaWriteResult {
+    unsafe {
+        let histtype = entry.data.history_item.histtype as c_uint;
+        if histtype >= HIST_COUNT {
+            let ret = shada_pack_entry(packer, entry, 0);
+            shada_free_shada_entry(&raw mut entry);
             return ret;
         }
-        return ret;
+        let hms = &raw mut (*wms).hms[histtype as usize];
+        if (*hms).hmll.size != 0 {
+            hms_insert(hms, entry, true);
+        } else {
+            shada_free_shada_entry(&raw mut entry);
+        }
+        ret
+    }
+}
+
+/// One global mark from the file.
+///
+/// A numbered mark has no name to match on — the ten of them are simply the
+/// ten most recent, so it is placed by timestamp. A lettered mark goes in
+/// its own slot, and has to beat whatever this Nvim holds for that letter.
+unsafe fn merge_global_mark(
+    wms: *mut WriteMergerState,
+    mut entry: ShadaEntry,
+    packer: *mut PackerBuffer,
+    ret: ShaDaWriteResult,
+) -> ShaDaWriteResult {
+    unsafe {
+        if ascii_isdigit(entry.data.filemark.name as c_int) {
+            merge_numbered_mark(wms, entry);
+            return ret;
+        }
+
+        let idx = mark_global_index(entry.data.filemark.name);
+        if idx < 0 {
+            let ret = shada_pack_entry(packer, entry, 0);
+            shada_free_shada_entry(&raw mut entry);
+            return ret;
+        }
+        let slot = if idx < 26 {
+            &raw mut (*wms).global_marks[idx as usize]
+        } else {
+            &raw mut (*wms).numbered_marks[idx as usize - 26]
+        };
+        // Nothing has claimed the slot yet, so what the file entry has to
+        // beat is the mark this Nvim holds.
+        if (*slot).type_0 == kSDItemMissing
+            && (*namedfm.ptr())[idx as usize].fmark.timestamp >= entry.timestamp
+        {
+            shada_free_shada_entry(&raw mut entry);
+            return ret;
+        }
+        keep_newer(slot, entry);
+        ret
+    }
+}
+
+/// A numbered global mark: kept in a list of the ten most recent, with the
+/// mark names ignored entirely.
+unsafe fn merge_numbered_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
+    unsafe {
+        let marks = &(*wms).numbered_marks;
+        for i in (1..=marks.len()).rev() {
+            let existing = marks[i - 1];
+            if existing.type_0 != kSDItemGlobalMark {
+                continue;
+            }
+            // The same mark written twice: keep the one already here.
+            if existing.timestamp == entry.timestamp
+                && existing.additional_data.is_null()
+                && entry.additional_data.is_null()
+                && marks_equal(existing.data.filemark.mark, entry.data.filemark.mark)
+                && strcmp(existing.data.filemark.fname, entry.data.filemark.fname) == 0
+            {
+                shada_free_shada_entry(&raw mut entry);
+                return;
+            }
+            if existing.timestamp >= entry.timestamp {
+                if i < marks.len() {
+                    replace_numbered_mark(wms, i, entry);
+                } else {
+                    // Older than all ten of them.
+                    shada_free_shada_entry(&raw mut entry);
+                }
+                return;
+            }
+        }
+        replace_numbered_mark(wms, 0, entry);
+    }
+}
+
+/// A buffer-local mark or change-list entry from the file, filed under the
+/// name of the file it belongs to.
+unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
+    unsafe {
+        let fname = entry.data.filemark.fname;
+        if shada_removable(fname) {
+            shada_free_shada_entry(&raw mut entry);
+            return;
+        }
+
+        let mut key: *mut cstr_t = core::ptr::null_mut();
+        let mut new_item = false;
+        let val = map_put_ref_cstr_t_ptr_t(
+            &raw mut (*wms).file_marks,
+            fname,
+            &raw mut key,
+            &raw mut new_item,
+        );
+        if new_item {
+            *key = xstrdup(fname);
+        }
+        if (*val).is_null() {
+            *val = xcalloc(1, size_of::<FileMarks>());
+        }
+        let filemarks = (*val).cast::<FileMarks>();
+        if entry.timestamp > (*filemarks).greatest_timestamp {
+            (*filemarks).greatest_timestamp = entry.timestamp;
+        }
+
+        if entry.type_0 == kSDItemChange {
+            let mark = entry.data.filemark.mark;
+            insert_mark_list(
+                &mut (*filemarks).changes,
+                &mut (*filemarks).changes_size,
+                entry,
+                |existing| marks_equal(existing.data.filemark.mark, mark),
+            );
+            return;
+        }
+
+        let idx = mark_local_index(entry.data.filemark.name);
+        if idx < 0 {
+            // A mark name this Nvim does not know: keep it to write back.
+            (*filemarks).additional_marks_size += 1;
+            (*filemarks).additional_marks = xrealloc(
+                (*filemarks).additional_marks.cast::<c_void>(),
+                (*filemarks).additional_marks_size * size_of::<ShadaEntry>(),
+            )
+            .cast::<ShadaEntry>();
+            *(*filemarks)
+                .additional_marks
+                .add((*filemarks).additional_marks_size - 1) = entry;
+            return;
+        }
+
+        let slot = &raw mut (*filemarks).marks[idx as usize];
+        if (*slot).type_0 != kSDItemMissing {
+            if (*slot).timestamp >= entry.timestamp {
+                shada_free_shada_entry(&raw mut entry);
+                return;
+            }
+            if (*slot).can_free_entry {
+                // The map's key may be the very string about to be freed.
+                if *key == (*slot).data.filemark.fname {
+                    *key = entry.data.filemark.fname;
+                }
+                shada_free_shada_entry(slot);
+            }
+        } else if beaten_by_a_loaded_buffer(&entry) {
+            shada_free_shada_entry(&raw mut entry);
+            return;
+        }
+        *slot = entry;
+    }
+}
+
+/// Whether a buffer Nvim has open on this file already holds a newer value
+/// for the mark. Nothing has claimed the slot, so this is the comparison
+/// [`keep_newer`] would otherwise make.
+unsafe fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
+    unsafe {
+        let mut buf = firstbuf.get();
+        while !buf.is_null() {
+            if !(*buf).b_ffname.is_null()
+                && path_fnamecmp(entry.data.filemark.fname, (*buf).b_ffname) == 0
+            {
+                let mut fm: fmark_T = core::mem::zeroed();
+                mark_get(
+                    buf,
+                    curwin.get(),
+                    &raw mut fm,
+                    kMarkBufLocal,
+                    entry.data.filemark.name as c_int,
+                );
+                if fm.timestamp >= entry.timestamp {
+                    return true;
+                }
+            }
+            buf = (*buf).b_next;
+        }
+        false
     }
 }
