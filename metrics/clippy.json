@@ -131,7 +131,6 @@
     "crates/nvim/src/nvim/register.rs": 146,
     "crates/nvim/src/nvim/runtime.rs": 278,
     "crates/nvim/src/nvim/search.rs": 93,
-    "crates/nvim/src/nvim/shada/collect.rs": 10,
     "crates/nvim/src/nvim/shada/file.rs": 32,
     "crates/nvim/src/nvim/shada/parse.rs": 1,
     "crates/nvim/src/nvim/shada/read.rs": 11,
