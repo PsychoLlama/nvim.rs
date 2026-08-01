@@ -70,7 +70,6 @@ pub const VAR_UNKNOWN: VarType = 0;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kListLenShouldKnow: ListLenSpecials = -2;
 pub const kListLenUnknown: ListLenSpecials = -1;
-pub const HLF_E: c_uint = 6;
 pub const EXPAND_ENV_VARS: c_int = 26;
 pub const EXPAND_EXPRESSION: c_int = 20;
 pub const EXPAND_FUNCTIONS: c_int = 18;

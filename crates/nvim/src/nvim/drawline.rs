@@ -32,7 +32,11 @@ use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight::{
     hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr,
 };
-use crate::src::nvim::highlight_group::syn_id2attr;
+use crate::src::nvim::highlight_group::{
+    HLF_0, HLF_8, HLF_ADD, HLF_AT, HLF_CHD, HLF_CLF, HLF_CLN, HLF_CLS, HLF_CONCEAL, HLF_COUNT,
+    HLF_CUC, HLF_CUL, HLF_DED, HLF_FC, HLF_FL, HLF_I, HLF_LNA, HLF_LNB, HLF_MC, HLF_N, HLF_NONE,
+    HLF_QFL, HLF_SC, HLF_TXA, HLF_TXD, HLF_V, syn_id2attr,
+};
 use crate::src::nvim::indent::{get_breakindent_win, tabstop_padding};
 use crate::src::nvim::insexpand::{
     ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active,
@@ -106,32 +110,6 @@ pub const kHlModeReplace: HlMode = 1;
 pub const kHlModeUnknown: HlMode = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const kVTRepeatLinebreak: C2Rust_Unnamed_15 = 8;
-pub const HLF_COUNT: hlf_T = 76;
-pub const HLF_0: hlf_T = 59;
-pub const HLF_QFL: hlf_T = 58;
-pub const HLF_MC: hlf_T = 57;
-pub const HLF_CUL: hlf_T = 56;
-pub const HLF_CUC: hlf_T = 55;
-pub const HLF_CONCEAL: hlf_T = 36;
-pub const HLF_SC: hlf_T = 35;
-pub const HLF_TXA: hlf_T = 34;
-pub const HLF_TXD: hlf_T = 33;
-pub const HLF_DED: hlf_T = 32;
-pub const HLF_CHD: hlf_T = 31;
-pub const HLF_ADD: hlf_T = 30;
-pub const HLF_FC: hlf_T = 29;
-pub const HLF_FL: hlf_T = 28;
-pub const HLF_V: hlf_T = 24;
-pub const HLF_CLF: hlf_T = 17;
-pub const HLF_CLS: hlf_T = 16;
-pub const HLF_CLN: hlf_T = 15;
-pub const HLF_LNB: hlf_T = 14;
-pub const HLF_LNA: hlf_T = 13;
-pub const HLF_N: hlf_T = 12;
-pub const HLF_I: hlf_T = 7;
-pub const HLF_AT: hlf_T = 4;
-pub const HLF_8: hlf_T = 1;
-pub const HLF_NONE: hlf_T = 0;
 pub const kMTMetaInline: MetaIndex = 0;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
 pub const FOLD_TEXT_LEN: C2Rust_Unnamed_19 = 51;
@@ -692,7 +670,7 @@ unsafe extern "C" fn draw_col_buf(
         if inc_vcol {
             advance_color_col(wlv, (*wlv).vcol as ::core::ffi::c_int);
             if !(*wlv).color_cols.is_null() && (*wlv).vcol == *(*wlv).color_cols {
-                myattr = hl_combine_attr(win_hl_attr(wp, HLF_MC as ::core::ffi::c_int), myattr);
+                myattr = hl_combine_attr(win_hl_attr(wp, HLF_MC), myattr);
             }
         }
         let mut c: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -742,9 +720,9 @@ unsafe extern "C" fn draw_foldcolumn(mut wp: *mut win_T, mut wlv: *mut winlineva
         let mut attr: ::core::ffi::c_int = win_hl_attr(
             wp,
             if use_cursor_line_highlight(wp, (*wlv).lnum) as ::core::ffi::c_int != 0 {
-                HLF_CLF as ::core::ffi::c_int
+                HLF_CLF
             } else {
-                HLF_FC as ::core::ffi::c_int
+                HLF_FC
             },
         );
         let mut is_virt: bool = (*wlv).filler_todo > 0 as ::core::ffi::c_int;
@@ -864,9 +842,9 @@ unsafe extern "C" fn draw_sign(
     let mut scl_attr: ::core::ffi::c_int = win_hl_attr(
         wp,
         if use_cursor_line_highlight(wp, (*wlv).lnum) as ::core::ffi::c_int != 0 {
-            HLF_CLS as ::core::ffi::c_int
+            HLF_CLS
         } else {
-            HLF_SC as ::core::ffi::c_int
+            HLF_SC
         },
     );
     if sattr.text[0 as ::core::ffi::c_int as usize] != 0
@@ -982,17 +960,17 @@ unsafe extern "C" fn get_line_number_attr(
         numhl_attr = (*wlv).prev_num_attr;
     }
     if use_cursor_line_nr(wp, wlv) {
-        return hl_combine_attr(win_hl_attr(wp, HLF_CLN as ::core::ffi::c_int), numhl_attr);
+        return hl_combine_attr(win_hl_attr(wp, HLF_CLN), numhl_attr);
     }
     if (*wp).w_onebuf_opt.wo_rnu != 0 {
         if (*wlv).lnum < (*wp).w_cursor.lnum {
-            return hl_combine_attr(win_hl_attr(wp, HLF_LNA as ::core::ffi::c_int), numhl_attr);
+            return hl_combine_attr(win_hl_attr(wp, HLF_LNA), numhl_attr);
         }
         if (*wlv).lnum > (*wp).w_cursor.lnum {
-            return hl_combine_attr(win_hl_attr(wp, HLF_LNB as ::core::ffi::c_int), numhl_attr);
+            return hl_combine_attr(win_hl_attr(wp, HLF_LNB), numhl_attr);
         }
     }
-    return hl_combine_attr(win_hl_attr(wp, HLF_N as ::core::ffi::c_int), numhl_attr);
+    return hl_combine_attr(win_hl_attr(wp, HLF_N), numhl_attr);
 }
 unsafe extern "C" fn draw_lnum_col(mut wp: *mut win_T, mut wlv: *mut winlinevars_T) {
     let mut has_cpo_n: bool = !vim_strchr(p_cpo.get(), CPO_NUMCOL).is_null();
@@ -1153,9 +1131,9 @@ unsafe extern "C" fn draw_statuscol(
     let mut scl_attr: ::core::ffi::c_int = win_hl_attr(
         wp,
         if use_cursor_line_highlight(wp, (*wlv).lnum) as ::core::ffi::c_int != 0 {
-            HLF_CLS as ::core::ffi::c_int
+            HLF_CLS
         } else {
-            HLF_SC as ::core::ffi::c_int
+            HLF_SC
         },
     );
     let mut num_attr: ::core::ffi::c_int = get_line_number_attr(wp, wlv);
@@ -1258,7 +1236,7 @@ unsafe extern "C" fn handle_breakindent(mut wp: *mut win_T, mut wlv: *mut winlin
             advance_color_col(wlv, (*wlv).vcol as ::core::ffi::c_int);
             let mut myattr: ::core::ffi::c_int = attr;
             if !(*wlv).color_cols.is_null() && (*wlv).vcol == *(*wlv).color_cols {
-                myattr = hl_combine_attr(win_hl_attr(wp, HLF_MC as ::core::ffi::c_int), myattr);
+                myattr = hl_combine_attr(win_hl_attr(wp, HLF_MC), myattr);
             }
             *(*linebuf_attr.ptr()).offset((*wlv).off as isize) = myattr as sattr_T;
             let c2rust_fresh5 = (*wlv).vcol;
@@ -1293,19 +1271,12 @@ unsafe extern "C" fn handle_showbreak_and_filler(mut wp: *mut win_T, mut wlv: *m
         );
     } else if (*wlv).filler_todo > 0 as ::core::ffi::c_int {
         let mut c: schar_T = (*wp).w_p_fcs_chars.diff;
-        draw_col_fill(
-            wlv,
-            c,
-            remaining,
-            win_hl_attr(wp, HLF_DED as ::core::ffi::c_int),
-        );
+        draw_col_fill(wlv, c, remaining, win_hl_attr(wp, HLF_DED));
     }
     let sbr: *mut ::core::ffi::c_char = get_showbreak_value(wp);
     if *sbr as ::core::ffi::c_int != NUL && (*wlv).need_showbreak as ::core::ffi::c_int != 0 {
-        let mut attr: ::core::ffi::c_int = hl_combine_attr(
-            (*wlv).cul_attr,
-            win_hl_attr(wp, HLF_AT as ::core::ffi::c_int),
-        );
+        let mut attr: ::core::ffi::c_int =
+            hl_combine_attr((*wlv).cul_attr, win_hl_attr(wp, HLF_AT));
         let mut vcol_before: colnr_T = (*wlv).vcol;
         draw_col_buf(
             wp,
@@ -1333,7 +1304,7 @@ unsafe extern "C" fn handle_showbreak_and_filler(mut wp: *mut win_T, mut wlv: *m
     }
 }
 unsafe extern "C" fn apply_cursorline_highlight(mut wp: *mut win_T, mut wlv: *mut winlinevars_T) {
-    (*wlv).cul_attr = win_hl_attr(wp, HLF_CUL as ::core::ffi::c_int);
+    (*wlv).cul_attr = win_hl_attr(wp, HLF_CUL);
     let mut ae: HlAttrs = syn_attr2entry((*wlv).cul_attr);
     if ae.rgb_fg_color == -1 as RgbValue
         && ae.cterm_fg_color as ::core::ffi::c_int == 0 as ::core::ffi::c_int
@@ -1616,7 +1587,7 @@ pub unsafe extern "C" fn win_line(
     let mut syntax_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut syntax_seqnr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut prev_syntax_id: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut conceal_attr: ::core::ffi::c_int = win_hl_attr(wp, HLF_CONCEAL as ::core::ffi::c_int);
+    let mut conceal_attr: ::core::ffi::c_int = win_hl_attr(wp, HLF_CONCEAL);
     let mut is_concealing: bool = false_0 != 0;
     let mut did_wcol: bool = false_0 != 0;
     '_c2rust_label: {
@@ -1798,7 +1769,7 @@ pub unsafe extern "C" fn win_line(
             }
             if wlv.fromcol >= 0 as ::core::ffi::c_int {
                 area_highlighting = true_0 != 0;
-                vi_attr = win_hl_attr(wp, HLF_V as ::core::ffi::c_int);
+                vi_attr = win_hl_attr(wp, HLF_V);
             }
         } else if highlight_match.get() as ::core::ffi::c_int != 0
             && wp == curwin.get()
@@ -1835,7 +1806,7 @@ pub unsafe extern "C" fn win_line(
                 wlv.tocol = wlv.fromcol + 1 as ::core::ffi::c_int;
             }
             area_highlighting = true_0 != 0;
-            vi_attr = win_hl_attr(wp, HLF_I as ::core::ffi::c_int);
+            vi_attr = win_hl_attr(wp, HLF_I);
         }
     }
     let mut bg_attr: ::core::ffi::c_int = win_bg_attr(wp);
@@ -1970,7 +1941,7 @@ pub unsafe extern "C" fn win_line(
         wlv.line_attr = syn_id2attr(sign_line_attr);
     }
     if bt_quickfix((*wp).w_buffer) as ::core::ffi::c_int != 0 && qf_current_entry(wp) == lnum {
-        wlv.line_attr = win_hl_attr(wp, HLF_QFL as ::core::ffi::c_int);
+        wlv.line_attr = win_hl_attr(wp, HLF_QFL);
     }
     if wlv.line_attr_lowprio != 0 || wlv.line_attr != 0 {
         area_highlighting = true_0 != 0;
@@ -2228,9 +2199,7 @@ pub unsafe extern "C" fn win_line(
                 word_end = (*wp).w_cursor.col as ::core::ffi::c_int
                     + len as ::core::ffi::c_int
                     + 1 as ::core::ffi::c_int;
-                if spell_hlf as ::core::ffi::c_uint
-                    != HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
+                if spell_hlf as ::core::ffi::c_uint != HLF_COUNT as ::core::ffi::c_uint {
                     spell_attr = (*highlight_attr.ptr())[spell_hlf as usize];
                 }
             }
@@ -2375,7 +2344,7 @@ pub unsafe extern "C" fn win_line(
                         &raw mut wlv,
                         cmdwin_type.get() as schar_T,
                         1 as ::core::ffi::c_int,
-                        win_hl_attr(wp, HLF_AT as ::core::ffi::c_int),
+                        win_hl_attr(wp, HLF_AT),
                     );
                 }
                 if wlv.filler_todo > 0 as ::core::ffi::c_int {
@@ -2447,10 +2416,8 @@ pub unsafe extern "C" fn win_line(
                     );
                     if !(wlv.row + 1 as ::core::ffi::c_int - wlv.startrow < col_rows
                         && (statuscol.draw as ::core::ffi::c_int != 0
-                            || win_hl_attr(wp, HLF_LNA as ::core::ffi::c_int)
-                                != win_hl_attr(wp, HLF_N as ::core::ffi::c_int)
-                            || win_hl_attr(wp, HLF_LNB as ::core::ffi::c_int)
-                                != win_hl_attr(wp, HLF_N as ::core::ffi::c_int))
+                            || win_hl_attr(wp, HLF_LNA) != win_hl_attr(wp, HLF_N)
+                            || win_hl_attr(wp, HLF_LNB) != win_hl_attr(wp, HLF_N))
                         || wlv.filler_todo > 0 as ::core::ffi::c_int)
                     {
                         break 's_5143;
@@ -2533,7 +2500,7 @@ pub unsafe extern "C" fn win_line(
                     has_fold as ::core::ffi::c_int != 0 && wlv.row == startrow + wlv.filler_lines;
                 if draw_folded as ::core::ffi::c_int != 0 && wlv.n_extra == 0 as ::core::ffi::c_int
                 {
-                    folded_attr = win_hl_attr(wp, HLF_FL as ::core::ffi::c_int);
+                    folded_attr = win_hl_attr(wp, HLF_FL);
                     wlv.char_attr = folded_attr;
                     decor_attr = 0 as ::core::ffi::c_int;
                 }
@@ -2697,21 +2664,19 @@ pub unsafe extern "C" fn win_line(
                                 &raw mut change_end,
                             );
                         }
-                        if wlv.diff_hlf as ::core::ffi::c_uint
-                            == HLF_CHD as ::core::ffi::c_int as ::core::ffi::c_uint
+                        if wlv.diff_hlf as ::core::ffi::c_uint == HLF_CHD as ::core::ffi::c_uint
                             && ptr_0.offset_from(line_1) >= change_start as isize
                             && wlv.n_extra == 0 as ::core::ffi::c_int
                         {
                             wlv.diff_hlf = (if added_0 as ::core::ffi::c_int != 0 {
-                                HLF_TXA as ::core::ffi::c_int
+                                HLF_TXA
                             } else {
-                                HLF_TXD as ::core::ffi::c_int
+                                HLF_TXD
                             }) as hlf_T;
                         }
-                        if (wlv.diff_hlf as ::core::ffi::c_uint
-                            == HLF_TXD as ::core::ffi::c_int as ::core::ffi::c_uint
+                        if (wlv.diff_hlf as ::core::ffi::c_uint == HLF_TXD as ::core::ffi::c_uint
                             || wlv.diff_hlf as ::core::ffi::c_uint
-                                == HLF_TXA as ::core::ffi::c_int as ::core::ffi::c_uint)
+                                == HLF_TXA as ::core::ffi::c_uint)
                             && (ptr_0.offset_from(line_1) >= change_end as isize
                                 && wlv.n_extra == 0 as ::core::ffi::c_int
                                 || wlv.n_extra > 0 as ::core::ffi::c_int
@@ -2845,7 +2810,7 @@ pub unsafe extern "C" fn win_line(
                             mb_c = '>' as ::core::ffi::c_int;
                             mb_l = 1 as ::core::ffi::c_int;
                             mb_schar = mb_c as schar_T;
-                            multi_attr = win_hl_attr(wp, HLF_AT as ::core::ffi::c_int);
+                            multi_attr = win_hl_attr(wp, HLF_AT);
                             if wlv.cul_attr != 0 {
                                 multi_attr = if 0 as ::core::ffi::c_int != wlv.line_attr_lowprio {
                                     hl_combine_attr(wlv.cul_attr, multi_attr)
@@ -2872,7 +2837,7 @@ pub unsafe extern "C" fn win_line(
                             mb_c = ' ' as ::core::ffi::c_int;
                             mb_l = 1 as ::core::ffi::c_int;
                             wlv.n_attr += 1;
-                            wlv.extra_attr = win_hl_attr(wp, HLF_AT as ::core::ffi::c_int);
+                            wlv.extra_attr = win_hl_attr(wp, HLF_AT);
                         }
                     }
                     if wlv.n_extra <= 0 as ::core::ffi::c_int {
@@ -2989,7 +2954,7 @@ pub unsafe extern "C" fn win_line(
                             && search_attr == 0 as ::core::ffi::c_int
                         {
                             wlv.n_attr = wlv.n_extra + 1 as ::core::ffi::c_int;
-                            wlv.extra_attr = win_hl_attr(wp, HLF_8 as ::core::ffi::c_int);
+                            wlv.extra_attr = win_hl_attr(wp, HLF_8);
                             saved_attr2 = wlv.char_attr;
                         }
                     } else if mb_l == 0 as ::core::ffi::c_int {
@@ -3001,7 +2966,7 @@ pub unsafe extern "C" fn win_line(
                         mb_schar = '>' as ::core::ffi::c_int as schar_T;
                         mb_c = '>' as ::core::ffi::c_int;
                         mb_l = 1 as ::core::ffi::c_int;
-                        multi_attr = win_hl_attr(wp, HLF_AT as ::core::ffi::c_int);
+                        multi_attr = win_hl_attr(wp, HLF_AT);
                         ptr_0 = ptr_0.offset(-1);
                         did_decrement_ptr = true_0 != 0;
                     } else if *ptr_0 as ::core::ffi::c_int != NUL {
@@ -3021,7 +2986,7 @@ pub unsafe extern "C" fn win_line(
                             && search_attr == 0 as ::core::ffi::c_int
                         {
                             wlv.n_attr = wlv.n_extra + 1 as ::core::ffi::c_int;
-                            wlv.extra_attr = win_hl_attr(wp, HLF_AT as ::core::ffi::c_int);
+                            wlv.extra_attr = win_hl_attr(wp, HLF_AT);
                             saved_attr2 = wlv.char_attr;
                         }
                     }
@@ -3133,7 +3098,7 @@ pub unsafe extern "C" fn win_line(
                                 let mut len_0: ::core::ffi::c_int = tmplen as ::core::ffi::c_int;
                                 word_end = v1 + len_0;
                                 if spell_hlf_0 as ::core::ffi::c_uint
-                                    != HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
+                                    != HLF_COUNT as ::core::ffi::c_uint
                                     && State.get() & MODE_INSERT != 0
                                     && (*wp).w_cursor.lnum == lnum
                                     && (*wp).w_cursor.col
@@ -3144,7 +3109,7 @@ pub unsafe extern "C" fn win_line(
                                     spell_redraw_lnum.set(lnum);
                                 }
                                 if spell_hlf_0 as ::core::ffi::c_uint
-                                    == HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
+                                    == HLF_COUNT as ::core::ffi::c_uint
                                     && p != prev_ptr_0 as *mut ::core::ffi::c_char
                                     && p.offset_from(&raw mut nextline as *mut ::core::ffi::c_char)
                                         + len_0 as isize
@@ -3158,7 +3123,7 @@ pub unsafe extern "C" fn win_line(
                                         as ::core::ffi::c_int;
                                 }
                                 if spell_hlf_0 as ::core::ffi::c_uint
-                                    != HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
+                                    != HLF_COUNT as ::core::ffi::c_uint
                                 {
                                     spell_attr = (*highlight_attr.ptr())[spell_hlf_0 as usize];
                                 }
@@ -3306,7 +3271,7 @@ pub unsafe extern "C" fn win_line(
                                 };
                             }
                             wlv.n_attr = 1 as ::core::ffi::c_int;
-                            wlv.extra_attr = win_hl_attr(wp, HLF_0 as ::core::ffi::c_int);
+                            wlv.extra_attr = win_hl_attr(wp, HLF_0);
                             saved_attr2 = wlv.char_attr;
                             mb_c = schar_get_first_codepoint(mb_schar);
                         }
@@ -3350,7 +3315,7 @@ pub unsafe extern "C" fn win_line(
                                 mb_schar = (*wp).w_p_lcs_chars.space;
                             }
                             wlv.n_attr = 1 as ::core::ffi::c_int;
-                            wlv.extra_attr = win_hl_attr(wp, HLF_0 as ::core::ffi::c_int);
+                            wlv.extra_attr = win_hl_attr(wp, HLF_0);
                             saved_attr2 = wlv.char_attr;
                             mb_c = schar_get_first_codepoint(mb_schar);
                         }
@@ -3474,7 +3439,7 @@ pub unsafe extern "C" fn win_line(
                                 }
                                 wlv.sc_final = lcs_tab3;
                                 wlv.n_attr = tab_len + 1 as ::core::ffi::c_int;
-                                wlv.extra_attr = win_hl_attr(wp, HLF_0 as ::core::ffi::c_int);
+                                wlv.extra_attr = win_hl_attr(wp, HLF_0);
                                 saved_attr2 = wlv.char_attr;
                             } else {
                                 wlv.sc_final = NUL as schar_T;
@@ -3519,7 +3484,7 @@ pub unsafe extern "C" fn win_line(
                             }
                             lcs_eol_todo = false_0 != 0;
                             ptr_0 = ptr_0.offset(-1);
-                            wlv.extra_attr = win_hl_attr(wp, HLF_AT as ::core::ffi::c_int);
+                            wlv.extra_attr = win_hl_attr(wp, HLF_AT);
                             wlv.n_attr = 1 as ::core::ffi::c_int;
                             mb_c = schar_get_first_codepoint(mb_schar);
                         } else if mb_schar != NUL as schar_T {
@@ -3564,7 +3529,7 @@ pub unsafe extern "C" fn win_line(
                                 mb_c = *c2rust_fresh3 as uint8_t as ::core::ffi::c_int;
                             }
                             wlv.n_attr = wlv.n_extra + 1 as ::core::ffi::c_int;
-                            wlv.extra_attr = win_hl_attr(wp, HLF_8 as ::core::ffi::c_int);
+                            wlv.extra_attr = win_hl_attr(wp, HLF_8);
                             saved_attr2 = wlv.char_attr;
                             mb_schar = mb_c as schar_T;
                         } else if VIsual_active.get() as ::core::ffi::c_int != 0
@@ -3728,12 +3693,12 @@ pub unsafe extern "C" fn win_line(
                             wlv.n_attr = 2 as ::core::ffi::c_int;
                         }
                         wlv.n_extra = 1 as ::core::ffi::c_int;
-                        wlv.extra_attr = win_hl_attr(wp, HLF_AT as ::core::ffi::c_int);
+                        wlv.extra_attr = win_hl_attr(wp, HLF_AT);
                     }
                     mb_schar = (*wp).w_p_lcs_chars.prec;
                     mb_c = schar_get_first_codepoint(mb_schar);
                     saved_attr3 = wlv.char_attr;
-                    wlv.char_attr = win_hl_attr(wp, HLF_AT as ::core::ffi::c_int);
+                    wlv.char_attr = win_hl_attr(wp, HLF_AT);
                     n_attr3 = 1 as ::core::ffi::c_int;
                 }
                 if mb_schar == NUL as schar_T && eol_hl_off == 0 as ::core::ffi::c_int {
@@ -3831,14 +3796,10 @@ pub unsafe extern "C" fn win_line(
                     {
                         let mut rightmost_vcol: ::core::ffi::c_int =
                             get_rightmost_vcol(wp, wlv.color_cols);
-                        let cuc_attr: ::core::ffi::c_int =
-                            win_hl_attr(wp, HLF_CUC as ::core::ffi::c_int);
-                        let mc_attr: ::core::ffi::c_int =
-                            win_hl_attr(wp, HLF_MC as ::core::ffi::c_int);
-                        if wlv.diff_hlf as ::core::ffi::c_uint
-                            == HLF_TXD as ::core::ffi::c_int as ::core::ffi::c_uint
-                            || wlv.diff_hlf as ::core::ffi::c_uint
-                                == HLF_TXA as ::core::ffi::c_int as ::core::ffi::c_uint
+                        let cuc_attr: ::core::ffi::c_int = win_hl_attr(wp, HLF_CUC);
+                        let mc_attr: ::core::ffi::c_int = win_hl_attr(wp, HLF_MC);
+                        if wlv.diff_hlf as ::core::ffi::c_uint == HLF_TXD as ::core::ffi::c_uint
+                            || wlv.diff_hlf as ::core::ffi::c_uint == HLF_TXA as ::core::ffi::c_uint
                         {
                             wlv.diff_hlf = HLF_CHD;
                             set_line_attr_for_diff(wp, &raw mut wlv);
@@ -3952,7 +3913,7 @@ pub unsafe extern "C" fn win_line(
                                     != 0
                         {
                             mb_schar = lcs_ext;
-                            wlv.char_attr = win_hl_attr(wp, HLF_AT as ::core::ffi::c_int);
+                            wlv.char_attr = win_hl_attr(wp, HLF_AT);
                             mb_c = schar_get_first_codepoint(mb_schar);
                         }
                     }
@@ -3971,18 +3932,13 @@ pub unsafe extern "C" fn win_line(
                             && lnum != (*wp).w_cursor.lnum
                         {
                             vcol_save_attr = wlv.char_attr;
-                            wlv.char_attr = hl_combine_attr(
-                                win_hl_attr(wp, HLF_CUC as ::core::ffi::c_int),
-                                wlv.char_attr,
-                            );
+                            wlv.char_attr =
+                                hl_combine_attr(win_hl_attr(wp, HLF_CUC), wlv.char_attr);
                         } else if !wlv.color_cols.is_null()
                             && wlv.vcol as ::core::ffi::c_int - wlv.vcol_off_co == *wlv.color_cols
                         {
                             vcol_save_attr = wlv.char_attr;
-                            wlv.char_attr = hl_combine_attr(
-                                win_hl_attr(wp, HLF_MC as ::core::ffi::c_int),
-                                wlv.char_attr,
-                            );
+                            wlv.char_attr = hl_combine_attr(win_hl_attr(wp, HLF_MC), wlv.char_attr);
                         }
                     }
                     if wlv.filler_todo <= 0 as ::core::ffi::c_int {
@@ -4350,7 +4306,7 @@ unsafe extern "C" fn wlv_put_linebuf(
             }
             *(*linebuf_char.ptr()).offset(off as isize) = '<' as ::core::ffi::c_int as schar_T;
             *(*linebuf_attr.ptr()).offset(off as isize) =
-                *(*hl_attr_active.ptr()).offset(HLF_AT as ::core::ffi::c_int as isize) as sattr_T;
+                *(*hl_attr_active.ptr()).offset(HLF_AT as isize) as sattr_T;
             off += 1;
             i += 1;
         }

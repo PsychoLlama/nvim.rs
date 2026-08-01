@@ -21,6 +21,7 @@ use crate::src::nvim::ex_getln::putcmdline;
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::src::nvim::getchar::plain_vgetc;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight_group::{HLF_8, HLF_CM};
 use crate::src::nvim::keycodes::K_BS;
 use crate::src::nvim::main::{
     Columns, allow_keys, cmdline_star, curbuf, curwin, e_number_exp, emsg_skip, got_int, msg_col,
@@ -49,8 +50,6 @@ const CTRL_H: c_int = 8;
 const OK: c_int = 1;
 const FAIL: c_int = 0;
 /// Highlight ids used by the `:digraphs` listing.
-const HLF_CM: c_int = 11;
-const HLF_8: c_int = 1;
 
 const VAR_UNKNOWN: VarType = 0;
 const VAR_STRING: VarType = 2;

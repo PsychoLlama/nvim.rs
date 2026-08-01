@@ -23,7 +23,10 @@ use crate::src::nvim::grid::{
 };
 use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight::{hl_combine_attr, hl_get_ui_attr};
-use crate::src::nvim::highlight_group::syn_check_group;
+use crate::src::nvim::highlight_group::{
+    HLF_PBR, HLF_PMNI, HLF_PMSI, HLF_PNI, HLF_PNK, HLF_PNX, HLF_PSB, HLF_PSI, HLF_PSK, HLF_PST,
+    HLF_PSX, syn_check_group,
+};
 use crate::src::nvim::insexpand::{
     compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
 };
@@ -94,17 +97,6 @@ pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const kZIndexCmdlinePopupMenu: C2Rust_Unnamed_14 = 250;
 pub const kZIndexPopupMenu: C2Rust_Unnamed_14 = 100;
 pub const kZIndexFloatDefault: C2Rust_Unnamed_14 = 50;
-pub const HLF_PBR: hlf_T = 51;
-pub const HLF_PST: hlf_T = 50;
-pub const HLF_PSB: hlf_T = 49;
-pub const HLF_PSX: hlf_T = 48;
-pub const HLF_PNX: hlf_T = 47;
-pub const HLF_PSK: hlf_T = 46;
-pub const HLF_PNK: hlf_T = 45;
-pub const HLF_PMSI: hlf_T = 44;
-pub const HLF_PMNI: hlf_T = 43;
-pub const HLF_PSI: hlf_T = 42;
-pub const HLF_PNI: hlf_T = 41;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeBoolean: OptValType = 0;
 pub const CMD_append: CMD_index = 0;
@@ -609,12 +601,10 @@ unsafe extern "C" fn pum_compute_text_attrs(
     mut user_hlattr: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_int {
     if *text as ::core::ffi::c_int == NUL
-        || hlf as ::core::ffi::c_uint != HLF_PSI as ::core::ffi::c_int as ::core::ffi::c_uint
-            && hlf as ::core::ffi::c_uint != HLF_PNI as ::core::ffi::c_int as ::core::ffi::c_uint
-        || win_hl_attr(curwin.get(), HLF_PMSI as ::core::ffi::c_int)
-            == win_hl_attr(curwin.get(), HLF_PSI as ::core::ffi::c_int)
-            && win_hl_attr(curwin.get(), HLF_PMNI as ::core::ffi::c_int)
-                == win_hl_attr(curwin.get(), HLF_PNI as ::core::ffi::c_int)
+        || hlf as ::core::ffi::c_uint != HLF_PSI as ::core::ffi::c_uint
+            && hlf as ::core::ffi::c_uint != HLF_PNI as ::core::ffi::c_uint
+        || win_hl_attr(curwin.get(), HLF_PMSI) == win_hl_attr(curwin.get(), HLF_PSI)
+            && win_hl_attr(curwin.get(), HLF_PMNI) == win_hl_attr(curwin.get(), HLF_PNI)
     {
         return ::core::ptr::null_mut::<::core::ffi::c_int>();
     }
@@ -648,8 +638,7 @@ unsafe extern "C" fn pum_compute_text_attrs(
     let mut ptr: *const ::core::ffi::c_char = text;
     let mut cell_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut char_pos: uint32_t = 0 as uint32_t;
-    let mut is_select: bool =
-        hlf as ::core::ffi::c_uint == HLF_PSI as ::core::ffi::c_int as ::core::ffi::c_uint;
+    let mut is_select: bool = hlf as ::core::ffi::c_uint == HLF_PSI as ::core::ffi::c_uint;
     while *ptr as ::core::ffi::c_int != NUL {
         let mut new_attr: ::core::ffi::c_int = win_hl_attr(curwin.get(), hlf as ::core::ffi::c_int);
         if !ga.is_null() {
@@ -659,15 +648,12 @@ unsafe extern "C" fn pum_compute_text_attrs(
                     new_attr = win_hl_attr(
                         curwin.get(),
                         if is_select as ::core::ffi::c_int != 0 {
-                            HLF_PMSI as ::core::ffi::c_int
+                            HLF_PMSI
                         } else {
-                            HLF_PMNI as ::core::ffi::c_int
+                            HLF_PMNI
                         },
                     );
-                    new_attr = hl_combine_attr(
-                        win_hl_attr(curwin.get(), HLF_PMNI as ::core::ffi::c_int),
-                        new_attr,
-                    );
+                    new_attr = hl_combine_attr(win_hl_attr(curwin.get(), HLF_PMNI), new_attr);
                     new_attr = hl_combine_attr(
                         win_hl_attr(curwin.get(), hlf as ::core::ffi::c_int),
                         new_attr,
@@ -687,15 +673,12 @@ unsafe extern "C" fn pum_compute_text_attrs(
                 new_attr = win_hl_attr(
                     curwin.get(),
                     if is_select as ::core::ffi::c_int != 0 {
-                        HLF_PMSI as ::core::ffi::c_int
+                        HLF_PMSI
                     } else {
-                        HLF_PMNI as ::core::ffi::c_int
+                        HLF_PMNI
                     },
                 );
-                new_attr = hl_combine_attr(
-                    win_hl_attr(curwin.get(), HLF_PMNI as ::core::ffi::c_int),
-                    new_attr,
-                );
+                new_attr = hl_combine_attr(win_hl_attr(curwin.get(), HLF_PMNI), new_attr);
                 new_attr = hl_combine_attr(
                     win_hl_attr(curwin.get(), hlf as ::core::ffi::c_int),
                     new_attr,
@@ -703,10 +686,7 @@ unsafe extern "C" fn pum_compute_text_attrs(
                 matched_len -= 1;
             }
         }
-        new_attr = hl_combine_attr(
-            win_hl_attr(curwin.get(), HLF_PNI as ::core::ffi::c_int),
-            new_attr,
-        );
+        new_attr = hl_combine_attr(win_hl_attr(curwin.get(), HLF_PNI), new_attr);
         if user_hlattr > 0 as ::core::ffi::c_int {
             new_attr = hl_combine_attr(new_attr, user_hlattr);
         }
@@ -803,10 +783,8 @@ unsafe extern "C" fn pum_user_attr_combine(
 }
 pub unsafe extern "C" fn pum_redraw() {
     let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut attr_scroll: ::core::ffi::c_int =
-        win_hl_attr(curwin.get(), HLF_PSB as ::core::ffi::c_int);
-    let mut attr_thumb: ::core::ffi::c_int =
-        win_hl_attr(curwin.get(), HLF_PST as ::core::ffi::c_int);
+    let mut attr_scroll: ::core::ffi::c_int = win_hl_attr(curwin.get(), HLF_PSB);
+    let mut attr_thumb: ::core::ffi::c_int = win_hl_attr(curwin.get(), HLF_PST);
     let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut thumb_pos: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut thumb_height: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -931,12 +909,11 @@ pub unsafe extern "C" fn pum_redraw() {
         }
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < 8 as ::core::ffi::c_int {
-            let mut attr: ::core::ffi::c_int =
-                *(*hl_attr_active.ptr()).offset(HLF_PBR as ::core::ffi::c_int as isize);
+            let mut attr: ::core::ffi::c_int = *(*hl_attr_active.ptr()).offset(HLF_PBR as isize);
             if fconfig.border_hl_ids[i as usize] != 0 {
                 attr = hl_get_ui_attr(
                     -1 as ::core::ffi::c_int,
-                    HLF_PBR as ::core::ffi::c_int,
+                    HLF_PBR,
                     fconfig.border_hl_ids[i as usize],
                     false_0 != 0,
                 );
@@ -1064,17 +1041,14 @@ pub unsafe extern "C" fn pum_redraw() {
         let trunc_attr: ::core::ffi::c_int = win_hl_attr(
             curwin.get(),
             if selected as ::core::ffi::c_int != 0 {
-                HLF_PSI as ::core::ffi::c_int
+                HLF_PSI
             } else {
-                HLF_PNI as ::core::ffi::c_int
+                HLF_PNI
             },
         );
         let mut hlf: hlf_T = *hlfs.offset(0 as ::core::ffi::c_int as isize);
         let mut attr_0: ::core::ffi::c_int = win_hl_attr(curwin.get(), hlf as ::core::ffi::c_int);
-        attr_0 = hl_combine_attr(
-            win_hl_attr(curwin.get(), HLF_PNI as ::core::ffi::c_int),
-            attr_0,
-        );
+        attr_0 = hl_combine_attr(win_hl_attr(curwin.get(), HLF_PNI), attr_0);
         screengrid_line_start(pum_grid.ptr(), row, 0 as ::core::ffi::c_int);
         if extra_space {
             if pum_rl.get() {
@@ -1113,10 +1087,7 @@ pub unsafe extern "C" fn pum_redraw() {
             let mut item_type: ::core::ffi::c_int = order[j as usize];
             hlf = *hlfs.offset(item_type as isize);
             attr_0 = win_hl_attr(curwin.get(), hlf as ::core::ffi::c_int);
-            attr_0 = hl_combine_attr(
-                win_hl_attr(curwin.get(), HLF_PNI as ::core::ffi::c_int),
-                attr_0,
-            );
+            attr_0 = hl_combine_attr(win_hl_attr(curwin.get(), HLF_PNI), attr_0);
             orig_attr = attr_0;
             if item_type < 2 as ::core::ffi::c_int {
                 attr_0 = pum_user_attr_combine(idx, item_type, attr_0);

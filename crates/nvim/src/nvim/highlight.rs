@@ -41,7 +41,9 @@ use crate::src::nvim::api::private::helpers::{arena_array, arena_dict, cstr_as_s
 use crate::src::nvim::api::ui::{remote_ui_hl_attr_define, remote_ui_hl_group_set};
 use crate::src::nvim::drawscreen::screen_invalidate_highlights;
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::highlight_group::{highlight_attr_set_all, highlight_changed, syn_id2name};
+use crate::src::nvim::highlight_group::{
+    HLF_COUNT, highlight_attr_set_all, highlight_changed, syn_id2name,
+};
 use crate::src::nvim::main::{highlight_attr, highlight_attr_last, hlf_names};
 use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::src::nvim::message::emsg;
@@ -101,13 +103,6 @@ pub const HL_OVERLINE: HlAttrFlags = 0x2_0000;
 
 // The `HLF_*` builtin-group indices this family names. The full list lives
 // with `hlf_names`; these are the ones the code here singles out.
-pub(crate) const HLF_NONE: c_int = 0;
-pub(crate) const HLF_PNI: c_int = 41;
-pub(crate) const HLF_PST: c_int = 50;
-pub(crate) const HLF_INACTIVE: c_int = 60;
-pub(crate) const HLF_NFLOAT: c_int = 62;
-pub(crate) const HLF_BORDER: c_int = 64;
-pub(crate) const HLF_COUNT: c_int = 76;
 
 // What an entry was made from, recorded for `ext_hlstate`.
 pub(crate) const kHlUnknown: HlKind = 0;

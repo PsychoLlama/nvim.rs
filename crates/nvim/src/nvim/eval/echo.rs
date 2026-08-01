@@ -13,13 +13,13 @@ use crate::src::nvim::eval::userfunc::{restore_funccal, save_funccal};
 use crate::src::nvim::eval::vars::set_var;
 use crate::src::nvim::eval::{
     CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, DOCMD_NOWAIT, DOCMD_VERBOSE, FAIL,
-    HLF_E, NUL, OK, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING,
-    VAR_UNKNOWN, VAR_UNLOCKED, clear_evalarg, echo_hl_id, eval1, eval1_emsg, fill_evalarg_from_eap,
+    NUL, OK, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN,
+    VAR_UNLOCKED, clear_evalarg, echo_hl_id, eval1, eval1_emsg, fill_evalarg_from_eap,
 };
 use crate::src::nvim::ex_docmd::{check_nextcmd, do_cmdline};
 use crate::src::nvim::ex_eval::aborting;
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
-use crate::src::nvim::highlight_group::syn_name2id;
+use crate::src::nvim::highlight_group::{HLF_E, syn_name2id};
 use crate::src::nvim::main::{
     called_emsg, did_emsg, e_invexpr2, emsg_skip, force_abort, got_int, line_msg, msg_didout,
     msg_ext_skip_verbose, need_clr_eos,
@@ -231,7 +231,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
                 emsg_multiline(
                     ga.ga_data as *const c_char,
                     c"echoerr".as_ptr(),
-                    HLF_E as c_int,
+                    HLF_E,
                     true,
                 );
                 if !force_abort.get() {

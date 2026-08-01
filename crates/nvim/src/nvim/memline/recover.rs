@@ -16,6 +16,7 @@ use core::ffi::{c_char, c_int, c_long, c_uint};
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::highlight_group::HLF_E;
 
 /// Try to recover `curbuf` from its swap file.
 ///
@@ -88,7 +89,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             // file can have, and correct it below.
             (*mfp).mf_page_size = MIN_SWAP_PAGE_SIZE;
 
-            let hl_id = HLF_E as c_int;
+            let hl_id = HLF_E;
             msg_ext_set_kind(c"emsg".as_ptr());
             hp = mf_get(mfp, 0, 1);
             if hp.is_null() {

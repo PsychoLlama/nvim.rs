@@ -2,6 +2,7 @@
 
 use super::file::*;
 use super::*;
+use crate::src::nvim::highlight_group::HLF_T;
 
 pub unsafe fn ex_undolist(mut _eap: *mut exarg_T) {
     let mut changes: c_int = 1;
@@ -85,7 +86,7 @@ pub unsafe fn ex_undolist(mut _eap: *mut exarg_T) {
         msg_start();
         msg_puts_hl(
             gettext(c"number changes  when               saved".as_ptr()),
-            HLF_T as c_int,
+            HLF_T,
             false,
         );
         let mut i: c_int = 0;

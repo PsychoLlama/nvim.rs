@@ -9,6 +9,7 @@ use crate::src::nvim::fileio::vim_fgets;
 use crate::src::nvim::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
 
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
+use crate::src::nvim::highlight_group::HLF_E;
 use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::{
     Columns, IObuff, KeyTyped, NameBuff, cmdmod, curbuf, curtab, curwin, e_fnametoolong, e_noident,
@@ -117,83 +118,6 @@ pub const kFloatRelativeCursor: FloatRelative = 2;
 pub const kFloatRelativeWindow: FloatRelative = 1;
 pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_14 = 76;
-pub const HLF_PRE: C2Rust_Unnamed_14 = 75;
-pub const HLF_OK: C2Rust_Unnamed_14 = 74;
-pub const HLF_SO: C2Rust_Unnamed_14 = 73;
-pub const HLF_SE: C2Rust_Unnamed_14 = 72;
-pub const HLF_TSNC: C2Rust_Unnamed_14 = 71;
-pub const HLF_TS: C2Rust_Unnamed_14 = 70;
-pub const HLF_BFOOTER: C2Rust_Unnamed_14 = 69;
-pub const HLF_BTITLE: C2Rust_Unnamed_14 = 68;
-pub const HLF_CU: C2Rust_Unnamed_14 = 67;
-pub const HLF_WBRNC: C2Rust_Unnamed_14 = 66;
-pub const HLF_WBR: C2Rust_Unnamed_14 = 65;
-pub const HLF_BORDER: C2Rust_Unnamed_14 = 64;
-pub const HLF_MSG: C2Rust_Unnamed_14 = 63;
-pub const HLF_NFLOAT: C2Rust_Unnamed_14 = 62;
-pub const HLF_MSGSEP: C2Rust_Unnamed_14 = 61;
-pub const HLF_INACTIVE: C2Rust_Unnamed_14 = 60;
-pub const HLF_0: C2Rust_Unnamed_14 = 59;
-pub const HLF_QFL: C2Rust_Unnamed_14 = 58;
-pub const HLF_MC: C2Rust_Unnamed_14 = 57;
-pub const HLF_CUL: C2Rust_Unnamed_14 = 56;
-pub const HLF_CUC: C2Rust_Unnamed_14 = 55;
-pub const HLF_TPF: C2Rust_Unnamed_14 = 54;
-pub const HLF_TPS: C2Rust_Unnamed_14 = 53;
-pub const HLF_TP: C2Rust_Unnamed_14 = 52;
-pub const HLF_PBR: C2Rust_Unnamed_14 = 51;
-pub const HLF_PST: C2Rust_Unnamed_14 = 50;
-pub const HLF_PSB: C2Rust_Unnamed_14 = 49;
-pub const HLF_PSX: C2Rust_Unnamed_14 = 48;
-pub const HLF_PNX: C2Rust_Unnamed_14 = 47;
-pub const HLF_PSK: C2Rust_Unnamed_14 = 46;
-pub const HLF_PNK: C2Rust_Unnamed_14 = 45;
-pub const HLF_PMSI: C2Rust_Unnamed_14 = 44;
-pub const HLF_PMNI: C2Rust_Unnamed_14 = 43;
-pub const HLF_PSI: C2Rust_Unnamed_14 = 42;
-pub const HLF_PNI: C2Rust_Unnamed_14 = 41;
-pub const HLF_SPL: C2Rust_Unnamed_14 = 40;
-pub const HLF_SPR: C2Rust_Unnamed_14 = 39;
-pub const HLF_SPC: C2Rust_Unnamed_14 = 38;
-pub const HLF_SPB: C2Rust_Unnamed_14 = 37;
-pub const HLF_CONCEAL: C2Rust_Unnamed_14 = 36;
-pub const HLF_SC: C2Rust_Unnamed_14 = 35;
-pub const HLF_TXA: C2Rust_Unnamed_14 = 34;
-pub const HLF_TXD: C2Rust_Unnamed_14 = 33;
-pub const HLF_DED: C2Rust_Unnamed_14 = 32;
-pub const HLF_CHD: C2Rust_Unnamed_14 = 31;
-pub const HLF_ADD: C2Rust_Unnamed_14 = 30;
-pub const HLF_FC: C2Rust_Unnamed_14 = 29;
-pub const HLF_FL: C2Rust_Unnamed_14 = 28;
-pub const HLF_WM: C2Rust_Unnamed_14 = 27;
-pub const HLF_W: C2Rust_Unnamed_14 = 26;
-pub const HLF_VNC: C2Rust_Unnamed_14 = 25;
-pub const HLF_V: C2Rust_Unnamed_14 = 24;
-pub const HLF_T: C2Rust_Unnamed_14 = 23;
-pub const HLF_VSP: C2Rust_Unnamed_14 = 22;
-pub const HLF_C: C2Rust_Unnamed_14 = 21;
-pub const HLF_SNC: C2Rust_Unnamed_14 = 20;
-pub const HLF_S: C2Rust_Unnamed_14 = 19;
-pub const HLF_R: C2Rust_Unnamed_14 = 18;
-pub const HLF_CLF: C2Rust_Unnamed_14 = 17;
-pub const HLF_CLS: C2Rust_Unnamed_14 = 16;
-pub const HLF_CLN: C2Rust_Unnamed_14 = 15;
-pub const HLF_LNB: C2Rust_Unnamed_14 = 14;
-pub const HLF_LNA: C2Rust_Unnamed_14 = 13;
-pub const HLF_N: C2Rust_Unnamed_14 = 12;
-pub const HLF_CM: C2Rust_Unnamed_14 = 11;
-pub const HLF_M: C2Rust_Unnamed_14 = 10;
-pub const HLF_LC: C2Rust_Unnamed_14 = 9;
-pub const HLF_L: C2Rust_Unnamed_14 = 8;
-pub const HLF_I: C2Rust_Unnamed_14 = 7;
-pub const HLF_E: C2Rust_Unnamed_14 = 6;
-pub const HLF_D: C2Rust_Unnamed_14 = 5;
-pub const HLF_AT: C2Rust_Unnamed_14 = 4;
-pub const HLF_TERM: C2Rust_Unnamed_14 = 3;
-pub const HLF_EOB: C2Rust_Unnamed_14 = 2;
-pub const HLF_8: C2Rust_Unnamed_14 = 1;
-pub const HLF_NONE: C2Rust_Unnamed_14 = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
@@ -1414,7 +1338,7 @@ pub unsafe extern "C" fn find_help_tags(
         emsg_multiline(
             err.msg,
             b"lua_error\0".as_ptr() as *const ::core::ffi::c_char,
-            HLF_E as ::core::ffi::c_int,
+            HLF_E,
             true_0 != 0,
         );
         api_clear_error(&raw mut err);
@@ -1646,7 +1570,7 @@ pub unsafe extern "C" fn get_local_additions() {
         emsg_multiline(
             err.msg,
             b"lua_error\0".as_ptr() as *const ::core::ffi::c_char,
-            HLF_E as ::core::ffi::c_int,
+            HLF_E,
             true_0 != 0,
         );
     }

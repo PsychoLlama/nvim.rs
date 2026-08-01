@@ -26,11 +26,11 @@ use crate::src::nvim::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::src::nvim::memline::ml_get_pos;
 use crate::src::nvim::message::msg_grid_validate;
 use crate::src::nvim::normal::{
-    ARRAY_DICT_INIT, Ctrl_V, HLF_MSG, KE_EVENT, KE_IGNORE, KE_LEFTDRAG, KE_LEFTMOUSE,
-    KE_LEFTRELEASE, KE_MIDDLEDRAG, KE_MIDDLEMOUSE, KE_MIDDLERELEASE, KE_MOUSEDOWN, KE_MOUSELEFT,
-    KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE,
-    KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE, KE_X2DRAG, KE_X2MOUSE, KE_X2RELEASE, NUL, SHOWCMD_BUFLEN,
-    SHOWCMD_COLS, old_showcmd_buf, showcmd_is_clear, showcmd_visual,
+    ARRAY_DICT_INIT, Ctrl_V, KE_EVENT, KE_IGNORE, KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE,
+    KE_MIDDLEDRAG, KE_MIDDLEMOUSE, KE_MIDDLERELEASE, KE_MOUSEDOWN, KE_MOUSELEFT, KE_MOUSEMOVE,
+    KE_MOUSERIGHT, KE_MOUSEUP, KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1DRAG, KE_X1MOUSE,
+    KE_X1RELEASE, KE_X2DRAG, KE_X2MOUSE, KE_X2RELEASE, NUL, SHOWCMD_BUFLEN, SHOWCMD_COLS,
+    old_showcmd_buf, showcmd_is_clear, showcmd_visual,
 };
 use crate::src::nvim::os::libc::{memmove, snprintf, strcat, strcpy, strlen};
 use crate::src::nvim::plines::getvcols;
@@ -44,6 +44,7 @@ use crate::src::nvim::types::{
 use crate::src::nvim::ui::{ui_call_msg_showcmd, ui_has};
 use core::ffi::{c_char, c_int, c_void};
 
+use crate::src::nvim::highlight_group::HLF_MSG;
 use crate::src::nvim::types::object_data;
 use crate::src::nvim::types::ui::kUIMessages;
 
@@ -448,7 +449,7 @@ fn draw_on_last_line(clear: bool) {
         msg_grid_validate();
         let showcmd_row = Rows.get() - 1;
         grid_line_start(msg_grid_adj.ptr(), showcmd_row);
-        let attr = *(*hl_attr_active.ptr()).offset(HLF_MSG as c_int as isize);
+        let attr = *(*hl_attr_active.ptr()).offset(HLF_MSG as isize);
         let mut len = 0;
         if !clear {
             len = grid_line_puts(sc_col.get(), showcmd_buf.ptr().cast::<c_char>(), -1, attr);

@@ -57,7 +57,7 @@ use crate::src::nvim::fold::{foldMoveRange, foldUpdate, foldUpdateAll, hasAnyFol
 use crate::src::nvim::getchar::{AppendToRedobuff, AppendToRedobuffLit};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::help::prepare_help_buffer;
-use crate::src::nvim::highlight_group::syn_check_group;
+use crate::src::nvim::highlight_group::{HLF_N, HLF_R, syn_check_group};
 use crate::src::nvim::indent::{get_indent, get_indent_lnum, set_indent};
 use crate::src::nvim::input::prompt_for_input;
 use crate::src::nvim::main::{
@@ -259,83 +259,6 @@ pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_15 = 2147483647;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_16 = 76;
-pub const HLF_PRE: C2Rust_Unnamed_16 = 75;
-pub const HLF_OK: C2Rust_Unnamed_16 = 74;
-pub const HLF_SO: C2Rust_Unnamed_16 = 73;
-pub const HLF_SE: C2Rust_Unnamed_16 = 72;
-pub const HLF_TSNC: C2Rust_Unnamed_16 = 71;
-pub const HLF_TS: C2Rust_Unnamed_16 = 70;
-pub const HLF_BFOOTER: C2Rust_Unnamed_16 = 69;
-pub const HLF_BTITLE: C2Rust_Unnamed_16 = 68;
-pub const HLF_CU: C2Rust_Unnamed_16 = 67;
-pub const HLF_WBRNC: C2Rust_Unnamed_16 = 66;
-pub const HLF_WBR: C2Rust_Unnamed_16 = 65;
-pub const HLF_BORDER: C2Rust_Unnamed_16 = 64;
-pub const HLF_MSG: C2Rust_Unnamed_16 = 63;
-pub const HLF_NFLOAT: C2Rust_Unnamed_16 = 62;
-pub const HLF_MSGSEP: C2Rust_Unnamed_16 = 61;
-pub const HLF_INACTIVE: C2Rust_Unnamed_16 = 60;
-pub const HLF_0: C2Rust_Unnamed_16 = 59;
-pub const HLF_QFL: C2Rust_Unnamed_16 = 58;
-pub const HLF_MC: C2Rust_Unnamed_16 = 57;
-pub const HLF_CUL: C2Rust_Unnamed_16 = 56;
-pub const HLF_CUC: C2Rust_Unnamed_16 = 55;
-pub const HLF_TPF: C2Rust_Unnamed_16 = 54;
-pub const HLF_TPS: C2Rust_Unnamed_16 = 53;
-pub const HLF_TP: C2Rust_Unnamed_16 = 52;
-pub const HLF_PBR: C2Rust_Unnamed_16 = 51;
-pub const HLF_PST: C2Rust_Unnamed_16 = 50;
-pub const HLF_PSB: C2Rust_Unnamed_16 = 49;
-pub const HLF_PSX: C2Rust_Unnamed_16 = 48;
-pub const HLF_PNX: C2Rust_Unnamed_16 = 47;
-pub const HLF_PSK: C2Rust_Unnamed_16 = 46;
-pub const HLF_PNK: C2Rust_Unnamed_16 = 45;
-pub const HLF_PMSI: C2Rust_Unnamed_16 = 44;
-pub const HLF_PMNI: C2Rust_Unnamed_16 = 43;
-pub const HLF_PSI: C2Rust_Unnamed_16 = 42;
-pub const HLF_PNI: C2Rust_Unnamed_16 = 41;
-pub const HLF_SPL: C2Rust_Unnamed_16 = 40;
-pub const HLF_SPR: C2Rust_Unnamed_16 = 39;
-pub const HLF_SPC: C2Rust_Unnamed_16 = 38;
-pub const HLF_SPB: C2Rust_Unnamed_16 = 37;
-pub const HLF_CONCEAL: C2Rust_Unnamed_16 = 36;
-pub const HLF_SC: C2Rust_Unnamed_16 = 35;
-pub const HLF_TXA: C2Rust_Unnamed_16 = 34;
-pub const HLF_TXD: C2Rust_Unnamed_16 = 33;
-pub const HLF_DED: C2Rust_Unnamed_16 = 32;
-pub const HLF_CHD: C2Rust_Unnamed_16 = 31;
-pub const HLF_ADD: C2Rust_Unnamed_16 = 30;
-pub const HLF_FC: C2Rust_Unnamed_16 = 29;
-pub const HLF_FL: C2Rust_Unnamed_16 = 28;
-pub const HLF_WM: C2Rust_Unnamed_16 = 27;
-pub const HLF_W: C2Rust_Unnamed_16 = 26;
-pub const HLF_VNC: C2Rust_Unnamed_16 = 25;
-pub const HLF_V: C2Rust_Unnamed_16 = 24;
-pub const HLF_T: C2Rust_Unnamed_16 = 23;
-pub const HLF_VSP: C2Rust_Unnamed_16 = 22;
-pub const HLF_C: C2Rust_Unnamed_16 = 21;
-pub const HLF_SNC: C2Rust_Unnamed_16 = 20;
-pub const HLF_S: C2Rust_Unnamed_16 = 19;
-pub const HLF_R: C2Rust_Unnamed_16 = 18;
-pub const HLF_CLF: C2Rust_Unnamed_16 = 17;
-pub const HLF_CLS: C2Rust_Unnamed_16 = 16;
-pub const HLF_CLN: C2Rust_Unnamed_16 = 15;
-pub const HLF_LNB: C2Rust_Unnamed_16 = 14;
-pub const HLF_LNA: C2Rust_Unnamed_16 = 13;
-pub const HLF_N: C2Rust_Unnamed_16 = 12;
-pub const HLF_CM: C2Rust_Unnamed_16 = 11;
-pub const HLF_M: C2Rust_Unnamed_16 = 10;
-pub const HLF_LC: C2Rust_Unnamed_16 = 9;
-pub const HLF_L: C2Rust_Unnamed_16 = 8;
-pub const HLF_I: C2Rust_Unnamed_16 = 7;
-pub const HLF_E: C2Rust_Unnamed_16 = 6;
-pub const HLF_D: C2Rust_Unnamed_16 = 5;
-pub const HLF_AT: C2Rust_Unnamed_16 = 4;
-pub const HLF_TERM: C2Rust_Unnamed_16 = 3;
-pub const HLF_EOB: C2Rust_Unnamed_16 = 2;
-pub const HLF_8: C2Rust_Unnamed_16 = 1;
-pub const HLF_NONE: C2Rust_Unnamed_16 = 0;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
 pub const EXPAND_LSP: C2Rust_Unnamed_17 = 64;
 pub const EXPAND_LUA: C2Rust_Unnamed_17 = 63;
@@ -3194,7 +3117,7 @@ pub unsafe extern "C" fn print_line_no_prefix(
         );
         msg_puts_hl(
             &raw mut numbuf as *mut ::core::ffi::c_char,
-            HLF_N as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
+            HLF_N + 1 as ::core::ffi::c_int,
             false_0 != 0,
         );
     }
@@ -5654,7 +5577,7 @@ unsafe extern "C" fn do_sub(
                                     p_2 = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
                                     typed = prompt_for_input(
                                         p_2,
-                                        HLF_R as ::core::ffi::c_int,
+                                        HLF_R,
                                         true_0 != 0,
                                         ::core::ptr::null_mut::<bool>(),
                                     );

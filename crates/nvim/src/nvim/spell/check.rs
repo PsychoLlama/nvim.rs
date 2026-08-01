@@ -47,10 +47,11 @@ use crate::src::nvim::types::{
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
 use super::{
-    CHAR_DIGIT, CHAR_OTHER, CHAR_UPPER, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPWORD, HLF_SPB,
-    HLF_SPC, HLF_SPL, HLF_SPR, MAXWLEN, SP_BAD, SP_BANNED, SP_OK, SP_RARE, WF_ALLCAP, WF_FIXCAP,
-    WF_KEEPCAP, WF_ONECAP, count_common_word, matchinf_T, spelltab,
+    CHAR_DIGIT, CHAR_OTHER, CHAR_UPPER, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPWORD, MAXWLEN,
+    SP_BAD, SP_BANNED, SP_OK, SP_RARE, WF_ALLCAP, WF_FIXCAP, WF_KEEPCAP, WF_ONECAP,
+    count_common_word, matchinf_T, spelltab,
 };
+use crate::src::nvim::highlight_group::{HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 
 /// Whether `c` is upper case, by the spell table below 128 and the general
 /// rules above it.

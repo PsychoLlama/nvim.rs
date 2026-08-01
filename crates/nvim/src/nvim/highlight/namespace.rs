@@ -22,16 +22,16 @@
 //! then the global one.
 
 use super::{
-    HL_DEFAULT, HL_GLOBAL, HLATTRS_INIT, HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE,
-    HLF_PNI, HLF_PST, dict2hlattrs, get_attr_entry, hl_apply_winblend, hl_combine_attr,
-    hl_get_syn_attr, kHlUI, syn_attr2entry,
+    HL_DEFAULT, HL_GLOBAL, HLATTRS_INIT, dict2hlattrs, get_attr_entry, hl_apply_winblend,
+    hl_combine_attr, hl_get_syn_attr, kHlUI, syn_attr2entry,
 };
 use crate::src::nvim::api::private::dispatch::KeyDict_highlight_get_field;
 use crate::src::nvim::api::private::helpers::{api_dict_to_keydict, cstr_as_string};
 use crate::src::nvim::decoration_provider::get_decor_provider;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{
-    set_hl_group, syn_check_group, syn_id2name, syn_ns_id2attr,
+    HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, set_hl_group,
+    syn_check_group, syn_id2name, syn_ns_id2attr,
 };
 use crate::src::nvim::lua::executor::nlua_call_ref;
 use crate::src::nvim::main::{
@@ -384,7 +384,7 @@ pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional
 
         // The popup menu's own groups pick up 'pumblend' unless the group
         // set a blend itself.
-        if HLF_PNI as c_int <= idx && idx <= HLF_PST as c_int {
+        if HLF_PNI <= idx && idx <= HLF_PST {
             if attrs.hl_blend == -1 && p_pb.get() > 0 {
                 attrs.hl_blend = p_pb.get() as c_int;
             }
@@ -459,7 +459,7 @@ pub unsafe fn update_window_hl(wp: *mut win_T, invalid: bool) {
             for i in 0..8 {
                 let id = (*wp).w_config.border_hl_ids[i];
                 let mut attr = if id != 0 {
-                    hl_get_ui_attr(ns_id, HLF_BORDER as c_int, id, false)
+                    hl_get_ui_attr(ns_id, HLF_BORDER, id, false)
                 } else {
                     *hl_def.add(HLF_BORDER as usize)
                 };
@@ -511,11 +511,11 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
         // insert into the map, and the table's own allocation does not move.
         let table = NS_HL_ATTR.with_mut(|tables| tables.entry(ns_id).or_default().as_ptr());
         let names = hlf_names.ptr().cast::<*const c_char>();
-        for hlf in 1..HLF_COUNT as c_int {
+        for hlf in 1..HLF_COUNT {
             let name = *names.add(hlf as usize);
             let id = syn_check_group(name, strlen(name));
             // These two are the groups where "undefined" is meaningful.
-            let optional = hlf == HLF_INACTIVE as c_int || hlf == HLF_NFLOAT as c_int;
+            let optional = hlf == HLF_INACTIVE || hlf == HLF_NFLOAT;
             *table.add(hlf as usize) = hl_get_ui_attr(ns_id, hlf, id, optional);
         }
 

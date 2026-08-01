@@ -19,6 +19,7 @@ use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use super::*;
+use crate::src::nvim::highlight_group::HLF_D;
 
 /// print the marks
 pub unsafe fn ex_marks(mut eap: *mut exarg_T) {
@@ -180,7 +181,7 @@ pub(super) unsafe extern "C" fn show_one_mark(
                 );
                 msg_outtrans(IObuff.ptr() as *mut c_char, 0, false);
                 if !name.is_null() {
-                    msg_outtrans(name, if current != 0 { HLF_D as c_int } else { 0 }, false);
+                    msg_outtrans(name, if current != 0 { HLF_D } else { 0 }, false);
                 }
             }
         }

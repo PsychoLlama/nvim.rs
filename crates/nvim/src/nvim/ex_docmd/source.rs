@@ -13,12 +13,13 @@ use crate::src::nvim::eval::vars::{set_vim_var_string, v_exception, v_throwpoint
 use crate::src::nvim::ex_cmds::print_line_no_prefix;
 use crate::src::nvim::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 use crate::src::nvim::ex_docmd::{
-    ETYPE_EXCEPT, FAIL, HLF_E, IOSIZE, ML_EMPTY, MSG_BUF_LEN, OK, VV_EXITREASON,
-    cmdline_call_depth, dbg_stuff, ex_error_buf, ex_pressedreturn, loop_cookie, wcmd_T,
+    ETYPE_EXCEPT, FAIL, IOSIZE, ML_EMPTY, MSG_BUF_LEN, OK, VV_EXITREASON, cmdline_call_depth,
+    dbg_stuff, ex_error_buf, ex_pressedreturn, loop_cookie, wcmd_T,
 };
 use crate::src::nvim::ex_eval::discard_current_exception;
 use crate::src::nvim::ex_getln::{getcmdline, getexline};
 use crate::src::nvim::garray::ga_append_via_ptr;
+use crate::src::nvim::highlight_group::HLF_E;
 use crate::src::nvim::main::{
     IObuff, KeyTyped, RedrawingDisabled, Rows, State, caught_stack, check_cstack, cmdline_row,
     curbuf, current_exception, curwin, did_emsg, did_throw, e_empty_buffer, emsg_silent,
@@ -267,7 +268,7 @@ pub unsafe fn handle_did_throw() {
             let mut m = messages;
             while !m.is_null() {
                 let next = (*m).next;
-                emsg_multiline((*m).msg, c"emsg".as_ptr(), HLF_E as c_int, (*m).multiline);
+                emsg_multiline((*m).msg, c"emsg".as_ptr(), HLF_E, (*m).multiline);
                 xfree((*m).msg as *mut c_void);
                 xfree((*m).sfile as *mut c_void);
                 xfree(m as *mut c_void);

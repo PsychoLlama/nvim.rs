@@ -23,7 +23,10 @@ use crate::src::nvim::grid::{
 };
 use crate::src::nvim::highlight::hl_combine_attr;
 use crate::src::nvim::highlight::win_hl_attr;
-use crate::src::nvim::highlight_group::{syn_id2attr, syn_name2id_len};
+use crate::src::nvim::highlight_group::{
+    HLF_C, HLF_CLF, HLF_FC, HLF_MSG, HLF_NONE, HLF_S, HLF_SNC, HLF_T, HLF_TP, HLF_TPF, HLF_TPS,
+    HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_len,
+};
 use crate::src::nvim::main::{
     Columns, KeyTyped, NameBuff, Rows, State, VIsual_active, curbuf, curtab, curwin, default_grid,
     default_gridview, did_emsg, edit_submode, first_tabpage, firstbuf, firstwin, highlight_stlnc,
@@ -143,83 +146,6 @@ pub const kFloatRelativeMouse: FloatRelative = 3;
 pub const kFloatRelativeCursor: FloatRelative = 2;
 pub const kFloatRelativeWindow: FloatRelative = 1;
 pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const HLF_COUNT: hlf_T = 76;
-pub const HLF_PRE: hlf_T = 75;
-pub const HLF_OK: hlf_T = 74;
-pub const HLF_SO: hlf_T = 73;
-pub const HLF_SE: hlf_T = 72;
-pub const HLF_TSNC: hlf_T = 71;
-pub const HLF_TS: hlf_T = 70;
-pub const HLF_BFOOTER: hlf_T = 69;
-pub const HLF_BTITLE: hlf_T = 68;
-pub const HLF_CU: hlf_T = 67;
-pub const HLF_WBRNC: hlf_T = 66;
-pub const HLF_WBR: hlf_T = 65;
-pub const HLF_BORDER: hlf_T = 64;
-pub const HLF_MSG: hlf_T = 63;
-pub const HLF_NFLOAT: hlf_T = 62;
-pub const HLF_MSGSEP: hlf_T = 61;
-pub const HLF_INACTIVE: hlf_T = 60;
-pub const HLF_0: hlf_T = 59;
-pub const HLF_QFL: hlf_T = 58;
-pub const HLF_MC: hlf_T = 57;
-pub const HLF_CUL: hlf_T = 56;
-pub const HLF_CUC: hlf_T = 55;
-pub const HLF_TPF: hlf_T = 54;
-pub const HLF_TPS: hlf_T = 53;
-pub const HLF_TP: hlf_T = 52;
-pub const HLF_PBR: hlf_T = 51;
-pub const HLF_PST: hlf_T = 50;
-pub const HLF_PSB: hlf_T = 49;
-pub const HLF_PSX: hlf_T = 48;
-pub const HLF_PNX: hlf_T = 47;
-pub const HLF_PSK: hlf_T = 46;
-pub const HLF_PNK: hlf_T = 45;
-pub const HLF_PMSI: hlf_T = 44;
-pub const HLF_PMNI: hlf_T = 43;
-pub const HLF_PSI: hlf_T = 42;
-pub const HLF_PNI: hlf_T = 41;
-pub const HLF_SPL: hlf_T = 40;
-pub const HLF_SPR: hlf_T = 39;
-pub const HLF_SPC: hlf_T = 38;
-pub const HLF_SPB: hlf_T = 37;
-pub const HLF_CONCEAL: hlf_T = 36;
-pub const HLF_SC: hlf_T = 35;
-pub const HLF_TXA: hlf_T = 34;
-pub const HLF_TXD: hlf_T = 33;
-pub const HLF_DED: hlf_T = 32;
-pub const HLF_CHD: hlf_T = 31;
-pub const HLF_ADD: hlf_T = 30;
-pub const HLF_FC: hlf_T = 29;
-pub const HLF_FL: hlf_T = 28;
-pub const HLF_WM: hlf_T = 27;
-pub const HLF_W: hlf_T = 26;
-pub const HLF_VNC: hlf_T = 25;
-pub const HLF_V: hlf_T = 24;
-pub const HLF_T: hlf_T = 23;
-pub const HLF_VSP: hlf_T = 22;
-pub const HLF_C: hlf_T = 21;
-pub const HLF_SNC: hlf_T = 20;
-pub const HLF_S: hlf_T = 19;
-pub const HLF_R: hlf_T = 18;
-pub const HLF_CLF: hlf_T = 17;
-pub const HLF_CLS: hlf_T = 16;
-pub const HLF_CLN: hlf_T = 15;
-pub const HLF_LNB: hlf_T = 14;
-pub const HLF_LNA: hlf_T = 13;
-pub const HLF_N: hlf_T = 12;
-pub const HLF_CM: hlf_T = 11;
-pub const HLF_M: hlf_T = 10;
-pub const HLF_LC: hlf_T = 9;
-pub const HLF_L: hlf_T = 8;
-pub const HLF_I: hlf_T = 7;
-pub const HLF_E: hlf_T = 6;
-pub const HLF_D: hlf_T = 5;
-pub const HLF_AT: hlf_T = 4;
-pub const HLF_TERM: hlf_T = 3;
-pub const HLF_EOB: hlf_T = 2;
-pub const HLF_8: hlf_T = 1;
-pub const HLF_NONE: hlf_T = 0;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeNumber: OptValType = 1;
 pub const kOptValTypeBoolean: OptValType = 0;
@@ -676,9 +602,9 @@ unsafe extern "C" fn win_redr_custom(
             } else {
                 fillchar = (*wp).w_p_fcs_chars.wbr;
                 group = (if wp == curwin.get() {
-                    HLF_WBR as ::core::ffi::c_int
+                    HLF_WBR
                 } else {
-                    HLF_WBRNC as ::core::ffi::c_int
+                    HLF_WBRNC
                 }) as hlf_T;
                 attr = win_hl_attr(wp, group as ::core::ffi::c_int);
                 maxwidth = (*wp).w_view_width;
@@ -1166,11 +1092,11 @@ pub unsafe extern "C" fn redraw_ruler() {
         *chunk.items.offset(c2rust_fresh37 as isize) = object {
             type_0: kObjectTypeInteger,
             data: C2Rust_Unnamed {
-                integer: HLF_MSG as ::core::ffi::c_int as Integer,
+                integer: HLF_MSG as Integer,
             },
         };
         '_c2rust_label: {
-            if attr == *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize) {
+            if attr == *(*hl_attr_active.ptr()).offset(HLF_MSG as isize) {
             } else {
                 __assert_fail(
                     b"attr == HL_ATTR(HLF_MSG)\0".as_ptr() as *const ::core::ffi::c_char,
@@ -1351,10 +1277,8 @@ unsafe extern "C" fn ui_ext_tabline_update() {
 }
 pub unsafe extern "C" fn draw_tabline() {
     let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    let mut attr_nosel: ::core::ffi::c_int =
-        *(*hl_attr_active.ptr()).offset(HLF_TP as ::core::ffi::c_int as isize);
-    let mut attr_fill: ::core::ffi::c_int =
-        *(*hl_attr_active.ptr()).offset(HLF_TPF as ::core::ffi::c_int as isize);
+    let mut attr_nosel: ::core::ffi::c_int = *(*hl_attr_active.ptr()).offset(HLF_TP as isize);
+    let mut attr_fill: ::core::ffi::c_int = *(*hl_attr_active.ptr()).offset(HLF_TPF as isize);
     let mut use_sep_chars: bool = t_colors.get() < 8 as ::core::ffi::c_int;
     if (*default_grid.ptr()).chars.is_null() {
         return;
@@ -1430,7 +1354,7 @@ pub unsafe extern "C" fn draw_tabline() {
                 wp = (*tp_0).tp_firstwin;
             }
             if (*tp_0).tp_topframe == topframe.get() {
-                attr = win_hl_attr(cwp, HLF_TPS as ::core::ffi::c_int);
+                attr = win_hl_attr(cwp, HLF_TPS);
             }
             if use_sep_chars as ::core::ffi::c_int != 0 && col > 0 as ::core::ffi::c_int {
                 let c2rust_fresh39 = col;
@@ -1438,7 +1362,7 @@ pub unsafe extern "C" fn draw_tabline() {
                 grid_line_put_schar(c2rust_fresh39, '|' as ::core::ffi::c_int as schar_T, attr);
             }
             if (*tp_0).tp_topframe != topframe.get() {
-                attr = win_hl_attr(cwp, HLF_TP as ::core::ffi::c_int);
+                attr = win_hl_attr(cwp, HLF_TP);
             }
             let c2rust_fresh40 = col;
             col = col + 1;
@@ -1469,7 +1393,7 @@ pub unsafe extern "C" fn draw_tabline() {
                         col,
                         NameBuff.ptr() as *mut ::core::ffi::c_char,
                         len,
-                        hl_combine_attr(attr, win_hl_attr(cwp, HLF_T as ::core::ffi::c_int)),
+                        hl_combine_attr(attr, win_hl_attr(cwp, HLF_T)),
                     );
                     col += len;
                 }
@@ -2841,9 +2765,9 @@ pub unsafe extern "C" fn build_stl_str_hl(
                                             as ::core::ffi::c_int
                                             != 0
                                         {
-                                            HLF_CLF as ::core::ffi::c_int
+                                            HLF_CLF
                                         } else {
-                                            HLF_FC as ::core::ffi::c_int
+                                            HLF_FC
                                         };
                                         let mut buflen: size_t = 0 as size_t;
                                         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

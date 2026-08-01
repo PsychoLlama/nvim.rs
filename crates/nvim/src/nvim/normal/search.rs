@@ -14,17 +14,18 @@ use crate::src::nvim::drawscreen::{UPD_SOME_VALID, redraw_later};
 use crate::src::nvim::ex_getln::getcmdline;
 use crate::src::nvim::fold::foldOpenCursor;
 use crate::src::nvim::highlight::win_hl_attr;
+use crate::src::nvim::highlight_group::{HLF_L, HLF_LC};
 use crate::src::nvim::main::{
     KeyTyped, curbuf, curwin, fdo_flags, jop_flags, mod_mask, no_hlsearch, p_hls,
 };
 use crate::src::nvim::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
 use crate::src::nvim::message::emsg;
 use crate::src::nvim::normal::{
-    HLF_L, HLF_LC, KMarkNoContext, MOD_MASK_CTRL, OP_NOP, OP_ROT13, SEARCH_ECHO, SEARCH_MARK,
-    SEARCH_MSG, SEARCH_OPT, TAB, checkclearop, checkclearopq, clearop, clearopbeep,
-    e_changelist_is_empty, false_0, kMTCharWise, kMTLineWise, kMarkAll, kMarkBeginLine,
-    kMarkChangedCursor, kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed,
-    kMarkMoveSuccess, kMarkSetView, kMarkSwitchedBuf, nv_operator, true_0,
+    KMarkNoContext, MOD_MASK_CTRL, OP_NOP, OP_ROT13, SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG,
+    SEARCH_OPT, TAB, checkclearop, checkclearopq, clearop, clearopbeep, e_changelist_is_empty,
+    false_0, kMTCharWise, kMTLineWise, kMarkAll, kMarkBeginLine, kMarkChangedCursor,
+    kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed, kMarkMoveSuccess, kMarkSetView,
+    kMarkSwitchedBuf, nv_operator, true_0,
 };
 use crate::src::nvim::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
 use crate::src::nvim::os::libc::{gettext, strlen};
@@ -45,8 +46,7 @@ fn current_match_is_distinct() -> bool {
     unsafe {
         p_hls.get() != 0
             && !no_hlsearch.get()
-            && win_hl_attr(curwin.get(), HLF_LC as c_int)
-                != win_hl_attr(curwin.get(), HLF_L as c_int)
+            && win_hl_attr(curwin.get(), HLF_LC) != win_hl_attr(curwin.get(), HLF_L)
     }
 }
 

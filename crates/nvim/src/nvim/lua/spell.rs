@@ -7,6 +7,7 @@
 //! `char *` the way the spell checker expects.
 
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::src::nvim::lua::ffi::{
     lua_createtable, lua_gettop, lua_pushinteger, lua_pushlstring, lua_pushstring, lua_rawseti,
     lua_tolstring, lua_type, luaL_argerror, luaL_error, luaL_register,
@@ -21,15 +22,10 @@ use core::ptr;
 
 /// No misspelling: `spell_check` leaves the attribute at this when the
 /// word it consumed was fine.
-pub const HLF_COUNT: hlf_T = 76;
 /// Spelling mistake.
-pub const HLF_SPB: hlf_T = 37;
 /// Rare word.
-pub const HLF_SPR: hlf_T = 39;
 /// Word only valid in another region.
-pub const HLF_SPL: hlf_T = 40;
 /// Word should start with a capital.
-pub const HLF_SPC: hlf_T = 38;
 
 pub const LUA_TSTRING: c_int = 4;
 

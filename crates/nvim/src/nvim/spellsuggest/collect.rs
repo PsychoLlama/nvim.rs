@@ -26,6 +26,7 @@
 
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init};
 use crate::src::nvim::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_removed};
+use crate::src::nvim::highlight_group::HLF_COUNT;
 use crate::src::nvim::main::curwin;
 use crate::src::nvim::mbyte::{utf_head_off, utf_ptr2char};
 use crate::src::nvim::memory::{xfree, xmemdupz, xstrdup, xstrlcpy};
@@ -33,7 +34,7 @@ use crate::src::nvim::os::libc::{qsort, strcasecmp, strcmp, strlen, strncmp};
 use crate::src::nvim::spell::{spell_check, spell_soundfold};
 use crate::src::nvim::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
 use crate::src::nvim::spellsuggest::{
-    HLF_COUNT, MAXWLEN, SCORE_INS, SCORE_MAXMAX, suggest_T, suginfo_T, window_langs,
+    MAXWLEN, SCORE_INS, SCORE_MAXMAX, suggest_T, suginfo_T, window_langs,
 };
 use crate::src::nvim::types::{__compar_fn_t, garray_T, hlf_T, size_t, slang_T};
 use core::ffi::{c_char, c_int, c_void};

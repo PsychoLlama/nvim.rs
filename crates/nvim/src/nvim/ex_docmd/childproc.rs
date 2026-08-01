@@ -6,7 +6,8 @@ use core::ptr;
 
 use crate::src::nvim::api::private::helpers::{api_clear_error, cstr_as_string};
 use crate::src::nvim::ex_docmd::cmdline::do_cmdline_cmd;
-use crate::src::nvim::ex_docmd::{HLF_E, NUL, kRetNilBool};
+use crate::src::nvim::ex_docmd::{NUL, kRetNilBool};
+use crate::src::nvim::highlight_group::HLF_E;
 use crate::src::nvim::lua::executor::nlua_exec;
 use crate::src::nvim::main::{cmdmod, e_shellempty, p_sh};
 use crate::src::nvim::memory::{xfree, xstrlcat};
@@ -145,7 +146,7 @@ pub(crate) unsafe fn ex_lsp(eap: *mut exarg_T) {
             &raw mut err,
         );
         if err.type_0 as c_int != kErrorTypeNone as c_int {
-            emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E as c_int, true);
+            emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true);
         }
         api_clear_error(&raw mut err);
     }

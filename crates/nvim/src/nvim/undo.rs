@@ -95,7 +95,6 @@ mod header {
     pub const UH_RELOAD: c_int = 4;
 
     pub const UPD_NOT_VALID: c_int = 40;
-    pub const HLF_T: c_int = 23;
     pub const kListLenMayKnow: ListLenSpecials = -3;
     pub const kExtmarkNOOP: ExtmarkOp = 0;
     pub const kExtmarkUndo: ExtmarkOp = 1;

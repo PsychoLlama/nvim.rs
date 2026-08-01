@@ -12,6 +12,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::highlight_group::{HLF_D, HLF_R};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
@@ -24,9 +25,6 @@ const ACTION_EXPAND: c_int = super::ACTION_EXPAND as c_int;
 const FNAME_EXP: c_int = super::FNAME_EXP as c_int;
 const FNAME_INCL: c_int = super::FNAME_INCL as c_int;
 const FNAME_REL: c_int = super::FNAME_REL as c_int;
-const HLF_D: c_int = super::HLF_D as c_int;
-const HLF_N: c_int = super::HLF_N as c_int;
-const HLF_R: c_int = super::HLF_R as c_int;
 const LSIZE: usize = super::LSIZE as usize;
 const RE_MAGIC: c_int = super::RE_MAGIC;
 

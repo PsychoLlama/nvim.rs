@@ -70,8 +70,6 @@ pub use schar::{
 };
 
 const NUL: c_char = 0;
-const HLF_BTITLE: c_int = 68;
-const HLF_BFOOTER: c_int = 69;
 const kMHExisting: MHPutStatus = 0;
 const kBorderTextTitle: BorderTextType = 0;
 const kBorderTextFooter: BorderTextType = 1;

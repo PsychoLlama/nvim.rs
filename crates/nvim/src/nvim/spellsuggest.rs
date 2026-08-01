@@ -78,6 +78,7 @@ use crate::src::nvim::types::{FILE, VarType, garray_T, hashtab_T, hlf_T, langp_T
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
+use crate::src::nvim::highlight_group::HLF_COUNT;
 /// The longest word the spell code handles, and so the size of every word
 /// buffer in this module tree.
 pub use crate::src::nvim::spell::MAXWLEN;
@@ -98,7 +99,6 @@ const FAIL: c_int = 0;
 
 /// "No highlight", which `spell_check` leaves in place when it finds
 /// nothing wrong with the word.
-pub const HLF_COUNT: hlf_T = 76;
 /// Move to any kind of spelling mistake, not just bad or rare words.
 const SMT_ALL: smt_T = 0;
 /// A `v:t_list` typval, which is what a `'spellsuggest'` expression must

@@ -13,12 +13,12 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::highlight_group::HLF_N;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
 const FIND_DEFINE: c_int = super::FIND_DEFINE as c_int;
 const ACTION_SHOW_ALL: c_int = super::ACTION_SHOW_ALL as c_int;
-const HLF_N: c_int = super::HLF_N as c_int;
 const LSIZE: usize = super::LSIZE as usize;
 
 /// Whether a match at `startp` is really in code rather than in a

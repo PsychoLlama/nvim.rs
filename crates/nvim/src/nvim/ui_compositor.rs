@@ -1,7 +1,7 @@
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{schar_from_buf, schar_from_char};
 use crate::src::nvim::highlight::hl_blend_attrs;
-use crate::src::nvim::highlight_group::{syn_check_group, syn_id2attr};
+use crate::src::nvim::highlight_group::{HLF_MSGSEP, syn_check_group, syn_id2attr};
 use crate::src::nvim::log::{LOGLVL_DBG, logmsg};
 use crate::src::nvim::main::{
     Columns, Rows, curtab, curwin, default_grid, firstwin, hl_attr_active, msg_grid, p_wd,
@@ -92,83 +92,6 @@ pub const kFloatRelativeCursor: FloatRelative = 2;
 pub const kFloatRelativeWindow: FloatRelative = 1;
 pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_12 = 76;
-pub const HLF_PRE: C2Rust_Unnamed_12 = 75;
-pub const HLF_OK: C2Rust_Unnamed_12 = 74;
-pub const HLF_SO: C2Rust_Unnamed_12 = 73;
-pub const HLF_SE: C2Rust_Unnamed_12 = 72;
-pub const HLF_TSNC: C2Rust_Unnamed_12 = 71;
-pub const HLF_TS: C2Rust_Unnamed_12 = 70;
-pub const HLF_BFOOTER: C2Rust_Unnamed_12 = 69;
-pub const HLF_BTITLE: C2Rust_Unnamed_12 = 68;
-pub const HLF_CU: C2Rust_Unnamed_12 = 67;
-pub const HLF_WBRNC: C2Rust_Unnamed_12 = 66;
-pub const HLF_WBR: C2Rust_Unnamed_12 = 65;
-pub const HLF_BORDER: C2Rust_Unnamed_12 = 64;
-pub const HLF_MSG: C2Rust_Unnamed_12 = 63;
-pub const HLF_NFLOAT: C2Rust_Unnamed_12 = 62;
-pub const HLF_MSGSEP: C2Rust_Unnamed_12 = 61;
-pub const HLF_INACTIVE: C2Rust_Unnamed_12 = 60;
-pub const HLF_0: C2Rust_Unnamed_12 = 59;
-pub const HLF_QFL: C2Rust_Unnamed_12 = 58;
-pub const HLF_MC: C2Rust_Unnamed_12 = 57;
-pub const HLF_CUL: C2Rust_Unnamed_12 = 56;
-pub const HLF_CUC: C2Rust_Unnamed_12 = 55;
-pub const HLF_TPF: C2Rust_Unnamed_12 = 54;
-pub const HLF_TPS: C2Rust_Unnamed_12 = 53;
-pub const HLF_TP: C2Rust_Unnamed_12 = 52;
-pub const HLF_PBR: C2Rust_Unnamed_12 = 51;
-pub const HLF_PST: C2Rust_Unnamed_12 = 50;
-pub const HLF_PSB: C2Rust_Unnamed_12 = 49;
-pub const HLF_PSX: C2Rust_Unnamed_12 = 48;
-pub const HLF_PNX: C2Rust_Unnamed_12 = 47;
-pub const HLF_PSK: C2Rust_Unnamed_12 = 46;
-pub const HLF_PNK: C2Rust_Unnamed_12 = 45;
-pub const HLF_PMSI: C2Rust_Unnamed_12 = 44;
-pub const HLF_PMNI: C2Rust_Unnamed_12 = 43;
-pub const HLF_PSI: C2Rust_Unnamed_12 = 42;
-pub const HLF_PNI: C2Rust_Unnamed_12 = 41;
-pub const HLF_SPL: C2Rust_Unnamed_12 = 40;
-pub const HLF_SPR: C2Rust_Unnamed_12 = 39;
-pub const HLF_SPC: C2Rust_Unnamed_12 = 38;
-pub const HLF_SPB: C2Rust_Unnamed_12 = 37;
-pub const HLF_CONCEAL: C2Rust_Unnamed_12 = 36;
-pub const HLF_SC: C2Rust_Unnamed_12 = 35;
-pub const HLF_TXA: C2Rust_Unnamed_12 = 34;
-pub const HLF_TXD: C2Rust_Unnamed_12 = 33;
-pub const HLF_DED: C2Rust_Unnamed_12 = 32;
-pub const HLF_CHD: C2Rust_Unnamed_12 = 31;
-pub const HLF_ADD: C2Rust_Unnamed_12 = 30;
-pub const HLF_FC: C2Rust_Unnamed_12 = 29;
-pub const HLF_FL: C2Rust_Unnamed_12 = 28;
-pub const HLF_WM: C2Rust_Unnamed_12 = 27;
-pub const HLF_W: C2Rust_Unnamed_12 = 26;
-pub const HLF_VNC: C2Rust_Unnamed_12 = 25;
-pub const HLF_V: C2Rust_Unnamed_12 = 24;
-pub const HLF_T: C2Rust_Unnamed_12 = 23;
-pub const HLF_VSP: C2Rust_Unnamed_12 = 22;
-pub const HLF_C: C2Rust_Unnamed_12 = 21;
-pub const HLF_SNC: C2Rust_Unnamed_12 = 20;
-pub const HLF_S: C2Rust_Unnamed_12 = 19;
-pub const HLF_R: C2Rust_Unnamed_12 = 18;
-pub const HLF_CLF: C2Rust_Unnamed_12 = 17;
-pub const HLF_CLS: C2Rust_Unnamed_12 = 16;
-pub const HLF_CLN: C2Rust_Unnamed_12 = 15;
-pub const HLF_LNB: C2Rust_Unnamed_12 = 14;
-pub const HLF_LNA: C2Rust_Unnamed_12 = 13;
-pub const HLF_N: C2Rust_Unnamed_12 = 12;
-pub const HLF_CM: C2Rust_Unnamed_12 = 11;
-pub const HLF_M: C2Rust_Unnamed_12 = 10;
-pub const HLF_LC: C2Rust_Unnamed_12 = 9;
-pub const HLF_L: C2Rust_Unnamed_12 = 8;
-pub const HLF_I: C2Rust_Unnamed_12 = 7;
-pub const HLF_E: C2Rust_Unnamed_12 = 6;
-pub const HLF_D: C2Rust_Unnamed_12 = 5;
-pub const HLF_AT: C2Rust_Unnamed_12 = 4;
-pub const HLF_TERM: C2Rust_Unnamed_12 = 3;
-pub const HLF_EOB: C2Rust_Unnamed_12 = 2;
-pub const HLF_8: C2Rust_Unnamed_12 = 1;
-pub const HLF_NONE: C2Rust_Unnamed_12 = 0;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -751,9 +674,8 @@ unsafe extern "C" fn compose_line(
         if row == msg_sep_row.get() as Integer && (*grid).comp_index <= (*msg_grid.ptr()).comp_index
         {
             grid = msg_grid.ptr();
-            let mut msg_sep_attr: sattr_T = *(*hl_attr_active.ptr())
-                .offset(HLF_MSGSEP as ::core::ffi::c_int as isize)
-                as sattr_T;
+            let mut msg_sep_attr: sattr_T =
+                *(*hl_attr_active.ptr()).offset(HLF_MSGSEP as isize) as sattr_T;
             let mut i_0: ::core::ffi::c_int = col;
             while i_0 < until {
                 *(*linebuf.ptr()).offset((i_0 as Integer - startcol) as isize) = msg_sep_char.get();

@@ -23,7 +23,7 @@ use crate::src::nvim::extmark::{extmark_del, extmark_del_id, extmark_set};
 use crate::src::nvim::fold::foldOpenCursor;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::schar_get;
-use crate::src::nvim::highlight_group::{get_highlight_name_ext, syn_check_group};
+use crate::src::nvim::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
 use crate::src::nvim::main::{
     curtab, curwin, e_argreq, e_dictreq, e_invalid_buffer_name_str, e_invarg, e_invarg2, e_listreq,
     e_trailing_arg, firstbuf, firstwin, got_int, namespace_ids,
@@ -69,7 +69,6 @@ pub const kListLenMayKnow: ListLenSpecials = -3;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const kSHIsSign: C2Rust_Unnamed_14 = 1;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const HLF_D: C2Rust_Unnamed_15 = 5;
 pub const kMTMetaSignText: MetaIndex = 3;
 pub const kMTMetaSignHL: MetaIndex = 2;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
@@ -614,7 +613,7 @@ unsafe extern "C" fn sign_list_placed(mut rbuf: *mut buf_T, mut group: *mut ::co
             );
             msg_puts_hl(
                 &raw mut lbuf as *mut ::core::ffi::c_char,
-                HLF_D as ::core::ffi::c_int,
+                HLF_D,
                 false_0 != 0,
             );
         }

@@ -47,7 +47,8 @@ use crate::src::nvim::highlight::{
     hl_ns_get_attrs, ns_hl_def, win_check_ns_hl,
 };
 use crate::src::nvim::highlight_group::{
-    color_name_table, name_to_color, ns_get_hl_defs, syn_check_group, syn_id2name,
+    HLF_CLN, HLF_CLS, HLF_LNA, HLF_LNB, HLF_N, HLF_NONE, HLF_SC, color_name_table, name_to_color,
+    ns_get_hl_defs, syn_check_group, syn_id2name,
 };
 use crate::src::nvim::insexpand::get_cot_flags;
 use crate::src::nvim::keycodes::{name_to_mod_mask, replace_termcodes, vim_strsave_escape_ks};
@@ -265,83 +266,6 @@ pub const kMessageTypeNotification: MessageType = 2;
 pub const kMessageTypeResponse: MessageType = 1;
 pub const kMessageTypeRequest: MessageType = 0;
 pub const kMessageTypeUnknown: MessageType = -1;
-pub const HLF_COUNT: hlf_T = 76;
-pub const HLF_PRE: hlf_T = 75;
-pub const HLF_OK: hlf_T = 74;
-pub const HLF_SO: hlf_T = 73;
-pub const HLF_SE: hlf_T = 72;
-pub const HLF_TSNC: hlf_T = 71;
-pub const HLF_TS: hlf_T = 70;
-pub const HLF_BFOOTER: hlf_T = 69;
-pub const HLF_BTITLE: hlf_T = 68;
-pub const HLF_CU: hlf_T = 67;
-pub const HLF_WBRNC: hlf_T = 66;
-pub const HLF_WBR: hlf_T = 65;
-pub const HLF_BORDER: hlf_T = 64;
-pub const HLF_MSG: hlf_T = 63;
-pub const HLF_NFLOAT: hlf_T = 62;
-pub const HLF_MSGSEP: hlf_T = 61;
-pub const HLF_INACTIVE: hlf_T = 60;
-pub const HLF_0: hlf_T = 59;
-pub const HLF_QFL: hlf_T = 58;
-pub const HLF_MC: hlf_T = 57;
-pub const HLF_CUL: hlf_T = 56;
-pub const HLF_CUC: hlf_T = 55;
-pub const HLF_TPF: hlf_T = 54;
-pub const HLF_TPS: hlf_T = 53;
-pub const HLF_TP: hlf_T = 52;
-pub const HLF_PBR: hlf_T = 51;
-pub const HLF_PST: hlf_T = 50;
-pub const HLF_PSB: hlf_T = 49;
-pub const HLF_PSX: hlf_T = 48;
-pub const HLF_PNX: hlf_T = 47;
-pub const HLF_PSK: hlf_T = 46;
-pub const HLF_PNK: hlf_T = 45;
-pub const HLF_PMSI: hlf_T = 44;
-pub const HLF_PMNI: hlf_T = 43;
-pub const HLF_PSI: hlf_T = 42;
-pub const HLF_PNI: hlf_T = 41;
-pub const HLF_SPL: hlf_T = 40;
-pub const HLF_SPR: hlf_T = 39;
-pub const HLF_SPC: hlf_T = 38;
-pub const HLF_SPB: hlf_T = 37;
-pub const HLF_CONCEAL: hlf_T = 36;
-pub const HLF_SC: hlf_T = 35;
-pub const HLF_TXA: hlf_T = 34;
-pub const HLF_TXD: hlf_T = 33;
-pub const HLF_DED: hlf_T = 32;
-pub const HLF_CHD: hlf_T = 31;
-pub const HLF_ADD: hlf_T = 30;
-pub const HLF_FC: hlf_T = 29;
-pub const HLF_FL: hlf_T = 28;
-pub const HLF_WM: hlf_T = 27;
-pub const HLF_W: hlf_T = 26;
-pub const HLF_VNC: hlf_T = 25;
-pub const HLF_V: hlf_T = 24;
-pub const HLF_T: hlf_T = 23;
-pub const HLF_VSP: hlf_T = 22;
-pub const HLF_C: hlf_T = 21;
-pub const HLF_SNC: hlf_T = 20;
-pub const HLF_S: hlf_T = 19;
-pub const HLF_R: hlf_T = 18;
-pub const HLF_CLF: hlf_T = 17;
-pub const HLF_CLS: hlf_T = 16;
-pub const HLF_CLN: hlf_T = 15;
-pub const HLF_LNB: hlf_T = 14;
-pub const HLF_LNA: hlf_T = 13;
-pub const HLF_N: hlf_T = 12;
-pub const HLF_CM: hlf_T = 11;
-pub const HLF_M: hlf_T = 10;
-pub const HLF_LC: hlf_T = 9;
-pub const HLF_L: hlf_T = 8;
-pub const HLF_I: hlf_T = 7;
-pub const HLF_E: hlf_T = 6;
-pub const HLF_D: hlf_T = 5;
-pub const HLF_AT: hlf_T = 4;
-pub const HLF_TERM: hlf_T = 3;
-pub const HLF_EOB: hlf_T = 2;
-pub const HLF_8: hlf_T = 1;
-pub const HLF_NONE: hlf_T = 0;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_int;
 pub const kDirectionNotSet: C2Rust_Unnamed_27 = 0;
 pub const kCdScopeGlobal: CdScope = 2;
@@ -3408,22 +3332,22 @@ pub unsafe extern "C" fn nvim_eval_statusline(
             0 as ::core::ffi::c_int
         };
         scl_hl_id = if use_cursor_line_highlight(wp, lnum) as ::core::ffi::c_int != 0 {
-            HLF_CLS as ::core::ffi::c_int
+            HLF_CLS
         } else {
-            HLF_SC as ::core::ffi::c_int
+            HLF_SC
         };
         if num_id != 0 {
             stc_hl_id = num_id;
         } else if use_cursor_line_highlight(wp, lnum) {
-            stc_hl_id = HLF_CLN as ::core::ffi::c_int;
+            stc_hl_id = HLF_CLN;
         } else if (*wp).w_onebuf_opt.wo_rnu != 0 {
             stc_hl_id = if lnum < (*wp).w_cursor.lnum {
-                HLF_LNA as ::core::ffi::c_int
+                HLF_LNA
             } else {
-                HLF_LNB as ::core::ffi::c_int
+                HLF_LNB
             };
         } else {
-            stc_hl_id = HLF_N as ::core::ffi::c_int;
+            stc_hl_id = HLF_N;
         }
         set_vim_var_nr(VV_LNUM, lnum as varnumber_T);
         set_vim_var_nr(

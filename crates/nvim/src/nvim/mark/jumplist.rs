@@ -15,6 +15,7 @@ use core::ptr;
 
 use super::show::*;
 use super::*;
+use crate::src::nvim::highlight_group::HLF_D;
 
 /// Set the previous context mark to the current position and add it to the
 /// jump list.
@@ -318,7 +319,7 @@ pub unsafe fn ex_jumps(mut _eap: *mut exarg_T) {
                         if (*curwin.get()).w_jumplist[i as usize].fmark.fnum
                             == (*curbuf.get()).handle
                         {
-                            HLF_D as c_int
+                            HLF_D
                         } else {
                             0
                         },
@@ -377,7 +378,7 @@ pub unsafe fn ex_changes(mut _eap: *mut exarg_T) {
                 .mark,
                 17,
             );
-            msg_outtrans(name, HLF_D as c_int, false);
+            msg_outtrans(name, HLF_D, false);
             xfree(name as *mut c_void);
             os_breakcheck();
         }

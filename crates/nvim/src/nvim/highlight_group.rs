@@ -61,15 +61,9 @@ pub const _ISxdigit: C2Rust_Unnamed = 4096;
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_15 = 76;
-pub const HLF_MSG: C2Rust_Unnamed_15 = 63;
-pub const HLF_INACTIVE: C2Rust_Unnamed_15 = 60;
-pub const HLF_W: C2Rust_Unnamed_15 = 26;
-pub const HLF_SNC: C2Rust_Unnamed_15 = 20;
-pub const HLF_S: C2Rust_Unnamed_15 = 19;
-pub const HLF_D: C2Rust_Unnamed_15 = 5;
-pub const HLF_NONE: C2Rust_Unnamed_15 = 0;
+mod hlf;
+
+pub use self::hlf::*;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const HLATTRS_DICT_SIZE: C2Rust_Unnamed_16 = 24;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
@@ -2275,7 +2269,7 @@ unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
         didh = true_0 != 0;
         msg_puts_hl(
             b"links to\0".as_ptr() as *const ::core::ffi::c_char,
-            HLF_D as ::core::ffi::c_int,
+            HLF_D,
             false_0 != 0,
         );
         msg_putchar(' ' as ::core::ffi::c_int);
@@ -2567,10 +2561,10 @@ unsafe extern "C" fn highlight_list_arg(
     didh = true_0 != 0;
     if !got_int.get() {
         if *name as ::core::ffi::c_int != NUL {
-            msg_puts_hl(name, HLF_D as ::core::ffi::c_int, false_0 != 0);
+            msg_puts_hl(name, HLF_D, false_0 != 0);
             msg_puts_hl(
                 b"=\0".as_ptr() as *const ::core::ffi::c_char,
-                HLF_D as ::core::ffi::c_int,
+                HLF_D,
                 false_0 != 0,
             );
         }
@@ -2997,7 +2991,7 @@ unsafe extern "C" fn syn_add_group(
             && c != '@' as ::core::ffi::c_int
             && c != '-' as ::core::ffi::c_int
         {
-            msg_source(HLF_W as ::core::ffi::c_int);
+            msg_source(HLF_W);
             emsg(gettext(
                 &raw const e_highlight_group_name_invalid_char as *const ::core::ffi::c_char,
             ));
@@ -3216,9 +3210,9 @@ pub unsafe extern "C" fn highlight_changed() {
     let mut id_S: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let mut id_SNC: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     need_highlight_changed.set(false_0 != 0);
-    (*highlight_attr.ptr())[HLF_NONE as ::core::ffi::c_int as usize] = 0 as ::core::ffi::c_int;
+    (*highlight_attr.ptr())[HLF_NONE as usize] = 0 as ::core::ffi::c_int;
     let mut hlf: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while hlf < HLF_COUNT as ::core::ffi::c_int {
+    while hlf < HLF_COUNT {
         let mut id: ::core::ffi::c_int = syn_check_group(
             *(hlf_names.ptr() as *mut *const ::core::ffi::c_char).offset(hlf as isize),
             strlen(*(hlf_names.ptr() as *mut *const ::core::ffi::c_char).offset(hlf as isize)),
@@ -3229,19 +3223,15 @@ pub unsafe extern "C" fn highlight_changed() {
         let mut ns_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
         let mut final_id: ::core::ffi::c_int = id;
         syn_ns_get_final_id(&raw mut ns_id, &raw mut final_id);
-        if hlf == HLF_SNC as ::core::ffi::c_int {
+        if hlf == HLF_SNC {
             id_SNC = final_id;
-        } else if hlf == HLF_S as ::core::ffi::c_int {
+        } else if hlf == HLF_S {
             id_S = final_id;
         }
-        (*highlight_attr.ptr())[hlf as usize] = hl_get_ui_attr(
-            ns_id,
-            hlf,
-            final_id,
-            hlf == HLF_INACTIVE as ::core::ffi::c_int,
-        );
+        (*highlight_attr.ptr())[hlf as usize] =
+            hl_get_ui_attr(ns_id, hlf, final_id, hlf == HLF_INACTIVE);
         if (*highlight_attr.ptr())[hlf as usize] != (*highlight_attr_last.ptr())[hlf as usize] {
-            if hlf == HLF_MSG as ::core::ffi::c_int {
+            if hlf == HLF_MSG {
                 clear_cmdline.set(true_0 != 0);
                 let mut attrs: HlAttrs = syn_attr2entry((*highlight_attr.ptr())[hlf as usize]);
                 (*msg_grid.ptr()).blending = attrs.hl_blend > -1 as int32_t;
@@ -3288,7 +3278,7 @@ pub unsafe extern "C" fn highlight_changed() {
                 id_SNC,
                 hlcnt,
                 i,
-                HLF_SNC as ::core::ffi::c_int,
+                HLF_SNC,
                 highlight_stlnc.ptr() as *mut ::core::ffi::c_int,
             );
         }
@@ -3363,7 +3353,7 @@ unsafe extern "C" fn highlight_list() {
         if i < 0 as ::core::ffi::c_int {
             break;
         }
-        highlight_list_two(i, HLF_D as ::core::ffi::c_int);
+        highlight_list_two(i, HLF_D);
     }
     let mut i_0: ::core::ffi::c_int = 40 as ::core::ffi::c_int;
     loop {

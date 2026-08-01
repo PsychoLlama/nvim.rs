@@ -13,6 +13,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::file_search::Name;
+use crate::src::nvim::highlight_group::HLF_W;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -878,7 +879,7 @@ impl DoTag {
                 );
             }
             if (found > self.prev_num_matches || self.new_tag) && found > 1 {
-                msg(buf, if ignored_case { HLF_W as c_int } else { 0 });
+                msg(buf, if ignored_case { HLF_W } else { 0 });
                 // Don't overwrite this message.
                 msg_scroll.set(true_0);
             } else {

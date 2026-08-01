@@ -34,6 +34,7 @@ mod remote;
 mod usage;
 pub use self::exit::*;
 use crate::src::nvim::eval::typval::kCallbackNone;
+use crate::src::nvim::highlight_group::HLF_NONE;
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::state::MODE_NORMAL;
 
@@ -74,7 +75,6 @@ pub(crate) const VAR_FIXED: VarLockStatus = 2;
 pub(crate) const VAR_NUMBER: VarType = 1;
 pub(crate) const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
 pub(crate) const kListLenMayKnow: ListLenSpecials = -3;
-pub(crate) const HLF_NONE: hlf_T = 0;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;
 pub const OPTION_MAGIC_ON: optmagic_T = 1;
 pub(crate) const OPTION_MAGIC_NOT_SET: optmagic_T = 0;

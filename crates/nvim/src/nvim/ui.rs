@@ -49,6 +49,7 @@ use crate::src::nvim::ex_getln::cmdline_ui_flush;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::get_win_by_grid_handle;
 use crate::src::nvim::highlight::{highlight_use_hlstate, ui_send_all_hls};
+use crate::src::nvim::highlight_group::HLF_W;
 use crate::src::nvim::main::{
     State, called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, curwin, default_grid,
     emsg_silent, exiting, expr_map_lock, first_tabpage, full_screen, in_assert_fails, msg_grid_adj,
@@ -434,8 +435,6 @@ pub unsafe fn vim_beep(val: core::ffi::c_uint) {
         }
     }
 }
-
-const HLF_W: c_int = 26;
 
 /// Fires `UIEnter` once per attached UI. Startup's catch-up, for the UIs
 /// that attached before autocommands were running.

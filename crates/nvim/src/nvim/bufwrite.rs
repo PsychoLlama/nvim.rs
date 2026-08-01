@@ -23,6 +23,7 @@ use crate::src::nvim::fileio::{
     msg_add_fileformat, msg_add_lines, need_conversion, set_rw_fname, time_differs, vim_rename,
     vim_tempname, write_eintr,
 };
+use crate::src::nvim::highlight_group::HLF_E;
 use crate::src::nvim::input::ask_yesno;
 use crate::src::nvim::main::{
     IObuff, cmdmod, curbuf, e_empty_buffer, e_fsync, e_interr, e_longname, ex_no_reprint, exiting,
@@ -71,7 +72,6 @@ pub(crate) use self::lines::*;
 pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ENOTSUP: C2Rust_Unnamed = -95;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const HLF_E: C2Rust_Unnamed_13 = 6;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const CMOD_LOCKMARKS: C2Rust_Unnamed_15 = 2048;
 /// A write error, held until the cleanup path can report it.
@@ -850,7 +850,7 @@ pub unsafe fn buf_write(
             err.emit();
             retval = FAIL;
             if end == 0 {
-                let hl_id = HLF_E as ::core::ffi::c_int;
+                let hl_id = HLF_E;
                 msg_puts_hl(
                     translate(c"\nWARNING: Original file may be lost or damaged\n").as_ptr(),
                     hl_id,

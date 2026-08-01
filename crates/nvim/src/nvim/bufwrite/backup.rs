@@ -18,6 +18,7 @@ use core::ffi::{c_char, c_int, c_uint};
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::highlight_group::HLF_E;
 
 /// `st_mode & S_IFMT` for a regular file.
 const S_IFREG: uint64_t = 0o100000;
@@ -68,7 +69,7 @@ unsafe fn check_mtime(buf: *mut buf_T, file_info: *mut FileInfo) -> bool {
         // Not emsg(): that would flush the buffers.
         msg(
             translate(c"WARNING: The file has been changed since reading it!!!").as_ptr(),
-            HLF_E as c_int,
+            HLF_E,
         );
         if ask_yesno(translate(c"Do you really want to write to it").as_ptr()) == 'n' as c_int {
             return false;

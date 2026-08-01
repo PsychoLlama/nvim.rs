@@ -15,6 +15,7 @@ use std::ffi::CStr;
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::highlight_group::{HLF_E, HLF_W};
 
 /// Has a warning already been shown this sweep? Only one is worth reading.
 static ALREADY_WARNED: GlobalCell<bool> = GlobalCell::new(false);
@@ -320,9 +321,9 @@ unsafe fn warn_changed(
 
         if !autocmd_busy.get() {
             msg_start();
-            msg_puts_hl(tbuf.as_ptr(), HLF_E as c_int, true);
+            msg_puts_hl(tbuf.as_ptr(), HLF_E, true);
             if !mesg2.is_empty() {
-                msg_puts_hl(mesg2.as_ptr(), HLF_W as c_int, true);
+                msg_puts_hl(mesg2.as_ptr(), HLF_W, true);
             }
             msg_clr_eos();
             msg_end();

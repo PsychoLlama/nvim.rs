@@ -5,6 +5,7 @@ use crate::src::nvim::eval::last_set_msg;
 use crate::src::nvim::ex_docmd::{do_cmdline, ends_excmd};
 use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight_group::{HLF_8, HLF_D};
 use crate::src::nvim::keycodes::{K_SPECIAL, replace_termcodes};
 use crate::src::nvim::lua::executor::{
     api_free_luaref, api_new_luaref, nlua_do_ucmd, nlua_funcref_str, nlua_set_sctx,
@@ -110,83 +111,6 @@ pub const kFloatRelativeCursor: FloatRelative = 2;
 pub const kFloatRelativeWindow: FloatRelative = 1;
 pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_13 = 76;
-pub const HLF_PRE: C2Rust_Unnamed_13 = 75;
-pub const HLF_OK: C2Rust_Unnamed_13 = 74;
-pub const HLF_SO: C2Rust_Unnamed_13 = 73;
-pub const HLF_SE: C2Rust_Unnamed_13 = 72;
-pub const HLF_TSNC: C2Rust_Unnamed_13 = 71;
-pub const HLF_TS: C2Rust_Unnamed_13 = 70;
-pub const HLF_BFOOTER: C2Rust_Unnamed_13 = 69;
-pub const HLF_BTITLE: C2Rust_Unnamed_13 = 68;
-pub const HLF_CU: C2Rust_Unnamed_13 = 67;
-pub const HLF_WBRNC: C2Rust_Unnamed_13 = 66;
-pub const HLF_WBR: C2Rust_Unnamed_13 = 65;
-pub const HLF_BORDER: C2Rust_Unnamed_13 = 64;
-pub const HLF_MSG: C2Rust_Unnamed_13 = 63;
-pub const HLF_NFLOAT: C2Rust_Unnamed_13 = 62;
-pub const HLF_MSGSEP: C2Rust_Unnamed_13 = 61;
-pub const HLF_INACTIVE: C2Rust_Unnamed_13 = 60;
-pub const HLF_0: C2Rust_Unnamed_13 = 59;
-pub const HLF_QFL: C2Rust_Unnamed_13 = 58;
-pub const HLF_MC: C2Rust_Unnamed_13 = 57;
-pub const HLF_CUL: C2Rust_Unnamed_13 = 56;
-pub const HLF_CUC: C2Rust_Unnamed_13 = 55;
-pub const HLF_TPF: C2Rust_Unnamed_13 = 54;
-pub const HLF_TPS: C2Rust_Unnamed_13 = 53;
-pub const HLF_TP: C2Rust_Unnamed_13 = 52;
-pub const HLF_PBR: C2Rust_Unnamed_13 = 51;
-pub const HLF_PST: C2Rust_Unnamed_13 = 50;
-pub const HLF_PSB: C2Rust_Unnamed_13 = 49;
-pub const HLF_PSX: C2Rust_Unnamed_13 = 48;
-pub const HLF_PNX: C2Rust_Unnamed_13 = 47;
-pub const HLF_PSK: C2Rust_Unnamed_13 = 46;
-pub const HLF_PNK: C2Rust_Unnamed_13 = 45;
-pub const HLF_PMSI: C2Rust_Unnamed_13 = 44;
-pub const HLF_PMNI: C2Rust_Unnamed_13 = 43;
-pub const HLF_PSI: C2Rust_Unnamed_13 = 42;
-pub const HLF_PNI: C2Rust_Unnamed_13 = 41;
-pub const HLF_SPL: C2Rust_Unnamed_13 = 40;
-pub const HLF_SPR: C2Rust_Unnamed_13 = 39;
-pub const HLF_SPC: C2Rust_Unnamed_13 = 38;
-pub const HLF_SPB: C2Rust_Unnamed_13 = 37;
-pub const HLF_CONCEAL: C2Rust_Unnamed_13 = 36;
-pub const HLF_SC: C2Rust_Unnamed_13 = 35;
-pub const HLF_TXA: C2Rust_Unnamed_13 = 34;
-pub const HLF_TXD: C2Rust_Unnamed_13 = 33;
-pub const HLF_DED: C2Rust_Unnamed_13 = 32;
-pub const HLF_CHD: C2Rust_Unnamed_13 = 31;
-pub const HLF_ADD: C2Rust_Unnamed_13 = 30;
-pub const HLF_FC: C2Rust_Unnamed_13 = 29;
-pub const HLF_FL: C2Rust_Unnamed_13 = 28;
-pub const HLF_WM: C2Rust_Unnamed_13 = 27;
-pub const HLF_W: C2Rust_Unnamed_13 = 26;
-pub const HLF_VNC: C2Rust_Unnamed_13 = 25;
-pub const HLF_V: C2Rust_Unnamed_13 = 24;
-pub const HLF_T: C2Rust_Unnamed_13 = 23;
-pub const HLF_VSP: C2Rust_Unnamed_13 = 22;
-pub const HLF_C: C2Rust_Unnamed_13 = 21;
-pub const HLF_SNC: C2Rust_Unnamed_13 = 20;
-pub const HLF_S: C2Rust_Unnamed_13 = 19;
-pub const HLF_R: C2Rust_Unnamed_13 = 18;
-pub const HLF_CLF: C2Rust_Unnamed_13 = 17;
-pub const HLF_CLS: C2Rust_Unnamed_13 = 16;
-pub const HLF_CLN: C2Rust_Unnamed_13 = 15;
-pub const HLF_LNB: C2Rust_Unnamed_13 = 14;
-pub const HLF_LNA: C2Rust_Unnamed_13 = 13;
-pub const HLF_N: C2Rust_Unnamed_13 = 12;
-pub const HLF_CM: C2Rust_Unnamed_13 = 11;
-pub const HLF_M: C2Rust_Unnamed_13 = 10;
-pub const HLF_LC: C2Rust_Unnamed_13 = 9;
-pub const HLF_L: C2Rust_Unnamed_13 = 8;
-pub const HLF_I: C2Rust_Unnamed_13 = 7;
-pub const HLF_E: C2Rust_Unnamed_13 = 6;
-pub const HLF_D: C2Rust_Unnamed_13 = 5;
-pub const HLF_AT: C2Rust_Unnamed_13 = 4;
-pub const HLF_TERM: C2Rust_Unnamed_13 = 3;
-pub const HLF_EOB: C2Rust_Unnamed_13 = 2;
-pub const HLF_8: C2Rust_Unnamed_13 = 1;
-pub const HLF_NONE: C2Rust_Unnamed_13 = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
@@ -1527,7 +1451,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                             .offset((4 as size_t).wrapping_sub(len) as isize),
                     );
                 }
-                msg_outtrans((*cmd).uc_name, HLF_D as ::core::ffi::c_int, false_0 != 0);
+                msg_outtrans((*cmd).uc_name, HLF_D, false_0 != 0);
                 len = strlen((*cmd).uc_name).wrapping_add(4 as size_t);
                 if len < 21 as size_t {
                     static spaces: GlobalCell<[::core::ffi::c_char; 18]> =
@@ -1721,7 +1645,7 @@ unsafe extern "C" fn uc_list(mut name: *mut ::core::ffi::c_char, mut name_len: s
                 if (*cmd).uc_luaref != LUA_NOREF {
                     let mut fn_0: *mut ::core::ffi::c_char =
                         nlua_funcref_str((*cmd).uc_luaref, ::core::ptr::null_mut::<Arena>());
-                    msg_puts_hl(fn_0, HLF_8 as ::core::ffi::c_int, false_0 != 0);
+                    msg_puts_hl(fn_0, HLF_8, false_0 != 0);
                     xfree(fn_0 as *mut ::core::ffi::c_void);
                     if *(*cmd).uc_rep as ::core::ffi::c_int != NUL {
                         msg_puts(

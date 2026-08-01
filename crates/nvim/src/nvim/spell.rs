@@ -83,12 +83,6 @@ pub const kTrue: crate::src::nvim::types::TriState = 1;
 pub const kFalse: crate::src::nvim::types::TriState = 0;
 pub const MAXCOL: c_uint = 2147483647;
 
-pub const HLF_COUNT: hlf_T = 76;
-pub const HLF_SPL: hlf_T = 40;
-pub const HLF_SPR: hlf_T = 39;
-pub const HLF_SPC: hlf_T = 38;
-pub const HLF_SPB: hlf_T = 37;
-
 pub const kOptValTypeBoolean: crate::src::nvim::types::OptValType = 0;
 pub const SHM_SEARCH: c_uint = 115;
 pub const OPT_LOCAL: c_uint = 2;

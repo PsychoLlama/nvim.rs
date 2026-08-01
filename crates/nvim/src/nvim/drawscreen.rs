@@ -31,7 +31,9 @@ use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight::{
     hl_combine_attr, update_window_hl, win_bg_attr, win_check_ns_hl,
 };
-use crate::src::nvim::highlight_group::highlight_changed;
+use crate::src::nvim::highlight_group::{
+    HLF_AT, HLF_C, HLF_CM, HLF_COUNT, HLF_EOB, HLF_FC, HLF_MSG, HLF_N, HLF_SC, highlight_changed,
+};
 use crate::src::nvim::insexpand::ins_compl_show_pum;
 use crate::src::nvim::main::{
     Columns, KeyTyped, NameBuff, RedrawingDisabled, Rows, State, VIsual, VIsual_active,
@@ -120,15 +122,6 @@ pub const SIGN_WIDTH: C2Rust_Unnamed = 2;
 pub const kVPosWinCol: VirtTextPos = 5;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
-pub const HLF_COUNT: hlf_T = 76;
-pub const HLF_MSG: hlf_T = 63;
-pub const HLF_SC: hlf_T = 35;
-pub const HLF_FC: hlf_T = 29;
-pub const HLF_C: hlf_T = 21;
-pub const HLF_N: hlf_T = 12;
-pub const HLF_CM: hlf_T = 11;
-pub const HLF_AT: hlf_T = 4;
-pub const HLF_EOB: hlf_T = 2;
 pub const kMTMetaSignText: MetaIndex = 3;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
 pub const SHM_RECORDING: C2Rust_Unnamed_18 = 113;
@@ -280,8 +273,7 @@ pub unsafe extern "C" fn screenclear() {
     msg_reset_scroll();
     msg_didany.set(false_0 != 0);
     msg_didout.set(false_0 != 0);
-    if *(*hl_attr_active.ptr()).offset(HLF_MSG as ::core::ffi::c_int as isize)
-        > 0 as ::core::ffi::c_int
+    if *(*hl_attr_active.ptr()).offset(HLF_MSG as isize) > 0 as ::core::ffi::c_int
         && msg_use_grid() as ::core::ffi::c_int != 0
         && !(*msg_grid.ptr()).chars.is_null()
     {
@@ -903,7 +895,7 @@ pub unsafe extern "C" fn showmode() -> ::core::ffi::c_int {
             msg_clr_cmdline();
         }
         msg_pos_mode();
-        let mut hl_id: ::core::ffi::c_int = HLF_CM as ::core::ffi::c_int;
+        let mut hl_id: ::core::ffi::c_int = HLF_CM;
         msg_no_more.set(true_0 != 0);
         let mut save_lines_left: ::core::ffi::c_int = lines_left.get();
         lines_left.set(0 as ::core::ffi::c_int);
@@ -942,7 +934,7 @@ pub unsafe extern "C" fn showmode() -> ::core::ffi::c_int {
                         );
                         let mut sub_id: ::core::ffi::c_int = if (edit_submode_highl.get()
                             as ::core::ffi::c_uint)
-                            < HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
+                            < HLF_COUNT as ::core::ffi::c_uint
                         {
                             edit_submode_highl.get() as ::core::ffi::c_int
                         } else {
@@ -1139,7 +1131,7 @@ pub unsafe extern "C" fn clearmode() {
     msg_ext_ui_flush();
     msg_pos_mode();
     if reg_recording.get() != 0 as ::core::ffi::c_int {
-        recording_mode(HLF_CM as ::core::ffi::c_int);
+        recording_mode(HLF_CM);
     }
     msg_clr_eos();
     msg_ext_flush_showmode();
@@ -1408,7 +1400,7 @@ unsafe extern "C" fn draw_vsep_win(mut wp: *mut win_T) {
         grid_line_put_schar(
             (*wp).w_wincol + (*wp).w_width,
             (*wp).w_p_fcs_chars.vert,
-            win_hl_attr(wp, HLF_C as ::core::ffi::c_int),
+            win_hl_attr(wp, HLF_C),
         );
         grid_line_flush();
         row += 1;
@@ -1423,7 +1415,7 @@ unsafe extern "C" fn draw_hsep_win(mut wp: *mut win_T) {
         (*wp).w_wincol,
         (*wp).w_wincol + (*wp).w_width,
         (*wp).w_p_fcs_chars.horiz,
-        win_hl_attr(wp, HLF_C as ::core::ffi::c_int),
+        win_hl_attr(wp, HLF_C),
     );
     grid_line_flush();
 }
@@ -1460,7 +1452,7 @@ unsafe extern "C" fn draw_sep_connectors_win(mut wp: *mut win_T) {
     {
         return;
     }
-    let mut hl: ::core::ffi::c_int = win_hl_attr(wp, HLF_C as ::core::ffi::c_int);
+    let mut hl: ::core::ffi::c_int = win_hl_attr(wp, HLF_C);
     let mut win_at_top: bool = false;
     let mut win_at_bottom: bool = (*wp).w_hsep_height == 0 as ::core::ffi::c_int;
     let mut win_at_left: bool = false;
@@ -2699,10 +2691,8 @@ unsafe extern "C" fn win_update(mut wp: *mut win_T) {
                 (*wp).w_empty_rows = 0 as ::core::ffi::c_int;
                 (*wp).w_filler_rows = 0 as ::core::ffi::c_int;
                 if !eof && !didline {
-                    let mut at_attr: ::core::ffi::c_int = hl_combine_attr(
-                        win_bg_attr(wp),
-                        win_hl_attr(wp, HLF_AT as ::core::ffi::c_int),
-                    );
+                    let mut at_attr: ::core::ffi::c_int =
+                        hl_combine_attr(win_bg_attr(wp), win_hl_attr(wp, HLF_AT));
                     if lnum_0 == (*wp).w_topline {
                         (*wp).w_botline = lnum_0 + 1 as linenr_T;
                     } else if win_get_fill(wp, lnum_0) >= (*wp).w_view_height - srow_0 {
@@ -2959,7 +2949,7 @@ pub unsafe extern "C" fn win_draw_end(
 ) {
     '_c2rust_label: {
         if hl as ::core::ffi::c_uint >= 0 as ::core::ffi::c_uint
-            && (hl as ::core::ffi::c_uint) < HLF_COUNT as ::core::ffi::c_int as ::core::ffi::c_uint
+            && (hl as ::core::ffi::c_uint) < HLF_COUNT as ::core::ffi::c_uint
         {
         } else {
             __assert_fail(
@@ -2988,7 +2978,7 @@ pub unsafe extern "C" fn win_draw_end(
                         n + fdc
                     },
                     ' ' as ::core::ffi::c_int as schar_T,
-                    win_hl_attr(wp, HLF_FC as ::core::ffi::c_int),
+                    win_hl_attr(wp, HLF_FC),
                 );
             }
             if scwidth > 0 as ::core::ffi::c_int {
@@ -3000,7 +2990,7 @@ pub unsafe extern "C" fn win_draw_end(
                         n + scwidth * SIGN_WIDTH as ::core::ffi::c_int
                     },
                     ' ' as ::core::ffi::c_int as schar_T,
-                    win_hl_attr(wp, HLF_SC as ::core::ffi::c_int),
+                    win_hl_attr(wp, HLF_SC),
                 );
             }
             if ((*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0)
@@ -3015,7 +3005,7 @@ pub unsafe extern "C" fn win_draw_end(
                         n + width
                     },
                     ' ' as ::core::ffi::c_int as schar_T,
-                    win_hl_attr(wp, HLF_N as ::core::ffi::c_int),
+                    win_hl_attr(wp, HLF_N),
                 );
             }
         }

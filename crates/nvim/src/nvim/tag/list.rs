@@ -10,6 +10,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::src::nvim::file_search::Name;
+use crate::src::nvim::highlight_group::{HLF_CM, HLF_D, HLF_T};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -69,10 +70,10 @@ pub(crate) unsafe fn print_tag_list(
         }
         msg_ext_set_kind(c"confirm".as_ptr());
         msg_start();
-        msg_puts_hl(gettext(c"  # pri kind tag".as_ptr()), HLF_T as c_int, false);
+        msg_puts_hl(gettext(c"  # pri kind tag".as_ptr()), HLF_T, false);
         msg_clr_eos();
         advance_to_files(taglen);
-        msg_puts_hl(gettext(c"file\n".as_ptr()), HLF_T as c_int, false);
+        msg_puts_hl(gettext(c"file\n".as_ptr()), HLF_T, false);
 
         'each: for i in 0..num_matches {
             if got_int.get() {
@@ -171,13 +172,13 @@ unsafe fn print_entry_head(
         }
         msg_advance(13);
         let len = tagp.tagname_end.offset_from(tagp.tagname) as c_int;
-        msg_outtrans_len(tagp.tagname, len, HLF_T as c_int, false);
+        msg_outtrans_len(tagp.tagname, len, HLF_T, false);
         msg_putchar(' ' as c_int);
         advance_to_files(taglen);
 
         let fname = tag_full_fname(tagp);
         if !fname.is_null() {
-            msg_outtrans(fname, HLF_D as c_int, false);
+            msg_outtrans(fname, HLF_D, false);
             xfree(fname.cast());
         }
     }
@@ -217,7 +218,7 @@ unsafe fn print_extra_fields(tagp: &TagParts) -> bool {
 
             // Everything else is printed, the field name highlighted up to
             // its colon.
-            let mut hl_id = HLF_CM as c_int;
+            let mut hl_id = HLF_CM;
             while !matches!(*p as u8, 0 | b'\r' | b'\n') {
                 if msg_col.get() + ptr2cells(p) >= Columns.get() {
                     msg_putchar('\n' as c_int);

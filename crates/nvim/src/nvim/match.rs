@@ -17,7 +17,9 @@ use crate::src::nvim::ex_docmd::{ends_excmd, ex_errmsg, find_nextcmd, set_no_hls
 use crate::src::nvim::fold::hasFolding;
 use crate::src::nvim::highlight::win_hl_attr;
 
-use crate::src::nvim::highlight_group::{syn_check_group, syn_id2attr, syn_id2name, syn_name2id};
+use crate::src::nvim::highlight_group::{
+    HLF_L, HLF_LC, syn_check_group, syn_id2attr, syn_id2name, syn_name2id,
+};
 use crate::src::nvim::main::{
     called_emsg, curwin, e_dictreq, e_invalwindow, e_invarg2, e_invcmd, e_listarg, e_listreq,
     e_trailing_arg, got_int, p_cpo, p_rdt, search_first_line, search_hl_has_cursor_lnum,
@@ -53,8 +55,6 @@ pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const HLF_LC: C2Rust_Unnamed_13 = 9;
-pub const HLF_L: C2Rust_Unnamed_13 = 8;
 pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 56] = unsafe {
     ::core::mem::transmute::<[u8; 56], [::core::ffi::c_char; 56]>(
         *b"void f_getmatches(typval_T *, typval_T *, EvalFuncData)\0",
@@ -368,7 +368,7 @@ pub unsafe extern "C" fn init_search_hl(mut wp: *mut win_T, mut search_hl: *mut 
     (*search_hl).buf = (*wp).w_buffer;
     (*search_hl).lnum = 0 as ::core::ffi::c_int as linenr_T;
     (*search_hl).first_lnum = 0 as ::core::ffi::c_int as linenr_T;
-    (*search_hl).attr = win_hl_attr(wp, HLF_L as ::core::ffi::c_int);
+    (*search_hl).attr = win_hl_attr(wp, HLF_L);
 }
 unsafe extern "C" fn next_search_hl_pos(
     mut shl: *mut match_T,
@@ -733,7 +733,7 @@ pub unsafe extern "C" fn update_search_hl(
                     (*shl).endcol = next_col as colnr_T;
                 }
                 if shl == search_hl && (*shl).has_cursor as ::core::ffi::c_int != 0 {
-                    (*shl).attr_cur = win_hl_attr(wp, HLF_LC as ::core::ffi::c_int);
+                    (*shl).attr_cur = win_hl_attr(wp, HLF_LC);
                     if (*shl).attr_cur != (*shl).attr {
                         search_hl_has_cursor_lnum.set(lnum);
                     }

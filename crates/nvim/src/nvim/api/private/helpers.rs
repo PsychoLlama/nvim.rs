@@ -65,7 +65,6 @@ const DI_FLAGS_FIX: c_int = 4;
 const DI_FLAGS_LOCK: c_int = 8;
 
 /// The highlight group an error chunk gets when the caller named none.
-const HLF_E: c_int = 6;
 
 /// The hash slot `mh_get_int` reports for a key it did not find.
 const MH_TOMBSTONE: uint32_t = u32::MAX;

@@ -21,8 +21,8 @@ use crate::src::nvim::hashtab::{
     hash_remove, hash_unlock,
 };
 use crate::src::nvim::highlight_group::{
-    highlight_group_name, highlight_link_id, highlight_num_groups, init_highlight, syn_check_group,
-    syn_id2attr, syn_list_header, syn_name2id, syn_name2id_len,
+    HLF_D, highlight_group_name, highlight_link_id, highlight_num_groups, init_highlight,
+    syn_check_group, syn_id2attr, syn_list_header, syn_name2id, syn_name2id_len,
 };
 use crate::src::nvim::indent_c::find_start_comment;
 use crate::src::nvim::main::{
@@ -71,7 +71,6 @@ unsafe extern "C" {
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const HLF_D: C2Rust_Unnamed_14 = 5;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const EXPAND_BUF_LEN: C2Rust_Unnamed_15 = 256;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
@@ -3539,7 +3538,7 @@ unsafe extern "C" fn syn_match_msg() {
 static last_matchgroup: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 unsafe extern "C" fn syn_list_one(id: ::core::ffi::c_int, syncing: bool, link_only: bool) {
     let mut did_header: bool = false_0 != 0;
-    let hl_id: ::core::ffi::c_int = HLF_D as ::core::ffi::c_int;
+    let hl_id: ::core::ffi::c_int = HLF_D;
     if !syncing {
         did_header = syn_list_keywords(
             id,
@@ -3766,12 +3765,12 @@ unsafe extern "C" fn syn_list_cluster(mut id: ::core::ffi::c_int) {
             (*((*(*curwin.get()).w_s).b_syn_clusters.ga_data as *mut syn_cluster_T)
                 .offset(id as isize))
             .scl_list,
-            HLF_D as ::core::ffi::c_int,
+            HLF_D,
         );
     } else {
         msg_puts_hl(
             b"cluster\0".as_ptr() as *const ::core::ffi::c_char,
-            HLF_D as ::core::ffi::c_int,
+            HLF_D,
             false_0 != 0,
         );
         msg_puts(b"=NONE\0".as_ptr() as *const ::core::ffi::c_char);

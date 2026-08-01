@@ -67,11 +67,12 @@ use crate::src::nvim::window::{
 use crate::src::nvim::winfloat::win_float_update_statusline;
 
 use super::{
-    B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, Ctrl_C, DIP_ALL, HLF_W, NO_SCREEN, NUL,
-    OPT_GLOBAL, OPT_LOCAL, STATUS_HEIGHT, VV_WARNINGMSG, check_blending, did_set_title, kFalse,
+    B_IMODE_NONE, B_IMODE_USE_INSERT, BF_SYN_SET, Ctrl_C, DIP_ALL, NO_SCREEN, NUL, OPT_GLOBAL,
+    OPT_LOCAL, STATUS_HEIGHT, VV_WARNINGMSG, check_blending, did_set_title, kFalse,
     kOptValTypeNumber, kOptValTypeString, option_was_set, redraw_titles, set_option_value,
     set_option_varp, set_options_bin,
 };
+use crate::src::nvim::highlight_group::HLF_W;
 use crate::src::nvim::keycodes::K_KENTER;
 
 /// "E590", the one message a callback in this module reports.
@@ -165,8 +166,8 @@ pub unsafe extern "C" fn did_set_arabic(args: *mut optset_T) -> *const c_char {
         }
         if strcmp(p_enc.get(), c"utf-8".as_ptr()) != 0 {
             let warning = c"W17: Arabic requires UTF-8, do ':set encoding=utf-8'";
-            msg_source(HLF_W as c_int);
-            msg(gettext(warning.as_ptr()), HLF_W as c_int);
+            msg_source(HLF_W);
+            msg(gettext(warning.as_ptr()), HLF_W);
             set_vim_var_string(VV_WARNINGMSG, gettext(warning.as_ptr()), -1 as ptrdiff_t);
         }
         p_deco.set(1);

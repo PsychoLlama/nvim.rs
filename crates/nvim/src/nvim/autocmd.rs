@@ -26,6 +26,7 @@ use crate::src::nvim::getchar::{restoreRedobuff, saveRedobuff};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::grid_free;
 use crate::src::nvim::hashtab::hash_init;
+use crate::src::nvim::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::src::nvim::insexpand::ins_compl_active;
 use crate::src::nvim::lua::executor::{nlua_call_ref, nlua_set_sctx};
 use crate::src::nvim::main::aucmd_win_vec;
@@ -217,83 +218,6 @@ pub const UV_UNKNOWN_REQ: uv_req_type = 0;
 pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
 pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_27 = 76;
-pub const HLF_PRE: C2Rust_Unnamed_27 = 75;
-pub const HLF_OK: C2Rust_Unnamed_27 = 74;
-pub const HLF_SO: C2Rust_Unnamed_27 = 73;
-pub const HLF_SE: C2Rust_Unnamed_27 = 72;
-pub const HLF_TSNC: C2Rust_Unnamed_27 = 71;
-pub const HLF_TS: C2Rust_Unnamed_27 = 70;
-pub const HLF_BFOOTER: C2Rust_Unnamed_27 = 69;
-pub const HLF_BTITLE: C2Rust_Unnamed_27 = 68;
-pub const HLF_CU: C2Rust_Unnamed_27 = 67;
-pub const HLF_WBRNC: C2Rust_Unnamed_27 = 66;
-pub const HLF_WBR: C2Rust_Unnamed_27 = 65;
-pub const HLF_BORDER: C2Rust_Unnamed_27 = 64;
-pub const HLF_MSG: C2Rust_Unnamed_27 = 63;
-pub const HLF_NFLOAT: C2Rust_Unnamed_27 = 62;
-pub const HLF_MSGSEP: C2Rust_Unnamed_27 = 61;
-pub const HLF_INACTIVE: C2Rust_Unnamed_27 = 60;
-pub const HLF_0: C2Rust_Unnamed_27 = 59;
-pub const HLF_QFL: C2Rust_Unnamed_27 = 58;
-pub const HLF_MC: C2Rust_Unnamed_27 = 57;
-pub const HLF_CUL: C2Rust_Unnamed_27 = 56;
-pub const HLF_CUC: C2Rust_Unnamed_27 = 55;
-pub const HLF_TPF: C2Rust_Unnamed_27 = 54;
-pub const HLF_TPS: C2Rust_Unnamed_27 = 53;
-pub const HLF_TP: C2Rust_Unnamed_27 = 52;
-pub const HLF_PBR: C2Rust_Unnamed_27 = 51;
-pub const HLF_PST: C2Rust_Unnamed_27 = 50;
-pub const HLF_PSB: C2Rust_Unnamed_27 = 49;
-pub const HLF_PSX: C2Rust_Unnamed_27 = 48;
-pub const HLF_PNX: C2Rust_Unnamed_27 = 47;
-pub const HLF_PSK: C2Rust_Unnamed_27 = 46;
-pub const HLF_PNK: C2Rust_Unnamed_27 = 45;
-pub const HLF_PMSI: C2Rust_Unnamed_27 = 44;
-pub const HLF_PMNI: C2Rust_Unnamed_27 = 43;
-pub const HLF_PSI: C2Rust_Unnamed_27 = 42;
-pub const HLF_PNI: C2Rust_Unnamed_27 = 41;
-pub const HLF_SPL: C2Rust_Unnamed_27 = 40;
-pub const HLF_SPR: C2Rust_Unnamed_27 = 39;
-pub const HLF_SPC: C2Rust_Unnamed_27 = 38;
-pub const HLF_SPB: C2Rust_Unnamed_27 = 37;
-pub const HLF_CONCEAL: C2Rust_Unnamed_27 = 36;
-pub const HLF_SC: C2Rust_Unnamed_27 = 35;
-pub const HLF_TXA: C2Rust_Unnamed_27 = 34;
-pub const HLF_TXD: C2Rust_Unnamed_27 = 33;
-pub const HLF_DED: C2Rust_Unnamed_27 = 32;
-pub const HLF_CHD: C2Rust_Unnamed_27 = 31;
-pub const HLF_ADD: C2Rust_Unnamed_27 = 30;
-pub const HLF_FC: C2Rust_Unnamed_27 = 29;
-pub const HLF_FL: C2Rust_Unnamed_27 = 28;
-pub const HLF_WM: C2Rust_Unnamed_27 = 27;
-pub const HLF_W: C2Rust_Unnamed_27 = 26;
-pub const HLF_VNC: C2Rust_Unnamed_27 = 25;
-pub const HLF_V: C2Rust_Unnamed_27 = 24;
-pub const HLF_T: C2Rust_Unnamed_27 = 23;
-pub const HLF_VSP: C2Rust_Unnamed_27 = 22;
-pub const HLF_C: C2Rust_Unnamed_27 = 21;
-pub const HLF_SNC: C2Rust_Unnamed_27 = 20;
-pub const HLF_S: C2Rust_Unnamed_27 = 19;
-pub const HLF_R: C2Rust_Unnamed_27 = 18;
-pub const HLF_CLF: C2Rust_Unnamed_27 = 17;
-pub const HLF_CLS: C2Rust_Unnamed_27 = 16;
-pub const HLF_CLN: C2Rust_Unnamed_27 = 15;
-pub const HLF_LNB: C2Rust_Unnamed_27 = 14;
-pub const HLF_LNA: C2Rust_Unnamed_27 = 13;
-pub const HLF_N: C2Rust_Unnamed_27 = 12;
-pub const HLF_CM: C2Rust_Unnamed_27 = 11;
-pub const HLF_M: C2Rust_Unnamed_27 = 10;
-pub const HLF_LC: C2Rust_Unnamed_27 = 9;
-pub const HLF_L: C2Rust_Unnamed_27 = 8;
-pub const HLF_I: C2Rust_Unnamed_27 = 7;
-pub const HLF_E: C2Rust_Unnamed_27 = 6;
-pub const HLF_D: C2Rust_Unnamed_27 = 5;
-pub const HLF_AT: C2Rust_Unnamed_27 = 4;
-pub const HLF_TERM: C2Rust_Unnamed_27 = 3;
-pub const HLF_EOB: C2Rust_Unnamed_27 = 2;
-pub const HLF_8: C2Rust_Unnamed_27 = 1;
-pub const HLF_NONE: C2Rust_Unnamed_27 = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_INV: xp_prefix_T = 2;
 pub const XP_PREFIX_NO: xp_prefix_T = 1;
@@ -1486,25 +1410,13 @@ unsafe extern "C" fn au_show_for_event(
                         }
                         if (*(*ac).pat).group != AUGROUP_DEFAULT as ::core::ffi::c_int {
                             if last_group_name.is_null() {
-                                msg_puts_hl(
-                                    get_deleted_augroup(),
-                                    HLF_E as ::core::ffi::c_int,
-                                    false_0 != 0,
-                                );
+                                msg_puts_hl(get_deleted_augroup(), HLF_E, false_0 != 0);
                             } else {
-                                msg_puts_hl(
-                                    last_group_name,
-                                    HLF_T as ::core::ffi::c_int,
-                                    false_0 != 0,
-                                );
+                                msg_puts_hl(last_group_name, HLF_T, false_0 != 0);
                             }
                             msg_puts(b"  \0".as_ptr() as *const ::core::ffi::c_char);
                         }
-                        msg_puts_hl(
-                            event_nr2name(event),
-                            HLF_T as ::core::ffi::c_int,
-                            false_0 != 0,
-                        );
+                        msg_puts_hl(event_nr2name(event), HLF_T, false_0 != 0);
                     }
                     if last_ap != (*ac).pat {
                         last_ap = (*ac).pat;
@@ -1539,7 +1451,7 @@ unsafe extern "C" fn au_show_for_event(
                                 (*ac).desc,
                             );
                         } else {
-                            msg_puts_hl(handler_str, HLF_8 as ::core::ffi::c_int, false_0 != 0);
+                            msg_puts_hl(handler_str, HLF_8, false_0 != 0);
                             snprintf(
                                 msg,
                                 msglen,
@@ -1556,7 +1468,7 @@ unsafe extern "C" fn au_show_for_event(
                     } else if !(*ac).handler_cmd.is_null() {
                         msg_outtrans(handler_str, 0 as ::core::ffi::c_int, false_0 != 0);
                     } else {
-                        msg_puts_hl(handler_str, HLF_8 as ::core::ffi::c_int, false_0 != 0);
+                        msg_puts_hl(handler_str, HLF_8, false_0 != 0);
                     }
                     let mut ptr__0: *mut *mut ::core::ffi::c_void =
                         &raw mut handler_str as *mut *mut ::core::ffi::c_void;

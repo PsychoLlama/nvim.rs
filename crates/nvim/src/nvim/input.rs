@@ -2,6 +2,7 @@ use crate::src::nvim::ex_getln::getcmdline_prompt;
 use crate::src::nvim::getchar::{fix_input_buffer, merge_modifiers};
 
 use crate::src::nvim::eval::typval::kCallbackNone;
+use crate::src::nvim::highlight_group::HLF_R;
 use crate::src::nvim::keycodes::{K_SPECIAL, K_ZERO};
 use crate::src::nvim::main::{
     IObuff, State, allow_keys, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask,
@@ -113,83 +114,6 @@ pub const EXPAND_NOTHING: C2Rust_Unnamed_1 = 0;
 pub const EXPAND_OK: C2Rust_Unnamed_1 = -1;
 pub const EXPAND_UNSUCCESSFUL: C2Rust_Unnamed_1 = -2;
 pub type C2Rust_Unnamed_2 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_2 = 76;
-pub const HLF_PRE: C2Rust_Unnamed_2 = 75;
-pub const HLF_OK: C2Rust_Unnamed_2 = 74;
-pub const HLF_SO: C2Rust_Unnamed_2 = 73;
-pub const HLF_SE: C2Rust_Unnamed_2 = 72;
-pub const HLF_TSNC: C2Rust_Unnamed_2 = 71;
-pub const HLF_TS: C2Rust_Unnamed_2 = 70;
-pub const HLF_BFOOTER: C2Rust_Unnamed_2 = 69;
-pub const HLF_BTITLE: C2Rust_Unnamed_2 = 68;
-pub const HLF_CU: C2Rust_Unnamed_2 = 67;
-pub const HLF_WBRNC: C2Rust_Unnamed_2 = 66;
-pub const HLF_WBR: C2Rust_Unnamed_2 = 65;
-pub const HLF_BORDER: C2Rust_Unnamed_2 = 64;
-pub const HLF_MSG: C2Rust_Unnamed_2 = 63;
-pub const HLF_NFLOAT: C2Rust_Unnamed_2 = 62;
-pub const HLF_MSGSEP: C2Rust_Unnamed_2 = 61;
-pub const HLF_INACTIVE: C2Rust_Unnamed_2 = 60;
-pub const HLF_0: C2Rust_Unnamed_2 = 59;
-pub const HLF_QFL: C2Rust_Unnamed_2 = 58;
-pub const HLF_MC: C2Rust_Unnamed_2 = 57;
-pub const HLF_CUL: C2Rust_Unnamed_2 = 56;
-pub const HLF_CUC: C2Rust_Unnamed_2 = 55;
-pub const HLF_TPF: C2Rust_Unnamed_2 = 54;
-pub const HLF_TPS: C2Rust_Unnamed_2 = 53;
-pub const HLF_TP: C2Rust_Unnamed_2 = 52;
-pub const HLF_PBR: C2Rust_Unnamed_2 = 51;
-pub const HLF_PST: C2Rust_Unnamed_2 = 50;
-pub const HLF_PSB: C2Rust_Unnamed_2 = 49;
-pub const HLF_PSX: C2Rust_Unnamed_2 = 48;
-pub const HLF_PNX: C2Rust_Unnamed_2 = 47;
-pub const HLF_PSK: C2Rust_Unnamed_2 = 46;
-pub const HLF_PNK: C2Rust_Unnamed_2 = 45;
-pub const HLF_PMSI: C2Rust_Unnamed_2 = 44;
-pub const HLF_PMNI: C2Rust_Unnamed_2 = 43;
-pub const HLF_PSI: C2Rust_Unnamed_2 = 42;
-pub const HLF_PNI: C2Rust_Unnamed_2 = 41;
-pub const HLF_SPL: C2Rust_Unnamed_2 = 40;
-pub const HLF_SPR: C2Rust_Unnamed_2 = 39;
-pub const HLF_SPC: C2Rust_Unnamed_2 = 38;
-pub const HLF_SPB: C2Rust_Unnamed_2 = 37;
-pub const HLF_CONCEAL: C2Rust_Unnamed_2 = 36;
-pub const HLF_SC: C2Rust_Unnamed_2 = 35;
-pub const HLF_TXA: C2Rust_Unnamed_2 = 34;
-pub const HLF_TXD: C2Rust_Unnamed_2 = 33;
-pub const HLF_DED: C2Rust_Unnamed_2 = 32;
-pub const HLF_CHD: C2Rust_Unnamed_2 = 31;
-pub const HLF_ADD: C2Rust_Unnamed_2 = 30;
-pub const HLF_FC: C2Rust_Unnamed_2 = 29;
-pub const HLF_FL: C2Rust_Unnamed_2 = 28;
-pub const HLF_WM: C2Rust_Unnamed_2 = 27;
-pub const HLF_W: C2Rust_Unnamed_2 = 26;
-pub const HLF_VNC: C2Rust_Unnamed_2 = 25;
-pub const HLF_V: C2Rust_Unnamed_2 = 24;
-pub const HLF_T: C2Rust_Unnamed_2 = 23;
-pub const HLF_VSP: C2Rust_Unnamed_2 = 22;
-pub const HLF_C: C2Rust_Unnamed_2 = 21;
-pub const HLF_SNC: C2Rust_Unnamed_2 = 20;
-pub const HLF_S: C2Rust_Unnamed_2 = 19;
-pub const HLF_R: C2Rust_Unnamed_2 = 18;
-pub const HLF_CLF: C2Rust_Unnamed_2 = 17;
-pub const HLF_CLS: C2Rust_Unnamed_2 = 16;
-pub const HLF_CLN: C2Rust_Unnamed_2 = 15;
-pub const HLF_LNB: C2Rust_Unnamed_2 = 14;
-pub const HLF_LNA: C2Rust_Unnamed_2 = 13;
-pub const HLF_N: C2Rust_Unnamed_2 = 12;
-pub const HLF_CM: C2Rust_Unnamed_2 = 11;
-pub const HLF_M: C2Rust_Unnamed_2 = 10;
-pub const HLF_LC: C2Rust_Unnamed_2 = 9;
-pub const HLF_L: C2Rust_Unnamed_2 = 8;
-pub const HLF_I: C2Rust_Unnamed_2 = 7;
-pub const HLF_E: C2Rust_Unnamed_2 = 6;
-pub const HLF_D: C2Rust_Unnamed_2 = 5;
-pub const HLF_AT: C2Rust_Unnamed_2 = 4;
-pub const HLF_TERM: C2Rust_Unnamed_2 = 3;
-pub const HLF_EOB: C2Rust_Unnamed_2 = 2;
-pub const HLF_8: C2Rust_Unnamed_2 = 1;
-pub const HLF_NONE: C2Rust_Unnamed_2 = 0;
 pub const KE_LEFTMOUSE: key_extra = 44;
 pub const KE_IGNORE: key_extra = 53;
 pub const KE_WILD: key_extra = 108;
@@ -303,12 +227,7 @@ pub unsafe extern "C" fn ask_yesno(str: *const ::core::ffi::c_char) -> ::core::f
     let mut prompt: *mut ::core::ffi::c_char = xstrdup(IObuff.ptr() as *mut ::core::ffi::c_char);
     let mut r: ::core::ffi::c_int = ' ' as ::core::ffi::c_int;
     while r != 'y' as ::core::ffi::c_int && r != 'n' as ::core::ffi::c_int {
-        r = prompt_for_input(
-            prompt,
-            HLF_R as ::core::ffi::c_int,
-            true_0 != 0,
-            ::core::ptr::null_mut::<bool>(),
-        );
+        r = prompt_for_input(prompt, HLF_R, true_0 != 0, ::core::ptr::null_mut::<bool>());
         if r == Ctrl_C || r == ESC {
             r = 'n' as ::core::ffi::c_int;
             if !ui_has(kUIMessages) {

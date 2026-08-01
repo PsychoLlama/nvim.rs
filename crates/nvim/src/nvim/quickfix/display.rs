@@ -13,6 +13,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::highlight_group::{HLF_D, HLF_N, HLF_QFL};
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
@@ -141,11 +142,7 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
         }
         msg_outtrans(
             IObuff.ptr().cast(),
-            if cursel {
-                HLF_QFL as c_int
-            } else {
-                qfFile_hl_id.get()
-            },
+            if cursel { HLF_QFL } else { qfFile_hl_id.get() },
             false,
         );
 
@@ -235,15 +232,15 @@ pub unsafe fn qf_list(eap: *mut exarg_T) {
         // The highlighting comes from the qf.vim syntax file.
         qfFile_hl_id.set(syn_name2id(c"qfFileName".as_ptr()));
         if qfFile_hl_id.get() == 0 {
-            qfFile_hl_id.set(HLF_D as c_int);
+            qfFile_hl_id.set(HLF_D);
         }
         qfSep_hl_id.set(syn_name2id(c"qfSeparator".as_ptr()));
         if qfSep_hl_id.get() == 0 {
-            qfSep_hl_id.set(HLF_D as c_int);
+            qfSep_hl_id.set(HLF_D);
         }
         qfLine_hl_id.set(syn_name2id(c"qfLineNr".as_ptr()));
         if qfLine_hl_id.get() == 0 {
-            qfLine_hl_id.set(HLF_N as c_int);
+            qfLine_hl_id.set(HLF_N);
         }
 
         // Without "!" only recognised entries are listed — unless none of

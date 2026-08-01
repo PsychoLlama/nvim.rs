@@ -15,7 +15,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::mouse::{nv_mouse, nv_mousescroll};
 use crate::src::nvim::types::{
     Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, Object, SpellAddType, VimState,
-    VimVarIndex, cmdarg_T, getf_values, hlf_T, int16_t, key_extra, oparg_T, pos_T, size_t, smt_T,
+    VimVarIndex, cmdarg_T, getf_values, int16_t, key_extra, oparg_T, pos_T, size_t, smt_T,
     uint16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -55,9 +55,6 @@ pub(crate) use self::misc::*;
 pub const _ISlower: c_uint = 512;
 pub const _ISupper: c_uint = 256;
 pub const MAXCOL: c_uint = 2147483647;
-pub const HLF_MSG: hlf_T = 63;
-pub const HLF_LC: hlf_T = 9;
-pub const HLF_L: hlf_T = 8;
 pub const kDirectionNotSet: Direction = 0;
 pub const kMarkChangedCursor: MarkMoveRes = 32;
 pub const kMarkChangedLine: MarkMoveRes = 16;

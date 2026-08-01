@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::highlight_group::HLF_D;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -253,7 +254,7 @@ pub unsafe fn do_tags(_eap: *mut exarg_T) {
             );
             msg_outtrans(IObuff.ptr().cast(), 0, false);
             let hl = if item.fmark.fnum == (*curbuf.get()).handle {
-                HLF_D as c_int
+                HLF_D
             } else {
                 0
             };

@@ -8,6 +8,7 @@
 //! actually has, in the order top, right, bottom, left.
 
 use super::*;
+use crate::src::nvim::highlight_group::{HLF_BFOOTER, HLF_BTITLE};
 
 /// Draw one of the two border texts into the batch in progress.
 ///

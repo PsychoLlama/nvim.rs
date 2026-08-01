@@ -5,9 +5,9 @@
 //! resolve, so that the joke works without occupying a row.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 
-use crate::src::nvim::ex_docmd::HLF_E;
+use crate::src::nvim::highlight_group::HLF_E;
 use crate::src::nvim::message::msg;
 
 /// The banner, one `msg` call per line, as upstream draws it.
@@ -167,7 +167,7 @@ pub unsafe fn verify_command(cmd: *mut c_char) {
             return;
         }
         for line in SMILE {
-            msg(line.as_ptr(), HLF_E as c_int);
+            msg(line.as_ptr(), HLF_E);
         }
     }
 }

@@ -5,8 +5,8 @@
 use super::args::{Args, frame};
 use super::wrappers::non_zero_arg;
 use super::{
-    CONV_NONE, FAIL, GA_EMPTY_INIT_VALUE, HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR, NSUBEXP,
-    NUL, RE_MAGIC, RE_STRING, SMT_ALL, VAR_BLOB, VAR_LIST, VAR_STRING, VSE_NONE, kListLenMayKnow,
+    CONV_NONE, FAIL, GA_EMPTY_INIT_VALUE, NSUBEXP, NUL, RE_MAGIC, RE_STRING, SMT_ALL, VAR_BLOB,
+    VAR_LIST, VAR_STRING, VSE_NONE, kListLenMayKnow,
 };
 use crate::semsg;
 use crate::src::nvim::cursor::get_cursor_pos_ptr;
@@ -20,6 +20,7 @@ use crate::src::nvim::eval::typval::{
 };
 use crate::src::nvim::ex_getln::vim_strsave_fnameescape;
 use crate::src::nvim::garray::{ga_clear, ga_grow};
+use crate::src::nvim::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::src::nvim::keycodes::vim_strsave_escape_ks;
 use crate::src::nvim::main::{
     curbuf, curwin, did_emsg, e_no_spell, empty_string_option, p_cpo, p_enc,

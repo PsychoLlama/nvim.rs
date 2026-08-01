@@ -8,11 +8,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{EMPTY_HL_MESSAGE, HLF_E, NIL, STRING_INIT, api_set_error, cstr_as_string};
+use super::{EMPTY_HL_MESSAGE, NIL, STRING_INIT, api_set_error, cstr_as_string};
 use crate::src::nvim::api::private::metadata::PACKED_API_METADATA;
 use crate::src::nvim::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::highlight_group::{highlight_num_groups, syn_check_group};
+use crate::src::nvim::highlight_group::{HLF_E, highlight_num_groups, syn_check_group};
 use crate::src::nvim::kvec::InitVec;
 use crate::src::nvim::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::src::nvim::memory::{

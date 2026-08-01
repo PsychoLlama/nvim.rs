@@ -21,9 +21,10 @@ use crate::src::nvim::ex_docmd::tags::ex_findpat;
 use crate::src::nvim::ex_docmd::{
     CMD_new, CMD_sfind, CMD_split, CMD_tabNext, CMD_tabedit, CMD_tabfind, CMD_tabfirst,
     CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, CMOD_KEEPALT,
-    Ctrl_G, FAIL, FNAME_MESS, HLF_T, IOSIZE, NUL, WSP_VERT,
+    Ctrl_G, FAIL, FNAME_MESS, IOSIZE, NUL, WSP_VERT,
 };
 use crate::src::nvim::file_search::{find_file_in_path, vim_findfile_cleanup};
+use crate::src::nvim::highlight_group::HLF_T;
 use crate::src::nvim::main::{
     Columns, IObuff, Rows, cmdmod, curbuf, curtab, curwin, e_invarg, e_invarg2, e_invcmd,
     e_invrange, e_screenmode, first_tabpage, firstwin, g_do_tagpreview, got_int, lastused_tabpage,
@@ -313,7 +314,7 @@ pub(crate) unsafe fn ex_tabs(_eap: *mut exarg_T) {
                 tabcount,
             );
             tabcount += 1;
-            msg_outtrans(IObuff.ptr() as *mut c_char, HLF_T as c_int, false);
+            msg_outtrans(IObuff.ptr() as *mut c_char, HLF_T, false);
             os_breakcheck();
 
             // The current tab page's window list lives in the globals, not

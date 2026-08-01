@@ -17,6 +17,7 @@ use crate::src::nvim::event::wstream::{
 use crate::src::nvim::ex_cmds::{check_secure, make_filter_cmd};
 use crate::src::nvim::fileio::vim_tempname;
 use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight_group::{HLF_SE, HLF_SO};
 use crate::src::nvim::main::{
     Rows, State, cmdline_row, curbuf, curwin, do_profiling, e_cannot_read_from_str_2,
     e_cant_read_file_str, e_notmp, e_shellempty, e_wildexpand, emsg_silent, got_int, lines_left,
@@ -187,83 +188,6 @@ pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const kProcTypePty: ProcType = 1;
 pub const kProcTypeUv: ProcType = 0;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_28 = 76;
-pub const HLF_PRE: C2Rust_Unnamed_28 = 75;
-pub const HLF_OK: C2Rust_Unnamed_28 = 74;
-pub const HLF_SO: C2Rust_Unnamed_28 = 73;
-pub const HLF_SE: C2Rust_Unnamed_28 = 72;
-pub const HLF_TSNC: C2Rust_Unnamed_28 = 71;
-pub const HLF_TS: C2Rust_Unnamed_28 = 70;
-pub const HLF_BFOOTER: C2Rust_Unnamed_28 = 69;
-pub const HLF_BTITLE: C2Rust_Unnamed_28 = 68;
-pub const HLF_CU: C2Rust_Unnamed_28 = 67;
-pub const HLF_WBRNC: C2Rust_Unnamed_28 = 66;
-pub const HLF_WBR: C2Rust_Unnamed_28 = 65;
-pub const HLF_BORDER: C2Rust_Unnamed_28 = 64;
-pub const HLF_MSG: C2Rust_Unnamed_28 = 63;
-pub const HLF_NFLOAT: C2Rust_Unnamed_28 = 62;
-pub const HLF_MSGSEP: C2Rust_Unnamed_28 = 61;
-pub const HLF_INACTIVE: C2Rust_Unnamed_28 = 60;
-pub const HLF_0: C2Rust_Unnamed_28 = 59;
-pub const HLF_QFL: C2Rust_Unnamed_28 = 58;
-pub const HLF_MC: C2Rust_Unnamed_28 = 57;
-pub const HLF_CUL: C2Rust_Unnamed_28 = 56;
-pub const HLF_CUC: C2Rust_Unnamed_28 = 55;
-pub const HLF_TPF: C2Rust_Unnamed_28 = 54;
-pub const HLF_TPS: C2Rust_Unnamed_28 = 53;
-pub const HLF_TP: C2Rust_Unnamed_28 = 52;
-pub const HLF_PBR: C2Rust_Unnamed_28 = 51;
-pub const HLF_PST: C2Rust_Unnamed_28 = 50;
-pub const HLF_PSB: C2Rust_Unnamed_28 = 49;
-pub const HLF_PSX: C2Rust_Unnamed_28 = 48;
-pub const HLF_PNX: C2Rust_Unnamed_28 = 47;
-pub const HLF_PSK: C2Rust_Unnamed_28 = 46;
-pub const HLF_PNK: C2Rust_Unnamed_28 = 45;
-pub const HLF_PMSI: C2Rust_Unnamed_28 = 44;
-pub const HLF_PMNI: C2Rust_Unnamed_28 = 43;
-pub const HLF_PSI: C2Rust_Unnamed_28 = 42;
-pub const HLF_PNI: C2Rust_Unnamed_28 = 41;
-pub const HLF_SPL: C2Rust_Unnamed_28 = 40;
-pub const HLF_SPR: C2Rust_Unnamed_28 = 39;
-pub const HLF_SPC: C2Rust_Unnamed_28 = 38;
-pub const HLF_SPB: C2Rust_Unnamed_28 = 37;
-pub const HLF_CONCEAL: C2Rust_Unnamed_28 = 36;
-pub const HLF_SC: C2Rust_Unnamed_28 = 35;
-pub const HLF_TXA: C2Rust_Unnamed_28 = 34;
-pub const HLF_TXD: C2Rust_Unnamed_28 = 33;
-pub const HLF_DED: C2Rust_Unnamed_28 = 32;
-pub const HLF_CHD: C2Rust_Unnamed_28 = 31;
-pub const HLF_ADD: C2Rust_Unnamed_28 = 30;
-pub const HLF_FC: C2Rust_Unnamed_28 = 29;
-pub const HLF_FL: C2Rust_Unnamed_28 = 28;
-pub const HLF_WM: C2Rust_Unnamed_28 = 27;
-pub const HLF_W: C2Rust_Unnamed_28 = 26;
-pub const HLF_VNC: C2Rust_Unnamed_28 = 25;
-pub const HLF_V: C2Rust_Unnamed_28 = 24;
-pub const HLF_T: C2Rust_Unnamed_28 = 23;
-pub const HLF_VSP: C2Rust_Unnamed_28 = 22;
-pub const HLF_C: C2Rust_Unnamed_28 = 21;
-pub const HLF_SNC: C2Rust_Unnamed_28 = 20;
-pub const HLF_S: C2Rust_Unnamed_28 = 19;
-pub const HLF_R: C2Rust_Unnamed_28 = 18;
-pub const HLF_CLF: C2Rust_Unnamed_28 = 17;
-pub const HLF_CLS: C2Rust_Unnamed_28 = 16;
-pub const HLF_CLN: C2Rust_Unnamed_28 = 15;
-pub const HLF_LNB: C2Rust_Unnamed_28 = 14;
-pub const HLF_LNA: C2Rust_Unnamed_28 = 13;
-pub const HLF_N: C2Rust_Unnamed_28 = 12;
-pub const HLF_CM: C2Rust_Unnamed_28 = 11;
-pub const HLF_M: C2Rust_Unnamed_28 = 10;
-pub const HLF_LC: C2Rust_Unnamed_28 = 9;
-pub const HLF_L: C2Rust_Unnamed_28 = 8;
-pub const HLF_I: C2Rust_Unnamed_28 = 7;
-pub const HLF_E: C2Rust_Unnamed_28 = 6;
-pub const HLF_D: C2Rust_Unnamed_28 = 5;
-pub const HLF_AT: C2Rust_Unnamed_28 = 4;
-pub const HLF_TERM: C2Rust_Unnamed_28 = 3;
-pub const HLF_EOB: C2Rust_Unnamed_28 = 2;
-pub const HLF_8: C2Rust_Unnamed_28 = 1;
-pub const HLF_NONE: C2Rust_Unnamed_28 = 0;
 pub const VV_EXITREASON: VimVarIndex = 105;
 pub const VV_STARTTIME: VimVarIndex = 104;
 pub const VV_VIRTNUM: VimVarIndex = 103;
@@ -1665,9 +1589,9 @@ unsafe extern "C" fn out_data_event(mut argv: *mut *mut ::core::ffi::c_void) {
         as ::core::ffi::c_int
         == STDERR_FILENO
     {
-        HLF_SE as ::core::ffi::c_int
+        HLF_SE
     } else {
-        HLF_SO as ::core::ffi::c_int
+        HLF_SO
     };
     msg_ext_set_kind(
         if (*argv.offset(2 as ::core::ffi::c_int as isize)).expose_provenance() as intptr_t
