@@ -121,7 +121,6 @@
     "crates/nvim/src/nvim/os/lang.rs": 32,
     "crates/nvim/src/nvim/os/shell.rs": 104,
     "crates/nvim/src/nvim/path.rs": 15,
-    "crates/nvim/src/nvim/path/expand.rs": 26,
     "crates/nvim/src/nvim/path/names.rs": 3,
     "crates/nvim/src/nvim/popupmenu.rs": 30,
     "crates/nvim/src/nvim/profile.rs": 7,

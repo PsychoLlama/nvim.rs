@@ -31,9 +31,8 @@ use crate::src::nvim::os::libc::{
 use crate::src::nvim::os::shell::{get_cmd_output, os_expand_wildcards};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
-    Directory, FileComparison, FileID, FileInfo, colnr_T, file_comparison, garray_T, linenr_T,
-    regmatch_T, regprog_T, size_t, uint8_t, uv_dirent_type_t, uv_fs_type, uv_req_type, uv_stat_t,
-    uv_timespec_t,
+    Directory, FileComparison, FileID, FileInfo, colnr_T, file_comparison, garray_T, regmatch_T,
+    regprog_T, size_t, uv_dirent_type_t, uv_fs_type, uv_req_type, uv_stat_t, uv_timespec_t,
 };
 
 // The carve of the transpiled module; see each child's docs.

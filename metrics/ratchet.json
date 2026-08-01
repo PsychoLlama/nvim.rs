@@ -363,7 +363,7 @@
     "crates/nvim/src/nvim/os/users.rs": {"no_mangle": 4, "unsafe": 7},
     "crates/nvim/src/nvim/path.rs": {"no_mangle": 4, "unsafe": 12},
     "crates/nvim/src/nvim/path/compare.rs": {"no_mangle": 2, "unsafe": 4},
-    "crates/nvim/src/nvim/path/expand.rs": {"unsafe": 9},
+    "crates/nvim/src/nvim/path/expand.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/path/glob.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/path/names.rs": {"no_mangle": 7, "unsafe": 20},
     "crates/nvim/src/nvim/path/unique.rs": {"no_mangle": 2, "unsafe": 9},
