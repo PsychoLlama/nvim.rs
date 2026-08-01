@@ -43,16 +43,12 @@ pub(crate) unsafe fn expand_path_option(
         let buf = buf.as_mut_ptr();
         let mut curdirlen = 0;
         while *path_option != 0 {
-            // What `copy_option_part` answers is the entry's *untruncated*
-            // length; an entry too long for the buffer is only in it up to
-            // MAXPATHL - 1, and that is the length everything below wants.
-            copy_option_part(
+            let mut buflen = copy_option_part(
                 &raw mut path_option,
                 buf,
                 MAXPATHL as size_t,
                 c" ,".as_ptr().cast_mut(),
             );
-            let mut buflen = CStr::from_ptr(buf).to_bytes().len();
 
             // Do not expand backticks: this could have been set by a modeline.
             if !vim_strchr(buf, c_int::from(b'`')).is_null() {

@@ -416,8 +416,13 @@ pub unsafe fn skip_to_option_part(mut p: *const c_char) -> *mut c_char {
 }
 
 /// Copy one part of a separated option into `buf` and advance `option` past
-/// it, returning the part's length. A part longer than `maxlen - 1` is
-/// truncated in `buf` but still counted in full.
+/// it, answering how many bytes it wrote: the part's length, or
+/// `maxlen - 1` when the part is longer than that. A caller may use the
+/// answer as the length of what is in the buffer.
+///
+/// The one exception is a leading `'.'`, which is written and counted
+/// without a bound test — a `maxlen` below 2 is not usable here. No caller
+/// passes one.
 ///
 /// # Safety
 ///
