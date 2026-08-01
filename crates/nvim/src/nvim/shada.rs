@@ -64,7 +64,7 @@ use crate::src::nvim::os::fs::{
     os_fchown, os_fileinfo, os_getperm, os_isdir, os_mkdir_recurse, os_remove,
 };
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, atoi, getgid, gettext, getuid, qsort, strcmp, strlen,
+    __assert_fail, atoi, getgid, gettext, getuid, qsort, strcmp, strlen,
 };
 use crate::src::nvim::os::stdpaths::stdpaths_user_state_subpath;
 use crate::src::nvim::os::time::os_time;
@@ -396,6 +396,71 @@ unsafe fn set_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, key_alloc: *mut *mut pt
 /// [`set_has_cstr_t`] for a set of pointers.
 unsafe fn set_has_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> bool {
     unsafe { mh_get_ptr_t(set, key) != MH_TOMBSTONE }
+}
+
+/// Free a set's own allocations, leaving it empty. What the keys point at
+/// is the caller's business.
+unsafe fn set_destroy_cstr_t(set: *mut Set_cstr_t) {
+    unsafe {
+        xfree((*set).keys.cast());
+        xfree((*set).h.hash.cast());
+        *set = Set_cstr_t {
+            h: MAPHASH_INIT,
+            keys: ::core::ptr::null_mut(),
+        };
+    }
+}
+
+/// [`set_destroy_cstr_t`] for a set of pointers.
+unsafe fn set_destroy_ptr_t(set: *mut Set_ptr_t) {
+    unsafe {
+        xfree((*set).keys.cast());
+        xfree((*set).h.hash.cast());
+        *set = Set_ptr_t {
+            h: MAPHASH_INIT,
+            keys: ::core::ptr::null_mut(),
+        };
+    }
+}
+
+/// [`set_destroy_cstr_t`] for a map. Neither the keys nor the values are
+/// freed; both belong to whoever put them in.
+unsafe fn map_destroy_cstr_t_ptr_t(map: *mut Map_cstr_t_ptr_t) {
+    unsafe {
+        set_destroy_cstr_t(&raw mut (*map).set);
+        xfree((*map).values.cast());
+        (*map).values = ::core::ptr::null_mut();
+    }
+}
+
+/// Every window in every tabpage.
+///
+/// The current tabpage keeps its window list in `firstwin` rather than in
+/// the tabpage struct, which is why this is not a plain walk of
+/// `tp_firstwin`.
+unsafe fn all_windows() -> impl Iterator<Item = *mut win_T> {
+    let mut tp = first_tabpage.get() as *mut tabpage_T;
+    let mut wp: *mut win_T = ::core::ptr::null_mut();
+    ::core::iter::from_fn(move || {
+        // SAFETY: walking the editor's window lists on the main thread. No
+        // caller restructures them while iterating.
+        unsafe {
+            while wp.is_null() {
+                if tp.is_null() {
+                    return None;
+                }
+                wp = if tp == curtab.get() {
+                    firstwin.get()
+                } else {
+                    (*tp).tp_firstwin
+                };
+                tp = (*tp).tp_next as *mut tabpage_T;
+            }
+            let found = wp;
+            wp = (*found).w_next;
+            Some(found)
+        }
+    })
 }
 
 pub const NMARKS: ::core::ffi::c_int =

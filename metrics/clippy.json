@@ -132,7 +132,7 @@
     "crates/nvim/src/nvim/runtime.rs": 278,
     "crates/nvim/src/nvim/search.rs": 93,
     "crates/nvim/src/nvim/shada/parse.rs": 1,
-    "crates/nvim/src/nvim/shada/read.rs": 11,
+    "crates/nvim/src/nvim/shada/read.rs": 1,
     "crates/nvim/src/nvim/shada/write.rs": 22,
     "crates/nvim/src/nvim/sign.rs": 132,
     "crates/nvim/src/nvim/spellfile.rs": 24,
