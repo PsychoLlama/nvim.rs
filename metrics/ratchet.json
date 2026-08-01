@@ -1,6 +1,6 @@
 {
   "internal_exports": 55,
-  "files_without_forbid_unsafe": 523,
+  "files_without_forbid_unsafe": 528,
   "files_without_deny_unsafe_op": 217,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -191,7 +191,12 @@
     "crates/nvim/src/nvim/ex_getln.rs": {"lines": 8070, "unsafe": 126},
     "crates/nvim/src/nvim/ex_session.rs": {"lines": 2321, "unsafe": 24},
     "crates/nvim/src/nvim/extmark.rs": {"lines": 1556, "no_mangle": 1, "unsafe": 16},
-    "crates/nvim/src/nvim/file_search.rs": {"lines": 2390, "unsafe": 29},
+    "crates/nvim/src/nvim/file_search.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/file_search/chdir.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/file_search/cursor.rs": {"unsafe": 5},
+    "crates/nvim/src/nvim/file_search/init.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/file_search/resolve.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/file_search/visited.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/fileio.rs": {"unsafe": 23},
     "crates/nvim/src/nvim/fileio/convert.rs": {"unsafe": 17},
     "crates/nvim/src/nvim/fileio/lines.rs": {"unsafe": 2},
