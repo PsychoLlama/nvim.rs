@@ -390,7 +390,7 @@
     "crates/nvim/src/nvim/quickfix/navigate.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/quickfix/parse.rs": {"unsafe": 32},
     "crates/nvim/src/nvim/quickfix/read.rs": {"unsafe": 18},
-    "crates/nvim/src/nvim/quickfix/setprops.rs": {"unsafe": 12},
+    "crates/nvim/src/nvim/quickfix/setprops.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/quickfix/stack.rs": {"unsafe": 30},
     "crates/nvim/src/nvim/quickfix/switchbuf.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/quickfix/vimgrep.rs": {"unsafe": 15},

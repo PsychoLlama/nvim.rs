@@ -9,127 +9,111 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int, c_uint};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn qf_setprop_qftf(
-    mut qfl: *mut qf_list_T,
-    mut di: *mut dictitem_T,
-) -> ::core::ffi::c_int {
+/// The `what` entry under `key`, or null. `tv_dict_find` copies exactly the
+/// length it is given, so a Rust `&str` is the key type.
+///
+/// # Safety
+///
+/// `what` must be null or a live dictionary.
+unsafe fn find(what: *const dict_T, key: &str) -> *mut dictitem_T {
+    // SAFETY: the caller's dictionary; the key is `key.len()` bytes long.
+    unsafe { tv_dict_find(what, key.as_ptr().cast(), key.len() as ptrdiff_t) }
+}
+
+/// Set the list's `'quickfixtextfunc'` callback from `di`.
+///
+/// # Safety
+///
+/// `qfl` must be a live list and `di` a live entry.
+unsafe fn qf_setprop_qftf(qfl: *mut qf_list_T, di: *mut dictitem_T) -> c_int {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut cb: Callback = Callback {
-            data: C2Rust_Unnamed_6 {
-                funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-            type_0: kCallbackNone,
-        };
         if check_secure() {
             return FAIL;
         }
         callback_free(&raw mut (*qfl).qf_qftf_cb);
+        let mut cb = Callback {
+            data: C2Rust_Unnamed_6 {
+                funcref: ptr::null_mut(),
+            },
+            type_0: kCallbackNone,
+        };
+        // A value that is not a callable leaves the list without one.
         if callback_from_typval(&raw mut cb, &raw mut (*di).di_tv) {
             (*qfl).qf_qftf_cb = cb;
         }
-        return OK;
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn qf_add_entry_from_dict(
-    mut qfl: *mut qf_list_T,
-    mut d: *mut dict_T,
-    mut first_entry: bool,
-    mut valid_entry: *mut bool,
-) -> ::core::ffi::c_int {
+/// Add one entry described by a `setqflist()` dictionary. `first_entry`
+/// resets the "already complained about a bad buffer number" flag, so that
+/// each call to `setqflist()` reports E92 once rather than once per entry.
+/// `valid_entry` is set when the entry names a real position.
+///
+/// # Safety
+///
+/// `qfl` must be a live list and `d` a live dictionary.
+unsafe fn qf_add_entry_from_dict(
+    qfl: *mut qf_list_T,
+    d: *mut dict_T,
+    first_entry: bool,
+    valid_entry: &mut bool,
+) {
+    static DID_BUFNR_EMSG: GlobalCell<bool> = GlobalCell::new(false);
+
+    // SAFETY: forwarded from the caller.
     unsafe {
-        static did_bufnr_emsg: GlobalCell<bool> = GlobalCell::new(false);
         if first_entry {
-            did_bufnr_emsg.set(false_0 != 0);
+            DID_BUFNR_EMSG.set(false);
         }
-        let filename: *mut ::core::ffi::c_char = tv_dict_get_string(
-            d,
-            b"filename\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0 != 0,
-        );
-        let module: *mut ::core::ffi::c_char = tv_dict_get_string(
-            d,
-            b"module\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0 != 0,
-        );
-        let mut bufnum: ::core::ffi::c_int =
-            tv_dict_get_number(d, b"bufnr\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int;
-        let lnum: linenr_T =
-            tv_dict_get_number(d, b"lnum\0".as_ptr() as *const ::core::ffi::c_char) as linenr_T;
-        let end_lnum: linenr_T =
-            tv_dict_get_number(d, b"end_lnum\0".as_ptr() as *const ::core::ffi::c_char) as linenr_T;
-        let col: ::core::ffi::c_int =
-            tv_dict_get_number(d, b"col\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int;
-        let end_col: ::core::ffi::c_int =
-            tv_dict_get_number(d, b"end_col\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int;
-        let vcol: ::core::ffi::c_char =
-            tv_dict_get_number(d, b"vcol\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_char;
-        let nr: ::core::ffi::c_int =
-            tv_dict_get_number(d, b"nr\0".as_ptr() as *const ::core::ffi::c_char)
-                as ::core::ffi::c_int;
-        let type_0: *const ::core::ffi::c_char = tv_dict_get_string(
-            d,
-            b"type\0".as_ptr() as *const ::core::ffi::c_char,
-            false_0 != 0,
-        );
-        let pattern: *mut ::core::ffi::c_char = tv_dict_get_string(
-            d,
-            b"pattern\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0 != 0,
-        );
-        let mut text: *mut ::core::ffi::c_char = tv_dict_get_string(
-            d,
-            b"text\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0 != 0,
-        );
+
+        let filename = tv_dict_get_string(d, c"filename".as_ptr(), true);
+        let module = tv_dict_get_string(d, c"module".as_ptr(), true);
+        let mut bufnum = tv_dict_get_number(d, c"bufnr".as_ptr()) as c_int;
+        let lnum = tv_dict_get_number(d, c"lnum".as_ptr()) as linenr_T;
+        let end_lnum = tv_dict_get_number(d, c"end_lnum".as_ptr()) as linenr_T;
+        let col = tv_dict_get_number(d, c"col".as_ptr()) as c_int;
+        let end_col = tv_dict_get_number(d, c"end_col".as_ptr()) as c_int;
+        // Not narrowed to a bool: `setqflist({'vcol': 5})` stores the 5 and
+        // `getqflist()` reports it back.
+        let vcol = tv_dict_get_number(d, c"vcol".as_ptr()) as c_char;
+        let nr = tv_dict_get_number(d, c"nr".as_ptr()) as c_int;
+        let kind = tv_dict_get_string(d, c"type".as_ptr(), false);
+        let pattern = tv_dict_get_string(d, c"pattern".as_ptr(), true);
+        let mut text = tv_dict_get_string(d, c"text".as_ptr(), true);
         if text.is_null() {
-            text = xcalloc(1 as size_t, 1 as size_t) as *mut ::core::ffi::c_char;
+            text = xcalloc(1, 1).cast();
         }
-        let mut user_data: typval_T = typval_T {
+        let mut user_data = typval_T {
             v_type: VAR_UNKNOWN,
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union { v_number: 0 },
         };
-        tv_dict_get_tv(
-            d,
-            b"user_data\0".as_ptr() as *const ::core::ffi::c_char,
-            &raw mut user_data,
-        );
-        let mut valid: bool = true_0 != 0;
-        if filename.is_null() && bufnum == 0 as ::core::ffi::c_int
-            || lnum == 0 as linenr_T && pattern.is_null()
-        {
-            valid = false_0 != 0;
-        }
-        if bufnum != 0 as ::core::ffi::c_int && buflist_findnr(bufnum).is_null() {
-            if !did_bufnr_emsg.get() {
-                did_bufnr_emsg.set(true_0 != 0);
-                semsg(
-                    gettext(b"E92: Buffer %d not found\0".as_ptr() as *const ::core::ffi::c_char),
-                    bufnum,
-                );
+        tv_dict_get_tv(d, c"user_data".as_ptr(), &raw mut user_data);
+
+        // An entry that names neither a file nor a position cannot be
+        // jumped to.
+        let mut valid = !(filename.is_null() && bufnum == 0 || lnum == 0 && pattern.is_null());
+
+        if bufnum != 0 && buflist_findnr(bufnum).is_null() {
+            // Ignore the buffer number, and report it once per call.
+            if !DID_BUFNR_EMSG.get() {
+                DID_BUFNR_EMSG.set(true);
+                semsg(gettext(c"E92: Buffer %d not found".as_ptr()), bufnum);
             }
-            valid = false_0 != 0;
-            bufnum = 0 as ::core::ffi::c_int;
+            valid = false;
+            bufnum = 0;
         }
-        if !tv_dict_find(
-            d,
-            b"valid\0".as_ptr() as *const ::core::ffi::c_char,
-            -1 as ptrdiff_t,
-        )
-        .is_null()
-        {
-            valid = tv_dict_get_bool(
-                d,
-                b"valid\0".as_ptr() as *const ::core::ffi::c_char,
-                false_0,
-            ) != 0;
+
+        // An explicit "valid" overrides all of that.
+        if !find(d, "valid").is_null() {
+            valid = tv_dict_get_bool(d, c"valid".as_ptr(), false as c_int) != 0;
         }
+
         qf_add_entry(
             qfl,
             &NewEntry {
@@ -143,234 +127,231 @@ pub(crate) unsafe extern "C" fn qf_add_entry_from_dict(
                 vis_col: vcol,
                 pattern,
                 nr,
-                kind: (if type_0.is_null() {
-                    NUL
-                } else {
-                    *type_0 as ::core::ffi::c_int
-                }) as ::core::ffi::c_char,
+                kind: if kind.is_null() { 0 } else { *kind },
                 user_data: &raw mut user_data,
                 valid,
                 ..NewEntry::new(text)
             },
         );
-        xfree(filename as *mut ::core::ffi::c_void);
-        xfree(module as *mut ::core::ffi::c_void);
-        xfree(pattern as *mut ::core::ffi::c_void);
-        xfree(text as *mut ::core::ffi::c_void);
+
+        xfree(filename.cast());
+        xfree(module.cast());
+        xfree(pattern.cast());
+        xfree(text.cast());
         tv_clear(&raw mut user_data);
+
         if valid {
-            *valid_entry = true_0 != 0;
+            *valid_entry = true;
         }
-        return QF_OK as ::core::ffi::c_int;
     }
 }
 
-pub(crate) unsafe extern "C" fn entry_is_closer_to_target(
-    mut entry: *mut qfline_T,
-    mut other_entry: *mut qfline_T,
-    mut target_fnum: ::core::ffi::c_int,
-    mut target_lnum: ::core::ffi::c_int,
-    mut target_col: ::core::ffi::c_int,
+/// Whether `entry` is a better match for the position the list was on than
+/// `other_entry` is: the same file beats another file, then the nearer line,
+/// then the nearer column. A target of zero at any level ends the
+/// comparison, which is how `setqflist(…, 'u')` keeps the cursor put when
+/// there is nothing to compare against.
+///
+/// # Safety
+///
+/// Both entries must be live.
+unsafe fn entry_is_closer_to_target(
+    entry: *mut qfline_T,
+    other_entry: *mut qfline_T,
+    target_fnum: c_int,
+    target_lnum: c_int,
+    target_col: c_int,
 ) -> bool {
+    // SAFETY: forwarded from the caller.
     unsafe {
         if target_fnum == 0 {
-            return false_0 != 0;
+            return false;
         }
-        let mut is_target_file: bool = (*entry).qf_fnum != 0 && (*entry).qf_fnum == target_fnum;
-        let mut other_is_target_file: bool =
+        let is_target_file = (*entry).qf_fnum != 0 && (*entry).qf_fnum == target_fnum;
+        let other_is_target_file =
             (*other_entry).qf_fnum != 0 && (*other_entry).qf_fnum == target_fnum;
-        if !is_target_file && other_is_target_file as ::core::ffi::c_int != 0 {
-            return false_0 != 0;
-        } else if is_target_file as ::core::ffi::c_int != 0 && !other_is_target_file {
-            return true_0 != 0;
+        if is_target_file != other_is_target_file {
+            return is_target_file;
         }
+
         if target_lnum == 0 {
-            return false_0 != 0;
+            return false;
         }
-        let mut line_distance: ::core::ffi::c_int = if (*entry).qf_lnum != 0 {
-            abs((*entry).qf_lnum as ::core::ffi::c_int - target_lnum)
-        } else {
-            INT_MAX
+        // An entry without a line number is infinitely far away.
+        let distance = |qfp: *mut qfline_T| {
+            if (*qfp).qf_lnum != 0 {
+                abs((*qfp).qf_lnum as c_int - target_lnum)
+            } else {
+                INT_MAX
+            }
         };
-        let mut other_line_distance: ::core::ffi::c_int = if (*other_entry).qf_lnum != 0 {
-            abs((*other_entry).qf_lnum as ::core::ffi::c_int - target_lnum)
-        } else {
-            INT_MAX
-        };
-        if line_distance > other_line_distance {
-            return false_0 != 0;
-        } else if line_distance < other_line_distance {
-            return true_0 != 0;
+        let (line_distance, other_line_distance) = (distance(entry), distance(other_entry));
+        if line_distance != other_line_distance {
+            return line_distance < other_line_distance;
         }
+
         if target_col == 0 {
-            return false_0 != 0;
+            return false;
         }
-        let mut column_distance: ::core::ffi::c_int = if (*entry).qf_col != 0 {
-            abs((*entry).qf_col - target_col)
-        } else {
-            INT_MAX
+        let distance = |qfp: *mut qfline_T| {
+            if (*qfp).qf_col != 0 {
+                abs((*qfp).qf_col - target_col)
+            } else {
+                INT_MAX
+            }
         };
-        let mut other_column_distance: ::core::ffi::c_int = if (*other_entry).qf_col != 0 {
-            abs((*other_entry).qf_col - target_col)
-        } else {
-            INT_MAX
-        };
-        if column_distance > other_column_distance {
-            return false_0 != 0;
-        } else if column_distance < other_column_distance {
-            return true_0 != 0;
-        }
-        return false_0 != 0;
+        let (column_distance, other_column_distance) = (distance(entry), distance(other_entry));
+        column_distance < other_column_distance
     }
 }
 
-pub(crate) unsafe extern "C" fn qf_add_entries(
-    mut qi: *mut qf_info_T,
-    mut qf_idx: ::core::ffi::c_int,
-    mut list: *mut list_T,
-    mut title: *mut ::core::ffi::c_char,
-    mut action: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Add every dictionary in `list` to list `qf_idx`, as `action` says: `' '`
+/// starts a new list, `'a'` appends, `'r'` replaces the entries and `'u'`
+/// replaces them while keeping the cursor on the nearest entry.
+///
+/// # Safety
+///
+/// `qi` must be a live stack, `list` null or a live list, and `title`
+/// NUL-terminated.
+unsafe fn qf_add_entries(
+    qi: *mut qf_info_T,
+    mut qf_idx: c_int,
+    list: *mut list_T,
+    title: *mut c_char,
+    action: c_int,
+) -> c_int {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut qfl: *mut qf_list_T = qf_get_list(qi, qf_idx);
-        let mut old_last: *mut qfline_T = ::core::ptr::null_mut::<qfline_T>();
-        let mut retval: ::core::ffi::c_int = OK;
-        let mut valid_entry: bool = false_0 != 0;
-        let mut prev_fnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut prev_lnum: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut prev_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+        let mut qfl = qf_get_list(qi, qf_idx);
+        let mut old_last: *mut qfline_T = ptr::null_mut();
+
+        // Where the list was, so that 'u' can find the nearest entry again.
+        let (mut prev_fnum, mut prev_lnum, mut prev_col) = (0, 0, 0);
         if !(*qfl).qf_ptr.is_null() {
             prev_fnum = (*(*qfl).qf_ptr).qf_fnum;
-            prev_lnum = (*(*qfl).qf_ptr).qf_lnum as ::core::ffi::c_int;
+            prev_lnum = (*(*qfl).qf_ptr).qf_lnum as c_int;
             prev_col = (*(*qfl).qf_ptr).qf_col;
         }
-        let mut select_first_entry: bool = false_0 != 0;
-        let mut select_nearest_entry: bool = false_0 != 0;
-        if action == ' ' as ::core::ffi::c_int || qf_idx == (*qi).qf_listcount {
-            select_first_entry = true_0 != 0;
+
+        let mut select_first_entry = false;
+        let mut select_nearest_entry = false;
+        if action == ' ' as c_int || qf_idx == (*qi).qf_listcount {
+            // Make a new list.
+            select_first_entry = true;
             qf_new_list(qi, title);
             qf_idx = (*qi).qf_curlist;
             qfl = qf_get_list(qi, qf_idx);
-        } else if action == 'a' as ::core::ffi::c_int {
+        } else if action == 'a' as c_int {
             if qf_list_empty(qfl) {
-                select_first_entry = true_0 != 0;
+                // Appending to an empty list is starting one.
+                select_first_entry = true;
             } else {
+                // Adding to an existing list, so use the last entry.
                 old_last = (*qfl).qf_last;
             }
-        } else if action == 'r' as ::core::ffi::c_int {
-            select_first_entry = true_0 != 0;
+        } else if action == 'r' as c_int {
+            select_first_entry = true;
             qf_free_items(qfl);
             qf_store_title(qfl, title);
-        } else if action == 'u' as ::core::ffi::c_int {
-            select_nearest_entry = true_0 != 0;
+        } else if action == 'u' as c_int {
+            select_nearest_entry = true;
             qf_free_items(qfl);
             qf_store_title(qfl, title);
         }
-        let mut entry_to_select: *mut qfline_T = ::core::ptr::null_mut::<qfline_T>();
-        let mut entry_to_select_index: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let l_: *const list_T = list;
-        if !l_.is_null() {
-            let mut li: *const listitem_T = (*l_).lv_first;
+
+        let mut valid_entry = false;
+        let mut entry_to_select: *mut qfline_T = ptr::null_mut();
+        let mut entry_to_select_index = 0;
+        if !list.is_null() {
+            let first = tv_list_first(list);
+            let mut li = (*list).lv_first;
             while !li.is_null() {
-                if (*li).li_tv.v_type as ::core::ffi::c_uint
-                    == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    let d: *mut dict_T = (*li).li_tv.vval.v_dict;
-                    if !d.is_null() {
-                        retval = qf_add_entry_from_dict(
-                            qfl,
-                            d,
-                            li == tv_list_first(list) as *const listitem_T,
-                            &raw mut valid_entry,
-                        );
-                        if retval == QF_FAIL as ::core::ffi::c_int {
-                            break;
-                        }
-                        let mut entry: *mut qfline_T = (*qfl).qf_last;
-                        if select_first_entry as ::core::ffi::c_int != 0
-                            && entry_to_select.is_null()
-                            || select_nearest_entry as ::core::ffi::c_int != 0
-                                && (entry_to_select.is_null()
-                                    || entry_is_closer_to_target(
-                                        entry,
-                                        entry_to_select,
-                                        prev_fnum,
-                                        prev_lnum,
-                                        prev_col,
-                                    ) as ::core::ffi::c_int
-                                        != 0)
-                        {
-                            entry_to_select = entry;
-                            entry_to_select_index = (*qfl).qf_count;
-                        }
+                if (*li).li_tv.v_type == VAR_DICT && !(*li).li_tv.vval.v_dict.is_null() {
+                    let d = (*li).li_tv.vval.v_dict;
+                    qf_add_entry_from_dict(qfl, d, ptr::eq(li, first), &mut valid_entry);
+
+                    let entry = (*qfl).qf_last;
+                    let wanted = select_first_entry && entry_to_select.is_null()
+                        || select_nearest_entry
+                            && (entry_to_select.is_null()
+                                || entry_is_closer_to_target(
+                                    entry,
+                                    entry_to_select,
+                                    prev_fnum,
+                                    prev_lnum,
+                                    prev_col,
+                                ));
+                    if wanted {
+                        entry_to_select = entry;
+                        entry_to_select_index = (*qfl).qf_count;
                     }
                 }
                 li = (*li).li_next;
             }
         }
+
         if valid_entry {
-            (*qfl).qf_nonevalid = false_0 != 0;
-        } else if (*qfl).qf_index == 0 as ::core::ffi::c_int {
-            (*qfl).qf_nonevalid = true_0 != 0;
+            (*qfl).qf_nonevalid = false;
+        } else if (*qfl).qf_index == 0 {
+            (*qfl).qf_nonevalid = true;
         }
         if !entry_to_select.is_null() {
             (*qfl).qf_ptr = entry_to_select;
             (*qfl).qf_index = entry_to_select_index;
         }
+
+        // Don't update the cursor in quickfix window when appending entries.
         qf_update_buffer(qi, old_last);
-        return retval;
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn qf_setprop_get_qfidx(
-    mut qi: *const qf_info_T,
-    mut what: *const dict_T,
-    mut action: ::core::ffi::c_int,
-    mut newlist: *mut bool,
-) -> ::core::ffi::c_int {
+/// Which list a `setqflist()` `what` names, through its `nr` or `id` key.
+/// `newlist` is both an input — whether a new list is being started — and an
+/// output, since an `nr` one past the end asks for one.
+///
+/// # Safety
+///
+/// `qi` must be a live stack and `what` null or a live dictionary.
+unsafe fn qf_setprop_get_qfidx(
+    qi: *const qf_info_T,
+    what: *const dict_T,
+    action: c_int,
+    newlist: &mut bool,
+) -> c_int {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut di: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
-        let mut qf_idx: ::core::ffi::c_int = (*qi).qf_curlist;
-        di = tv_dict_find(
-            what,
-            b"nr\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
+        let mut qf_idx = (*qi).qf_curlist;
+
+        let di = find(what, "nr");
         if !di.is_null() {
-            if (*di).di_tv.v_type as ::core::ffi::c_uint
-                == VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                if (*di).di_tv.vval.v_number != 0 as varnumber_T {
-                    qf_idx =
-                        (*di).di_tv.vval.v_number as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
+            if (*di).di_tv.v_type == VAR_NUMBER {
+                // For zero use the current list.
+                if (*di).di_tv.vval.v_number != 0 {
+                    qf_idx = (*di).di_tv.vval.v_number as c_int - 1;
                 }
-                if (action == ' ' as ::core::ffi::c_int || action == 'a' as ::core::ffi::c_int)
+                if (action == ' ' as c_int || action == 'a' as c_int)
                     && qf_idx == (*qi).qf_listcount
                 {
-                    *newlist = true_0 != 0;
-                    qf_idx = if qf_stack_empty(qi) as ::core::ffi::c_int != 0 {
-                        0 as ::core::ffi::c_int
+                    // Create a new list.
+                    *newlist = true;
+                    qf_idx = if qf_stack_empty(qi) {
+                        0
                     } else {
-                        (*qi).qf_listcount - 1 as ::core::ffi::c_int
+                        (*qi).qf_listcount - 1
                     };
-                } else if qf_idx < 0 as ::core::ffi::c_int || qf_idx >= (*qi).qf_listcount {
+                } else if qf_idx < 0 || qf_idx >= (*qi).qf_listcount {
                     return INVALID_QFIDX;
-                } else if action != ' ' as ::core::ffi::c_int {
-                    *newlist = false_0 != 0;
+                } else if action != ' ' as c_int {
+                    *newlist = false;
                 }
-            } else if (*di).di_tv.v_type as ::core::ffi::c_uint
-                == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                && strequal(
-                    (*di).di_tv.vval.v_string,
-                    b"$\0".as_ptr() as *const ::core::ffi::c_char,
-                ) as ::core::ffi::c_int
-                    != 0
+            } else if (*di).di_tv.v_type == VAR_STRING
+                && strequal((*di).di_tv.vval.v_string, c"$".as_ptr())
             {
                 if !qf_stack_empty(qi) {
-                    qf_idx = (*qi).qf_listcount - 1 as ::core::ffi::c_int;
+                    qf_idx = (*qi).qf_listcount - 1;
                 } else if *newlist {
-                    qf_idx = 0 as ::core::ffi::c_int;
+                    qf_idx = 0;
                 } else {
                     return INVALID_QFIDX;
                 }
@@ -378,333 +359,305 @@ pub(crate) unsafe extern "C" fn qf_setprop_get_qfidx(
                 return INVALID_QFIDX;
             }
         }
-        if !*newlist && {
-            di = tv_dict_find(
-                what,
-                b"id\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 3]>().wrapping_sub(1 as usize)
-                    as ptrdiff_t,
-            );
-            !di.is_null()
-        } {
-            if (*di).di_tv.v_type as ::core::ffi::c_uint
-                != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                return INVALID_QFIDX;
+
+        // An id names a list outright, but only when a new one is not being
+        // started.
+        if !*newlist {
+            let di = find(what, "id");
+            if !di.is_null() {
+                if (*di).di_tv.v_type != VAR_NUMBER {
+                    return INVALID_QFIDX;
+                }
+                return qf_id2nr(qi, (*di).di_tv.vval.v_number as c_uint);
             }
-            return qf_id2nr(qi, (*di).di_tv.vval.v_number as ::core::ffi::c_uint);
         }
-        return qf_idx;
+        qf_idx
     }
 }
 
-pub(crate) unsafe extern "C" fn qf_setprop_title(
-    mut qi: *mut qf_info_T,
-    mut qf_idx: ::core::ffi::c_int,
-    mut what: *const dict_T,
-    mut di: *const dictitem_T,
-) -> ::core::ffi::c_int {
+/// Set the list's title.
+///
+/// # Safety
+///
+/// `qi` must be a live stack, `what` and `di` live.
+unsafe fn qf_setprop_title(
+    qi: *mut qf_info_T,
+    qf_idx: c_int,
+    what: *const dict_T,
+    di: *const dictitem_T,
+) -> c_int {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut qfl: *mut qf_list_T = qf_get_list(qi, qf_idx);
-        if (*di).di_tv.v_type as ::core::ffi::c_uint
-            != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if (*di).di_tv.v_type != VAR_STRING {
             return FAIL;
         }
-        xfree((*qfl).qf_title as *mut ::core::ffi::c_void);
-        (*qfl).qf_title = tv_dict_get_string(
-            what,
-            b"title\0".as_ptr() as *const ::core::ffi::c_char,
-            true_0 != 0,
-        );
+        let qfl = qf_get_list(qi, qf_idx);
+        xfree((*qfl).qf_title.cast());
+        (*qfl).qf_title = tv_dict_get_string(what, c"title".as_ptr(), true);
         if qf_idx == (*qi).qf_curlist {
             qf_update_win_titlevar(qi);
         }
-        return OK;
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn qf_setprop_items(
-    mut qi: *mut qf_info_T,
-    mut qf_idx: ::core::ffi::c_int,
-    mut di: *mut dictitem_T,
-    mut action: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Replace the list's entries with the dictionaries in `di`.
+///
+/// # Safety
+///
+/// `qi` must be a live stack and `di` a live entry.
+unsafe fn qf_setprop_items(
+    qi: *mut qf_info_T,
+    qf_idx: c_int,
+    di: *mut dictitem_T,
+    action: c_int,
+) -> c_int {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        if (*di).di_tv.v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if (*di).di_tv.v_type != VAR_LIST {
             return FAIL;
         }
-        let mut title_save: *mut ::core::ffi::c_char = xstrdup((*qf_get_list(qi, qf_idx)).qf_title);
-        let retval: ::core::ffi::c_int = qf_add_entries(
-            qi,
-            qf_idx,
-            (*di).di_tv.vval.v_list,
-            title_save,
-            if action == ' ' as ::core::ffi::c_int {
-                'a' as ::core::ffi::c_int
-            } else {
-                action
-            },
-        );
-        xfree(title_save as *mut ::core::ffi::c_void);
-        return retval;
+        // The title survives the entries being replaced, so it has to be
+        // copied out before `qf_add_entries` frees them.
+        let title_save = xstrdup((*qf_get_list(qi, qf_idx)).qf_title);
+        let action = if action == ' ' as c_int {
+            'a' as c_int
+        } else {
+            action
+        };
+        let retval = qf_add_entries(qi, qf_idx, (*di).di_tv.vval.v_list, title_save, action);
+        xfree(title_save.cast());
+        retval
     }
 }
 
-pub(crate) unsafe extern "C" fn qf_setprop_items_from_lines(
-    mut qi: *mut qf_info_T,
-    mut qf_idx: ::core::ffi::c_int,
-    mut what: *const dict_T,
-    mut di: *mut dictitem_T,
-    mut action: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Replace the list's entries with the result of parsing the lines in `di`
+/// with `'errorformat'` — or with the `what` dictionary's `efm`.
+///
+/// # Safety
+///
+/// `qi` must be a live stack, and `what` and `di` live.
+unsafe fn qf_setprop_items_from_lines(
+    qi: *mut qf_info_T,
+    qf_idx: c_int,
+    what: *const dict_T,
+    di: *mut dictitem_T,
+    action: c_int,
+) -> c_int {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut errorformat: *mut ::core::ffi::c_char = p_efm.get();
-        let mut efm_di: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
-        let mut retval: ::core::ffi::c_int = FAIL;
-        efm_di = tv_dict_find(
-            what,
-            b"efm\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
+        let mut errorformat = p_efm.get();
+        let efm_di = find(what, "efm");
         if !efm_di.is_null() {
-            if (*efm_di).di_tv.v_type as ::core::ffi::c_uint
-                != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                || (*efm_di).di_tv.vval.v_string.is_null()
-            {
+            if (*efm_di).di_tv.v_type != VAR_STRING || (*efm_di).di_tv.vval.v_string.is_null() {
                 return FAIL;
             }
             errorformat = (*efm_di).di_tv.vval.v_string;
         }
-        if (*di).di_tv.v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-            || (*di).di_tv.vval.v_list.is_null()
-        {
+
+        // Only a List value is supported.
+        if (*di).di_tv.v_type != VAR_LIST || (*di).di_tv.vval.v_list.is_null() {
             return FAIL;
         }
-        if action == 'r' as ::core::ffi::c_int || action == 'u' as ::core::ffi::c_int {
+
+        if action == 'r' as c_int || action == 'u' as c_int {
             qf_free_items(qf_get_list(qi, qf_idx));
         }
-        if qf_init_ext(
+        let parsed = qf_init_ext(
             qi,
             qf_idx,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<buf_T>(),
+            ptr::null(),
+            ptr::null_mut(),
             &raw mut (*di).di_tv,
             errorformat,
-            false_0 != 0,
-            0 as linenr_T,
-            0 as linenr_T,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        ) >= 0 as ::core::ffi::c_int
-        {
-            retval = OK;
-        }
-        return retval;
+            false,
+            0,
+            0,
+            ptr::null(),
+            ptr::null_mut(),
+        ) >= 0;
+        if parsed { OK } else { FAIL }
     }
 }
 
-pub(crate) unsafe extern "C" fn qf_setprop_context(
-    mut qfl: *mut qf_list_T,
-    mut di: *mut dictitem_T,
-) -> ::core::ffi::c_int {
+/// Attach an arbitrary value to the list, which `getqflist({'context': 1})`
+/// hands back.
+///
+/// # Safety
+///
+/// `qfl` must be a live list and `di` a live entry.
+unsafe fn qf_setprop_context(qfl: *mut qf_list_T, di: *mut dictitem_T) -> c_int {
+    // SAFETY: forwarded from the caller.
     unsafe {
         tv_free((*qfl).qf_ctx);
-        let mut ctx: *mut typval_T =
-            xcalloc(1 as size_t, ::core::mem::size_of::<typval_T>()) as *mut typval_T;
+        let ctx: *mut typval_T = xcalloc(1, size_of::<typval_T>()).cast();
         tv_copy(&raw mut (*di).di_tv, ctx);
         (*qfl).qf_ctx = ctx;
-        return OK;
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn qf_setprop_curidx(
-    mut qi: *mut qf_info_T,
-    mut qfl: *mut qf_list_T,
-    mut di: *const dictitem_T,
-) -> ::core::ffi::c_int {
+/// Move the list's cursor to entry `di`, or to the last entry for `"$"`.
+///
+/// # Safety
+///
+/// `qi` must be a live stack, `qfl` a live list and `di` a live entry.
+unsafe fn qf_setprop_curidx(
+    qi: *mut qf_info_T,
+    qfl: *mut qf_list_T,
+    di: *const dictitem_T,
+) -> c_int {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut newidx: ::core::ffi::c_int = 0;
-        if (*di).di_tv.v_type as ::core::ffi::c_uint
-            == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
+        let mut newidx = if (*di).di_tv.v_type == VAR_STRING
             && !(*di).di_tv.vval.v_string.is_null()
-            && strcmp(
-                (*di).di_tv.vval.v_string,
-                b"$\0".as_ptr() as *const ::core::ffi::c_char,
-            ) == 0 as ::core::ffi::c_int
+            && strcmp((*di).di_tv.vval.v_string, c"$".as_ptr()) == 0
         {
-            newidx = (*qfl).qf_count;
+            // Select the last entry in the list.
+            (*qfl).qf_count
         } else {
-            let mut denote: bool = false_0 != 0;
-            newidx =
-                tv_get_number_chk(&raw const (*di).di_tv, &raw mut denote) as ::core::ffi::c_int;
-            if denote {
+            let mut not_a_number = false;
+            let idx = tv_get_number_chk(&raw const (*di).di_tv, &raw mut not_a_number) as c_int;
+            if not_a_number {
                 return FAIL;
             }
-        }
-        if newidx < 1 as ::core::ffi::c_int {
+            idx
+        };
+
+        if newidx < 1 {
             return FAIL;
         }
-        newidx = if newidx < (*qfl).qf_count {
-            newidx
-        } else {
-            (*qfl).qf_count
-        };
-        let old_qfidx: ::core::ffi::c_int = (*qfl).qf_index;
-        let qf_ptr: *mut qfline_T = get_nth_entry(qfl, newidx, &mut newidx);
+        newidx = newidx.min((*qfl).qf_count);
+
+        let old_qfidx = (*qfl).qf_index;
+        let qf_ptr = get_nth_entry(qfl, newidx, &mut newidx);
         if qf_ptr.is_null() {
             return FAIL;
         }
         (*qfl).qf_ptr = qf_ptr;
         (*qfl).qf_index = newidx;
+
+        // Update the displayed quickfix list.
         if (*qf_get_curlist(qi)).qf_id == (*qfl).qf_id {
             qf_win_pos_update(qi, old_qfidx);
         }
-        return OK;
+        OK
     }
 }
 
-pub(crate) unsafe extern "C" fn qf_set_properties(
-    mut qi: *mut qf_info_T,
-    mut what: *const dict_T,
-    mut action: ::core::ffi::c_int,
-    mut title: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// `setqflist(…, {what})`: apply each property `what` names.
+///
+/// # Safety
+///
+/// `qi` must be a live stack, `what` live and `title` NUL-terminated.
+unsafe fn qf_set_properties(
+    qi: *mut qf_info_T,
+    what: *const dict_T,
+    action: c_int,
+    title: *mut c_char,
+) -> c_int {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut newlist: bool =
-            action == ' ' as ::core::ffi::c_int || qf_stack_empty(qi) as ::core::ffi::c_int != 0;
-        let mut qf_idx: ::core::ffi::c_int =
-            qf_setprop_get_qfidx(qi, what, action, &raw mut newlist);
+        let mut newlist = action == ' ' as c_int || qf_stack_empty(qi);
+        let mut qf_idx = qf_setprop_get_qfidx(qi, what, action, &mut newlist);
         if qf_idx == INVALID_QFIDX {
             return FAIL;
         }
+
         if newlist {
             (*qi).qf_curlist = qf_idx;
             qf_new_list(qi, title);
             qf_idx = (*qi).qf_curlist;
         }
-        let mut qfl: *mut qf_list_T = qf_get_list(qi, qf_idx);
-        let mut di: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
-        let mut retval: ::core::ffi::c_int = FAIL;
-        di = tv_dict_find(
-            what,
-            b"title\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
+        let qfl = qf_get_list(qi, qf_idx);
+
+        // Each key that is present overwrites the answer, so what is
+        // reported is the last one's result, not the worst.
+        let mut retval = FAIL;
+        let di = find(what, "title");
         if !di.is_null() {
             retval = qf_setprop_title(qi, qf_idx, what, di);
         }
-        di = tv_dict_find(
-            what,
-            b"items\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
+        let di = find(what, "items");
         if !di.is_null() {
             retval = qf_setprop_items(qi, qf_idx, di, action);
         }
-        di = tv_dict_find(
-            what,
-            b"lines\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
+        let di = find(what, "lines");
         if !di.is_null() {
             retval = qf_setprop_items_from_lines(qi, qf_idx, what, di, action);
         }
-        di = tv_dict_find(
-            what,
-            b"context\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
+        let di = find(what, "context");
         if !di.is_null() {
             retval = qf_setprop_context(qfl, di);
         }
-        di = tv_dict_find(
-            what,
-            b"idx\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
+        let di = find(what, "idx");
         if !di.is_null() {
             retval = qf_setprop_curidx(qi, qfl, di);
         }
-        di = tv_dict_find(
-            what,
-            b"quickfixtextfunc\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 17]>().wrapping_sub(1 as usize)
-                as ptrdiff_t,
-        );
+        let di = find(what, "quickfixtextfunc");
         if !di.is_null() {
             retval = qf_setprop_qftf(qfl, di);
         }
-        if newlist as ::core::ffi::c_int != 0 || retval == OK {
+
+        if newlist || retval == OK {
             qf_list_changed(qfl);
         }
         if newlist {
-            qf_update_buffer(qi, ::core::ptr::null_mut::<qfline_T>());
+            qf_update_buffer(qi, ptr::null_mut());
         }
-        return retval;
+        retval
     }
 }
 
+/// `setqflist()` and `setloclist()`. A null `wp` means the quickfix stack.
+/// An `action` of `'f'` frees the whole stack; otherwise either `list` or
+/// `what` says what to write, never both.
+///
+/// # Safety
+///
+/// `wp` must be null or a live window; `list`, `title` and `what` null or
+/// live.
 pub unsafe fn set_errorlist(
-    mut wp: *mut win_T,
-    mut list: *mut list_T,
-    mut action: ::core::ffi::c_int,
-    mut title: *mut ::core::ffi::c_char,
-    mut what: *mut dict_T,
-) -> ::core::ffi::c_int {
+    wp: *mut win_T,
+    list: *mut list_T,
+    action: c_int,
+    title: *mut c_char,
+    what: *mut dict_T,
+) -> c_int {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut qi: *mut qf_info_T = ::core::ptr::null_mut::<qf_info_T>();
-        if !wp.is_null() {
-            qi = ll_get_or_alloc_list(wp);
+        let qi = if wp.is_null() {
+            ql_info.get()
         } else {
-            qi = ql_info.get();
-        }
-        '_c2rust_label: {
-            if !qi.is_null() {
-            } else {
-                __assert_fail(
-                    b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    7120 as ::core::ffi::c_uint,
-                    b"int set_errorlist(win_T *, list_T *, int, char *, dict_T *)\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                );
-            }
+            ll_get_or_alloc_list(wp)
         };
-        if action == 'f' as ::core::ffi::c_int {
+        debug_assert!(!qi.is_null());
+
+        if action == 'f' as c_int {
+            // Free the entire quickfix or location list stack.
             qf_free_stack(wp, qi);
             return OK;
         }
-        if !list.is_null() && tv_list_len(list) != 0 as ::core::ffi::c_int && !what.is_null() {
+
+        if !list.is_null() && tv_list_len(list) != 0 && !what.is_null() {
             semsg(
-                gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                gettext(
-                    b"cannot have both a list and a \"what\" argument\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                ),
+                gettext(&raw const e_invarg2 as *const c_char),
+                gettext(c"cannot have both a list and a \"what\" argument".as_ptr()),
             );
             return FAIL;
         }
+
         incr_quickfix_busy();
-        let mut retval: ::core::ffi::c_int = OK;
-        if !what.is_null() {
-            retval = qf_set_properties(qi, what, action, title);
-        } else {
-            retval = qf_add_entries(qi, (*qi).qf_curlist, list, title, action);
+        let retval = if what.is_null() {
+            let retval = qf_add_entries(qi, (*qi).qf_curlist, list, title, action);
             if retval == OK {
                 qf_list_changed(qf_get_curlist(qi));
             }
-        }
+            retval
+        } else {
+            qf_set_properties(qi, what, action, title)
+        };
         decr_quickfix_busy();
-        return retval;
+        retval
     }
 }
