@@ -72,7 +72,7 @@ pub unsafe extern "C" fn searchit(
                     gettext(
                         b"E383: Invalid search string: %s\0".as_ptr() as *const ::core::ffi::c_char
                     ),
-                    mr_pattern.get(),
+                    get_search_pat(),
                 );
             }
             return FAIL;
@@ -463,7 +463,7 @@ pub unsafe extern "C" fn searchit(
                 if p_ws.get() != 0 {
                     semsg(
                         gettext(&raw const e_patnotf2 as *const ::core::ffi::c_char),
-                        mr_pattern.get(),
+                        get_search_pat(),
                     );
                 } else if lnum == 0 as linenr_T {
                     semsg(
@@ -471,7 +471,7 @@ pub unsafe extern "C" fn searchit(
                             (e_search_hit_top_without_match_for_str.ptr() as *const _)
                                 as *const ::core::ffi::c_char,
                         ),
-                        mr_pattern.get(),
+                        get_search_pat(),
                     );
                 } else {
                     semsg(
@@ -479,7 +479,7 @@ pub unsafe extern "C" fn searchit(
                             (e_search_hit_bottom_without_match_for_str.ptr() as *const _)
                                 as *const ::core::ffi::c_char,
                         ),
-                        mr_pattern.get(),
+                        get_search_pat(),
                     );
                 }
             }

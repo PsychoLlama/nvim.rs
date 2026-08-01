@@ -4969,12 +4969,7 @@ unsafe extern "C" fn sub_joining_lines(
         }
         if save {
             if !keeppatterns {
-                save_re_pat(
-                    RE_SUBST as ::core::ffi::c_int,
-                    pat,
-                    patlen,
-                    magic_isset() as ::core::ffi::c_int,
-                );
+                save_re_pat(RE_SUBST as ::core::ffi::c_int, pat, patlen, magic_isset());
             }
             add_to_history(
                 HIST_SEARCH as ::core::ffi::c_int,

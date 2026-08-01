@@ -73,11 +73,11 @@ use crate::src::nvim::state::MODE_SHOWMATCH;
 use crate::src::nvim::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
-    AdditionalData, Direction, EvalFuncData, FILE, MotionType, OptInt, SearchOffset, SearchPattern,
-    Timestamp, TriState, VarType, VimVarIndex, buf_T, cmdarg_T, colnr_T, dict_T, dictitem_T,
-    file_comparison, int64_t, linenr_T, listitem_T, lpos_T, magic_T, oparg_T, pos_T, proftime_T,
-    ptrdiff_t, regmatch_T, regmmatch_T, regprog_T, searchit_arg_T, size_t, typval_T, uint8_t,
-    uint64_t, varnumber_T, win_T,
+    Direction, EvalFuncData, FILE, MotionType, OptInt, SearchOffset, SearchPattern, TriState,
+    VarType, VimVarIndex, buf_T, cmdarg_T, colnr_T, dict_T, dictitem_T, file_comparison, int64_t,
+    linenr_T, listitem_T, lpos_T, magic_T, oparg_T, pos_T, proftime_T, ptrdiff_t, regmatch_T,
+    regmmatch_T, regprog_T, searchit_arg_T, size_t, typval_T, uint8_t, uint64_t, varnumber_T,
+    win_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep,
@@ -212,88 +212,11 @@ static e_search_hit_bottom_without_match_for_str: GlobalCell<[::core::ffi::c_cha
             *b"E385: Search hit BOTTOM without match for: %s\0",
         )
     });
-static spats: GlobalCell<[SearchPattern; 2]> = GlobalCell::new([
-    SearchPattern {
-        pat: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        patlen: 0 as size_t,
-        magic: true_0 != 0,
-        no_scs: false_0 != 0,
-        timestamp: 0 as Timestamp,
-        off: SearchOffset {
-            dir: '/' as ::core::ffi::c_char,
-            line: false_0 != 0,
-            end: false_0 != 0,
-            off: 0 as int64_t,
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    SearchPattern {
-        pat: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        patlen: 0 as size_t,
-        magic: true_0 != 0,
-        no_scs: false_0 != 0,
-        timestamp: 0 as Timestamp,
-        off: SearchOffset {
-            dir: '/' as ::core::ffi::c_char,
-            line: false_0 != 0,
-            end: false_0 != 0,
-            off: 0 as int64_t,
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-]);
-static last_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static lastc: GlobalCell<[uint8_t; 2]> = GlobalCell::new([NUL as uint8_t, NUL as uint8_t]);
 static lastcdir: GlobalCell<Direction> = GlobalCell::new(FORWARD);
 static last_t_cmd: GlobalCell<bool> = GlobalCell::new(true_0 != 0);
 static lastc_bytes: GlobalCell<[::core::ffi::c_char; 33]> = GlobalCell::new([0; 33]);
 static lastc_bytelen: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
-static saved_spats: GlobalCell<[SearchPattern; 2]> = GlobalCell::new(
-    [SearchPattern {
-        pat: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        patlen: 0,
-        magic: false,
-        no_scs: false,
-        timestamp: 0,
-        off: SearchOffset {
-            dir: 0,
-            line: false,
-            end: false,
-            off: 0,
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    }; 2],
-);
-static saved_mr_pattern: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-static saved_mr_patternlen: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-static saved_spats_last_idx: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
-static saved_spats_no_hlsearch: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static mr_pattern: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-static mr_patternlen: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-static save_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static saved_last_search_spat: GlobalCell<SearchPattern> = GlobalCell::new(SearchPattern {
-    pat: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    patlen: 0,
-    magic: false,
-    no_scs: false,
-    timestamp: 0,
-    off: SearchOffset {
-        dir: 0,
-        line: false,
-        end: false,
-        off: 0,
-    },
-    additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-});
-static did_save_last_search_spat: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
-static saved_last_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static saved_no_hlsearch: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static saved_search_match_endcol: GlobalCell<colnr_T> = GlobalCell::new(0);
-static saved_search_match_lines: GlobalCell<linenr_T> = GlobalCell::new(0);
 unsafe extern "C" fn get_line_and_copy(
     mut lnum: linenr_T,
     mut buf: *mut ::core::ffi::c_char,

@@ -65,6 +65,19 @@ pub struct regmmatch_T {
     pub rmm_maxcol: colnr_T,
 }
 
+impl Default for regmmatch_T {
+    fn default() -> Self {
+        regmmatch_T {
+            regprog: ::core::ptr::null_mut(),
+            startpos: [lpos_T::default(); 10],
+            endpos: [lpos_T::default(); 10],
+            rmm_matchcol: 0,
+            rmm_ic: 0,
+            rmm_maxcol: 0,
+        }
+    }
+}
+
 impl Default for regmatch_T {
     fn default() -> Self {
         regmatch_T {

@@ -4419,7 +4419,7 @@ pub unsafe extern "C" fn write_reg_contents_ex(
         len = strlen(str) as ssize_t;
     }
     if name == '/' as ::core::ffi::c_int {
-        set_last_search_pat(str, RE_SEARCH as ::core::ffi::c_int, true_0, true_0 != 0);
+        set_last_search_pat(str, RE_SEARCH as ::core::ffi::c_int, true, true);
         return;
     }
     if name == '#' as ::core::ffi::c_int {

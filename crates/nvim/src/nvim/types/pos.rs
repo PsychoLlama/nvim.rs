@@ -6,13 +6,13 @@ use super::*;
 
 pub type colnr_T = ::core::ffi::c_int;
 pub type linenr_T = int32_t;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct lpos_T {
     pub lnum: linenr_T,
     pub col: colnr_T,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct pos_T {
     pub lnum: linenr_T,
