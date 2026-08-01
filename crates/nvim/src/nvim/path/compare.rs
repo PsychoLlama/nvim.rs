@@ -11,61 +11,55 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int};
+use std::ffi::CStr;
+
 #[allow(unused_imports)]
 use super::*;
 
+/// Compare two file names, by identity where the file system can say and by
+/// name where it cannot.
+///
+/// Answers [`kEqualFiles`], [`kDifferentFiles`], [`kOneFileMissing`],
+/// [`kBothFilesMissing`], or — when neither file exists, `checkname` is set
+/// and their full paths agree — [`kEqualFileNames`].
+///
+/// # Safety
+/// Both names must be NUL-terminated strings. With `expandenv`, `s1` also
+/// has its environment variables expanded.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_full_compare(
-    s1: *mut ::core::ffi::c_char,
-    s2: *mut ::core::ffi::c_char,
+    s1: *mut c_char,
+    s2: *mut c_char,
     checkname: bool,
     expandenv: bool,
 ) -> FileComparison {
     unsafe {
-        let mut expanded1: [::core::ffi::c_char; 4096] = [0; 4096];
-        let mut full1: [::core::ffi::c_char; 4096] = [0; 4096];
-        let mut full2: [::core::ffi::c_char; 4096] = [0; 4096];
-        let mut file_id_1: FileID = FileID {
-            inode: 0,
-            device_id: 0,
-        };
-        let mut file_id_2: FileID = FileID {
-            inode: 0,
-            device_id: 0,
-        };
+        let mut expanded1 = [0 as c_char; MAXPATHL as usize];
         if expandenv {
-            expand_env(s1, &raw mut expanded1 as *mut ::core::ffi::c_char, MAXPATHL);
+            expand_env(s1, expanded1.as_mut_ptr(), MAXPATHL);
         } else {
-            xstrlcpy(
-                &raw mut expanded1 as *mut ::core::ffi::c_char,
-                s1,
-                MAXPATHL as size_t,
-            );
+            xstrlcpy(expanded1.as_mut_ptr(), s1, MAXPATHL as size_t);
         }
-        let mut id_ok_1: bool = os_fileid(
-            &raw mut expanded1 as *mut ::core::ffi::c_char,
-            &raw mut file_id_1,
-        );
-        let mut id_ok_2: bool = os_fileid(s2, &raw mut file_id_2);
+
+        let mut file_id_1 = FileID::default();
+        let mut file_id_2 = FileID::default();
+        let id_ok_1 = os_fileid(expanded1.as_mut_ptr(), &raw mut file_id_1);
+        let id_ok_2 = os_fileid(s2, &raw mut file_id_2);
+
         if !id_ok_1 && !id_ok_2 {
+            // With no id from the file system the names are all there is.
             if checkname {
+                let mut full1 = [0 as c_char; MAXPATHL as usize];
+                let mut full2 = [0 as c_char; MAXPATHL as usize];
                 vim_FullName(
-                    &raw mut expanded1 as *mut ::core::ffi::c_char,
-                    &raw mut full1 as *mut ::core::ffi::c_char,
+                    expanded1.as_mut_ptr(),
+                    full1.as_mut_ptr(),
                     MAXPATHL as size_t,
-                    false_0 != 0,
+                    false,
                 );
-                vim_FullName(
-                    s2,
-                    &raw mut full2 as *mut ::core::ffi::c_char,
-                    MAXPATHL as size_t,
-                    false_0 != 0,
-                );
-                if path_fnamecmp(
-                    &raw mut full1 as *mut ::core::ffi::c_char,
-                    &raw mut full2 as *mut ::core::ffi::c_char,
-                ) == 0 as ::core::ffi::c_int
-                {
+                vim_FullName(s2, full2.as_mut_ptr(), MAXPATHL as size_t, false);
+                if path_fnamecmp(full1.as_mut_ptr(), full2.as_mut_ptr()) == 0 {
                     return kEqualFileNames;
                 }
             }
@@ -74,304 +68,176 @@ pub unsafe extern "C" fn path_full_compare(
         if !id_ok_1 || !id_ok_2 {
             return kOneFileMissing;
         }
-        if os_fileid_equal(&raw mut file_id_1, &raw mut file_id_2) {
-            return kEqualFiles;
+        if os_fileid_equal(&raw const file_id_1, &raw const file_id_2) {
+            kEqualFiles
+        } else {
+            kDifferentFiles
         }
-        return kDifferentFiles;
     }
 }
 
+/// Rewrite the last component of `name` with the spelling the file system
+/// holds, when the two differ only in case.
+///
+/// Nothing happens unless a directory entry matches case-insensitively, is
+/// the same byte length — a longer name would not fit where this one is —
+/// and turns out to be the same file.
+///
+/// # Safety
+/// `name` must be a writable NUL-terminated string: its directory part is
+/// terminated in place while the directory is opened, as upstream does.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn path_fix_case(mut name: *mut ::core::ffi::c_char) {
+pub unsafe extern "C" fn path_fix_case(name: *mut c_char) {
     unsafe {
-        let mut file_info: FileInfo = FileInfo {
-            stat: uv_stat_t {
-                st_dev: 0,
-                st_mode: 0,
-                st_nlink: 0,
-                st_uid: 0,
-                st_gid: 0,
-                st_rdev: 0,
-                st_ino: 0,
-                st_size: 0,
-                st_blksize: 0,
-                st_blocks: 0,
-                st_flags: 0,
-                st_gen: 0,
-                st_atim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_mtim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_ctim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-                st_birthtim: uv_timespec_t {
-                    tv_sec: 0,
-                    tv_nsec: 0,
-                },
-            },
-        };
+        let mut file_info = FileInfo::default();
         if !os_fileinfo_link(name, &raw mut file_info) {
             return;
         }
-        let mut slash: *mut ::core::ffi::c_char = strrchr(name, '/' as ::core::ffi::c_int);
-        let mut tail: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut dir: Directory = Directory {
-            request: uv_fs_t {
-                data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                type_0: UV_UNKNOWN_REQ,
-                reserved: [::core::ptr::null_mut::<::core::ffi::c_void>(); 6],
-                fs_type: UV_FS_CUSTOM,
-                loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
-                cb: None,
-                result: 0,
-                ptr: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                path: ::core::ptr::null::<::core::ffi::c_char>(),
-                statbuf: uv_stat_t {
-                    st_dev: 0,
-                    st_mode: 0,
-                    st_nlink: 0,
-                    st_uid: 0,
-                    st_gid: 0,
-                    st_rdev: 0,
-                    st_ino: 0,
-                    st_size: 0,
-                    st_blksize: 0,
-                    st_blocks: 0,
-                    st_flags: 0,
-                    st_gen: 0,
-                    st_atim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_mtim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_ctim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_birthtim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                },
-                new_path: ::core::ptr::null::<::core::ffi::c_char>(),
-                file: 0,
-                flags: 0,
-                mode: 0,
-                nbufs: 0,
-                bufs: ::core::ptr::null_mut::<uv_buf_t>(),
-                off: 0,
-                uid: 0,
-                gid: 0,
-                atime: 0.,
-                mtime: 0.,
-                work_req: uv__work {
-                    work: None,
-                    done: None,
-                    loop_0: ::core::ptr::null_mut::<uv_loop_s>(),
-                    wq: uv__queue {
-                        next: ::core::ptr::null_mut::<uv__queue>(),
-                        prev: ::core::ptr::null_mut::<uv__queue>(),
-                    },
-                },
-                bufsml: [uv_buf_t {
-                    base: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    len: 0,
-                }; 4],
-            },
-            ent: uv_dirent_t {
-                name: ::core::ptr::null::<::core::ffi::c_char>(),
-                type_0: UV_DIRENT_UNKNOWN,
-            },
+
+        // Open the directory the file is in.
+        let mut dir = Directory::default();
+        let at = CStr::from_ptr(name)
+            .to_bytes()
+            .iter()
+            .rposition(|&b| b == b'/');
+        let tail = match at {
+            None => {
+                if !os_scandir(&raw mut dir, c".".as_ptr()) {
+                    return;
+                }
+                name
+            }
+            Some(at) => {
+                let slash = name.add(at);
+                *slash = 0;
+                let ok = os_scandir(&raw mut dir, name);
+                *slash = b'/' as c_char;
+                if !ok {
+                    return;
+                }
+                slash.add(1)
+            }
         };
-        let mut ok: bool = false;
-        if slash.is_null() {
-            ok = os_scandir(&raw mut dir, b".\0".as_ptr() as *const ::core::ffi::c_char);
-            tail = name;
-        } else {
-            *slash = NUL as ::core::ffi::c_char;
-            ok = os_scandir(&raw mut dir, name);
-            *slash = '/' as ::core::ffi::c_char;
-            tail = slash.offset(1 as ::core::ffi::c_int as isize);
-        }
-        if !ok {
-            return;
-        }
-        let mut taillen: size_t = strlen(tail);
-        let mut entry: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+
+        let head = tail.offset_from(name) as usize;
+        let taillen = CStr::from_ptr(tail).to_bytes().len();
         loop {
-            entry = os_scandir_next(&raw mut dir);
+            let entry = os_scandir_next(&raw mut dir);
             if entry.is_null() {
                 break;
             }
-            if !(strcasecmp(tail, entry as *mut ::core::ffi::c_char) == 0 as ::core::ffi::c_int
-                && taillen == strlen(entry))
-            {
+            // Only names that differ in case and are the same byte length.
+            // TODO(upstream): accept a different length name.
+            if strcasecmp(tail, entry) != 0 || taillen != CStr::from_ptr(entry).to_bytes().len() {
                 continue;
             }
-            let mut newname: [::core::ffi::c_char; 4097] = [0; 4097];
+            // Then check it really is this file, and not a second one whose
+            // name happens to fold to the same thing.
+            let mut newname = [0 as c_char; MAXPATHL as usize + 1];
+            xstrlcpy(newname.as_mut_ptr(), name, MAXPATHL as size_t + 1);
             xstrlcpy(
-                &raw mut newname as *mut ::core::ffi::c_char,
-                name,
-                (MAXPATHL + 1 as ::core::ffi::c_int) as size_t,
-            );
-            xstrlcpy(
-                (&raw mut newname as *mut ::core::ffi::c_char)
-                    .offset(tail.offset_from(name) as isize),
+                newname.as_mut_ptr().add(head),
                 entry,
-                (MAXPATHL as isize - tail.offset_from(name) + 1 as isize) as size_t,
+                (MAXPATHL as usize - head + 1) as size_t,
             );
-            let mut file_info_new: FileInfo = FileInfo {
-                stat: uv_stat_t {
-                    st_dev: 0,
-                    st_mode: 0,
-                    st_nlink: 0,
-                    st_uid: 0,
-                    st_gid: 0,
-                    st_rdev: 0,
-                    st_ino: 0,
-                    st_size: 0,
-                    st_blksize: 0,
-                    st_blocks: 0,
-                    st_flags: 0,
-                    st_gen: 0,
-                    st_atim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_mtim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_ctim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                    st_birthtim: uv_timespec_t {
-                        tv_sec: 0,
-                        tv_nsec: 0,
-                    },
-                },
-            };
-            if !(os_fileinfo_link(
-                &raw mut newname as *mut ::core::ffi::c_char,
-                &raw mut file_info_new,
-            ) as ::core::ffi::c_int
-                != 0
-                && os_fileinfo_id_equal(&raw mut file_info, &raw mut file_info_new)
-                    as ::core::ffi::c_int
-                    != 0)
+            let mut file_info_new = FileInfo::default();
+            if os_fileinfo_link(newname.as_mut_ptr(), &raw mut file_info_new)
+                && os_fileinfo_id_equal(&raw const file_info, &raw const file_info_new)
             {
-                continue;
+                strcpy(tail, entry);
+                break;
             }
-            strcpy(tail, entry as *mut ::core::ffi::c_char);
-            break;
         }
         os_closedir(&raw mut dir);
     }
 }
 
-pub unsafe extern "C" fn same_directory(
-    mut f1: *mut ::core::ffi::c_char,
-    mut f2: *mut ::core::ffi::c_char,
-) -> bool {
+/// Are `f1` and `f2` in the same directory? `f1` may be a short name; `f2`
+/// must be a full path.
+///
+/// # Safety
+/// Both must be NUL-terminated strings, or NULL for "no".
+pub unsafe fn same_directory(f1: *mut c_char, f2: *mut c_char) -> bool {
     unsafe {
-        let mut ffname: [::core::ffi::c_char; 4096] = [0; 4096];
-        let mut t1: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut t2: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
         if f1.is_null() || f2.is_null() {
-            return false_0 != 0;
+            return false;
         }
-        vim_FullName(
-            f1,
-            &raw mut ffname as *mut ::core::ffi::c_char,
-            MAXPATHL as size_t,
-            false_0 != 0,
-        );
-        t1 = path_tail_with_sep(&raw mut ffname as *mut ::core::ffi::c_char);
-        t2 = path_tail_with_sep(f2);
-        return t1.offset_from(&raw mut ffname as *mut ::core::ffi::c_char) == t2.offset_from(f2)
-            && pathcmp(
-                &raw mut ffname as *mut ::core::ffi::c_char,
-                f2,
-                t1.offset_from(&raw mut ffname as *mut ::core::ffi::c_char) as ::core::ffi::c_int,
-            ) == 0 as ::core::ffi::c_int;
+        let mut ffname = [0 as c_char; MAXPATHL as usize];
+        let full = ffname.as_mut_ptr();
+        vim_FullName(f1, full, MAXPATHL as size_t, false);
+        let head = path_tail_with_sep(full).offset_from(full);
+        head == path_tail_with_sep(f2).offset_from(f2) && pathcmp(full, f2, head as c_int) == 0
     }
 }
 
-pub unsafe extern "C" fn pathcmp(
-    mut p: *const ::core::ffi::c_char,
-    mut q: *const ::core::ffi::c_char,
-    mut maxlen: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Compare the file names `p` and `q`, over at most `maxlen` bytes of each
+/// when `maxlen` is not negative.
+///
+/// Answers zero when they name the same thing, which includes one of them
+/// having a trailing separator the other lacks. Otherwise the sign says
+/// which sorts first, and a path separator sorts before anything else — so
+/// `"foo/bar"` comes before `"foo-bar"`, and a name that is a prefix of the
+/// other comes first. `'fileignorecase'` folds case.
+///
+/// # Safety
+/// Both must be NUL-terminated strings.
+pub unsafe fn pathcmp(p: *const c_char, q: *const c_char, maxlen: c_int) -> c_int {
     unsafe {
-        let mut i: ::core::ffi::c_int = 0;
-        let mut j: ::core::ffi::c_int = 0;
-        let mut s: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        i = 0 as ::core::ffi::c_int;
-        j = 0 as ::core::ffi::c_int;
-        while maxlen < 0 as ::core::ffi::c_int || i < maxlen && j < maxlen {
-            let mut c1: ::core::ffi::c_int = utf_ptr2char(p.offset(i as isize));
-            let mut c2: ::core::ffi::c_int = utf_ptr2char(q.offset(j as isize));
+        let ignorecase = p_fic.get() != 0;
+        let fold = |c: c_int| if ignorecase { mb_toupper(c) } else { c };
+        let limit = if maxlen < 0 {
+            usize::MAX
+        } else {
+            maxlen as usize
+        };
+
+        // Where one name ran out, and how far into it that was. Staying NULL
+        // means the comparison ran into `maxlen` with both still going.
+        let mut short: *const c_char = core::ptr::null();
+        let mut at = 0;
+        let mut j = 0;
+        while at < limit && j < limit {
+            let c1 = utf_ptr2char(p.add(at));
+            let c2 = utf_ptr2char(q.add(j));
+
+            // End of one name: the other may just have a trailing separator.
             if c1 == NUL {
                 if c2 == NUL {
-                    return 0 as ::core::ffi::c_int;
+                    return 0;
                 }
-                s = q;
-                i = j;
+                short = q;
+                at = j;
                 break;
-            } else if c2 == NUL {
-                s = p;
-                break;
-            } else {
-                if if p_fic.get() != 0 {
-                    (mb_toupper(c1) != mb_toupper(c2)) as ::core::ffi::c_int
-                } else {
-                    (c1 != c2) as ::core::ffi::c_int
-                } != 0
-                {
-                    if vim_ispathsep(c1) {
-                        return -1 as ::core::ffi::c_int;
-                    }
-                    if vim_ispathsep(c2) {
-                        return 1 as ::core::ffi::c_int;
-                    }
-                    return if p_fic.get() != 0 {
-                        mb_toupper(c1) - mb_toupper(c2)
-                    } else {
-                        c1 - c2
-                    };
-                }
-                i += utfc_ptr2len(p.offset(i as isize));
-                j += utfc_ptr2len(q.offset(j as isize));
             }
+            if c2 == NUL {
+                short = p;
+                break;
+            }
+
+            if fold(c1) != fold(c2) {
+                if vim_ispathsep(c1) {
+                    return -1;
+                }
+                if vim_ispathsep(c2) {
+                    return 1;
+                }
+                return fold(c1) - fold(c2);
+            }
+            at += utfc_ptr2len(p.add(at)) as usize;
+            j += utfc_ptr2len(q.add(j)) as usize;
         }
-        if s.is_null() {
-            return 0 as ::core::ffi::c_int;
+        if short.is_null() {
+            return 0;
         }
-        let mut c1_0: ::core::ffi::c_int = utf_ptr2char(s.offset(i as isize));
-        let mut c2_0: ::core::ffi::c_int = utf_ptr2char(
-            s.offset(i as isize)
-                .offset(utfc_ptr2len(s.offset(i as isize)) as isize),
-        );
-        if c2_0 == NUL
-            && i > 0 as ::core::ffi::c_int
-            && after_pathsep(s, s.offset(i as isize)) == 0
-            && c1_0 == '/' as ::core::ffi::c_int
-        {
-            return 0 as ::core::ffi::c_int;
+
+        // The longer name matches if all it has left is a trailing
+        // separator — but "//" and ":/" are not that.
+        let rest = short.add(at);
+        let c1 = utf_ptr2char(rest);
+        let c2 = utf_ptr2char(rest.add(utfc_ptr2len(rest) as usize));
+        if c2 == NUL && at > 0 && after_pathsep(short, rest) == 0 && c1 == c_int::from(b'/') {
+            return 0;
         }
-        if s == q {
-            return -1 as ::core::ffi::c_int;
-        }
-        return 1 as ::core::ffi::c_int;
+        if short == q { -1 } else { 1 }
     }
 }
