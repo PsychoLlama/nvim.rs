@@ -97,7 +97,7 @@ pub unsafe extern "C" fn find_file_in_path_option(
             file_to_findlen.set(expand_env_esc(
                 ptr,
                 NameBuff.ptr() as *mut ::core::ffi::c_char,
-                MAXPATHL,
+                MAXPATHL as ::core::ffi::c_int,
                 false_0 != 0,
                 true_0 != 0,
                 ::core::ptr::null_mut::<::core::ffi::c_char>(),

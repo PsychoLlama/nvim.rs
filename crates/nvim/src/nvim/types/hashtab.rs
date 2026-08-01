@@ -22,3 +22,26 @@ pub struct hashtab_T {
     pub ht_array: *mut hashitem_T,
     pub ht_smallarray: [hashitem_T; 16],
 }
+
+impl Default for hashitem_T {
+    fn default() -> Self {
+        Self {
+            hi_hash: 0,
+            hi_key: ::core::ptr::null_mut(),
+        }
+    }
+}
+
+impl Default for hashtab_T {
+    fn default() -> Self {
+        Self {
+            ht_mask: 0,
+            ht_used: 0,
+            ht_filled: 0,
+            ht_changed: 0,
+            ht_locked: 0,
+            ht_array: ::core::ptr::null_mut(),
+            ht_smallarray: [hashitem_T::default(); 16],
+        }
+    }
+}

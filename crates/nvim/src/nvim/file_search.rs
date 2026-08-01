@@ -27,8 +27,7 @@ use crate::src::nvim::os::fs::{
 };
 use crate::src::nvim::os::input::os_breakcheck;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, gettext, memmove, snprintf, strcpy, strlen, strncmp,
-    strtol,
+    __assert_fail, __ctype_b_loc, abort, gettext, memmove, strcpy, strlen, strncmp, strtol,
 };
 use crate::src::nvim::path::{
     FreeWild, FullName_save, after_pathsep, expand_wildcards, path_fnamecmp, path_fnamencmp,
@@ -37,9 +36,8 @@ use crate::src::nvim::path::{
 };
 use crate::src::nvim::strings::{vim_snprintf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::{
-    Arena, BoolVarValue, CdCause, CdScope, FileID, String_0, VimVarIndex, cmdarg_T, dict_T,
-    event_T, hashitem_T, hashtab_T, int32_t, int64_t, linenr_T, ptrdiff_t, save_v_event_T, sctx_T,
-    size_t, uint8_t,
+    Arena, BoolVarValue, CdCause, CdScope, FileID, String_0, VimVarIndex, cmdarg_T, event_T,
+    int32_t, int64_t, linenr_T, ptrdiff_t, save_v_event_T, sctx_T, size_t, uint8_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -55,7 +53,11 @@ mod chdir;
 pub use self::chdir::*;
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const _ISdigit: C2Rust_Unnamed = 2048;
+pub const kCdScopeGlobal: CdScope = 2;
+pub const kCdScopeTabpage: CdScope = 1;
 pub const kCdScopeWindow: CdScope = 0;
+pub const kCdScopeInvalid: CdScope = -1;
+pub const kCdCauseAuto: CdCause = 2;
 pub const kCdCauseWindow: CdCause = 1;
 pub const kCdCauseOther: CdCause = -1;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_int;
@@ -128,8 +130,8 @@ pub const OPT_LOCAL: C2Rust_Unnamed_16 = 2;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
+/// The longest path name the searcher will build, buffers included.
+pub const MAXPATHL: usize = 4096;
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const NULL_STRING: String_0 = String_0 {

@@ -33,7 +33,7 @@ pub struct lval_T {
     pub ll_newkey: *mut ::core::ffi::c_char,
     pub ll_blob: *mut blob_T,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct save_v_event_T {
     pub sve_did_save: bool,
