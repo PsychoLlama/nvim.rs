@@ -406,7 +406,7 @@
     "crates/nvim/src/nvim/shada/collect.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/shada/file.rs": {"unsafe": 14},
     "crates/nvim/src/nvim/shada/merge.rs": {"unsafe": 13},
-    "crates/nvim/src/nvim/shada/pack.rs": {"unsafe": 8},
+    "crates/nvim/src/nvim/shada/pack.rs": {"unsafe": 19},
     "crates/nvim/src/nvim/shada/parse.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/shada/read.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/shada/unpack.rs": {"unsafe": 16},

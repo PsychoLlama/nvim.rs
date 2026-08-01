@@ -1,850 +1,485 @@
 //! Turning a [`ShadaEntry`] into msgpack.
 //!
-//! One entry becomes one `<type> <timestamp> <length> <payload>` quadruple,
-//! where the payload is a map for everything but the plain-string entries.
-//! `shada_pack_entry` writes them all; the rest of this file is the buffer
-//! plumbing under it, which keeps at least [`SHADA_MPACK_FREE_SPACE`] bytes
-//! free and flushes to the file when it runs out.
+//! One entry becomes four things in a row: its type, its timestamp, the byte
+//! length of its payload, and the payload — see `unpack` for the reading
+//! side. The payload is packed into a scratch buffer first, because the
+//! length has to be written before it.
+//!
+//! Every field whose value equals the default for its entry type is left
+//! out; `sd_default_values` is what both sides call the default, so a reader
+//! puts it back. That is what keeps a ShaDa file small, and it is why the
+//! map sizes below are counted before anything is written.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
+use core::ffi::{CStr, c_char, c_int, c_void};
+
+use crate::src::nvim::types::builders::static_cstring;
+
 use super::*;
 
-pub(crate) unsafe extern "C" fn shada_check_buffer(mut packer: *mut PackerBuffer) {
+/// Room the packer keeps free, so that a handful of small tokens can be
+/// written without checking after each one.
+const FREE_SPACE: size_t = 4 * MPACK_ITEM_SIZE as size_t;
+
+/// Make room for the next few tokens, flushing the buffer if it is short.
+pub(crate) unsafe fn shada_check_buffer(packer: *mut PackerBuffer) {
     unsafe {
-        if mpack_remaining(&*packer) < SHADA_MPACK_FREE_SPACE as size_t {
+        if mpack_remaining(&*packer) < FREE_SPACE {
             (*packer).packer_flush.expect("non-null function pointer")(packer);
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn additional_data_len(mut src: *mut AdditionalData) -> uint32_t {
-    unsafe {
-        return if !src.is_null() {
-            (*src).nitems
-        } else {
-            0 as uint32_t
-        };
+/// How many map keys or array elements an entry carries that this Nvim has
+/// no field for, and therefore stored verbatim.
+unsafe fn additional_data_len(src: *mut AdditionalData) -> uint32_t {
+    if src.is_null() {
+        0
+    } else {
+        unsafe { (*src).nitems }
     }
 }
 
-pub(crate) unsafe extern "C" fn dump_additional_data(
-    mut src: *mut AdditionalData,
-    mut sbuf: *mut PackerBuffer,
-) {
+/// Write those keys or elements back out, exactly as they were read.
+unsafe fn dump_additional_data(src: *mut AdditionalData, sbuf: &mut PackerBuffer) {
     unsafe {
         if !src.is_null() {
             mpack_raw(
-                &raw mut (*src).data as *mut ::core::ffi::c_char,
+                (&raw mut (*src).data).cast::<c_char>(),
                 (*src).nbytes as size_t,
-                &mut *sbuf,
+                sbuf,
             );
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn shada_pack_entry(
-    packer: *mut PackerBuffer,
-    mut entry: ShadaEntry,
-    max_kbyte: size_t,
-) -> ShaDaWriteResult {
-    unsafe {
-        let mut packed: String_0 = String_0 {
-            data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            size: 0,
-        };
-        let mut ret: ShaDaWriteResult = kSDWriteFailed;
-        let mut sbuf: PackerBuffer = packer_string_buffer();
-        shada_check_buffer(&mut sbuf);
-        '_shada_pack_entry_error: {
-            match entry.type_0 as ::core::ffi::c_int {
-                0 => {
-                    abort();
-                }
-                -1 => {
-                    mpack_raw(
-                        entry.data.unknown_item.contents,
-                        entry.data.unknown_item.size,
-                        &mut sbuf,
-                    );
-                }
-                4 => {
-                    let is_hist_search: bool = entry.data.history_item.histtype
-                        as ::core::ffi::c_int
-                        == HIST_SEARCH as ::core::ffi::c_int;
-                    let mut arr_size: uint32_t = (2 as uint32_t)
-                        .wrapping_add(is_hist_search as uint32_t)
-                        .wrapping_add(additional_data_len(entry.additional_data));
-                    mpack_array(&mut sbuf.ptr, arr_size);
-                    mpack_uint(&mut sbuf.ptr, entry.data.history_item.histtype as uint32_t);
-                    mpack_bin(cstr_as_string(entry.data.history_item.string), &mut sbuf);
-                    if is_hist_search {
-                        mpack_uint(
-                            &mut sbuf.ptr,
-                            entry.data.history_item.sep as uint8_t as uint32_t,
-                        );
-                    }
-                    dump_additional_data(entry.additional_data, &mut sbuf);
-                }
-                6 => {
-                    let mut is_blob: bool = entry.data.global_var.value.v_type
-                        as ::core::ffi::c_uint
-                        == VAR_BLOB as ::core::ffi::c_int as ::core::ffi::c_uint;
-                    let mut arr_size_0: uint32_t = ((2 as ::core::ffi::c_int
-                        + (if is_blob as ::core::ffi::c_int != 0 {
-                            1 as ::core::ffi::c_int
-                        } else {
-                            0 as ::core::ffi::c_int
-                        })) as uint32_t)
-                        .wrapping_add(additional_data_len(entry.additional_data));
-                    mpack_array(&mut sbuf.ptr, arr_size_0);
-                    let varname: String_0 = cstr_as_string(entry.data.global_var.name);
-                    mpack_bin(varname, &mut sbuf);
-                    let mut vardesc: [::core::ffi::c_char; 256] = ::core::mem::transmute::<
-                    [u8; 256],
-                    [::core::ffi::c_char; 256],
-                >(
-                    *b"variable g:\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
-                );
-                    memcpy(
-                        (&raw mut vardesc as *mut ::core::ffi::c_char).offset(
-                            ::core::mem::size_of::<[::core::ffi::c_char; 12]>()
-                                .wrapping_sub(1 as usize) as isize,
-                        ) as *mut ::core::ffi::c_void,
-                        varname.data as *const ::core::ffi::c_void,
-                        varname.size.wrapping_add(1 as size_t),
-                    );
-                    if encode_vim_to_msgpack(
-                        &mut sbuf,
-                        &raw mut entry.data.global_var.value,
-                        &raw mut vardesc as *mut ::core::ffi::c_char,
-                    ) == FAIL
-                    {
-                        ret = kSDWriteIgnError;
-                        semsg(
-                            gettext(b"E574: Failed to write variable %s\0".as_ptr()
-                                as *const ::core::ffi::c_char),
-                            entry.data.global_var.name,
-                        );
-                        break '_shada_pack_entry_error;
-                    } else {
-                        if is_blob {
-                            mpack_check_buffer(&mut sbuf);
-                            mpack_integer(
-                                &mut sbuf.ptr,
-                                VAR_TYPE_BLOB as ::core::ffi::c_int as Integer,
-                            );
-                        }
-                        dump_additional_data(entry.additional_data, &mut sbuf);
-                    }
-                }
-                3 => {
-                    let mut arr_size_1: uint32_t =
-                        (1 as uint32_t).wrapping_add(additional_data_len(entry.additional_data));
-                    mpack_array(&mut sbuf.ptr, arr_size_1);
-                    mpack_bin(cstr_as_string(entry.data.sub_string.sub), &mut sbuf);
-                    dump_additional_data(entry.additional_data, &mut sbuf);
-                }
-                2 => {
-                    let mut entry_map_size: uint32_t = (1 as uint32_t)
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .magic as ::core::ffi::c_int
-                                == entry.data.search_pattern.magic as ::core::ffi::c_int)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .is_last_used as ::core::ffi::c_int
-                                == entry.data.search_pattern.is_last_used as ::core::ffi::c_int)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .smartcase as ::core::ffi::c_int
-                                == entry.data.search_pattern.smartcase as ::core::ffi::c_int)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .has_line_offset
-                                as ::core::ffi::c_int
-                                == entry.data.search_pattern.has_line_offset as ::core::ffi::c_int)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .place_cursor_at_end
-                                as ::core::ffi::c_int
-                                == entry.data.search_pattern.place_cursor_at_end
-                                    as ::core::ffi::c_int)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .is_substitute_pattern
-                                as ::core::ffi::c_int
-                                == entry.data.search_pattern.is_substitute_pattern
-                                    as ::core::ffi::c_int)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .highlighted as ::core::ffi::c_int
-                                == entry.data.search_pattern.highlighted as ::core::ffi::c_int)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .offset
-                                == entry.data.search_pattern.offset)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .search_backward
-                                as ::core::ffi::c_int
-                                == entry.data.search_pattern.search_backward as ::core::ffi::c_int)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(additional_data_len(entry.additional_data));
-                    mpack_map(&mut sbuf.ptr, entry_map_size);
-                    mpack_str(
-                        String_0 {
-                            data: b"sp\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                            size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                .wrapping_sub(1 as size_t),
-                        },
-                        &mut sbuf,
-                    );
-                    mpack_bin(entry.data.search_pattern.pat, &mut sbuf);
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .search_pattern
-                        .magic as ::core::ffi::c_int
-                        == entry.data.search_pattern.magic as ::core::ffi::c_int)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"sm\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_bool(
-                            &mut sbuf.ptr,
-                            !(*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .magic,
-                        );
-                    }
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .search_pattern
-                        .is_last_used as ::core::ffi::c_int
-                        == entry.data.search_pattern.is_last_used as ::core::ffi::c_int)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"su\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_bool(
-                            &mut sbuf.ptr,
-                            !(*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .is_last_used,
-                        );
-                    }
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .search_pattern
-                        .smartcase as ::core::ffi::c_int
-                        == entry.data.search_pattern.smartcase as ::core::ffi::c_int)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"sc\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_bool(
-                            &mut sbuf.ptr,
-                            !(*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .smartcase,
-                        );
-                    }
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .search_pattern
-                        .has_line_offset as ::core::ffi::c_int
-                        == entry.data.search_pattern.has_line_offset as ::core::ffi::c_int)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"sl\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_bool(
-                            &mut sbuf.ptr,
-                            !(*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .has_line_offset,
-                        );
-                    }
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .search_pattern
-                        .place_cursor_at_end as ::core::ffi::c_int
-                        == entry.data.search_pattern.place_cursor_at_end as ::core::ffi::c_int)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"se\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_bool(
-                            &mut sbuf.ptr,
-                            !(*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .place_cursor_at_end,
-                        );
-                    }
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .search_pattern
-                        .is_substitute_pattern as ::core::ffi::c_int
-                        == entry.data.search_pattern.is_substitute_pattern as ::core::ffi::c_int)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"ss\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_bool(
-                            &mut sbuf.ptr,
-                            !(*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .is_substitute_pattern,
-                        );
-                    }
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .search_pattern
-                        .highlighted as ::core::ffi::c_int
-                        == entry.data.search_pattern.highlighted as ::core::ffi::c_int)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"sh\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_bool(
-                            &mut sbuf.ptr,
-                            !(*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .highlighted,
-                        );
-                    }
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .search_pattern
-                        .search_backward as ::core::ffi::c_int
-                        == entry.data.search_pattern.search_backward as ::core::ffi::c_int)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"sb\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_bool(
-                            &mut sbuf.ptr,
-                            !(*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .search_pattern
-                                .search_backward,
-                        );
-                    }
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .search_pattern
-                        .offset
-                        == entry.data.search_pattern.offset)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"so\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_integer(&mut sbuf.ptr, entry.data.search_pattern.offset);
-                    }
-                    dump_additional_data(entry.additional_data, &mut sbuf);
-                }
-                11 | 7 | 10 | 8 => {
-                    let mut entry_map_size_0: size_t = (1 as uint32_t)
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .filemark
-                                .mark
-                                .lnum
-                                == entry.data.filemark.mark.lnum)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .filemark
-                                .mark
-                                .col
-                                == entry.data.filemark.mark.col)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .filemark
-                                .name as ::core::ffi::c_int
-                                == entry.data.filemark.name as ::core::ffi::c_int)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(additional_data_len(entry.additional_data))
-                        as size_t;
-                    mpack_map(&mut sbuf.ptr, entry_map_size_0 as uint32_t);
-                    mpack_str(
-                        String_0 {
-                            data: b"f\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                            size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                                .wrapping_sub(1 as size_t),
-                        },
-                        &mut sbuf,
-                    );
-                    mpack_bin(cstr_as_string(entry.data.filemark.fname), &mut sbuf);
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .filemark
-                        .mark
-                        .lnum
-                        == entry.data.filemark.mark.lnum)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"l\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_integer(&mut sbuf.ptr, entry.data.filemark.mark.lnum as Integer);
-                    }
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .filemark
-                        .mark
-                        .col
-                        == entry.data.filemark.mark.col)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"c\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_integer(&mut sbuf.ptr, entry.data.filemark.mark.col as Integer);
-                    }
-                    '_c2rust_label: {
-                        if (if entry.type_0 as ::core::ffi::c_int
-                            == kSDItemJump as ::core::ffi::c_int
-                            || entry.type_0 as ::core::ffi::c_int
-                                == kSDItemChange as ::core::ffi::c_int
-                        {
-                            ((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .filemark
-                                .name as ::core::ffi::c_int
-                                == entry.data.filemark.name as ::core::ffi::c_int)
-                                as ::core::ffi::c_int
-                        } else {
-                            1 as ::core::ffi::c_int
-                        }) != 0
-                        {
-                        } else {
-                            __assert_fail(
-                            b"entry.type == kSDItemJump || entry.type == kSDItemChange ? CHECK_DEFAULT(entry, filemark.name) : true\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/shada.rs\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            1471 as ::core::ffi::c_uint,
-                            b"ShaDaWriteResult shada_pack_entry(PackerBuffer *const, ShadaEntry, const size_t)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                        }
-                    };
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .filemark
-                        .name as ::core::ffi::c_int
-                        == entry.data.filemark.name as ::core::ffi::c_int)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"n\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_uint(
-                            &mut sbuf.ptr,
-                            entry.data.filemark.name as uint8_t as uint32_t,
-                        );
-                    }
-                    dump_additional_data(entry.additional_data, &mut sbuf);
-                }
-                5 => {
-                    let mut entry_map_size_1: uint32_t = (2 as uint32_t)
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .reg
-                                .type_0 as ::core::ffi::c_int
-                                == entry.data.reg.type_0 as ::core::ffi::c_int)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .reg
-                                .width
-                                == entry.data.reg.width)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(
-                            !((*sd_default_values.ptr())[entry.type_0 as usize]
-                                .data
-                                .reg
-                                .is_unnamed as ::core::ffi::c_int
-                                == entry.data.reg.is_unnamed as ::core::ffi::c_int)
-                                as ::core::ffi::c_int as uint32_t,
-                        )
-                        .wrapping_add(additional_data_len(entry.additional_data));
-                    mpack_map(&mut sbuf.ptr, entry_map_size_1);
-                    mpack_str(
-                        String_0 {
-                            data: b"rc\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                            size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                .wrapping_sub(1 as size_t),
-                        },
-                        &mut sbuf,
-                    );
-                    mpack_array(&mut sbuf.ptr, entry.data.reg.contents_size as uint32_t);
-                    let mut i: size_t = 0 as size_t;
-                    while i < entry.data.reg.contents_size {
-                        mpack_bin(*entry.data.reg.contents.offset(i as isize), &mut sbuf);
-                        i = i.wrapping_add(1);
-                    }
-                    mpack_str(
-                        String_0 {
-                            data: b"n\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                            size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                                .wrapping_sub(1 as size_t),
-                        },
-                        &mut sbuf,
-                    );
-                    mpack_uint(&mut sbuf.ptr, entry.data.reg.name as uint8_t as uint32_t);
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .reg
-                        .type_0 as ::core::ffi::c_int
-                        == entry.data.reg.type_0 as ::core::ffi::c_int)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"rt\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_uint(&mut sbuf.ptr, entry.data.reg.type_0 as uint8_t as uint32_t);
-                    }
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .reg
-                        .width
-                        == entry.data.reg.width)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"rw\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_uint64(&mut sbuf.ptr, entry.data.reg.width as uint64_t);
-                    }
-                    if !((*sd_default_values.ptr())[entry.type_0 as usize]
-                        .data
-                        .reg
-                        .is_unnamed as ::core::ffi::c_int
-                        == entry.data.reg.is_unnamed as ::core::ffi::c_int)
-                    {
-                        mpack_str(
-                            String_0 {
-                                data: b"ru\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 3]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_bool(&mut sbuf.ptr, entry.data.reg.is_unnamed);
-                    }
-                    dump_additional_data(entry.additional_data, &mut sbuf);
-                }
-                9 => {
-                    mpack_array(&mut sbuf.ptr, entry.data.buffer_list.size as uint32_t);
-                    let mut i_0: size_t = 0 as size_t;
-                    while i_0 < entry.data.buffer_list.size {
-                        let mut entry_map_size_2: size_t = (1 as size_t)
-                            .wrapping_add(
-                                ((*entry.data.buffer_list.buffers.offset(i_0 as isize))
-                                    .pos
-                                    .lnum
-                                    != (*default_pos.ptr()).lnum)
-                                    as ::core::ffi::c_int as size_t,
-                            )
-                            .wrapping_add(
-                                ((*entry.data.buffer_list.buffers.offset(i_0 as isize))
-                                    .pos
-                                    .col
-                                    != (*default_pos.ptr()).col)
-                                    as ::core::ffi::c_int as size_t,
-                            )
-                            .wrapping_add(additional_data_len(
-                                (*entry.data.buffer_list.buffers.offset(i_0 as isize))
-                                    .additional_data,
-                            ) as size_t);
-                        mpack_map(&mut sbuf.ptr, entry_map_size_2 as uint32_t);
-                        mpack_str(
-                            String_0 {
-                                data: b"f\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char,
-                                size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                                    .wrapping_sub(1 as size_t),
-                            },
-                            &mut sbuf,
-                        );
-                        mpack_bin(
-                            cstr_as_string(
-                                (*entry.data.buffer_list.buffers.offset(i_0 as isize)).fname,
-                            ),
-                            &mut sbuf,
-                        );
-                        if (*entry.data.buffer_list.buffers.offset(i_0 as isize))
-                            .pos
-                            .lnum
-                            != 1 as linenr_T
-                        {
-                            mpack_str(
-                                String_0 {
-                                    data: b"l\0".as_ptr() as *const ::core::ffi::c_char
-                                        as *mut ::core::ffi::c_char,
-                                    size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                                        .wrapping_sub(1 as size_t),
-                                },
-                                &mut sbuf,
-                            );
-                            mpack_uint64(
-                                &mut sbuf.ptr,
-                                (*entry.data.buffer_list.buffers.offset(i_0 as isize))
-                                    .pos
-                                    .lnum as uint64_t,
-                            );
-                        }
-                        if (*entry.data.buffer_list.buffers.offset(i_0 as isize))
-                            .pos
-                            .col
-                            != 0 as ::core::ffi::c_int
-                        {
-                            mpack_str(
-                                String_0 {
-                                    data: b"c\0".as_ptr() as *const ::core::ffi::c_char
-                                        as *mut ::core::ffi::c_char,
-                                    size: ::core::mem::size_of::<[::core::ffi::c_char; 2]>()
-                                        .wrapping_sub(1 as size_t),
-                                },
-                                &mut sbuf,
-                            );
-                            mpack_uint64(
-                                &mut sbuf.ptr,
-                                (*entry.data.buffer_list.buffers.offset(i_0 as isize))
-                                    .pos
-                                    .col as uint64_t,
-                            );
-                        }
-                        dump_additional_data(
-                            (*entry.data.buffer_list.buffers.offset(i_0 as isize)).additional_data,
-                            &mut sbuf,
-                        );
-                        i_0 = i_0.wrapping_add(1);
-                    }
-                }
-                1 => {
-                    mpack_map(&mut sbuf.ptr, entry.data.header.size as uint32_t);
-                    let mut i_1: size_t = 0 as size_t;
-                    while i_1 < entry.data.header.size {
-                        mpack_str(
-                            (*entry.data.header.items.offset(i_1 as isize)).key,
-                            &mut sbuf,
-                        );
-                        let obj: Object = (*entry.data.header.items.offset(i_1 as isize)).value;
-                        match obj.type_0 as ::core::ffi::c_uint {
-                            4 => {
-                                mpack_bin(obj.data.string, &mut sbuf);
-                            }
-                            2 => {
-                                mpack_integer(&mut sbuf.ptr, obj.data.integer);
-                            }
-                            _ => {
-                                abort();
-                            }
-                        }
-                        i_1 = i_1.wrapping_add(1);
-                    }
-                }
-                _ => {}
-            }
-            packed = packer_take_string(&mut sbuf);
-            if max_kbyte == 0 || packed.size <= max_kbyte.wrapping_mul(1024 as size_t) {
-                shada_check_buffer(packer);
-                if entry.type_0 as ::core::ffi::c_int == kSDItemUnknown as ::core::ffi::c_int {
-                    mpack_uint64(&mut (*packer).ptr, entry.data.unknown_item.type_0);
-                } else {
-                    mpack_uint64(&mut (*packer).ptr, entry.type_0 as uint64_t);
-                }
-                mpack_uint64(&mut (*packer).ptr, entry.timestamp);
-                if packed.size > 0 as size_t {
-                    mpack_uint64(&mut (*packer).ptr, packed.size as uint64_t);
-                    mpack_raw(packed.data, packed.size, &mut *packer);
-                }
-                if (*packer).anyint != 0 as int64_t {
-                    break '_shada_pack_entry_error;
-                }
-            }
-            ret = kSDWriteSuccessful;
-        }
-        xfree(sbuf.startptr as *mut ::core::ffi::c_void);
-        return ret;
+/// The scratch buffer one entry's payload is packed into.
+///
+/// Its `packer_flush` grows the buffer rather than writing anything out, so
+/// the whole payload ends up in one allocation that [`Payload::packed`]
+/// hands back. Dropping it releases that allocation.
+struct Payload {
+    buf: PackerBuffer,
+}
+
+impl Payload {
+    fn new() -> Self {
+        let mut buf = packer_string_buffer();
+        // SAFETY: a fresh string buffer.
+        unsafe { shada_check_buffer(&raw mut buf) };
+        Payload { buf }
+    }
+
+    /// A map key. ShaDa spells them as one- or two-letter codes.
+    fn key(&mut self, name: &'static CStr) {
+        // SAFETY: `name` is a static string and the buffer has room.
+        unsafe { mpack_str(static_cstring(name), &mut self.buf) };
+    }
+
+    /// What has been packed so far. Valid until this is dropped.
+    fn packed(&self) -> String_0 {
+        packer_take_string(&self.buf)
     }
 }
 
-#[inline(always)]
-pub(crate) unsafe extern "C" fn shada_pack_pfreed_entry(
+impl Drop for Payload {
+    fn drop(&mut self) {
+        // SAFETY: ours, from `packer_string_buffer`, and `flush` only ever
+        // reallocates it in place of this field.
+        unsafe { xfree(self.buf.startptr.cast::<c_void>()) };
+    }
+}
+
+/// The values a reader assumes for the fields an entry leaves out.
+unsafe fn defaults_for(type_0: ShadaEntryType) -> C2Rust_Unnamed_22 {
+    unsafe { (*sd_default_values.ptr())[type_0 as usize].data }
+}
+
+/// 1 when a field differs from its default and so has to be written.
+fn written<T: PartialEq>(value: T, default: T) -> uint32_t {
+    (value != default) as uint32_t
+}
+
+/// Write one entry, and free it.
+///
+/// Only used where the entry was built for the occasion; an entry that came
+/// out of the merger is still owned by it.
+pub(crate) unsafe fn shada_pack_pfreed_entry(
     packer: *mut PackerBuffer,
     mut entry: ShadaEntry,
     max_kbyte: size_t,
 ) -> ShaDaWriteResult {
     unsafe {
-        let mut ret: ShaDaWriteResult = shada_pack_entry(packer, entry, max_kbyte);
+        let ret = shada_pack_entry(packer, entry, max_kbyte);
         shada_free_shada_entry(&raw mut entry);
-        return ret;
+        ret
     }
 }
 
-pub(crate) unsafe extern "C" fn packer_buffer_for_file(
-    mut file: *mut FileDescriptor,
-) -> PackerBuffer {
+/// Write one entry.
+///
+/// `max_kbyte`, if non-zero, drops an entry whose payload comes out longer
+/// than that many kilobytes — quietly, since the file is still valid
+/// without it.
+pub(crate) unsafe fn shada_pack_entry(
+    packer: *mut PackerBuffer,
+    entry: ShadaEntry,
+    max_kbyte: size_t,
+) -> ShaDaWriteResult {
     unsafe {
-        if file_space(file) < SHADA_MPACK_FREE_SPACE as size_t {
+        let mut payload = Payload::new();
+        let sbuf = &mut payload.buf;
+
+        let packed = match entry.type_0 {
+            kSDItemMissing => unreachable!("shada: a missing entry is never written"),
+            kSDItemUnknown => {
+                mpack_raw(
+                    entry.data.unknown_item.contents,
+                    entry.data.unknown_item.size,
+                    sbuf,
+                );
+                Ok(())
+            }
+            kSDItemHeader => {
+                pack_header(&entry, sbuf);
+                Ok(())
+            }
+            kSDItemHistoryEntry => {
+                pack_history(&entry, sbuf);
+                Ok(())
+            }
+            kSDItemVariable => pack_variable(&entry, sbuf),
+            kSDItemSubString => {
+                pack_sub_string(&entry, sbuf);
+                Ok(())
+            }
+            kSDItemSearchPattern => {
+                pack_search_pattern(&entry, &mut payload);
+                Ok(())
+            }
+            kSDItemChange | kSDItemGlobalMark | kSDItemLocalMark | kSDItemJump => {
+                pack_mark(&entry, &mut payload);
+                Ok(())
+            }
+            kSDItemRegister => {
+                pack_register(&entry, &mut payload);
+                Ok(())
+            }
+            kSDItemBufferList => {
+                pack_buffer_list(&entry, &mut payload);
+                Ok(())
+            }
+            _ => unreachable!("shada: entry type {} is not written here", entry.type_0),
+        };
+        if let Err(ignorable) = packed {
+            return ignorable;
+        }
+
+        let packed = payload.packed();
+        if max_kbyte != 0 && packed.size > max_kbyte * 1024 {
+            return kSDWriteSuccessful; // too big to keep; not an error
+        }
+
+        shada_check_buffer(packer);
+        // An unknown entry keeps the type it arrived with.
+        mpack_uint64(
+            &mut (*packer).ptr,
+            if entry.type_0 == kSDItemUnknown {
+                entry.data.unknown_item.type_0
+            } else {
+                entry.type_0 as uint64_t
+            },
+        );
+        mpack_uint64(&mut (*packer).ptr, entry.timestamp);
+        if packed.size > 0 {
+            mpack_uint64(&mut (*packer).ptr, packed.size as uint64_t);
+            mpack_raw(packed.data, packed.size, &mut *packer);
+        }
+
+        if (*packer).anyint != 0 {
+            return kSDWriteFailed; // the file's own error code
+        }
+        kSDWriteSuccessful
+    }
+}
+
+/// The file header: whatever `shada_write` chose to record about the Nvim
+/// that wrote it. Nvim has never read it back — it is there for anyone
+/// looking at the file by hand.
+unsafe fn pack_header(entry: &ShadaEntry, sbuf: &mut PackerBuffer) {
+    unsafe {
+        let header = entry.data.header;
+        mpack_map(&mut sbuf.ptr, header.size as uint32_t);
+        for i in 0..header.size {
+            let item = *header.items.add(i);
+            mpack_str(item.key, sbuf);
+            match item.value.type_0 {
+                kObjectTypeString => mpack_bin(item.value.data.string, sbuf),
+                kObjectTypeInteger => mpack_integer(&mut sbuf.ptr, item.value.data.integer),
+                other => unreachable!("shada: header holds an object of type {other}"),
+            }
+        }
+    }
+}
+
+/// One history line: the history it belongs to, its text, and — for search
+/// history only — the character the search was started with.
+unsafe fn pack_history(entry: &ShadaEntry, sbuf: &mut PackerBuffer) {
+    unsafe {
+        let history = entry.data.history_item;
+        let is_search = history.histtype as c_int == HIST_SEARCH;
+        mpack_array(
+            &mut sbuf.ptr,
+            2 + is_search as uint32_t + additional_data_len(entry.additional_data),
+        );
+        mpack_uint(&mut sbuf.ptr, history.histtype as uint32_t);
+        mpack_bin(cstr_as_string(history.string), sbuf);
+        if is_search {
+            mpack_uint(&mut sbuf.ptr, history.sep as uint8_t as uint32_t);
+        }
+        dump_additional_data(entry.additional_data, sbuf);
+    }
+}
+
+/// One global variable. A Blob is packed as binary like a String, so it
+/// carries a trailing type tag to tell the two apart when read back.
+unsafe fn pack_variable(
+    entry: &ShadaEntry,
+    sbuf: &mut PackerBuffer,
+) -> Result<(), ShaDaWriteResult> {
+    unsafe {
+        let mut global_var = entry.data.global_var;
+        let is_blob = global_var.value.v_type == VAR_BLOB;
+        mpack_array(
+            &mut sbuf.ptr,
+            2 + is_blob as uint32_t + additional_data_len(entry.additional_data),
+        );
+        let varname = cstr_as_string(global_var.name);
+        mpack_bin(varname, sbuf);
+
+        // What `encode_vim_to_msgpack` calls the value in its complaints.
+        // Upstream formats this into a `char[256]` and `memcpy`s the name in
+        // unbounded, overrunning it for a long enough variable name; built
+        // here in a buffer that fits.
+        let mut vardesc = b"variable g:".to_vec();
+        vardesc.extend_from_slice(core::slice::from_raw_parts(
+            varname.data.cast::<u8>(),
+            varname.size,
+        ));
+        vardesc.push(0);
+
+        if encode_vim_to_msgpack(
+            sbuf,
+            &raw mut global_var.value,
+            vardesc.as_ptr().cast::<c_char>(),
+        ) == FAIL
+        {
+            semsg(
+                gettext(c"E574: Failed to write variable %s".as_ptr()),
+                global_var.name,
+            );
+            // The rest of the file is still worth writing.
+            return Err(kSDWriteIgnError);
+        }
+        if is_blob {
+            mpack_check_buffer(sbuf);
+            mpack_integer(&mut sbuf.ptr, VAR_TYPE_BLOB as Integer);
+        }
+        dump_additional_data(entry.additional_data, sbuf);
+        Ok(())
+    }
+}
+
+/// The last `:substitute` replacement string.
+unsafe fn pack_sub_string(entry: &ShadaEntry, sbuf: &mut PackerBuffer) {
+    unsafe {
+        mpack_array(
+            &mut sbuf.ptr,
+            1 + additional_data_len(entry.additional_data),
+        );
+        mpack_bin(cstr_as_string(entry.data.sub_string.sub), sbuf);
+        dump_additional_data(entry.additional_data, sbuf);
+    }
+}
+
+/// The last search pattern, and the flags it was used with. Each flag is
+/// written only when it differs from the default, and then always as the
+/// *negation* of that default — a flag that is present is by definition not
+/// the default value.
+unsafe fn pack_search_pattern(entry: &ShadaEntry, payload: &mut Payload) {
+    unsafe {
+        let pattern = entry.data.search_pattern;
+        let default = defaults_for(entry.type_0).search_pattern;
+        // Each flag, as (wire key, its value here, its default).
+        let flags: [(&'static CStr, bool, bool); 8] = [
+            (c"sm", pattern.magic, default.magic),
+            (c"su", pattern.is_last_used, default.is_last_used),
+            (c"sc", pattern.smartcase, default.smartcase),
+            (c"sl", pattern.has_line_offset, default.has_line_offset),
+            (
+                c"se",
+                pattern.place_cursor_at_end,
+                default.place_cursor_at_end,
+            ),
+            (
+                c"ss",
+                pattern.is_substitute_pattern,
+                default.is_substitute_pattern,
+            ),
+            (c"sh", pattern.highlighted, default.highlighted),
+            (c"sb", pattern.search_backward, default.search_backward),
+        ];
+
+        let size = 1 // the pattern itself is always there
+            + flags.iter().filter(|(_, value, d)| value != d).count() as uint32_t
+            + written(pattern.offset, default.offset)
+            + additional_data_len(entry.additional_data);
+        mpack_map(&mut payload.buf.ptr, size);
+
+        payload.key(c"sp");
+        mpack_bin(pattern.pat, &mut payload.buf);
+        for (name, _, default) in flags.iter().filter(|(_, value, d)| value != d) {
+            payload.key(name);
+            mpack_bool(&mut payload.buf.ptr, !default);
+        }
+        if pattern.offset != default.offset {
+            payload.key(c"so");
+            mpack_integer(&mut payload.buf.ptr, pattern.offset);
+        }
+        dump_additional_data(entry.additional_data, &mut payload.buf);
+    }
+}
+
+/// A global mark, local mark, jump or change: a file name and a position in
+/// it, plus the mark's letter for the two kinds that have one.
+unsafe fn pack_mark(entry: &ShadaEntry, payload: &mut Payload) {
+    unsafe {
+        let mark = entry.data.filemark;
+        let default = defaults_for(entry.type_0).filemark;
+
+        let size = 1 // the file name is always there
+            + written(mark.mark.lnum, default.mark.lnum)
+            + written(mark.mark.col, default.mark.col)
+            + written(mark.name, default.name)
+            + additional_data_len(entry.additional_data);
+        mpack_map(&mut payload.buf.ptr, size);
+
+        payload.key(c"f");
+        mpack_bin(cstr_as_string(mark.fname), &mut payload.buf);
+        if mark.mark.lnum != default.mark.lnum {
+            payload.key(c"l");
+            mpack_integer(&mut payload.buf.ptr, mark.mark.lnum as Integer);
+        }
+        if mark.mark.col != default.mark.col {
+            payload.key(c"c");
+            mpack_integer(&mut payload.buf.ptr, mark.mark.col as Integer);
+        }
+        debug_assert!(
+            !(entry.type_0 == kSDItemJump || entry.type_0 == kSDItemChange)
+                || mark.name == default.name,
+            "shada: a jump or change entry has no mark name"
+        );
+        if mark.name != default.name {
+            payload.key(c"n");
+            mpack_uint(&mut payload.buf.ptr, mark.name as uint8_t as uint32_t);
+        }
+        dump_additional_data(entry.additional_data, &mut payload.buf);
+    }
+}
+
+/// One register: its lines, its name, and how it is put back.
+unsafe fn pack_register(entry: &ShadaEntry, payload: &mut Payload) {
+    unsafe {
+        let reg = entry.data.reg;
+        let default = defaults_for(entry.type_0).reg;
+
+        let size = 2 // the contents and the name are always there
+            + written(reg.type_0, default.type_0)
+            + written(reg.width, default.width)
+            + written(reg.is_unnamed, default.is_unnamed)
+            + additional_data_len(entry.additional_data);
+        mpack_map(&mut payload.buf.ptr, size);
+
+        payload.key(c"rc");
+        mpack_array(&mut payload.buf.ptr, reg.contents_size as uint32_t);
+        for i in 0..reg.contents_size {
+            mpack_bin(*reg.contents.add(i), &mut payload.buf);
+        }
+        payload.key(c"n");
+        mpack_uint(&mut payload.buf.ptr, reg.name as uint8_t as uint32_t);
+        if reg.type_0 != default.type_0 {
+            payload.key(c"rt");
+            mpack_uint(&mut payload.buf.ptr, reg.type_0 as uint8_t as uint32_t);
+        }
+        if reg.width != default.width {
+            payload.key(c"rw");
+            mpack_uint64(&mut payload.buf.ptr, reg.width as uint64_t);
+        }
+        if reg.is_unnamed != default.is_unnamed {
+            payload.key(c"ru");
+            mpack_bool(&mut payload.buf.ptr, reg.is_unnamed);
+        }
+        dump_additional_data(entry.additional_data, &mut payload.buf);
+    }
+}
+
+/// The buffer list: one map per buffer, each a file name and the cursor
+/// position in it. The position's defaults are the same for every buffer,
+/// so they come from `default_pos` rather than from an entry type.
+unsafe fn pack_buffer_list(entry: &ShadaEntry, payload: &mut Payload) {
+    unsafe {
+        let list = entry.data.buffer_list;
+        let default = *default_pos.ptr();
+        mpack_array(&mut payload.buf.ptr, list.size as uint32_t);
+        for i in 0..list.size {
+            let buffer = *list.buffers.add(i);
+            let size = 1 // the file name is always there
+                + written(buffer.pos.lnum, default.lnum)
+                + written(buffer.pos.col, default.col)
+                + additional_data_len(buffer.additional_data);
+            mpack_map(&mut payload.buf.ptr, size);
+
+            payload.key(c"f");
+            mpack_bin(cstr_as_string(buffer.fname), &mut payload.buf);
+            if buffer.pos.lnum != default.lnum {
+                payload.key(c"l");
+                mpack_uint64(&mut payload.buf.ptr, buffer.pos.lnum as uint64_t);
+            }
+            if buffer.pos.col != default.col {
+                payload.key(c"c");
+                mpack_uint64(&mut payload.buf.ptr, buffer.pos.col as uint64_t);
+            }
+            dump_additional_data(buffer.additional_data, &mut payload.buf);
+        }
+    }
+}
+
+/// A packer that writes straight into the file's own buffer.
+///
+/// The file keeps its write position in the buffer, so the packer starts
+/// where the file left off and hands the position back on every flush.
+pub(crate) unsafe fn packer_buffer_for_file(file: *mut FileDescriptor) -> PackerBuffer {
+    unsafe {
+        if file_space(file) < FREE_SPACE {
             file_flush(file);
         }
-        return packer_buffer_t {
+        PackerBuffer {
             startptr: (*file).buffer,
             ptr: (*file).write_pos,
-            endptr: (*file).buffer.offset(ARENA_BLOCK_SIZE as isize),
-            anydata: file as *mut ::core::ffi::c_void,
-            anyint: 0 as int64_t,
-            packer_flush: Some(flush_file_buffer as unsafe extern "C" fn(*mut PackerBuffer) -> ()),
-        };
+            endptr: (*file).buffer.add(ARENA_BLOCK_SIZE as usize),
+            anydata: file.cast::<c_void>(),
+            anyint: 0,
+            packer_flush: Some(flush_file_buffer),
+        }
     }
 }
 
-pub(crate) unsafe extern "C" fn flush_file_buffer(mut buffer: *mut PackerBuffer) {
+/// Hand what has been packed to the file, and start again at whatever it
+/// leaves in its buffer.
+unsafe extern "C" fn flush_file_buffer(buffer: *mut PackerBuffer) {
     unsafe {
-        let mut fd: *mut FileDescriptor = (*buffer).anydata as *mut FileDescriptor;
+        let fd = (*buffer).anydata.cast::<FileDescriptor>();
         (*fd).write_pos = (*buffer).ptr;
         (*buffer).anyint = file_flush(fd) as int64_t;
         (*buffer).ptr = (*fd).write_pos;

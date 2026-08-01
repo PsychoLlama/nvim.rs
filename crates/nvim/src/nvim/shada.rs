@@ -62,7 +62,7 @@ use crate::src::nvim::os::fs::{
     os_fchown, os_fileinfo, os_getperm, os_isdir, os_mkdir_recurse, os_remove,
 };
 use crate::src::nvim::os::libc::{
-    __assert_fail, abort, atoi, getgid, gettext, getuid, memcpy, memmove, qsort, strcmp, strlen,
+    __assert_fail, abort, atoi, getgid, gettext, getuid, memmove, qsort, strcmp, strlen,
 };
 use crate::src::nvim::os::stdpaths::stdpaths_user_state_subpath;
 use crate::src::nvim::os::time::os_time;
@@ -82,14 +82,14 @@ use crate::src::nvim::types::{
     __uid_t, AdditionalData, AdditionalDataBuilder, Arena, Boolean, Dict, FileDescriptor, FileInfo,
     Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
     KeyDict__shada_search_pat, KeyValuePair, ListLenSpecials, MHPutStatus, Map_cstr_t_ptr_t,
-    MapHash, MarkGet, MotionType, Object, OptInt, OptionalKeys, PackerBuffer, SearchOffset,
-    SearchPattern, Set_cstr_t, Set_ptr_t, String_0, StringArray, SubReplacementString, Timestamp,
-    VarLockStatus, VarType, VimVarIndex, bln_values, buf_T, colnr_T, cstr_t, dict_T, dictitem_T,
-    fmark_T, fmarkv_T, hashitem_T, hashtab_T, ht_stack_T, int32_t, int64_t, kObjectTypeInteger,
+    MapHash, MarkGet, MotionType, OptInt, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern,
+    Set_cstr_t, Set_ptr_t, String_0, StringArray, SubReplacementString, Timestamp, VarLockStatus,
+    VarType, VimVarIndex, bln_values, buf_T, colnr_T, cstr_t, dict_T, dictitem_T, fmark_T,
+    fmarkv_T, hashitem_T, hashtab_T, ht_stack_T, int32_t, int64_t, kObjectTypeInteger,
     kObjectTypeString, key_value_pair, linenr_T, list_T, list_stack_T, object,
-    object_data as C2Rust_Unnamed_1, packer_buffer_t, pos_T, ptr_t, ptrdiff_t, size_t, ssize_t,
-    tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t,
-    uv_stat_t, uv_timespec_t, uv_uid_t, var_flavour_T, win_T, xfmark_T, yankreg_T,
+    object_data as C2Rust_Unnamed_1, pos_T, ptr_t, ptrdiff_t, size_t, ssize_t, tabpage_T, typval_T,
+    typval_vval_union, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_stat_t, uv_timespec_t,
+    uv_uid_t, var_flavour_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::src::nvim::version::longVersion;
 
