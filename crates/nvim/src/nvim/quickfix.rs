@@ -14,6 +14,8 @@
 //!   there, `display` and `window` with `fill` show it.
 //! - Vimscript: `getprops`, `setprops` and the `eval` bridges.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::arglist::get_arglist_exp;
 use crate::src::nvim::ascii::ascii_iswhite;
