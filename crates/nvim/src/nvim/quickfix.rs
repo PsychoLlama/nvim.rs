@@ -103,16 +103,17 @@ use crate::src::nvim::search::{
     BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE, do_search, last_search_pat,
 };
 use crate::src::nvim::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen, vim_strchr};
+use crate::src::nvim::types::builders::static_cstring;
 use crate::src::nvim::types::{
     CMD_index, Callback, Callback_data as C2Rust_Unnamed_6, DirStack, Direction, EvalFuncData,
     ExtmarkOp, FILE, FileInfo, ListLenSpecials, OptInt, OptVal, OptValData, OptValType,
-    QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, String_0, TriState, VarLockStatus, VarType,
-    aco_save_T, bcount_t, bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, cmdidx_T, colnr_T,
-    cstack_T, dict_T, dictitem_T, dobuf_action_values, exarg, exarg_T, except_T, getf_values,
-    handle_T, ht_stack_T, linenr_T, list_T, list_stack_T, listitem_T, lpos_T, optset_T, pos_T,
-    proftime_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T,
-    regprog_T, scid_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, uint32_t, uv_stat_t,
-    uv_timespec_t, varnumber_T, vimconv_T, win_T,
+    QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, TriState, VarLockStatus, VarType, aco_save_T,
+    bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T, dict_T,
+    dictitem_T, dobuf_action_values, exarg, exarg_T, except_T, getf_values, handle_T, ht_stack_T,
+    linenr_T, list_T, list_stack_T, listitem_T, lpos_T, optset_T, pos_T, proftime_T, ptrdiff_t,
+    qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T, regprog_T, scid_T, size_t,
+    tabpage_T, time_t, typval_T, typval_vval_union, uint32_t, uv_stat_t, uv_timespec_t,
+    varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::u_clearallandblockfree;
@@ -143,6 +144,8 @@ mod display;
 pub use self::display::*;
 mod window;
 pub use self::window::*;
+mod fill;
+pub(crate) use self::fill::*;
 mod navigate;
 pub use self::navigate::*;
 mod vimgrep;
