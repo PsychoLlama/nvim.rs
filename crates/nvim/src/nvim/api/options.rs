@@ -340,11 +340,7 @@ unsafe extern "C" fn do_ft_buf(
         );
         return ftbuf;
     }
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut bufref, ftbuf);
     aucmd_prepbuf(aco, ftbuf);
     *aco_used = true_0 != 0;
@@ -433,11 +429,7 @@ unsafe extern "C" fn do_ft_buf(
 }
 unsafe extern "C" fn wipe_ft_buf(mut buf: *mut buf_T) {
     block_autocmds();
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut bufref, buf);
     close_windows(buf, false_0 != 0);
     if bufref_valid(&raw mut bufref) as ::core::ffi::c_int != 0
@@ -477,21 +469,7 @@ pub unsafe extern "C" fn nvim_get_option_value(
             data: C2Rust_Unnamed { boolean: false },
         };
     }
-    let mut aco: aco_save_T = aco_save_T {
-        use_aucmd_win_idx: 0,
-        save_curwin_handle: 0,
-        new_curwin_handle: 0,
-        save_prevwin_handle: 0,
-        new_curbuf: bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        },
-        tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        save_VIsual_active: false,
-        save_prompt_insert: 0,
-    };
+    let mut aco: aco_save_T = aco_save_T::default();
     let mut aco_used: bool = false;
     let mut ftbuf: *mut buf_T = do_ft_buf(filetype, &raw mut aco, &raw mut aco_used, err);
     if (*err).type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {

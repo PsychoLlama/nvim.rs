@@ -4240,11 +4240,7 @@ unsafe extern "C" fn win_close_buffer(
     }
     let mut retval: bool = false_0 != 0;
     if !(*win).w_buffer.is_null() {
-        let mut bufref: bufref_T = bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        };
+        let mut bufref: bufref_T = bufref_T::default();
         set_bufref(&raw mut bufref, curbuf.get());
         (*win).w_locked = true_0 != 0;
         retval = close_buffer(win, (*win).w_buffer, action, abort_if_last, true_0 != 0);
@@ -4416,11 +4412,7 @@ pub unsafe extern "C" fn win_close(
     if !win_valid_any_tab(win) {
         return OK;
     }
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut bufref, (*win).w_buffer);
     let mut did_decrement: bool = win_close_buffer(
         win,
@@ -4700,11 +4692,7 @@ pub unsafe extern "C" fn win_close_othertab(
     mut tp: *mut tabpage_T,
     mut force: bool,
 ) -> bool {
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
     let mut free_tp_idx: ::core::ffi::c_int = 0;
     let mut dir: ::core::ffi::c_int = 0;
     '_c2rust_label: {
@@ -4773,11 +4761,7 @@ pub unsafe extern "C" fn win_close_othertab(
                 return false_0 != 0;
             }
         }
-        bufref = bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        };
+        bufref = bufref_T::default();
         set_bufref(&raw mut bufref, (*win).w_buffer);
         if !(*win).w_buffer.is_null() {
             did_decrement = close_buffer(
@@ -7755,11 +7739,7 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
     snapshot_windows_scroll_size();
     recursive.set(true_0 != 0);
     let mut resize_winid: [::core::ffi::c_char; 65] = [0; 65];
-    let mut resize_bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut resize_bufref: bufref_T = bufref_T::default();
     if trigger_resize {
         vim_snprintf(
             &raw mut resize_winid as *mut ::core::ffi::c_char,
@@ -7770,11 +7750,7 @@ pub unsafe extern "C" fn may_trigger_win_scrolled_resized() {
         set_bufref(&raw mut resize_bufref, (*first_size_win).w_buffer);
     }
     let mut scroll_winid: [::core::ffi::c_char; 65] = [0; 65];
-    let mut scroll_bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut scroll_bufref: bufref_T = bufref_T::default();
     if trigger_scroll {
         vim_snprintf(
             &raw mut scroll_winid as *mut ::core::ffi::c_char,

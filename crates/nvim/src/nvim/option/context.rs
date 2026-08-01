@@ -17,8 +17,7 @@ use crate::src::nvim::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::src::nvim::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::src::nvim::main::{curbuf, curwin};
 use crate::src::nvim::types::{
-    Error, OptIndex, OptScope, OptVal, OptValData, aco_save_T, buf_T, bufref_T, scid_T,
-    switchwin_T, win_T,
+    Error, OptIndex, OptScope, OptVal, OptValData, aco_save_T, buf_T, scid_T, switchwin_T, win_T,
 };
 use crate::src::nvim::window::win_find_tabpage;
 
@@ -87,21 +86,7 @@ impl OptionContext {
                 sw_same_win: false,
                 sw_visual_active: false,
             }),
-            kOptScopeBuf => OptionContext::Buf(aco_save_T {
-                use_aucmd_win_idx: 0,
-                save_curwin_handle: 0,
-                new_curwin_handle: 0,
-                save_prevwin_handle: 0,
-                new_curbuf: bufref_T {
-                    br_buf: ptr::null_mut(),
-                    br_fnum: 0,
-                    br_buf_free_count: 0,
-                },
-                tp_localdir: ptr::null_mut(),
-                globaldir: ptr::null_mut(),
-                save_VIsual_active: false,
-                save_prompt_insert: 0,
-            }),
+            kOptScopeBuf => OptionContext::Buf(aco_save_T::default()),
             _ => OptionContext::Global,
         }
     }

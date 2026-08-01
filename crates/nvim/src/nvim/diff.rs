@@ -2388,11 +2388,7 @@ pub unsafe fn ex_diffpatch(mut eap: *mut exarg_T) {
 }
 pub unsafe fn ex_diffsplit(mut eap: *mut exarg_T) {
     let mut old_curwin: *mut win_T = curwin.get();
-    let mut old_curbuf: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut old_curbuf: bufref_T = bufref_T::default();
     set_bufref(&raw mut old_curbuf, curbuf.get());
     validate_cursor(curwin.get());
     set_fraction(curwin.get());
@@ -4983,21 +4979,7 @@ pub unsafe fn ex_diffgetput(mut eap: *mut exarg_T) {
             (*eap).line1 -= 1;
         }
     }
-    let mut aco: aco_save_T = aco_save_T {
-        use_aucmd_win_idx: 0,
-        save_curwin_handle: 0,
-        new_curwin_handle: 0,
-        save_prevwin_handle: 0,
-        new_curbuf: bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        },
-        tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        save_VIsual_active: false,
-        save_prompt_insert: 0,
-    };
+    let mut aco: aco_save_T = aco_save_T::default();
     if (*eap).cmdidx as ::core::ffi::c_int != CMD_diffget as ::core::ffi::c_int {
         aucmd_prepbuf(
             &raw mut aco,

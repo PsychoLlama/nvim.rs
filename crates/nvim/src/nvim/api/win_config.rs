@@ -817,11 +817,7 @@ pub unsafe extern "C" fn nvim_open_win(
     mut config: *mut KeyDict_win_config,
     mut err: *mut Error,
 ) -> Window {
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
     let mut b: *mut buf_T = find_buffer_by_handle(buf, err);
     if b.is_null() {
         return 0 as Window;
@@ -1063,11 +1059,7 @@ pub unsafe extern "C" fn nvim_open_win(
             if fconfig._cmdline_offset < INT_MAX {
                 cmdline_win.set(wp);
             }
-            bufref = bufref_T {
-                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            };
+            bufref = bufref_T::default();
             set_bufref(&raw mut bufref, b);
             if !fconfig.noautocmd {
                 let mut switchwin_0: switchwin_T = switchwin_T {

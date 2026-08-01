@@ -3716,11 +3716,7 @@ pub unsafe fn do_wqall(mut eap: *mut exarg_T) {
                 {
                     error += 1;
                 } else {
-                    let mut bufref: bufref_T = bufref_T {
-                        br_buf: ::core::ptr::null_mut::<buf_T>(),
-                        br_fnum: 0,
-                        br_buf_free_count: 0,
-                    };
+                    let mut bufref: bufref_T = bufref_T::default();
                     set_bufref(&raw mut bufref, buf);
                     if handle_mkdir_p_arg(eap, (*buf).b_fname) == FAIL
                         || buf_write_all(buf, (*eap).forceit != 0) == FAIL
@@ -3953,16 +3949,8 @@ pub unsafe extern "C" fn do_ecmd(
     let mut new_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut did_set_swapcommand: bool = false_0 != 0;
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
-    let mut old_curbuf: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
+    let mut old_curbuf: bufref_T = bufref_T::default();
     let mut free_fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut retval: ::core::ffi::c_int = FAIL;
     let mut topline: linenr_T = 0 as linenr_T;

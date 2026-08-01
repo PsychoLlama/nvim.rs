@@ -844,14 +844,23 @@ pub struct wline_T {
     pub wl_lastlnum: linenr_T,
 }
 
-impl Default for bufref_T {
+impl bufref_T {
     /// The zeroed state `set_bufref` expects to be handed. Every caller
     /// declares one of these as a local and immediately fills it in.
-    fn default() -> Self {
+    ///
+    /// A `const fn` as well as a [`Default`] because two of them are
+    /// statics.
+    pub const fn new() -> Self {
         bufref_T {
             br_buf: ::core::ptr::null_mut(),
             br_fnum: 0,
             br_buf_free_count: 0,
         }
+    }
+}
+
+impl Default for bufref_T {
+    fn default() -> Self {
+        Self::new()
     }
 }

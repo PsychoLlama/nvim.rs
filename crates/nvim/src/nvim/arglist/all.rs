@@ -104,11 +104,7 @@ unsafe extern "C" fn arg_all_close_unused_windows(mut aall: *mut arg_all_state_T
                         || !bufIsChanged(buf)
                     {
                         if !buf_hide(buf) && (*buf).b_nwindows <= 1 && bufIsChanged(buf) {
-                            let mut bufref: bufref_T = bufref_T {
-                                br_buf: ptr::null_mut(),
-                                br_fnum: 0,
-                                br_buf_free_count: 0,
-                            };
+                            let mut bufref: bufref_T = bufref_T::default();
                             set_bufref(&raw mut bufref, buf);
                             autowrite(buf, false);
                             if !win_valid(wp) || !bufref_valid(&raw mut bufref) {

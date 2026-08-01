@@ -1011,11 +1011,7 @@ pub unsafe fn ex_perldo(mut eap: *mut exarg_T) {
     );
 }
 pub unsafe extern "C" fn autowrite(mut buf: *mut buf_T, mut forceit: bool) -> ::core::ffi::c_int {
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
     if !(p_aw.get() != 0 || p_awa.get() != 0)
         || p_write.get() == 0
         || bt_dontwrite(buf) as ::core::ffi::c_int != 0
@@ -1041,11 +1037,7 @@ pub unsafe extern "C" fn autowrite_all() {
     while !buf.is_null() {
         if bufIsChanged(buf) as ::core::ffi::c_int != 0 && (*buf).b_p_ro == 0 && !bt_dontwrite(buf)
         {
-            let mut bufref: bufref_T = bufref_T {
-                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            };
+            let mut bufref: bufref_T = bufref_T::default();
             set_bufref(&raw mut bufref, buf);
             buf_write_all(buf, false_0 != 0);
             if !bufref_valid(&raw mut bufref) {
@@ -1057,11 +1049,7 @@ pub unsafe extern "C" fn autowrite_all() {
 }
 pub unsafe extern "C" fn check_changed(mut buf: *mut buf_T, mut flags: ::core::ffi::c_int) -> bool {
     let mut forceit: bool = flags & CCGD_FORCEIT as ::core::ffi::c_int != 0;
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut bufref, buf);
     if !forceit
         && bufIsChanged(buf) as ::core::ffi::c_int != 0
@@ -1203,11 +1191,7 @@ pub unsafe extern "C" fn dialog_changed(mut buf: *mut buf_T, mut checkall: bool)
                 && !(*buf2).b_ffname.is_null()
                 && (*buf2).b_p_ro == 0
             {
-                let mut bufref: bufref_T = bufref_T {
-                    br_buf: ::core::ptr::null_mut::<buf_T>(),
-                    br_fnum: 0,
-                    br_buf_free_count: 0,
-                };
+                let mut bufref: bufref_T = bufref_T::default();
                 set_bufref(&raw mut bufref, buf2);
                 if !(*buf2).b_fname.is_null()
                     && check_overwrite(
@@ -1346,11 +1330,7 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
             if (!hidden || (*buf_1).b_nwindows == 0 as ::core::ffi::c_int)
                 && bufIsChanged(buf_1) as ::core::ffi::c_int != 0
             {
-                let mut bufref: bufref_T = bufref_T {
-                    br_buf: ::core::ptr::null_mut::<buf_T>(),
-                    br_fnum: 0,
-                    br_buf_free_count: 0,
-                };
+                let mut bufref: bufref_T = bufref_T::default();
                 set_bufref(&raw mut bufref, buf_1);
                 if check_changed(
                     buf_1,
@@ -1426,11 +1406,7 @@ pub unsafe extern "C" fn check_changed_any(mut hidden: bool, mut unload: bool) -
                         };
                         while !wp_1.is_null() {
                             if (*wp_1).w_buffer == buf_1 {
-                                let mut bufref_0: bufref_T = bufref_T {
-                                    br_buf: ::core::ptr::null_mut::<buf_T>(),
-                                    br_fnum: 0,
-                                    br_buf_free_count: 0,
-                                };
+                                let mut bufref_0: bufref_T = bufref_T::default();
                                 set_bufref(&raw mut bufref_0, buf_1);
                                 goto_tabpage_win(tp_0 as *mut tabpage_T, wp_1);
                                 if !bufref_valid(&raw mut bufref_0) {
@@ -1793,21 +1769,7 @@ pub unsafe fn ex_listdo(mut eap: *mut exarg_T) {
     (*msg_listdo_overwrite.ptr()) -= 1;
     if !save_ei.is_null() {
         let mut bnext: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-        let mut aco: aco_save_T = aco_save_T {
-            use_aucmd_win_idx: 0,
-            save_curwin_handle: 0,
-            new_curwin_handle: 0,
-            save_prevwin_handle: 0,
-            new_curbuf: bufref_T {
-                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            },
-            tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            save_VIsual_active: false,
-            save_prompt_insert: 0,
-        };
+        let mut aco: aco_save_T = aco_save_T::default();
         au_event_restore(save_ei);
         let mut buf_1: *mut buf_T = firstbuf.get();
         while !buf_1.is_null() {

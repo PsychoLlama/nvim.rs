@@ -1154,11 +1154,7 @@ static e_current_location_list_was_changed: GlobalCell<*const ::core::ffi::c_cha
     );
 static qf_last_bufname: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-static qf_last_bufref: GlobalCell<bufref_T> = GlobalCell::new(bufref_T {
-    br_buf: ::core::ptr::null_mut::<buf_T>(),
-    br_fnum: 0 as ::core::ffi::c_int,
-    br_buf_free_count: 0 as ::core::ffi::c_int,
-});
+static qf_last_bufref: GlobalCell<bufref_T> = GlobalCell::new(bufref_T::new());
 static qfga: GlobalCell<garray_T> = GlobalCell::new(garray_T {
     ga_len: 0,
     ga_maxlen: 0,
@@ -5500,21 +5496,7 @@ unsafe extern "C" fn qf_update_buffer(mut qi: *mut qf_info_T, mut old_last: *mut
         qf_winid_0 = (*win).handle;
     }
     incr_quickfix_busy();
-    let mut aco: aco_save_T = aco_save_T {
-        use_aucmd_win_idx: 0,
-        save_curwin_handle: 0,
-        new_curwin_handle: 0,
-        save_prevwin_handle: 0,
-        new_curbuf: bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        },
-        tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        save_VIsual_active: false,
-        save_prompt_insert: 0,
-    };
+    let mut aco: aco_save_T = aco_save_T::default();
     if old_last.is_null() {
         aucmd_prepbuf(&raw mut aco, buf);
     }
@@ -7366,21 +7348,7 @@ unsafe extern "C" fn vgr_process_files(
                         {
                             *target_dir = xstrdup(dirname_now);
                         }
-                        let mut aco: aco_save_T = aco_save_T {
-                            use_aucmd_win_idx: 0,
-                            save_curwin_handle: 0,
-                            new_curwin_handle: 0,
-                            save_prevwin_handle: 0,
-                            new_curbuf: bufref_T {
-                                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                                br_fnum: 0,
-                                br_buf_free_count: 0,
-                            },
-                            tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            save_VIsual_active: false,
-                            save_prompt_insert: 0,
-                        };
+                        let mut aco: aco_save_T = aco_save_T::default();
                         aucmd_prepbuf(&raw mut aco, buf);
                         apply_autocmds(
                             EVENT_FILETYPE,
@@ -7580,11 +7548,7 @@ unsafe extern "C" fn load_dummy_buffer(
         return ::core::ptr::null_mut::<buf_T>();
     }
     let mut failed: bool = true_0 != 0;
-    let mut newbufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut newbufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut newbufref, newbuf);
     buf_copy_options(
         newbuf,
@@ -7592,21 +7556,7 @@ unsafe extern "C" fn load_dummy_buffer(
     );
     if ml_open(newbuf) == OK {
         (*newbuf).b_locked += 1;
-        let mut aco: aco_save_T = aco_save_T {
-            use_aucmd_win_idx: 0,
-            save_curwin_handle: 0,
-            new_curwin_handle: 0,
-            save_prevwin_handle: 0,
-            new_curbuf: bufref_T {
-                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            },
-            tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            save_VIsual_active: false,
-            save_prompt_insert: 0,
-        };
+        let mut aco: aco_save_T = aco_save_T::default();
         aucmd_prepbuf(&raw mut aco, newbuf);
         setfname(
             curbuf.get(),
@@ -7616,11 +7566,7 @@ unsafe extern "C" fn load_dummy_buffer(
         );
         check_need_swap(true_0 != 0);
         (*curbuf.get()).b_flags &= !BF_DUMMY;
-        let mut newbuf_to_wipe: bufref_T = bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        };
+        let mut newbuf_to_wipe: bufref_T = bufref_T::default();
         newbuf_to_wipe.br_buf = ::core::ptr::null_mut::<buf_T>();
         let mut readfile_result: ::core::ffi::c_int = readfile(
             fname,

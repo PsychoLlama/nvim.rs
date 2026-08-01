@@ -296,11 +296,7 @@ pub static last_cursormoved: GlobalCell<pos_T> = GlobalCell::new(pos_T {
 pub static autocmd_busy: GlobalCell<bool> = GlobalCell::new(false);
 pub static autocmd_no_enter: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static autocmd_no_leave: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static au_new_curbuf: GlobalCell<bufref_T> = GlobalCell::new(bufref_T {
-    br_buf: ::core::ptr::null_mut::<buf_T>(),
-    br_fnum: 0 as c_int,
-    br_buf_free_count: 0 as c_int,
-});
+pub static au_new_curbuf: GlobalCell<bufref_T> = GlobalCell::new(bufref_T::new());
 pub static au_pending_free_buf: GlobalCell<*mut buf_T> =
     GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 pub static au_pending_free_win: GlobalCell<*mut win_T> =

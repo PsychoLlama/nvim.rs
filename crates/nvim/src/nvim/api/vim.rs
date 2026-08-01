@@ -1868,11 +1868,7 @@ pub unsafe extern "C" fn nvim_create_buf(
             (*buf).b_p_ml = 0 as ::core::ffi::c_int;
         }
         unblock_autocmds();
-        let mut bufref: bufref_T = bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        };
+        let mut bufref: bufref_T = bufref_T::default();
         set_bufref(&raw mut bufref, buf);
         if !(apply_autocmds(
             EVENT_BUFNEW,

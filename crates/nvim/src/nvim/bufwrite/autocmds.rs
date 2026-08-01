@@ -109,11 +109,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
 
         // Set curwin/curbuf to buf and save a few things.
         let mut aco = aco_save_T::default();
-        let mut bufref = bufref_T {
-            br_buf: core::ptr::null_mut(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        };
+        let mut bufref = bufref_T::default();
         aucmd_prepbuf(&raw mut aco, buf);
         set_bufref(&raw mut bufref, buf);
 

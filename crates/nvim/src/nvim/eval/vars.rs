@@ -8447,21 +8447,7 @@ pub unsafe extern "C" fn f_setbufvar(
         return;
     }
     if *varname as ::core::ffi::c_int == '&' as ::core::ffi::c_int {
-        let mut aco: aco_save_T = aco_save_T {
-            use_aucmd_win_idx: 0,
-            save_curwin_handle: 0,
-            new_curwin_handle: 0,
-            save_prevwin_handle: 0,
-            new_curbuf: bufref_T {
-                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            },
-            tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            save_VIsual_active: false,
-            save_prompt_insert: 0,
-        };
+        let mut aco: aco_save_T = aco_save_T::default();
         aucmd_prepbuf(&raw mut aco, buf);
         set_option_from_tv(varname.offset(1 as ::core::ffi::c_int as isize), varp);
         aucmd_restbuf(&raw mut aco);

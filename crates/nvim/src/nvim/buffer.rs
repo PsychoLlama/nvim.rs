@@ -1180,21 +1180,7 @@ pub unsafe extern "C" fn buf_ensure_loaded(mut buf: *mut buf_T) -> bool {
     if !(*buf).b_ml.ml_mfp.is_null() {
         return true_0 != 0;
     }
-    let mut aco: aco_save_T = aco_save_T {
-        use_aucmd_win_idx: 0,
-        save_curwin_handle: 0,
-        new_curwin_handle: 0,
-        save_prevwin_handle: 0,
-        new_curbuf: bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        },
-        tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        save_VIsual_active: false,
-        save_prompt_insert: 0,
-    };
+    let mut aco: aco_save_T = aco_save_T::default();
     aucmd_prepbuf(&raw mut aco, buf);
     let mut status: ::core::ffi::c_int = open_buffer(
         false_0 != 0,
@@ -1211,11 +1197,7 @@ pub unsafe extern "C" fn open_buffer(
 ) -> ::core::ffi::c_int {
     let mut flags: ::core::ffi::c_int = flags_arg;
     let mut retval: ::core::ffi::c_int = OK;
-    let mut old_curbuf: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut old_curbuf: bufref_T = bufref_T::default();
     let mut old_tw: OptInt = (*curbuf.get()).b_p_tw;
     let mut read_fifo: bool = false_0 != 0;
     let mut silent: bool = shortmess(SHM_FILEINFO as ::core::ffi::c_int);
@@ -1371,21 +1353,7 @@ pub unsafe extern "C" fn open_buffer(
     if bufref_valid(&raw mut old_curbuf) as ::core::ffi::c_int != 0
         && !(*old_curbuf.br_buf).b_ml.ml_mfp.is_null()
     {
-        let mut aco: aco_save_T = aco_save_T {
-            use_aucmd_win_idx: 0,
-            save_curwin_handle: 0,
-            new_curwin_handle: 0,
-            save_prevwin_handle: 0,
-            new_curbuf: bufref_T {
-                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            },
-            tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            save_VIsual_active: false,
-            save_prompt_insert: 0,
-        };
+        let mut aco: aco_save_T = aco_save_T::default();
         aucmd_prepbuf(&raw mut aco, old_curbuf.br_buf);
         do_modelines(0 as ::core::ffi::c_int);
         (*curbuf.get()).b_flags &= !(BF_CHECK_RO | BF_NEVERLOADED);
@@ -1545,11 +1513,7 @@ pub unsafe extern "C" fn close_buffer(
             true_0 != 0,
         );
     }
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut bufref, buf);
     if (*buf).b_nwindows == 1 as ::core::ffi::c_int {
         (*buf).b_locked += 1;
@@ -1760,11 +1724,7 @@ pub unsafe extern "C" fn buf_freeall(mut buf: *mut buf_T, mut flags: ::core::ffi
     let mut the_curtab: *mut tabpage_T = curtab.get();
     (*buf).b_locked += 1;
     (*buf).b_locked_split += 1;
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut bufref, buf);
     if !(*buf).terminal.is_null() {
         buf_close_terminal(buf);
@@ -1983,11 +1943,7 @@ pub unsafe extern "C" fn goto_buffer(
             skip_help_buf = false_0 != 0;
         }
     }
-    let mut old_curbuf: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut old_curbuf: bufref_T = bufref_T::default();
     set_bufref(&raw mut old_curbuf, curbuf.get());
     if swap_exists_action.get() == SEA_NONE {
         swap_exists_action.set(SEA_DIALOG);
@@ -2234,11 +2190,7 @@ unsafe extern "C" fn empty_curbuf(
         ));
         return FAIL;
     }
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut bufref, buf);
     if close_others {
         let mut can_close_all_others: bool = true_0 != 0;
@@ -2426,11 +2378,7 @@ unsafe extern "C" fn do_buffer_ext(
     }
     if unload {
         let mut forward: ::core::ffi::c_int = 0;
-        let mut bufref: bufref_T = bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        };
+        let mut bufref: bufref_T = bufref_T::default();
         if !can_unload_buffer(buf) {
             return FAIL;
         }
@@ -2708,11 +2656,7 @@ unsafe extern "C" fn do_buffer_ext(
             || (*cmdmod.ptr()).cmod_flags & CMOD_CONFIRM as ::core::ffi::c_int != 0)
             && p_write.get() != 0
         {
-            let mut bufref_0: bufref_T = bufref_T {
-                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            };
+            let mut bufref_0: bufref_T = bufref_T::default();
             set_bufref(&raw mut bufref_0, buf);
             dialog_changed(curbuf.get(), false_0 != 0);
             if !bufref_valid(&raw mut bufref_0) {
@@ -2774,16 +2718,8 @@ pub unsafe extern "C" fn set_curbuf(
     buflist_altfpos(curwin.get());
     VIsual_reselect.set(false_0);
     prevbuf = curbuf.get();
-    let mut newbufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
-    let mut prevbufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut newbufref: bufref_T = bufref_T::default();
+    let mut prevbufref: bufref_T = bufref_T::default();
     set_bufref(&raw mut prevbufref, prevbuf);
     set_bufref(&raw mut newbufref, buf);
     let prev_nwindows: ::core::ffi::c_int = (*prevbuf).b_nwindows;
@@ -3066,11 +3002,7 @@ pub unsafe extern "C" fn buflist_new(
         }
         if flags & BLN_LISTED as ::core::ffi::c_int != 0 && (*buf).b_p_bl == 0 {
             (*buf).b_p_bl = true_0;
-            let mut bufref: bufref_T = bufref_T {
-                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            };
+            let mut bufref: bufref_T = bufref_T::default();
             set_bufref(&raw mut bufref, buf);
             if flags & BLN_DUMMY as ::core::ffi::c_int == 0 {
                 if apply_autocmds(
@@ -3092,11 +3024,7 @@ pub unsafe extern "C" fn buflist_new(
     buf = ::core::ptr::null_mut::<buf_T>();
     if flags & BLN_CURBUF as ::core::ffi::c_int != 0 && curbuf_reusable() as ::core::ffi::c_int != 0
     {
-        let mut bufref_0: bufref_T = bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        };
+        let mut bufref_0: bufref_T = bufref_T::default();
         assert!(!(*curbuf.ptr()).is_null(), "curbuf != NULL");
         buf = curbuf.get();
         set_bufref(&raw mut bufref_0, buf);
@@ -3231,11 +3159,7 @@ pub unsafe extern "C" fn buflist_new(
     (*buf).update_callbacks.size = (*buf).update_callbacks.capacity;
     (*buf).update_callbacks.items = ::core::ptr::null_mut::<BufUpdateCallbacks>();
     if flags & BLN_DUMMY as ::core::ffi::c_int == 0 {
-        let mut bufref_1: bufref_T = bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        };
+        let mut bufref_1: bufref_T = bufref_T::default();
         set_bufref(&raw mut bufref_1, buf);
         if apply_autocmds(
             EVENT_BUFNEW,
@@ -5118,11 +5042,7 @@ pub unsafe fn ex_buffer_all(mut eap: *mut exarg_T) {
                     }
                 }
                 if wp_0.is_null() && split_ret == OK {
-                    let mut bufref: bufref_T = bufref_T {
-                        br_buf: ::core::ptr::null_mut::<buf_T>(),
-                        br_fnum: 0,
-                        br_buf_free_count: 0,
-                    };
+                    let mut bufref: bufref_T = bufref_T::default();
                     set_bufref(&raw mut bufref, buf);
                     let mut p_ea_save: bool = p_ea.get() != 0;
                     p_ea.set(true_0);
@@ -5614,21 +5534,7 @@ pub unsafe extern "C" fn buf_contents_changed(mut buf: *mut buf_T) -> bool {
         cstack: ::core::ptr::null_mut::<cstack_T>(),
     };
     prep_exarg(&raw mut ea, buf);
-    let mut aco: aco_save_T = aco_save_T {
-        use_aucmd_win_idx: 0,
-        save_curwin_handle: 0,
-        new_curwin_handle: 0,
-        save_prevwin_handle: 0,
-        new_curbuf: bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        },
-        tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        save_VIsual_active: false,
-        save_prompt_insert: 0,
-    };
+    let mut aco: aco_save_T = aco_save_T::default();
     aucmd_prepbuf(&raw mut aco, newbuf);
     block_autocmds();
     if ml_open(curbuf.get()) == OK

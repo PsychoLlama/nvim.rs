@@ -4503,21 +4503,7 @@ unsafe extern "C" fn cmdpreview_open_buf() -> *mut buf_T {
     if cmdpreview_buf == curbuf.get() {
         return ::core::ptr::null_mut::<buf_T>();
     }
-    let mut aco: aco_save_T = aco_save_T {
-        use_aucmd_win_idx: 0,
-        save_curwin_handle: 0,
-        new_curwin_handle: 0,
-        save_prevwin_handle: 0,
-        new_curbuf: bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        },
-        tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        save_VIsual_active: false,
-        save_prompt_insert: 0,
-    };
+    let mut aco: aco_save_T = aco_save_T::default();
     aucmd_prepbuf(&raw mut aco, cmdpreview_buf);
     let mut retv: ::core::ffi::c_int = rename_buffer(b"[Preview]\0".as_ptr()
         as *const ::core::ffi::c_char
@@ -4787,21 +4773,7 @@ unsafe extern "C" fn cmdpreview_restore_state(mut cpinfo: *mut CpInfo) {
                 uhp = (*uhp).uh_next.ptr;
                 count += 1;
             }
-            let mut aco: aco_save_T = aco_save_T {
-                use_aucmd_win_idx: 0,
-                save_curwin_handle: 0,
-                new_curwin_handle: 0,
-                save_prevwin_handle: 0,
-                new_curbuf: bufref_T {
-                    br_buf: ::core::ptr::null_mut::<buf_T>(),
-                    br_fnum: 0,
-                    br_buf_free_count: 0,
-                },
-                tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                save_VIsual_active: false,
-                save_prompt_insert: 0,
-            };
+            let mut aco: aco_save_T = aco_save_T::default();
             aucmd_prepbuf(&raw mut aco, buf);
             if (*curbuf.get()).b_u_synced as ::core::ffi::c_int == false_0 {
                 u_sync(true_0 != 0);
@@ -7468,16 +7440,8 @@ pub unsafe extern "C" fn did_set_cedit(mut _args: *mut optset_T) -> *const ::cor
     return ::core::ptr::null::<::core::ffi::c_char>();
 }
 unsafe extern "C" fn open_cmdwin() -> ::core::ffi::c_int {
-    let mut old_curbuf: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut old_curbuf: bufref_T = bufref_T::default();
+    let mut bufref: bufref_T = bufref_T::default();
     let mut old_curwin: *mut win_T = curwin.get();
     let mut i: ::core::ffi::c_int = 0;
     let mut winsizes: garray_T = garray_T {

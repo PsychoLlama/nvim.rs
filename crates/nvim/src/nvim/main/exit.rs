@@ -157,11 +157,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
                     // An autocommand may already have closed the buffer.
                     let buf = (*wp).w_buffer;
                     if !buf.is_null() && buf_valid(buf) && buf_get_changedtick(buf) != -1 {
-                        let mut bufref = bufref_T {
-                            br_buf: ptr::null_mut(),
-                            br_fnum: 0,
-                            br_buf_free_count: 0,
-                        };
+                        let mut bufref = bufref_T::default();
                         set_bufref(&raw mut bufref, buf);
                         apply_autocmds(
                             EVENT_BUFWINLEAVE,
@@ -187,11 +183,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
             let mut buf = firstbuf.get();
             while !buf.is_null() {
                 if !(*buf).b_ml.ml_mfp.is_null() {
-                    let mut bufref = bufref_T {
-                        br_buf: ptr::null_mut(),
-                        br_fnum: 0,
-                        br_buf_free_count: 0,
-                    };
+                    let mut bufref = bufref_T::default();
                     set_bufref(&raw mut bufref, buf);
                     apply_autocmds(EVENT_BUFUNLOAD, (*buf).b_fname, (*buf).b_fname, false, buf);
                     if !bufref_valid(&raw mut bufref) {

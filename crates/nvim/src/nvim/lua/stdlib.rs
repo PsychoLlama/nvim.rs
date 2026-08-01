@@ -971,21 +971,7 @@ unsafe extern "C-unwind" fn nlua_with(mut L: *mut lua_State) -> ::core::ffi::c_i
         did_emsg: 0,
     };
     try_enter(&raw mut tstate);
-    let mut aco: aco_save_T = aco_save_T {
-        use_aucmd_win_idx: 0,
-        save_curwin_handle: 0,
-        new_curwin_handle: 0,
-        save_prevwin_handle: 0,
-        new_curbuf: bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        },
-        tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        save_VIsual_active: false,
-        save_prompt_insert: 0,
-    };
+    let mut aco: aco_save_T = aco_save_T::default();
     let mut win_execute_args: win_execute_T = win_execute_T {
         wp: ::core::ptr::null_mut::<win_T>(),
         curpos: pos_T {

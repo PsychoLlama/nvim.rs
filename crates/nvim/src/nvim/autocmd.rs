@@ -2645,29 +2645,11 @@ pub unsafe extern "C" fn do_doautocmd(
 }
 pub unsafe fn ex_doautoall(mut eap: *mut exarg_T) {
     let mut retval: ::core::ffi::c_int = OK;
-    let mut aco: aco_save_T = aco_save_T {
-        use_aucmd_win_idx: 0,
-        save_curwin_handle: 0,
-        new_curwin_handle: 0,
-        save_prevwin_handle: 0,
-        new_curbuf: bufref_T {
-            br_buf: ::core::ptr::null_mut::<buf_T>(),
-            br_fnum: 0,
-            br_buf_free_count: 0,
-        },
-        tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        save_VIsual_active: false,
-        save_prompt_insert: 0,
-    };
+    let mut aco: aco_save_T = aco_save_T::default();
     let mut arg: *mut ::core::ffi::c_char = (*eap).arg;
     let mut call_do_modelines: ::core::ffi::c_int =
         check_nomodeline(&raw mut arg) as ::core::ffi::c_int;
-    let mut bufref: bufref_T = bufref_T {
-        br_buf: ::core::ptr::null_mut::<buf_T>(),
-        br_fnum: 0,
-        br_buf_free_count: 0,
-    };
+    let mut bufref: bufref_T = bufref_T::default();
     let mut did_aucmd: bool = false;
     let mut buf: *mut buf_T = firstbuf.get();
     while !buf.is_null() {
@@ -3044,21 +3026,7 @@ unsafe extern "C" fn deferred_event(mut argv: *mut *mut ::core::ffi::c_void) {
             }
         }
         tv_dict_set_keys_readonly(v_event);
-        let mut aco: aco_save_T = aco_save_T {
-            use_aucmd_win_idx: 0,
-            save_curwin_handle: 0,
-            new_curwin_handle: 0,
-            save_prevwin_handle: 0,
-            new_curbuf: bufref_T {
-                br_buf: ::core::ptr::null_mut::<buf_T>(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            },
-            tp_localdir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            globaldir: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            save_VIsual_active: false,
-            save_prompt_insert: 0,
-        };
+        let mut aco: aco_save_T = aco_save_T::default();
         aucmd_prepbuf(&raw mut aco, buf);
         apply_autocmds_group(event, fname, fname_io, false_0 != 0, group, buf, eap, data);
         aucmd_restbuf(&raw mut aco);
