@@ -1,3 +1,14 @@
+//! Searching.
+//!
+//! This module is the root of the family and holds nothing but the
+//! namespace its children share: [`pattern`] remembers the patterns,
+//! [`find`] runs one over the buffer, [`command`] is `/` and `?`,
+//! [`charsearch`] is `f`/`t`, [`select`] is `gn`, [`stat`] is the
+//! `[1/15]` count, [`matchpair`] and [`comment`] are `%`, and
+//! [`includes`] with [`incline`] is `[i`/`:checkpath`.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::autocmd::{EVENT_SEARCHWRAPPED, apply_autocmds};
 use crate::src::nvim::buffer::buf_get_changedtick;
