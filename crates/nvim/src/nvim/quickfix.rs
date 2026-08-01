@@ -91,11 +91,11 @@ use crate::src::nvim::os::fs::{
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
     __assert_fail, __errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets,
-    gettext, memset, snprintf, strcat, strcmp, strlen, strncasecmp, time,
+    gettext, memset, snprintf, strcmp, strlen, strncasecmp, time,
 };
 use crate::src::nvim::path::{
-    FreeWild, add_pathsep, concat_fnames, fix_fname, gen_expand_wildcards, path_fnamecmp,
-    path_is_absolute, path_tail, path_try_shorten_fname, vim_isAbsName,
+    FreeWild, PATHSEP, after_pathsep, concat_fnames, fix_fname, gen_expand_wildcards,
+    path_fnamecmp, path_is_absolute, path_tail, path_try_shorten_fname, vim_isAbsName,
 };
 use crate::src::nvim::pos::MAXLNUM;
 use crate::src::nvim::regexp::{vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
@@ -174,6 +174,7 @@ pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kDirectionNotSet: Direction = 0;
 pub const CMD_vimgrepadd: CMD_index = 511;
 pub const CMD_make: CMD_index = 274;
+pub const CMD_helpgrep: CMD_index = 178;
 pub const CMD_lvimgrepadd: CMD_index = 268;
 pub const CMD_lrewind: CMD_index = 261;
 pub const CMD_lpfile: CMD_index = 260;

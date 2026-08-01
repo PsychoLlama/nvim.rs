@@ -9,69 +9,80 @@
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn hgr_get_ll(mut new_ll: *mut bool) -> *mut qf_info_T {
+/// The wildcard `:helpgrep` expands in each `'runtimepath'` entry. It is a
+/// `\(…\)` alternation because `gen_expand_wildcards` matches it as a
+/// regular expression once the shell-style parts are translated.
+const HELP_FILES: &[u8] = br"doc/*.\(txt\|??x\)";
+
+/// The location list `:lhelpgrep` adds to: the one of the help window, if
+/// there is one, and otherwise a fresh stack — which the caller is told
+/// about through `new_ll`, because it has to free it again if nothing ends
+/// up pointing at it.
+///
+/// # Safety
+///
+/// There must be a current window.
+unsafe fn hgr_get_ll(new_ll: &mut bool) -> *mut qf_info_T {
+    // SAFETY: the caller's promise.
     unsafe {
-        let mut wp: *mut win_T = if bt_help((*curwin.get()).w_buffer) as ::core::ffi::c_int != 0 {
+        let wp = if bt_help((*curwin.get()).w_buffer) {
             curwin.get()
         } else {
             qf_find_help_win()
         };
-        let mut qi: *mut qf_info_T = if wp.is_null() {
-            ::core::ptr::null_mut::<qf_info_T>()
+        let qi = if wp.is_null() {
+            ptr::null_mut()
         } else {
             (*wp).w_llist
         };
-        if qi.is_null() {
-            qi = qf_alloc_stack(QFLT_LOCATION, 1 as ::core::ffi::c_int);
-            *new_ll = true_0 != 0;
+        if !qi.is_null() {
+            return qi;
         }
-        return qi;
+        *new_ll = true;
+        qf_alloc_stack(QFLT_LOCATION, 1)
     }
 }
 
-pub(crate) unsafe extern "C" fn hgr_search_file(
-    mut qfl: *mut qf_list_T,
-    mut fname: *mut ::core::ffi::c_char,
-    mut p_regmatch: *mut regmatch_T,
-) {
+/// Add an entry for every line of one help file that the pattern matches.
+///
+/// # Safety
+///
+/// `qfl` must be a live list, `fname` NUL-terminated and `p_regmatch` a
+/// compiled pattern.
+unsafe fn hgr_search_file(qfl: *mut qf_list_T, fname: *mut c_char, p_regmatch: *mut regmatch_T) {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let fd: *mut FILE = os_fopen(fname, b"r\0".as_ptr() as *const ::core::ffi::c_char);
+        let fd = os_fopen(fname, c"r".as_ptr());
         if fd.is_null() {
             return;
         }
-        let mut lnum: linenr_T = 1 as linenr_T;
-        while !vim_fgets(IObuff.ptr() as *mut ::core::ffi::c_char, IOSIZE, fd) && !got_int.get() {
-            let mut line: *mut ::core::ffi::c_char = IObuff.ptr() as *mut ::core::ffi::c_char;
-            if vim_regexec(p_regmatch, line, 0 as colnr_T) {
-                let mut l: ::core::ffi::c_int = strlen(line) as ::core::ffi::c_int;
-                while l > 0 as ::core::ffi::c_int
-                    && *line.offset((l - 1 as ::core::ffi::c_int) as isize) as ::core::ffi::c_int
-                        <= ' ' as ::core::ffi::c_int
-                {
+
+        let line: *mut c_char = IObuff.ptr().cast();
+        let mut lnum: linenr_T = 1;
+        while !vim_fgets(line, IOSIZE, fd) && !got_int.get() {
+            if vim_regexec(p_regmatch, line, 0) {
+                // Remove the trailing CR, LF, spaces, etc.
+                let mut l = strlen(line);
+                while l > 0 && *line.add(l - 1) as c_int <= ' ' as c_int {
                     l -= 1;
-                    *line.offset(l as isize) = NUL as ::core::ffi::c_char;
+                    *line.add(l) = NUL as c_char;
                 }
+
                 qf_add_entry(
                     qfl,
                     &NewEntry {
                         fname,
                         lnum,
-                        col: (*p_regmatch).startp[0 as ::core::ffi::c_int as usize]
-                            .offset_from(line) as ::core::ffi::c_int
-                            + 1 as ::core::ffi::c_int,
-                        end_col: (*p_regmatch).endp[0 as ::core::ffi::c_int as usize]
-                            .offset_from(line)
-                            as ::core::ffi::c_int
-                            + 1 as ::core::ffi::c_int,
+                        col: (*p_regmatch).startp[0].offset_from(line) as c_int + 1,
+                        end_col: (*p_regmatch).endp[0].offset_from(line) as c_int + 1,
                         // A help entry, which `qf_jump` opens as help.
-                        kind: 1 as ::core::ffi::c_char,
+                        kind: 1,
                         ..NewEntry::new(line)
                     },
                 );
-            }
-            if line != IObuff.ptr() as *mut ::core::ffi::c_char {
-                xfree(line as *mut ::core::ffi::c_void);
             }
             lnum += 1;
             line_breakcheck();
@@ -80,158 +91,172 @@ pub(crate) unsafe extern "C" fn hgr_search_file(
     }
 }
 
-pub(crate) unsafe extern "C" fn hgr_search_files_in_dir(
-    mut qfl: *mut qf_list_T,
-    mut dirname: *mut ::core::ffi::c_char,
-    mut p_regmatch: *mut regmatch_T,
-    mut lang: *const ::core::ffi::c_char,
+/// Search every help file in `dir`'s `doc/` directory, skipping the ones
+/// written in another language than `lang`.
+///
+/// # Safety
+///
+/// `qfl` must be a live list, `p_regmatch` a compiled pattern and `lang`
+/// null or NUL-terminated.
+unsafe fn hgr_search_files_in_dir(
+    qfl: *mut qf_list_T,
+    dir: &[u8],
+    p_regmatch: *mut regmatch_T,
+    lang: *const c_char,
 ) {
+    // SAFETY: the caller's list, pattern and language, plus one owned file
+    // pattern that stays alive for the whole call.
     unsafe {
-        let mut fcount: ::core::ffi::c_int = 0;
-        let mut fnames: *mut *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        add_pathsep(dirname);
-        strcat(
-            dirname,
-            b"doc/*.\\(txt\\|??x\\)\0".as_ptr() as *const ::core::ffi::c_char,
-        );
+        // Find all "*.txt" and "*.??x" files in the "doc" directory.
+        // Upstream builds this in `NameBuff` with `add_pathsep` and
+        // `strcat`, which a 'runtimepath' entry close to MAXPATHL overruns;
+        // the pattern is owned here instead.
+        let mut pattern: Vec<u8> = dir.to_vec();
+        pattern.push(0);
+        let base: *const c_char = pattern.as_ptr().cast();
+        if !dir.is_empty() && after_pathsep(base, base.add(dir.len())) == 0 {
+            pattern[dir.len()] = PATHSEP as u8;
+            pattern.push(0);
+        }
+        pattern.pop();
+        pattern.extend_from_slice(HELP_FILES);
+        pattern.push(0);
+
+        let mut fcount: c_int = 0;
+        let mut fnames: *mut *mut c_char = ptr::null_mut();
+        let mut arg: *mut c_char = pattern.as_mut_ptr().cast();
         if gen_expand_wildcards(
-            1 as ::core::ffi::c_int,
-            &raw mut dirname,
+            1,
+            &raw mut arg,
             &raw mut fcount,
             &raw mut fnames,
-            EW_FILE as ::core::ffi::c_int | EW_SILENT as ::core::ffi::c_int,
-        ) == OK
-            && fcount > 0 as ::core::ffi::c_int
+            (EW_FILE | EW_SILENT) as c_int,
+        ) != OK
+            || fcount <= 0
         {
-            let mut fi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while fi < fcount && !got_int.get() {
-                if !(!lang.is_null()
-                    && strncasecmp(
-                        lang as *mut ::core::ffi::c_char,
-                        (*fnames.offset(fi as isize))
-                            .offset(strlen(*fnames.offset(fi as isize)) as isize)
-                            .offset(-(3 as ::core::ffi::c_int as isize)),
-                        2 as ::core::ffi::c_int as size_t,
-                    ) != 0 as ::core::ffi::c_int
-                    && !(strncasecmp(
-                        lang as *mut ::core::ffi::c_char,
-                        b"en\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                        2 as ::core::ffi::c_int as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                        && strncasecmp(
-                            b"txt\0".as_ptr() as *const ::core::ffi::c_char
-                                as *mut ::core::ffi::c_char,
-                            (*fnames.offset(fi as isize))
-                                .offset(strlen(*fnames.offset(fi as isize)) as isize)
-                                .offset(-(3 as ::core::ffi::c_int as isize)),
-                            3 as ::core::ffi::c_int as size_t,
-                        ) == 0 as ::core::ffi::c_int))
-                {
-                    hgr_search_file(qfl, *fnames.offset(fi as isize), p_regmatch);
-                }
-                fi += 1;
-            }
-            FreeWild(fcount, fnames);
+            return;
         }
+
+        let mut fi = 0;
+        while fi < fcount && !got_int.get() {
+            let fname = *fnames.offset(fi as isize);
+            if lang.is_null() || wanted_language(lang, fname) {
+                hgr_search_file(qfl, fname, p_regmatch);
+            }
+            fi += 1;
+        }
+        FreeWild(fcount, fnames);
     }
 }
 
-pub(crate) unsafe extern "C" fn hgr_search_in_rtp(
-    mut qfl: *mut qf_list_T,
-    mut p_regmatch: *mut regmatch_T,
-    mut lang: *const ::core::ffi::c_char,
-) {
+/// Whether a help file is one `lang` asked for. The language is the two
+/// characters before the extension's last one, so `foo.frx` is French —
+/// except that `en` also claims every plain `.txt` file.
+///
+/// # Safety
+///
+/// Both strings must be NUL-terminated, and `fname` at least three bytes
+/// long, which every name the wildcard produced is.
+unsafe fn wanted_language(lang: *const c_char, fname: *const c_char) -> bool {
+    // SAFETY: the caller's promise.
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = p_rtp.get();
-        while *p as ::core::ffi::c_int != NUL && !got_int.get() {
-            copy_option_part(
+        let ext = fname.add(strlen(fname)).offset(-3);
+        strncasecmp(lang, ext, 2) == 0
+            || (strncasecmp(lang, c"en".as_ptr(), 2) == 0
+                && strncasecmp(c"txt".as_ptr(), ext, 3) == 0)
+    }
+}
+
+/// Search the help files of every `'runtimepath'` entry.
+///
+/// # Safety
+///
+/// `qfl` must be a live list and `p_regmatch` a compiled pattern.
+unsafe fn hgr_search_in_rtp(qfl: *mut qf_list_T, p_regmatch: *mut regmatch_T, lang: *const c_char) {
+    // SAFETY: forwarded from the caller; `NameBuff` holds MAXPATHL bytes.
+    unsafe {
+        let mut p = p_rtp.get();
+        while *p as c_int != NUL && !got_int.get() {
+            let len = copy_option_part(
                 &raw mut p,
-                NameBuff.ptr() as *mut ::core::ffi::c_char,
+                NameBuff.ptr().cast(),
                 MAXPATHL as size_t,
-                b",\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                c",".as_ptr().cast_mut(),
             );
-            hgr_search_files_in_dir(
-                qfl,
-                NameBuff.ptr() as *mut ::core::ffi::c_char,
-                p_regmatch,
-                lang,
-            );
+            let entry = core::slice::from_raw_parts(NameBuff.ptr().cast::<u8>(), len);
+            hgr_search_files_in_dir(qfl, entry, p_regmatch, lang);
         }
     }
 }
 
-pub unsafe fn ex_helpgrep(mut eap: *mut exarg_T) {
+/// `:helpgrep` and `:lhelpgrep`.
+///
+/// # Safety
+///
+/// `eap` must be a live command.
+pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut qi: *mut qf_info_T = ql_info.get();
-        '_c2rust_label: {
-            if !qi.is_null() {
-            } else {
-                __assert_fail(
-                    b"qi != NULL\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"src/nvim/quickfix.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                    7575 as ::core::ffi::c_uint,
-                    b"void ex_helpgrep(exarg_T *)\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
+        let mut qi = ql_info.get();
+        debug_assert!(!qi.is_null());
+
+        let au_name = match (*eap).cmdidx {
+            CMD_helpgrep => Some(c"helpgrep"),
+            CMD_lhelpgrep => Some(c"lhelpgrep"),
+            _ => None,
         };
-        let mut au_name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        match (*eap).cmdidx as ::core::ffi::c_int {
-            178 => {
-                au_name = b"helpgrep\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
-            }
-            241 => {
-                au_name = b"lhelpgrep\0".as_ptr() as *const ::core::ffi::c_char
-                    as *mut ::core::ffi::c_char;
-            }
-            _ => {}
-        }
-        if !au_name.is_null()
-            && apply_autocmds(
+        if let Some(name) = au_name {
+            let claimed = apply_autocmds(
                 EVENT_QUICKFIXCMDPRE,
-                au_name,
+                name.as_ptr().cast_mut(),
                 (*curbuf.get()).b_fname,
-                true_0 != 0,
+                true,
                 curbuf.get(),
-            ) as ::core::ffi::c_int
-                != 0
-        {
-            if aborting() {
+            );
+            if claimed && aborting() {
                 return;
             }
         }
-        let mut updated: bool = false_0 != 0;
-        let save_cpo: *mut ::core::ffi::c_char = p_cpo.get();
-        p_cpo.set(empty_string_option.ptr() as *mut ::core::ffi::c_char);
-        let mut new_qi: bool = false_0 != 0;
-        if is_loclist_cmd((*eap).cmdidx as ::core::ffi::c_int) {
-            qi = hgr_get_ll(&raw mut new_qi);
+
+        // Make 'cpoptions' empty, the 'l' flag should not be used here.
+        let save_cpo = p_cpo.get();
+        p_cpo.set(empty_string_option.ptr().cast());
+
+        let mut new_qi = false;
+        if is_loclist_cmd((*eap).cmdidx as c_int) {
+            qi = hgr_get_ll(&mut new_qi);
         }
+
         incr_quickfix_busy();
-        let lang: *mut ::core::ffi::c_char = check_help_lang((*eap).arg);
-        let mut regmatch: regmatch_T = regmatch_T {
+
+        // Check for a specified language.
+        let lang = check_help_lang((*eap).arg);
+        let mut regmatch = regmatch_T {
             regprog: vim_regcomp((*eap).arg, RE_MAGIC + RE_STRING),
-            startp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            endp: [::core::ptr::null_mut::<::core::ffi::c_char>(); 10],
-            rm_matchcol: 0,
-            rm_ic: false_0 != 0,
+            rm_ic: false,
+            ..regmatch_T::default()
         };
-        if !regmatch.regprog.is_null() {
+        let updated = !regmatch.regprog.is_null();
+        if updated {
+            // Create a new quickfix list.
             qf_new_list(qi, qf_cmdtitle(*(*eap).cmdlinep));
-            let qfl: *mut qf_list_T = qf_get_curlist(qi);
+            let qfl = qf_get_curlist(qi);
+
             hgr_search_in_rtp(qfl, &raw mut regmatch, lang);
             vim_regfree(regmatch.regprog);
-            (*qfl).qf_nonevalid = false_0 != 0;
+
+            (*qfl).qf_nonevalid = false;
             (*qfl).qf_ptr = (*qfl).qf_start;
-            (*qfl).qf_index = 1 as ::core::ffi::c_int;
+            (*qfl).qf_index = 1;
             qf_list_changed(qfl);
-            updated = true_0 != 0;
         }
-        if p_cpo.get() == empty_string_option.ptr() as *mut ::core::ffi::c_char {
+
+        if p_cpo.get() == empty_string_option.ptr().cast() {
             p_cpo.set(save_cpo);
         } else {
-            if *p_cpo.get() as ::core::ffi::c_int == NUL {
+            // Darn, some plugin changed the value. If it's still empty it
+            // was changed and restored, need to restore the complicated way.
+            if *p_cpo.get() as c_int == NUL {
                 set_option_value_give_err(
                     kOptCpoptions,
                     OptVal {
@@ -240,51 +265,55 @@ pub unsafe fn ex_helpgrep(mut eap: *mut exarg_T) {
                             string: cstr_as_string(save_cpo),
                         },
                     },
-                    0 as ::core::ffi::c_int,
+                    0,
                 );
             }
             free_string_option(save_cpo);
         }
+
         if updated {
-            qf_update_buffer(qi, ::core::ptr::null_mut::<qfline_T>());
+            // This may open a window and source scripts, so it waits until
+            // 'cpo' has been restored.
+            qf_update_buffer(qi, ptr::null_mut());
         }
-        if !au_name.is_null() {
+
+        if let Some(name) = au_name {
             apply_autocmds(
                 EVENT_QUICKFIXCMDPOST,
-                au_name,
+                name.as_ptr().cast_mut(),
                 (*curbuf.get()).b_fname,
-                true_0 != 0,
+                true,
                 curbuf.get(),
             );
+            // When adding to an existing location list stack, an autocommand
+            // may have made that stack invalid, in which case there is
+            // nothing left to jump to.
             if !new_qi
-                && (*qi).qfl_type as ::core::ffi::c_uint
-                    == QFLT_LOCATION as ::core::ffi::c_int as ::core::ffi::c_uint
+                && (*qi).qfl_type == QFLT_LOCATION as qfltype_T
                 && qf_find_win_with_loclist(qi).is_null()
             {
                 decr_quickfix_busy();
                 return;
             }
         }
+
+        // Jump to the first match.
         if !qf_list_empty(qf_get_curlist(qi)) {
-            qf_jump(
-                qi,
-                0 as ::core::ffi::c_int,
-                0 as ::core::ffi::c_int,
-                false_0,
-            );
+            qf_jump(qi, 0, 0, false as c_int);
         } else {
-            semsg(
-                gettext(&raw const e_nomatch2 as *const ::core::ffi::c_char),
-                (*eap).arg,
-            );
+            semsg(gettext(&raw const e_nomatch2 as *const c_char), (*eap).arg);
         }
+
         decr_quickfix_busy();
-        if (*eap).cmdidx as ::core::ffi::c_int == CMD_lhelpgrep as ::core::ffi::c_int {
+
+        if (*eap).cmdidx == CMD_lhelpgrep && new_qi {
             if !bt_help((*curwin.get()).w_buffer) || (*curwin.get()).w_llist == qi {
-                if new_qi {
-                    ll_free_all(&raw mut qi);
-                }
-            } else if (*curwin.get()).w_llist.is_null() && new_qi as ::core::ffi::c_int != 0 {
+                // The help window was not opened, or it already points at
+                // the right location list: the new one is not wanted.
+                ll_free_all(&raw mut qi);
+            } else if (*curwin.get()).w_llist.is_null() {
+                // The current window had no location list before, so it
+                // takes the new one.
                 (*curwin.get()).w_llist = qi;
             }
         }
