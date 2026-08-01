@@ -70,7 +70,7 @@ use crate::src::nvim::state::{MODE_INSERT, virtual_active};
 use crate::src::nvim::statusline::build_statuscol_str;
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::syntax::{
-    get_syntax_attr, get_syntax_info, syn_get_sub_char, syntax_present, syntax_start,
+    HL_CONCEAL, get_syntax_attr, get_syntax_info, syn_get_sub_char, syntax_present, syntax_start,
 };
 use crate::src::nvim::terminal::terminal_get_line_attributes;
 use crate::src::nvim::types::{
@@ -202,11 +202,9 @@ pub struct winlinevars_T {
 pub const SLF_WRAP: C2Rust_Unnamed_32 = 2;
 pub const SLF_RIGHTLEFT: C2Rust_Unnamed_32 = 1;
 pub const SLF_INC_VCOL: C2Rust_Unnamed_32 = 4;
-pub const HL_CONCEAL: C2Rust_Unnamed_34 = 131072;
 pub const VV_VIRTNUM: VimVarIndex = 103;
 pub const SMT_ALL: smt_T = 0;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
