@@ -40,9 +40,9 @@ use crate::src::nvim::mbyte::{
     mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len,
 };
 use crate::src::nvim::memfile::{
-    mf_close, mf_close_file, mf_find, mf_fname, mf_free, mf_free_fnames, mf_get, mf_need_trans,
-    mf_new, mf_new_page_size, mf_open, mf_open_file, mf_put, mf_set_dirty, mf_set_fnames, mf_sync,
-    mf_trans_del,
+    MfDirty, mf_close, mf_close_file, mf_find, mf_fname, mf_free, mf_free_fnames, mf_get,
+    mf_need_trans, mf_new, mf_new_page_size, mf_open, mf_open_file, mf_put, mf_set_dirty,
+    mf_set_fnames, mf_sync, mf_trans_del,
 };
 use crate::src::nvim::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstpcpy, xstrdup, xstrlcpy};
 use crate::src::nvim::message::{
@@ -82,8 +82,8 @@ use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     FileInfo, OptVal, OptValData, OptValType, String_0, StringBuilder, Timestamp, VimVarIndex,
     bhdr_T, blocknr_T, buf_T, chunksize_T, colnr_T, dict_T, file_comparison, flush_buffers_T,
-    infoptr_T, int16_t, int64_t, linenr_T, list_T, memfile_T, mfdirty_T, off_T, pos_T, size_t,
-    ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_uid_t, varnumber_T,
+    infoptr_T, int16_t, int64_t, linenr_T, list_T, memfile_T, off_T, pos_T, size_t, ssize_t,
+    time_t, uint8_t, uint16_t, uint64_t, uv_uid_t, varnumber_T,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 use crate::src::nvim::undo::bufIsChanged;
@@ -104,8 +104,6 @@ mod offsets;
 pub use self::offsets::*;
 mod lines;
 pub use self::lines::*;
-pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
-pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
@@ -483,7 +481,7 @@ pub unsafe fn ml_open_file(buf: *mut buf_T) {
                 // consumes fname!
                 continue;
             }
-            (*mfp).mf_dirty = MF_DIRTY_YES_NOSYNC; // don't sync yet in ml_sync_all
+            (*mfp).mf_dirty = MfDirty::YesNoSync; // don't sync yet in ml_sync_all
             ml_upd_block0(buf, UB_SAME_DIR);
 
             // Flush block zero, so others can read it.

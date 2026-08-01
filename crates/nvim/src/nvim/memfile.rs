@@ -63,11 +63,21 @@ use crate::src::nvim::os::fs::{
 use crate::src::nvim::os::input::{os_breakcheck, os_char_avail};
 use crate::src::nvim::os::libc::{__errno_location, close, gettext, lseek, strerror};
 use crate::src::nvim::path::FullName_save;
-use crate::src::nvim::types::{FileInfo, blocknr_T, buf_T, mfdirty_T, off_T};
+use crate::src::nvim::types::{FileInfo, blocknr_T, buf_T, off_T};
 
-pub const MF_DIRTY_NO: mfdirty_T = 0;
-pub const MF_DIRTY_YES: mfdirty_T = 1;
-pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
+/// Whether a memfile has blocks that are not on disk, and whether they may
+/// be written yet.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u32)]
+pub enum MfDirty {
+    /// Everything is on disk.
+    No,
+    /// Something is not, and `ml_sync_all` should write it.
+    Yes,
+    /// Something is not, but writing it now would put a half-finished
+    /// change in the swap file — `:preserve` clears this first.
+    YesNoSync,
+}
 
 /// Sync every block, not just the ones with a file block number.
 pub const MFS_ALL: c_int = 1;
@@ -262,7 +272,7 @@ pub struct memfile_T {
     /// How many pages the file holds.
     pub mf_infile_count: blocknr_T,
     pub mf_page_size: c_uint,
-    pub mf_dirty: mfdirty_T,
+    pub mf_dirty: MfDirty,
 }
 
 /// Open a new or existing memory file.
@@ -285,7 +295,7 @@ pub unsafe fn mf_open(fname: *mut c_char, flags: c_int) -> *mut memfile_T {
         mf_neg_count: 0,
         mf_infile_count: 0,
         mf_page_size: MEMFILE_PAGE_SIZE,
-        mf_dirty: MF_DIRTY_NO,
+        mf_dirty: MfDirty::No,
     }));
 
     unsafe {
@@ -332,7 +342,7 @@ pub unsafe fn mf_open(fname: *mut c_char, flags: c_int) -> *mut memfile_T {
 pub unsafe fn mf_open_file(mfp: *mut memfile_T, fname: *mut c_char) -> c_int {
     unsafe {
         if mf_do_open(mfp, fname, O_RDWR | O_CREAT | O_EXCL) {
-            (*mfp).mf_dirty = MF_DIRTY_YES;
+            (*mfp).mf_dirty = MfDirty::Yes;
             OK
         } else {
             FAIL
@@ -430,7 +440,7 @@ pub unsafe fn mf_new(mfp: *mut memfile_T, negative: bool, page_count: c_uint) ->
         }
 
         block.bh_flags = BH_LOCKED | BH_DIRTY; // a new block is always dirty
-        (*mfp).mf_dirty = MF_DIRTY_YES;
+        (*mfp).mf_dirty = MfDirty::Yes;
         (*mfp).used.insert(block)
     }
 }
@@ -492,8 +502,8 @@ pub unsafe fn mf_put(mfp: *mut memfile_T, hp: *mut bhdr_T, dirty: bool, infile: 
         flags &= !BH_LOCKED;
         if dirty {
             flags |= BH_DIRTY;
-            if (*mfp).mf_dirty != MF_DIRTY_YES_NOSYNC {
-                (*mfp).mf_dirty = MF_DIRTY_YES;
+            if (*mfp).mf_dirty != MfDirty::YesNoSync {
+                (*mfp).mf_dirty = MfDirty::Yes;
             }
         }
         (*hp).bh_flags = flags;
@@ -534,7 +544,7 @@ pub unsafe fn mf_sync(mfp: *mut memfile_T, flags: c_int) -> c_int {
         let got_int_save = got_int.get();
 
         if (*mfp).mf_fd < 0 {
-            (*mfp).mf_dirty = MF_DIRTY_NO;
+            (*mfp).mf_dirty = MfDirty::No;
             return FAIL;
         }
 
@@ -579,7 +589,7 @@ pub unsafe fn mf_sync(mfp: *mut memfile_T, flags: c_int) -> c_int {
         // Everything written means nothing is dirty. So does a failure: the
         // flag is cleared to stop us retrying on every keystroke.
         if !visited || status == FAIL {
-            (*mfp).mf_dirty = MF_DIRTY_NO;
+            (*mfp).mf_dirty = MfDirty::No;
         }
 
         if flags & MFS_FLUSH != 0 && os_fsync((*mfp).mf_fd) != 0 {
@@ -601,7 +611,7 @@ pub unsafe fn mf_set_dirty(mfp: *mut memfile_T) {
                 (*hp).bh_flags |= BH_DIRTY;
             }
         }
-        (*mfp).mf_dirty = MF_DIRTY_YES;
+        (*mfp).mf_dirty = MfDirty::Yes;
     }
 }
 

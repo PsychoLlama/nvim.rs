@@ -818,7 +818,7 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
                     }
                 }
 
-                if (*(*buf).b_ml.ml_mfp).mf_dirty == MF_DIRTY_YES {
+                if (*(*buf).b_ml.ml_mfp).mf_dirty == MfDirty::Yes {
                     mf_sync(
                         (*buf).b_ml.ml_mfp,
                         (if check_char != 0 {

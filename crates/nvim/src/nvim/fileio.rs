@@ -86,9 +86,9 @@ use crate::src::nvim::types::ui::kUIMessages;
 use crate::src::nvim::types::{
     CMD_index, CheckItem, Directory, FILE, FileInfo, OptInt, OptVal, OptValData, OptValType,
     VimVarIndex, aco_save_T, bln_values, buf_T, bufref_T, cmd_addr_T, colnr_T, exarg_T, garray_T,
-    iconv_t, int64_t, linenr_T, mfdirty_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T,
-    size_t, ssize_t, time_t, uint64_t, uintmax_t, uv_dirent_type_t, uv_fs_type, uv_gid_t,
-    uv_req_type, uv_uid_t,
+    iconv_t, int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t,
+    ssize_t, time_t, uint64_t, uintmax_t, uv_dirent_type_t, uv_fs_type, uv_gid_t, uv_req_type,
+    uv_uid_t,
 };
 use crate::src::nvim::ui::{ui_flush, ui_has};
 use crate::src::nvim::undo::{
@@ -139,8 +139,6 @@ pub const UV_EFBIG: C2Rust_Unnamed_5 = -27;
 pub const UV_UNKNOWN_REQ: uv_req_type = 0;
 pub const UV_DIRENT_UNKNOWN: uv_dirent_type_t = 0;
 pub const UV_FS_CUSTOM: uv_fs_type = 0;
-pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
-pub const MF_DIRTY_YES: mfdirty_T = 1;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_20 = 2147483647;
 pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;

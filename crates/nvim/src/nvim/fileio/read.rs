@@ -14,6 +14,7 @@ use core::ffi::{c_char, c_int};
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::memfile::MfDirty;
 /// What the read is being asked to do, decoded from `readfile`'s `flags`.
 #[derive(Clone, Copy)]
 pub(crate) struct How {
@@ -974,9 +975,9 @@ pub unsafe extern "C" fn readfile(
         }
 
         let mfp = (*curbuf.get()).b_ml.ml_mfp;
-        if !mfp.is_null() && (*mfp).mf_dirty == MF_DIRTY_YES_NOSYNC {
+        if !mfp.is_null() && (*mfp).mf_dirty == MfDirty::YesNoSync {
             // It is OK to sync the swap file now.
-            (*mfp).mf_dirty = MF_DIRTY_YES;
+            (*mfp).mf_dirty = MfDirty::Yes;
         }
         retval
     }

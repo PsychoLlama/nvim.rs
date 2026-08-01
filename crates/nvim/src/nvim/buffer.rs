@@ -69,6 +69,7 @@ use crate::src::nvim::mark::{
     mark_jumplist_forget_file, mark_view_make, mark_view_restore, set_last_cursor, setpcmark,
 };
 use crate::src::nvim::mbyte::utf_cp_bounds;
+use crate::src::nvim::memfile::MfDirty;
 use crate::src::nvim::memline::{
     ml_close, ml_delete, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len, ml_open, ml_recover,
     ml_setname, ml_timestamp,
@@ -239,9 +240,6 @@ pub const kFloatRelativeMouse: FloatRelative = 3;
 pub const kFloatRelativeCursor: FloatRelative = 2;
 pub const kFloatRelativeWindow: FloatRelative = 1;
 pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const MF_DIRTY_YES_NOSYNC: mfdirty_T = 2;
-pub const MF_DIRTY_YES: mfdirty_T = 1;
-pub const MF_DIRTY_NO: mfdirty_T = 0;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const DO_NOT_FREE_CNT: C2Rust_Unnamed_16 = 1073741823;
@@ -1244,7 +1242,7 @@ pub unsafe extern "C" fn open_buffer(
         return FAIL;
     }
     if !(*curbuf.get()).b_ml.ml_mfp.is_null() {
-        (*(*curbuf.get()).b_ml.ml_mfp).mf_dirty = MF_DIRTY_YES_NOSYNC;
+        (*(*curbuf.get()).b_ml.ml_mfp).mf_dirty = MfDirty::YesNoSync;
     }
     set_bufref(&raw mut old_curbuf, curbuf.get());
     (*curbuf.get()).b_modified_was_set = false_0 != 0;
@@ -1310,10 +1308,9 @@ pub unsafe extern "C" fn open_buffer(
         }
     }
     if !(*curbuf.get()).b_ml.ml_mfp.is_null()
-        && (*(*curbuf.get()).b_ml.ml_mfp).mf_dirty as ::core::ffi::c_uint
-            == MF_DIRTY_YES_NOSYNC as ::core::ffi::c_int as ::core::ffi::c_uint
+        && (*(*curbuf.get()).b_ml.ml_mfp).mf_dirty == MfDirty::YesNoSync
     {
-        (*(*curbuf.get()).b_ml.ml_mfp).mf_dirty = MF_DIRTY_YES;
+        (*(*curbuf.get()).b_ml.ml_mfp).mf_dirty = MfDirty::Yes;
     }
     if (*curbuf.get()).b_flags & BF_NEVERLOADED != 0 {
         buf_init_chartab(curbuf.get(), false);
