@@ -77,7 +77,6 @@
     "crates/nvim/src/nvim/help.rs": 49,
     "crates/nvim/src/nvim/highlight_group.rs": 1,
     "crates/nvim/src/nvim/highlight_group/apply.rs": 1,
-    "crates/nvim/src/nvim/highlight_group/colornames.rs": 8,
     "crates/nvim/src/nvim/highlight_group/command.rs": 38,
     "crates/nvim/src/nvim/highlight_group/defaults.rs": 6,
     "crates/nvim/src/nvim/highlight_group/list.rs": 24,

@@ -9,6 +9,11 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// Where [`highlight_color`] formats a `#rrggbb` answer. Static because the
+/// answer is a borrowed pointer, overwritten on the next call — which is
+/// what upstream documents for this function.
+static HEXBUF: GlobalCell<HexBuf> = GlobalCell::new([0; 8]);
+
 pub(crate) unsafe extern "C" fn hlgroup2dict(
     mut hl: *mut Dict,
     mut ns_id: NS,
@@ -408,8 +413,9 @@ pub unsafe extern "C" fn highlight_color(
                     (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                         .offset((id - 1 as ::core::ffi::c_int) as isize))
                     .sg_rgb_fg as ::core::ffi::c_int,
-                    name.ptr() as *mut ::core::ffi::c_char,
-                );
+                    &mut *HEXBUF.ptr(),
+                )
+                .map_or(::core::ptr::null(), |s| s.as_ptr());
             } else if sp {
                 return coloridx_to_name(
                     (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
@@ -418,8 +424,9 @@ pub unsafe extern "C" fn highlight_color(
                     (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                         .offset((id - 1 as ::core::ffi::c_int) as isize))
                     .sg_rgb_sp as ::core::ffi::c_int,
-                    name.ptr() as *mut ::core::ffi::c_char,
-                );
+                    &mut *HEXBUF.ptr(),
+                )
+                .map_or(::core::ptr::null(), |s| s.as_ptr());
             } else {
                 return coloridx_to_name(
                     (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
@@ -428,8 +435,9 @@ pub unsafe extern "C" fn highlight_color(
                     (*((*highlight_ga.ptr()).ga_data as *mut HlGroup)
                         .offset((id - 1 as ::core::ffi::c_int) as isize))
                     .sg_rgb_bg as ::core::ffi::c_int,
-                    name.ptr() as *mut ::core::ffi::c_char,
-                );
+                    &mut *HEXBUF.ptr(),
+                )
+                .map_or(::core::ptr::null(), |s| s.as_ptr());
             }
         }
         if font as ::core::ffi::c_int != 0 || sp as ::core::ffi::c_int != 0 {

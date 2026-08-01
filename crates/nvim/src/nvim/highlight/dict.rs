@@ -601,11 +601,11 @@ unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: *mut Error) -
         if str.size == 0 || strcasecmp(str.data, c"NONE".as_ptr()) == 0 {
             return -1;
         }
+        let name = CStr::from_ptr(str.data);
         let color = if rgb {
-            let mut dummy: c_int = 0;
-            name_to_color(str.data, &raw mut dummy) as int32_t
+            name_to_color(name).0 as int32_t
         } else {
-            name_to_ctermcolor(str.data)
+            name_to_ctermcolor(name)
         };
         if color < 0 {
             api_err_invalid(err, c"highlight color".as_ptr(), str.data, 0, true);

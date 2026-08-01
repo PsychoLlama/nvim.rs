@@ -59,7 +59,7 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             ::core::ptr::null::<::core::ffi::c_char>(),
             b"gui\0".as_ptr() as *const ::core::ffi::c_char,
         );
-        let mut hexbuf: [::core::ffi::c_char; 8] = [0; 8];
+        let mut hexbuf: HexBuf = [0; 8];
         didh = highlight_list_arg(
             id,
             didh,
@@ -68,8 +68,9 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             coloridx_to_name(
                 (*sgp).sg_rgb_fg_idx,
                 (*sgp).sg_rgb_fg as ::core::ffi::c_int,
-                &raw mut hexbuf as *mut ::core::ffi::c_char,
-            ),
+                &mut hexbuf,
+            )
+            .map_or(::core::ptr::null(), |s| s.as_ptr()),
             b"guifg\0".as_ptr() as *const ::core::ffi::c_char,
         );
         didh = highlight_list_arg(
@@ -80,8 +81,9 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             coloridx_to_name(
                 (*sgp).sg_rgb_bg_idx,
                 (*sgp).sg_rgb_bg as ::core::ffi::c_int,
-                &raw mut hexbuf as *mut ::core::ffi::c_char,
-            ),
+                &mut hexbuf,
+            )
+            .map_or(::core::ptr::null(), |s| s.as_ptr()),
             b"guibg\0".as_ptr() as *const ::core::ffi::c_char,
         );
         didh = highlight_list_arg(
@@ -92,8 +94,9 @@ pub(crate) unsafe extern "C" fn highlight_list_one(id: ::core::ffi::c_int) {
             coloridx_to_name(
                 (*sgp).sg_rgb_sp_idx,
                 (*sgp).sg_rgb_sp as ::core::ffi::c_int,
-                &raw mut hexbuf as *mut ::core::ffi::c_char,
-            ),
+                &mut hexbuf,
+            )
+            .map_or(::core::ptr::null(), |s| s.as_ptr()),
             b"guisp\0".as_ptr() as *const ::core::ffi::c_char,
         );
         didh = highlight_list_arg(

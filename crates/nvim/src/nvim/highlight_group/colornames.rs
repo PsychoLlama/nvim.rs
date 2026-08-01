@@ -1,29 +1,39 @@
 //! The named RGB colours, and the lookup both directions.
 //!
-//! `color_name_table` is X11's `rgb.txt`, sorted, and is what turns
+//! [`COLOR_NAMES`] is X11's `rgb.txt`, sorted by name, and is what turns
 //! `guifg=AliceBlue` into a number ([`name_to_color`], a binary search) and
 //! a number back into the name `:highlight` prints ([`coloridx_to_name`]).
 //! A group stores the table index, not just the value, so the name it was
 //! given survives the round trip.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::cmp::Ordering;
+use core::ffi::{CStr, c_int};
 
-/// One X11 colour-table entry. `color_name_table_T` holds a `*mut c_char`
-/// because the C table did; nothing writes through it.
-pub(crate) const fn color_entry(
-    name: &'static ::core::ffi::CStr,
-    color: RgbValue,
-) -> color_name_table_T {
-    color_name_table_T {
-        name: name.as_ptr().cast_mut(),
-        color,
-    }
+use crate::src::nvim::main::{normal_bg, normal_fg};
+use crate::src::nvim::types::RgbValue;
+
+use super::{kColorIdxBg, kColorIdxFg, kColorIdxHex, kColorIdxNone};
+
+/// One entry of X11's colour table.
+pub struct ColorName {
+    pub name: &'static CStr,
+    pub color: RgbValue,
 }
 
-pub static color_name_table: GlobalCell<[color_name_table_T; 708]> = GlobalCell::new([
+const fn color_entry(name: &'static CStr, color: RgbValue) -> ColorName {
+    ColorName { name, color }
+}
+
+/// The buffer [`coloridx_to_name`] formats a hex colour into: `#rrggbb` plus
+/// its terminator.
+pub type HexBuf = [u8; 8];
+
+/// `rgb.txt`, sorted by name — [`name_to_color`]'s binary search depends on
+/// that order. Upstream carries a trailing `{ NULL, 0 }` sentinel, which no
+/// reader here needs: both walk the length instead.
+pub static COLOR_NAMES: [ColorName; 707] = [
     color_entry(c"AliceBlue", 0xf0f8ff),
     color_entry(c"AntiqueWhite", 0xfaebd7),
     color_entry(c"AntiqueWhite1", 0xffefdb),
@@ -731,129 +741,108 @@ pub static color_name_table: GlobalCell<[color_name_table_T; 708]> = GlobalCell:
     color_entry(c"Yellow3", 0xcdcd00),
     color_entry(c"Yellow4", 0x8b8b00),
     color_entry(c"YellowGreen", 0x9acd32),
-    color_name_table_T {
-        name: ::core::ptr::null_mut(),
-        color: 0,
-    },
-]);
+];
 
-pub unsafe extern "C" fn name_to_color(
-    mut name: *const ::core::ffi::c_char,
-    mut idx: *mut ::core::ffi::c_int,
-) -> RgbValue {
-    unsafe {
-        if *name.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '#' as ::core::ffi::c_int
-            && *(*__ctype_b_loc()).offset(*name.offset(1 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-            && *(*__ctype_b_loc()).offset(*name.offset(2 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-            && *(*__ctype_b_loc()).offset(*name.offset(3 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-            && *(*__ctype_b_loc()).offset(*name.offset(4 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-            && *(*__ctype_b_loc()).offset(*name.offset(5 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-            && *(*__ctype_b_loc()).offset(*name.offset(6 as ::core::ffi::c_int as isize) as uint8_t
-                as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                & _ISxdigit as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                != 0
-            && *name.offset(7 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == NUL
-        {
-            *idx = kColorIdxHex as ::core::ffi::c_int;
-            return strtol(
-                name.offset(1 as ::core::ffi::c_int as isize),
-                ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                16 as ::core::ffi::c_int,
-            ) as RgbValue;
-        } else if strcasecmp(
-            name as *mut ::core::ffi::c_char,
-            b"bg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        ) == 0
-            || strcasecmp(
-                name as *mut ::core::ffi::c_char,
-                b"background\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            ) == 0
-        {
-            *idx = kColorIdxBg as ::core::ffi::c_int;
-            return normal_bg.get();
-        } else if strcasecmp(
-            name as *mut ::core::ffi::c_char,
-            b"fg\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-        ) == 0
-            || strcasecmp(
-                name as *mut ::core::ffi::c_char,
-                b"foreground\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            ) == 0
-        {
-            *idx = kColorIdxFg as ::core::ffi::c_int;
-            return normal_fg.get();
+const HEX: &[u8; 16] = b"0123456789abcdef";
+
+/// `strcasecmp` over two NUL-terminated names.
+///
+/// ASCII folding only, which is what `strcasecmp` does for these: every
+/// table entry is ASCII, and in the C locale `tolower` is the identity on
+/// bytes above 0x7f.
+fn casecmp(a: &CStr, b: &CStr) -> Ordering {
+    let (a, b) = (a.to_bytes(), b.to_bytes());
+    let mut i = 0;
+    while i < a.len() && i < b.len() {
+        let (x, y) = (a[i].to_ascii_lowercase(), b[i].to_ascii_lowercase());
+        if x != y {
+            return x.cmp(&y);
         }
-        let mut lo: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut hi: ::core::ffi::c_int = ::core::mem::size_of::<[color_name_table_T; 708]>()
-            .wrapping_div(::core::mem::size_of::<color_name_table_T>())
-            .wrapping_div(
-                (::core::mem::size_of::<[color_name_table_T; 708]>()
-                    .wrapping_rem(::core::mem::size_of::<color_name_table_T>())
-                    == 0) as ::core::ffi::c_int as usize,
-            )
-            .wrapping_sub(1 as usize)
-            as ::core::ffi::c_int;
-        while lo < hi {
-            let mut m: ::core::ffi::c_int = (lo + hi) / 2 as ::core::ffi::c_int;
-            let mut cmp: ::core::ffi::c_int = strcasecmp(
-                name as *mut ::core::ffi::c_char,
-                (*color_name_table.ptr())[m as usize].name,
-            );
-            if cmp < 0 as ::core::ffi::c_int {
-                hi = m;
-            } else if cmp > 0 as ::core::ffi::c_int {
-                lo = m + 1 as ::core::ffi::c_int;
-            } else {
-                *idx = m;
-                return (*color_name_table.ptr())[m as usize].color;
-            }
-        }
-        *idx = kColorIdxNone as ::core::ffi::c_int;
-        return -1 as RgbValue;
+        i += 1;
     }
+    // A prefix compares less: the shorter name's NUL is below any byte.
+    a.len().cmp(&b.len())
 }
 
-pub unsafe extern "C" fn coloridx_to_name(
-    mut idx: ::core::ffi::c_int,
-    mut val: ::core::ffi::c_int,
-    mut hexbuf: *mut ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
-    unsafe {
-        if idx >= 0 as ::core::ffi::c_int {
-            return (*color_name_table.ptr())[idx as usize].name;
+/// Six hex digits and nothing else, as `#rrggbb` requires.
+fn parse_hex6(digits: &[u8]) -> Option<RgbValue> {
+    if digits.len() != 6 {
+        return None;
+    }
+    let mut value: RgbValue = 0;
+    for &byte in digits {
+        value = value * 16 + RgbValue::from((byte as char).to_digit(16)? as u8);
+    }
+    Some(value)
+}
+
+/// The colour `name` means, and the `kColorIdx*` value (or table index) that
+/// records where it came from.
+///
+/// Answers `-1` for a name that is neither a `#rrggbb` literal, nor one of
+/// the four aliases for the `Normal` colours, nor in [`COLOR_NAMES`].
+pub fn name_to_color(name: &CStr) -> (RgbValue, c_int) {
+    if let Some(digits) = name.to_bytes().strip_prefix(b"#")
+        && let Some(value) = parse_hex6(digits)
+    {
+        return (value, kColorIdxHex);
+    }
+    for (alias, idx, value) in [
+        (c"bg", kColorIdxBg, &normal_bg),
+        (c"background", kColorIdxBg, &normal_bg),
+        (c"fg", kColorIdxFg, &normal_fg),
+        (c"foreground", kColorIdxFg, &normal_fg),
+    ] {
+        if casecmp(name, alias) == Ordering::Equal {
+            return (value.get(), idx);
         }
-        match idx {
-            -1 => return ::core::ptr::null::<::core::ffi::c_char>(),
-            -3 => return b"fg\0".as_ptr() as *const ::core::ffi::c_char,
-            -4 => return b"bg\0".as_ptr() as *const ::core::ffi::c_char,
-            -2 => {
-                snprintf(
-                    hexbuf as *mut ::core::ffi::c_char,
-                    (7 as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t,
-                    b"#%06x\0".as_ptr() as *const ::core::ffi::c_char,
-                    val,
-                );
-                return hexbuf as *const ::core::ffi::c_char;
-            }
-            _ => {
-                abort();
-            }
-        };
+    }
+
+    // Upstream's exact search: it stops at `lo == hi` without looking at that
+    // last candidate, so the final entry is only ever reached as a midpoint.
+    let mut lo = 0;
+    let mut hi = COLOR_NAMES.len();
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        match casecmp(name, COLOR_NAMES[mid].name) {
+            Ordering::Less => hi = mid,
+            Ordering::Greater => lo = mid + 1,
+            Ordering::Equal => return (COLOR_NAMES[mid].color, mid as c_int),
+        }
+    }
+    (-1, kColorIdxNone)
+}
+
+/// The name to print for a colour recorded as `idx` with value `val`.
+///
+/// `None` is "this colour is not set". A `kColorIdxHex` colour is formatted
+/// into `hexbuf`, which is why the answer borrows it.
+///
+/// # Panics
+/// On an `idx` that is neither a table index nor one of the four
+/// `kColorIdx*` values — upstream called `abort()` in the same place.
+pub fn coloridx_to_name(idx: c_int, val: c_int, hexbuf: &mut HexBuf) -> Option<&CStr> {
+    if idx >= 0 {
+        return Some(COLOR_NAMES[idx as usize].name);
+    }
+    match idx {
+        kColorIdxNone => None,
+        kColorIdxFg => Some(c"fg"),
+        kColorIdxBg => Some(c"bg"),
+        kColorIdxHex => {
+            let [r, g, b] = [val >> 16 & 0xff, val >> 8 & 0xff, val & 0xff];
+            *hexbuf = [
+                b'#',
+                HEX[(r >> 4) as usize],
+                HEX[(r & 0xf) as usize],
+                HEX[(g >> 4) as usize],
+                HEX[(g & 0xf) as usize],
+                HEX[(b >> 4) as usize],
+                HEX[(b & 0xf) as usize],
+                0,
+            ];
+            Some(CStr::from_bytes_with_nul(hexbuf).expect("NUL-terminated"))
+        }
+        _ => panic!("colour index {idx}"),
     }
 }

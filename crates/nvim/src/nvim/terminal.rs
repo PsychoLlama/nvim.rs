@@ -90,7 +90,7 @@ use crate::src::nvim::vterm::vterm::{
     VTERM_PROP_CURSORSHAPE_UNDERLINE, vterm_free, vterm_get_size, vterm_new,
     vterm_output_set_callback, vterm_set_size, vterm_set_utf8,
 };
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use scrollback::{fetch_cell, refresh_scrollback, term_may_alloc_scrollback};
 
@@ -342,8 +342,7 @@ pub unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
             if name.is_null() {
                 continue;
             }
-            let mut dummy: c_int = 0;
-            let rgb = name_to_color(name, &raw mut dummy);
+            let rgb = name_to_color(CStr::from_ptr(name)).0;
             xfree(name as *mut c_void);
             if rgb == -1 as RgbValue {
                 continue;

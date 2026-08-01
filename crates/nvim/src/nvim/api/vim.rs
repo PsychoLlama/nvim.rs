@@ -47,7 +47,7 @@ use crate::src::nvim::highlight::{
     hl_ns_get_attrs, ns_hl_def, win_check_ns_hl,
 };
 use crate::src::nvim::highlight_group::{
-    HLF_CLN, HLF_CLS, HLF_LNA, HLF_LNB, HLF_N, HLF_NONE, HLF_SC, color_name_table, name_to_color,
+    COLOR_NAMES, HLF_CLN, HLF_CLS, HLF_LNA, HLF_LNB, HLF_N, HLF_NONE, HLF_SC, name_to_color,
     ns_get_hl_defs, syn_check_group, syn_id2name,
 };
 use crate::src::nvim::insexpand::get_cot_flags;
@@ -2293,34 +2293,23 @@ pub unsafe extern "C" fn nvim_put(
     try_leave(&raw mut tstate, err);
 }
 pub unsafe extern "C" fn nvim_get_color_by_name(mut name: String_0) -> Integer {
-    let mut dummy: ::core::ffi::c_int = 0;
-    return name_to_color(name.data, &raw mut dummy) as Integer;
+    // An API string is NUL-terminated.
+    return name_to_color(::core::ffi::CStr::from_ptr(name.data)).0 as Integer;
 }
 pub unsafe extern "C" fn nvim_get_color_map(mut arena: *mut Arena) -> Dict {
-    let mut colors: Dict = arena_dict(
-        arena,
-        ::core::mem::size_of::<[color_name_table_T; 708]>()
-            .wrapping_div(::core::mem::size_of::<color_name_table_T>())
-            .wrapping_div(
-                (::core::mem::size_of::<[color_name_table_T; 708]>()
-                    .wrapping_rem(::core::mem::size_of::<color_name_table_T>())
-                    == 0) as ::core::ffi::c_int as size_t,
-            ),
-    );
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while !(*color_name_table.ptr())[i as usize].name.is_null() {
+    let mut colors: Dict = arena_dict(arena, COLOR_NAMES.len() as size_t);
+    for entry in &COLOR_NAMES {
         let c2rust_fresh9 = colors.size;
         colors.size = colors.size.wrapping_add(1);
         *colors.items.offset(c2rust_fresh9 as isize) = key_value_pair {
-            key: cstr_as_string((*color_name_table.ptr())[i as usize].name),
+            key: cstr_as_string(entry.name.as_ptr()),
             value: object {
                 type_0: kObjectTypeInteger,
                 data: C2Rust_Unnamed {
-                    integer: (*color_name_table.ptr())[i as usize].color as Integer,
+                    integer: entry.color as Integer,
                 },
             },
         };
-        i += 1;
     }
     return colors;
 }

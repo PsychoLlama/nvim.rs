@@ -36,8 +36,8 @@ use crate::src::nvim::message::{
 use crate::src::nvim::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
 use crate::src::nvim::options::kOptBackground;
 use crate::src::nvim::os::libc::{
-    __assert_fail, __ctype_b_loc, abort, atoi, gettext, memcmp, memcpy, memmove, memset, snprintf,
-    strcasecmp, strchr, strcmp, strlen, strncasecmp, strncmp, strtol,
+    __assert_fail, abort, atoi, gettext, memcmp, memcpy, memmove, memset, snprintf, strcasecmp,
+    strchr, strcmp, strlen, strncasecmp, strncmp, strtol,
 };
 use crate::src::nvim::os::time::os_delay;
 use crate::src::nvim::runtime::{exestack, source_runtime_vim_lua};
@@ -47,10 +47,9 @@ use crate::src::nvim::types::ui::{kUILinegrid, kUIMessages};
 use crate::src::nvim::types::{
     Arena, Boolean, Dict, Error, HlAttrs, Integer, KeyDict_get_highlight, KeyDict_highlight,
     KeyValuePair, Map_cstr_t_int, MapHash, NS, Object, OptInt, OptVal, OptValData, OptValType,
-    RgbValue, Set_cstr_t, TriState, color_name_table_T, cstr_t, estack_T, expand_T, garray_T,
-    int16_t, int32_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeNil, kObjectTypeString,
-    key_value_pair, object, object_data as C2Rust_Unnamed_0, sctx_T, size_t, uint8_t, uint32_t,
-    uint64_t,
+    RgbValue, Set_cstr_t, TriState, cstr_t, estack_T, expand_T, garray_T, int16_t, int32_t,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeNil, kObjectTypeString, key_value_pair, object,
+    object_data as C2Rust_Unnamed_0, sctx_T, size_t, uint8_t, uint32_t, uint64_t,
 };
 use crate::src::nvim::ui::{
     ui_call_hl_group_set, ui_default_colors_set, ui_flush, ui_has, ui_mode_info_set, ui_refresh,

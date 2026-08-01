@@ -112,10 +112,10 @@ pub unsafe extern "C" fn set_hl_group(
                     == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
                     && cattrs[j as usize].name.data.string.size != 0
                 {
-                    name_to_color(
+                    *cattrs[j as usize].dest = name_to_color(::core::ffi::CStr::from_ptr(
                         cattrs[j as usize].name.data.string.data,
-                        cattrs[j as usize].dest,
-                    );
+                    ))
+                    .1;
                 } else {
                     *cattrs[j as usize].dest = kColorIdxHex as ::core::ffi::c_int;
                 }

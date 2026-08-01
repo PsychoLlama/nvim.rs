@@ -33,7 +33,9 @@ pub(crate) unsafe extern "C" fn set_gui_color(
         let mut old_idx: ::core::ffi::c_int = *color_idx;
         if strcmp(arg, b"NONE\0".as_ptr() as *const ::core::ffi::c_char) != 0 as ::core::ffi::c_int
         {
-            *color = name_to_color(arg, color_idx);
+            let (rgb, idx) = name_to_color(::core::ffi::CStr::from_ptr(arg));
+            *color = rgb;
+            *color_idx = idx;
         } else {
             *color = -1 as ::core::ffi::c_int as RgbValue;
             *color_idx = kColorIdxNone as ::core::ffi::c_int;
@@ -596,77 +598,15 @@ pub unsafe extern "C" fn do_highlight(
                                                         break;
                                                     }
                                                 } else {
-                                                    let mut off_0: ::core::ffi::c_int =
-                                                        if (*(&raw mut arg
-                                                            as *mut ::core::ffi::c_char)
-                                                            as ::core::ffi::c_int)
-                                                            < 'a' as ::core::ffi::c_int
-                                                            || *(&raw mut arg
-                                                                as *mut ::core::ffi::c_char)
-                                                                as ::core::ffi::c_int
-                                                                > 'z' as ::core::ffi::c_int
-                                                        {
-                                                            *(&raw mut arg
-                                                                as *mut ::core::ffi::c_char)
-                                                                as ::core::ffi::c_int
-                                                        } else {
-                                                            *(&raw mut arg
-                                                                as *mut ::core::ffi::c_char)
-                                                                as ::core::ffi::c_int
-                                                                - ('a' as ::core::ffi::c_int
-                                                                    - 'A' as ::core::ffi::c_int)
-                                                        };
-                                                    let mut i_1: ::core::ffi::c_int = 0;
-                                                    i_1 = ::core::mem::size_of::<
-                                                        [*mut ::core::ffi::c_char; 28],
-                                                    >(
-                                                    )
-                                                    .wrapping_div(::core::mem::size_of::<
-                                                        *mut ::core::ffi::c_char,
-                                                    >(
-                                                    ))
-                                                    .wrapping_div(
-                                                        (::core::mem::size_of::<
-                                                            [*mut ::core::ffi::c_char; 28],
-                                                        >(
-                                                        )
-                                                        .wrapping_rem(::core::mem::size_of::<
-                                                            *mut ::core::ffi::c_char,
-                                                        >(
-                                                        )) == 0)
-                                                            as ::core::ffi::c_int
-                                                            as usize,
-                                                    )
-                                                        as ::core::ffi::c_int;
-                                                    loop {
-                                                        i_1 -= 1;
-                                                        if i_1 < 0 as ::core::ffi::c_int {
-                                                            break;
-                                                        }
-                                                        if off_0
-                                                            == *(*color_names.ptr())[i_1 as usize]
-                                                                .offset(
-                                                                    0 as ::core::ffi::c_int
-                                                                        as isize,
-                                                                )
-                                                                as ::core::ffi::c_int
-                                                            && strcasecmp(
-                                                                (&raw mut arg
-                                                                    as *mut ::core::ffi::c_char)
-                                                                    .offset(
-                                                                        1 as ::core::ffi::c_int
-                                                                            as isize,
-                                                                    ),
-                                                                (*color_names.ptr())[i_1 as usize]
-                                                                    .offset(
-                                                                        1 as ::core::ffi::c_int
-                                                                            as isize,
-                                                                    ),
-                                                            ) == 0 as ::core::ffi::c_int
-                                                        {
-                                                            break;
-                                                        }
-                                                    }
+                                                    let i_1 = match cterm_color_index(
+                                                        ::core::ffi::CStr::from_ptr(
+                                                            &raw const arg
+                                                                as *const ::core::ffi::c_char,
+                                                        ),
+                                                    ) {
+                                                        Some(i) => i as ::core::ffi::c_int,
+                                                        None => -1,
+                                                    };
                                                     if i_1 < 0 as ::core::ffi::c_int {
                                                         semsg(
                                                         gettext(
@@ -678,14 +618,13 @@ pub unsafe extern "C" fn do_highlight(
                                                         error = true_0 != 0;
                                                         break;
                                                     } else {
-                                                        let mut bold: TriState = kNone;
-                                                        color = lookup_color(
-                                                            i_1,
+                                                        let (c, bold) = lookup_color(
+                                                            i_1 as usize,
                                                             key[5 as ::core::ffi::c_int as usize]
                                                                 as ::core::ffi::c_int
                                                                 == 'F' as ::core::ffi::c_int,
-                                                            &raw mut bold,
                                                         );
+                                                        color = c;
                                                         if bold as ::core::ffi::c_int
                                                             == kTrue as ::core::ffi::c_int
                                                         {

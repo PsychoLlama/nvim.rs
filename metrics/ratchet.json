@@ -1,6 +1,6 @@
 {
   "internal_exports": 47,
-  "files_without_forbid_unsafe": 584,
+  "files_without_forbid_unsafe": 582,
   "files_without_deny_unsafe_op": 210,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -53,7 +53,7 @@
     "crates/nvim/src/nvim/api/ui/line.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/api/ui/packer.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/api/ui/redraw.rs": {"unsafe": 9},
-    "crates/nvim/src/nvim/api/vim.rs": {"lines": 3906, "unsafe": 87},
+    "crates/nvim/src/nvim/api/vim.rs": {"lines": 3895, "unsafe": 87},
     "crates/nvim/src/nvim/api/vimscript.rs": {"lines": 2129, "unsafe": 8},
     "crates/nvim/src/nvim/api/win_config.rs": {"lines": 3457, "unsafe": 20},
     "crates/nvim/src/nvim/api/window.rs": {"unsafe": 20},
@@ -230,9 +230,7 @@
     "crates/nvim/src/nvim/highlight/namespace.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/highlight_group.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/highlight_group/apply.rs": {"unsafe": 1},
-    "crates/nvim/src/nvim/highlight_group/colornames.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/highlight_group/command.rs": {"unsafe": 2},
-    "crates/nvim/src/nvim/highlight_group/cterm.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/highlight_group/defaults.rs": {"no_mangle": 1, "unsafe": 3},
     "crates/nvim/src/nvim/highlight_group/list.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/highlight_group/query.rs": {"unsafe": 4},

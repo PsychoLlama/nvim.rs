@@ -1,241 +1,130 @@
-//! The sixteen cterm colour names, per `'t_Co'`.
+//! The cterm colour names, per `'t_Co'`.
 //!
 //! `ctermfg=`/`ctermbg=` accept a small set of names rather than the RGB
 //! table, and which number each one means depends on how many colours the
 //! terminal claims ([`lookup_color`]). The 8-colour case also has to fake
 //! the light half by setting `bold`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{CStr, c_int};
 
-pub(crate) static color_names: GlobalCell<[*mut ::core::ffi::c_char; 28]> = GlobalCell::new([
-    c"Black".as_ptr().cast_mut(),
-    c"DarkBlue".as_ptr().cast_mut(),
-    c"DarkGreen".as_ptr().cast_mut(),
-    c"DarkCyan".as_ptr().cast_mut(),
-    c"DarkRed".as_ptr().cast_mut(),
-    c"DarkMagenta".as_ptr().cast_mut(),
-    c"Brown".as_ptr().cast_mut(),
-    c"DarkYellow".as_ptr().cast_mut(),
-    c"Gray".as_ptr().cast_mut(),
-    c"Grey".as_ptr().cast_mut(),
-    c"LightGray".as_ptr().cast_mut(),
-    c"LightGrey".as_ptr().cast_mut(),
-    c"DarkGray".as_ptr().cast_mut(),
-    c"DarkGrey".as_ptr().cast_mut(),
-    c"Blue".as_ptr().cast_mut(),
-    c"LightBlue".as_ptr().cast_mut(),
-    c"Green".as_ptr().cast_mut(),
-    c"LightGreen".as_ptr().cast_mut(),
-    c"Cyan".as_ptr().cast_mut(),
-    c"LightCyan".as_ptr().cast_mut(),
-    c"Red".as_ptr().cast_mut(),
-    c"LightRed".as_ptr().cast_mut(),
-    c"Magenta".as_ptr().cast_mut(),
-    c"LightMagenta".as_ptr().cast_mut(),
-    c"Yellow".as_ptr().cast_mut(),
-    c"LightYellow".as_ptr().cast_mut(),
-    c"White".as_ptr().cast_mut(),
-    c"NONE".as_ptr().cast_mut(),
-]);
+use crate::src::nvim::main::t_colors;
+use crate::src::nvim::types::TriState;
 
-pub(crate) static color_numbers_16: GlobalCell<[::core::ffi::c_int; 28]> = GlobalCell::new([
-    0 as ::core::ffi::c_int,
-    1 as ::core::ffi::c_int,
-    2 as ::core::ffi::c_int,
-    3 as ::core::ffi::c_int,
-    4 as ::core::ffi::c_int,
-    5 as ::core::ffi::c_int,
-    6 as ::core::ffi::c_int,
-    6 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    8 as ::core::ffi::c_int,
-    8 as ::core::ffi::c_int,
-    9 as ::core::ffi::c_int,
-    9 as ::core::ffi::c_int,
-    10 as ::core::ffi::c_int,
-    10 as ::core::ffi::c_int,
-    11 as ::core::ffi::c_int,
-    11 as ::core::ffi::c_int,
-    12 as ::core::ffi::c_int,
-    12 as ::core::ffi::c_int,
-    13 as ::core::ffi::c_int,
-    13 as ::core::ffi::c_int,
-    14 as ::core::ffi::c_int,
-    14 as ::core::ffi::c_int,
-    15 as ::core::ffi::c_int,
-    -1 as ::core::ffi::c_int,
-]);
+use super::{kFalse, kNone, kTrue};
 
-pub(crate) static color_numbers_88: GlobalCell<[::core::ffi::c_int; 28]> = GlobalCell::new([
-    0 as ::core::ffi::c_int,
-    4 as ::core::ffi::c_int,
-    2 as ::core::ffi::c_int,
-    6 as ::core::ffi::c_int,
-    1 as ::core::ffi::c_int,
-    5 as ::core::ffi::c_int,
-    32 as ::core::ffi::c_int,
-    72 as ::core::ffi::c_int,
-    84 as ::core::ffi::c_int,
-    84 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    82 as ::core::ffi::c_int,
-    82 as ::core::ffi::c_int,
-    12 as ::core::ffi::c_int,
-    43 as ::core::ffi::c_int,
-    10 as ::core::ffi::c_int,
-    61 as ::core::ffi::c_int,
-    14 as ::core::ffi::c_int,
-    63 as ::core::ffi::c_int,
-    9 as ::core::ffi::c_int,
-    74 as ::core::ffi::c_int,
-    13 as ::core::ffi::c_int,
-    75 as ::core::ffi::c_int,
-    11 as ::core::ffi::c_int,
-    78 as ::core::ffi::c_int,
-    15 as ::core::ffi::c_int,
-    -1 as ::core::ffi::c_int,
-]);
+/// The names `ctermfg=`/`ctermbg=` accept, in the order the number tables
+/// below are indexed. `NONE` is last and maps to -1 in every table.
+static COLOR_NAMES: [&CStr; 28] = [
+    c"Black",
+    c"DarkBlue",
+    c"DarkGreen",
+    c"DarkCyan",
+    c"DarkRed",
+    c"DarkMagenta",
+    c"Brown",
+    c"DarkYellow",
+    c"Gray",
+    c"Grey",
+    c"LightGray",
+    c"LightGrey",
+    c"DarkGray",
+    c"DarkGrey",
+    c"Blue",
+    c"LightBlue",
+    c"Green",
+    c"LightGreen",
+    c"Cyan",
+    c"LightCyan",
+    c"Red",
+    c"LightRed",
+    c"Magenta",
+    c"LightMagenta",
+    c"Yellow",
+    c"LightYellow",
+    c"White",
+    c"NONE",
+];
 
-pub(crate) static color_numbers_256: GlobalCell<[::core::ffi::c_int; 28]> = GlobalCell::new([
-    0 as ::core::ffi::c_int,
-    4 as ::core::ffi::c_int,
-    2 as ::core::ffi::c_int,
-    6 as ::core::ffi::c_int,
-    1 as ::core::ffi::c_int,
-    5 as ::core::ffi::c_int,
-    130 as ::core::ffi::c_int,
-    3 as ::core::ffi::c_int,
-    248 as ::core::ffi::c_int,
-    248 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    242 as ::core::ffi::c_int,
-    242 as ::core::ffi::c_int,
-    12 as ::core::ffi::c_int,
-    81 as ::core::ffi::c_int,
-    10 as ::core::ffi::c_int,
-    121 as ::core::ffi::c_int,
-    14 as ::core::ffi::c_int,
-    159 as ::core::ffi::c_int,
-    9 as ::core::ffi::c_int,
-    224 as ::core::ffi::c_int,
-    13 as ::core::ffi::c_int,
-    225 as ::core::ffi::c_int,
-    11 as ::core::ffi::c_int,
-    229 as ::core::ffi::c_int,
-    15 as ::core::ffi::c_int,
-    -1 as ::core::ffi::c_int,
-]);
+/// The number each name means on a 16-colour terminal. Also the validity
+/// test: a name whose entry here is negative is not a colour at all.
+static COLOR_NUMBERS_16: [c_int; 28] = [
+    0, 1, 2, 3, 4, 5, 6, 6, 7, 7, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, -1,
+];
 
-pub(crate) static color_numbers_8: GlobalCell<[::core::ffi::c_int; 28]> = GlobalCell::new([
-    0 as ::core::ffi::c_int,
-    4 as ::core::ffi::c_int,
-    2 as ::core::ffi::c_int,
-    6 as ::core::ffi::c_int,
-    1 as ::core::ffi::c_int,
-    5 as ::core::ffi::c_int,
-    3 as ::core::ffi::c_int,
-    3 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int,
-    0 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    0 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    4 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    4 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    2 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    2 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    6 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    6 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    1 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    1 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    5 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    5 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    3 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    3 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    7 as ::core::ffi::c_int + 8 as ::core::ffi::c_int,
-    -1 as ::core::ffi::c_int,
-]);
+/// xterm with 88 colours.
+static COLOR_NUMBERS_88: [c_int; 28] = [
+    0, 4, 2, 6, 1, 5, 32, 72, 84, 84, 7, 7, 82, 82, 12, 43, 10, 61, 14, 63, 9, 74, 13, 75, 11, 78,
+    15, -1,
+];
 
-pub(crate) unsafe extern "C" fn lookup_color(
-    idx: ::core::ffi::c_int,
-    foreground: bool,
-    boldp: *mut TriState,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut color: ::core::ffi::c_int = (*color_numbers_16.ptr())[idx as usize];
-        if color < 0 as ::core::ffi::c_int {
-            return -1 as ::core::ffi::c_int;
+/// xterm with 256 colours.
+static COLOR_NUMBERS_256: [c_int; 28] = [
+    0, 4, 2, 6, 1, 5, 130, 3, 248, 248, 7, 7, 242, 242, 12, 81, 10, 121, 14, 159, 9, 224, 13, 225,
+    11, 229, 15, -1,
+];
+
+/// Fewer than 16 colours: the light half of the palette is the dark half
+/// with bit 3 set (8, 12, 10, 14, 9, 13, 11, 15), which [`lookup_color`]
+/// turns into `bold` plus the dark colour.
+static COLOR_NUMBERS_8: [c_int; 28] = [
+    0, 4, 2, 6, 1, 5, 3, 3, 7, 7, 7, 7, 8, 8, 12, 12, 10, 10, 14, 14, 9, 9, 13, 13, 11, 11, 15, -1,
+];
+
+/// The index in [`COLOR_NAMES`] of a cterm colour name, case-insensitively.
+///
+/// Upstream compares the first byte against the uppercased first byte of the
+/// argument before calling `STRICMP` on the rest, "to reduce calls to
+/// STRICMP, it can be slow" — every table entry starts with an uppercase
+/// letter, so that is the same test as folding both sides.
+pub(crate) fn cterm_color_index(name: &CStr) -> Option<usize> {
+    let name = name.to_bytes();
+    let (&first, rest) = name.split_first()?;
+    let first = first.to_ascii_uppercase();
+    // Reverse order, as upstream; every name is distinct case-insensitively,
+    // so the direction cannot change which one is found.
+    (0..COLOR_NAMES.len()).rev().find(|&i| {
+        let entry = COLOR_NAMES[i].to_bytes();
+        entry[0] == first && entry[1..].eq_ignore_ascii_case(rest)
+    })
+}
+
+/// The cterm number for [`COLOR_NAMES`]`[idx]` on this terminal, and whether
+/// `bold` has to be turned on or off to get it.
+///
+/// Answers -1 for `NONE`, the one entry that is not a colour. `bold` is only
+/// decided for a foreground colour on an 8-colour terminal, where the light
+/// half of the palette is reached by making the dark half bold; every other
+/// case leaves it [`kNone`], meaning "don't touch it".
+pub(crate) fn lookup_color(idx: usize, foreground: bool) -> (c_int, TriState) {
+    // The _16 table doubles as the validity check.
+    if COLOR_NUMBERS_16[idx] < 0 {
+        return (-1, kNone);
+    }
+    match t_colors.get() {
+        8 => {
+            let color = COLOR_NUMBERS_8[idx];
+            let bold = if !foreground {
+                kNone
+            } else if color & 8 != 0 {
+                kTrue
+            } else {
+                kFalse
+            };
+            (color & 7, bold)
         }
-        if t_colors.get() == 8 as ::core::ffi::c_int {
-            color = (*color_numbers_8.ptr())[idx as usize];
-            if foreground {
-                if color & 8 as ::core::ffi::c_int != 0 {
-                    *boldp = kTrue;
-                } else {
-                    *boldp = kFalse;
-                }
-            }
-            color &= 7 as ::core::ffi::c_int;
-        } else if t_colors.get() == 16 as ::core::ffi::c_int {
-            color = (*color_numbers_8.ptr())[idx as usize];
-        } else if t_colors.get() == 88 as ::core::ffi::c_int {
-            color = (*color_numbers_88.ptr())[idx as usize];
-        } else if t_colors.get() >= 256 as ::core::ffi::c_int {
-            color = (*color_numbers_256.ptr())[idx as usize];
-        }
-        return color;
+        16 => (COLOR_NUMBERS_8[idx], kNone),
+        88 => (COLOR_NUMBERS_88[idx], kNone),
+        n if n >= 256 => (COLOR_NUMBERS_256[idx], kNone),
+        _ => (COLOR_NUMBERS_16[idx], kNone),
     }
 }
 
-pub unsafe extern "C" fn name_to_ctermcolor(
-    mut name: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut i: ::core::ffi::c_int = 0;
-        let mut off: ::core::ffi::c_int = if (*name as ::core::ffi::c_int)
-            < 'a' as ::core::ffi::c_int
-            || *name as ::core::ffi::c_int > 'z' as ::core::ffi::c_int
-        {
-            *name as ::core::ffi::c_int
-        } else {
-            *name as ::core::ffi::c_int - ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-        };
-        i = ::core::mem::size_of::<[*mut ::core::ffi::c_char; 28]>()
-            .wrapping_div(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-            .wrapping_div(
-                (::core::mem::size_of::<[*mut ::core::ffi::c_char; 28]>()
-                    .wrapping_rem(::core::mem::size_of::<*mut ::core::ffi::c_char>())
-                    == 0) as ::core::ffi::c_int as usize,
-            ) as ::core::ffi::c_int;
-        loop {
-            i -= 1;
-            if i < 0 as ::core::ffi::c_int {
-                break;
-            }
-            if off
-                == *(*color_names.ptr())[i as usize].offset(0 as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int
-                && strcasecmp(
-                    name.offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_char,
-                    (*color_names.ptr())[i as usize].offset(1 as ::core::ffi::c_int as isize),
-                ) == 0 as ::core::ffi::c_int
-            {
-                break;
-            }
-        }
-        if i < 0 as ::core::ffi::c_int {
-            return -1 as ::core::ffi::c_int;
-        }
-        let mut bold: TriState = kNone;
-        return lookup_color(i, false_0 != 0, &raw mut bold);
+/// The cterm number a colour name means, or -1 if it is not one.
+pub fn name_to_ctermcolor(name: &CStr) -> c_int {
+    match cterm_color_index(name) {
+        Some(idx) => lookup_color(idx, false).0,
+        None => -1,
     }
 }
