@@ -13,8 +13,7 @@ use crate::src::nvim::highlight_group::{
 use crate::src::nvim::lua::executor::nlua_call_ref;
 use crate::src::nvim::main::{
     curwin, highlight_attr, highlight_attr_last, hl_attr_active, hlf_names, must_redraw_pum,
-    need_highlight_changed, normal_bg, normal_fg, normal_sp, ns_hl_active, ns_hl_fast,
-    ns_hl_global, ns_hl_win, p_bg, p_pb,
+    need_highlight_changed, ns_hl_active, ns_hl_fast, ns_hl_global, ns_hl_win, p_pb,
 };
 use crate::src::nvim::map::{
     map_put_ref_ColorKey_ColorItem, map_put_ref_int_ptr_t, map_put_ref_uint64_t_int, mh_clear,
@@ -35,13 +34,16 @@ use crate::src::nvim::types::{
     RgbValue, Set_ColorKey, Set_HlEntry, Set_cstr_t, Set_int, Set_uint64_t, cstr_t, int16_t,
     int32_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeNil,
     kObjectTypeString, key_value_pair, object, object_data as C2Rust_Unnamed, ptr_t, size_t,
-    uint8_t, uint32_t, uint64_t, win_T,
+    uint32_t, uint64_t, win_T,
 };
 use crate::src::nvim::ui::ui_call_hl_attr_define;
 
 // Split out for size; the rest of the tree calls all of it as `highlight::*`.
+pub mod blend;
+pub mod cache;
 pub mod dict;
 
+pub use blend::{hl_blend_attrs, hl_invalidate_blends};
 pub use dict::{HLATTRS_DICT_SIZE, dict2hlattrs, hl_get_attr_by_id, hlattrs2dict};
 
 /// The attribute bits an `HlAttrs`' `rgb_ae_attr`/`cterm_ae_attr` carry.
@@ -219,8 +221,6 @@ static attr_entries: GlobalCell<Set_HlEntry> = GlobalCell::new(Set_HlEntry {
     keys: ::core::ptr::null_mut::<HlEntry>(),
 });
 static combine_attr_entries: GlobalCell<Map_uint64_t_int> = GlobalCell::new(MAP_INIT);
-static blend_attr_entries: GlobalCell<Map_uint64_t_int> = GlobalCell::new(MAP_INIT);
-static blendthrough_attr_entries: GlobalCell<Map_uint64_t_int> = GlobalCell::new(MAP_INIT);
 static urls: GlobalCell<Set_cstr_t> = GlobalCell::new(Set_cstr_t {
     h: MAPHASH_INIT,
     keys: ::core::ptr::null_mut::<cstr_t>(),
@@ -870,8 +870,7 @@ pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
         mh_clear(&raw mut (*attr_entries.ptr()).h);
         highlight_init();
         mh_clear(&raw mut (*combine_attr_entries.ptr()).set.h);
-        mh_clear(&raw mut (*blend_attr_entries.ptr()).set.h);
-        mh_clear(&raw mut (*blendthrough_attr_entries.ptr()).set.h);
+        blend::clear_caches();
         mh_clear(&raw mut (*urls.ptr()).h);
         memset(
             highlight_attr_last.ptr() as *mut ::core::ffi::c_int as *mut ::core::ffi::c_void,
@@ -899,28 +898,7 @@ pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
         xfree(*ptr_);
         *ptr_ = NULL_0;
         let _ = *ptr_;
-        xfree((*blend_attr_entries.ptr()).set.keys as *mut ::core::ffi::c_void);
-        xfree((*blend_attr_entries.ptr()).set.h.hash as *mut ::core::ffi::c_void);
-        (*blend_attr_entries.ptr()).set = Set_uint64_t {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut::<uint64_t>(),
-        };
-        let mut ptr__0: *mut *mut ::core::ffi::c_void =
-            &raw mut (*blend_attr_entries.ptr()).values as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr__0);
-        *ptr__0 = NULL_0;
-        let _ = *ptr__0;
-        xfree((*blendthrough_attr_entries.ptr()).set.keys as *mut ::core::ffi::c_void);
-        xfree((*blendthrough_attr_entries.ptr()).set.h.hash as *mut ::core::ffi::c_void);
-        (*blendthrough_attr_entries.ptr()).set = Set_uint64_t {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut::<uint64_t>(),
-        };
-        let mut ptr__1: *mut *mut ::core::ffi::c_void =
-            &raw mut (*blendthrough_attr_entries.ptr()).values as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr__1);
-        *ptr__1 = NULL_0;
-        let _ = *ptr__1;
+        blend::clear_caches();
         xfree((*ns_hls.ptr()).set.keys as *mut ::core::ffi::c_void);
         xfree((*ns_hls.ptr()).set.h.hash as *mut ::core::ffi::c_void);
         (*ns_hls.ptr()).set = Set_ColorKey {
@@ -939,12 +917,6 @@ pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
             keys: ::core::ptr::null_mut::<cstr_t>(),
         });
     };
-}
-pub unsafe extern "C" fn hl_invalidate_blends() {
-    mh_clear(&raw mut (*blend_attr_entries.ptr()).set.h);
-    mh_clear(&raw mut (*blendthrough_attr_entries.ptr()).set.h);
-    highlight_changed();
-    update_window_hl(curwin.get(), true_0 != 0);
 }
 unsafe extern "C" fn hl_combine_ae(mut char_ae: int32_t, mut prim_ae: int32_t) -> int32_t {
     let mut char_ul: int32_t = char_ae & HL_UNDERLINE_MASK as int32_t;
@@ -1026,282 +998,6 @@ pub unsafe extern "C" fn hl_combine_attr(
         map_put_uint64_t_int(combine_attr_entries.ptr(), combine_tag, id);
     }
     return id;
-}
-unsafe extern "C" fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
-    if attrs.rgb_bg_color == -1 as RgbValue {
-        attrs.rgb_bg_color = normal_bg.get();
-    }
-    if attrs.rgb_fg_color == -1 as RgbValue {
-        attrs.rgb_fg_color = normal_fg.get();
-    }
-    if attrs.rgb_sp_color == -1 as RgbValue {
-        attrs.rgb_sp_color = normal_sp.get();
-    }
-    let mut dark_: bool = *p_bg.get() as ::core::ffi::c_int == 'd' as ::core::ffi::c_int;
-    attrs.rgb_fg_color = if attrs.rgb_fg_color != -1 as RgbValue {
-        attrs.rgb_fg_color
-    } else if dark_ as ::core::ffi::c_int != 0 {
-        0xffffff as RgbValue
-    } else {
-        0 as RgbValue
-    };
-    attrs.rgb_bg_color = if attrs.rgb_bg_color != -1 as RgbValue {
-        attrs.rgb_bg_color
-    } else if dark_ as ::core::ffi::c_int != 0 {
-        0 as RgbValue
-    } else {
-        0xffffff as RgbValue
-    };
-    attrs.rgb_sp_color = if attrs.rgb_sp_color != -1 as RgbValue {
-        attrs.rgb_sp_color
-    } else {
-        0xff0000 as RgbValue
-    };
-    if attrs.rgb_ae_attr & HL_INVERSE as int32_t != 0 {
-        let mut temp: ::core::ffi::c_int = attrs.rgb_bg_color as ::core::ffi::c_int;
-        attrs.rgb_bg_color = attrs.rgb_fg_color;
-        attrs.rgb_fg_color = temp as RgbValue;
-        attrs.rgb_ae_attr = (attrs.rgb_ae_attr as ::core::ffi::c_int & !(HL_INVERSE)) as int32_t;
-    }
-    return attrs;
-}
-pub unsafe extern "C" fn hl_blend_attrs(
-    mut back_attr: ::core::ffi::c_int,
-    mut front_attr: ::core::ffi::c_int,
-    mut through: *mut bool,
-) -> ::core::ffi::c_int {
-    if front_attr < 0 as ::core::ffi::c_int || back_attr < 0 as ::core::ffi::c_int {
-        return front_attr;
-    }
-    let mut fattrs_raw: HlAttrs = syn_attr2entry(front_attr);
-    let mut fattrs: HlAttrs = get_colors_force(fattrs_raw);
-    let mut ratio: ::core::ffi::c_int = fattrs.hl_blend as ::core::ffi::c_int;
-    if ratio <= 0 as ::core::ffi::c_int {
-        *through = false_0 != 0;
-        return front_attr;
-    }
-    let mut combine_tag: uint64_t = (back_attr as uint32_t as uint64_t) << 32 as ::core::ffi::c_int
-        | front_attr as uint32_t as uint64_t;
-    let mut map: *mut Map_uint64_t_int = if *through as ::core::ffi::c_int != 0 {
-        blendthrough_attr_entries.ptr()
-    } else {
-        blend_attr_entries.ptr()
-    };
-    let mut id: ::core::ffi::c_int = map_get_uint64_t_int(map, combine_tag);
-    if id > 0 as ::core::ffi::c_int {
-        return id;
-    }
-    let mut battrs_raw: HlAttrs = syn_attr2entry(back_attr);
-    let mut battrs: HlAttrs = get_colors_force(battrs_raw);
-    let mut cattrs: HlAttrs = HlAttrs {
-        rgb_ae_attr: 0,
-        cterm_ae_attr: 0,
-        rgb_fg_color: 0,
-        rgb_bg_color: 0,
-        rgb_sp_color: 0,
-        cterm_fg_color: 0,
-        cterm_bg_color: 0,
-        hl_blend: 0,
-        url: 0,
-    };
-    if *through {
-        cattrs = battrs;
-        cattrs.rgb_fg_color = rgb_blend(
-            ratio,
-            battrs.rgb_fg_color as ::core::ffi::c_int,
-            fattrs.rgb_bg_color as ::core::ffi::c_int,
-        ) as RgbValue;
-        if cattrs.rgb_ae_attr & HL_UNDERLINE_MASK as int32_t != 0
-            && battrs_raw.rgb_sp_color != -1 as RgbValue
-        {
-            cattrs.rgb_sp_color = rgb_blend(
-                ratio,
-                battrs.rgb_sp_color as ::core::ffi::c_int,
-                fattrs.rgb_bg_color as ::core::ffi::c_int,
-            ) as RgbValue;
-        } else {
-            cattrs.rgb_sp_color = -1 as ::core::ffi::c_int as RgbValue;
-        }
-        cattrs.cterm_bg_color = fattrs.cterm_bg_color;
-        cattrs.cterm_fg_color =
-            cterm_blend(ratio, battrs.cterm_fg_color, fattrs.cterm_bg_color) as int16_t;
-        cattrs.rgb_ae_attr = (cattrs.rgb_ae_attr as ::core::ffi::c_int
-            & !(HL_FG_INDEXED | HL_BG_INDEXED)) as int32_t;
-    } else {
-        cattrs = fattrs;
-        cattrs.rgb_fg_color = rgb_blend(
-            ratio / 2 as ::core::ffi::c_int,
-            battrs.rgb_fg_color as ::core::ffi::c_int,
-            fattrs.rgb_fg_color as ::core::ffi::c_int,
-        ) as RgbValue;
-        if cattrs.rgb_ae_attr & HL_UNDERLINE_MASK as int32_t != 0 {
-            cattrs.rgb_sp_color = rgb_blend(
-                ratio / 2 as ::core::ffi::c_int,
-                battrs.rgb_bg_color as ::core::ffi::c_int,
-                fattrs.rgb_sp_color as ::core::ffi::c_int,
-            ) as RgbValue;
-        } else {
-            cattrs.rgb_sp_color = -1 as ::core::ffi::c_int as RgbValue;
-        }
-        cattrs.rgb_ae_attr = (cattrs.rgb_ae_attr as ::core::ffi::c_int
-            & !(HL_FG_INDEXED | HL_BG_INDEXED)) as int32_t;
-    }
-    if ratio == 100 as ::core::ffi::c_int && battrs_raw.rgb_bg_color == -1 as RgbValue {
-        cattrs.rgb_bg_color = -1 as ::core::ffi::c_int as RgbValue;
-    } else {
-        cattrs.rgb_bg_color = (if battrs_raw.rgb_bg_color == -1 as RgbValue
-            && fattrs_raw.rgb_bg_color == -1 as RgbValue
-        {
-            -1 as ::core::ffi::c_int
-        } else {
-            rgb_blend(
-                ratio,
-                battrs.rgb_bg_color as ::core::ffi::c_int,
-                fattrs.rgb_bg_color as ::core::ffi::c_int,
-            )
-        }) as RgbValue;
-    }
-    cattrs.hl_blend = -1 as ::core::ffi::c_int as int32_t;
-    let mut kind: HlKind = (if *through as ::core::ffi::c_int != 0 {
-        kHlBlendThrough as ::core::ffi::c_int
-    } else {
-        kHlBlend as ::core::ffi::c_int
-    }) as HlKind;
-    id = get_attr_entry(HlEntry {
-        attr: cattrs,
-        kind: kind,
-        id1: back_attr,
-        id2: front_attr,
-        winid: 0,
-    });
-    if id > 0 as ::core::ffi::c_int {
-        map_put_uint64_t_int(map, combine_tag, id);
-    }
-    return id;
-}
-unsafe extern "C" fn rgb_blend(
-    mut ratio: ::core::ffi::c_int,
-    mut rgb1: ::core::ffi::c_int,
-    mut rgb2: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut a: ::core::ffi::c_int = ratio;
-    let mut b: ::core::ffi::c_int = 100 as ::core::ffi::c_int - ratio;
-    let mut r1: ::core::ffi::c_int =
-        (rgb1 & 0xff0000 as ::core::ffi::c_int) >> 16 as ::core::ffi::c_int;
-    let mut g1: ::core::ffi::c_int =
-        (rgb1 & 0xff00 as ::core::ffi::c_int) >> 8 as ::core::ffi::c_int;
-    let mut b1: ::core::ffi::c_int = (rgb1 & 0xff as ::core::ffi::c_int) >> 0 as ::core::ffi::c_int;
-    let mut r2: ::core::ffi::c_int =
-        (rgb2 & 0xff0000 as ::core::ffi::c_int) >> 16 as ::core::ffi::c_int;
-    let mut g2: ::core::ffi::c_int =
-        (rgb2 & 0xff00 as ::core::ffi::c_int) >> 8 as ::core::ffi::c_int;
-    let mut b2: ::core::ffi::c_int = (rgb2 & 0xff as ::core::ffi::c_int) >> 0 as ::core::ffi::c_int;
-    let mut mr: ::core::ffi::c_int = (a * r1 + b * r2) / 100 as ::core::ffi::c_int;
-    let mut mg: ::core::ffi::c_int = (a * g1 + b * g2) / 100 as ::core::ffi::c_int;
-    let mut mb: ::core::ffi::c_int = (a * b1 + b * b2) / 100 as ::core::ffi::c_int;
-    return (mr << 16 as ::core::ffi::c_int) + (mg << 8 as ::core::ffi::c_int) + mb;
-}
-unsafe extern "C" fn cterm_blend(
-    mut ratio: ::core::ffi::c_int,
-    mut c1: int16_t,
-    mut c2: int16_t,
-) -> ::core::ffi::c_int {
-    let mut rgb1: ::core::ffi::c_int = hl_cterm2rgb_color(c1 as ::core::ffi::c_int);
-    let mut rgb2: ::core::ffi::c_int = hl_cterm2rgb_color(c2 as ::core::ffi::c_int);
-    let mut rgb_blended: ::core::ffi::c_int = rgb_blend(ratio, rgb1, rgb2);
-    return hl_rgb2cterm_color(rgb_blended);
-}
-unsafe extern "C" fn hl_rgb2cterm_color(mut rgb: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    let mut r: ::core::ffi::c_int =
-        (rgb & 0xff0000 as ::core::ffi::c_int) >> 16 as ::core::ffi::c_int;
-    let mut g: ::core::ffi::c_int = (rgb & 0xff00 as ::core::ffi::c_int) >> 8 as ::core::ffi::c_int;
-    let mut b: ::core::ffi::c_int = (rgb & 0xff as ::core::ffi::c_int) >> 0 as ::core::ffi::c_int;
-    return r * 6 as ::core::ffi::c_int / 256 as ::core::ffi::c_int * 36 as ::core::ffi::c_int
-        + g * 6 as ::core::ffi::c_int / 256 as ::core::ffi::c_int * 6 as ::core::ffi::c_int
-        + b * 6 as ::core::ffi::c_int / 256 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn hl_cterm2rgb_color(mut nr: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    static cube_value: GlobalCell<[::core::ffi::c_int; 6]> = GlobalCell::new([
-        0 as ::core::ffi::c_int,
-        0x5f as ::core::ffi::c_int,
-        0x87 as ::core::ffi::c_int,
-        0xaf as ::core::ffi::c_int,
-        0xd7 as ::core::ffi::c_int,
-        0xff as ::core::ffi::c_int,
-    ]);
-    static grey_ramp: GlobalCell<[::core::ffi::c_int; 24]> = GlobalCell::new([
-        0x8 as ::core::ffi::c_int,
-        0x12 as ::core::ffi::c_int,
-        0x1c as ::core::ffi::c_int,
-        0x26 as ::core::ffi::c_int,
-        0x30 as ::core::ffi::c_int,
-        0x3a as ::core::ffi::c_int,
-        0x44 as ::core::ffi::c_int,
-        0x4e as ::core::ffi::c_int,
-        0x58 as ::core::ffi::c_int,
-        0x62 as ::core::ffi::c_int,
-        0x6c as ::core::ffi::c_int,
-        0x76 as ::core::ffi::c_int,
-        0x80 as ::core::ffi::c_int,
-        0x8a as ::core::ffi::c_int,
-        0x94 as ::core::ffi::c_int,
-        0x9e as ::core::ffi::c_int,
-        0xa8 as ::core::ffi::c_int,
-        0xb2 as ::core::ffi::c_int,
-        0xbc as ::core::ffi::c_int,
-        0xc6 as ::core::ffi::c_int,
-        0xd0 as ::core::ffi::c_int,
-        0xda as ::core::ffi::c_int,
-        0xe4 as ::core::ffi::c_int,
-        0xee as ::core::ffi::c_int,
-    ]);
-    static ansi_table: GlobalCell<[[uint8_t; 4]; 16]> = GlobalCell::new([
-        [0 as uint8_t, 0 as uint8_t, 0 as uint8_t, 1 as uint8_t],
-        [224 as uint8_t, 0 as uint8_t, 0 as uint8_t, 2 as uint8_t],
-        [0 as uint8_t, 224 as uint8_t, 0 as uint8_t, 3 as uint8_t],
-        [224 as uint8_t, 224 as uint8_t, 0 as uint8_t, 4 as uint8_t],
-        [0 as uint8_t, 0 as uint8_t, 224 as uint8_t, 5 as uint8_t],
-        [224 as uint8_t, 0 as uint8_t, 224 as uint8_t, 6 as uint8_t],
-        [0 as uint8_t, 224 as uint8_t, 224 as uint8_t, 7 as uint8_t],
-        [224 as uint8_t, 224 as uint8_t, 224 as uint8_t, 8 as uint8_t],
-        [128 as uint8_t, 128 as uint8_t, 128 as uint8_t, 9 as uint8_t],
-        [255 as uint8_t, 64 as uint8_t, 64 as uint8_t, 10 as uint8_t],
-        [64 as uint8_t, 255 as uint8_t, 64 as uint8_t, 11 as uint8_t],
-        [255 as uint8_t, 255 as uint8_t, 64 as uint8_t, 12 as uint8_t],
-        [64 as uint8_t, 64 as uint8_t, 255 as uint8_t, 13 as uint8_t],
-        [255 as uint8_t, 64 as uint8_t, 255 as uint8_t, 14 as uint8_t],
-        [64 as uint8_t, 255 as uint8_t, 255 as uint8_t, 15 as uint8_t],
-        [
-            255 as uint8_t,
-            255 as uint8_t,
-            255 as uint8_t,
-            16 as uint8_t,
-        ],
-    ]);
-    let mut r: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut g: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut b: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut idx: ::core::ffi::c_int = 0;
-    if nr < 16 as ::core::ffi::c_int {
-        r = (*ansi_table.ptr())[nr as usize][0 as ::core::ffi::c_int as usize]
-            as ::core::ffi::c_int;
-        g = (*ansi_table.ptr())[nr as usize][1 as ::core::ffi::c_int as usize]
-            as ::core::ffi::c_int;
-        b = (*ansi_table.ptr())[nr as usize][2 as ::core::ffi::c_int as usize]
-            as ::core::ffi::c_int;
-    } else if nr < 232 as ::core::ffi::c_int {
-        idx = nr - 16 as ::core::ffi::c_int;
-        r = (*cube_value.ptr())
-            [(idx / 36 as ::core::ffi::c_int % 6 as ::core::ffi::c_int) as usize];
-        g = (*cube_value.ptr())[(idx / 6 as ::core::ffi::c_int % 6 as ::core::ffi::c_int) as usize];
-        b = (*cube_value.ptr())[(idx % 6 as ::core::ffi::c_int) as usize];
-    } else if nr < 256 as ::core::ffi::c_int {
-        idx = nr - 232 as ::core::ffi::c_int;
-        r = (*grey_ramp.ptr())[idx as usize];
-        g = (*grey_ramp.ptr())[idx as usize];
-        b = (*grey_ramp.ptr())[idx as usize];
-    }
-    return (r << 16 as ::core::ffi::c_int) + (g << 8 as ::core::ffi::c_int) + b;
 }
 /// The number of attribute ids handed out so far, counting the id-0
 /// sentinel. Every id below this is a live entry.

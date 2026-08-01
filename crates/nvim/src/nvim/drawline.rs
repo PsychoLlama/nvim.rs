@@ -617,7 +617,7 @@ unsafe extern "C" fn draw_virt_text_item(
             attr = hl_blend_attrs(
                 *(*linebuf_attr.ptr()).offset(col as isize) as ::core::ffi::c_int,
                 virt_attr,
-                &raw mut through,
+                &mut through,
             );
         } else {
             attr = virt_attr;

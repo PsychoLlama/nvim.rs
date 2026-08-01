@@ -813,7 +813,7 @@ unsafe extern "C" fn compose_line(
                 *(*attrbuf.ptr()).offset(i_1 as isize) = hl_blend_attrs(
                     *bg_attrs.offset(i_1 as isize) as ::core::ffi::c_int,
                     *(*attrbuf.ptr()).offset(i_1 as isize) as ::core::ffi::c_int,
-                    &raw mut thru,
+                    &mut thru,
                 ) as sattr_T;
                 if width == 2 as ::core::ffi::c_int {
                     *(*attrbuf.ptr()).offset((i_1 + 1 as ::core::ffi::c_int) as isize) =
@@ -822,7 +822,7 @@ unsafe extern "C" fn compose_line(
                                 as ::core::ffi::c_int,
                             *(*attrbuf.ptr()).offset((i_1 + 1 as ::core::ffi::c_int) as isize)
                                 as ::core::ffi::c_int,
-                            &raw mut thru,
+                            &mut thru,
                         ) as sattr_T;
                 }
                 if thru {
