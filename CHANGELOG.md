@@ -9,6 +9,16 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Rewrote searching and navigation, covering `/` and `?` with their search
+  offsets, `n`, `*`, `#` and `gd`, `searchcount()` and the search-stat
+  message, `%` and the `[`/`]` bracket motions, `:checkpath` and the
+  `'include'`/`'define'` lookups, tags (the tag-file readers, the tag stack,
+  `:tag`, `:tselect`, `:ptag`, `taglist()` and `'tagfunc'`), path handling
+  (`glob()`, `expand()`, `fnamemodify()`, `findfile()`, `:find` and the
+  `'path'` upward and downward searches), fuzzy matching (`matchfuzzy()` and
+  `'wildoptions'=fuzzy`), and the quickfix and location lists (`'errorformat'`
+  parsing, `:cfile`, `:cexpr`, `setqflist()`, the quickfix window with
+  `'quickfixtextfunc'`, `:cdo`, and `:vimgrep`, `:make` and `:helpgrep`).
 - Rewrote the persistence layer, covering swap files and crash recovery
   (`'directory'`, `:preserve`, the ATTENTION prompt, `:recover` and
   `swapinfo()`), reading a file into a buffer and writing one back out
