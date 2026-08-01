@@ -114,7 +114,6 @@ pub unsafe fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut 
             kind,
             id1: back_attr,
             id2: front_attr,
-            winid: 0,
         });
         if id > 0 {
             (*cache.ptr()).insert(back_attr, front_attr, id);

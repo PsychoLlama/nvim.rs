@@ -22,7 +22,7 @@ use core::slice;
 use super::policy;
 use crate::src::nvim::memory::{strequal, xcalloc, xfree, xrealloc};
 use crate::src::nvim::types::{
-    ColorKey, HlEntry, MHPutStatus, MapHash, String_0, cstr_t, int64_t, ptr_t, uint32_t, uint64_t,
+    MHPutStatus, MapHash, String_0, cstr_t, int64_t, ptr_t, uint32_t, uint64_t,
 };
 
 /// The bucket slot of a key that is not in the table.
@@ -146,24 +146,6 @@ impl MapKey for String_0 {
                     slice::from_raw_parts(self.data.cast::<u8>(), self.size)
                         == slice::from_raw_parts(other.data.cast::<u8>(), other.size)
                 })
-    }
-}
-
-impl MapKey for HlEntry {
-    fn map_hash(&self) -> uint32_t {
-        fold_value(self)
-    }
-    fn map_eq(&self, other: &Self) -> bool {
-        bytes_eq(self, other)
-    }
-}
-
-impl MapKey for ColorKey {
-    fn map_hash(&self) -> uint32_t {
-        fold_value(self)
-    }
-    fn map_eq(&self, other: &Self) -> bool {
-        bytes_eq(self, other)
     }
 }
 

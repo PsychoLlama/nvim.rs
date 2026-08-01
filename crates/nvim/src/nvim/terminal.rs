@@ -735,7 +735,7 @@ pub unsafe fn terminal_get_line_attributes(
                     hl_blend: -1,
                     url: -1,
                 };
-                attr_id = hl_get_term_attr(&raw mut resolved);
+                attr_id = hl_get_term_attr(resolved);
             }
             // A hyperlink is its own attribute, layered over the colours.
             if cell.uri > 0 {

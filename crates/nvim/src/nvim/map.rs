@@ -22,11 +22,10 @@ mod policy;
 mod table;
 
 pub use crate::src::nvim::types::{
-    ColorItem, ColorKey, HlEntry, MHPutStatus, MTDamage, MTDamagePair, MTNode,
-    Map_ColorKey_ColorItem, Map_String_int, Map_cstr_t_int, Map_cstr_t_ptr_t, Map_int_String,
-    Map_int_ptr_t, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_ptr_t_ptr_t, Map_uint32_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_MTDamagePair, Map_uint64_t_int, Map_uint64_t_ptr_t,
-    MapHash, Set_ColorKey, Set_HlEntry, Set_String, Set_cstr_t, Set_int, Set_int64_t, Set_ptr_t,
+    MHPutStatus, MTDamage, MTDamagePair, MTNode, Map_String_int, Map_cstr_t_int, Map_cstr_t_ptr_t,
+    Map_int_String, Map_int_ptr_t, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_ptr_t_ptr_t,
+    Map_uint32_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_MTDamagePair, Map_uint64_t_int,
+    Map_uint64_t_ptr_t, MapHash, Set_String, Set_cstr_t, Set_int, Set_int64_t, Set_ptr_t,
     Set_uint32_t, Set_uint64_t, String_0, cstr_t, int64_t, ptr_t, uint32_t, uint64_t,
 };
 pub use table::{MH_TOMBSTONE, MapKey, kMHExisting, kMHNewKeyDidFit, kMHNewKeyRealloc};
@@ -45,14 +44,6 @@ pub const STRING_INIT: String_0 = String_0 {
     data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     size: 0,
 };
-pub const COLOR_ITEM_INITIALIZER: ColorItem = ColorItem {
-    attr_id: -1,
-    link_id: -1,
-    version: -1,
-    is_default: false,
-    link_global: false,
-};
-
 /// Discard a bucket table and start again with room for `n_min_buckets`. The
 /// caller rehashes: the glyph cache keeps its own keys array and calls this
 /// directly.
@@ -95,10 +86,6 @@ pub unsafe fn mh_get_String(set: *mut Set_String, key: String_0) -> uint32_t {
     table::get(&(*set).h, (*set).keys, &key)
 }
 
-pub unsafe fn mh_get_ColorKey(set: *mut Set_ColorKey, key: ColorKey) -> uint32_t {
-    table::get(&(*set).h, (*set).keys, &key)
-}
-
 // Insert a key into a set, or find it. See `table::put`.
 
 pub unsafe fn mh_put_cstr_t(
@@ -116,14 +103,6 @@ pub unsafe fn mh_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, status: *mut MHPutSt
 pub unsafe fn mh_put_uint32_t(
     set: *mut Set_uint32_t,
     key: uint32_t,
-    status: *mut MHPutStatus,
-) -> uint32_t {
-    table::put(&mut (*set).h, &mut (*set).keys, key, &mut *status)
-}
-
-pub unsafe fn mh_put_HlEntry(
-    set: *mut Set_HlEntry,
-    key: HlEntry,
     status: *mut MHPutStatus,
 ) -> uint32_t {
     table::put(&mut (*set).h, &mut (*set).keys, key, &mut *status)
@@ -206,23 +185,6 @@ pub unsafe fn map_ref_String_int(
 }
 
 // The slot a map holds for a key, inserting it if absent.
-
-pub unsafe fn map_put_ref_ColorKey_ColorItem(
-    map: *mut Map_ColorKey_ColorItem,
-    key: ColorKey,
-    key_alloc: *mut *mut ColorKey,
-    new_item: *mut bool,
-) -> *mut ColorItem {
-    table::map_put_ref(
-        &mut (*map).set.h,
-        &mut (*map).set.keys,
-        &mut (*map).values,
-        key,
-        COLOR_ITEM_INITIALIZER,
-        key_alloc,
-        new_item,
-    )
-}
 
 pub unsafe fn map_put_ref_cstr_t_int(
     map: *mut Map_cstr_t_int,

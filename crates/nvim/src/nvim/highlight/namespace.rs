@@ -356,8 +356,7 @@ pub unsafe fn hl_ns_get_attrs(
     if syn_attr <= 0 {
         return None;
     }
-    // SAFETY: as above.
-    Some(unsafe { syn_attr2entry(syn_attr) })
+    Some(syn_attr2entry(syn_attr))
 }
 
 /// The attribute id for builtin group `idx` in namespace `ns_id`.
@@ -402,7 +401,6 @@ pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional
             kind: kHlUI,
             id1: idx,
             id2: final_id,
-            winid: 0,
         })
     }
 }

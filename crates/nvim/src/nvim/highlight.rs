@@ -1,22 +1,62 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
+//! The attribute set: every distinct combination of colours and attributes
+//! the screen is currently using, numbered.
+//!
+//! A screen cell carries an *attribute id*, not colours — one `sattr_T` per
+//! cell instead of nine fields, and the UI is told each definition once. Ids
+//! are indices into [`ATTRS`], handed out by [`get_attr_entry`] and never
+//! reused; id 0 is "no attributes at all" and is the table's first entry.
+//!
+//! Everything that produces an id goes through that one function, so the
+//! table is deduplicated by construction: asking twice for the same colours
+//! answers the same id, and only the first ask reaches the UI. When the table
+//! fills up (`MAX_TYPENR`) it is thrown away and rebuilt, which is why ids are
+//! valid only until [`clear_hl_tables`] runs.
+//!
+//! Where the ids come from:
+//!
+//! * a syntax or `:highlight` group ([`hl_get_syn_attr`], and
+//!   [`namespace`]'s `hl_get_ui_attr` for the builtin ones),
+//! * two ids combined, spelling "this cell is a spelling error *and* a
+//!   comment" ([`hl_combine_attr`]),
+//! * two ids blended, for `'winblend'`/`'pumblend'` ([`blend`]),
+//! * `:terminal` forwarding what the program asked for ([`hl_get_term_attr`]).
+//!
+//! The last three are memoised ([`cache`]) because they are asked per cell.
+//!
+//! `hlstate` is the other axis. A UI that asked for `ext_hlstate` wants to
+//! know *why* a cell looks the way it does, so each entry records the ids or
+//! group it came from and [`hl_inspect`] flattens that back out. Without such
+//! a UI the provenance is erased on the way in, which keeps the table smaller.
+//!
+//! Split for size:
+//!
+//! * [`cache`] — the memo table type.
+//! * [`blend`] — `'winblend'`/`'pumblend'`.
+//! * [`dict`] — the API's dictionary form of an attribute set.
+//! * [`namespace`] — per-namespace group definitions and the `HLF_*` tables.
+
 use crate::src::nvim::api::private::helpers::{arena_array, arena_dict, cstr_as_string};
 use crate::src::nvim::api::ui::{remote_ui_hl_attr_define, remote_ui_hl_group_set};
 use crate::src::nvim::drawscreen::screen_invalidate_highlights;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::{highlight_attr_set_all, highlight_changed, syn_id2name};
 use crate::src::nvim::main::{highlight_attr, highlight_attr_last, hlf_names};
-use crate::src::nvim::map::{
-    map_put_ref_uint64_t_int, mh_clear, mh_get_uint64_t, mh_put_HlEntry, mh_put_cstr_t,
-};
-use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xstrdup};
+use crate::src::nvim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::src::nvim::message::emsg;
-use crate::src::nvim::os::libc::{gettext, memset};
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::types::builders::static_cstring;
 use crate::src::nvim::types::{
-    Arena, Array, Dict, HlAttrs, HlEntry, HlKind, Integer, KeyValuePair, MHPutStatus,
-    Map_uint64_t_int, MapHash, Object, RemoteUI, RgbValue, Set_HlEntry, Set_cstr_t, Set_uint64_t,
-    cstr_t, int16_t, int32_t, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    key_value_pair, object, object_data as C2Rust_Unnamed, size_t, uint32_t, uint64_t,
+    Arena, Array, Dict, HlAttrs, HlEntry, HlKind, Integer, KeyValuePair, Object, RemoteUI, uint32_t,
 };
 use crate::src::nvim::ui::ui_call_hl_attr_define;
+use ::core::ffi::{CStr, c_char, c_int};
+use ::core::hash::BuildHasherDefault;
+use cache::AttrCache;
+use std::collections::HashMap;
+use std::ffi::CString;
+use std::hash::DefaultHasher;
 
 // Split out for size; the rest of the tree calls all of it as `highlight::*`.
 pub mod blend;
@@ -32,599 +72,703 @@ pub use namespace::{
 };
 
 /// The attribute bits an `HlAttrs`' `rgb_ae_attr`/`cterm_ae_attr` carry.
-pub type HlAttrFlags = ::core::ffi::c_int;
-pub const HL_GLOBAL: HlAttrFlags = 16384;
-pub const HL_DEFAULT: HlAttrFlags = 8192;
-pub const HL_FG_INDEXED: HlAttrFlags = 4096;
-pub const HL_BG_INDEXED: HlAttrFlags = 2048;
-pub const HL_NOCOMBINE: HlAttrFlags = 1024;
-pub const HL_OVERLINE: HlAttrFlags = 131072;
-pub const HL_CONCEALED: HlAttrFlags = 65536;
-pub const HL_BLINK: HlAttrFlags = 32768;
-pub const HL_DIM: HlAttrFlags = 512;
-pub const HL_ALTFONT: HlAttrFlags = 256;
-pub const HL_STRIKETHROUGH: HlAttrFlags = 128;
-pub const HL_STANDOUT: HlAttrFlags = 64;
-pub const HL_UNDERDASHED: HlAttrFlags = 40;
-pub const HL_UNDERDOTTED: HlAttrFlags = 32;
-pub const HL_UNDERDOUBLE: HlAttrFlags = 24;
-pub const HL_UNDERCURL: HlAttrFlags = 16;
-pub const HL_UNDERLINE: HlAttrFlags = 8;
-pub const HL_UNDERLINE_MASK: HlAttrFlags = 56;
-pub const HL_ITALIC: HlAttrFlags = 4;
-pub const HL_BOLD: HlAttrFlags = 2;
-pub const HL_INVERSE: HlAttrFlags = 1;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_15 = 76;
-pub const HLF_BORDER: C2Rust_Unnamed_15 = 64;
-pub const HLF_NFLOAT: C2Rust_Unnamed_15 = 62;
-pub const HLF_INACTIVE: C2Rust_Unnamed_15 = 60;
-pub const HLF_PST: C2Rust_Unnamed_15 = 50;
-pub const HLF_PNI: C2Rust_Unnamed_15 = 41;
-pub const HLF_NONE: C2Rust_Unnamed_15 = 0;
-pub const kHlInvalid: HlKind = 7;
-pub const kHlBlendThrough: HlKind = 6;
-pub const kHlBlend: HlKind = 5;
-pub const kHlCombine: HlKind = 4;
-pub const kHlTerminal: HlKind = 3;
-pub const kHlSyntax: HlKind = 2;
-pub const kHlUI: HlKind = 1;
-pub const kHlUnknown: HlKind = 0;
-pub const kMHExisting: MHPutStatus = 0;
-pub type NSHlAttr = [::core::ffi::c_int; 76];
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+///
+/// The sign bit stays clear: a negative attribute value is an invalid one.
+pub type HlAttrFlags = c_int;
+pub const HL_INVERSE: HlAttrFlags = 0x01;
+pub const HL_BOLD: HlAttrFlags = 0x02;
+pub const HL_ITALIC: HlAttrFlags = 0x04;
+/// The three bits the underline styles share: at most one style at a time.
+pub const HL_UNDERLINE_MASK: HlAttrFlags = 0x38;
+pub const HL_UNDERLINE: HlAttrFlags = 0x08;
+pub const HL_UNDERCURL: HlAttrFlags = 0x10;
+pub const HL_UNDERDOUBLE: HlAttrFlags = 0x18;
+pub const HL_UNDERDOTTED: HlAttrFlags = 0x20;
+pub const HL_UNDERDASHED: HlAttrFlags = 0x28;
+pub const HL_STANDOUT: HlAttrFlags = 0x40;
+pub const HL_STRIKETHROUGH: HlAttrFlags = 0x80;
+pub const HL_ALTFONT: HlAttrFlags = 0x100;
+pub const HL_DIM: HlAttrFlags = 0x200;
+pub const HL_NOCOMBINE: HlAttrFlags = 0x400;
+pub const HL_BG_INDEXED: HlAttrFlags = 0x800;
+pub const HL_FG_INDEXED: HlAttrFlags = 0x1000;
+pub const HL_DEFAULT: HlAttrFlags = 0x2000;
+pub const HL_GLOBAL: HlAttrFlags = 0x4000;
+pub const HL_BLINK: HlAttrFlags = 0x8000;
+/// The SGR attribute, unrelated to the `HL_CONCEAL` syntax flag.
+pub const HL_CONCEALED: HlAttrFlags = 0x1_0000;
+pub const HL_OVERLINE: HlAttrFlags = 0x2_0000;
+
+// The `HLF_*` builtin-group indices this family names. The full list lives
+// with `hlf_names`; these are the ones the code here singles out.
+pub(crate) const HLF_NONE: c_int = 0;
+pub(crate) const HLF_PNI: c_int = 41;
+pub(crate) const HLF_PST: c_int = 50;
+pub(crate) const HLF_INACTIVE: c_int = 60;
+pub(crate) const HLF_NFLOAT: c_int = 62;
+pub(crate) const HLF_BORDER: c_int = 64;
+pub(crate) const HLF_COUNT: c_int = 76;
+
+// What an entry was made from, recorded for `ext_hlstate`.
+pub(crate) const kHlUnknown: HlKind = 0;
+pub(crate) const kHlUI: HlKind = 1;
+pub(crate) const kHlSyntax: HlKind = 2;
+pub(crate) const kHlTerminal: HlKind = 3;
+pub(crate) const kHlCombine: HlKind = 4;
+pub(crate) const kHlBlend: HlKind = 5;
+pub(crate) const kHlBlendThrough: HlKind = 6;
+pub(crate) const kHlInvalid: HlKind = 7;
+
+/// An attribute set with nothing set. -1 is "unset" for an RGB colour and 0
+/// for a cterm one, which is why the two halves do not look alike.
 pub const HLATTRS_INIT: HlAttrs = HlAttrs {
-    rgb_ae_attr: 0 as int32_t,
-    cterm_ae_attr: 0 as int32_t,
-    rgb_fg_color: -1 as RgbValue,
-    rgb_bg_color: -1 as RgbValue,
-    rgb_sp_color: -1 as RgbValue,
-    cterm_fg_color: 0 as int16_t,
-    cterm_bg_color: 0 as int16_t,
-    hl_blend: -1 as int32_t,
-    url: -1 as int32_t,
+    rgb_ae_attr: 0,
+    cterm_ae_attr: 0,
+    rgb_fg_color: -1,
+    rgb_bg_color: -1,
+    rgb_sp_color: -1,
+    cterm_fg_color: 0,
+    cterm_bg_color: 0,
+    hl_blend: -1,
+    url: -1,
 };
-static value_init_int: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
-};
-pub const MAP_INIT: Map_uint64_t_int = Map_uint64_t_int {
-    set: Set_uint64_t {
-        h: MAPHASH_INIT,
-        keys: ::core::ptr::null_mut::<uint64_t>(),
-    },
-    values: ::core::ptr::null_mut::<::core::ffi::c_int>(),
-};
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe extern "C" fn set_put_HlEntry(
-    mut set: *mut Set_HlEntry,
-    mut key: HlEntry,
-    mut key_alloc: *mut *mut HlEntry,
-) -> bool {
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = mh_put_HlEntry(set, key, &raw mut status);
-    if !key_alloc.is_null() {
-        *key_alloc = (*set).keys.offset(k as isize);
+
+/// How many entries the table may hold before it is thrown away and rebuilt:
+/// an id has to fit a `sattr_T`.
+const MAX_TYPENR: usize = 65535;
+
+/// Does any UI want to know where an attribute came from (`ext_hlstate`)?
+/// Until one does, the provenance fields are erased on the way in.
+static HLSTATE_ACTIVE: GlobalCell<bool> = GlobalCell::new(false);
+
+/// The attribute sets, by id.
+static ATTRS: GlobalCell<AttrTable> = GlobalCell::new(AttrTable::new());
+
+/// Results of [`hl_combine_attr`], by the pair that produced them.
+static COMBINE: GlobalCell<AttrCache> = GlobalCell::new(AttrCache::new());
+
+/// The URLs entries refer to by index (OSC 8 hyperlinks).
+static URLS: GlobalCell<UrlTable> = GlobalCell::new(UrlTable::new());
+
+/// Small keys, never iterated, so a fixed-seed hasher is enough and is
+/// constructible in a `static`.
+type Table<K, V> = HashMap<K, V, BuildHasherDefault<DefaultHasher>>;
+
+/// The attribute sets in id order, plus the reverse lookup that makes
+/// [`get_attr_entry`] deduplicating.
+///
+/// An index map rather than a plain map because both directions are used: the
+/// screen has ids and wants colours, and everything that produces attributes
+/// has colours and wants an id.
+struct AttrTable {
+    entries: Vec<HlEntry>,
+    ids: Table<HlEntry, uint32_t>,
+}
+
+impl AttrTable {
+    const fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            ids: HashMap::with_hasher(BuildHasherDefault::new()),
+        }
     }
-    return status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
+
+    /// `entry`'s id, and whether it had to be added.
+    fn put(&mut self, entry: HlEntry) -> (c_int, bool) {
+        if let Some(&id) = self.ids.get(&entry) {
+            return (id as c_int, false);
+        }
+        let id = self.entries.len() as uint32_t;
+        self.entries.push(entry);
+        self.ids.insert(entry, id);
+        (id as c_int, true)
+    }
+
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// The entry `id` names.
+    ///
+    /// Panics on an id the table never handed out. Upstream indexed the array
+    /// unchecked here; a panic is the honest answer for the case it read out
+    /// of bounds in.
+    fn at(&self, id: c_int) -> HlEntry {
+        self.entries[id as usize]
+    }
+
+    /// The entry `id` names, or `None` for anything outside the table — an id
+    /// from before the last rebuild, or the 0 sentinel.
+    fn live(&self, id: c_int) -> Option<HlEntry> {
+        if id <= 0 || id as usize >= self.entries.len() {
+            None
+        } else {
+            Some(self.entries[id as usize])
+        }
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.ids.clear();
+    }
 }
-#[inline]
-unsafe extern "C" fn map_get_uint64_t_int(
-    mut map: *mut Map_uint64_t_int,
-    mut key: uint64_t,
-) -> ::core::ffi::c_int {
-    let mut k: uint32_t = mh_get_uint64_t(&raw mut (*map).set, key);
-    return if k == MH_TOMBSTONE as uint32_t {
-        value_init_int.get()
-    } else {
-        *(*map).values.offset(k as isize)
-    };
+
+/// The interned URLs, by index. Same index-map shape as [`AttrTable`]: an
+/// attribute set stores the index, and the UI is sent the string.
+struct UrlTable {
+    urls: Vec<CString>,
+    ids: Table<CString, uint32_t>,
 }
-#[inline]
-unsafe extern "C" fn map_put_uint64_t_int(
-    mut map: *mut Map_uint64_t_int,
-    mut key: uint64_t,
-    mut value: ::core::ffi::c_int,
-) {
-    let mut val: *mut ::core::ffi::c_int = map_put_ref_uint64_t_int(
-        map,
-        key,
-        ::core::ptr::null_mut::<*mut uint64_t>(),
-        ::core::ptr::null_mut::<bool>(),
-    );
-    *val = value;
+
+impl UrlTable {
+    const fn new() -> Self {
+        Self {
+            urls: Vec::new(),
+            ids: HashMap::with_hasher(BuildHasherDefault::new()),
+        }
+    }
+
+    fn intern(&mut self, url: &CStr) -> uint32_t {
+        if let Some(&id) = self.ids.get(url) {
+            return id;
+        }
+        let id = self.urls.len() as uint32_t;
+        self.urls.push(url.to_owned());
+        self.ids.insert(url.to_owned(), id);
+        id
+    }
+
+    fn clear(&mut self) {
+        self.urls.clear();
+        self.ids.clear();
+    }
 }
-pub const MAX_TYPENR: ::core::ffi::c_int = 65535 as ::core::ffi::c_int;
-static hlstate_active: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static attr_entries: GlobalCell<Set_HlEntry> = GlobalCell::new(Set_HlEntry {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut::<HlEntry>(),
-});
-static combine_attr_entries: GlobalCell<Map_uint64_t_int> = GlobalCell::new(MAP_INIT);
-static urls: GlobalCell<Set_cstr_t> = GlobalCell::new(Set_cstr_t {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut::<cstr_t>(),
-});
-pub unsafe extern "C" fn highlight_init() {
-    set_put_HlEntry(
-        attr_entries.ptr(),
-        HlEntry {
-            attr: HlAttrs {
-                rgb_ae_attr: 0 as int32_t,
-                cterm_ae_attr: 0 as int32_t,
-                rgb_fg_color: -1 as RgbValue,
-                rgb_bg_color: -1 as RgbValue,
-                rgb_sp_color: -1 as RgbValue,
-                cterm_fg_color: 0 as int16_t,
-                cterm_bg_color: 0 as int16_t,
-                hl_blend: -1 as int32_t,
-                url: -1 as int32_t,
-            },
+
+/// Puts the id-0 entry in place: "no attributes", which every unhighlighted
+/// cell carries.
+pub fn highlight_init() {
+    ATTRS.with_mut(|attrs| {
+        attrs.put(HlEntry {
+            attr: HLATTRS_INIT,
             kind: kHlInvalid,
-            id1: 0 as ::core::ffi::c_int,
-            id2: 0 as ::core::ffi::c_int,
-            winid: 0,
-        },
-        ::core::ptr::null_mut::<*mut HlEntry>(),
-    );
+            id1: 0,
+            id2: 0,
+        })
+    });
 }
-pub unsafe extern "C" fn highlight_use_hlstate() -> bool {
-    if hlstate_active.get() {
-        return false_0 != 0;
+
+/// Turns on `ext_hlstate` bookkeeping. Answers whether the tables had to be
+/// rebuilt — everything already in them was recorded without provenance.
+///
+/// # Safety
+/// Rebuilds the highlight tables and forces a redraw; main thread only.
+pub unsafe fn highlight_use_hlstate() -> bool {
+    if HLSTATE_ACTIVE.get() {
+        return false;
     }
-    hlstate_active.set(true_0 != 0);
-    clear_hl_tables(true_0 != 0);
-    return true_0 != 0;
+    HLSTATE_ACTIVE.set(true);
+    // SAFETY: the editor's own tables.
+    unsafe { clear_hl_tables(true) };
+    true
 }
-unsafe extern "C" fn get_attr_entry(mut entry: HlEntry) -> ::core::ffi::c_int {
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = 0;
-    static recursive: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-    let mut retried: bool = false_0 != 0;
-    if !hlstate_active.get() {
+
+/// The id for `entry`, adding it to the table if it is new.
+///
+/// Answers 0 — the empty attribute set — when the table is full and cannot be
+/// rebuilt, which is the only way this fails.
+///
+/// # Safety
+/// May rebuild the highlight tables and emit a UI event; main thread only.
+pub(crate) unsafe fn get_attr_entry(mut entry: HlEntry) -> c_int {
+    // Set while the table is being rebuilt from inside this function, so that
+    // a rebuild triggered by the rebuild gives up instead of recursing.
+    static REBUILDING: GlobalCell<bool> = GlobalCell::new(false);
+
+    if !HLSTATE_ACTIVE.get() {
+        // Nothing will read the provenance; erase it and keep the table small.
         entry.kind = kHlUnknown;
-        entry.id1 = 0 as ::core::ffi::c_int;
-        entry.id2 = 0 as ::core::ffi::c_int;
+        entry.id1 = 0;
+        entry.id2 = 0;
     }
-    loop {
-        status = kMHExisting;
-        k = mh_put_HlEntry(attr_entries.ptr(), entry, &raw mut status);
-        if status as ::core::ffi::c_uint == kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            return k as ::core::ffi::c_int;
+
+    let mut retried = false;
+    let id = loop {
+        let (id, is_new) = ATTRS.with_mut(|attrs| attrs.put(entry));
+        if !is_new {
+            return id;
         }
-        if (*attr_entries.ptr()).h.size <= MAX_TYPENR as uint32_t {
-            break;
+        if ATTRS.with(AttrTable::len) <= MAX_TYPENR {
+            break id;
         }
-        if recursive.get() as ::core::ffi::c_int != 0 || retried as ::core::ffi::c_int != 0 {
-            emsg(gettext(
-                b"E424: Too many different highlighting attributes in use\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ));
-            return 0 as ::core::ffi::c_int;
+
+        // Out of attribute entries: throw the table away and let every group
+        // compute a fresh one. Twice round means we are really out.
+        if REBUILDING.get() || retried {
+            let msg = c"E424: Too many different highlighting attributes in use";
+            // SAFETY: the caller's editor state.
+            unsafe { emsg(gettext(msg.as_ptr())) };
+            return 0;
         }
-        recursive.set(true_0 != 0);
-        clear_hl_tables(true_0 != 0);
-        recursive.set(false_0 != 0);
-        if entry.kind as ::core::ffi::c_uint
-            == kHlCombine as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            return 0 as ::core::ffi::c_int;
+        REBUILDING.set(true);
+        // SAFETY: as above.
+        unsafe { clear_hl_tables(true) };
+        REBUILDING.set(false);
+        if entry.kind == kHlCombine {
+            // The ids this entry combines are gone, so it means nothing now.
+            return 0;
         }
-        retried = true_0 != 0;
-    }
-    let mut id: ::core::ffi::c_int = k as ::core::ffi::c_int;
-    let mut arena: Arena = ARENA_EMPTY;
-    let mut inspect: Array = hl_inspect(id, &raw mut arena);
-    ui_call_hl_attr_define(id as Integer, entry.attr, entry.attr, inspect);
-    arena_mem_free(arena_finish(&raw mut arena));
-    return id;
-}
-pub unsafe extern "C" fn ui_send_all_hls(mut ui: *mut RemoteUI) {
-    let mut i: size_t = 1 as size_t;
-    while i < (*attr_entries.ptr()).h.size as size_t {
-        let mut arena: Arena = ARENA_EMPTY;
-        let mut inspect: Array = hl_inspect(i as ::core::ffi::c_int, &raw mut arena);
-        let mut attr: HlAttrs = (*(*attr_entries.ptr()).keys.offset(i as isize)).attr;
-        remote_ui_hl_attr_define(ui, i as Integer, attr, attr, inspect);
+        retried = true;
+    };
+
+    // A new id: tell the UIs what it looks like.
+    // SAFETY: the arena is local and the event only borrows the array.
+    unsafe {
+        let mut arena = ARENA_EMPTY;
+        let inspect = hl_inspect(id, &raw mut arena);
+        // Internally there is one attribute set for cterm and rgb;
+        // `remote_ui_hl_attr_define` is where they part company.
+        ui_call_hl_attr_define(Integer::from(id), entry.attr, entry.attr, inspect);
         arena_mem_free(arena_finish(&raw mut arena));
-        i = i.wrapping_add(1);
     }
-    let mut hlf: size_t = 0 as size_t;
-    while hlf < HLF_COUNT as ::core::ffi::c_int as size_t {
-        remote_ui_hl_group_set(
-            ui,
-            cstr_as_string(
-                *(hlf_names.ptr() as *mut *const ::core::ffi::c_char).offset(hlf as isize),
-            ),
-            (*highlight_attr.ptr())[hlf as usize] as Integer,
-        );
-        hlf = hlf.wrapping_add(1);
+    id
+}
+
+/// Sends a newly connected UI the whole table, plus the current attribute of
+/// every builtin group.
+///
+/// # Safety
+/// `ui` is a live remote UI; main thread only.
+pub unsafe fn ui_send_all_hls(ui: *mut RemoteUI) {
+    // SAFETY: the caller's UI; each iteration's arena is local to it.
+    unsafe {
+        // The bound is re-read each time round, as upstream's `for` did:
+        // sending an event is not supposed to touch the table, and if one
+        // ever did this stops rather than reading past the end.
+        let mut i = 1;
+        while i < ATTRS.with(AttrTable::len) {
+            let mut arena = ARENA_EMPTY;
+            let inspect = hl_inspect(i as c_int, &raw mut arena);
+            let attr = ATTRS.with(|attrs| attrs.at(i as c_int)).attr;
+            remote_ui_hl_attr_define(ui, i as Integer, attr, attr, inspect);
+            arena_mem_free(arena_finish(&raw mut arena));
+            i += 1;
+        }
+        let names = hlf_names.ptr().cast::<*const c_char>();
+        for hlf in 0..HLF_COUNT as usize {
+            let name = cstr_as_string(*names.add(hlf));
+            let attr = Integer::from((*highlight_attr.ptr())[hlf]);
+            remote_ui_hl_group_set(ui, name, attr);
+        }
     }
 }
-pub unsafe extern "C" fn hl_get_syn_attr(
-    mut ns_id: ::core::ffi::c_int,
-    mut idx: ::core::ffi::c_int,
-    mut at_en: HlAttrs,
-) -> ::core::ffi::c_int {
-    if at_en.cterm_fg_color as ::core::ffi::c_int != 0 as ::core::ffi::c_int
-        || at_en.cterm_bg_color as ::core::ffi::c_int != 0 as ::core::ffi::c_int
-        || at_en.rgb_fg_color != -1 as RgbValue
-        || at_en.rgb_bg_color != -1 as RgbValue
-        || at_en.rgb_sp_color != -1 as RgbValue
-        || at_en.cterm_ae_attr != 0 as int32_t
-        || at_en.rgb_ae_attr != 0 as int32_t
-        || ns_id != 0 as ::core::ffi::c_int
-    {
-        return get_attr_entry(HlEntry {
+
+/// The id for syntax group `idx`'s attributes, as namespace `ns_id` sees it.
+///
+/// Attributes that are entirely unset answer 0 rather than an entry of their
+/// own — but only in the global namespace, where "unset" and "not defined in
+/// this namespace" are the same thing.
+///
+/// # Safety
+/// As [`get_attr_entry`].
+pub unsafe fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int {
+    // TODO(bfredl): should we do this unconditionally
+    let anything_set = at_en.cterm_fg_color != 0
+        || at_en.cterm_bg_color != 0
+        || at_en.rgb_fg_color != -1
+        || at_en.rgb_bg_color != -1
+        || at_en.rgb_sp_color != -1
+        || at_en.cterm_ae_attr != 0
+        || at_en.rgb_ae_attr != 0
+        || ns_id != 0;
+    if !anything_set {
+        return 0;
+    }
+    // SAFETY: the caller's editor state.
+    unsafe {
+        get_attr_entry(HlEntry {
             attr: at_en,
             kind: kHlSyntax,
             id1: idx,
             id2: ns_id,
-            winid: 0,
+        })
+    }
+}
+
+/// `attr` with `'winblend'` applied, unless it carries a `blend=` of its own
+/// — an explicit `blend=` on the group wins over the window's.
+///
+/// # Safety
+/// `attr` must be an id this table handed out; main thread only.
+pub unsafe fn hl_apply_winblend(winbl: c_int, attr: c_int) -> c_int {
+    let mut entry = ATTRS.with(|attrs| attrs.at(attr));
+    if entry.attr.hl_blend != -1 || winbl <= 0 {
+        return attr;
+    }
+    entry.attr.hl_blend = winbl;
+    // SAFETY: the caller's editor state.
+    unsafe { get_attr_entry(entry) }
+}
+
+/// The id for plain `HL_UNDERLINE`, which is what a URL is drawn with.
+///
+/// # Safety
+/// As [`get_attr_entry`].
+pub unsafe fn hl_get_underline() -> c_int {
+    let mut attrs = HLATTRS_INIT;
+    attrs.cterm_ae_attr = HL_UNDERLINE;
+    attrs.rgb_ae_attr = HL_UNDERLINE;
+    // SAFETY: the caller's editor state.
+    unsafe {
+        get_attr_entry(HlEntry {
+            attr: attrs,
+            kind: kHlUI,
+            id1: 0,
+            id2: 0,
+        })
+    }
+}
+
+/// `attr` combined with an entry carrying `url`.
+///
+/// The URL is interned, so the same target used a thousand times costs one
+/// string and one attribute entry.
+///
+/// # Safety
+/// `url` is NUL-terminated; as [`get_attr_entry`] otherwise.
+pub unsafe fn hl_add_url(attr: c_int, url: *const c_char) -> c_int {
+    let mut attrs = HLATTRS_INIT;
+    // SAFETY: the caller's string.
+    let url = unsafe { CStr::from_ptr(url) };
+    attrs.url = URLS.with_mut(|urls| urls.intern(url)) as i32;
+    // SAFETY: the caller's editor state.
+    unsafe {
+        let with_url = get_attr_entry(HlEntry {
+            attr: attrs,
+            kind: kHlUI,
+            id1: 0,
+            id2: 0,
         });
+        hl_combine_attr(attr, with_url)
     }
-    return 0 as ::core::ffi::c_int;
 }
-pub unsafe extern "C" fn hl_apply_winblend(
-    mut winbl: ::core::ffi::c_int,
-    mut attr: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    let mut entry: HlEntry = *(*attr_entries.ptr()).keys.offset(attr as isize);
-    if entry.attr.hl_blend == -1 as int32_t && winbl > 0 as ::core::ffi::c_int {
-        entry.attr.hl_blend = winbl as int32_t;
-        attr = get_attr_entry(entry);
+
+/// The URL at `index`. Panics on an index no entry ever stored (upstream
+/// asserted the table was allocated and then read it unchecked).
+///
+/// The pointer borrows the table, which is stable until [`clear_hl_tables`]
+/// runs — the same lifetime upstream's had.
+pub fn hl_get_url(index: uint32_t) -> *const c_char {
+    URLS.with(|urls| urls.urls[index as usize].as_ptr())
+}
+
+/// The id for attributes a `:terminal` program asked for directly.
+///
+/// # Safety
+/// As [`get_attr_entry`].
+pub unsafe fn hl_get_term_attr(attrs: HlAttrs) -> c_int {
+    // SAFETY: the caller's editor state.
+    unsafe {
+        get_attr_entry(HlEntry {
+            attr: attrs,
+            kind: kHlTerminal,
+            id1: 0,
+            id2: 0,
+        })
     }
-    return attr;
 }
-pub unsafe extern "C" fn hl_get_underline() -> ::core::ffi::c_int {
-    let mut attrs: HlAttrs = HLATTRS_INIT;
-    attrs.cterm_ae_attr = HL_UNDERLINE as int16_t as int32_t;
-    attrs.rgb_ae_attr = HL_UNDERLINE as int16_t as int32_t;
-    return get_attr_entry(HlEntry {
-        attr: attrs,
-        kind: kHlUI,
-        id1: 0 as ::core::ffi::c_int,
-        id2: 0 as ::core::ffi::c_int,
-        winid: 0,
-    });
-}
-pub unsafe extern "C" fn hl_add_url(
-    mut attr: ::core::ffi::c_int,
-    mut url: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    let mut attrs: HlAttrs = HLATTRS_INIT;
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = mh_put_cstr_t(urls.ptr(), url as cstr_t, &raw mut status);
-    if status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint {
-        *(*urls.ptr()).keys.offset(k as isize) = xstrdup(url) as cstr_t;
+
+/// Empties every attribute table, invalidating every id in existence.
+///
+/// With `reinit` the table is put back into a usable state and everything on
+/// screen is recomputed; without it this is the free-all-memory path, which
+/// also drops the namespace definitions.
+///
+/// # Safety
+/// Forces a full redraw; main thread only.
+pub unsafe fn clear_hl_tables(reinit: bool) {
+    URLS.with_mut(UrlTable::clear);
+    ATTRS.with_mut(AttrTable::clear);
+    COMBINE.with_mut(AttrCache::clear);
+    blend::clear_caches();
+    if !reinit {
+        namespace::clear_ns_defs();
+        return;
     }
-    attrs.url = k as int32_t;
-    let mut new: ::core::ffi::c_int = get_attr_entry(HlEntry {
-        attr: attrs,
-        kind: kHlUI,
-        id1: 0 as ::core::ffi::c_int,
-        id2: 0 as ::core::ffi::c_int,
-        winid: 0,
-    });
-    return hl_combine_attr(attr, new);
-}
-pub unsafe extern "C" fn hl_get_url(mut index: uint32_t) -> *const ::core::ffi::c_char {
-    assert!(!(*urls.ptr()).keys.is_null(), "urls.keys");
-    return *(*urls.ptr()).keys.offset(index as isize) as *const ::core::ffi::c_char;
-}
-pub unsafe extern "C" fn hl_get_term_attr(mut aep: *mut HlAttrs) -> ::core::ffi::c_int {
-    return get_attr_entry(HlEntry {
-        attr: *aep,
-        kind: kHlTerminal,
-        id1: 0 as ::core::ffi::c_int,
-        id2: 0 as ::core::ffi::c_int,
-        winid: 0,
-    });
-}
-pub unsafe extern "C" fn clear_hl_tables(mut reinit: bool) {
-    let mut url: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut __i: uint32_t = 0;
-    __i = 0 as uint32_t;
-    while __i < (*urls.ptr()).h.n_keys {
-        url = *(*urls.ptr()).keys.offset(__i as isize) as *const ::core::ffi::c_char;
-        xfree(url as *mut ::core::ffi::c_void);
-        __i = __i.wrapping_add(1);
-    }
-    if reinit {
-        mh_clear(&raw mut (*attr_entries.ptr()).h);
-        highlight_init();
-        mh_clear(&raw mut (*combine_attr_entries.ptr()).set.h);
-        blend::clear_caches();
-        mh_clear(&raw mut (*urls.ptr()).h);
-        memset(
-            highlight_attr_last.ptr() as *mut ::core::ffi::c_int as *mut ::core::ffi::c_void,
-            -1 as ::core::ffi::c_int,
-            ::core::mem::size_of::<[::core::ffi::c_int; 76]>(),
-        );
+    highlight_init();
+    // SAFETY: the editor's own tables.
+    unsafe {
+        // No group's attribute matches its remembered one any more.
+        (*highlight_attr_last.ptr()).fill(-1);
         highlight_attr_set_all();
         highlight_changed();
         screen_invalidate_highlights();
-    } else {
-        xfree((*attr_entries.ptr()).keys as *mut ::core::ffi::c_void);
-        xfree((*attr_entries.ptr()).h.hash as *mut ::core::ffi::c_void);
-        attr_entries.set(Set_HlEntry {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut::<HlEntry>(),
-        });
-        xfree((*combine_attr_entries.ptr()).set.keys as *mut ::core::ffi::c_void);
-        xfree((*combine_attr_entries.ptr()).set.h.hash as *mut ::core::ffi::c_void);
-        (*combine_attr_entries.ptr()).set = Set_uint64_t {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut::<uint64_t>(),
-        };
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut (*combine_attr_entries.ptr()).values as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL_0;
-        let _ = *ptr_;
-        blend::clear_caches();
-        namespace::clear_ns_defs();
-        xfree((*urls.ptr()).keys as *mut ::core::ffi::c_void);
-        xfree((*urls.ptr()).h.hash as *mut ::core::ffi::c_void);
-        urls.set(Set_cstr_t {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut::<cstr_t>(),
-        });
-    };
+    }
 }
-unsafe extern "C" fn hl_combine_ae(mut char_ae: int32_t, mut prim_ae: int32_t) -> int32_t {
-    let mut char_ul: int32_t = char_ae & HL_UNDERLINE_MASK as int32_t;
-    let mut prim_ul: int32_t = prim_ae & HL_UNDERLINE_MASK as int32_t;
-    let mut new_ul: int32_t = if prim_ul != 0 { prim_ul } else { char_ul };
-    return char_ae & !(HL_UNDERLINE_MASK as int32_t)
-        | prim_ae & !(HL_UNDERLINE_MASK as int32_t)
-        | new_ul;
+
+/// Combines two attribute-bit masks, `prim_ae` winning.
+///
+/// The underline styles share a field, so a style in `prim_ae` replaces the
+/// one in `char_ae` rather than or-ing with it; everything else is a union.
+fn hl_combine_ae(char_ae: i32, prim_ae: i32) -> i32 {
+    let char_ul = char_ae & HL_UNDERLINE_MASK;
+    let prim_ul = prim_ae & HL_UNDERLINE_MASK;
+    let new_ul = if prim_ul != 0 { prim_ul } else { char_ul };
+    (char_ae & !HL_UNDERLINE_MASK) | (prim_ae & !HL_UNDERLINE_MASK) | new_ul
 }
-pub unsafe extern "C" fn hl_combine_attr(
-    mut char_attr: ::core::ffi::c_int,
-    mut prim_attr: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    if char_attr == 0 as ::core::ffi::c_int {
+
+/// The id for `char_attr` overlaid with `prim_attr`.
+///
+/// This is how "a spelling error inside a comment" gets one id: the
+/// character's own attributes are the base and the special ones override.
+/// Memoised, because the screen asks per cell and there tend to be a lot of
+/// spelling mistakes.
+///
+/// # Safety
+/// Both ids must be ones this table handed out; main thread only.
+pub unsafe fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
+    if char_attr == 0 {
         return prim_attr;
-    } else if prim_attr == 0 as ::core::ffi::c_int {
+    } else if prim_attr == 0 {
         return char_attr;
     }
-    let mut combine_tag: uint64_t = (char_attr as uint32_t as uint64_t) << 32 as ::core::ffi::c_int
-        | prim_attr as uint32_t as uint64_t;
-    let mut id: ::core::ffi::c_int = map_get_uint64_t_int(combine_attr_entries.ptr(), combine_tag);
-    if id > 0 as ::core::ffi::c_int {
-        return id;
+
+    // SAFETY: the caller's ids and the editor's own tables.
+    unsafe {
+        let cached = (*COMBINE.ptr()).get(char_attr, prim_attr);
+        if cached > 0 {
+            return cached;
+        }
+
+        let char_aep = syn_attr2entry(char_attr);
+        let prim_aep = syn_attr2entry(prim_attr);
+
+        // Start from the low-priority set and override below.
+        let mut new_en = char_aep;
+        new_en.cterm_ae_attr = if prim_aep.cterm_ae_attr & HL_NOCOMBINE != 0 {
+            prim_aep.cterm_ae_attr
+        } else {
+            hl_combine_ae(new_en.cterm_ae_attr, prim_aep.cterm_ae_attr)
+        };
+        new_en.rgb_ae_attr = if prim_aep.rgb_ae_attr & HL_NOCOMBINE != 0 {
+            prim_aep.rgb_ae_attr
+        } else {
+            hl_combine_ae(new_en.rgb_ae_attr, prim_aep.rgb_ae_attr)
+        };
+
+        // Taking a colour from `prim_aep` takes its "this is a palette index"
+        // bit with it, which is why each of these clears the flag unless the
+        // overriding set had it too.
+        let inherit = |mask: &mut i32, flag: i32| {
+            *mask &= !flag | (prim_aep.rgb_ae_attr & flag);
+        };
+        if prim_aep.cterm_fg_color > 0 {
+            new_en.cterm_fg_color = prim_aep.cterm_fg_color;
+            inherit(&mut new_en.rgb_ae_attr, HL_FG_INDEXED);
+        }
+        if prim_aep.cterm_bg_color > 0 {
+            new_en.cterm_bg_color = prim_aep.cterm_bg_color;
+            inherit(&mut new_en.rgb_ae_attr, HL_BG_INDEXED);
+        }
+        if prim_aep.rgb_fg_color >= 0 {
+            new_en.rgb_fg_color = prim_aep.rgb_fg_color;
+            inherit(&mut new_en.rgb_ae_attr, HL_FG_INDEXED);
+        }
+        if prim_aep.rgb_bg_color >= 0 {
+            new_en.rgb_bg_color = prim_aep.rgb_bg_color;
+            inherit(&mut new_en.rgb_ae_attr, HL_BG_INDEXED);
+        }
+        if prim_aep.rgb_sp_color >= 0 {
+            new_en.rgb_sp_color = prim_aep.rgb_sp_color;
+        }
+        if prim_aep.hl_blend >= 0 {
+            new_en.hl_blend = prim_aep.hl_blend;
+        }
+        // A URL already on the cell is not replaced by the one overlaying it.
+        if new_en.url == -1 && prim_aep.url >= 0 {
+            new_en.url = prim_aep.url;
+        }
+
+        let id = get_attr_entry(HlEntry {
+            attr: new_en,
+            kind: kHlCombine,
+            id1: char_attr,
+            id2: prim_attr,
+        });
+        if id > 0 {
+            (*COMBINE.ptr()).insert(char_attr, prim_attr, id);
+        }
+        id
     }
-    let mut char_aep: HlAttrs = syn_attr2entry(char_attr);
-    let mut prim_aep: HlAttrs = syn_attr2entry(prim_attr);
-    let mut new_en: HlAttrs = char_aep;
-    if prim_aep.cterm_ae_attr & HL_NOCOMBINE as int32_t != 0 {
-        new_en.cterm_ae_attr = prim_aep.cterm_ae_attr;
-    } else {
-        new_en.cterm_ae_attr = hl_combine_ae(new_en.cterm_ae_attr, prim_aep.cterm_ae_attr);
-    }
-    if prim_aep.rgb_ae_attr & HL_NOCOMBINE as int32_t != 0 {
-        new_en.rgb_ae_attr = prim_aep.rgb_ae_attr;
-    } else {
-        new_en.rgb_ae_attr = hl_combine_ae(new_en.rgb_ae_attr, prim_aep.rgb_ae_attr);
-    }
-    if prim_aep.cterm_fg_color as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
-        new_en.cterm_fg_color = prim_aep.cterm_fg_color;
-        new_en.rgb_ae_attr = (new_en.rgb_ae_attr as ::core::ffi::c_int
-            & (!(HL_FG_INDEXED as int32_t) | prim_aep.rgb_ae_attr & HL_FG_INDEXED as int32_t)
-                as ::core::ffi::c_int) as int32_t;
-    }
-    if prim_aep.cterm_bg_color as ::core::ffi::c_int > 0 as ::core::ffi::c_int {
-        new_en.cterm_bg_color = prim_aep.cterm_bg_color;
-        new_en.rgb_ae_attr = (new_en.rgb_ae_attr as ::core::ffi::c_int
-            & (!(HL_BG_INDEXED as int32_t) | prim_aep.rgb_ae_attr & HL_BG_INDEXED as int32_t)
-                as ::core::ffi::c_int) as int32_t;
-    }
-    if prim_aep.rgb_fg_color >= 0 as RgbValue {
-        new_en.rgb_fg_color = prim_aep.rgb_fg_color;
-        new_en.rgb_ae_attr = (new_en.rgb_ae_attr as ::core::ffi::c_int
-            & (!(HL_FG_INDEXED as int32_t) | prim_aep.rgb_ae_attr & HL_FG_INDEXED as int32_t)
-                as ::core::ffi::c_int) as int32_t;
-    }
-    if prim_aep.rgb_bg_color >= 0 as RgbValue {
-        new_en.rgb_bg_color = prim_aep.rgb_bg_color;
-        new_en.rgb_ae_attr = (new_en.rgb_ae_attr as ::core::ffi::c_int
-            & (!(HL_BG_INDEXED as int32_t) | prim_aep.rgb_ae_attr & HL_BG_INDEXED as int32_t)
-                as ::core::ffi::c_int) as int32_t;
-    }
-    if prim_aep.rgb_sp_color >= 0 as RgbValue {
-        new_en.rgb_sp_color = prim_aep.rgb_sp_color;
-    }
-    if prim_aep.hl_blend >= 0 as int32_t {
-        new_en.hl_blend = prim_aep.hl_blend;
-    }
-    if new_en.url == -1 as int32_t && prim_aep.url >= 0 as int32_t {
-        new_en.url = prim_aep.url;
-    }
-    id = get_attr_entry(HlEntry {
-        attr: new_en,
-        kind: kHlCombine,
-        id1: char_attr,
-        id2: prim_attr,
-        winid: 0,
-    });
-    if id > 0 as ::core::ffi::c_int {
-        map_put_uint64_t_int(combine_attr_entries.ptr(), combine_tag, id);
-    }
-    return id;
 }
-/// The number of attribute ids handed out so far, counting the id-0
-/// sentinel. Every id below this is a live entry.
-pub unsafe fn attr_entry_count() -> ::core::ffi::c_int {
-    unsafe { (*attr_entries.ptr()).h.size as ::core::ffi::c_int }
+
+/// The number of ids handed out so far, counting the id-0 sentinel. Every id
+/// below this is a live entry.
+pub fn attr_entry_count() -> c_int {
+    ATTRS.with(AttrTable::len) as c_int
 }
-pub unsafe extern "C" fn syn_attr2entry(mut attr: ::core::ffi::c_int) -> HlAttrs {
-    if attr <= 0 as ::core::ffi::c_int || attr >= (*attr_entries.ptr()).h.size as ::core::ffi::c_int
-    {
-        return HLATTRS_INIT;
-    }
-    return (*(*attr_entries.ptr()).keys.offset(attr as isize)).attr;
+
+/// The attributes id `attr` names.
+///
+/// Unlike [`AttrTable::at`] this tolerates any integer: an id past the end
+/// means the tables were rebuilt under the caller, and the empty set is the
+/// answer the drawing code expects for it.
+#[inline]
+pub fn syn_attr2entry(attr: c_int) -> HlAttrs {
+    ATTRS.with(|attrs| attrs.live(attr).map_or(HLATTRS_INIT, |entry| entry.attr))
 }
-pub unsafe extern "C" fn hl_inspect(mut attr: ::core::ffi::c_int, mut arena: *mut Arena) -> Array {
-    if !hlstate_active.get() {
+
+/// What id `attr` was built from, as the `ext_hlstate` UI event carries it:
+/// an array of `{ kind, hi_name, ui_name, id }` dicts, innermost first.
+///
+/// Empty unless some UI asked for `ext_hlstate`.
+///
+/// # Safety
+/// `arena` is null or a live arena; main thread only.
+pub unsafe fn hl_inspect(attr: c_int, arena: *mut Arena) -> Array {
+    if !HLSTATE_ACTIVE.get() {
         return Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
+            size: 0,
+            capacity: 0,
+            items: ::core::ptr::null_mut(),
         };
     }
-    let mut ret: Array = arena_array(arena, hl_inspect_size(attr));
-    hl_inspect_impl(&raw mut ret, attr, arena);
-    return ret;
-}
-unsafe extern "C" fn hl_inspect_size(mut attr: ::core::ffi::c_int) -> size_t {
-    if attr <= 0 as ::core::ffi::c_int || attr >= (*attr_entries.ptr()).h.size as ::core::ffi::c_int
-    {
-        return 0 as size_t;
+    // SAFETY: the caller's arena.
+    unsafe {
+        let mut ret = arena_array(arena, hl_inspect_size(attr));
+        hl_inspect_impl(&mut ret, attr, arena);
+        ret
     }
-    let mut e: HlEntry = *(*attr_entries.ptr()).keys.offset(attr as isize);
-    if e.kind as ::core::ffi::c_uint == kHlCombine as ::core::ffi::c_int as ::core::ffi::c_uint
-        || e.kind as ::core::ffi::c_uint == kHlBlend as ::core::ffi::c_int as ::core::ffi::c_uint
-        || e.kind as ::core::ffi::c_uint
-            == kHlBlendThrough as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        return hl_inspect_size(e.id1).wrapping_add(hl_inspect_size(e.id2));
-    }
-    return 1 as size_t;
 }
-unsafe extern "C" fn hl_inspect_impl(
-    mut arr: *mut Array,
-    mut attr: ::core::ffi::c_int,
-    mut arena: *mut Arena,
-) {
-    let mut item: Dict = Dict {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<KeyValuePair>(),
+
+/// How many entries [`hl_inspect_impl`] will produce for `attr`. Combinations
+/// are flattened, so this recurses exactly as the filling does.
+fn hl_inspect_size(attr: c_int) -> usize {
+    let Some(entry) = ATTRS.with(|attrs| attrs.live(attr)) else {
+        return 0;
     };
-    if attr <= 0 as ::core::ffi::c_int || attr >= (*attr_entries.ptr()).h.size as ::core::ffi::c_int
-    {
+    match entry.kind {
+        kHlCombine | kHlBlend | kHlBlendThrough => {
+            hl_inspect_size(entry.id1) + hl_inspect_size(entry.id2)
+        }
+        _ => 1,
+    }
+}
+
+/// Appends `attr`'s provenance to `arr`.
+///
+/// # Safety
+/// `arr` must have room for [`hl_inspect_size`] more entries, and `arena` is
+/// null or live.
+unsafe fn hl_inspect_impl(arr: &mut Array, attr: c_int, arena: *mut Arena) {
+    let Some(entry) = ATTRS.with(|attrs| attrs.live(attr)) else {
         return;
-    }
-    let mut e: HlEntry = *(*attr_entries.ptr()).keys.offset(attr as isize);
-    let mut ui_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    match e.kind as ::core::ffi::c_uint {
-        2 => {
-            item = arena_dict(arena, 3 as size_t);
-            let c2rust_fresh0 = item.size;
-            item.size = item.size.wrapping_add(1);
-            *item.items.offset(c2rust_fresh0 as isize) = key_value_pair {
-                key: cstr_as_string(b"kind\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string(b"syntax\0".as_ptr() as *const ::core::ffi::c_char),
-                    },
-                },
-            };
-            let c2rust_fresh1 = item.size;
-            item.size = item.size.wrapping_add(1);
-            *item.items.offset(c2rust_fresh1 as isize) = key_value_pair {
-                key: cstr_as_string(b"hi_name\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string(syn_id2name(e.id1)),
-                    },
-                },
-            };
-        }
-        1 => {
-            item = arena_dict(arena, 4 as size_t);
-            let c2rust_fresh2 = item.size;
-            item.size = item.size.wrapping_add(1);
-            *item.items.offset(c2rust_fresh2 as isize) = key_value_pair {
-                key: cstr_as_string(b"kind\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string(b"ui\0".as_ptr() as *const ::core::ffi::c_char),
-                    },
-                },
-            };
-            ui_name = if e.id1 == -1 as ::core::ffi::c_int {
-                b"Normal\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                *(hlf_names.ptr() as *mut *const ::core::ffi::c_char).offset(e.id1 as isize)
-            };
-            let c2rust_fresh3 = item.size;
-            item.size = item.size.wrapping_add(1);
-            *item.items.offset(c2rust_fresh3 as isize) = key_value_pair {
-                key: cstr_as_string(b"ui_name\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string(ui_name),
-                    },
-                },
-            };
-            let c2rust_fresh4 = item.size;
-            item.size = item.size.wrapping_add(1);
-            *item.items.offset(c2rust_fresh4 as isize) = key_value_pair {
-                key: cstr_as_string(b"hi_name\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string(syn_id2name(e.id2)),
-                    },
-                },
-            };
-        }
-        3 => {
-            item = arena_dict(arena, 2 as size_t);
-            let c2rust_fresh5 = item.size;
-            item.size = item.size.wrapping_add(1);
-            *item.items.offset(c2rust_fresh5 as isize) = key_value_pair {
-                key: cstr_as_string(b"kind\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed {
-                        string: cstr_as_string(b"term\0".as_ptr() as *const ::core::ffi::c_char),
-                    },
-                },
-            };
-        }
-        4 | 5 | 6 => {
-            hl_inspect_impl(arr, e.id1, arena);
-            hl_inspect_impl(arr, e.id2, arena);
-            return;
-        }
-        0 | 7 => return,
-        _ => {}
-    }
-    let c2rust_fresh6 = item.size;
-    item.size = item.size.wrapping_add(1);
-    *item.items.offset(c2rust_fresh6 as isize) = key_value_pair {
-        key: cstr_as_string(b"id\0".as_ptr() as *const ::core::ffi::c_char),
-        value: object {
-            type_0: kObjectTypeInteger,
-            data: C2Rust_Unnamed {
-                integer: attr as Integer,
-            },
-        },
     };
-    let c2rust_fresh7 = (*arr).size;
-    (*arr).size = (*arr).size.wrapping_add(1);
-    *(*arr).items.offset(c2rust_fresh7 as isize) = object {
-        type_0: kObjectTypeDict,
-        data: C2Rust_Unnamed { dict: item },
-    };
+    // SAFETY: the caller's arena and array.
+    unsafe {
+        let mut item = match entry.kind {
+            kHlSyntax => {
+                let mut item = arena_dict(arena, 3);
+                put(&mut item, c"kind", Object::literal("syntax"));
+                put(&mut item, c"hi_name", name_object(syn_id2name(entry.id1)));
+                item
+            }
+            kHlUI => {
+                let mut item = arena_dict(arena, 4);
+                put(&mut item, c"kind", Object::literal("ui"));
+                // -1 is `Normal`, which is not one of the `hlf_names`.
+                let ui_name = if entry.id1 == -1 {
+                    c"Normal".as_ptr()
+                } else {
+                    let names = hlf_names.ptr().cast::<*const c_char>();
+                    *names.add(entry.id1 as usize)
+                };
+                put(&mut item, c"ui_name", name_object(ui_name));
+                put(&mut item, c"hi_name", name_object(syn_id2name(entry.id2)));
+                item
+            }
+            kHlTerminal => {
+                let mut item = arena_dict(arena, 2);
+                put(&mut item, c"kind", Object::literal("term"));
+                item
+            }
+            kHlCombine | kHlBlend | kHlBlendThrough => {
+                // Combination is associative, so flatten it to an array.
+                hl_inspect_impl(arr, entry.id1, arena);
+                hl_inspect_impl(arr, entry.id2, arena);
+                return;
+            }
+            // kHlUnknown and kHlInvalid: nothing to say about the entry.
+            _ => return,
+        };
+        put(&mut item, c"id", Object::integer(Integer::from(attr)));
+        *arr.items.add(arr.size) = Object::dict(item);
+        arr.size += 1;
+    }
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+
+/// A group name, borrowed rather than copied.
+///
+/// # Safety
+/// `name` is null or NUL-terminated.
+unsafe fn name_object(name: *const c_char) -> Object {
+    // SAFETY: the caller's string.
+    Object::string(unsafe { cstr_as_string(name) })
+}
+
+/// Appends `key: value` to an arena dict.
+///
+/// # Safety
+/// `dict.items` must have room for one more entry.
+unsafe fn put(dict: &mut Dict, key: &'static CStr, value: Object) {
+    assert!(dict.size < dict.capacity, "hl_inspect dict overflow");
+    // SAFETY: the assert above kept the index inside the arena block.
+    unsafe {
+        *dict.items.add(dict.size) = KeyValuePair {
+            key: static_cstring(key),
+            value,
+        };
+    }
+    dict.size += 1;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_table_deduplicates_and_numbers_from_zero() {
+        let mut table = AttrTable::new();
+        let entry = |id1| HlEntry {
+            attr: HLATTRS_INIT,
+            kind: kHlSyntax,
+            id1,
+            id2: 0,
+        };
+        assert_eq!(table.put(entry(1)), (0, true));
+        assert_eq!(table.put(entry(2)), (1, true));
+        assert_eq!(table.put(entry(1)), (0, false));
+        assert_eq!(table.len(), 2);
+        assert_eq!(table.at(1).id1, 2);
+        assert!(table.live(0).is_none());
+        assert!(table.live(2).is_none());
+        table.clear();
+        assert_eq!(table.put(entry(2)), (0, true));
+    }
+
+    #[test]
+    fn urls_are_interned_by_value() {
+        let mut table = UrlTable::new();
+        assert_eq!(table.intern(c"https://a"), 0);
+        assert_eq!(table.intern(c"https://b"), 1);
+        assert_eq!(table.intern(c"https://a"), 0);
+        table.clear();
+        assert_eq!(table.intern(c"https://b"), 0);
+    }
+
+    #[test]
+    fn combining_underline_styles_replaces_rather_than_ors() {
+        assert_eq!(hl_combine_ae(HL_UNDERLINE, HL_UNDERCURL), HL_UNDERCURL);
+        assert_eq!(hl_combine_ae(HL_UNDERCURL, 0), HL_UNDERCURL);
+        assert_eq!(hl_combine_ae(HL_BOLD, HL_ITALIC), HL_BOLD | HL_ITALIC);
+    }
+}

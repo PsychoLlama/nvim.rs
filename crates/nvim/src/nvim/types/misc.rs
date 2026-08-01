@@ -22,12 +22,6 @@ pub struct MPConvStack {
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct Map_ColorKey_ColorItem {
-    pub set: Set_ColorKey,
-    pub values: *mut ColorItem,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Map_String_int {
     pub set: Set_String,
     pub values: *mut ::core::ffi::c_int,
@@ -119,18 +113,6 @@ pub struct ScopeDictDictItem {
     pub di_tv: typval_T,
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 1],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_ColorKey {
-    pub h: MapHash,
-    pub keys: *mut ColorKey,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Set_HlEntry {
-    pub h: MapHash,
-    pub keys: *mut HlEntry,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

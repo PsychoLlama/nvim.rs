@@ -19,7 +19,7 @@ pub struct ColorKey {
     pub ns_id: ::core::ffi::c_int,
     pub syn_id: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct HlAttrs {
     pub rgb_ae_attr: int32_t,
@@ -32,14 +32,13 @@ pub struct HlAttrs {
     pub hl_blend: int32_t,
     pub url: int32_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct HlEntry {
     pub attr: HlAttrs,
     pub kind: HlKind,
     pub id1: ::core::ffi::c_int,
     pub id2: ::core::ffi::c_int,
-    pub winid: ::core::ffi::c_int,
 }
 pub type HlKind = ::core::ffi::c_uint;
 pub type RgbValue = int32_t;
