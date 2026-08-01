@@ -37,6 +37,7 @@ static PENDING_FREE: GlobalCell<Vec<*mut qf_info_T>> = GlobalCell::new(Vec::new(
 
 /// Whether the stack holds no lists at all. A null stack counts as empty,
 /// which is how the location list commands report "no location list".
+#[inline]
 pub(crate) unsafe fn qf_stack_empty(qi: *const qf_info_T) -> bool {
     // SAFETY: the caller's stack, which may be null.
     unsafe { qi.is_null() || (*qi).qf_listcount <= 0 }
@@ -44,13 +45,21 @@ pub(crate) unsafe fn qf_stack_empty(qi: *const qf_info_T) -> bool {
 
 /// Whether `wp` *is* a location list window, i.e. shows another window's
 /// location list rather than owning one.
+#[inline]
 pub(crate) unsafe fn is_ll_window(wp: *const win_T) -> bool {
     // SAFETY: the caller's window.
     unsafe { bt_quickfix((*wp).w_buffer) && !(*wp).w_llist_ref.is_null() }
 }
 
+/// Whether `wp` is a *quickfix* window, as opposed to a location list one.
+pub(crate) unsafe fn is_qf_window(wp: *const win_T) -> bool {
+    // SAFETY: the caller's window.
+    unsafe { bt_quickfix((*wp).w_buffer) && (*wp).w_llist_ref.is_null() }
+}
+
 /// The location list stack `wp` works on: the one it references when it is
 /// a location list window, otherwise its own. May be null.
+#[inline]
 pub(crate) unsafe fn win_loclist(wp: *mut win_T) -> *mut qf_info_T {
     // SAFETY: the caller's window.
     unsafe {
@@ -68,6 +77,7 @@ pub(crate) unsafe fn win_loclist(wp: *mut win_T) -> *mut qf_info_T {
 ///
 /// `qi` must be a live stack and `idx` below its
 /// [`max_count`](qf_info_T::max_count).
+#[inline]
 pub(crate) unsafe fn qf_get_list(qi: *mut qf_info_T, idx: c_int) -> *mut qf_list_T {
     // SAFETY: the caller's stack and a slot it has room for. The pointer
     // is into the `Vec`'s heap buffer, which outlives every borrow of the
@@ -80,6 +90,7 @@ pub(crate) unsafe fn qf_get_list(qi: *mut qf_info_T, idx: c_int) -> *mut qf_list
 /// # Safety
 ///
 /// `qi` must be a live stack with at least one list.
+#[inline]
 pub(crate) unsafe fn qf_get_curlist(qi: *mut qf_info_T) -> *mut qf_list_T {
     // SAFETY: forwarded from the caller.
     unsafe { qf_get_list(qi, (*qi).qf_curlist) }

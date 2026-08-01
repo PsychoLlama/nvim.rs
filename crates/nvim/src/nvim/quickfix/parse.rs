@@ -686,6 +686,7 @@ impl Fields {
     /// # Safety
     ///
     /// `qfl` must be the live list the line was parsed against.
+    #[inline]
     pub(crate) unsafe fn entry(&mut self, qfl: *mut qf_list_T) -> NewEntry {
         // SAFETY: forwarded from the caller.
         unsafe {

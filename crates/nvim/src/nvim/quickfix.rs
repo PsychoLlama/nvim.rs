@@ -110,10 +110,10 @@ use crate::src::nvim::types::{
     QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, String_0, TriState, VarLockStatus, VarType,
     aco_save_T, bcount_t, bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, cmdidx_T, colnr_T,
     cstack_T, dict_T, dictitem_T, dobuf_action_values, exarg, exarg_T, except_T, garray_T,
-    getf_values, handle_T, ht_stack_T, linenr_T, list_T, list_stack_T, listitem_T, lpos_T, oparg_T,
+    getf_values, handle_T, ht_stack_T, linenr_T, list_T, list_stack_T, listitem_T, lpos_T,
     optset_T, pos_T, proftime_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T,
-    regmmatch_T, regprog_T, scid_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T,
-    typval_vval_union, uint8_t, uint32_t, uv_stat_t, uv_timespec_t, varnumber_T, vimconv_T, win_T,
+    regmmatch_T, regprog_T, scid_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union,
+    uint8_t, uint32_t, uv_stat_t, uv_timespec_t, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::u_clearallandblockfree;
@@ -136,6 +136,8 @@ mod list;
 pub use self::list::*;
 mod entry;
 pub use self::entry::*;
+mod switchbuf;
+pub(crate) use self::switchbuf::*;
 mod jump;
 pub use self::jump::*;
 mod display;

@@ -29,12 +29,14 @@ pub(crate) fn empty_list() -> qf_list_T {
 }
 
 /// Whether the list holds no entries. A null list counts as empty.
+#[inline]
 pub(crate) unsafe fn qf_list_empty(qfl: *const qf_list_T) -> bool {
     // SAFETY: the caller's list, which may be null.
     unsafe { qfl.is_null() || (*qfl).qf_count <= 0 }
 }
 
 /// Whether the list holds at least one entry naming a real position.
+#[inline]
 pub(crate) unsafe fn qf_list_has_valid_entries(qfl: *const qf_list_T) -> bool {
     // SAFETY: forwarded from the caller.
     unsafe { !qf_list_empty(qfl) && !(*qfl).qf_nonevalid }
@@ -254,6 +256,7 @@ pub(crate) unsafe fn qf_add_entry(qfl: *mut qf_list_T, new: &NewEntry) {
 /// # Safety
 ///
 /// `qfl` must be a live list.
+#[inline]
 pub(crate) unsafe fn has_entry_flag(qfl: *const qf_list_T) -> c_int {
     // SAFETY: forwarded from the caller.
     if unsafe { (*qfl).qfl_type } == QFLT_QUICKFIX {
@@ -268,6 +271,7 @@ pub(crate) unsafe fn has_entry_flag(qfl: *const qf_list_T) -> c_int {
 /// # Safety
 ///
 /// `s` must be null or NUL-terminated.
+#[inline]
 unsafe fn dup_unless_empty(s: *const c_char) -> *mut c_char {
     // SAFETY: forwarded from the caller.
     unsafe {
