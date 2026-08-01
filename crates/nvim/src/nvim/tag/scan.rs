@@ -172,19 +172,91 @@ impl MatchArgs {
     }
 }
 
-/// One match, in the form [`find_tags`] hands it to its caller.
+/// One match, in the form [`find_tags`] hands it to its caller: an
+/// allocation the caller will `xfree`.
 ///
 /// Everything up to the first NUL is the key duplicates are found by; a
-/// help match carries its sort heuristic after that NUL.
-pub(crate) struct Match(pub(crate) Vec<u8>);
+/// help match carries its sort heuristic after that NUL, and every kind
+/// leaves a byte or two of slack at the end, as upstream does — the
+/// consumers write into it.
+pub(crate) struct Match {
+    at: *mut u8,
+    len: usize,
+}
 
 impl Match {
-    /// What two matches are compared on.
-    fn key(&self) -> &[u8] {
-        let end = self.0.iter().position(|&b| b == 0).unwrap_or(self.0.len());
-        &self.0[..end]
+    /// Room for `len` bytes, all zero.
+    #[inline]
+    pub(crate) fn zeroed(len: usize) -> Self {
+        // SAFETY: `len` bytes are allocated and immediately zeroed.
+        unsafe {
+            let at = xmalloc(len).cast::<u8>();
+            at.write_bytes(0, len);
+            Match { at, len }
+        }
+    }
+
+    /// The whole allocation, slack included.
+    #[inline]
+    pub(crate) fn bytes(&mut self) -> &mut [u8] {
+        // SAFETY: `len` bytes were allocated and zeroed at construction.
+        unsafe { core::slice::from_raw_parts_mut(self.at, self.len) }
+    }
+
+    /// Where the match's own bytes are, for a [`Key`] into it.
+    fn at(&self) -> *const u8 {
+        self.at
+    }
+
+    /// Hand the allocation over to the caller of [`find_tags`].
+    fn into_raw(self) -> *mut c_char {
+        let at = self.at;
+        core::mem::forget(self);
+        at.cast()
     }
 }
+
+impl Drop for Match {
+    fn drop(&mut self) {
+        // SAFETY: the allocation came from `xmalloc` and is dropped once.
+        unsafe { xfree(self.at.cast()) };
+    }
+}
+
+/// What two matches are compared on: the bytes of a [`Match`] before its
+/// first NUL.
+///
+/// This borrows rather than copies. The buffer belongs to a `Match` in the
+/// same bucket and is a heap allocation, so it does not move when the
+/// vector holding that `Match` grows; the set and the vector are emptied
+/// together.
+#[derive(Clone, Copy)]
+struct Key(*const u8);
+
+impl Key {
+    fn bytes(&self) -> &[u8] {
+        // SAFETY: every `Match` is NUL-terminated within what it wrote,
+        // and outlives the key pointing at it.
+        unsafe { CStr::from_ptr(self.0.cast()) }.to_bytes()
+    }
+}
+
+impl core::hash::Hash for Key {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.bytes().hash(state);
+    }
+}
+
+impl PartialEq for Key {
+    fn eq(&self, other: &Self) -> bool {
+        self.bytes() == other.bytes()
+    }
+}
+
+impl Eq for Key {}
+
+/// The keys of the matches in one bucket.
+type Seen = HashSet<Key>;
 
 /// The state one [`find_tags`] call threads through the readers.
 pub(crate) struct FindTags {
@@ -234,7 +306,7 @@ pub(crate) struct FindTags {
     /// The matches, one bucket per priority, in the order found.
     found: [Vec<Match>; MT_COUNT],
     /// The keys already in `found`, so a duplicate can be dropped.
-    seen: [HashSet<Box<[u8]>>; MT_COUNT],
+    seen: [Seen; MT_COUNT],
 }
 
 impl FindTags {
@@ -272,20 +344,22 @@ impl FindTags {
             is_txt: false,
             match_count: 0,
             found: [const { Vec::new() }; MT_COUNT],
-            seen: core::array::from_fn(|_| HashSet::new()),
+            seen: core::array::from_fn(|_| Seen::default()),
         }
     }
 
     /// File `mfp` under `bucket`, unless one with the same key is already
     /// there.
+    #[inline]
     pub(crate) fn record(&mut self, bucket: usize, mfp: Match) {
-        if self.seen[bucket].insert(mfp.key().into()) {
+        if self.seen[bucket].insert(Key(mfp.at())) {
             self.found[bucket].push(mfp);
             self.match_count += 1;
         }
     }
 
     /// Which of the sixteen buckets a match belongs in.
+    #[inline]
     pub(crate) fn bucket(&self, is_static: bool, is_current: bool, margs: &MatchArgs) -> usize {
         let mut mtt = match (is_static, is_current) {
             (true, true) => MT_ST_CUR,
@@ -399,7 +473,7 @@ impl FindTags {
             let items = ga.ga_data.cast::<*mut c_char>();
             for i in 0..ga.ga_len as usize {
                 let mfp = *items.add(i);
-                self.found[MT_ST_CUR].push(Match(bytes_of(mfp)));
+                self.found[MT_ST_CUR].push(match_of(mfp));
                 xfree(mfp.cast());
             }
             ga_clear(&raw mut ga);
@@ -558,6 +632,8 @@ impl FindTags {
     /// caller's to free.
     unsafe fn into_matches(mut self, matchesp: *mut *mut *mut c_char) -> c_int {
         let name_only = self.flags & TAG_NAMES as c_int != 0;
+        // The keys point into the matches, so they go first.
+        self.seen = core::array::from_fn(|_| Seen::default());
         // SAFETY: `matches` is `match_count` pointers and every one of
         // them is filled before the array is handed over.
         unsafe {
@@ -573,14 +649,19 @@ impl FindTags {
                     if !name_only {
                         // Put the bucket number back the way the readers
                         // want it, and the field separators back to NUL.
-                        mfp.0[0] -= 1;
-                        for byte in &mut mfp.0[1..] {
-                            if *byte == TAG_SEP as u8 {
-                                *byte = NUL as u8;
+                        // The walk stops at the match's own terminator,
+                        // short of the slack after it.
+                        let bytes = mfp.bytes();
+                        bytes[0] -= 1;
+                        for byte in &mut bytes[1..] {
+                            match *byte {
+                                0 => break,
+                                b if b == TAG_SEP as u8 => *byte = NUL as u8,
+                                _ => {}
                             }
                         }
                     }
-                    *matches.add(at) = copy_out(&mfp.0);
+                    *matches.add(at) = mfp.into_raw();
                     at += 1;
                 }
             }
@@ -610,28 +691,17 @@ unsafe fn lang_is(at: *const c_char, lang: [u8; 2], whole: bool) -> bool {
     }
 }
 
-/// A NUL-terminated string as owned bytes, terminator included.
+/// A NUL-terminated string as an owned [`Match`], terminator included.
 ///
 /// # Safety
 /// `p` must be NUL-terminated.
-unsafe fn bytes_of(p: *const c_char) -> Vec<u8> {
+unsafe fn match_of(p: *const c_char) -> Match {
     // SAFETY: the caller's promise.
-    unsafe { CStr::from_ptr(p) }.to_bytes_with_nul().to_vec()
-}
-
-/// A copy of `bytes` for the caller of [`find_tags`] to `xfree`.
-///
-/// What follows the first NUL is copied too: a help match keeps its sort
-/// heuristic there.
-///
-/// # Safety
-/// The answer is allocated and becomes the caller's.
-unsafe fn copy_out(bytes: &[u8]) -> *mut c_char {
-    // SAFETY: the allocation is exactly as long as what goes into it.
     unsafe {
-        let out = xmalloc(bytes.len()).cast::<u8>();
-        ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len());
-        out.cast()
+        let bytes = CStr::from_ptr(p).to_bytes_with_nul();
+        let mut mfp = Match::zeroed(bytes.len());
+        mfp.bytes().copy_from_slice(bytes);
+        mfp
     }
 }
 

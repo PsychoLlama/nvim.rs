@@ -61,6 +61,7 @@ unsafe fn tag_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_in
 
 impl FindTags {
     /// Read a line into the buffer, answering true at end of file.
+    #[inline(always)]
     fn fgets(&mut self) -> bool {
         let size = self.lbuf.len() as c_int;
         let fp = self.fp;
@@ -70,12 +71,14 @@ impl FindTags {
     }
 
     /// Whether the line just read holds nothing but white space.
+    #[inline(always)]
     fn blank_line(&self) -> bool {
         // SAFETY: `vim_fgets` NUL-terminated the buffer.
         unsafe { vim_isblankline(self.lbuf.as_ptr().cast_mut()) }
     }
 
     /// Where the file is being read from now.
+    #[inline(always)]
     fn tell(&self) -> off_T {
         // SAFETY: `fp` is open.
         unsafe { ftello(self.fp) }
@@ -85,6 +88,7 @@ impl FindTags {
     ///
     /// While bisecting, this is also what moves: it picks the next offset,
     /// seeks there and reads past whatever partial line it landed in.
+    #[inline]
     pub(crate) fn next_line(&mut self, sinfo: &mut SearchInfo) -> Line {
         // SAFETY: `fp` is open and the buffer is what `fgets` fills.
         unsafe {
@@ -251,6 +255,7 @@ impl FindTags {
     /// The tag name is compared against the pattern's plain head first, as
     /// a quick way of rejecting a line: that is most of what makes tag
     /// searching fast.
+    #[inline]
     pub(crate) fn parse_line(
         &mut self,
         tagp: &mut tagptrs_T,
@@ -389,6 +394,7 @@ impl FindTags {
     /// The pattern is tried literally first — even when it is a regexp —
     /// and the regexp only afterwards, which is what tells the collector
     /// how good the match was.
+    #[inline]
     pub(crate) fn match_tag(&mut self, tagp: &tagptrs_T, margs: &mut MatchArgs) -> bool {
         // SAFETY: `tagname` and `tagname_end` bracket the name inside the
         // line buffer; the terminator written over `tagname_end` for the

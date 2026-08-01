@@ -48,6 +48,7 @@ impl FindTags {
     }
 
     /// File the match the line holds under the priority it deserves.
+    #[inline]
     pub(crate) fn add_match(
         &mut self,
         tagp: &tagptrs_T,
@@ -105,10 +106,11 @@ impl FindTags {
 
             // One byte for the '@', ten for the number and its NUL, and
             // `ML_EXTRA` for the language and the NUL after it.
-            let mut mfp = vec![0u8; 1 + len + 10 + ML_EXTRA + 1];
-            mfp[..len].copy_from_slice(name);
-            mfp[len] = b'@';
-            mfp[len + 1..len + 3].copy_from_slice(&self.help_lang);
+            let mut mfp = Match::zeroed(1 + len + 10 + ML_EXTRA + 1);
+            let out = mfp.bytes();
+            out[..len].copy_from_slice(name);
+            out[len] = b'@';
+            out[len + 1..len + 3].copy_from_slice(&self.help_lang);
 
             let score = help_heuristic(
                 tagp.tagname,
@@ -119,12 +121,13 @@ impl FindTags {
             let printed = format!("{score:06}");
             // What `snprintf` would have had room for: everything left in
             // the buffer, less its terminator.
-            let room = mfp.len() - at - 1;
+            let out = mfp.bytes();
+            let room = out.len() - at - 1;
             let printed = &printed.as_bytes()[..printed.len().min(room)];
-            mfp[at..at + printed.len()].copy_from_slice(printed);
+            out[at..at + printed.len()].copy_from_slice(printed);
 
             *tagp.tagname_end = TAB as c_char;
-            Match(mfp)
+            mfp
         }
     }
 
@@ -149,9 +152,10 @@ impl FindTags {
                 return None;
             }
             let len = end.offset_from(tagp.command) as usize - 2;
-            let mut mfp = vec![0u8; len + 2];
-            ptr::copy_nonoverlapping(tagp.command.add(2).cast::<u8>(), mfp.as_mut_ptr(), len);
-            Some(Match(mfp))
+            let mut mfp = Match::zeroed(len + 2);
+            mfp.bytes()[..len]
+                .copy_from_slice(core::slice::from_raw_parts(tagp.command.add(2).cast(), len));
+            Some(mfp)
         }
     }
 
@@ -169,13 +173,14 @@ impl FindTags {
         let line = unsafe { CStr::from_ptr(self.lbuf.as_ptr()) }.to_bytes();
         let fname = self.tag_fname.bytes();
 
-        let mut mfp = vec![0u8; fname.len() + line.len() + 5];
-        mfp[0] = bucket as u8 + 1;
-        mfp[1..=fname.len()].copy_from_slice(fname);
-        mfp[fname.len() + 1] = TAG_SEP as u8;
+        let mut mfp = Match::zeroed(fname.len() + line.len() + 5);
+        let out = mfp.bytes();
+        out[0] = bucket as u8 + 1;
+        out[1..=fname.len()].copy_from_slice(fname);
+        out[fname.len() + 1] = TAG_SEP as u8;
         let at = fname.len() + 2;
-        mfp[at..at + line.len()].copy_from_slice(line);
-        Match(mfp)
+        out[at..at + line.len()].copy_from_slice(line);
+        mfp
     }
 }
 
@@ -187,8 +192,8 @@ unsafe fn name_match(tagp: &tagptrs_T) -> Match {
     // SAFETY: the caller's promise.
     unsafe {
         let len = tagp.tagname_end.offset_from(tagp.tagname) as usize;
-        let mut mfp = vec![0u8; len + 2];
-        ptr::copy_nonoverlapping(tagp.tagname.cast::<u8>(), mfp.as_mut_ptr(), len);
-        Match(mfp)
+        let mut mfp = Match::zeroed(len + 2);
+        mfp.bytes()[..len].copy_from_slice(core::slice::from_raw_parts(tagp.tagname.cast(), len));
+        mfp
     }
 }
