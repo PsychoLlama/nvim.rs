@@ -91,7 +91,7 @@ use crate::src::nvim::os::fs::{
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
     __assert_fail, __errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets,
-    gettext, memset, snprintf, strcmp, strlen, strncasecmp, time,
+    gettext, snprintf, strcmp, strlen, strncasecmp, time,
 };
 use crate::src::nvim::path::{
     FreeWild, PATHSEP, after_pathsep, concat_fnames, fix_fname, gen_expand_wildcards,
@@ -108,11 +108,11 @@ use crate::src::nvim::types::{
     CMD_index, Callback, Callback_data as C2Rust_Unnamed_6, DirStack, Direction, EvalFuncData,
     ExtmarkOp, FILE, FileInfo, ListLenSpecials, OptInt, OptVal, OptValData, OptValType,
     QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, TriState, VarLockStatus, VarType, aco_save_T,
-    bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, cmdidx_T, colnr_T, cstack_T, dict_T,
-    dictitem_T, dobuf_action_values, exarg, exarg_T, except_T, getf_values, handle_T, ht_stack_T,
-    linenr_T, list_T, list_stack_T, listitem_T, lpos_T, optset_T, pos_T, proftime_T, ptrdiff_t,
-    qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T, regprog_T, scid_T, size_t,
-    tabpage_T, time_t, typval_T, typval_vval_union, uint32_t, varnumber_T, vimconv_T, win_T,
+    bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, dictitem_T,
+    dobuf_action_values, exarg_T, getf_values, handle_T, ht_stack_T, linenr_T, list_T,
+    list_stack_T, listitem_T, optset_T, pos_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T,
+    qfltype_T, regmatch_T, regmmatch_T, regprog_T, scid_T, size_t, tabpage_T, time_t, typval_T,
+    typval_vval_union, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::u_clearallandblockfree;
@@ -149,6 +149,8 @@ mod navigate;
 pub use self::navigate::*;
 mod vimgrep;
 pub use self::vimgrep::*;
+mod dummy;
+pub(crate) use self::dummy::*;
 mod make;
 pub use self::make::*;
 mod helpgrep;
@@ -172,7 +174,9 @@ pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
 pub const kListLenMayKnow: ListLenSpecials = -3;
 pub const kDirectionNotSet: Direction = 0;
+pub const CMD_vimgrep: CMD_index = 510;
 pub const CMD_vimgrepadd: CMD_index = 511;
+pub const CMD_lvimgrep: CMD_index = 267;
 pub const CMD_make: CMD_index = 274;
 pub const CMD_helpgrep: CMD_index = 178;
 pub const CMD_lvimgrepadd: CMD_index = 268;

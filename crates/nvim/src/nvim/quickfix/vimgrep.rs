@@ -2,835 +2,703 @@
 //!
 //! [`ex_vimgrep`] loads each file named on the command line — into a real
 //! buffer if one is already open, otherwise into a throwaway one
-//! ([`load_dummy_buffer`]) — and [`vgr_match_buflines`] runs the pattern
-//! over its lines, recording every match as an entry.
+//! ([`load_dummy_buffer`], in the sibling `dummy` module) — and
+//! [`match_buflines`] runs the pattern over its lines, recording every match
+//! as an entry.
+//!
+//! Loading a file fires autocommands, and an autocommand can replace the
+//! quickfix list, close windows or change directory. So the buffer, window
+//! and list pointers stay raw here, the list is re-checked by id after every
+//! file ([`list_still_usable`]), and the directory is restored around every
+//! dummy buffer.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::file_search::Name;
+use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn vgr_get_auname(mut cmdidx: cmdidx_T) -> *mut ::core::ffi::c_char {
-    match cmdidx as ::core::ffi::c_int {
-        510 => {
-            return b"vimgrep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        267 => {
-            return b"lvimgrep\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        511 => {
-            return b"vimgrepadd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        268 => {
-            return b"lvimgrepadd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        172 => {
-            return b"grep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        239 => {
-            return b"lgrep\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        173 => {
-            return b"grepadd\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        240 => {
-            return b"lgrepadd\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char;
-        }
-        _ => return ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
+/// The autocommand name of a `:vimgrep`-family command. `:grep` is here
+/// too, because `'grepprg'` set to `internal` sends it this way.
+fn vgr_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
+    Some(match cmdidx {
+        CMD_vimgrep => c"vimgrep",
+        CMD_lvimgrep => c"lvimgrep",
+        CMD_vimgrepadd => c"vimgrepadd",
+        CMD_lvimgrepadd => c"lvimgrepadd",
+        CMD_grep => c"grep",
+        CMD_lgrep => c"lgrep",
+        CMD_grepadd => c"grepadd",
+        CMD_lgrepadd => c"lgrepadd",
+        _ => return None,
+    })
 }
 
-pub(crate) unsafe extern "C" fn vgr_init_regmatch(
-    mut regmatch: *mut regmmatch_T,
-    mut s: *mut ::core::ffi::c_char,
-) {
-    unsafe {
-        (*regmatch).regprog = ::core::ptr::null_mut::<regprog_T>();
-        if s.is_null() || *s as ::core::ffi::c_int == NUL {
-            if last_search_pat().is_null() {
-                emsg(gettext(&raw const e_noprevre as *const ::core::ffi::c_char));
-                return;
+/// The files named on the command line, as `get_arglist_exp` expanded them.
+/// Owns the array, which `FreeWild` is the only way to give back.
+struct Files {
+    names: *mut *mut c_char,
+    count: c_int,
+}
+
+impl Files {
+    /// Expand the file names in `arg`, reporting E480 when the pattern
+    /// matches nothing.
+    ///
+    /// # Safety
+    ///
+    /// `arg` must be NUL-terminated.
+    unsafe fn expand(arg: *mut c_char) -> Option<Files> {
+        let mut files = Files {
+            names: ptr::null_mut(),
+            count: 0,
+        };
+        // SAFETY: the caller's string, and two writable out-parameters.
+        unsafe {
+            let ok = get_arglist_exp(arg, &raw mut files.count, &raw mut files.names, true) == OK;
+            if !ok || files.count == 0 {
+                emsg(gettext(&raw const e_nomatch as *const c_char));
+                return None;
             }
-            (*regmatch).regprog = vim_regcomp(last_search_pat(), RE_MAGIC);
-        } else {
-            (*regmatch).regprog = vim_regcomp(s, RE_MAGIC);
         }
-        (*regmatch).rmm_ic = p_ic.get();
-        (*regmatch).rmm_maxcol = 0 as ::core::ffi::c_int as colnr_T;
+        Some(files)
+    }
+
+    /// # Safety
+    ///
+    /// `at` must be below `count`.
+    unsafe fn get(&self, at: c_int) -> *mut c_char {
+        // SAFETY: the caller's promise.
+        unsafe { *self.names.offset(at as isize) }
     }
 }
 
-pub(crate) unsafe extern "C" fn vgr_display_fname(mut fname: *mut ::core::ffi::c_char) {
+impl Drop for Files {
+    fn drop(&mut self) {
+        // SAFETY: the array and its entries are ours, and nothing else holds
+        // them.
+        unsafe { FreeWild(self.count, self.names) };
+    }
+}
+
+/// The command line of one `:vimgrep`, parsed.
+///
+/// Owns the compiled pattern and the list title; `spat` points into the
+/// command line itself, which `skip_vimgrep_pat` terminated in place.
+struct Search {
+    /// The pattern as the user wrote it, for the fuzzy matcher and for the
+    /// "no match" message.
+    spat: *mut c_char,
+    /// `VGR_GLOBAL`, `VGR_NOJUMP` and `VGR_FUZZY`.
+    flags: c_int,
+    /// How many more matches to record before stopping.
+    tomatch: c_int,
+    regmatch: regmmatch_T,
+    /// The title the list gets, which outlives the command line.
+    qf_title: Name,
+}
+
+impl Drop for Search {
+    fn drop(&mut self) {
+        // SAFETY: the program is ours and nothing else holds it.
+        unsafe { vim_regfree(self.regmatch.regprog) };
+    }
+}
+
+impl Search {
+    /// Parse `:vimgrep`'s arguments: the pattern, its flags, the match limit
+    /// and the files to search. Reports the error itself.
+    ///
+    /// # Safety
+    ///
+    /// `eap` must be a live command.
+    unsafe fn parse(eap: *mut exarg_T) -> Option<(Search, Files)> {
+        // SAFETY: forwarded from the caller.
+        unsafe {
+            let mut search = Search {
+                spat: ptr::null_mut(),
+                flags: 0,
+                tomatch: if (*eap).addr_count > 0 {
+                    (*eap).line2 as c_int
+                } else {
+                    MAXLNUM as c_int
+                },
+                regmatch: regmmatch_T::default(),
+                qf_title: Name::from_ptr(qf_cmdtitle(*(*eap).cmdlinep)),
+            };
+
+            let p = skip_vimgrep_pat((*eap).arg, &raw mut search.spat, &raw mut search.flags);
+            if p.is_null() {
+                emsg(gettext(&raw const e_invalpat as *const c_char));
+                return None;
+            }
+
+            search.regmatch.regprog = compile_pattern(search.spat);
+            if search.regmatch.regprog.is_null() {
+                return None;
+            }
+            search.regmatch.rmm_ic = p_ic.get();
+            search.regmatch.rmm_maxcol = 0;
+
+            let p = skipwhite(p);
+            if *p as c_int == NUL {
+                emsg(gettext(
+                    c"E683: File name missing or invalid pattern".as_ptr(),
+                ));
+                return None;
+            }
+
+            let files = Files::expand(p)?;
+            Some((search, files))
+        }
+    }
+}
+
+/// Compile the search pattern, falling back on the last search pattern when
+/// `:vimgrep //` left it empty. Answers null after reporting the error.
+///
+/// # Safety
+///
+/// `spat` must be null or NUL-terminated.
+unsafe fn compile_pattern(spat: *mut c_char) -> *mut regprog_T {
+    // SAFETY: forwarded from the caller.
+    unsafe {
+        if !spat.is_null() && *spat as c_int != NUL {
+            return vim_regcomp(spat, RE_MAGIC);
+        }
+        if last_search_pat().is_null() {
+            emsg(gettext(&raw const e_noprevre as *const c_char));
+            return ptr::null_mut();
+        }
+        vim_regcomp(last_search_pat(), RE_MAGIC)
+    }
+}
+
+/// Show which file is being searched, on the command line and without
+/// waiting for a keypress.
+///
+/// # Safety
+///
+/// `fname` must be NUL-terminated.
+unsafe fn display_fname(fname: *mut c_char) {
+    // SAFETY: forwarded from the caller.
     unsafe {
         msg_start();
-        let mut p: *mut ::core::ffi::c_char = msg_strtrunc(fname, true_0);
-        if p.is_null() {
-            msg_outtrans(fname, 0 as ::core::ffi::c_int, false_0 != 0);
+        let truncated = msg_strtrunc(fname, true_0);
+        if truncated.is_null() {
+            msg_outtrans(fname, 0, false);
         } else {
-            msg_outtrans(p, 0 as ::core::ffi::c_int, false_0 != 0);
-            xfree(p as *mut ::core::ffi::c_void);
+            msg_outtrans(truncated, 0, false);
+            xfree(truncated.cast());
         }
         msg_clr_eos();
-        msg_didout.set(false_0 != 0);
-        msg_nowait.set(true_0 != 0);
-        msg_col.set(0 as ::core::ffi::c_int);
+        msg_didout.set(false);
+        msg_nowait.set(true);
+        msg_col.set(0);
         ui_flush();
     }
 }
 
-pub(crate) unsafe extern "C" fn vgr_load_dummy_buf(
-    mut fname: *mut ::core::ffi::c_char,
-    mut dirname_start: *mut ::core::ffi::c_char,
-    mut dirname_now: *mut ::core::ffi::c_char,
+/// Load a file into a dummy buffer with `'modelines'` and the `FileType`
+/// autocommand turned off, so that reading it stays cheap.
+///
+/// # Safety
+///
+/// The strings must be NUL-terminated and `dirname_now` have room for
+/// MAXPATHL bytes.
+unsafe fn load_quietly(
+    fname: *mut c_char,
+    dirname_start: *const c_char,
+    dirname_now: *mut c_char,
 ) -> *mut buf_T {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut save_ei: *mut ::core::ffi::c_char = au_event_disable(b",Filetype\0".as_ptr()
-            as *const ::core::ffi::c_char
-            as *mut ::core::ffi::c_char);
-        let mut save_mls: OptInt = p_mls.get();
-        p_mls.set(0 as OptInt);
-        let mut buf: *mut buf_T = load_dummy_buffer(fname, dirname_start, dirname_now);
+        let save_ei = au_event_disable(c",Filetype".as_ptr().cast_mut());
+        let save_mls = p_mls.get();
+        p_mls.set(0);
+        let buf = load_dummy_buffer(fname, dirname_start, dirname_now);
         p_mls.set(save_mls);
         au_event_restore(save_ei);
-        return buf;
+        buf
     }
 }
 
-pub(crate) unsafe extern "C" fn vgr_qflist_valid(
-    mut wp: *mut win_T,
-    mut qi: *mut qf_info_T,
-    mut qfid: ::core::ffi::c_uint,
-    mut title: *mut ::core::ffi::c_char,
+/// Whether the list with id `qfid` can still be added to after an
+/// autocommand ran. A quickfix list that went away is replaced by a fresh
+/// one; a location list that went away ends the command.
+///
+/// # Safety
+///
+/// `qi` must be a live stack and `title` NUL-terminated.
+unsafe fn list_still_usable(
+    wp: *mut win_T,
+    qi: *mut qf_info_T,
+    qfid: c_uint,
+    title: *const c_char,
 ) -> bool {
+    // SAFETY: forwarded from the caller.
     unsafe {
         if !qflist_valid(wp, qfid) {
             if !wp.is_null() {
                 emsg(gettext(e_current_location_list_was_changed.get()));
-                return false_0 != 0;
+                return false;
             }
             qf_new_list(qi, title);
-            return true_0 != 0;
+            return true;
         }
-        if qf_restore_list(qi, qfid) == FAIL {
-            return false_0 != 0;
-        }
-        return true_0 != 0;
+        qf_restore_list(qi, qfid) != FAIL
     }
 }
 
-pub(crate) unsafe extern "C" fn vgr_match_buflines(
-    mut qfl: *mut qf_list_T,
-    mut fname: *mut ::core::ffi::c_char,
-    mut buf: *mut buf_T,
-    mut spat: *mut ::core::ffi::c_char,
-    mut regmatch: *mut regmmatch_T,
-    mut tomatch: *mut ::core::ffi::c_int,
-    mut duplicate_name: ::core::ffi::c_int,
-    mut flags: ::core::ffi::c_int,
+/// Search one buffer's lines and add an entry for every match. Answers
+/// whether anything matched at all.
+///
+/// `duplicate_name` says the file is open in a buffer that has no memfile,
+/// in which case the entry names the file rather than that buffer.
+///
+/// # Safety
+///
+/// `qfl` must be a live list, `buf` a loaded buffer and `fname`
+/// NUL-terminated.
+unsafe fn match_buflines(
+    qfl: *mut qf_list_T,
+    fname: *mut c_char,
+    buf: *mut buf_T,
+    search: &mut Search,
+    duplicate_name: bool,
 ) -> bool {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        let mut found_match: bool = false_0 != 0;
-        let mut pat_len: size_t = strlen(spat);
-        pat_len = if pat_len < FUZZY_MATCH_MAX_LEN as ::core::ffi::c_int as size_t {
-            pat_len
+        let bufnum = if duplicate_name {
+            0
         } else {
-            FUZZY_MATCH_MAX_LEN as ::core::ffi::c_int as size_t
+            (*buf).handle as c_int
         };
-        let mut lnum: linenr_T = 1 as linenr_T;
-        while lnum <= (*buf).b_ml.ml_line_count && *tomatch > 0 as ::core::ffi::c_int {
-            let mut col: colnr_T = 0 as colnr_T;
-            if flags & VGR_FUZZY as ::core::ffi::c_int == 0 {
+        let global = search.flags & VGR_GLOBAL as c_int != 0;
+        let mut found_match = false;
+
+        let mut lnum: linenr_T = 1;
+        while lnum <= (*buf).b_ml.ml_line_count && search.tomatch > 0 {
+            if search.flags & VGR_FUZZY as c_int == 0 {
+                let mut col: colnr_T = 0;
                 while vim_regexec_multi(
-                    regmatch,
+                    &raw mut search.regmatch,
                     curwin.get(),
                     buf,
                     lnum,
                     col,
-                    ::core::ptr::null_mut::<proftime_T>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                ) > 0 as ::core::ffi::c_int
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                ) > 0
                 {
+                    let start = search.regmatch.startpos[0];
+                    let end = search.regmatch.endpos[0];
                     qf_add_entry(
                         qfl,
                         &NewEntry {
                             fname,
-                            bufnum: if duplicate_name != 0 {
-                                0 as ::core::ffi::c_int
-                            } else {
-                                (*buf).handle as ::core::ffi::c_int
-                            },
-                            lnum: (*regmatch).startpos[0 as ::core::ffi::c_int as usize].lnum
-                                + lnum,
-                            end_lnum: (*regmatch).endpos[0 as ::core::ffi::c_int as usize].lnum
-                                + lnum,
-                            col: (*regmatch).startpos[0 as ::core::ffi::c_int as usize].col
-                                as ::core::ffi::c_int
-                                + 1 as ::core::ffi::c_int,
-                            end_col: (*regmatch).endpos[0 as ::core::ffi::c_int as usize].col
-                                as ::core::ffi::c_int
-                                + 1 as ::core::ffi::c_int,
-                            ..NewEntry::new(ml_get_buf(
-                                buf,
-                                (*regmatch).startpos[0 as ::core::ffi::c_int as usize].lnum + lnum,
-                            ))
+                            bufnum,
+                            lnum: start.lnum + lnum,
+                            end_lnum: end.lnum + lnum,
+                            col: start.col as c_int + 1,
+                            end_col: end.col as c_int + 1,
+                            ..NewEntry::new(ml_get_buf(buf, start.lnum + lnum))
                         },
                     );
-                    {
-                        found_match = true_0 != 0;
-                        *tomatch -= 1;
-                        if *tomatch == 0 as ::core::ffi::c_int {
-                            break;
-                        }
-                        if flags & VGR_GLOBAL as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-                            || (*regmatch).endpos[0 as ::core::ffi::c_int as usize].lnum
-                                > 0 as linenr_T
-                        {
-                            break;
-                        }
-                        col = ((*regmatch).endpos[0 as ::core::ffi::c_int as usize].col
-                            as ::core::ffi::c_int
-                            + (col == (*regmatch).endpos[0 as ::core::ffi::c_int as usize].col)
-                                as ::core::ffi::c_int) as colnr_T;
-                        if col > ml_get_buf_len(buf, lnum) {
-                            break;
-                        }
+                    found_match = true;
+
+                    search.tomatch -= 1;
+                    if search.tomatch == 0 {
+                        break;
+                    }
+                    // Without `g` only the first match of a line counts, and
+                    // a match that ran into the next line has consumed this
+                    // one either way.
+                    if !global || end.lnum > 0 {
+                        break;
+                    }
+                    // Move past the match, and past one more column when the
+                    // match was empty, so that the scan makes progress.
+                    col = end.col + colnr_T::from(col == end.col);
+                    if col > ml_get_buf_len(buf, lnum) {
+                        break;
                     }
                 }
             } else {
-                let str: *mut ::core::ffi::c_char = ml_get_buf(buf, lnum);
-                let linelen: colnr_T = ml_get_buf_len(buf, lnum);
-                let mut score: ::core::ffi::c_int = 0;
-                let mut matches: [uint32_t; 1024] = [0; 1024];
-                let sz: size_t = ::core::mem::size_of::<[uint32_t; 1024]>()
-                    .wrapping_div(::core::mem::size_of::<uint32_t>());
-                memset(
-                    &raw mut matches as *mut ::core::ffi::c_void,
-                    0 as ::core::ffi::c_int,
-                    ::core::mem::size_of::<[uint32_t; 1024]>(),
-                );
-                while fuzzy_match(
-                    str.offset(col as isize),
-                    spat,
-                    false_0 != 0,
-                    &raw mut score,
-                    &raw mut matches as *mut uint32_t,
-                    sz as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int
-                    > 0 as ::core::ffi::c_int
-                {
+                let line = ml_get_buf(buf, lnum);
+                let linelen = ml_get_buf_len(buf, lnum);
+                // The pattern length is in bytes while the matcher fills one
+                // position per *character*, so for a multibyte pattern the
+                // position read below is one the matcher never wrote. It has
+                // to be zero, which is why the array is cleared every line.
+                let pat_len = strlen(search.spat).min(FUZZY_MATCH_MAX_LEN as size_t);
+                let mut col: colnr_T = 0;
+                // Cleared once per line, not once per match: a second match
+                // on the same line reads whatever the first one left in the
+                // positions past its own length, which is what upstream does.
+                let mut positions = [0u32; FUZZY_MATCH_MAX_LEN as usize];
+                loop {
+                    let mut score: c_int = 0;
+                    let matched = fuzzy_match(
+                        line.offset(col as isize),
+                        search.spat,
+                        false,
+                        &raw mut score,
+                        positions.as_mut_ptr(),
+                        positions.len() as c_int,
+                    );
+                    if !matched {
+                        break;
+                    }
+
                     qf_add_entry(
                         qfl,
                         &NewEntry {
                             fname,
-                            bufnum: if duplicate_name != 0 {
-                                0 as ::core::ffi::c_int
-                            } else {
-                                (*buf).handle as ::core::ffi::c_int
-                            },
+                            bufnum,
                             lnum,
-                            col: matches[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int
-                                + col as ::core::ffi::c_int
-                                + 1 as ::core::ffi::c_int,
-                            ..NewEntry::new(str)
+                            col: positions[0] as c_int + col as c_int + 1,
+                            ..NewEntry::new(line)
                         },
                     );
-                    {
-                        found_match = true_0 != 0;
-                        *tomatch -= 1;
-                        if *tomatch == 0 as ::core::ffi::c_int {
-                            break;
-                        }
-                        if flags & VGR_GLOBAL as ::core::ffi::c_int == 0 as ::core::ffi::c_int {
-                            break;
-                        }
-                        col = (matches[pat_len.wrapping_sub(1 as size_t) as usize]
-                            as ::core::ffi::c_int
-                            + col as ::core::ffi::c_int
-                            + 1 as ::core::ffi::c_int) as colnr_T;
-                        if col > linelen {
-                            break;
-                        }
+                    found_match = true;
+
+                    search.tomatch -= 1;
+                    if search.tomatch == 0 || !global {
+                        break;
+                    }
+                    // `pat_len` is at least 1 here: an empty pattern fills
+                    // no position and so never passes the test above.
+                    col = positions[pat_len as usize - 1] as colnr_T + col + 1;
+                    if col > linelen {
+                        break;
                     }
                 }
             }
+
             line_breakcheck();
             if got_int.get() {
                 break;
             }
             lnum += 1;
         }
-        return found_match;
+
+        found_match
     }
 }
 
-pub(crate) unsafe extern "C" fn vgr_jump_to_match(
-    mut qi: *mut qf_info_T,
-    mut forceit: ::core::ffi::c_int,
-    mut redraw_for_dummy: *mut bool,
-    mut first_match_buf: *mut buf_T,
-    mut target_dir: *mut ::core::ffi::c_char,
-) {
-    unsafe {
-        let mut buf: *mut buf_T = curbuf.get();
-        qf_jump(
-            qi,
-            0 as ::core::ffi::c_int,
-            0 as ::core::ffi::c_int,
-            forceit,
-        );
-        if buf != curbuf.get() {
-            *redraw_for_dummy = false_0 != 0;
+/// What searching the files left behind for [`ex_vimgrep`]'s tail.
+struct Outcome {
+    /// A dummy buffer was loaded, so folds have to be rebuilt afterwards.
+    redraw_for_dummy: bool,
+    /// The buffer holding the first match, which is kept loaded so that the
+    /// jump lands in it.
+    first_match_buf: *mut buf_T,
+    /// Where an autocommand left the directory, if the first match's buffer
+    /// is to be entered with it.
+    target_dir: Option<Name>,
+}
+
+impl Default for Outcome {
+    fn default() -> Self {
+        Outcome {
+            redraw_for_dummy: false,
+            first_match_buf: ptr::null_mut(),
+            target_dir: None,
         }
-        if curbuf.get() == first_match_buf && !target_dir.is_null() {
-            let mut ea: exarg_T = exarg {
-                arg: target_dir,
-                args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                arglens: ::core::ptr::null_mut::<size_t>(),
-                argc: 0,
-                nextcmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    }
+}
+
+/// Whether the swap file the buffer has is one that already existed, i.e.
+/// not the `.swp` this load made — in which case the dummy buffer is
+/// unloaded rather than kept, so that the swap file is not left behind.
+///
+/// # Safety
+///
+/// `buf` must be a live buffer.
+unsafe fn existing_swapfile(buf: *const buf_T) -> bool {
+    // SAFETY: forwarded from the caller.
+    unsafe {
+        if (*buf).b_ml.ml_mfp.is_null() {
+            return false;
+        }
+        let fname = mf_fname((*buf).b_ml.ml_mfp);
+        if fname.is_null() {
+            return false;
+        }
+        !CStr::from_ptr(fname).to_bytes().ends_with(b"wp")
+    }
+}
+
+/// Search every file named on the command line. Answers false when an
+/// autocommand made the list unusable, in which case the caller stops.
+///
+/// # Safety
+///
+/// `qi` must be a live stack and `wp` null or a live window.
+unsafe fn process_files(
+    wp: *mut win_T,
+    qi: *mut qf_info_T,
+    search: &mut Search,
+    files: &Files,
+    out: &mut Outcome,
+) -> bool {
+    // SAFETY: forwarded from the caller.
+    unsafe {
+        let mut save_qfid = (*qf_get_curlist(qi)).qf_id;
+        let mut dirname_start = vec![0 as c_char; MAXPATHL as usize];
+        let mut dirname_now = vec![0 as c_char; MAXPATHL as usize];
+        os_dirname(dirname_start.as_mut_ptr(), MAXPATHL as size_t);
+        let start = dirname_start.as_ptr();
+
+        // Upstream never resets this in the "buffer already loaded" arm, so
+        // a file that is open keeps whatever the last dummy load decided.
+        let mut duplicate_name = false;
+        let mut seconds: time_t = 0;
+        let mut fi = 0;
+        while fi < files.count && !got_int.get() && search.tomatch > 0 {
+            let fname = path_try_shorten_fname(files.get(fi));
+            // Print the file name every second, so that a slow search shows
+            // progress without flooding the message area.
+            if time(ptr::null_mut()) > seconds {
+                seconds = time(ptr::null_mut());
+                display_fname(fname);
+            }
+
+            // Load the file into a buffer, unless it is already loaded.
+            let mut buf = buflist_findname_exp(files.get(fi));
+            let using_dummy = buf.is_null() || (*buf).b_ml.ml_mfp.is_null();
+            if using_dummy {
+                duplicate_name = !buf.is_null();
+                out.redraw_for_dummy = true;
+                buf = load_quietly(fname, start, dirname_now.as_mut_ptr());
+            }
+
+            // Autocommands may have changed the list under us.
+            if !list_still_usable(wp, qi, save_qfid, search.qf_title.as_ptr()) {
+                return false;
+            }
+            save_qfid = (*qf_get_curlist(qi)).qf_id;
+
+            if buf.is_null() {
+                if !got_int.get() {
+                    smsg(0, gettext(c"Cannot open file \"%s\"".as_ptr()), fname);
+                }
+            } else {
+                let found_match =
+                    match_buflines(qf_get_curlist(qi), fname, buf, search, duplicate_name);
+                if using_dummy {
+                    keep_or_drop_dummy(
+                        buf,
+                        found_match,
+                        duplicate_name,
+                        search,
+                        start,
+                        dirname_now.as_ptr(),
+                        out,
+                    );
+                }
+            }
+            fi += 1;
+        }
+        true
+    }
+}
+
+/// Decide what becomes of the dummy buffer a file was loaded into: wipe it,
+/// unload it, or keep it because it holds the first match and the jump will
+/// land there.
+///
+/// # Safety
+///
+/// `buf` must be the dummy buffer just searched, and the two directory names
+/// NUL-terminated.
+unsafe fn keep_or_drop_dummy(
+    buf: *mut buf_T,
+    found_match: bool,
+    duplicate_name: bool,
+    search: &Search,
+    dirname_start: *const c_char,
+    dirname_now: *const c_char,
+    out: &mut Outcome,
+) {
+    // SAFETY: forwarded from the caller.
+    unsafe {
+        if found_match && out.first_match_buf.is_null() {
+            out.first_match_buf = buf;
+        }
+
+        // Never keep a dummy buffer when another buffer has the same name.
+        if duplicate_name {
+            wipe_dummy_buffer(buf, dirname_start);
+            return;
+        }
+
+        // `:hide` keeps the buffer loaded — unless 'bufhidden' says the
+        // buffer goes away as soon as it is hidden, which wins.
+        let bufhidden = *(*buf).b_p_bh as u8;
+        let hidden_stays = (*cmdmod.ptr()).cmod_flags & CMOD_HIDE as c_int != 0
+            && !matches!(bufhidden, b'u' | b'w' | b'd');
+        if !hidden_stays {
+            if !found_match {
+                // Do not keep a buffer that was not loaded before.
+                wipe_dummy_buffer(buf, dirname_start);
+                return;
+            }
+            if !ptr::eq(buf, out.first_match_buf)
+                || search.flags & VGR_NOJUMP as c_int != 0
+                || existing_swapfile(buf)
+            {
+                unload_dummy_buffer(buf, dirname_start);
+                // Keeping the buffer, remove the dummy flag.
+                (*buf).b_flags &= !BF_DUMMY;
+                return;
+            }
+        }
+
+        // Keeping the buffer, remove the dummy flag.
+        (*buf).b_flags &= !BF_DUMMY;
+
+        // The buffer is still loaded, so the jump below has to go to the
+        // directory the search left it in.
+        if ptr::eq(buf, out.first_match_buf)
+            && out.target_dir.is_none()
+            && strcmp(dirname_start, dirname_now) != 0
+        {
+            out.target_dir = Some(Name::from_ptr(dirname_now));
+        }
+
+        // The Filetype autocommands and the modelines need to run now, in
+        // that buffer — but not the window-local options.
+        let mut aco = aco_save_T::default();
+        aucmd_prepbuf(&raw mut aco, buf);
+        apply_autocmds(EVENT_FILETYPE, (*buf).b_p_ft, (*buf).b_fname, true, buf);
+        do_modelines(OPT_NOWIN as c_int);
+        aucmd_restbuf(&raw mut aco);
+    }
+}
+
+/// Jump to the first match, and change to the directory the first match's
+/// file was found in when the search left the editor somewhere else.
+///
+/// # Safety
+///
+/// `qi` must be a live stack.
+unsafe fn jump_to_match(qi: *mut qf_info_T, forceit: c_int, out: &mut Outcome) {
+    // SAFETY: forwarded from the caller.
+    unsafe {
+        let buf = curbuf.get();
+        qf_jump(qi, 0, 0, forceit);
+        if !ptr::eq(buf, curbuf.get()) {
+            out.redraw_for_dummy = false;
+        }
+
+        // The buffer of the first match is the one the search left the
+        // directory in; put the window back there.
+        if let Some(target_dir) = &out.target_dir
+            && ptr::eq(curbuf.get(), out.first_match_buf)
+        {
+            let mut ea = exarg_T {
+                arg: target_dir.as_ptr().cast_mut(),
                 cmdidx: CMD_lcd,
-                argt: 0,
-                skip: 0,
-                forceit: 0,
-                addr_count: 0,
-                line1: 0,
-                line2: 0,
-                addr_type: ADDR_LINES,
-                flags: 0,
-                do_ecmd_cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                do_ecmd_lnum: 0,
-                append: 0,
-                usefilter: 0,
-                amount: 0,
-                regname: 0,
-                force_bin: 0,
-                read_edit: 0,
-                mkdir_p: 0,
-                force_ff: 0,
-                force_enc: 0,
-                bad_char: 0,
-                useridx: 0,
-                errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ea_getline: None,
-                cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                cstack: ::core::ptr::null_mut::<cstack_T>(),
+                ..Default::default()
             };
             ex_cd(&raw mut ea);
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn existing_swapfile(mut buf: *const buf_T) -> bool {
+/// `:vimgrep`, `:lvimgrep`, `:vimgrepadd`, `:lvimgrepadd`, and `:grep` and
+/// friends when `'grepprg'` is `internal`.
+///
+/// # Safety
+///
+/// `eap` must be a live command.
+pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
+    // SAFETY: forwarded from the caller.
     unsafe {
-        if !(*buf).b_ml.ml_mfp.is_null() && !mf_fname((*buf).b_ml.ml_mfp).is_null() {
-            let fname: *const ::core::ffi::c_char = mf_fname((*buf).b_ml.ml_mfp);
-            let len: size_t = strlen(fname);
-            return *fname.offset(len.wrapping_sub(1 as size_t) as isize) as ::core::ffi::c_int
-                != 'p' as ::core::ffi::c_int
-                || *fname.offset(len.wrapping_sub(2 as size_t) as isize) as ::core::ffi::c_int
-                    != 'w' as ::core::ffi::c_int;
-        }
-        return false_0 != 0;
-    }
-}
-
-pub(crate) unsafe extern "C" fn vgr_process_args(
-    mut eap: *mut exarg_T,
-    mut args: *mut vgr_args_T,
-) -> ::core::ffi::c_int {
-    unsafe {
-        memset(
-            args as *mut ::core::ffi::c_void,
-            0 as ::core::ffi::c_int,
-            ::core::mem::size_of::<vgr_args_T>(),
-        );
-        (*args).regmatch.regprog = ::core::ptr::null_mut::<regprog_T>();
-        (*args).qf_title = xstrdup(qf_cmdtitle(*(*eap).cmdlinep));
-        (*args).tomatch = (if (*eap).addr_count > 0 as ::core::ffi::c_int {
-            (*eap).line2
-        } else {
-            MAXLNUM as ::core::ffi::c_int as linenr_T
-        }) as ::core::ffi::c_int;
-        let mut p: *mut ::core::ffi::c_char =
-            skip_vimgrep_pat((*eap).arg, &raw mut (*args).spat, &raw mut (*args).flags);
-        if p.is_null() {
-            emsg(gettext(&raw const e_invalpat as *const ::core::ffi::c_char));
-            return FAIL;
-        }
-        vgr_init_regmatch(&raw mut (*args).regmatch, (*args).spat);
-        if (*args).regmatch.regprog.is_null() {
-            return FAIL;
-        }
-        p = skipwhite(p);
-        if *p as ::core::ffi::c_int == NUL {
-            emsg(gettext(
-                b"E683: File name missing or invalid pattern\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            ));
-            return FAIL;
-        }
-        if get_arglist_exp(
-            p,
-            &raw mut (*args).fcount,
-            &raw mut (*args).fnames,
-            true_0 != 0,
-        ) == FAIL
-            || (*args).fcount == 0 as ::core::ffi::c_int
-        {
-            emsg(gettext(&raw const e_nomatch as *const ::core::ffi::c_char));
-            return FAIL;
-        }
-        return OK;
-    }
-}
-
-pub(crate) unsafe extern "C" fn vgr_process_files(
-    mut wp: *mut win_T,
-    mut qi: *mut qf_info_T,
-    mut cmd_args: *mut vgr_args_T,
-    mut redraw_for_dummy: *mut bool,
-    mut first_match_buf: *mut *mut buf_T,
-    mut target_dir: *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut status: ::core::ffi::c_int = FAIL;
-        let mut save_qfid: ::core::ffi::c_uint = (*qf_get_curlist(qi)).qf_id;
-        let mut duplicate_name: bool = false_0 != 0;
-        let mut dirname_start: *mut ::core::ffi::c_char =
-            xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-        let mut dirname_now: *mut ::core::ffi::c_char =
-            xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-        os_dirname(dirname_start, MAXPATHL as size_t);
-        let mut seconds: time_t = 0 as time_t;
-        let mut fi: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        '_theend: {
-            while fi < (*cmd_args).fcount
-                && !got_int.get()
-                && (*cmd_args).tomatch > 0 as ::core::ffi::c_int
-            {
-                let mut fname: *mut ::core::ffi::c_char =
-                    path_try_shorten_fname(*(*cmd_args).fnames.offset(fi as isize));
-                if time(::core::ptr::null_mut::<time_t>()) > seconds {
-                    seconds = time(::core::ptr::null_mut::<time_t>());
-                    vgr_display_fname(fname);
-                }
-                let mut buf: *mut buf_T =
-                    buflist_findname_exp(*(*cmd_args).fnames.offset(fi as isize));
-                let mut using_dummy: bool = false;
-                if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() {
-                    duplicate_name = !buf.is_null();
-                    using_dummy = true_0 != 0;
-                    *redraw_for_dummy = true_0 != 0;
-                    buf = vgr_load_dummy_buf(fname, dirname_start, dirname_now);
-                } else {
-                    using_dummy = false_0 != 0;
-                }
-                if !vgr_qflist_valid(wp, qi, save_qfid, (*cmd_args).qf_title) {
-                    break '_theend;
-                }
-                save_qfid = (*qf_get_curlist(qi)).qf_id;
-                if buf.is_null() {
-                    if !got_int.get() {
-                        smsg(
-                            0 as ::core::ffi::c_int,
-                            gettext(
-                                b"Cannot open file \"%s\"\0".as_ptr() as *const ::core::ffi::c_char
-                            ),
-                            fname,
-                        );
-                    }
-                } else {
-                    let mut found_match: bool = vgr_match_buflines(
-                        qf_get_curlist(qi),
-                        fname,
-                        buf,
-                        (*cmd_args).spat,
-                        &raw mut (*cmd_args).regmatch,
-                        &raw mut (*cmd_args).tomatch,
-                        duplicate_name as ::core::ffi::c_int,
-                        (*cmd_args).flags,
-                    );
-                    if using_dummy {
-                        if found_match as ::core::ffi::c_int != 0 && (*first_match_buf).is_null() {
-                            *first_match_buf = buf;
-                        }
-                        if duplicate_name {
-                            wipe_dummy_buffer(buf, dirname_start);
-                            buf = ::core::ptr::null_mut::<buf_T>();
-                        } else if (*cmdmod.ptr()).cmod_flags & CMOD_HIDE as ::core::ffi::c_int
-                            == 0 as ::core::ffi::c_int
-                            || *(*buf).b_p_bh.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
-                                == 'u' as ::core::ffi::c_int
-                            || *(*buf).b_p_bh.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
-                                == 'w' as ::core::ffi::c_int
-                            || *(*buf).b_p_bh.offset(0 as ::core::ffi::c_int as isize)
-                                as ::core::ffi::c_int
-                                == 'd' as ::core::ffi::c_int
-                        {
-                            if !found_match {
-                                wipe_dummy_buffer(buf, dirname_start);
-                                buf = ::core::ptr::null_mut::<buf_T>();
-                            } else if buf != *first_match_buf
-                                || (*cmd_args).flags & VGR_NOJUMP as ::core::ffi::c_int != 0
-                                || existing_swapfile(buf) as ::core::ffi::c_int != 0
-                            {
-                                unload_dummy_buffer(buf, dirname_start);
-                                (*buf).b_flags &= !BF_DUMMY;
-                                buf = ::core::ptr::null_mut::<buf_T>();
-                            }
-                        }
-                        if !buf.is_null() {
-                            (*buf).b_flags &= !BF_DUMMY;
-                            if buf == *first_match_buf
-                                && (*target_dir).is_null()
-                                && strcmp(dirname_start, dirname_now) != 0 as ::core::ffi::c_int
-                            {
-                                *target_dir = xstrdup(dirname_now);
-                            }
-                            let mut aco: aco_save_T = aco_save_T::default();
-                            aucmd_prepbuf(&raw mut aco, buf);
-                            apply_autocmds(
-                                EVENT_FILETYPE,
-                                (*buf).b_p_ft,
-                                (*buf).b_fname,
-                                true_0 != 0,
-                                buf,
-                            );
-                            do_modelines(OPT_NOWIN as ::core::ffi::c_int);
-                            aucmd_restbuf(&raw mut aco);
-                        }
-                    }
-                }
-                fi += 1;
-            }
-            status = OK;
-        }
-        xfree(dirname_now as *mut ::core::ffi::c_void);
-        xfree(dirname_start as *mut ::core::ffi::c_void);
-        return status;
-    }
-}
-
-pub unsafe fn ex_vimgrep(mut eap: *mut exarg_T) {
-    unsafe {
-        let mut redraw_for_dummy: bool = false;
-        let mut first_match_buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-        let mut status: ::core::ffi::c_int = 0;
-        let mut qfl: *mut qf_list_T = ::core::ptr::null_mut::<qf_list_T>();
-        let mut save_qfid: ::core::ffi::c_uint = 0;
         if !check_can_set_curbuf_forceit((*eap).forceit) {
             return;
         }
-        let mut au_name: *mut ::core::ffi::c_char = vgr_get_auname((*eap).cmdidx);
-        if !au_name.is_null()
-            && apply_autocmds(
+
+        let au_name = vgr_get_auname((*eap).cmdidx);
+        if let Some(name) = au_name {
+            let claimed = apply_autocmds(
                 EVENT_QUICKFIXCMDPRE,
-                au_name,
+                name.as_ptr().cast_mut(),
                 (*curbuf.get()).b_fname,
-                true_0 != 0,
+                true,
                 curbuf.get(),
-            ) as ::core::ffi::c_int
-                != 0
-        {
-            if aborting() {
+            );
+            if claimed && aborting() {
                 return;
             }
         }
-        let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        let mut qi: *mut qf_info_T = qf_cmd_get_or_alloc_stack(eap, &raw mut wp);
-        let mut target_dir: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut args: vgr_args_T = vgr_args_T {
-            tomatch: 0,
-            spat: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            flags: 0,
-            fnames: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            fcount: 0,
-            regmatch: regmmatch_T {
-                regprog: ::core::ptr::null_mut::<regprog_T>(),
-                startpos: [lpos_T { lnum: 0, col: 0 }; 10],
-                endpos: [lpos_T { lnum: 0, col: 0 }; 10],
-                rmm_matchcol: 0,
-                rmm_ic: 0,
-                rmm_maxcol: 0,
-            },
-            qf_title: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+
+        let mut wp: *mut win_T = ptr::null_mut();
+        let qi = qf_cmd_get_or_alloc_stack(eap, &raw mut wp);
+
+        let Some((mut search, files)) = Search::parse(eap) else {
+            return;
         };
-        if vgr_process_args(eap, &raw mut args) != FAIL {
-            if (*eap).cmdidx as ::core::ffi::c_int != CMD_grepadd as ::core::ffi::c_int
-                && (*eap).cmdidx as ::core::ffi::c_int != CMD_lgrepadd as ::core::ffi::c_int
-                && (*eap).cmdidx as ::core::ffi::c_int != CMD_vimgrepadd as ::core::ffi::c_int
-                && (*eap).cmdidx as ::core::ffi::c_int != CMD_lvimgrepadd as ::core::ffi::c_int
-                || qf_stack_empty(qi) as ::core::ffi::c_int != 0
-            {
-                qf_new_list(qi, args.qf_title);
-            }
-            incr_quickfix_busy();
-            redraw_for_dummy = false_0 != 0;
-            first_match_buf = ::core::ptr::null_mut::<buf_T>();
-            status = vgr_process_files(
-                wp,
-                qi,
-                &raw mut args,
-                &raw mut redraw_for_dummy,
-                &raw mut first_match_buf,
-                &raw mut target_dir,
-            );
-            if status != OK {
-                FreeWild(args.fcount, args.fnames);
-                decr_quickfix_busy();
-            } else {
-                FreeWild(args.fcount, args.fnames);
-                qfl = qf_get_curlist(qi);
-                (*qfl).qf_nonevalid = false_0 != 0;
-                (*qfl).qf_ptr = (*qfl).qf_start;
-                (*qfl).qf_index = 1 as ::core::ffi::c_int;
-                qf_list_changed(qfl);
-                qf_update_buffer(qi, ::core::ptr::null_mut::<qfline_T>());
-                save_qfid = (*qf_get_curlist(qi)).qf_id;
-                if !au_name.is_null() {
-                    apply_autocmds(
-                        EVENT_QUICKFIXCMDPOST,
-                        au_name,
-                        (*curbuf.get()).b_fname,
-                        true_0 != 0,
-                        curbuf.get(),
-                    );
-                }
-                if !qflist_valid(wp, save_qfid) || qf_restore_list(qi, save_qfid) == FAIL {
-                    decr_quickfix_busy();
-                } else {
-                    if !qf_list_empty(qf_get_curlist(qi)) {
-                        if args.flags & VGR_NOJUMP as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-                        {
-                            vgr_jump_to_match(
-                                qi,
-                                (*eap).forceit,
-                                &raw mut redraw_for_dummy,
-                                first_match_buf,
-                                target_dir,
-                            );
-                        }
-                    } else {
-                        semsg(
-                            gettext(&raw const e_nomatch2 as *const ::core::ffi::c_char),
-                            args.spat,
-                        );
-                    }
-                    decr_quickfix_busy();
-                    if redraw_for_dummy {
-                        foldUpdateAll(curwin.get());
-                    }
-                }
-            }
-        }
-        xfree(args.qf_title as *mut ::core::ffi::c_void);
-        xfree(target_dir as *mut ::core::ffi::c_void);
-        vim_regfree(args.regmatch.regprog);
-    }
-}
 
-pub(crate) unsafe extern "C" fn restore_start_dir(mut dirname_start: *mut ::core::ffi::c_char) {
-    unsafe {
-        let mut dirname_now: *mut ::core::ffi::c_char =
-            xmalloc(MAXPATHL as size_t) as *mut ::core::ffi::c_char;
-        os_dirname(dirname_now, MAXPATHL as size_t);
-        if strcmp(dirname_start, dirname_now) != 0 as ::core::ffi::c_int {
-            let mut ea: exarg_T = exarg {
-                arg: dirname_start,
-                args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                arglens: ::core::ptr::null_mut::<size_t>(),
-                argc: 0,
-                nextcmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-                cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                cmdidx: (if (*curwin.get()).w_localdir.is_null() {
-                    CMD_cd as ::core::ffi::c_int
-                } else {
-                    CMD_lcd as ::core::ffi::c_int
-                }) as cmdidx_T,
-                argt: 0,
-                skip: 0,
-                forceit: 0,
-                addr_count: 0,
-                line1: 0,
-                line2: 0,
-                addr_type: ADDR_LINES,
-                flags: 0,
-                do_ecmd_cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                do_ecmd_lnum: 0,
-                append: 0,
-                usefilter: 0,
-                amount: 0,
-                regname: 0,
-                force_bin: 0,
-                read_edit: 0,
-                mkdir_p: 0,
-                force_ff: 0,
-                force_enc: 0,
-                bad_char: 0,
-                useridx: 0,
-                errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ea_getline: None,
-                cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-                cstack: ::core::ptr::null_mut::<cstack_T>(),
-            };
-            ex_cd(&raw mut ea);
-        }
-        xfree(dirname_now as *mut ::core::ffi::c_void);
-    }
-}
-
-pub(crate) unsafe extern "C" fn load_dummy_buffer(
-    mut fname: *mut ::core::ffi::c_char,
-    mut dirname_start: *mut ::core::ffi::c_char,
-    mut resulting_dir: *mut ::core::ffi::c_char,
-) -> *mut buf_T {
-    unsafe {
-        let mut newbuf: *mut buf_T = buflist_new(
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            1 as linenr_T,
-            BLN_DUMMY as ::core::ffi::c_int,
+        let adding = matches!(
+            (*eap).cmdidx,
+            CMD_grepadd | CMD_lgrepadd | CMD_vimgrepadd | CMD_lvimgrepadd
         );
-        if newbuf.is_null() {
-            return ::core::ptr::null_mut::<buf_T>();
+        if !adding || qf_stack_empty(qi) {
+            // Make a new list.
+            qf_new_list(qi, search.qf_title.as_ptr());
         }
-        let mut failed: bool = true_0 != 0;
-        let mut newbufref: bufref_T = bufref_T::default();
-        set_bufref(&raw mut newbufref, newbuf);
-        buf_copy_options(
-            newbuf,
-            BCO_ENTER as ::core::ffi::c_int | BCO_NOHELP as ::core::ffi::c_int,
-        );
-        if ml_open(newbuf) == OK {
-            (*newbuf).b_locked += 1;
-            let mut aco: aco_save_T = aco_save_T::default();
-            aucmd_prepbuf(&raw mut aco, newbuf);
-            setfname(
-                curbuf.get(),
-                fname,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
-            );
-            check_need_swap(true_0 != 0);
-            (*curbuf.get()).b_flags &= !BF_DUMMY;
-            let mut newbuf_to_wipe: bufref_T = bufref_T::default();
-            newbuf_to_wipe.br_buf = ::core::ptr::null_mut::<buf_T>();
-            let mut readfile_result: ::core::ffi::c_int = readfile(
-                fname,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                0 as linenr_T,
-                0 as linenr_T,
-                MAXLNUM as ::core::ffi::c_int as linenr_T,
-                ::core::ptr::null_mut::<exarg_T>(),
-                READ_NEW as ::core::ffi::c_int | READ_DUMMY as ::core::ffi::c_int,
-                false_0 != 0,
-            );
-            (*newbuf).b_locked -= 1;
-            if readfile_result == OK && !got_int.get() && (*curbuf.get()).b_flags & BF_NEW == 0 {
-                failed = false_0 != 0;
-                if curbuf.get() != newbuf {
-                    set_bufref(&raw mut newbuf_to_wipe, newbuf);
-                    newbuf = curbuf.get();
-                }
-            }
-            aucmd_restbuf(&raw mut aco);
-            if !newbuf_to_wipe.br_buf.is_null()
-                && bufref_valid(&raw mut newbuf_to_wipe) as ::core::ffi::c_int != 0
-            {
-                block_autocmds();
-                wipe_dummy_buffer(
-                    newbuf_to_wipe.br_buf,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                );
-                unblock_autocmds();
-            }
-            (*newbuf).b_flags |= BF_DUMMY;
-        }
-        os_dirname(resulting_dir, MAXPATHL as size_t);
-        restore_start_dir(dirname_start);
-        if !bufref_valid(&raw mut newbufref) {
-            return ::core::ptr::null_mut::<buf_T>();
-        }
-        if failed {
-            wipe_dummy_buffer(newbuf, dirname_start);
-            return ::core::ptr::null_mut::<buf_T>();
-        }
-        return newbuf;
-    }
-}
 
-pub(crate) unsafe extern "C" fn wipe_dummy_buffer(
-    mut buf: *mut buf_T,
-    mut dirname_start: *mut ::core::ffi::c_char,
-) {
-    unsafe {
-        '_fail: {
-            // Not immutable: win_close() drops (*buf).b_nwindows behind the raw pointer.
-            #[allow(clippy::while_immutable_condition)]
-            while (*buf).b_nwindows > 0 as ::core::ffi::c_int {
-                let mut did_one: bool = false_0 != 0;
-                if !(*firstwin.get()).w_next.is_null() {
-                    let mut wp: *mut win_T = firstwin.get();
-                    while !wp.is_null() {
-                        if (*wp).w_buffer == buf {
-                            if win_close(wp, false_0 != 0, false_0 != 0) == OK {
-                                did_one = true_0 != 0;
-                            }
-                            break;
-                        } else {
-                            wp = (*wp).w_next;
-                        }
-                    }
-                }
-                if !did_one {
-                    break '_fail;
-                }
-            }
-            if curbuf.get() != buf && (*buf).b_nwindows == 0 as ::core::ffi::c_int {
-                let mut cs: cleanup_T = cleanup_T {
-                    pending: 0,
-                    exception: ::core::ptr::null_mut::<except_T>(),
-                };
-                enter_cleanup(&raw mut cs);
-                wipe_buffer(buf, true_0 != 0);
-                leave_cleanup(&raw mut cs);
-                if !dirname_start.is_null() {
-                    restore_start_dir(dirname_start);
-                }
-                return;
-            }
-        }
-        (*buf).b_flags &= !BF_DUMMY;
-    }
-}
-
-pub(crate) unsafe extern "C" fn unload_dummy_buffer(
-    mut buf: *mut buf_T,
-    mut dirname_start: *mut ::core::ffi::c_char,
-) {
-    unsafe {
-        if curbuf.get() == buf {
+        incr_quickfix_busy();
+        let mut out = Outcome::default();
+        let searched = process_files(wp, qi, &mut search, &files, &mut out);
+        drop(files);
+        if !searched {
+            decr_quickfix_busy();
             return;
         }
-        close_buffer(
-            ::core::ptr::null_mut::<win_T>(),
-            buf,
-            DOBUF_UNLOAD as ::core::ffi::c_int,
-            false_0 != 0,
-            true_0 != 0,
-        );
-        restore_start_dir(dirname_start);
+
+        let qfl = qf_get_curlist(qi);
+        (*qfl).qf_nonevalid = false;
+        (*qfl).qf_ptr = (*qfl).qf_start;
+        (*qfl).qf_index = 1;
+        qf_list_changed(qfl);
+
+        qf_update_buffer(qi, ptr::null_mut());
+
+        // Remember the current list, so that an autocommand replacing it is
+        // noticed before the jump.
+        let save_qfid = (*qf_get_curlist(qi)).qf_id;
+        if let Some(name) = au_name {
+            apply_autocmds(
+                EVENT_QUICKFIXCMDPOST,
+                name.as_ptr().cast_mut(),
+                (*curbuf.get()).b_fname,
+                true,
+                curbuf.get(),
+            );
+        }
+        if !qflist_valid(wp, save_qfid) || qf_restore_list(qi, save_qfid) == FAIL {
+            decr_quickfix_busy();
+            return;
+        }
+
+        if qf_list_empty(qf_get_curlist(qi)) {
+            semsg(gettext(&raw const e_nomatch2 as *const c_char), search.spat);
+        } else if search.flags & VGR_NOJUMP as c_int == 0 {
+            jump_to_match(qi, (*eap).forceit, &mut out);
+        }
+
+        decr_quickfix_busy();
+
+        // Reading the files may have messed up the folds of the window the
+        // command was given in.
+        if out.redraw_for_dummy {
+            foldUpdateAll(curwin.get());
+        }
     }
 }

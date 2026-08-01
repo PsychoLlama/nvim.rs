@@ -1,6 +1,6 @@
 {
   "internal_exports": 55,
-  "files_without_forbid_unsafe": 567,
+  "files_without_forbid_unsafe": 568,
   "files_without_deny_unsafe_op": 214,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -377,6 +377,7 @@
     "crates/nvim/src/nvim/profile.rs": {"unsafe": 33},
     "crates/nvim/src/nvim/quickfix/cmds.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/quickfix/display.rs": {"unsafe": 11},
+    "crates/nvim/src/nvim/quickfix/dummy.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/quickfix/efm.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/quickfix/entry.rs": {"unsafe": 19},
     "crates/nvim/src/nvim/quickfix/eval.rs": {"unsafe": 9},
@@ -392,7 +393,7 @@
     "crates/nvim/src/nvim/quickfix/setprops.rs": {"unsafe": 12},
     "crates/nvim/src/nvim/quickfix/stack.rs": {"unsafe": 30},
     "crates/nvim/src/nvim/quickfix/switchbuf.rs": {"unsafe": 11},
-    "crates/nvim/src/nvim/quickfix/vimgrep.rs": {"unsafe": 14},
+    "crates/nvim/src/nvim/quickfix/vimgrep.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/quickfix/window.rs": {"unsafe": 17},
     "crates/nvim/src/nvim/regexp/api.rs": {"no_mangle": 6, "unsafe": 8},
     "crates/nvim/src/nvim/regexp/bt/collection.rs": {"unsafe": 4},
