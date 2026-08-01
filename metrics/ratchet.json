@@ -1,6 +1,6 @@
 {
   "internal_exports": 55,
-  "files_without_forbid_unsafe": 528,
+  "files_without_forbid_unsafe": 533,
   "files_without_deny_unsafe_op": 216,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -411,7 +411,12 @@
     "crates/nvim/src/nvim/regexp/substitute.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/register.rs": {"lines": 4625, "no_mangle": 2, "unsafe": 54},
     "crates/nvim/src/nvim/runtime.rs": {"lines": 5829, "unsafe": 118},
-    "crates/nvim/src/nvim/search.rs": {"lines": 4718, "no_mangle": 3, "unsafe": 57},
+    "crates/nvim/src/nvim/search.rs": {"lines": 1343, "unsafe": 6},
+    "crates/nvim/src/nvim/search/command.rs": {"unsafe": 5},
+    "crates/nvim/src/nvim/search/find.rs": {"unsafe": 3},
+    "crates/nvim/src/nvim/search/matchpair.rs": {"unsafe": 7},
+    "crates/nvim/src/nvim/search/pattern.rs": {"no_mangle": 3, "unsafe": 23},
+    "crates/nvim/src/nvim/search/stat.rs": {"unsafe": 3},
     "crates/nvim/src/nvim/shada.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/shada/collect.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/shada/file.rs": {"unsafe": 18},
