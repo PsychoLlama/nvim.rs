@@ -26,25 +26,30 @@ const LSIZE: usize = super::LSIZE as usize;
 ///
 /// # Safety
 /// `lbuf` must be NUL-terminated, and must outlive `tagp`.
+#[inline]
 pub(crate) unsafe fn parse_tag_line(lbuf: *mut c_char, tagp: &mut TagParts) -> bool {
     // SAFETY: the caller's promise; `vim_strchr` stops at the terminator,
     // and every pointer stored stays inside the line.
     unsafe {
+        // Through locals rather than back through `tagp`: this runs once
+        // per line of every tags file read without a usable head.
         tagp.tagname = lbuf;
-        let Some(end) = field_end(tagp.tagname) else {
+        let Some(name_end) = field_end(lbuf) else {
             return false;
         };
-        tagp.tagname_end = end;
+        tagp.tagname_end = name_end;
 
-        tagp.fname = skip_tab(end);
-        let Some(end) = field_end(tagp.fname) else {
+        let fname = skip_tab(name_end);
+        tagp.fname = fname;
+        let Some(fname_end) = field_end(fname) else {
             return false;
         };
-        tagp.fname_end = end;
+        tagp.fname_end = fname_end;
 
-        tagp.command = skip_tab(end);
+        let command = skip_tab(fname_end);
+        tagp.command = command;
         // A line that stops after the file name has no command at all.
-        *tagp.command != 0
+        *command != 0
     }
 }
 
@@ -52,6 +57,7 @@ pub(crate) unsafe fn parse_tag_line(lbuf: *mut c_char, tagp: &mut TagParts) -> b
 ///
 /// # Safety
 /// `p` must be NUL-terminated.
+#[inline]
 unsafe fn field_end(p: *mut c_char) -> Option<*mut c_char> {
     // SAFETY: the caller's promise.
     let end = unsafe { vim_strchr(p, TAB) };
@@ -62,6 +68,7 @@ unsafe fn field_end(p: *mut c_char) -> Option<*mut c_char> {
 ///
 /// # Safety
 /// `p` must be readable and NUL-terminated.
+#[inline]
 unsafe fn skip_tab(p: *mut c_char) -> *mut c_char {
     // SAFETY: the caller's promise.
     unsafe { if *p != 0 { p.add(1) } else { p } }

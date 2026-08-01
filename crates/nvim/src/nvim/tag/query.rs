@@ -56,8 +56,10 @@ pub unsafe fn expand_tags(
             (*curbuf.get()).b_ffname,
         );
         if ret == OK && !tagnames {
+            // One scratch buffer for the whole set, as upstream keeps.
+            let mut head = Vec::with_capacity(128);
             for i in 0..*num_file as usize {
-                reshape_match(*(*file).add(i));
+                reshape_match(*(*file).add(i), &mut head);
             }
         }
         ret
@@ -71,7 +73,7 @@ pub unsafe fn expand_tags(
 ///
 /// # Safety
 /// `entry` must be a match [`find_tags`] answered, and ours to write.
-unsafe fn reshape_match(entry: *mut c_char) {
+unsafe fn reshape_match(entry: *mut c_char, head: &mut Vec<c_char>) {
     // SAFETY: the caller's promise. The two moves may overlap, which is
     // why they are `copy` and not `copy_nonoverlapping`.
     unsafe {
@@ -85,7 +87,7 @@ unsafe fn reshape_match(entry: *mut c_char) {
         // Built before anything is written, because it is read out of the
         // match itself.
         let name_len = parts.tagname_end.offset_from(parts.tagname) as usize;
-        let mut head = Vec::with_capacity(name_len + 3);
+        head.clear();
         head.extend_from_slice(core::slice::from_raw_parts(parts.tagname, name_len));
         head.push(0);
         // A match with no kind of its own is reported as a function.
