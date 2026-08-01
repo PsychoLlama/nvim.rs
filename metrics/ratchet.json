@@ -1,6 +1,6 @@
 {
   "internal_exports": 55,
-  "files_without_forbid_unsafe": 518,
+  "files_without_forbid_unsafe": 523,
   "files_without_deny_unsafe_op": 218,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -361,7 +361,12 @@
     "crates/nvim/src/nvim/os/stdpaths.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/os/time.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/os/users.rs": {"no_mangle": 4, "unsafe": 7},
-    "crates/nvim/src/nvim/path.rs": {"lines": 2837, "no_mangle": 15, "unsafe": 68},
+    "crates/nvim/src/nvim/path.rs": {"no_mangle": 4, "unsafe": 12},
+    "crates/nvim/src/nvim/path/compare.rs": {"no_mangle": 2, "unsafe": 4},
+    "crates/nvim/src/nvim/path/expand.rs": {"unsafe": 9},
+    "crates/nvim/src/nvim/path/glob.rs": {"unsafe": 10},
+    "crates/nvim/src/nvim/path/names.rs": {"no_mangle": 7, "unsafe": 21},
+    "crates/nvim/src/nvim/path/unique.rs": {"no_mangle": 2, "unsafe": 9},
     "crates/nvim/src/nvim/plines.rs": {"lines": 1318, "no_mangle": 4, "unsafe": 32},
     "crates/nvim/src/nvim/popupmenu.rs": {"lines": 3201, "unsafe": 32},
     "crates/nvim/src/nvim/profile.rs": {"unsafe": 33},
