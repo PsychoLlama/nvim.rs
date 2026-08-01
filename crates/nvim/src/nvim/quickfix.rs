@@ -45,7 +45,6 @@ use crate::src::nvim::fileio::shorten_buf_fname;
 use crate::src::nvim::fileio::{readfile, shorten_fnames, vim_fgets, vim_tempname};
 use crate::src::nvim::fold::{foldOpenCursor, foldUpdateAll};
 use crate::src::nvim::fuzzy::fuzzy_match;
-use crate::src::nvim::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::help::check_help_lang;
 use crate::src::nvim::highlight_group::syn_name2id;
@@ -109,11 +108,11 @@ use crate::src::nvim::types::{
     ExtmarkOp, FILE, FileInfo, ListLenSpecials, OptInt, OptVal, OptValData, OptValType,
     QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, String_0, TriState, VarLockStatus, VarType,
     aco_save_T, bcount_t, bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, cmdidx_T, colnr_T,
-    cstack_T, dict_T, dictitem_T, dobuf_action_values, exarg, exarg_T, except_T, garray_T,
-    getf_values, handle_T, ht_stack_T, linenr_T, list_T, list_stack_T, listitem_T, lpos_T,
-    optset_T, pos_T, proftime_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T,
-    regmmatch_T, regprog_T, scid_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union,
-    uint8_t, uint32_t, uv_stat_t, uv_timespec_t, varnumber_T, vimconv_T, win_T,
+    cstack_T, dict_T, dictitem_T, dobuf_action_values, exarg, exarg_T, except_T, getf_values,
+    handle_T, ht_stack_T, linenr_T, list_T, list_stack_T, listitem_T, lpos_T, optset_T, pos_T,
+    proftime_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T,
+    regprog_T, scid_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, uint32_t, uv_stat_t,
+    uv_timespec_t, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::u_clearallandblockfree;
@@ -322,13 +321,6 @@ static e_current_location_list_was_changed: GlobalCell<*const ::core::ffi::c_cha
     GlobalCell::new(
         b"E926: Current location list was changed\0".as_ptr() as *const ::core::ffi::c_char
     );
-static qfga: GlobalCell<garray_T> = GlobalCell::new(garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 0,
-    ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-});
 static qftf_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: C2Rust_Unnamed_6 {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),

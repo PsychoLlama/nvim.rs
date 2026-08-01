@@ -578,69 +578,70 @@ pub(crate) unsafe extern "C" fn qf_buf_add_line(
     mut first_bufline: bool,
 ) -> ::core::ffi::c_int {
     unsafe {
-        let mut gap: *mut garray_T = qfga_get();
-        if !qftf_str.is_null() && *qftf_str as ::core::ffi::c_int != NUL {
-            ga_concat(gap, qftf_str);
-        } else {
-            let mut errbuf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-            if !(*qfp).qf_module.is_null() {
-                ga_concat(gap, (*qfp).qf_module);
-            } else if (*qfp).qf_fnum != 0 as ::core::ffi::c_int
-                && {
-                    errbuf = buflist_findnr((*qfp).qf_fnum);
-                    !errbuf.is_null()
-                }
-                && !(*errbuf).b_fname.is_null()
-            {
-                if (*qfp).qf_type as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
-                    ga_concat(gap, path_tail((*errbuf).b_fname));
-                } else {
-                    if first_bufline as ::core::ffi::c_int != 0
-                        && ((*errbuf).b_sfname.is_null()
-                            || path_is_absolute((*errbuf).b_sfname) as ::core::ffi::c_int != 0)
-                    {
-                        if *dirname as ::core::ffi::c_int == NUL {
-                            os_dirname(dirname, MAXPATHL as size_t);
-                        }
-                        shorten_buf_fname(errbuf, dirname, false_0);
+        let line = build_line(|gap| {
+            if !qftf_str.is_null() && *qftf_str as ::core::ffi::c_int != NUL {
+                push_cstr(gap, qftf_str);
+            } else {
+                let mut errbuf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
+                if !(*qfp).qf_module.is_null() {
+                    push_cstr(gap, (*qfp).qf_module);
+                } else if (*qfp).qf_fnum != 0 as ::core::ffi::c_int
+                    && {
+                        errbuf = buflist_findnr((*qfp).qf_fnum);
+                        !errbuf.is_null()
                     }
-                    ga_concat(
-                        gap,
-                        if (*qfp).qf_fname.is_null() {
-                            (*errbuf).b_fname
-                        } else {
-                            (*qfp).qf_fname
-                        },
-                    );
+                    && !(*errbuf).b_fname.is_null()
+                {
+                    if (*qfp).qf_type as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
+                        push_cstr(gap, path_tail((*errbuf).b_fname));
+                    } else {
+                        if first_bufline as ::core::ffi::c_int != 0
+                            && ((*errbuf).b_sfname.is_null()
+                                || path_is_absolute((*errbuf).b_sfname) as ::core::ffi::c_int != 0)
+                        {
+                            if *dirname as ::core::ffi::c_int == NUL {
+                                os_dirname(dirname, MAXPATHL as size_t);
+                            }
+                            shorten_buf_fname(errbuf, dirname, false_0);
+                        }
+                        push_cstr(
+                            gap,
+                            if (*qfp).qf_fname.is_null() {
+                                (*errbuf).b_fname
+                            } else {
+                                (*qfp).qf_fname
+                            },
+                        );
+                    }
                 }
-            }
-            ga_append(gap, '|' as uint8_t);
-            if (*qfp).qf_lnum > 0 as linenr_T {
-                qf_range_text(gap, qfp);
-                ga_concat(
+                gap.push(b'|');
+                if (*qfp).qf_lnum > 0 as linenr_T {
+                    qf_range_text(gap, qfp);
+                    push_cstr(
+                        gap,
+                        qf_types((*qfp).qf_type as ::core::ffi::c_int, (*qfp).qf_nr),
+                    );
+                } else if !(*qfp).qf_pattern.is_null() {
+                    qf_fmt_text(gap, (*qfp).qf_pattern);
+                }
+                gap.push(b'|');
+                gap.push(b' ');
+                let named = gap.len() > 3;
+                qf_fmt_text(
                     gap,
-                    qf_types((*qfp).qf_type as ::core::ffi::c_int, (*qfp).qf_nr),
+                    if named {
+                        skipwhite((*qfp).qf_text)
+                    } else {
+                        (*qfp).qf_text
+                    },
                 );
-            } else if !(*qfp).qf_pattern.is_null() {
-                qf_fmt_text(gap, (*qfp).qf_pattern);
             }
-            ga_append(gap, '|' as uint8_t);
-            ga_append(gap, ' ' as uint8_t);
-            qf_fmt_text(
-                gap,
-                if (*gap).ga_len > 3 as ::core::ffi::c_int {
-                    skipwhite((*qfp).qf_text)
-                } else {
-                    (*qfp).qf_text
-                },
-            );
-        }
-        ga_append(gap, NUL as uint8_t);
+        });
         if ml_append_buf(
             buf,
             lnum,
-            (*gap).ga_data as *mut ::core::ffi::c_char,
-            (*gap).ga_len as colnr_T,
+            line.as_ptr() as *mut ::core::ffi::c_char,
+            line.len() as colnr_T,
             false_0 != 0,
         ) == FAIL
         {
@@ -837,7 +838,7 @@ pub(crate) unsafe extern "C" fn qf_fill_buffer(
             if old_last.is_null() {
                 ml_delete(lnum + 1 as linenr_T);
             }
-            qfga_clear();
+            release_scratch();
         }
         check_lnums(true_0 != 0);
         if old_last.is_null() {

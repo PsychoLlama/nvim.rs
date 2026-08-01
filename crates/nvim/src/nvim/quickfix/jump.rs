@@ -16,7 +16,7 @@
 #[allow(unused_imports)]
 use super::*;
 use core::ffi::{c_char, c_int, c_uint};
-use core::ptr;
+use core::{ptr, slice};
 
 /// What became of one jump.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -265,7 +265,6 @@ unsafe fn qf_jump_print_msg(
 ) {
     // SAFETY: forwarded from the caller.
     unsafe {
-        let gap = qfga_get();
         // Update the screen before showing the message, unless messages
         // have scrolled.
         if msg_scrolled.get() == 0 {
@@ -287,10 +286,11 @@ unsafe fn qf_jump_print_msg(
             },
             qf_types((*qf_ptr).qf_type as c_int, (*qf_ptr).qf_nr),
         );
-        ga_concat_len(gap, IObuff.ptr().cast(), len);
-        // The message itself, without its leading whitespace and newlines.
-        qf_fmt_text(gap, skipwhite((*qf_ptr).qf_text));
-        ga_append(gap, NUL as uint8_t);
+        let text = build_line(|out| {
+            out.extend_from_slice(slice::from_raw_parts(IObuff.ptr().cast::<u8>(), len));
+            // The message itself, without leading whitespace or newlines.
+            qf_fmt_text(out, skipwhite((*qf_ptr).qf_text));
+        });
 
         // Overwrite rather than scroll when 'shortmess' holds "O" — but
         // print the whole message when the jump did not actually move.
@@ -303,9 +303,9 @@ unsafe fn qf_jump_print_msg(
             msg_scroll.set(false as c_int);
         }
         msg_ext_set_kind(c"quickfix".as_ptr());
-        msg_keep((*gap).ga_data.cast(), 0, true, false);
+        msg_keep(text.as_ptr().cast(), 0, true, false);
         msg_scroll.set(old_msg_scroll);
-        qfga_clear();
+        release_scratch();
     }
 }
 
