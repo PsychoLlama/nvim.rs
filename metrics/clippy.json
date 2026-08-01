@@ -124,7 +124,7 @@
     "crates/nvim/src/nvim/path/compare.rs": 2,
     "crates/nvim/src/nvim/path/expand.rs": 26,
     "crates/nvim/src/nvim/path/glob.rs": 20,
-    "crates/nvim/src/nvim/path/names.rs": 9,
+    "crates/nvim/src/nvim/path/names.rs": 3,
     "crates/nvim/src/nvim/path/unique.rs": 10,
     "crates/nvim/src/nvim/popupmenu.rs": 30,
     "crates/nvim/src/nvim/profile.rs": 7,

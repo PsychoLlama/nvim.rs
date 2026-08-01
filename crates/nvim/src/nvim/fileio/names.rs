@@ -14,26 +14,13 @@
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::CStr;
 
+use crate::src::nvim::path::tail_index;
+
 #[allow(unused_imports)]
 use super::*;
 
 /// `S_IFLNK`: the file type bits of a symbolic link.
 const S_IFLNK: u64 = 0o120000;
-
-/// Where the last component of `name` starts, as `path_tail` finds it.
-///
-/// Upstream steps through the name a character at a time, but a `/` byte can
-/// never be part of a multibyte character — `utf_ptr2len` only steps over a
-/// lead byte when every byte after it is a continuation byte, and `/` is not
-/// one — so scanning bytes finds the same separator.
-fn tail_index(name: &[u8]) -> usize {
-    // Leading separators belong to the head, not to a component.
-    let head = name.iter().position(|&b| b != b'/').unwrap_or(name.len());
-    name[head..]
-        .iter()
-        .rposition(|&b| b == b'/')
-        .map_or(head, |at| head + at + 1)
-}
 
 /// Shorten `buf`'s displayed file name to be relative to `dirname`.
 pub unsafe fn shorten_buf_fname(buf: *mut buf_T, dirname: *mut c_char, force: c_int) {

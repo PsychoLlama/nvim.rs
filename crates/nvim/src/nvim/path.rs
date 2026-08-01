@@ -1,4 +1,3 @@
-use crate::src::nvim::ascii::ascii_isdigit;
 use crate::src::nvim::charset::{backslash_halve, backslash_halve_save, rem_backslash, skipwhite};
 use crate::src::nvim::cmdexpand::globpath;
 use crate::src::nvim::eval::eval_to_string;
