@@ -200,18 +200,6 @@ pub const CPO_LINEOFF: ::core::ffi::c_int = 'o' as ::core::ffi::c_int;
 pub const CPO_MATCH: ::core::ffi::c_int = '%' as ::core::ffi::c_int;
 pub const CPO_SCOLON: ::core::ffi::c_int = ';' as ::core::ffi::c_int;
 pub const IOSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-static e_search_hit_top_without_match_for_str: GlobalCell<[::core::ffi::c_char; 43]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 43], [::core::ffi::c_char; 43]>(
-            *b"E384: Search hit TOP without match for: %s\0",
-        )
-    });
-static e_search_hit_bottom_without_match_for_str: GlobalCell<[::core::ffi::c_char; 46]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 46], [::core::ffi::c_char; 46]>(
-            *b"E385: Search hit BOTTOM without match for: %s\0",
-        )
-    });
 static lastc: GlobalCell<[uint8_t; 2]> = GlobalCell::new([NUL as uint8_t, NUL as uint8_t]);
 static lastcdir: GlobalCell<Direction> = GlobalCell::new(FORWARD);
 static last_t_cmd: GlobalCell<bool> = GlobalCell::new(true_0 != 0);

@@ -3,595 +3,776 @@
 //! [`searchit`] is the one searcher underneath `/`, `?`, `n`, `N`, `*`,
 //! `gd`, `:substitute`'s address form and the tag jumps: it walks lines
 //! from a starting position in one direction, wrapping at the end of the
-//! buffer when `'wrapscan'` is set, and applies the search offset the
-//! pattern carried. [`search_for_exact_line`] is the unrelated plain-text
-//! line scanner insert-mode line completion uses.
+//! buffer when `'wrapscan'` is set. [`search_for_exact_line`] is the
+//! unrelated plain-text line scanner insert-mode line completion uses.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{c_char, c_int};
+use core::ptr;
 
-pub unsafe extern "C" fn searchit(
-    mut win: *mut win_T,
-    mut buf: *mut buf_T,
-    mut pos: *mut pos_T,
-    mut end_pos: *mut pos_T,
-    mut dir: Direction,
-    mut pat: *mut ::core::ffi::c_char,
-    mut patlen: size_t,
-    mut count: ::core::ffi::c_int,
-    mut options: ::core::ffi::c_int,
-    mut pat_use: ::core::ffi::c_int,
-    mut extra_arg: *mut searchit_arg_T,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut found: ::core::ffi::c_int = 0;
-        let mut lnum: linenr_T = 0;
-        let mut regmatch: regmmatch_T = regmmatch_T {
-            regprog: ::core::ptr::null_mut::<regprog_T>(),
-            startpos: [lpos_T { lnum: 0, col: 0 }; 10],
-            endpos: [lpos_T { lnum: 0, col: 0 }; 10],
-            rmm_matchcol: 0,
-            rmm_ic: 0,
-            rmm_maxcol: 0,
-        };
-        let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut matchcol: colnr_T = 0;
-        let mut endpos: lpos_T = lpos_T { lnum: 0, col: 0 };
-        let mut matchpos: lpos_T = lpos_T { lnum: 0, col: 0 };
-        let mut loop_0: ::core::ffi::c_int = 0;
-        let mut extra_col: ::core::ffi::c_int = 0;
-        let mut start_char_len: ::core::ffi::c_int = 0;
-        let mut match_ok: bool = false;
-        let mut nmatched: ::core::ffi::c_int = 0;
-        let mut submatch: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut first_match: bool = true_0 != 0;
-        let called_emsg_before: ::core::ffi::c_int = called_emsg.get();
-        let mut break_loop: bool = false_0 != 0;
-        let mut stop_lnum: linenr_T = 0 as linenr_T;
-        let mut tm: *mut proftime_T = ::core::ptr::null_mut::<proftime_T>();
-        let mut timed_out: *mut ::core::ffi::c_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
-        if !extra_arg.is_null() {
-            stop_lnum = (*extra_arg).sa_stop_lnum;
-            tm = (*extra_arg).sa_tm;
-            timed_out = &raw mut (*extra_arg).sa_timed_out;
+/// Which remembered pattern an empty `pat` falls back on.
+const RE_SEARCH: c_int = super::RE_SEARCH as c_int;
+
+// The `SEARCH_*` option flags, retyped for this module: c2rust left the
+// family as `c_uint` and `options` is a `c_int`.
+const SEARCH_HIS: c_int = super::SEARCH_HIS as c_int;
+const SEARCH_END: c_int = super::SEARCH_END as c_int;
+const SEARCH_NOOF: c_int = super::SEARCH_NOOF as c_int;
+const SEARCH_START: c_int = super::SEARCH_START as c_int;
+const SEARCH_KEEP: c_int = super::SEARCH_KEEP as c_int;
+const SEARCH_PEEK: c_int = super::SEARCH_PEEK as c_int;
+const SEARCH_COL: c_int = super::SEARCH_COL as c_int;
+/// Both message bits: `options & SEARCH_MSG == SEARCH_MSG` asks for the
+/// "not found" message as well as the echo.
+const SEARCH_MSG: c_int = super::SEARCH_MSG as c_int;
+
+/// One `vim_regexec_multi` result: where the match starts, where it ends
+/// (both relative to the line the search was run from) and the number of
+/// the first sub-pattern that took part.
+#[derive(Clone, Copy)]
+struct Found {
+    start: lpos_T,
+    end: lpos_T,
+    submatch: c_int,
+}
+
+/// Where the search started from, and how close to it a match may sit.
+#[derive(Clone, Copy)]
+struct StartPos {
+    pos: pos_T,
+    /// Zero when a match at the start position itself counts; otherwise
+    /// the length of the character there, so that a match has to be at
+    /// least one character away.
+    extra_col: c_int,
+}
+
+/// Everything a [`searchit`] line walk needs that does not change while it
+/// runs.
+struct Searcher {
+    win: *mut win_T,
+    buf: *mut buf_T,
+    /// The compiled pattern. `vim_regexec_multi` may clear `regprog`,
+    /// which is how a pattern that turned out to be too expensive stops
+    /// the whole search.
+    regmatch: regmmatch_T,
+    /// Timeout limit, or null for none.
+    tm: *mut proftime_T,
+    /// Set when the limit was passed, or null.
+    timed_out: *mut c_int,
+    options: c_int,
+    dir: Direction,
+    /// `'cpo'` contains `c`: a repeated search continues from the end of
+    /// the previous match rather than one character past its start.
+    from_match_end: bool,
+    /// `called_emsg` on entry — anything above it means an error was
+    /// reported and the search must stop.
+    called_emsg_before: c_int,
+}
+
+impl Searcher {
+    /// Whether one of the `SEARCH_*` option bits is set.
+    #[inline(always)]
+    fn opt(&self, flag: c_int) -> bool {
+        self.options & flag != 0
+    }
+
+    /// Run the pattern against line `lnum` from column `col`.
+    ///
+    /// # Safety
+    /// `lnum` must be a line of `self.buf`.
+    #[inline(always)]
+    unsafe fn exec(&mut self, lnum: linenr_T, col: colnr_T) -> c_int {
+        unsafe {
+            vim_regexec_multi(
+                &raw mut self.regmatch,
+                self.win,
+                self.buf,
+                lnum,
+                col,
+                self.tm,
+                self.timed_out,
+            )
         }
+    }
+
+    /// The match `exec` just reported.
+    #[inline(always)]
+    fn found(&mut self) -> Found {
+        Found {
+            start: self.regmatch.startpos[0],
+            end: self.regmatch.endpos[0],
+            // SAFETY: a pointer to our own field.
+            submatch: unsafe { first_submatch(&raw mut self.regmatch) },
+        }
+    }
+
+    /// Text of line `lnum`.
+    ///
+    /// # Safety
+    /// `lnum` must be a line of `self.buf`.
+    #[inline(always)]
+    unsafe fn line(&self, lnum: linenr_T) -> *mut c_char {
+        unsafe { ml_get_buf(self.buf, lnum) }
+    }
+
+    /// Whether an error was reported or the timeout was passed — either
+    /// way the search stops where it is.
+    #[inline(always)]
+    fn aborted(&self) -> bool {
+        // SAFETY: `timed_out` is null or points into the caller's
+        // `searchit_arg_T`.
+        called_emsg.get() > self.called_emsg_before
+            || unsafe { !self.timed_out.is_null() && *self.timed_out != 0 }
+    }
+
+    /// Whether the timeout has been passed.
+    #[inline(always)]
+    fn out_of_time(&self) -> bool {
+        // SAFETY: `tm` is null or points into the caller's `searchit_arg_T`.
+        unsafe { !self.tm.is_null() && profile_passed_limit(*self.tm) }
+    }
+
+    /// Advance `col` over the character at it, if there is one.
+    ///
+    /// # Safety
+    /// `line` must be NUL-terminated and `col` within it.
+    #[inline(always)]
+    unsafe fn step_over(&self, line: *mut c_char, col: colnr_T) -> colnr_T {
+        unsafe {
+            if *line.offset(col as isize) as c_int != NUL {
+                col + utfc_ptr2len(line.offset(col as isize))
+            } else {
+                col
+            }
+        }
+    }
+
+    /// Forward search in the line the search started in: the match has to
+    /// lie after the start position. When it does not, look again — from
+    /// the end of the match with `'cpo'`'s `c` (vi compatible), otherwise
+    /// from one character on — until a match is past the start or the line
+    /// runs out.
+    ///
+    /// Answers false when this line holds nothing usable.
+    ///
+    /// # Safety
+    /// `lnum` must be a line of `self.buf` and `line` its text.
+    unsafe fn skip_to_start_pos(
+        &mut self,
+        lnum: linenr_T,
+        mut line: *mut c_char,
+        found: &mut Found,
+        nmatched: &mut c_int,
+        start: StartPos,
+        first_match: bool,
+    ) -> bool {
+        unsafe {
+            while found.start.lnum == 0
+                && if self.opt(SEARCH_END) && first_match {
+                    // A match landing on the NUL puts the cursor one back
+                    // afterwards; compare against that, or `/$` sticks at
+                    // the end of the line.
+                    *nmatched == 1 && found.end.col - 1 < start.pos.col + start.extra_col
+                } else {
+                    let on_nul = c_int::from(*line.offset(found.start.col as isize) == 0);
+                    found.start.col - on_nul < start.pos.col + start.extra_col
+                }
+            {
+                let matchcol = if self.from_match_end {
+                    if *nmatched > 1 {
+                        // The end is in the next line, so there is no
+                        // match in this one.
+                        return false;
+                    }
+                    // For an empty match, advance one character.
+                    if found.end.col == found.start.col {
+                        self.step_over(line, found.end.col)
+                    } else {
+                        found.end.col
+                    }
+                } else {
+                    // `rmm_matchcol` is the actual start of the match,
+                    // ignoring `\zs`.
+                    self.step_over(line, self.regmatch.rmm_matchcol)
+                };
+                if matchcol == 0 && self.opt(SEARCH_START) {
+                    return true;
+                }
+                if *line.offset(matchcol as isize) as c_int == NUL {
+                    return false;
+                }
+                *nmatched = self.exec(lnum, matchcol);
+                if *nmatched == 0 {
+                    return false;
+                }
+                if self.regmatch.regprog.is_null() {
+                    return true;
+                }
+                *found = self.found();
+                // The loop only works while the match starts in this line:
+                // above that, `line` would not be a buffer line.
+                if found.start.lnum != 0 {
+                    return true;
+                }
+                // A multi-line search may have invalidated the pointer.
+                line = self.line(lnum);
+            }
+            true
+        }
+    }
+
+    /// Backward search: take the last match in the line, or — in the line
+    /// the search started in — the last one before the start position.
+    ///
+    /// Answers false when every match in the line is after the cursor.
+    ///
+    /// # Safety
+    /// `lnum` must be a line of `self.buf` and `line` its text.
+    unsafe fn last_match_before(
+        &mut self,
+        lnum: linenr_T,
+        mut line: *mut c_char,
+        found: &mut Found,
+        nmatched: &mut c_int,
+        start: StartPos,
+        wrapped: bool,
+    ) -> bool {
+        unsafe {
+            let mut match_ok = false;
+            // Remember a position before the start position; it is the
+            // answer if it turns out to be the last match in the line.
+            // After wrapping around, any position is acceptable.
+            while wrapped || self.before_start_pos(lnum, start) {
+                match_ok = true;
+                *found = self.found();
+
+                // A valid match; now see whether another one follows it.
+                let matchcol = if self.from_match_end {
+                    if *nmatched > 1 {
+                        break;
+                    }
+                    // For an empty match, advance one character.
+                    if found.end.col == found.start.col {
+                        self.step_over(line, found.end.col)
+                    } else {
+                        found.end.col
+                    }
+                } else {
+                    // Stop when the match is in a following line.
+                    if found.start.lnum > 0 {
+                        break;
+                    }
+                    self.step_over(line, found.start.col)
+                };
+                if *line.offset(matchcol as isize) as c_int == NUL || {
+                    *nmatched = self.exec(lnum + found.start.lnum, matchcol);
+                    *nmatched == 0
+                } {
+                    // A search that timed out did find a match, but it may
+                    // be the wrong one — that is not good enough.
+                    if self.out_of_time() {
+                        match_ok = false;
+                    }
+                    break;
+                }
+                if self.regmatch.regprog.is_null() {
+                    break;
+                }
+                // A multi-line search may have invalidated the pointer.
+                line = self.line(lnum + found.start.lnum);
+            }
+            match_ok
+        }
+    }
+
+    /// Whether the match `exec` last reported begins (or, with
+    /// `SEARCH_END`, ends) before the start position.
+    #[inline(always)]
+    fn before_start_pos(&self, lnum: linenr_T, start: StartPos) -> bool {
+        if self.opt(SEARCH_END) {
+            let end = self.regmatch.endpos[0];
+            lnum + end.lnum < start.pos.lnum
+                || (lnum + end.lnum == start.pos.lnum
+                    && end.col - 1 < start.pos.col + start.extra_col)
+        } else {
+            let begin = self.regmatch.startpos[0];
+            lnum + begin.lnum < start.pos.lnum
+                || (lnum + begin.lnum == start.pos.lnum
+                    && begin.col < start.pos.col + start.extra_col)
+        }
+    }
+
+    /// Write a match out. With `SEARCH_END` the position is the last
+    /// character of the match and `end_pos` gets its start; otherwise the
+    /// other way round. An empty match has no last character, so it is
+    /// reported as its start either way.
+    ///
+    /// # Safety
+    /// `pos` must be writable and `end_pos` writable or null.
+    unsafe fn record(&self, lnum: linenr_T, found: Found, pos: *mut pos_T, end_pos: *mut pos_T) {
+        unsafe {
+            let empty = found.start.lnum == found.end.lnum && found.start.col == found.end.col;
+            if self.opt(SEARCH_END) && !self.opt(SEARCH_NOOF) && !empty {
+                (*pos).lnum = lnum + found.end.lnum;
+                (*pos).col = found.end.col;
+                if found.end.col == 0 {
+                    // A match in the first column ends on the NUL of the
+                    // line before.
+                    if (*pos).lnum > 1 {
+                        (*pos).lnum -= 1;
+                        (*pos).col = ml_get_buf_len(self.buf, (*pos).lnum);
+                    }
+                } else {
+                    (*pos).col -= 1;
+                    if (*pos).lnum <= (*self.buf).b_ml.ml_line_count {
+                        let line = self.line((*pos).lnum);
+                        (*pos).col -= utf_head_off(line, line.offset((*pos).col as isize));
+                    }
+                }
+                if !end_pos.is_null() {
+                    (*end_pos).lnum = lnum + found.start.lnum;
+                    (*end_pos).col = found.start.col;
+                }
+            } else {
+                (*pos).lnum = lnum + found.start.lnum;
+                (*pos).col = found.start.col;
+                if !end_pos.is_null() {
+                    (*end_pos).lnum = lnum + found.end.lnum;
+                    (*end_pos).col = found.end.col;
+                }
+            }
+            (*pos).coladd = 0;
+            if !end_pos.is_null() {
+                (*end_pos).coladd = 0;
+            }
+        }
+    }
+}
+
+/// Search for the `count`th occurrence of `pat` in direction `dir`,
+/// starting at `pos` and answering the position found in `pos`.
+///
+/// - `options & SEARCH_MSG == 0`: no messages at all; `== SEARCH_MSG`:
+///   every message, including "not found".
+/// - `options & SEARCH_HIS`: put the pattern in the search history.
+/// - `options & SEARCH_END`: answer the end of the match.
+/// - `options & SEARCH_START`: accept a match at `pos` itself.
+/// - `options & SEARCH_KEEP`: do not remember the pattern.
+/// - `options & SEARCH_PEEK`: give up when a character is typed.
+/// - `options & SEARCH_COL`: start at `pos->col` rather than at zero.
+///
+/// # Safety
+/// `pos` must be writable, `end_pos` writable or null, `pat` a readable
+/// string of `patlen` bytes or null, and `extra_arg` writable or null.
+///
+/// @param win        window to search in; can be NULL for a buffer without a window!
+/// @param end_pos    set to end of the match, unless NULL
+/// @param pat_use    which pattern to use when `pat` is empty
+/// @param extra_arg  optional extra arguments, can be NULL
+///
+/// @return  FAIL (zero) for failure, otherwise the index of the first
+///          matching sub-pattern plus one; one if there was none.
+pub unsafe extern "C" fn searchit(
+    win: *mut win_T,
+    buf: *mut buf_T,
+    pos: *mut pos_T,
+    end_pos: *mut pos_T,
+    dir: Direction,
+    pat: *mut c_char,
+    patlen: size_t,
+    mut count: c_int,
+    options: c_int,
+    pat_use: c_int,
+    extra_arg: *mut searchit_arg_T,
+) -> c_int {
+    unsafe {
+        let mut regmatch = regmmatch_T::default();
         if search_regcomp(
             pat,
             patlen,
-            ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-            RE_SEARCH as ::core::ffi::c_int,
+            ptr::null_mut(),
+            RE_SEARCH,
             pat_use,
-            options & SEARCH_HIS as ::core::ffi::c_int + SEARCH_KEEP as ::core::ffi::c_int,
+            options & (SEARCH_HIS | SEARCH_KEEP),
             &raw mut regmatch,
         ) == FAIL
         {
-            if options & SEARCH_MSG as ::core::ffi::c_int != 0 && !rc_did_emsg.get() {
+            if options & SEARCH_MSG != 0 && !rc_did_emsg.get() {
                 semsg(
-                    gettext(
-                        b"E383: Invalid search string: %s\0".as_ptr() as *const ::core::ffi::c_char
-                    ),
+                    gettext(c"E383: Invalid search string: %s".as_ptr()),
                     get_search_pat(),
                 );
             }
             return FAIL;
         }
-        let search_from_match_end: bool = !vim_strchr(p_cpo.get(), CPO_SEARCH).is_null();
+
+        // Stop after this line number, when it is not zero.
+        let mut stop_lnum: linenr_T = 0;
+        let mut s = Searcher {
+            win,
+            buf,
+            regmatch,
+            tm: ptr::null_mut(),
+            timed_out: ptr::null_mut(),
+            options,
+            dir,
+            from_match_end: !vim_strchr(p_cpo.get(), CPO_SEARCH).is_null(),
+            called_emsg_before: called_emsg.get(),
+        };
+        if !extra_arg.is_null() {
+            stop_lnum = (*extra_arg).sa_stop_lnum;
+            s.tm = (*extra_arg).sa_tm;
+            s.timed_out = &raw mut (*extra_arg).sa_timed_out;
+        }
+
+        let mut found = 0;
+        let mut submatch = 0;
+        let mut first_match = true;
+        let mut break_loop = false;
+        // The line the walk stopped on; the "hit TOP" message reads it
+        // after every loop has been left.
+        let mut lnum: linenr_T = 0;
+
         loop {
-            if (*pos).col == MAXCOL as ::core::ffi::c_int {
-                start_char_len = 0 as ::core::ffi::c_int;
-            } else if (*pos).lnum >= 1 as linenr_T
+            // When a match at the start position is not acceptable,
+            // `extra_col` is non-zero. Not at MAXCOL though, where
+            // MAXCOL + 1 is zero.
+            let start_char_len = if (*pos).col == MAXCOL as c_int {
+                0
+            } else if (*pos).lnum >= 1
                 && (*pos).lnum <= (*buf).b_ml.ml_line_count
-                && (*pos).col < MAXCOL as ::core::ffi::c_int - 2 as ::core::ffi::c_int
+                && (*pos).col < MAXCOL as c_int - 2
             {
-                ptr = ml_get_buf(buf, (*pos).lnum);
+                // Watch out for "col" being MAXCOL - 2, used in a closed fold.
+                let line = s.line((*pos).lnum);
                 if ml_get_buf_len(buf, (*pos).lnum) <= (*pos).col {
-                    start_char_len = 1 as ::core::ffi::c_int;
+                    1
                 } else {
-                    start_char_len = utfc_ptr2len(ptr.offset((*pos).col as isize));
+                    utfc_ptr2len(line.offset((*pos).col as isize))
                 }
             } else {
-                start_char_len = 1 as ::core::ffi::c_int;
-            }
-            if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
-                extra_col = if options & SEARCH_START as ::core::ffi::c_int != 0 {
-                    0 as ::core::ffi::c_int
-                } else {
+                1
+            };
+            let accept_at_start = s.opt(SEARCH_START);
+            let start = StartPos {
+                // Remember the start position, for detecting "no match".
+                pos: *pos,
+                extra_col: if dir == FORWARD {
+                    if accept_at_start { 0 } else { start_char_len }
+                } else if accept_at_start {
                     start_char_len
-                };
-            } else {
-                extra_col = if options & SEARCH_START as ::core::ffi::c_int != 0 {
-                    start_char_len
                 } else {
-                    0 as ::core::ffi::c_int
-                };
+                    0
+                },
+            };
+
+            found = 0;
+            let mut at_first_line = true;
+            if (*pos).lnum == 0 {
+                // Correct lnum for when starting in line 0.
+                (*pos).lnum = 1;
+                (*pos).col = 0;
+                at_first_line = false;
             }
-            let mut start_pos: pos_T = *pos;
-            found = 0 as ::core::ffi::c_int;
-            let mut at_first_line: ::core::ffi::c_int = true_0;
-            if (*pos).lnum == 0 as linenr_T {
-                (*pos).lnum = 1 as ::core::ffi::c_int as linenr_T;
-                (*pos).col = 0 as ::core::ffi::c_int as colnr_T;
-                at_first_line = false_0;
-            }
-            if dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int
-                && start_pos.col == 0 as ::core::ffi::c_int
-                && options & SEARCH_START as ::core::ffi::c_int == 0 as ::core::ffi::c_int
-            {
-                lnum = (*pos).lnum - 1 as linenr_T;
-                at_first_line = false_0;
+
+            // Start in the current line, unless searching backwards from
+            // column 0 without accepting a match there — skipping back a
+            // line is then free.
+            if dir == BACKWARD && start.pos.col == 0 && !accept_at_start {
+                lnum = (*pos).lnum - 1;
+                at_first_line = false;
             } else {
                 lnum = (*pos).lnum;
             }
-            loop_0 = 0 as ::core::ffi::c_int;
-            while loop_0 <= 1 as ::core::ffi::c_int {
-                's_704: while lnum > 0 as linenr_T && lnum <= (*buf).b_ml.ml_line_count {
-                    if stop_lnum != 0 as linenr_T
-                        && (if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int {
-                            (lnum > stop_lnum) as ::core::ffi::c_int
+
+            // Loop twice if 'wrapscan' is set.
+            for wrapped in [false, true] {
+                'lines: while lnum > 0 && lnum <= (*buf).b_ml.ml_line_count {
+                    // Stop after checking "stop_lnum", if it is set.
+                    if stop_lnum != 0
+                        && if dir == FORWARD {
+                            lnum > stop_lnum
                         } else {
-                            (lnum < stop_lnum) as ::core::ffi::c_int
-                        }) != 0
-                    {
-                        break;
-                    }
-                    if !tm.is_null() && profile_passed_limit(*tm) as ::core::ffi::c_int != 0 {
-                        break;
-                    }
-                    let mut col: colnr_T =
-                        if at_first_line != 0 && options & SEARCH_COL as ::core::ffi::c_int != 0 {
-                            (*pos).col
-                        } else {
-                            0 as colnr_T
-                        };
-                    nmatched =
-                        vim_regexec_multi(&raw mut regmatch, win, buf, lnum, col, tm, timed_out);
-                    if regmatch.regprog.is_null() {
-                        break;
-                    }
-                    if called_emsg.get() > called_emsg_before
-                        || !timed_out.is_null() && *timed_out != 0
-                    {
-                        break;
-                    }
-                    's_218: {
-                        if nmatched > 0 as ::core::ffi::c_int {
-                            matchpos = regmatch.startpos[0 as ::core::ffi::c_int as usize];
-                            endpos = regmatch.endpos[0 as ::core::ffi::c_int as usize];
-                            submatch = first_submatch(&raw mut regmatch);
-                            if lnum + matchpos.lnum > (*buf).b_ml.ml_line_count {
-                                ptr = b"\0".as_ptr() as *const ::core::ffi::c_char
-                                    as *mut ::core::ffi::c_char;
-                            } else {
-                                ptr = ml_get_buf(buf, lnum + matchpos.lnum);
-                            }
-                            if dir as ::core::ffi::c_int == FORWARD as ::core::ffi::c_int
-                                && at_first_line != 0
-                            {
-                                match_ok = true_0 != 0;
-                                while matchpos.lnum == 0 as linenr_T
-                                    && (if options & SEARCH_END as ::core::ffi::c_int != 0
-                                        && first_match as ::core::ffi::c_int != 0
-                                    {
-                                        (nmatched == 1 as ::core::ffi::c_int
-                                            && (endpos.col - 1 as ::core::ffi::c_int)
-                                                < start_pos.col + extra_col)
-                                            as ::core::ffi::c_int
-                                    } else {
-                                        ((matchpos.col
-                                            - (*ptr.offset(matchpos.col as isize)
-                                                as ::core::ffi::c_int
-                                                == NUL)
-                                                as ::core::ffi::c_int)
-                                            < start_pos.col + extra_col)
-                                            as ::core::ffi::c_int
-                                    }) != 0
-                                {
-                                    if search_from_match_end {
-                                        if nmatched > 1 as ::core::ffi::c_int {
-                                            match_ok = false_0 != 0;
-                                            break;
-                                        } else {
-                                            matchcol = endpos.col;
-                                            if matchcol == matchpos.col
-                                                && *ptr.offset(matchcol as isize)
-                                                    as ::core::ffi::c_int
-                                                    != NUL
-                                            {
-                                                matchcol +=
-                                                    utfc_ptr2len(ptr.offset(matchcol as isize));
-                                            }
-                                        }
-                                    } else {
-                                        matchcol = regmatch.rmm_matchcol;
-                                        if *ptr.offset(matchcol as isize) as ::core::ffi::c_int
-                                            != NUL
-                                        {
-                                            matchcol += utfc_ptr2len(ptr.offset(matchcol as isize));
-                                        }
-                                    }
-                                    if matchcol == 0 as ::core::ffi::c_int
-                                        && options & SEARCH_START as ::core::ffi::c_int != 0
-                                    {
-                                        break;
-                                    }
-                                    if *ptr.offset(matchcol as isize) as ::core::ffi::c_int == NUL
-                                        || {
-                                            nmatched = vim_regexec_multi(
-                                                &raw mut regmatch,
-                                                win,
-                                                buf,
-                                                lnum,
-                                                matchcol,
-                                                tm,
-                                                timed_out,
-                                            );
-                                            nmatched == 0 as ::core::ffi::c_int
-                                        }
-                                    {
-                                        match_ok = false_0 != 0;
-                                        break;
-                                    } else {
-                                        if regmatch.regprog.is_null() {
-                                            break;
-                                        }
-                                        matchpos =
-                                            regmatch.startpos[0 as ::core::ffi::c_int as usize];
-                                        endpos = regmatch.endpos[0 as ::core::ffi::c_int as usize];
-                                        submatch = first_submatch(&raw mut regmatch);
-                                        if matchpos.lnum != 0 as linenr_T {
-                                            break;
-                                        }
-                                        ptr = ml_get_buf(buf, lnum);
-                                    }
-                                }
-                                if !match_ok {
-                                    break 's_218;
-                                }
-                            }
-                            if dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int {
-                                match_ok = false_0 != 0;
-                                while loop_0 != 0
-                                    || (if options & SEARCH_END as ::core::ffi::c_int != 0 {
-                                        (lnum
-                                            + regmatch.endpos[0 as ::core::ffi::c_int as usize]
-                                                .lnum
-                                            < start_pos.lnum
-                                            || lnum
-                                                + regmatch.endpos[0 as ::core::ffi::c_int as usize]
-                                                    .lnum
-                                                == start_pos.lnum
-                                                && (regmatch.endpos
-                                                    [0 as ::core::ffi::c_int as usize]
-                                                    .col
-                                                    - 1 as ::core::ffi::c_int)
-                                                    < start_pos.col + extra_col)
-                                            as ::core::ffi::c_int
-                                    } else {
-                                        (lnum
-                                            + regmatch.startpos[0 as ::core::ffi::c_int as usize]
-                                                .lnum
-                                            < start_pos.lnum
-                                            || lnum
-                                                + regmatch.startpos
-                                                    [0 as ::core::ffi::c_int as usize]
-                                                    .lnum
-                                                == start_pos.lnum
-                                                && regmatch.startpos
-                                                    [0 as ::core::ffi::c_int as usize]
-                                                    .col
-                                                    < start_pos.col + extra_col)
-                                            as ::core::ffi::c_int
-                                    }) != 0
-                                {
-                                    match_ok = true_0 != 0;
-                                    matchpos = regmatch.startpos[0 as ::core::ffi::c_int as usize];
-                                    endpos = regmatch.endpos[0 as ::core::ffi::c_int as usize];
-                                    submatch = first_submatch(&raw mut regmatch);
-                                    if search_from_match_end {
-                                        if nmatched > 1 as ::core::ffi::c_int {
-                                            break;
-                                        }
-                                        matchcol = endpos.col;
-                                        if matchcol == matchpos.col
-                                            && *ptr.offset(matchcol as isize) as ::core::ffi::c_int
-                                                != NUL
-                                        {
-                                            matchcol += utfc_ptr2len(ptr.offset(matchcol as isize));
-                                        }
-                                    } else {
-                                        if matchpos.lnum > 0 as linenr_T {
-                                            break;
-                                        }
-                                        matchcol = matchpos.col;
-                                        if *ptr.offset(matchcol as isize) as ::core::ffi::c_int
-                                            != NUL
-                                        {
-                                            matchcol += utfc_ptr2len(ptr.offset(matchcol as isize));
-                                        }
-                                    }
-                                    if *ptr.offset(matchcol as isize) as ::core::ffi::c_int == NUL
-                                        || {
-                                            nmatched = vim_regexec_multi(
-                                                &raw mut regmatch,
-                                                win,
-                                                buf,
-                                                lnum + matchpos.lnum,
-                                                matchcol,
-                                                tm,
-                                                timed_out,
-                                            );
-                                            nmatched == 0 as ::core::ffi::c_int
-                                        }
-                                    {
-                                        if !tm.is_null()
-                                            && profile_passed_limit(*tm) as ::core::ffi::c_int != 0
-                                        {
-                                            match_ok = false_0 != 0;
-                                        }
-                                        break;
-                                    } else {
-                                        if regmatch.regprog.is_null() {
-                                            break;
-                                        }
-                                        ptr = ml_get_buf(buf, lnum + matchpos.lnum);
-                                    }
-                                }
-                                if !match_ok {
-                                    break 's_218;
-                                }
-                            }
-                            if options & SEARCH_END as ::core::ffi::c_int != 0
-                                && options & SEARCH_NOOF as ::core::ffi::c_int == 0
-                                && !(matchpos.lnum == endpos.lnum && matchpos.col == endpos.col)
-                            {
-                                (*pos).lnum = lnum + endpos.lnum;
-                                (*pos).col = endpos.col;
-                                if endpos.col == 0 as ::core::ffi::c_int {
-                                    if (*pos).lnum > 1 as linenr_T {
-                                        (*pos).lnum -= 1;
-                                        (*pos).col = ml_get_buf_len(buf, (*pos).lnum);
-                                    }
-                                } else {
-                                    (*pos).col -= 1;
-                                    if (*pos).lnum <= (*buf).b_ml.ml_line_count {
-                                        ptr = ml_get_buf(buf, (*pos).lnum);
-                                        (*pos).col -=
-                                            utf_head_off(ptr, ptr.offset((*pos).col as isize));
-                                    }
-                                }
-                                if !end_pos.is_null() {
-                                    (*end_pos).lnum = lnum + matchpos.lnum;
-                                    (*end_pos).col = matchpos.col;
-                                }
-                            } else {
-                                (*pos).lnum = lnum + matchpos.lnum;
-                                (*pos).col = matchpos.col;
-                                if !end_pos.is_null() {
-                                    (*end_pos).lnum = lnum + endpos.lnum;
-                                    (*end_pos).col = endpos.col;
-                                }
-                            }
-                            (*pos).coladd = 0 as ::core::ffi::c_int as colnr_T;
-                            if !end_pos.is_null() {
-                                (*end_pos).coladd = 0 as ::core::ffi::c_int as colnr_T;
-                            }
-                            found = 1 as ::core::ffi::c_int;
-                            first_match = false_0 != 0;
-                            search_match_lines.set(endpos.lnum - matchpos.lnum);
-                            search_match_endcol.set(endpos.col);
-                            break 's_704;
-                        } else {
-                            line_breakcheck();
-                            if got_int.get() {
-                                break 's_704;
-                            }
-                            if options & SEARCH_PEEK as ::core::ffi::c_int != 0
-                                && lnum - (*pos).lnum & 0x3f as linenr_T == 0 as linenr_T
-                                && char_avail() as ::core::ffi::c_int != 0
-                            {
-                                break_loop = true_0 != 0;
-                                break 's_704;
-                            } else if loop_0 != 0 && lnum == start_pos.lnum {
-                                break 's_704;
-                            }
+                            lnum < stop_lnum
                         }
+                    {
+                        break 'lines;
                     }
-                    lnum = (lnum as ::core::ffi::c_int + dir as ::core::ffi::c_int) as linenr_T;
-                    at_first_line = false_0;
+                    // Stop after passing the time limit.
+                    if s.out_of_time() {
+                        break 'lines;
+                    }
+
+                    // Look for a match somewhere in line "lnum".
+                    let col = if at_first_line && s.opt(SEARCH_COL) {
+                        (*pos).col
+                    } else {
+                        0
+                    };
+                    let mut nmatched = s.exec(lnum, col);
+                    // vim_regexec_multi() may clear "regprog".
+                    if s.regmatch.regprog.is_null() {
+                        break 'lines;
+                    }
+                    // Abort searching on an error (e.g., out of stack).
+                    if s.aborted() {
+                        break 'lines;
+                    }
+
+                    'next_line: {
+                        if nmatched <= 0 {
+                            line_breakcheck(); // stop if ctrl-C typed
+                            if got_int.get() {
+                                break 'lines;
+                            }
+                            // Cancel the search if a character was typed,
+                            // for 'incsearch'. Checking too often would
+                            // slow searching down too much.
+                            if s.opt(SEARCH_PEEK)
+                                && ((lnum - (*pos).lnum) & 0x3f) == 0
+                                && char_avail()
+                            {
+                                break_loop = true;
+                                break 'lines;
+                            }
+                            if wrapped && lnum == start.pos.lnum {
+                                // Second time round: stop where we started.
+                                break 'lines;
+                            }
+                            break 'next_line;
+                        }
+
+                        // The match may be in another line, with `\zs`.
+                        let mut m = s.found();
+                        // "lnum" may be past the end of the buffer for "\n\zs".
+                        let line = if lnum + m.start.lnum > (*buf).b_ml.ml_line_count {
+                            c"".as_ptr() as *mut c_char
+                        } else {
+                            s.line(lnum + m.start.lnum)
+                        };
+
+                        if dir == FORWARD
+                            && at_first_line
+                            && !s.skip_to_start_pos(
+                                lnum,
+                                line,
+                                &mut m,
+                                &mut nmatched,
+                                start,
+                                first_match,
+                            )
+                        {
+                            break 'next_line;
+                        }
+                        if dir == BACKWARD
+                            && !s.last_match_before(
+                                lnum,
+                                line,
+                                &mut m,
+                                &mut nmatched,
+                                start,
+                                wrapped,
+                            )
+                        {
+                            // There is only a match after the cursor.
+                            break 'next_line;
+                        }
+
+                        s.record(lnum, m, pos, end_pos);
+                        found = 1;
+                        first_match = false;
+                        submatch = m.submatch;
+
+                        // Variables used for 'incsearch' highlighting.
+                        search_match_lines.set(m.end.lnum - m.start.lnum);
+                        search_match_endcol.set(m.end.col);
+                        break 'lines;
+                    }
+                    lnum += dir;
+                    at_first_line = false;
                 }
-                at_first_line = false_0;
-                if regmatch.regprog.is_null() {
+                at_first_line = false;
+
+                // vim_regexec_multi() may clear "regprog".
+                if s.regmatch.regprog.is_null() {
                     break;
                 }
+
+                // Stop when 'wrapscan' is off, "stop_lnum" was given,
+                // after an interrupt, after a match, and after looping
+                // twice.
                 if p_ws.get() == 0
-                    || stop_lnum != 0 as linenr_T
-                    || got_int.get() as ::core::ffi::c_int != 0
-                    || called_emsg.get() > called_emsg_before
-                    || !timed_out.is_null() && *timed_out != 0
-                    || break_loop as ::core::ffi::c_int != 0
+                    || stop_lnum != 0
+                    || got_int.get()
+                    || s.aborted()
+                    || break_loop
                     || found != 0
-                    || loop_0 != 0
+                    || wrapped
                 {
                     break;
                 }
-                lnum = if dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int {
+
+                // Continue at the other end of the file. Say so unless
+                // 'shortmess' asks us not to, or the search stat is going
+                // to be shown anyway (so SEARCH_COUNT must be absent).
+                // The message is remembered in keep_msg for a redraw.
+                lnum = if dir == BACKWARD {
                     (*buf).b_ml.ml_line_count
                 } else {
-                    1 as linenr_T
+                    1
                 };
-                if !shortmess(SHM_SEARCH as ::core::ffi::c_int)
-                    && shortmess(SHM_SEARCHCOUNT as ::core::ffi::c_int) as ::core::ffi::c_int != 0
-                    && options & SEARCH_MSG as ::core::ffi::c_int != 0
+                if !shortmess(SHM_SEARCH as c_int)
+                    && shortmess(SHM_SEARCHCOUNT as c_int)
+                    && s.opt(SEARCH_MSG)
                 {
-                    give_warning(
-                        gettext(
-                            if dir as ::core::ffi::c_int == BACKWARD as ::core::ffi::c_int {
-                                &raw const top_bot_msg as *const ::core::ffi::c_char
-                            } else {
-                                &raw const bot_top_msg as *const ::core::ffi::c_char
-                            },
-                        ),
-                        true_0 != 0,
-                        false_0 != 0,
-                    );
+                    let msg = if dir == BACKWARD {
+                        top_bot_msg.ptr()
+                    } else {
+                        bot_top_msg.ptr()
+                    };
+                    give_warning(gettext(msg.cast()), true, false);
                 }
                 if !extra_arg.is_null() {
-                    (*extra_arg).sa_wrapped = true_0;
+                    (*extra_arg).sa_wrapped = true as c_int;
                 }
-                loop_0 += 1;
             }
-            if got_int.get() as ::core::ffi::c_int != 0
-                || called_emsg.get() > called_emsg_before
-                || !timed_out.is_null() && *timed_out != 0
-                || break_loop as ::core::ffi::c_int != 0
-            {
+
+            if got_int.get() || s.aborted() || break_loop {
                 break;
             }
+            // Stop after "count" matches, or as soon as one is missed.
             count -= 1;
-            if !(count > 0 as ::core::ffi::c_int && found != 0) {
+            if count <= 0 || found == 0 {
                 break;
             }
         }
-        vim_regfree(regmatch.regprog);
+
+        vim_regfree(s.regmatch.regprog);
+
         if found == 0 {
             if got_int.get() {
-                emsg(gettext(&raw const e_interr as *const ::core::ffi::c_char));
-            } else if options & SEARCH_MSG as ::core::ffi::c_int == SEARCH_MSG as ::core::ffi::c_int
-            {
-                if p_ws.get() != 0 {
-                    semsg(
-                        gettext(&raw const e_patnotf2 as *const ::core::ffi::c_char),
-                        get_search_pat(),
-                    );
-                } else if lnum == 0 as linenr_T {
-                    semsg(
-                        gettext(
-                            (e_search_hit_top_without_match_for_str.ptr() as *const _)
-                                as *const ::core::ffi::c_char,
-                        ),
-                        get_search_pat(),
-                    );
+                emsg(gettext(e_interr.ptr().cast()));
+            } else if options & SEARCH_MSG == SEARCH_MSG {
+                let msg = if p_ws.get() != 0 {
+                    gettext(e_patnotf2.ptr().cast())
+                } else if lnum == 0 {
+                    gettext(c"E384: Search hit TOP without match for: %s".as_ptr())
                 } else {
-                    semsg(
-                        gettext(
-                            (e_search_hit_bottom_without_match_for_str.ptr() as *const _)
-                                as *const ::core::ffi::c_char,
-                        ),
-                        get_search_pat(),
-                    );
-                }
+                    gettext(c"E385: Search hit BOTTOM without match for: %s".as_ptr())
+                };
+                semsg(msg, get_search_pat());
             }
             return FAIL;
         }
+
+        // A pattern like "\n\zs" may go past the last line.
         if (*pos).lnum > (*buf).b_ml.ml_line_count {
             (*pos).lnum = (*buf).b_ml.ml_line_count;
             (*pos).col = ml_get_buf_len(buf, (*pos).lnum);
-            if (*pos).col > 0 as ::core::ffi::c_int {
+            if (*pos).col > 0 {
                 (*pos).col -= 1;
             }
         }
-        return submatch + 1 as ::core::ffi::c_int;
+
+        submatch + 1
     }
 }
 
-pub(crate) unsafe extern "C" fn first_submatch(mut rp: *mut regmmatch_T) -> ::core::ffi::c_int {
+/// The number of the first sub-pattern that matched, or zero if none of
+/// them did.
+///
+/// # Safety
+/// `rp` must point at the result of a successful match.
+#[inline(always)]
+unsafe fn first_submatch(rp: *mut regmmatch_T) -> c_int {
     unsafe {
-        let mut submatch: ::core::ffi::c_int = 0;
-        submatch = 1 as ::core::ffi::c_int;
-        while (*rp).startpos[submatch as usize].lnum < 0 as linenr_T {
-            if submatch == 9 as ::core::ffi::c_int {
-                submatch = 0 as ::core::ffi::c_int;
-                break;
-            } else {
-                submatch += 1;
+        let mut submatch = 1;
+        while (*rp).startpos[submatch as usize].lnum < 0 {
+            if submatch == 9 {
+                return 0;
             }
+            submatch += 1;
         }
-        return submatch;
+        submatch
     }
 }
 
+/// Search for a line starting with `pat`, ignoring leading white space,
+/// from `pos` in direction `dir`; `pos` is left on the line found.
+///
+/// Blank lines match only while insert-mode completion is adding lines.
+/// With `'ignorecase'` the pattern must be in lower case.
+///
+/// # Safety
+/// `pos` must be writable and `pat` a NUL-terminated string.
+///
+/// @return  OK for success, FAIL if no line was found.
 pub unsafe extern "C" fn search_for_exact_line(
-    mut buf: *mut buf_T,
-    mut pos: *mut pos_T,
-    mut dir: Direction,
-    mut pat: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+    buf: *mut buf_T,
+    pos: *mut pos_T,
+    dir: Direction,
+    pat: *mut c_char,
+) -> c_int {
     unsafe {
-        let mut start: linenr_T = 0 as linenr_T;
-        let mut compl_len: ::core::ffi::c_int = ins_compl_len();
-        if (*buf).b_ml.ml_line_count == 0 as linenr_T {
+        let mut start: linenr_T = 0;
+        let compl_len = ins_compl_len();
+        if (*buf).b_ml.ml_line_count == 0 {
             return FAIL;
         }
         loop {
-            (*pos).lnum =
-                ((*pos).lnum as ::core::ffi::c_int + dir as ::core::ffi::c_int) as linenr_T;
-            if (*pos).lnum < 1 as linenr_T {
-                if p_ws.get() != 0 {
-                    (*pos).lnum = (*buf).b_ml.ml_line_count;
-                    if !shortmess(SHM_SEARCH as ::core::ffi::c_int) {
-                        give_warning(
-                            gettext(&raw const top_bot_msg as *const ::core::ffi::c_char),
-                            true_0 != 0,
-                            false_0 != 0,
-                        );
-                    }
-                } else {
-                    (*pos).lnum = 1 as ::core::ffi::c_int as linenr_T;
+            (*pos).lnum += dir;
+            if (*pos).lnum < 1 {
+                if p_ws.get() == 0 {
+                    (*pos).lnum = 1;
                     break;
                 }
+                (*pos).lnum = (*buf).b_ml.ml_line_count;
+                if !shortmess(SHM_SEARCH as c_int) {
+                    give_warning(gettext(top_bot_msg.ptr().cast()), true, false);
+                }
             } else if (*pos).lnum > (*buf).b_ml.ml_line_count {
-                if p_ws.get() != 0 {
-                    (*pos).lnum = 1 as ::core::ffi::c_int as linenr_T;
-                    if !shortmess(SHM_SEARCH as ::core::ffi::c_int) {
-                        give_warning(
-                            gettext(&raw const bot_top_msg as *const ::core::ffi::c_char),
-                            true_0 != 0,
-                            false_0 != 0,
-                        );
-                    }
-                } else {
-                    (*pos).lnum = 1 as ::core::ffi::c_int as linenr_T;
+                (*pos).lnum = 1;
+                if p_ws.get() == 0 {
                     break;
+                }
+                if !shortmess(SHM_SEARCH as c_int) {
+                    give_warning(gettext(bot_top_msg.ptr().cast()), true, false);
                 }
             }
             if (*pos).lnum == start {
                 break;
             }
-            if start == 0 as linenr_T {
+            if start == 0 {
                 start = (*pos).lnum;
             }
-            let mut ptr: *mut ::core::ffi::c_char = ml_get_buf(buf, (*pos).lnum);
-            let mut p: *mut ::core::ffi::c_char = skipwhite(ptr);
-            (*pos).col = p.offset_from(ptr) as colnr_T;
-            if compl_status_adding() as ::core::ffi::c_int != 0 && !compl_status_sol() {
-                if mb_strcmp_ic(p_ic.get() != 0, p, pat) == 0 as ::core::ffi::c_int {
+
+            let line = ml_get_buf(buf, (*pos).lnum);
+            let text = skipwhite(line);
+            (*pos).col = text.offset_from(line) as colnr_T;
+
+            if compl_status_adding() && !compl_status_sol() {
+                // When adding lines the matching line may be empty; it is
+                // not ignored, because it is the *next* line that is
+                // wanted. -- Acevedo
+                if mb_strcmp_ic(p_ic.get() != 0, text, pat) == 0 {
                     return OK;
                 }
-            } else if *p as ::core::ffi::c_int != NUL {
-                '_c2rust_label: {
-                    if compl_len >= 0 as ::core::ffi::c_int {
-                    } else {
-                        __assert_fail(
-                            b"compl_len >= 0\0".as_ptr() as *const ::core::ffi::c_char,
-                            b"src/nvim/search.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                            1519 as ::core::ffi::c_uint,
-                            b"int search_for_exact_line(buf_T *, pos_T *, Direction, char *)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
-                if (if p_ic.get() != 0 {
-                    mb_strnicmp(p, pat, compl_len as size_t)
+            } else if *text as c_int != NUL {
+                // Expanding lines or words; ignore empty lines.
+                debug_assert!(compl_len >= 0);
+                let same = if p_ic.get() != 0 {
+                    mb_strnicmp(text, pat, compl_len as size_t)
                 } else {
-                    strncmp(p, pat, compl_len as size_t)
-                }) == 0 as ::core::ffi::c_int
-                {
+                    strncmp(text, pat, compl_len as size_t)
+                };
+                if same == 0 {
                     return OK;
                 }
             }
         }
-        return FAIL;
+        FAIL
     }
 }
