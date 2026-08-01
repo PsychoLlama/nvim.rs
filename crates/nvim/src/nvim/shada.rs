@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::api::private::dispatch::{
     KeyDict__shada_buflist_item_get_field, KeyDict__shada_mark_get_field,
     KeyDict__shada_register_get_field, KeyDict__shada_search_pat_get_field,
@@ -123,8 +125,6 @@ pub type C2Rust_Unnamed = ::core::ffi::c_int;
 pub const UV_ENOENT: C2Rust_Unnamed = -2;
 pub const UV_ELOOP: C2Rust_Unnamed = -40;
 pub const UV_EEXIST: C2Rust_Unnamed = -17;
-pub type C2Rust_Unnamed_0 = ::core::ffi::c_uint;
-pub const MPACK_OK: C2Rust_Unnamed_0 = 0;
 pub const VAR_UNLOCKED: VarLockStatus = 0;
 pub const VAR_BLOB: VarType = 10;
 pub const VAR_PARTIAL: VarType = 9;
@@ -333,32 +333,11 @@ pub type ShaDaReadResult = ::core::ffi::c_uint;
 pub type SearchPatternGetter = Option<unsafe extern "C" fn(*mut SearchPattern) -> ()>;
 pub const kSDReadBufferList: SRNIFlags = 512;
 pub type SRNIFlags = ::core::ffi::c_uint;
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const PTRDIFF_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[inline]
-unsafe extern "C" fn __bswap_64(mut __bsx: __uint64_t) -> __uint64_t {
-    return ((__bsx as ::core::ffi::c_ulonglong & 0xff00000000000000 as ::core::ffi::c_ulonglong)
-        >> 56 as ::core::ffi::c_int
-        | (__bsx as ::core::ffi::c_ulonglong & 0xff000000000000 as ::core::ffi::c_ulonglong)
-            >> 40 as ::core::ffi::c_int
-        | (__bsx as ::core::ffi::c_ulonglong & 0xff0000000000 as ::core::ffi::c_ulonglong)
-            >> 24 as ::core::ffi::c_int
-        | (__bsx as ::core::ffi::c_ulonglong & 0xff00000000 as ::core::ffi::c_ulonglong)
-            >> 8 as ::core::ffi::c_int
-        | (__bsx as ::core::ffi::c_ulonglong & 0xff000000 as ::core::ffi::c_ulonglong)
-            << 8 as ::core::ffi::c_int
-        | (__bsx as ::core::ffi::c_ulonglong & 0xff0000 as ::core::ffi::c_ulonglong)
-            << 24 as ::core::ffi::c_int
-        | (__bsx as ::core::ffi::c_ulonglong & 0xff00 as ::core::ffi::c_ulonglong)
-            << 40 as ::core::ffi::c_int
-        | (__bsx as ::core::ffi::c_ulonglong & 0xff as ::core::ffi::c_ulonglong)
-            << 56 as ::core::ffi::c_int) as __uint64_t;
-}
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
+pub const MAXPATHL: ::core::ffi::c_int = 4096;
 pub const ROOT_UID: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const KV_INITIAL_VALUE: AdditionalDataBuilder = AdditionalDataBuilder {
     size: 0 as size_t,
@@ -381,43 +360,44 @@ pub const MAP_INIT: Map_cstr_t_ptr_t = Map_cstr_t_ptr_t {
     },
     values: ::core::ptr::null_mut::<ptr_t>(),
 };
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
+pub const MH_TOMBSTONE: ::core::ffi::c_uint = u32::MAX;
 #[inline]
-unsafe extern "C" fn set_put_cstr_t(
-    mut set: *mut Set_cstr_t,
-    mut key: cstr_t,
-    mut key_alloc: *mut *mut cstr_t,
-) -> bool {
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = mh_put_cstr_t(set, key, &raw mut status);
-    if !key_alloc.is_null() {
-        *key_alloc = (*set).keys.offset(k as isize);
+/// Add a key to a set, answering whether it was not already there. When
+/// `key_alloc` is given it is pointed at the set's own copy of the key,
+/// which the caller may then replace with an owned one.
+unsafe fn set_put_cstr_t(set: *mut Set_cstr_t, key: cstr_t, key_alloc: *mut *mut cstr_t) -> bool {
+    unsafe {
+        let mut status: MHPutStatus = kMHExisting;
+        let k = mh_put_cstr_t(set, key, &raw mut status);
+        if !key_alloc.is_null() {
+            *key_alloc = (*set).keys.add(k as usize);
+        }
+        status != kMHExisting
     }
-    return status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
 }
-#[inline]
-unsafe extern "C" fn set_has_cstr_t(mut set: *mut Set_cstr_t, mut key: cstr_t) -> bool {
-    return mh_get_cstr_t(set, key) != MH_TOMBSTONE as uint32_t;
+
+/// Whether a set holds a key.
+unsafe fn set_has_cstr_t(set: *mut Set_cstr_t, key: cstr_t) -> bool {
+    unsafe { mh_get_cstr_t(set, key) != MH_TOMBSTONE }
 }
-#[inline]
-unsafe extern "C" fn set_put_ptr_t(
-    mut set: *mut Set_ptr_t,
-    mut key: ptr_t,
-    mut key_alloc: *mut *mut ptr_t,
-) -> bool {
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = mh_put_ptr_t(set, key, &raw mut status);
-    if !key_alloc.is_null() {
-        *key_alloc = (*set).keys.offset(k as isize);
+
+/// [`set_put_cstr_t`] for a set of pointers.
+unsafe fn set_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, key_alloc: *mut *mut ptr_t) -> bool {
+    unsafe {
+        let mut status: MHPutStatus = kMHExisting;
+        let k = mh_put_ptr_t(set, key, &raw mut status);
+        if !key_alloc.is_null() {
+            *key_alloc = (*set).keys.add(k as usize);
+        }
+        status != kMHExisting
     }
-    return status as ::core::ffi::c_uint
-        != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
 }
-#[inline]
-unsafe extern "C" fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
-    return mh_get_ptr_t(set, key) != MH_TOMBSTONE as uint32_t;
+
+/// [`set_has_cstr_t`] for a set of pointers.
+unsafe fn set_has_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> bool {
+    unsafe { mh_get_ptr_t(set, key) != MH_TOMBSTONE }
 }
+
 pub const NMARKS: ::core::ffi::c_int =
     'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
@@ -442,33 +422,28 @@ pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const MPACK_ITEM_SIZE: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
 #[inline]
-unsafe extern "C" fn mark_global_index(name: ::core::ffi::c_char) -> ::core::ffi::c_int {
-    return if name as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-        && name as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-    {
-        name as ::core::ffi::c_int - 'A' as ::core::ffi::c_int
-    } else if ascii_isdigit(name as ::core::ffi::c_int) as ::core::ffi::c_int != 0 {
-        NMARKS + (name as ::core::ffi::c_int - '0' as ::core::ffi::c_int)
-    } else {
-        -1 as ::core::ffi::c_int
-    };
+/// Where a global mark's letter lives in `namedfm`: `A`-`Z` first, then the
+/// ten numbered marks. −1 for a name that is neither.
+fn mark_global_index(name: ::core::ffi::c_char) -> ::core::ffi::c_int {
+    match name as u8 {
+        b'A'..=b'Z' => name as ::core::ffi::c_int - 'A' as ::core::ffi::c_int,
+        b'0'..=b'9' => NMARKS + (name as ::core::ffi::c_int - '0' as ::core::ffi::c_int),
+        _ => -1,
+    }
 }
-#[inline]
-unsafe extern "C" fn mark_local_index(name: ::core::ffi::c_char) -> ::core::ffi::c_int {
-    return if name as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-        && name as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-    {
-        name as ::core::ffi::c_int - 'a' as ::core::ffi::c_int
-    } else if name as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
-        NMARKS
-    } else if name as ::core::ffi::c_int == '^' as ::core::ffi::c_int {
-        NMARKS + 1 as ::core::ffi::c_int
-    } else if name as ::core::ffi::c_int == '.' as ::core::ffi::c_int {
-        NMARKS + 2 as ::core::ffi::c_int
-    } else {
-        -1 as ::core::ffi::c_int
-    };
+
+/// Where a buffer-local mark's name lives in a buffer's mark array: `a`-`z`
+/// first, then the three special ones. −1 for a name that is none of them.
+fn mark_local_index(name: ::core::ffi::c_char) -> ::core::ffi::c_int {
+    match name as u8 {
+        b'a'..=b'z' => name as ::core::ffi::c_int - 'a' as ::core::ffi::c_int,
+        b'"' => NMARKS,
+        b'^' => NMARKS + 1,
+        b'.' => NMARKS + 2,
+        _ => -1,
+    }
 }
+
 pub const DEFAULT_POS: pos_T = pos_T {
     lnum: 1 as linenr_T,
     col: 0 as colnr_T,
