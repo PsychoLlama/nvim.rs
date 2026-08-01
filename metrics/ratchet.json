@@ -1,7 +1,7 @@
 {
   "internal_exports": 55,
   "files_without_forbid_unsafe": 518,
-  "files_without_deny_unsafe_op": 219,
+  "files_without_deny_unsafe_op": 218,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -209,7 +209,7 @@
     "crates/nvim/src/nvim/fold/open_close.rs": {"unsafe": 18},
     "crates/nvim/src/nvim/fold/session.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/fold/text.rs": {"unsafe": 2},
-    "crates/nvim/src/nvim/fuzzy.rs": {"lines": 1172, "unsafe": 23},
+    "crates/nvim/src/nvim/fuzzy.rs": {"unsafe": 18},
     "crates/nvim/src/nvim/garray.rs": {"no_mangle": 2, "unsafe": 11},
     "crates/nvim/src/nvim/getchar.rs": {"lines": 4497, "unsafe": 96},
     "crates/nvim/src/nvim/global_cell.rs": {"unsafe": 9},
@@ -224,7 +224,7 @@
     "crates/nvim/src/nvim/indent/expr.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/indent_c.rs": {"lines": 4389, "unsafe": 60},
     "crates/nvim/src/nvim/input.rs": {"unsafe": 3},
-    "crates/nvim/src/nvim/insexpand.rs": {"lines": 8048, "unsafe": 218},
+    "crates/nvim/src/nvim/insexpand.rs": {"lines": 8047, "unsafe": 218},
     "crates/nvim/src/nvim/keycodes.rs": {"lines": 3917, "unsafe": 17},
     "crates/nvim/src/nvim/kvec.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/log.rs": {"lines": 4677, "unsafe": 13, "variadic": 1},

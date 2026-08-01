@@ -5453,16 +5453,15 @@ unsafe extern "C" fn get_next_default_completion(
         let mut cont_s_ipos: bool = false_0 != 0;
         (*msg_silent.ptr()) += 1;
         if in_fuzzy_collect {
-            found_new_match = search_for_fuzzy_match(
-                (*st).ins_buf,
-                (*st).cur_match_pos,
-                leader,
-                compl_direction.get() as ::core::ffi::c_int,
-                start_pos,
-                &raw mut len,
-                &raw mut ptr,
-                &raw mut score,
-            ) as ::core::ffi::c_int;
+            let dir = compl_direction.get() as ::core::ffi::c_int;
+            let pos = (*st).cur_match_pos;
+            let m = search_for_fuzzy_match((*st).ins_buf, pos, leader, dir, start_pos);
+            found_new_match = FAIL;
+            if let Some(hit) = m {
+                (ptr, len) = (hit.ptr, hit.len);
+                score = hit.score.unwrap_or(score);
+                found_new_match = true_0;
+            }
         } else if ctrl_x_mode_whole_line() as ::core::ffi::c_int != 0
             || ctrl_x_mode_eval() as ::core::ffi::c_int != 0
             || compl_cont_status.get() & CONT_SOL != 0

@@ -1,1172 +1,1000 @@
-use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::charset::{skipwhite, vim_iswordc, vim_iswordp};
+//! Fuzzy matching: how well does a pattern describe a string?
+//!
+//! The scorer is a port of [fzy](https://github.com/jhawthorn/fzy) extended
+//! to multibyte characters — [`match_positions`] fills a dynamic-programming
+//! table and reads back both the score and where each pattern character
+//! landed. Around it sit the entry points the editor uses:
+//! [`fuzzy_match_str`] to score a candidate, [`fuzzy_match_str_with_pos`] for
+//! the popup menu's highlighting, [`search_for_fuzzy_match`] for
+//! `'completeopt'=fuzzy`, and [`f_matchfuzzy`]/[`f_matchfuzzypos`].
+//!
+//! A pattern is matched word by word (whitespace separated) unless the caller
+//! asks for `matchseq`, in which case the whole pattern including its spaces
+//! is one unit. Each word is scored against the whole candidate and the
+//! scores are added, saturating rather than wrapping; a word that does not
+//! match at all rejects the candidate outright.
+//!
+//! fzy scores in floating point, where a run of consecutive characters, a
+//! character after a path separator, and the capital of a CamelCase word all
+//! earn a bonus. Everything outside this file compares `int` scores, so the
+//! result is scaled by `SCORE_SCALE` and rounded away from zero; the two
+//! infinities become `c_int::MAX` and `c_int::MIN + 1`, leaving
+//! [`FUZZY_SCORE_NONE`] (`c_int::MIN`) to mean "no match at all".
+//!
+//! Portions of this file are adapted from fzy. Original code: Copyright (c)
+//! 2014 John Hawthorn, MIT licensed.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+
+use core::ffi::{c_char, c_int};
+use std::ffi::CStr;
+
+use crate::src::nvim::ascii::ascii_iswhite;
+use crate::src::nvim::charset::{vim_iswordc, vim_iswordp};
 use crate::src::nvim::eval::callback_call;
 use crate::src::nvim::eval::typval::{
-    callback_free, tv_check_for_nonnull_dict_arg, tv_clear, tv_dict_find, tv_dict_get_callback,
-    tv_dict_get_string, tv_dict_has_key, tv_dict_unref, tv_get_number_chk, tv_get_string,
-    tv_list_alloc, tv_list_alloc_ret, tv_list_append_list, tv_list_append_number,
+    callback_free, kCallbackNone, tv_check_for_nonnull_dict_arg, tv_clear, tv_dict_find,
+    tv_dict_get_callback, tv_dict_get_string, tv_dict_has_key, tv_dict_unref, tv_get_number_chk,
+    tv_get_string, tv_list_alloc, tv_list_alloc_ret, tv_list_append_list, tv_list_append_number,
     tv_list_append_tv, tv_list_find,
 };
-use crate::src::nvim::eval::typval::{kCallbackNone, tv_list_len};
-use crate::src::nvim::pos::equalpos;
-
-use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
+use crate::src::nvim::garray::{ga_grow, ga_init};
+use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::insexpand::{
     ctrl_x_mode_whole_line, find_line_end, find_word_end, find_word_start,
 };
 use crate::src::nvim::main::{curbuf, e_invarg2, e_invargNval, e_invargval, e_listarg, p_ws};
 use crate::src::nvim::mbyte::{
-    mb_charlen, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_ptr2char, utfc_ptr2len,
+    mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_ptr2char, utfc_ptr2len,
 };
 use crate::src::nvim::memline::{ml_get_buf, ml_get_buf_len};
-use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xstrdup};
+use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::message::semsg;
-use crate::src::nvim::os::libc::{__assert_fail, ceil, floor, gettext, qsort, strlen, strncmp};
+use crate::src::nvim::os::libc::gettext;
+use crate::src::nvim::pos::equalpos;
 use crate::src::nvim::search::FORWARD;
 use crate::src::nvim::types::{
-    Callback, Callback_data as C2Rust_Unnamed_5, EvalFuncData, ListLenSpecials, VarLockStatus,
-    VarType, buf_T, colnr_T, dict_T, dictitem_T, fuzmatch_str_T, garray_T, linenr_T, list_T,
-    listitem_T, pos_T, ptrdiff_t, size_t, typval_T, typval_vval_union, uint32_t, varnumber_T,
+    Callback, Callback_data, EvalFuncData, ListLenSpecials, VarLockStatus, VarType, buf_T, dict_T,
+    fuzmatch_str_T, garray_T, linenr_T, list_T, listitem_T, pos_T, typval_T, typval_vval_union,
+    varnumber_T,
 };
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kListLenMayKnow: ListLenSpecials = -3;
-pub const kListLenUnknown: ListLenSpecials = -1;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const FUZZY_MATCH_MAX_LEN: C2Rust_Unnamed_14 = 1024;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_int;
-pub const FUZZY_SCORE_NONE: C2Rust_Unnamed_15 = -2147483648;
-pub type score_t = ::core::ffi::c_double;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct match_struct {
-    pub needle_len: ::core::ffi::c_int,
-    pub haystack_len: ::core::ffi::c_int,
-    pub lower_needle: [::core::ffi::c_int; 1024],
-    pub lower_haystack: [::core::ffi::c_int; 1024],
-    pub match_bonus: [score_t; 1024],
+
+/// The most characters of a pattern or a candidate that are looked at, and
+/// so the most match positions that can be reported.
+pub const FUZZY_MATCH_MAX_LEN: usize = 1024;
+/// The score of a candidate the pattern does not match at all.
+pub const FUZZY_SCORE_NONE: c_int = c_int::MIN;
+
+const VAR_UNLOCKED: VarLockStatus = 0;
+const VAR_UNKNOWN: VarType = 0;
+const VAR_NUMBER: VarType = 1;
+const VAR_STRING: VarType = 2;
+const VAR_LIST: VarType = 4;
+const VAR_DICT: VarType = 5;
+const kListLenUnknown: ListLenSpecials = -1;
+const kListLenMayKnow: ListLenSpecials = -3;
+const FAIL: c_int = 0;
+
+/// An unset typval, as `VAR_UNKNOWN` spells it.
+const TV_UNKNOWN: typval_T = typval_T {
+    v_type: VAR_UNKNOWN,
+    v_lock: VAR_UNLOCKED,
+    vval: typval_vval_union { v_number: 0 },
+};
+
+/// fzy's score, before it is scaled to an `int`.
+type Score = f64;
+
+/// No match on this path — a real score, unlike [`FUZZY_SCORE_NONE`].
+const SCORE_MIN: Score = Score::NEG_INFINITY;
+/// The candidate is the pattern, ignoring case.
+const SCORE_MAX: Score = Score::INFINITY;
+/// What a fzy score is multiplied by to become an `int` score.
+const SCORE_SCALE: Score = 1000.0;
+
+const SCORE_GAP_LEADING: Score = -0.005;
+const SCORE_GAP_TRAILING: Score = -0.005;
+const SCORE_GAP_INNER: Score = -0.01;
+const SCORE_MATCH_CONSECUTIVE: Score = 1.0;
+const SCORE_MATCH_SLASH: Score = 0.9;
+const SCORE_MATCH_WORD: Score = 0.8;
+const SCORE_MATCH_CAPITAL: Score = 0.7;
+const SCORE_MATCH_DOT: Score = 0.6;
+
+/// The characters of a string, as `MB_PTR_ADV` steps over them: one item per
+/// base character, with any composing characters folded into the step.
+struct Chars<'a> {
+    str: &'a CStr,
+    /// Bytes before the NUL, worked out once.
+    len: usize,
+    /// Byte offset of the next character.
+    at: usize,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct fuzzyItem_T {
-    pub idx: ::core::ffi::c_int,
-    pub item: *mut listitem_T,
-    pub score: ::core::ffi::c_int,
-    pub lmatchpos: *mut list_T,
-    pub pat: *mut ::core::ffi::c_char,
-    pub itemstr: *mut ::core::ffi::c_char,
-    pub itemstr_allocated: bool,
-    pub startpos: ::core::ffi::c_int,
-}
-pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FAIL: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const SCORE_SCALE: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
-pub unsafe extern "C" fn fuzzy_match(
-    str: *mut ::core::ffi::c_char,
-    pat_arg: *const ::core::ffi::c_char,
-    matchseq: bool,
-    outScore: *mut ::core::ffi::c_int,
-    matches: *mut uint32_t,
-    maxMatches: ::core::ffi::c_int,
-) -> bool {
-    let mut complete: bool = false_0 != 0;
-    let mut numMatches: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    *outScore = 0 as ::core::ffi::c_int;
-    let save_pat: *mut ::core::ffi::c_char = xstrdup(pat_arg);
-    let mut pat: *mut ::core::ffi::c_char = save_pat;
-    let mut p: *mut ::core::ffi::c_char = pat;
-    loop {
-        if matchseq {
-            complete = true_0 != 0;
-        } else {
-            p = skipwhite(p);
-            if *p as ::core::ffi::c_int == NUL {
-                break;
-            }
-            pat = p;
-            while *p as ::core::ffi::c_int != NUL && !ascii_iswhite(utf_ptr2char(p)) {
-                p = p.offset(utfc_ptr2len(p) as isize);
-            }
-            if *p as ::core::ffi::c_int == NUL {
-                complete = true_0 != 0;
-            }
-            *p = NUL as ::core::ffi::c_char;
-        }
-        let mut score: ::core::ffi::c_int = FUZZY_SCORE_NONE as ::core::ffi::c_int;
-        if has_match(pat, str) != 0 {
-            let mut fzy_score: score_t =
-                match_positions(pat, str, matches.offset(numMatches as isize));
-            score = if fzy_score == -::core::f32::INFINITY as score_t {
-                INT_MIN + 1 as ::core::ffi::c_int
-            } else if fzy_score == ::core::f32::INFINITY as score_t {
-                INT_MAX
-            } else if fzy_score < 0 as ::core::ffi::c_int as score_t {
-                ceil(
-                    fzy_score as ::core::ffi::c_double * SCORE_SCALE as ::core::ffi::c_double
-                        - 0.5f64,
-                ) as ::core::ffi::c_int
-            } else {
-                floor(
-                    fzy_score as ::core::ffi::c_double * SCORE_SCALE as ::core::ffi::c_double
-                        + 0.5f64,
-                ) as ::core::ffi::c_int
-            };
-        }
-        if score == FUZZY_SCORE_NONE as ::core::ffi::c_int {
-            numMatches = 0 as ::core::ffi::c_int;
-            *outScore = FUZZY_SCORE_NONE as ::core::ffi::c_int;
-            break;
-        } else {
-            if score > 0 as ::core::ffi::c_int && *outScore > INT_MAX - score {
-                *outScore = INT_MAX;
-            } else if score < 0 as ::core::ffi::c_int
-                && *outScore < INT_MIN + 1 as ::core::ffi::c_int - score
-            {
-                *outScore = INT_MIN + 1 as ::core::ffi::c_int;
-            } else {
-                *outScore += score;
-            }
-            numMatches += mb_charlen(pat);
-            if complete as ::core::ffi::c_int != 0 || numMatches >= maxMatches {
-                break;
-            }
-            p = p.offset(1);
+
+impl<'a> Chars<'a> {
+    fn new(str: &'a CStr) -> Self {
+        Chars {
+            str,
+            len: str.to_bytes().len(),
+            at: 0,
         }
     }
-    xfree(save_pat as *mut ::core::ffi::c_void);
-    return numMatches != 0 as ::core::ffi::c_int;
 }
-unsafe extern "C" fn fuzzy_match_item_compare(
-    s1: *const ::core::ffi::c_void,
-    s2: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let v1: ::core::ffi::c_int = (*(s1 as *const fuzzyItem_T)).score;
-    let v2: ::core::ffi::c_int = (*(s2 as *const fuzzyItem_T)).score;
-    if v1 == v2 {
-        let pat: *const ::core::ffi::c_char = (*(s1 as *const fuzzyItem_T)).pat;
-        let patlen: size_t = strlen(pat);
-        let mut startpos: ::core::ffi::c_int = (*(s1 as *const fuzzyItem_T)).startpos;
-        let exact_match1: bool = startpos >= 0 as ::core::ffi::c_int
-            && strncmp(
-                pat,
-                (*(s1 as *mut fuzzyItem_T))
-                    .itemstr
-                    .offset(startpos as isize),
-                patlen,
-            ) == 0 as ::core::ffi::c_int;
-        startpos = (*(s2 as *const fuzzyItem_T)).startpos;
-        let exact_match2: bool = startpos >= 0 as ::core::ffi::c_int
-            && strncmp(
-                pat,
-                (*(s2 as *mut fuzzyItem_T))
-                    .itemstr
-                    .offset(startpos as isize),
-                patlen,
-            ) == 0 as ::core::ffi::c_int;
-        if exact_match1 as ::core::ffi::c_int == exact_match2 as ::core::ffi::c_int {
-            let idx1: ::core::ffi::c_int = (*(s1 as *const fuzzyItem_T)).idx;
-            let idx2: ::core::ffi::c_int = (*(s2 as *const fuzzyItem_T)).idx;
-            return if idx1 == idx2 {
-                0 as ::core::ffi::c_int
-            } else if idx1 > idx2 {
-                1 as ::core::ffi::c_int
-            } else {
-                -1 as ::core::ffi::c_int
-            };
-        } else if exact_match2 {
-            return 1 as ::core::ffi::c_int;
+
+impl Iterator for Chars<'_> {
+    /// The byte offset the character starts at, and its codepoint.
+    type Item = (usize, c_int);
+
+    fn next(&mut self) -> Option<(usize, c_int)> {
+        if self.at >= self.len {
+            return None;
         }
-        return -1 as ::core::ffi::c_int;
-    } else {
-        return if v1 > v2 {
-            -1 as ::core::ffi::c_int
-        } else {
-            1 as ::core::ffi::c_int
+        let at = self.at;
+        // SAFETY: `at` is a character boundary before the NUL of a
+        // NUL-terminated string, which is what both of these want. Neither
+        // reads past the NUL.
+        let (c, len) = unsafe {
+            let p = self.str.as_ptr().add(at);
+            (utf_ptr2char(p), utfc_ptr2len(p) as usize)
         };
-    };
+        // Zero is the answer only at the NUL, which `at` never points at.
+        debug_assert!(len > 0, "fuzzy: utfc_ptr2len stalled mid-string");
+        self.at = at + len;
+        Some((at, c))
+    }
 }
-unsafe extern "C" fn fuzzy_match_in_list(
-    l: *mut list_T,
-    str: *mut ::core::ffi::c_char,
-    matchseq: bool,
-    key: *const ::core::ffi::c_char,
-    item_cb: *mut Callback,
-    retmatchpos: bool,
-    fmatchlist: *mut list_T,
-    max_matches: ::core::ffi::c_int,
+
+/// C's `MAX` on scores: `a` only when strictly greater, so a NaN answers `b`.
+fn max_score(a: Score, b: Score) -> Score {
+    if a > b { a } else { b }
+}
+
+/// Is every character of `needle` somewhere in `haystack`, in order?
+///
+/// A lowercase pattern character also matches its uppercase form, which is
+/// what makes fuzzy matching case-insensitive in one direction only.
+fn has_match(needle: &CStr, haystack: &CStr) -> bool {
+    if needle.to_bytes().is_empty() {
+        return false;
+    }
+    let mut haystack = Chars::new(haystack);
+    // SAFETY: `mb_toupper` is a lookup on a codepoint, reading nothing else.
+    // The closures below inherit this block.
+    unsafe { Chars::new(needle).all(|(_, n)| haystack.any(|(_, h)| n == h || mb_toupper(n) == h)) }
+}
+
+/// What a haystack character earns for the character in front of it: the
+/// start of a path component, of a word, of an extension, or the capital
+/// that starts the second half of a CamelCase name.
+fn compute_bonus(last_c: c_int, c: c_int) -> Score {
+    // A codepoint outside ASCII is not alphanumeric, as C's ASCII_ISALNUM
+    // classifies them.
+    let alnum = u8::try_from(c).is_ok_and(|b| b.is_ascii_alphanumeric());
+    // SAFETY: the other three read only the character-class tables.
+    unsafe {
+        if !(alnum || vim_iswordc(c)) {
+            return 0.0;
+        }
+        match u8::try_from(last_c) {
+            Ok(b'/') => SCORE_MATCH_SLASH,
+            Ok(b'-' | b'_' | b' ') => SCORE_MATCH_WORD,
+            Ok(b'.') => SCORE_MATCH_DOT,
+            _ if mb_isupper(c) && mb_islower(last_c) => SCORE_MATCH_CAPITAL,
+            _ => 0.0,
+        }
+    }
+}
+
+/// Both strings reduced to what the score depends on: their lowercased
+/// codepoints, plus the bonus each haystack character earns from its
+/// predecessor. Anything past [`FUZZY_MATCH_MAX_LEN`] characters is ignored.
+struct Match {
+    lower_needle: Vec<c_int>,
+    lower_haystack: Vec<c_int>,
+    match_bonus: Vec<Score>,
+}
+
+impl Match {
+    fn new(needle: &CStr, haystack: &CStr) -> Self {
+        // SAFETY: `mb_tolower` is a lookup on a codepoint.
+        let lower_needle = Chars::new(needle)
+            .take(FUZZY_MATCH_MAX_LEN)
+            .map(|(_, c)| unsafe { mb_tolower(c) })
+            .collect();
+        let mut lower_haystack = Vec::new();
+        let mut match_bonus = Vec::new();
+        // The first character is treated as if a path separator preceded it.
+        let mut last_c = b'/' as c_int;
+        for (_, c) in Chars::new(haystack).take(FUZZY_MATCH_MAX_LEN) {
+            // SAFETY: as above.
+            lower_haystack.push(unsafe { mb_tolower(c) });
+            match_bonus.push(compute_bonus(last_c, c));
+            last_c = c;
+        }
+        Match {
+            lower_needle,
+            lower_haystack,
+            match_bonus,
+        }
+    }
+}
+
+/// Fill row `i` of the two score matrices: `curr_d[j]` is the best score for
+/// a match of the first `i + 1` pattern characters *ending* at haystack
+/// character `j`, and `curr_m[j]` the best score reachable by then, match or
+/// not. Row 0 reads nothing above it, so `last_d`/`last_m` may be empty there
+/// — upstream passes row 0 itself and relies on the reads being dead, which
+/// reads uninitialised memory.
+fn match_row(
+    mtch: &Match,
+    i: usize,
+    last_d: &[Score],
+    last_m: &[Score],
+    curr_d: &mut [Score],
+    curr_m: &mut [Score],
 ) {
-    let mut len: ::core::ffi::c_int = tv_list_len(l);
-    if len == 0 as ::core::ffi::c_int {
-        return;
-    }
-    if max_matches > 0 as ::core::ffi::c_int && len > max_matches {
-        len = max_matches;
-    }
-    let items: *mut fuzzyItem_T =
-        xcalloc(len as size_t, ::core::mem::size_of::<fuzzyItem_T>()) as *mut fuzzyItem_T;
-    let mut match_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut matches: [uint32_t; 1024] = [0; 1024];
-    let l_: *mut list_T = l;
-    if !l_.is_null() {
-        let mut li: *mut listitem_T = (*l_).lv_first;
-        while !li.is_null() {
-            if max_matches > 0 as ::core::ffi::c_int && match_count >= max_matches {
-                break;
-            }
-            let mut itemstr: *mut ::core::ffi::c_char =
-                ::core::ptr::null_mut::<::core::ffi::c_char>();
-            let mut itemstr_allocate: bool = false;
-            let mut rettv: typval_T = typval_T {
-                v_type: VAR_UNKNOWN,
-                v_lock: VAR_UNLOCKED,
-                vval: typval_vval_union { v_number: 0 },
-            };
-            rettv.v_type = VAR_UNKNOWN;
-            let tv: *const typval_T = &raw mut (*li).li_tv;
-            if (*tv).v_type as ::core::ffi::c_uint
-                == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                itemstr = (*tv).vval.v_string;
-            } else if (*tv).v_type as ::core::ffi::c_uint
-                == VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-                && (!key.is_null()
-                    || (*item_cb).type_0 as ::core::ffi::c_uint
-                        != kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint)
-            {
-                if !key.is_null() {
-                    itemstr = tv_dict_get_string((*tv).vval.v_dict, key, false);
-                } else {
-                    let mut argv: [typval_T; 2] = [typval_T {
-                        v_type: VAR_UNKNOWN,
-                        v_lock: VAR_UNLOCKED,
-                        vval: typval_vval_union { v_number: 0 },
-                    }; 2];
-                    (*(*tv).vval.v_dict).dv_refcount += 1;
-                    argv[0 as ::core::ffi::c_int as usize].v_type = VAR_DICT;
-                    argv[0 as ::core::ffi::c_int as usize].vval.v_dict = (*tv).vval.v_dict;
-                    argv[1 as ::core::ffi::c_int as usize].v_type = VAR_UNKNOWN;
-                    if callback_call(
-                        item_cb,
-                        1 as ::core::ffi::c_int,
-                        &raw mut argv as *mut typval_T,
-                        &raw mut rettv,
-                    ) {
-                        if rettv.v_type as ::core::ffi::c_uint
-                            == VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            itemstr = rettv.vval.v_string;
-                            itemstr_allocate = true;
-                        }
-                    }
-                    tv_dict_unref((*tv).vval.v_dict);
-                }
-            }
-            let mut score: ::core::ffi::c_int = 0;
-            if !itemstr.is_null()
-                && fuzzy_match(
-                    itemstr,
-                    str,
-                    matchseq,
-                    &raw mut score,
-                    &raw mut matches as *mut uint32_t,
-                    FUZZY_MATCH_MAX_LEN as ::core::ffi::c_int,
-                ) as ::core::ffi::c_int
-                    != 0
-            {
-                let mut itemstr_copy: *mut ::core::ffi::c_char =
-                    if itemstr_allocate as ::core::ffi::c_int != 0 {
-                        xstrdup(itemstr)
-                    } else {
-                        itemstr
-                    };
-                let mut match_positions_0: *mut list_T = ::core::ptr::null_mut::<list_T>();
-                if retmatchpos {
-                    match_positions_0 =
-                        tv_list_alloc(kListLenMayKnow as ::core::ffi::c_int as ptrdiff_t);
-                    let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                    let mut p: *const ::core::ffi::c_char = str;
-                    while *p as ::core::ffi::c_int != '\0' as ::core::ffi::c_int
-                        && j < FUZZY_MATCH_MAX_LEN as ::core::ffi::c_int
-                    {
-                        if !ascii_iswhite(utf_ptr2char(p)) || matchseq as ::core::ffi::c_int != 0 {
-                            tv_list_append_number(
-                                match_positions_0,
-                                matches[j as usize] as varnumber_T,
-                            );
-                            j += 1;
-                        }
-                        p = p.offset(utfc_ptr2len(p as *mut ::core::ffi::c_char) as isize);
-                    }
-                }
-                (*items.offset(match_count as isize)).idx = match_count;
-                (*items.offset(match_count as isize)).item = li;
-                (*items.offset(match_count as isize)).score = score;
-                (*items.offset(match_count as isize)).pat = str;
-                (*items.offset(match_count as isize)).startpos =
-                    matches[0 as ::core::ffi::c_int as usize] as ::core::ffi::c_int;
-                (*items.offset(match_count as isize)).itemstr = itemstr_copy;
-                (*items.offset(match_count as isize)).itemstr_allocated = itemstr_allocate;
-                (*items.offset(match_count as isize)).lmatchpos = match_positions_0;
-                match_count += 1;
-            }
-            tv_clear(&raw mut rettv);
-            li = (*li).li_next;
-        }
-    }
-    if match_count > 0 as ::core::ffi::c_int {
-        qsort(
-            items as *mut ::core::ffi::c_void,
-            match_count as size_t,
-            ::core::mem::size_of::<fuzzyItem_T>(),
-            Some(
-                fuzzy_match_item_compare
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_void,
-                        *const ::core::ffi::c_void,
-                    ) -> ::core::ffi::c_int,
-            ),
-        );
-        let mut retlist: *mut list_T = ::core::ptr::null_mut::<list_T>();
-        if retmatchpos {
-            let li_0: *const listitem_T = tv_list_find(fmatchlist, 0 as ::core::ffi::c_int);
-            '_c2rust_label: {
-                if !li_0.is_null() && !(*li_0).li_tv.vval.v_list.is_null() {
-                } else {
-                    __assert_fail(
-                        b"li != NULL && TV_LIST_ITEM_TV(li)->vval.v_list != NULL\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/fuzzy.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        293 as ::core::ffi::c_uint,
-                        b"void fuzzy_match_in_list(list_T *const, char *const, const _Bool, const char *const, Callback *const, const _Bool, list_T *const, const int)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            retlist = (*li_0).li_tv.vval.v_list;
-        } else {
-            retlist = fmatchlist;
-        }
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < match_count {
-            tv_list_append_tv(retlist, &raw mut (*(*items.offset(i as isize)).item).li_tv);
-            i += 1;
-        }
-        if retmatchpos {
-            let mut li_1: *const listitem_T = tv_list_find(fmatchlist, -2 as ::core::ffi::c_int);
-            '_c2rust_label_0: {
-                if !li_1.is_null() && !(*li_1).li_tv.vval.v_list.is_null() {
-                } else {
-                    __assert_fail(
-                        b"li != NULL && TV_LIST_ITEM_TV(li)->vval.v_list != NULL\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/fuzzy.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        307 as ::core::ffi::c_uint,
-                        b"void fuzzy_match_in_list(list_T *const, char *const, const _Bool, const char *const, Callback *const, const _Bool, list_T *const, const int)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            retlist = (*li_1).li_tv.vval.v_list;
-            let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i_0 < match_count {
-                '_c2rust_label_1: {
-                    if !(*items.offset(i_0 as isize)).lmatchpos.is_null() {
-                    } else {
-                        __assert_fail(
-                            b"items[i].lmatchpos != NULL\0".as_ptr()
-                                as *const ::core::ffi::c_char,
-                            b"src/nvim/fuzzy.rs\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                            311 as ::core::ffi::c_uint,
-                            b"void fuzzy_match_in_list(list_T *const, char *const, const _Bool, const char *const, Callback *const, const _Bool, list_T *const, const int)\0"
-                                .as_ptr() as *const ::core::ffi::c_char,
-                        );
-                    }
-                };
-                tv_list_append_list(retlist, (*items.offset(i_0 as isize)).lmatchpos);
-                (*items.offset(i_0 as isize)).lmatchpos = ::core::ptr::null_mut::<list_T>();
-                i_0 += 1;
-            }
-            li_1 = tv_list_find(fmatchlist, -1 as ::core::ffi::c_int);
-            '_c2rust_label_2: {
-                if !li_1.is_null() && !(*li_1).li_tv.vval.v_list.is_null() {
-                } else {
-                    __assert_fail(
-                        b"li != NULL && TV_LIST_ITEM_TV(li)->vval.v_list != NULL\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/fuzzy.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        318 as ::core::ffi::c_uint,
-                        b"void fuzzy_match_in_list(list_T *const, char *const, const _Bool, const char *const, Callback *const, const _Bool, list_T *const, const int)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            retlist = (*li_1).li_tv.vval.v_list;
-            let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i_1 < match_count {
-                tv_list_append_number(retlist, (*items.offset(i_1 as isize)).score as varnumber_T);
-                i_1 += 1;
-            }
-        }
-    }
-    let mut i_2: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i_2 < match_count {
-        if (*items.offset(i_2 as isize)).itemstr_allocated {
-            xfree((*items.offset(i_2 as isize)).itemstr as *mut ::core::ffi::c_void);
-        }
-        '_c2rust_label_3: {
-            if (*items.offset(i_2 as isize)).lmatchpos.is_null() {
-            } else {
-                __assert_fail(
-                    b"items[i].lmatchpos == NULL\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                    b"src/nvim/fuzzy.rs\0".as_ptr()
-                        as *const ::core::ffi::c_char,
-                    330 as ::core::ffi::c_uint,
-                    b"void fuzzy_match_in_list(list_T *const, char *const, const _Bool, const char *const, Callback *const, const _Bool, list_T *const, const int)\0"
-                        .as_ptr() as *const ::core::ffi::c_char,
-                );
-            }
-        };
-        i_2 += 1;
-    }
-    xfree(items as *mut ::core::ffi::c_void);
-}
-unsafe extern "C" fn do_fuzzymatch(
-    argvars: *const typval_T,
-    rettv: *mut typval_T,
-    retmatchpos: bool,
-) {
-    if (*argvars.offset(0 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*argvars.offset(0 as ::core::ffi::c_int as isize))
-            .vval
-            .v_list
-            .is_null()
-    {
-        semsg(
-            gettext(&raw const e_listarg as *const ::core::ffi::c_char),
-            if retmatchpos as ::core::ffi::c_int != 0 {
-                b"matchfuzzypos()\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"matchfuzzy()\0".as_ptr() as *const ::core::ffi::c_char
-            },
-        );
-        return;
-    }
-    if (*argvars.offset(1 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-        || (*argvars.offset(1 as ::core::ffi::c_int as isize))
-            .vval
-            .v_string
-            .is_null()
-    {
-        semsg(
-            gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-            tv_get_string(argvars.offset(1 as ::core::ffi::c_int as isize)),
-        );
-        return;
-    }
-    let mut cb: Callback = Callback {
-        data: C2Rust_Unnamed_5 {
-            funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        type_0: kCallbackNone,
-    };
-    let mut key: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut matchseq: bool = false_0 != 0;
-    let mut max_matches: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if (*argvars.offset(2 as ::core::ffi::c_int as isize)).v_type as ::core::ffi::c_uint
-        != VAR_UNKNOWN as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        if tv_check_for_nonnull_dict_arg(argvars, 2 as ::core::ffi::c_int) == FAIL {
-            return;
-        }
-        let d: *mut dict_T = (*argvars.offset(2 as ::core::ffi::c_int as isize))
-            .vval
-            .v_dict;
-        let mut di: *const dictitem_T = ::core::ptr::null::<dictitem_T>();
-        di = tv_dict_find(
-            d,
-            b"key\0".as_ptr() as *const ::core::ffi::c_char,
-            -1 as ptrdiff_t,
-        );
-        if !di.is_null() {
-            if (*di).di_tv.v_type as ::core::ffi::c_uint
-                != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                || (*di).di_tv.vval.v_string.is_null()
-                || *(*di).di_tv.vval.v_string as ::core::ffi::c_int == NUL
-            {
-                semsg(
-                    gettext(&raw const e_invargNval as *const ::core::ffi::c_char),
-                    b"key\0".as_ptr() as *const ::core::ffi::c_char,
-                    tv_get_string(&raw const (*di).di_tv),
-                );
-                return;
-            }
-            key = tv_get_string(&raw const (*di).di_tv);
-        } else if !tv_dict_get_callback(
-            d,
-            b"text_cb\0".as_ptr() as *const ::core::ffi::c_char,
-            -1 as ptrdiff_t,
-            &raw mut cb,
-        ) {
-            semsg(
-                gettext(&raw const e_invargval as *const ::core::ffi::c_char),
-                b"text_cb\0".as_ptr() as *const ::core::ffi::c_char,
-            );
-            return;
-        }
-        di = tv_dict_find(
-            d,
-            b"limit\0".as_ptr() as *const ::core::ffi::c_char,
-            -1 as ptrdiff_t,
-        );
-        if !di.is_null() {
-            if (*di).di_tv.v_type as ::core::ffi::c_uint
-                != VAR_NUMBER as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                semsg(
-                    gettext(&raw const e_invargval as *const ::core::ffi::c_char),
-                    b"limit\0".as_ptr() as *const ::core::ffi::c_char,
-                );
-                return;
-            }
-            max_matches = tv_get_number_chk(&raw const (*di).di_tv, ::core::ptr::null_mut::<bool>())
-                as ::core::ffi::c_int;
-        }
-        if tv_dict_has_key(d, b"matchseq\0".as_ptr() as *const ::core::ffi::c_char) {
-            matchseq = true_0 != 0;
-        }
-    }
-    tv_list_alloc_ret(
-        rettv,
-        (if retmatchpos as ::core::ffi::c_int != 0 {
-            3 as ::core::ffi::c_int
-        } else {
-            kListLenUnknown as ::core::ffi::c_int
-        }) as ptrdiff_t,
-    );
-    if retmatchpos {
-        tv_list_append_list(
-            (*rettv).vval.v_list,
-            tv_list_alloc(kListLenUnknown as ::core::ffi::c_int as ptrdiff_t),
-        );
-        tv_list_append_list(
-            (*rettv).vval.v_list,
-            tv_list_alloc(kListLenUnknown as ::core::ffi::c_int as ptrdiff_t),
-        );
-        tv_list_append_list(
-            (*rettv).vval.v_list,
-            tv_list_alloc(kListLenUnknown as ::core::ffi::c_int as ptrdiff_t),
-        );
-    }
-    fuzzy_match_in_list(
-        (*argvars.offset(0 as ::core::ffi::c_int as isize))
-            .vval
-            .v_list,
-        tv_get_string(argvars.offset(1 as ::core::ffi::c_int as isize)) as *mut ::core::ffi::c_char,
-        matchseq,
-        key,
-        &raw mut cb,
-        retmatchpos,
-        (*rettv).vval.v_list,
-        max_matches,
-    );
-    callback_free(&raw mut cb);
-}
-pub unsafe extern "C" fn f_matchfuzzy(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    do_fuzzymatch(argvars, rettv, false_0 != 0);
-}
-pub unsafe extern "C" fn f_matchfuzzypos(
-    mut argvars: *mut typval_T,
-    mut rettv: *mut typval_T,
-    mut _fptr: EvalFuncData,
-) {
-    do_fuzzymatch(argvars, rettv, true_0 != 0);
-}
-unsafe extern "C" fn fuzzy_match_str_compare(
-    s1: *const ::core::ffi::c_void,
-    s2: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let v1: ::core::ffi::c_int = (*(s1 as *mut fuzmatch_str_T)).score;
-    let v2: ::core::ffi::c_int = (*(s2 as *mut fuzmatch_str_T)).score;
-    let idx1: ::core::ffi::c_int = (*(s1 as *mut fuzmatch_str_T)).idx;
-    let idx2: ::core::ffi::c_int = (*(s2 as *mut fuzmatch_str_T)).idx;
-    if v1 == v2 {
-        return if idx1 == idx2 {
-            0 as ::core::ffi::c_int
-        } else if idx1 > idx2 {
-            1 as ::core::ffi::c_int
-        } else {
-            -1 as ::core::ffi::c_int
-        };
-    } else {
-        return if v1 > v2 {
-            -1 as ::core::ffi::c_int
-        } else {
-            1 as ::core::ffi::c_int
-        };
-    };
-}
-unsafe extern "C" fn fuzzy_match_str_sort(fm: *mut fuzmatch_str_T, sz: ::core::ffi::c_int) {
-    qsort(
-        fm as *mut ::core::ffi::c_void,
-        sz as size_t,
-        ::core::mem::size_of::<fuzmatch_str_T>(),
-        Some(
-            fuzzy_match_str_compare
-                as unsafe extern "C" fn(
-                    *const ::core::ffi::c_void,
-                    *const ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
-        ),
-    );
-}
-unsafe extern "C" fn fuzzy_match_func_compare(
-    s1: *const ::core::ffi::c_void,
-    s2: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    let v1: ::core::ffi::c_int = (*(s1 as *mut fuzmatch_str_T)).score;
-    let v2: ::core::ffi::c_int = (*(s2 as *mut fuzmatch_str_T)).score;
-    let idx1: ::core::ffi::c_int = (*(s1 as *mut fuzmatch_str_T)).idx;
-    let idx2: ::core::ffi::c_int = (*(s2 as *mut fuzmatch_str_T)).idx;
-    let str1: *const ::core::ffi::c_char = (*(s1 as *mut fuzmatch_str_T)).str;
-    let str2: *const ::core::ffi::c_char = (*(s2 as *mut fuzmatch_str_T)).str;
-    if *str1 as ::core::ffi::c_int != '<' as ::core::ffi::c_int
-        && *str2 as ::core::ffi::c_int == '<' as ::core::ffi::c_int
-    {
-        return -1 as ::core::ffi::c_int;
-    }
-    if *str1 as ::core::ffi::c_int == '<' as ::core::ffi::c_int
-        && *str2 as ::core::ffi::c_int != '<' as ::core::ffi::c_int
-    {
-        return 1 as ::core::ffi::c_int;
-    }
-    if v1 == v2 {
-        return if idx1 == idx2 {
-            0 as ::core::ffi::c_int
-        } else if idx1 > idx2 {
-            1 as ::core::ffi::c_int
-        } else {
-            -1 as ::core::ffi::c_int
-        };
-    }
-    return if v1 > v2 {
-        -1 as ::core::ffi::c_int
-    } else {
-        1 as ::core::ffi::c_int
-    };
-}
-unsafe extern "C" fn fuzzy_match_func_sort(fm: *mut fuzmatch_str_T, sz: ::core::ffi::c_int) {
-    qsort(
-        fm as *mut ::core::ffi::c_void,
-        sz as size_t,
-        ::core::mem::size_of::<fuzmatch_str_T>(),
-        Some(
-            fuzzy_match_func_compare
-                as unsafe extern "C" fn(
-                    *const ::core::ffi::c_void,
-                    *const ::core::ffi::c_void,
-                ) -> ::core::ffi::c_int,
-        ),
-    );
-}
-pub unsafe extern "C" fn fuzzy_match_str(
-    str: *mut ::core::ffi::c_char,
-    pat: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if str.is_null() || pat.is_null() {
-        return 0 as ::core::ffi::c_int;
-    }
-    let mut score: ::core::ffi::c_int = FUZZY_SCORE_NONE as ::core::ffi::c_int;
-    let mut matchpos: [uint32_t; 1024] = [0; 1024];
-    fuzzy_match(
-        str,
-        pat,
-        true_0 != 0,
-        &raw mut score,
-        &raw mut matchpos as *mut uint32_t,
-        ::core::mem::size_of::<[uint32_t; 1024]>()
-            .wrapping_div(::core::mem::size_of::<uint32_t>())
-            .wrapping_div(
-                (::core::mem::size_of::<[uint32_t; 1024]>()
-                    .wrapping_rem(::core::mem::size_of::<uint32_t>())
-                    == 0) as ::core::ffi::c_int as usize,
-            ) as ::core::ffi::c_int,
-    );
-    return score;
-}
-pub unsafe extern "C" fn fuzzy_match_str_with_pos(
-    str: *mut ::core::ffi::c_char,
-    pat: *const ::core::ffi::c_char,
-) -> *mut garray_T {
-    if str.is_null() || pat.is_null() {
-        return ::core::ptr::null_mut::<garray_T>();
-    }
-    let mut match_positions_0: *mut garray_T =
-        xmalloc(::core::mem::size_of::<garray_T>()) as *mut garray_T;
-    ga_init(
-        match_positions_0,
-        ::core::mem::size_of::<uint32_t>() as ::core::ffi::c_int,
-        10 as ::core::ffi::c_int,
-    );
-    let mut score: ::core::ffi::c_int = FUZZY_SCORE_NONE as ::core::ffi::c_int;
-    let mut matches: [uint32_t; 1024] = [0; 1024];
-    if !fuzzy_match(
-        str,
-        pat,
-        false_0 != 0,
-        &raw mut score,
-        &raw mut matches as *mut uint32_t,
-        FUZZY_MATCH_MAX_LEN as ::core::ffi::c_int,
-    ) || score == FUZZY_SCORE_NONE as ::core::ffi::c_int
-    {
-        ga_clear(match_positions_0);
-        xfree(match_positions_0 as *mut ::core::ffi::c_void);
-        return ::core::ptr::null_mut::<garray_T>();
-    }
-    let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut p: *const ::core::ffi::c_char = pat;
-    while *p as ::core::ffi::c_int != NUL {
-        if !ascii_iswhite(utf_ptr2char(p)) {
-            ga_grow(match_positions_0, 1 as ::core::ffi::c_int);
-            *((*match_positions_0).ga_data as *mut uint32_t)
-                .offset((*match_positions_0).ga_len as isize) = matches[j as usize];
-            (*match_positions_0).ga_len += 1;
-            j += 1;
-        }
-        p = p.offset(utfc_ptr2len(p as *mut ::core::ffi::c_char) as isize);
-    }
-    return match_positions_0;
-}
-pub unsafe extern "C" fn fuzzy_match_str_in_line(
-    mut ptr: *mut *mut ::core::ffi::c_char,
-    mut pat: *mut ::core::ffi::c_char,
-    mut len: *mut ::core::ffi::c_int,
-    mut current_pos: *mut pos_T,
-    mut score: *mut ::core::ffi::c_int,
-) -> bool {
-    let mut str: *mut ::core::ffi::c_char = *ptr;
-    let mut strBegin: *mut ::core::ffi::c_char = str;
-    let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut start: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut found: bool = false_0 != 0;
-    if str.is_null() || pat.is_null() {
-        return found;
-    }
-    let mut line_end: *mut ::core::ffi::c_char = find_line_end(str);
-    while str < line_end {
-        start = find_word_start(str);
-        if *start as ::core::ffi::c_int == NUL {
-            break;
-        }
-        end = find_word_end(start);
-        let mut save_end: ::core::ffi::c_char = *end;
-        *end = NUL as ::core::ffi::c_char;
-        *score = fuzzy_match_str(start, pat);
-        *end = save_end;
-        if *score != FUZZY_SCORE_NONE as ::core::ffi::c_int {
-            *len = end.offset_from(start) as ::core::ffi::c_int;
-            found = true_0 != 0;
-            *ptr = start;
-            if !current_pos.is_null() {
-                (*current_pos).col += end.offset_from(strBegin) as ::core::ffi::c_int;
-            }
-            break;
-        } else {
-            str = end;
-            while *str as ::core::ffi::c_int != NUL && !vim_iswordp(str) {
-                str = str.offset(utfc_ptr2len(str) as isize);
-            }
-        }
-    }
-    if !found {
-        *ptr = line_end;
-    }
-    return found;
-}
-pub unsafe extern "C" fn search_for_fuzzy_match(
-    mut buf: *mut buf_T,
-    mut pos: *mut pos_T,
-    mut pattern: *mut ::core::ffi::c_char,
-    mut dir: ::core::ffi::c_int,
-    mut start_pos: *mut pos_T,
-    mut len: *mut ::core::ffi::c_int,
-    mut ptr: *mut *mut ::core::ffi::c_char,
-    mut score: *mut ::core::ffi::c_int,
-) -> bool {
-    let mut current_pos: pos_T = *pos;
-    let mut circly_end: pos_T = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
-    let mut found_new_match: bool = false_0 != 0;
-    let mut looped_around: bool = false_0 != 0;
-    let mut whole_line: bool = ctrl_x_mode_whole_line();
-    if buf == curbuf.get() {
-        circly_end = *start_pos;
-    } else {
-        circly_end.lnum = (*buf).b_ml.ml_line_count;
-        circly_end.col = 0 as ::core::ffi::c_int as colnr_T;
-        circly_end.coladd = 0 as ::core::ffi::c_int as colnr_T;
-    }
-    if whole_line as ::core::ffi::c_int != 0 && (*start_pos).lnum != (*pos).lnum {
-        current_pos.lnum = (current_pos.lnum as ::core::ffi::c_int + dir) as linenr_T;
-    }
-    while !(looped_around as ::core::ffi::c_int != 0
-        && (if whole_line as ::core::ffi::c_int != 0 {
-            (current_pos.lnum == circly_end.lnum) as ::core::ffi::c_int
-        } else {
-            equalpos(current_pos, circly_end) as ::core::ffi::c_int
-        }) != 0)
-    {
-        if current_pos.lnum >= 1 as linenr_T && current_pos.lnum <= (*buf).b_ml.ml_line_count {
-            *ptr = ml_get_buf(buf, current_pos.lnum);
-            if !whole_line {
-                *ptr = (*ptr).offset(current_pos.col as isize);
-            }
-            if !(*ptr).is_null() && **ptr as ::core::ffi::c_int != NUL {
-                if !whole_line {
-                    found_new_match =
-                        fuzzy_match_str_in_line(ptr, pattern, len, &raw mut current_pos, score);
-                    if found_new_match {
-                        *pos = current_pos;
-                        break;
-                    } else if looped_around as ::core::ffi::c_int != 0
-                        && current_pos.lnum == circly_end.lnum
-                    {
-                        break;
-                    }
-                } else if fuzzy_match_str(*ptr, pattern) != FUZZY_SCORE_NONE as ::core::ffi::c_int {
-                    found_new_match = true_0 != 0;
-                    *pos = current_pos;
-                    *len = ml_get_buf_len(buf, current_pos.lnum) as ::core::ffi::c_int;
-                    break;
-                }
-            }
-        }
-        if dir == FORWARD as ::core::ffi::c_int {
-            current_pos.lnum += 1;
-            if current_pos.lnum > (*buf).b_ml.ml_line_count {
-                if p_ws.get() == 0 {
-                    break;
-                }
-                current_pos.lnum = 1 as ::core::ffi::c_int as linenr_T;
-                looped_around = true_0 != 0;
-            }
-        } else {
-            current_pos.lnum -= 1;
-            if current_pos.lnum < 1 as linenr_T {
-                if p_ws.get() == 0 {
-                    break;
-                }
-                current_pos.lnum = (*buf).b_ml.ml_line_count;
-                looped_around = true_0 != 0;
-            }
-        }
-        current_pos.col = 0 as ::core::ffi::c_int as colnr_T;
-    }
-    return found_new_match;
-}
-pub unsafe extern "C" fn fuzzymatches_to_strmatches(
-    fuzmatch: *mut fuzmatch_str_T,
-    matches: *mut *mut *mut ::core::ffi::c_char,
-    count: ::core::ffi::c_int,
-    funcsort: bool,
-) {
-    if count > 0 as ::core::ffi::c_int {
-        *matches = xmalloc(
-            (count as size_t).wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>()),
-        ) as *mut *mut ::core::ffi::c_char;
-        if funcsort {
-            fuzzy_match_func_sort(fuzmatch, count);
-        } else {
-            fuzzy_match_str_sort(fuzmatch, count);
-        }
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < count {
-            *(*matches).offset(i as isize) = (*fuzmatch.offset(i as isize)).str;
-            i += 1;
-        }
-    }
-    xfree(fuzmatch as *mut ::core::ffi::c_void);
-}
-pub const SCORE_GAP_LEADING: ::core::ffi::c_double = -0.005f64;
-pub const SCORE_GAP_TRAILING: ::core::ffi::c_double = -0.005f64;
-pub const SCORE_GAP_INNER: ::core::ffi::c_double = -0.01f64;
-pub const SCORE_MATCH_CONSECUTIVE: ::core::ffi::c_double = 1.0f64;
-pub const SCORE_MATCH_SLASH: ::core::ffi::c_double = 0.9f64;
-pub const SCORE_MATCH_WORD: ::core::ffi::c_double = 0.8f64;
-pub const SCORE_MATCH_CAPITAL: ::core::ffi::c_double = 0.7f64;
-pub const SCORE_MATCH_DOT: ::core::ffi::c_double = 0.6f64;
-unsafe extern "C" fn has_match(
-    needle: *const ::core::ffi::c_char,
-    haystack: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    if needle.is_null() || haystack.is_null() || *needle == 0 {
-        return FAIL;
-    }
-    let mut n_ptr: *const ::core::ffi::c_char = needle;
-    let mut h_ptr: *const ::core::ffi::c_char = haystack;
-    while *n_ptr != 0 {
-        let n_char: ::core::ffi::c_int = utf_ptr2char(n_ptr);
-        let mut found: bool = false_0 != 0;
-        while *h_ptr != 0 {
-            let h_char: ::core::ffi::c_int = utf_ptr2char(h_ptr);
-            if n_char == h_char || mb_toupper(n_char) == h_char {
-                found = true_0 != 0;
-                h_ptr = h_ptr.offset(utfc_ptr2len(h_ptr) as isize);
-                break;
-            } else {
-                h_ptr = h_ptr.offset(utfc_ptr2len(h_ptr) as isize);
-            }
-        }
-        if !found {
-            return FAIL;
-        }
-        n_ptr = n_ptr.offset(utfc_ptr2len(n_ptr) as isize);
-    }
-    return OK;
-}
-unsafe extern "C" fn compute_bonus_codepoint(
-    mut last_c: ::core::ffi::c_int,
-    mut c: ::core::ffi::c_int,
-) -> score_t {
-    if c as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-        && c as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-        || c as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-            && c as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-        || ascii_isdigit(c) as ::core::ffi::c_int != 0
-        || vim_iswordc(c) as ::core::ffi::c_int != 0
-    {
-        if last_c == '/' as ::core::ffi::c_int {
-            return SCORE_MATCH_SLASH;
-        }
-        if last_c == '-' as ::core::ffi::c_int
-            || last_c == '_' as ::core::ffi::c_int
-            || last_c == ' ' as ::core::ffi::c_int
-        {
-            return SCORE_MATCH_WORD;
-        }
-        if last_c == '.' as ::core::ffi::c_int {
-            return SCORE_MATCH_DOT;
-        }
-        if mb_isupper(c) as ::core::ffi::c_int != 0 && mb_islower(last_c) as ::core::ffi::c_int != 0
-        {
-            return SCORE_MATCH_CAPITAL;
-        }
-    }
-    return 0 as ::core::ffi::c_int as score_t;
-}
-unsafe extern "C" fn setup_match_struct(
-    match_0: *mut match_struct,
-    needle: *const ::core::ffi::c_char,
-    haystack: *const ::core::ffi::c_char,
-) {
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut p: *const ::core::ffi::c_char = needle;
-    while *p as ::core::ffi::c_int != NUL && i < FUZZY_MATCH_MAX_LEN as ::core::ffi::c_int {
-        let c: ::core::ffi::c_int = utf_ptr2char(p);
-        let c2rust_fresh1 = i;
-        i = i + 1;
-        (*match_0).lower_needle[c2rust_fresh1 as usize] = mb_tolower(c);
-        p = p.offset(utfc_ptr2len(p as *mut ::core::ffi::c_char) as isize);
-    }
-    (*match_0).needle_len = i;
-    i = 0 as ::core::ffi::c_int;
-    p = haystack;
-    let mut prev_c: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
-    while *p as ::core::ffi::c_int != NUL && i < FUZZY_MATCH_MAX_LEN as ::core::ffi::c_int {
-        let c_0: ::core::ffi::c_int = utf_ptr2char(p);
-        (*match_0).lower_haystack[i as usize] = mb_tolower(c_0);
-        (*match_0).match_bonus[i as usize] = compute_bonus_codepoint(prev_c, c_0);
-        prev_c = c_0;
-        p = p.offset(utfc_ptr2len(p as *mut ::core::ffi::c_char) as isize);
-        i += 1;
-    }
-    (*match_0).haystack_len = i;
-}
-#[inline]
-unsafe extern "C" fn match_row(
-    mut match_0: *const match_struct,
-    mut row: ::core::ffi::c_int,
-    mut curr_D: *mut score_t,
-    mut curr_M: *mut score_t,
-    mut last_D: *const score_t,
-    mut last_M: *const score_t,
-) {
-    let mut n: ::core::ffi::c_int = (*match_0).needle_len;
-    let mut m: ::core::ffi::c_int = (*match_0).haystack_len;
-    let mut i: ::core::ffi::c_int = row;
-    let mut lower_needle: *const ::core::ffi::c_int =
-        &raw const (*match_0).lower_needle as *const ::core::ffi::c_int;
-    let mut lower_haystack: *const ::core::ffi::c_int =
-        &raw const (*match_0).lower_haystack as *const ::core::ffi::c_int;
-    let mut match_bonus: *const score_t = &raw const (*match_0).match_bonus as *const score_t;
-    let mut prev_score: score_t = -::core::f32::INFINITY as score_t;
-    let mut gap_score: score_t = if i == n - 1 as ::core::ffi::c_int {
+    let n = mtch.lower_needle.len();
+    let m = mtch.lower_haystack.len();
+    // A gap after the last pattern character is only the tail of the
+    // candidate, which is cheaper than a gap in the middle of the match.
+    let gap_score = if i == n - 1 {
         SCORE_GAP_TRAILING
     } else {
         SCORE_GAP_INNER
     };
-    let mut prev_M: score_t = -::core::f32::INFINITY as score_t;
-    let mut prev_D: score_t = -::core::f32::INFINITY as score_t;
-    let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while j < m {
-        if *lower_needle.offset(i as isize) == *lower_haystack.offset(j as isize) {
-            let mut score: score_t = -::core::f32::INFINITY as score_t;
-            if i == 0 {
-                score = j as score_t * SCORE_GAP_LEADING + *match_bonus.offset(j as isize);
-            } else if j != 0 {
-                score = (if prev_M + *match_bonus.offset(j as isize)
-                    > prev_D as ::core::ffi::c_double + 1.0f64
-                {
-                    prev_M as ::core::ffi::c_double
-                        + *match_bonus.offset(j as isize) as ::core::ffi::c_double
-                } else {
-                    prev_D as ::core::ffi::c_double + 1.0f64
-                }) as score_t;
-            }
-            prev_D = *last_D.offset(j as isize);
-            prev_M = *last_M.offset(j as isize);
-            *curr_D.offset(j as isize) = score;
-            prev_score = if score > prev_score + gap_score {
-                score
+    let mut prev_score = SCORE_MIN;
+    for j in 0..m {
+        if mtch.lower_needle[i] == mtch.lower_haystack[j] {
+            let score = if i == 0 {
+                // Everything before the first match is a leading gap.
+                j as Score * SCORE_GAP_LEADING + mtch.match_bonus[j]
+            } else if j > 0 {
+                max_score(
+                    last_m[j - 1] + mtch.match_bonus[j],
+                    // A consecutive match does not stack with the bonus.
+                    last_d[j - 1] + SCORE_MATCH_CONSECUTIVE,
+                )
             } else {
-                prev_score + gap_score
+                SCORE_MIN
             };
-            *curr_M.offset(j as isize) = prev_score;
+            curr_d[j] = score;
+            prev_score = max_score(score, prev_score + gap_score);
         } else {
-            prev_D = *last_D.offset(j as isize);
-            prev_M = *last_M.offset(j as isize);
-            *curr_D.offset(j as isize) = -::core::f32::INFINITY as score_t;
-            prev_score = prev_score + gap_score;
-            *curr_M.offset(j as isize) = prev_score;
+            curr_d[j] = SCORE_MIN;
+            prev_score += gap_score;
         }
-        j += 1;
+        curr_m[j] = prev_score;
     }
 }
-unsafe extern "C" fn match_positions(
-    needle: *const ::core::ffi::c_char,
-    haystack: *const ::core::ffi::c_char,
-    positions: *mut uint32_t,
-) -> score_t {
-    if needle.is_null() || haystack.is_null() || *needle == 0 {
-        return -::core::f32::INFINITY as score_t;
+
+/// Score `needle` against `haystack` and record, in `positions`, which
+/// haystack character each needle character matched. Only callable when
+/// [`has_match`] said yes. `positions` is filled up to its length; upstream
+/// writes one entry per needle character with no bound at all, overrunning
+/// the caller's array once two pattern words together have more characters
+/// than it holds.
+fn match_positions(needle: &CStr, haystack: &CStr, positions: &mut [u32]) -> Score {
+    if needle.to_bytes().is_empty() {
+        return SCORE_MIN;
     }
-    let mut match_0: match_struct = match_struct {
-        needle_len: 0,
-        haystack_len: 0,
-        lower_needle: [0; 1024],
-        lower_haystack: [0; 1024],
-        match_bonus: [0.; 1024],
-    };
-    setup_match_struct(&raw mut match_0, needle, haystack);
-    let mut n: ::core::ffi::c_int = match_0.needle_len;
-    let mut m: ::core::ffi::c_int = match_0.haystack_len;
-    if m > FUZZY_MATCH_MAX_LEN as ::core::ffi::c_int || n > m {
-        return -::core::f32::INFINITY as score_t;
-    } else if n == m {
-        if !positions.is_null() {
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < n {
-                *positions.offset(i as isize) = i as uint32_t;
-                i += 1;
+    let mtch = Match::new(needle, haystack);
+    let n = mtch.lower_needle.len();
+    let m = mtch.lower_haystack.len();
+    if n > m {
+        // Cannot be a match; upstream also rejects a candidate longer than
+        // FUZZY_MATCH_MAX_LEN here, which `Match` has already truncated to it.
+        return SCORE_MIN;
+    }
+    if n == m {
+        // `has_match` only lets equal-length strings through when they are
+        // the same string, ignoring case.
+        for (i, slot) in positions.iter_mut().take(n).enumerate() {
+            *slot = i as u32;
+        }
+        return SCORE_MAX;
+    }
+
+    // Two n×m tables, laid out row by row.
+    let mut d = vec![SCORE_MIN; n * m];
+    let mut m_best = vec![SCORE_MIN; n * m];
+    let (row_d, row_m) = (&mut d[..m], &mut m_best[..m]);
+    match_row(&mtch, 0, &[], &[], row_d, row_m);
+    for i in 1..n {
+        let (above_d, row_d) = d.split_at_mut(i * m);
+        let (above_m, row_m) = m_best.split_at_mut(i * m);
+        match_row(
+            &mtch,
+            i,
+            &above_d[(i - 1) * m..],
+            &above_m[(i - 1) * m..],
+            &mut row_d[..m],
+            &mut row_m[..m],
+        );
+    }
+
+    // Walk the tables backwards for the positions that produced the score.
+    // Several paths can reach the same weight; take the first one found,
+    // which is the latest in the candidate.
+    let mut match_required = false;
+    let mut j = m as isize - 1;
+    for i in (0..n).rev() {
+        while j >= 0 {
+            let (at, row) = (j as usize, i * m);
+            j -= 1;
+            if d[row + at] != SCORE_MIN && (match_required || d[row + at] == m_best[row + at]) {
+                // A score that came from SCORE_MATCH_CONSECUTIVE says the
+                // character before this one has to be a match too.
+                match_required = i > 0
+                    && at > 0
+                    && m_best[row + at] == d[row - m + at - 1] + SCORE_MATCH_CONSECUTIVE;
+                if let Some(slot) = positions.get_mut(i) {
+                    *slot = at as u32;
+                }
+                break;
             }
         }
-        return ::core::f32::INFINITY as score_t;
     }
-    if n as size_t
-        > (SIZE_MAX as usize)
-            .wrapping_div(::core::mem::size_of::<score_t>())
-            .wrapping_div(FUZZY_MATCH_MAX_LEN as ::core::ffi::c_int as usize)
-            .wrapping_div(2 as usize)
-    {
-        return -::core::f32::INFINITY as score_t;
+    m_best[(n - 1) * m + m - 1]
+}
+
+/// fzy's score as the `int` score the rest of the editor compares.
+fn scale(score: Score) -> c_int {
+    if score == SCORE_MIN {
+        c_int::MIN + 1
+    } else if score == SCORE_MAX {
+        c_int::MAX
+    } else if score < 0.0 {
+        (score * SCORE_SCALE - 0.5).ceil() as c_int
+    } else {
+        (score * SCORE_SCALE + 0.5).floor() as c_int
     }
-    let mut block: *mut score_t = xmalloc(
-        ::core::mem::size_of::<score_t>()
-            .wrapping_mul(FUZZY_MATCH_MAX_LEN as ::core::ffi::c_int as size_t)
-            .wrapping_mul(n as size_t)
-            .wrapping_mul(2 as size_t),
-    ) as *mut score_t;
-    let mut D: *mut [score_t; 1024] = block as *mut [score_t; 1024];
-    let mut M: *mut [score_t; 1024] = block.offset(
-        (FUZZY_MATCH_MAX_LEN as ::core::ffi::c_int as size_t).wrapping_mul(n as size_t) as isize,
-    ) as *mut [score_t; 1024];
-    match_row(
-        &raw mut match_0,
-        0 as ::core::ffi::c_int,
-        &raw mut *D.offset(0 as ::core::ffi::c_int as isize) as *mut score_t,
-        &raw mut *M.offset(0 as ::core::ffi::c_int as isize) as *mut score_t,
-        &raw mut *D.offset(0 as ::core::ffi::c_int as isize) as *mut score_t,
-        &raw mut *M.offset(0 as ::core::ffi::c_int as isize) as *mut score_t,
-    );
-    let mut i_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-    while i_0 < n {
-        match_row(
-            &raw mut match_0,
-            i_0,
-            &raw mut *D.offset(i_0 as isize) as *mut score_t,
-            &raw mut *M.offset(i_0 as isize) as *mut score_t,
-            &raw mut *D.offset((i_0 - 1 as ::core::ffi::c_int) as isize) as *mut score_t,
-            &raw mut *M.offset((i_0 - 1 as ::core::ffi::c_int) as isize) as *mut score_t,
+}
+
+/// Add `score` to `total` the way upstream does: saturating at
+/// [`c_int::MAX`] and at `c_int::MIN + 1`, so a summed score never reaches
+/// [`FUZZY_SCORE_NONE`].
+fn add_score(total: c_int, score: c_int) -> c_int {
+    total.saturating_add(score).max(c_int::MIN + 1)
+}
+
+/// Match `pattern` against `haystack`, filling `positions` with the haystack
+/// character index of each pattern character.
+///
+/// With `matchseq` the whole pattern is one unit; otherwise its
+/// whitespace-separated words are matched independently and their scores
+/// added, and any word that fails rejects the candidate.
+///
+/// Answers the summed score and how many positions were filled — zero, with
+/// a score of [`FUZZY_SCORE_NONE`], when the candidate is rejected.
+fn fuzzy_match_words(
+    haystack: &CStr,
+    pattern: &CStr,
+    matchseq: bool,
+    positions: &mut [u32],
+) -> (c_int, usize) {
+    let rejected = (FUZZY_SCORE_NONE, 0);
+    if matchseq {
+        if !has_match(pattern, haystack) {
+            return rejected;
+        }
+        let score = scale(match_positions(pattern, haystack, positions));
+        return (add_score(0, score), Chars::new(pattern).count());
+    }
+
+    // Upstream terminates each word in a copy of the pattern; the copy is
+    // what makes a word a string in its own right.
+    let mut buf = pattern.to_bytes_with_nul().to_vec();
+    let mut at = 0;
+    let mut total = 0;
+    let mut filled = 0;
+    loop {
+        while buf[at] == b' ' || buf[at] == b'\t' {
+            at += 1;
+        }
+        if buf[at] == 0 {
+            break;
+        }
+        let start = at;
+        while buf[at] != 0 && buf[at] != b' ' && buf[at] != b'\t' {
+            at += 1;
+        }
+        let complete = buf[at] == 0;
+        buf[at] = 0;
+        let word = CStr::from_bytes_with_nul(&buf[start..=at]).expect("fuzzy: word is terminated");
+        if !has_match(word, haystack) {
+            return rejected;
+        }
+        total = add_score(
+            total,
+            scale(match_positions(word, haystack, &mut positions[filled..])),
         );
-        i_0 += 1;
+        filled += Chars::new(word).count();
+        if complete || filled >= positions.len() {
+            break;
+        }
+        // Step over the NUL that ended the word.
+        at += 1;
     }
-    if !positions.is_null() {
-        let mut match_required: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut i_1: ::core::ffi::c_int = n - 1 as ::core::ffi::c_int;
-        let mut j: ::core::ffi::c_int = m - 1 as ::core::ffi::c_int;
-        while i_1 >= 0 as ::core::ffi::c_int {
-            while j >= 0 as ::core::ffi::c_int {
-                if (*D.offset(i_1 as isize))[j as usize] != -::core::f32::INFINITY as score_t
-                    && (match_required != 0
-                        || (*D.offset(i_1 as isize))[j as usize]
-                            == (*M.offset(i_1 as isize))[j as usize])
-                {
-                    match_required = (i_1 != 0
-                        && j != 0
-                        && (*M.offset(i_1 as isize))[j as usize]
-                            == (*D.offset((i_1 - 1 as ::core::ffi::c_int) as isize))
-                                [(j - 1 as ::core::ffi::c_int) as usize]
-                                as ::core::ffi::c_double
-                                + SCORE_MATCH_CONSECUTIVE)
-                        as ::core::ffi::c_int;
-                    let c2rust_fresh0 = j;
-                    j = j - 1;
-                    *positions.offset(i_1 as isize) = c2rust_fresh0 as uint32_t;
-                    break;
+    (total, filled)
+}
+
+/// Fuzzy match `pat_arg` in `str`, reporting the score in `out_score` and the
+/// matching character positions in `matches`. With `matchseq` the words of a
+/// multi-word pattern have to match in sequence rather than independently.
+///
+/// # Safety
+/// `str` and `pat_arg` must be NUL-terminated strings, and `matches` must
+/// point at `max_matches` writable entries.
+pub unsafe fn fuzzy_match(
+    str: *const c_char,
+    pat_arg: *const c_char,
+    matchseq: bool,
+    out_score: *mut c_int,
+    matches: *mut u32,
+    max_matches: c_int,
+) -> bool {
+    unsafe {
+        let (score, filled) = fuzzy_match_words(
+            CStr::from_ptr(str),
+            CStr::from_ptr(pat_arg),
+            matchseq,
+            core::slice::from_raw_parts_mut(matches, max_matches as usize),
+        );
+        *out_score = score;
+        filled != 0
+    }
+}
+
+/// Fuzzy match `pat` in `str`, as one sequence. Answers 0 for a missing
+/// string, [`FUZZY_SCORE_NONE`] for no match.
+///
+/// # Safety
+/// Both arguments must be NUL-terminated strings or NULL.
+pub unsafe fn fuzzy_match_str(str: *const c_char, pat: *const c_char) -> c_int {
+    if str.is_null() || pat.is_null() {
+        return 0;
+    }
+    let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
+    // SAFETY: the caller's promise, plus a big enough array.
+    unsafe { fuzzy_match_words(CStr::from_ptr(str), CStr::from_ptr(pat), true, &mut matches).0 }
+}
+
+/// Where `pat` matches in `str`, as a garray of character positions, or NULL
+/// when there is no match. The array is the caller's to free.
+///
+/// # Safety
+/// Both arguments must be NUL-terminated strings or NULL.
+pub unsafe fn fuzzy_match_str_with_pos(str: *const c_char, pat: *const c_char) -> *mut garray_T {
+    if str.is_null() || pat.is_null() {
+        return core::ptr::null_mut();
+    }
+    unsafe {
+        let (str, pat) = (CStr::from_ptr(str), CStr::from_ptr(pat));
+        let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
+        let (score, filled) = fuzzy_match_words(str, pat, false, &mut matches);
+        if filled == 0 || score == FUZZY_SCORE_NONE {
+            return core::ptr::null_mut();
+        }
+
+        // One position per pattern character that took part in the match,
+        // i.e. everything but the whitespace between the words.
+        let placed: Vec<u32> = Chars::new(pat)
+            .filter(|&(_, c)| !ascii_iswhite(c))
+            .zip(matches)
+            .map(|(_, at)| at)
+            .collect();
+        let positions: *mut garray_T = xmalloc(size_of::<garray_T>()).cast();
+        ga_init(positions, size_of::<u32>() as c_int, 10);
+        ga_grow(positions, placed.len() as c_int);
+        core::ptr::copy_nonoverlapping(
+            placed.as_ptr(),
+            (*positions).ga_data.cast::<u32>(),
+            placed.len(),
+        );
+        (*positions).ga_len = placed.len() as c_int;
+        positions
+    }
+}
+
+/// Split the line at `*ptr` into words and fuzzy match `pat` against each.
+/// On a match `*ptr` points at the matched word, `*len` is its length and
+/// `*score` its score; otherwise `*ptr` is left at the end of the line.
+///
+/// # Safety
+/// `*ptr` and `pat` must be NUL-terminated strings or NULL, and the line must
+/// be writable — a word is terminated in place while it is scored.
+pub unsafe fn fuzzy_match_str_in_line(
+    ptr: *mut *mut c_char,
+    pat: *const c_char,
+    len: *mut c_int,
+    current_pos: *mut pos_T,
+    score: *mut c_int,
+) -> bool {
+    unsafe {
+        let line = *ptr;
+        if line.is_null() || pat.is_null() {
+            return false;
+        }
+        let line_end = find_line_end(line);
+        let mut str = line;
+        while str < line_end {
+            let start = find_word_start(str);
+            if *start == 0 {
+                break;
+            }
+            let end = find_word_end(start);
+            let save_end = *end;
+            *end = 0;
+            *score = fuzzy_match_str(start, pat);
+            *end = save_end;
+            if *score != FUZZY_SCORE_NONE {
+                *len = end.offset_from(start) as c_int;
+                *ptr = start;
+                if !current_pos.is_null() {
+                    (*current_pos).col += end.offset_from(line) as c_int;
+                }
+                return true;
+            }
+
+            // Carry on after the word just tried.
+            str = end;
+            while *str != 0 && !vim_iswordp(str) {
+                str = str.offset(utfc_ptr2len(str) as isize);
+            }
+        }
+        *ptr = line_end;
+        false
+    }
+}
+
+/// Where a fuzzy match was found in a buffer line: its start inside the
+/// line's own buffer, its length in bytes, and its score — missing for a
+/// whole-line match, where upstream leaves the caller's score alone.
+pub struct LineMatch {
+    pub ptr: *mut c_char,
+    pub len: c_int,
+    pub score: Option<c_int>,
+}
+
+/// Search `buf` for the next fuzzy match of `pattern`, starting at `pos` and
+/// going in `dir`, wrapping around to `start_pos` if `'wrapscan'` is set.
+/// `pos` is left on the match. In whole-line mode (`CTRL-X CTRL-L`) whole
+/// lines are matched rather than words.
+///
+/// # Safety
+/// `pattern` must be a NUL-terminated string, and `pos`/`start_pos` must
+/// point at valid positions in `buf`.
+pub unsafe fn search_for_fuzzy_match(
+    buf: *mut buf_T,
+    pos: *mut pos_T,
+    pattern: *const c_char,
+    dir: c_int,
+    start_pos: *const pos_T,
+) -> Option<LineMatch> {
+    unsafe {
+        let whole_line = ctrl_x_mode_whole_line();
+        let mut current_pos = *pos;
+
+        // Where the search has come full circle. Another buffer is walked
+        // from wherever it is to its end rather than back to the start.
+        let circly_end = if buf == curbuf.get() {
+            *start_pos
+        } else {
+            pos_T {
+                lnum: (*buf).b_ml.ml_line_count,
+                col: 0,
+                coladd: 0,
+            }
+        };
+        if whole_line && (*start_pos).lnum != (*pos).lnum {
+            current_pos.lnum += dir as linenr_T;
+        }
+        let mut looped_around = false;
+        loop {
+            if looped_around
+                && (if whole_line {
+                    current_pos.lnum == circly_end.lnum
                 } else {
-                    j -= 1;
+                    equalpos(current_pos, circly_end)
+                })
+            {
+                return None;
+            }
+            if current_pos.lnum >= 1 && current_pos.lnum <= (*buf).b_ml.ml_line_count {
+                let line = ml_get_buf(buf, current_pos.lnum);
+                let mut ptr = if whole_line {
+                    line
+                } else {
+                    line.offset(current_pos.col as isize)
+                };
+                if !ptr.is_null() && *ptr != 0 {
+                    if whole_line {
+                        if fuzzy_match_str(ptr, pattern) != FUZZY_SCORE_NONE {
+                            *pos = current_pos;
+                            return Some(LineMatch {
+                                ptr,
+                                len: ml_get_buf_len(buf, current_pos.lnum) as c_int,
+                                score: None,
+                            });
+                        }
+                    } else {
+                        let (mut len, mut score) = (0, 0);
+                        if fuzzy_match_str_in_line(
+                            &raw mut ptr,
+                            pattern,
+                            &raw mut len,
+                            &raw mut current_pos,
+                            &raw mut score,
+                        ) {
+                            *pos = current_pos;
+                            let score = Some(score);
+                            return Some(LineMatch { ptr, len, score });
+                        }
+                        if looped_around && current_pos.lnum == circly_end.lnum {
+                            return None;
+                        }
+                    }
                 }
             }
-            i_1 -= 1;
+
+            // On to the next line, or round to the far end of the buffer
+            // if `'wrapscan'` allows it.
+            let last = (*buf).b_ml.ml_line_count;
+            current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
+            if !(1..=last).contains(&current_pos.lnum) {
+                if p_ws.get() == 0 {
+                    return None;
+                }
+                current_pos.lnum = if dir == FORWARD { 1 } else { last };
+                looped_around = true;
+            }
+            current_pos.col = 0;
         }
     }
-    let mut result: score_t =
-        (*M.offset((n - 1 as ::core::ffi::c_int) as isize))[(m - 1 as ::core::ffi::c_int) as usize];
-    xfree(block as *mut ::core::ffi::c_void);
-    return result;
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
-pub const INT_MIN: ::core::ffi::c_int = -INT_MAX - 1 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
+
+/// Sort `fuzmatch` by fuzzy score and hand its strings to `matches`, freeing
+/// `fuzmatch` itself. With `funcsort`, `<SNR>` functions sort to the end.
+///
+/// # Safety
+/// `fuzmatch` must be an allocated array of `count` entries naming allocated
+/// strings, and `matches` must be writable.
+pub unsafe fn fuzzymatches_to_strmatches(
+    fuzmatch: *mut fuzmatch_str_T,
+    matches: *mut *mut *mut c_char,
+    count: c_int,
+    funcsort: bool,
+) {
+    unsafe {
+        if count > 0 {
+            let count = count as usize;
+            let found = core::slice::from_raw_parts_mut(fuzmatch, count);
+            // Best score first, `idx` breaking ties — and with `funcsort`,
+            // `<SNR>` functions after everything else whatever they scored.
+            // Callers number `idx` as they fill the array, so no two entries
+            // compare equal and the sort needs no stability of its own.
+            let snr = |m: &fuzmatch_str_T| funcsort && *m.str == b'<' as c_char;
+            found.sort_by(|a, b| {
+                snr(a)
+                    .cmp(&snr(b))
+                    .then(b.score.cmp(&a.score))
+                    .then(a.idx.cmp(&b.idx))
+            });
+            let strings: *mut *mut c_char = xmalloc(count * size_of::<*mut c_char>()).cast();
+            for (i, m) in found.iter().enumerate() {
+                *strings.add(i) = m.str;
+            }
+            *matches = strings;
+        }
+        xfree(fuzmatch.cast());
+    }
+}
+
+/// Where the string to match comes from: the list items are strings, and a
+/// dict item then contributes nothing — or they are dicts, to look a key up
+/// in or to hand to a callback.
+enum Source {
+    Item,
+    Key(*const c_char),
+    Callback(*mut Callback),
+}
+
+/// What one `matchfuzzy()`/`matchfuzzypos()` call was asked for: the pattern,
+/// where each item's string comes from, whether the words of a multi-word
+/// pattern have to match in sequence, whether the matching positions are
+/// wanted too (that is `matchfuzzypos()`), and how many matches are enough.
+struct Request {
+    pattern: *const c_char,
+    source: Source,
+    matchseq: bool,
+    retmatchpos: bool,
+    limit: c_int,
+}
+
+/// One list item that matched.
+struct FuzzyItem {
+    /// Where it sat in the input list, which is how ties are broken.
+    idx: usize,
+    /// The item itself, copied to the result list as it is.
+    item: *mut listitem_T,
+    score: c_int,
+    /// Whether the pattern occurs literally at the first matched position.
+    exact: bool,
+    /// The matching positions, for `matchfuzzypos()`.
+    positions: Option<*mut list_T>,
+}
+
+/// The item's string, as `Request::source` says to find it. A callback's
+/// answer lands in `rettv`, which the caller clears; the string is only
+/// borrowed until then.
+unsafe fn item_string(
+    request: &Request,
+    tv: *const typval_T,
+    rettv: *mut typval_T,
+) -> *const c_char {
+    unsafe {
+        if (*tv).v_type == VAR_STRING {
+            return (*tv).vval.v_string;
+        }
+        if (*tv).v_type != VAR_DICT {
+            return core::ptr::null();
+        }
+        match request.source {
+            Source::Item => core::ptr::null(),
+            Source::Key(key) => tv_dict_get_string((*tv).vval.v_dict, key, false),
+            Source::Callback(cb) => {
+                // The callback is handed the dict, which it must not be able
+                // to free out from under this loop.
+                (*(*tv).vval.v_dict).dv_refcount += 1;
+                let mut argv = [
+                    typval_T {
+                        v_type: VAR_DICT,
+                        v_lock: VAR_UNLOCKED,
+                        vval: typval_vval_union {
+                            v_dict: (*tv).vval.v_dict,
+                        },
+                    },
+                    TV_UNKNOWN,
+                ];
+                let called = callback_call(cb, 1, argv.as_mut_ptr(), rettv);
+                tv_dict_unref((*tv).vval.v_dict);
+                if called && (*rettv).v_type == VAR_STRING {
+                    (*rettv).vval.v_string
+                } else {
+                    core::ptr::null()
+                }
+            }
+        }
+    }
+}
+
+/// The list held by item `idx` of `list`, which the caller has just built.
+unsafe fn nested_list(list: *mut list_T, idx: c_int) -> *mut list_T {
+    unsafe {
+        let li = tv_list_find(list, idx);
+        debug_assert!(!li.is_null(), "fuzzy: result list is short");
+        let nested = (*li).li_tv.vval.v_list;
+        debug_assert!(!nested.is_null(), "fuzzy: result item is not a list");
+        nested
+    }
+}
+
+/// Fuzzy match `request`'s pattern against the strings of `list`, appending
+/// the matches to `fmatchlist` in descending score order. For `matchfuzzy()`
+/// that is a list of strings; for `matchfuzzypos()` `fmatchlist` already
+/// holds three lists — the matched strings, the matching positions of each,
+/// and the scores — which are filled in turn.
+unsafe fn fuzzy_match_in_list(list: *mut list_T, request: &Request, fmatchlist: *mut list_T) {
+    unsafe {
+        let pattern = CStr::from_ptr(request.pattern);
+        let mut found: Vec<FuzzyItem> = Vec::new();
+        let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
+        let mut li = (*list).lv_first;
+        while !li.is_null() {
+            if request.limit > 0 && found.len() >= request.limit as usize {
+                break;
+            }
+            let mut rettv = TV_UNKNOWN;
+            let itemstr = item_string(request, &raw const (*li).li_tv, &raw mut rettv);
+            if !itemstr.is_null() {
+                let itemstr = CStr::from_ptr(itemstr);
+                let (score, filled) =
+                    fuzzy_match_words(itemstr, pattern, request.matchseq, &mut matches);
+                if filled != 0 {
+                    // Upstream reads the string at the first *character*
+                    // position as if it were a byte offset. Preserved: it is
+                    // only a tie-break between two equally scored items.
+                    let at = matches[0] as usize;
+                    let exact = itemstr
+                        .to_bytes()
+                        .get(at..)
+                        .is_some_and(|tail| tail.starts_with(pattern.to_bytes()));
+                    let positions = request.retmatchpos.then(|| {
+                        let positions = tv_list_alloc(kListLenMayKnow as isize);
+                        // One position per pattern character that took part
+                        // in the match, i.e. all but the word separators.
+                        let placed = Chars::new(pattern)
+                            .filter(|&(_, c)| request.matchseq || !ascii_iswhite(c));
+                        for (at, _) in placed.enumerate().take(FUZZY_MATCH_MAX_LEN) {
+                            tv_list_append_number(positions, matches[at] as varnumber_T);
+                        }
+                        positions
+                    });
+                    found.push(FuzzyItem {
+                        idx: found.len(),
+                        item: li,
+                        score,
+                        exact,
+                        positions,
+                    });
+                }
+            }
+            tv_clear(&raw mut rettv);
+            li = (*li).li_next;
+        }
+        if found.is_empty() {
+            return;
+        }
+
+        // Best score first; an exact match wins a tie, and the input order
+        // settles the rest. No two items share an `idx`, so this is a total
+        // order and the sort needs no stability of its own.
+        found.sort_by(|a, b| {
+            b.score
+                .cmp(&a.score)
+                .then(b.exact.cmp(&a.exact))
+                .then(a.idx.cmp(&b.idx))
+        });
+
+        // matchfuzzy() answers just the strings; matchfuzzypos() answers
+        // them in the first of its three lists.
+        let strings = if request.retmatchpos {
+            nested_list(fmatchlist, 0)
+        } else {
+            fmatchlist
+        };
+        for item in &found {
+            tv_list_append_tv(strings, &raw mut (*item.item).li_tv);
+        }
+        if request.retmatchpos {
+            let positions = nested_list(fmatchlist, -2);
+            for item in &mut found {
+                let list = item.positions.take().expect("fuzzy: positions were kept");
+                tv_list_append_list(positions, list);
+            }
+            let scores = nested_list(fmatchlist, -1);
+            for item in &found {
+                tv_list_append_number(scores, item.score as varnumber_T);
+            }
+        }
+    }
+}
+
+/// The translated text of one of the shared `e_*` message strings.
+fn message<const N: usize>(msg: &'static GlobalCell<[c_char; N]>) -> *const c_char {
+    // SAFETY: gettext answers either its argument or a pointer into the
+    // loaded message catalog; both outlive the call.
+    unsafe { gettext(msg.ptr().cast()) }
+}
+
+/// The body of `matchfuzzy()` and, with `retmatchpos`, `matchfuzzypos()`.
+unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatchpos: bool) {
+    unsafe {
+        let list = &*argvars;
+        if list.v_type != VAR_LIST || list.vval.v_list.is_null() {
+            semsg(
+                message(&e_listarg),
+                if retmatchpos {
+                    c"matchfuzzypos()".as_ptr()
+                } else {
+                    c"matchfuzzy()".as_ptr()
+                },
+            );
+            return;
+        }
+        let pat = &*argvars.add(1);
+        if pat.v_type != VAR_STRING || pat.vval.v_string.is_null() {
+            semsg(message(&e_invarg2), tv_get_string(pat));
+            return;
+        }
+
+        // The optional third argument says where to find the string of a
+        // dict item, and how much of the list to bother with.
+        let mut cb = Callback {
+            data: Callback_data {
+                funcref: core::ptr::null_mut(),
+            },
+            type_0: kCallbackNone,
+        };
+        let mut key = core::ptr::null();
+        let mut matchseq = false;
+        let mut limit = 0;
+        if (*argvars.add(2)).v_type != VAR_UNKNOWN {
+            if tv_check_for_nonnull_dict_arg(argvars, 2) == FAIL {
+                return;
+            }
+            let d: *mut dict_T = (*argvars.add(2)).vval.v_dict;
+            let di = tv_dict_find(d, c"key".as_ptr(), -1);
+            if !di.is_null() {
+                if (*di).di_tv.v_type != VAR_STRING
+                    || (*di).di_tv.vval.v_string.is_null()
+                    || *(*di).di_tv.vval.v_string == 0
+                {
+                    semsg(
+                        message(&e_invargNval),
+                        c"key".as_ptr(),
+                        tv_get_string(&raw const (*di).di_tv),
+                    );
+                    return;
+                }
+                key = tv_get_string(&raw const (*di).di_tv);
+            } else if !tv_dict_get_callback(d, c"text_cb".as_ptr(), -1, &raw mut cb) {
+                semsg(message(&e_invargval), c"text_cb".as_ptr());
+                return;
+            }
+            let di = tv_dict_find(d, c"limit".as_ptr(), -1);
+            if !di.is_null() {
+                if (*di).di_tv.v_type != VAR_NUMBER {
+                    semsg(message(&e_invargval), c"limit".as_ptr());
+                    return;
+                }
+                limit = tv_get_number_chk(&raw const (*di).di_tv, core::ptr::null_mut()) as c_int;
+            }
+            matchseq = tv_dict_has_key(d, c"matchseq".as_ptr());
+        }
+
+        // matchfuzzypos() answers three lists: the matching strings, their
+        // matching positions, and their scores.
+        let len = if retmatchpos {
+            3
+        } else {
+            kListLenUnknown as isize
+        };
+        let result = tv_list_alloc_ret(rettv, len);
+        if retmatchpos {
+            for _ in 0..3 {
+                tv_list_append_list(result, tv_list_alloc(kListLenUnknown as isize));
+            }
+        }
+        let request = Request {
+            pattern: tv_get_string(pat),
+            source: if !key.is_null() {
+                Source::Key(key)
+            } else if cb.type_0 != kCallbackNone {
+                Source::Callback(&raw mut cb)
+            } else {
+                Source::Item
+            },
+            matchseq,
+            retmatchpos,
+            limit,
+        };
+        fuzzy_match_in_list(list.vval.v_list, &request, result);
+        callback_free(&raw mut cb);
+    }
+}
+
+/// `matchfuzzy()`: the items of a list that fuzzy match a pattern.
+///
+/// # Safety
+/// Called with a Vimscript function's arguments and result slot.
+pub unsafe extern "C" fn f_matchfuzzy(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    unsafe { do_fuzzymatch(argvars, rettv, false) }
+}
+
+/// `matchfuzzypos()`: as [`f_matchfuzzy`], plus where each match landed and
+/// what it scored.
+///
+/// # Safety
+/// Called with a Vimscript function's arguments and result slot.
+pub unsafe extern "C" fn f_matchfuzzypos(
+    argvars: *mut typval_T,
+    rettv: *mut typval_T,
+    _fptr: EvalFuncData,
+) {
+    unsafe { do_fuzzymatch(argvars, rettv, true) }
+}
