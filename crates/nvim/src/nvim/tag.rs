@@ -20,7 +20,6 @@ use crate::src::nvim::file_search::{
 };
 use crate::src::nvim::fileio::vim_fgets;
 use crate::src::nvim::fold::foldOpenCursor;
-use crate::src::nvim::garray::{ga_clear, ga_grow, ga_init};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::help::help_heuristic;
 use crate::src::nvim::input::prompt_for_input;
@@ -52,7 +51,7 @@ use crate::src::nvim::os::fs::{os_fopen, os_path_exists};
 use crate::src::nvim::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
     __assert_fail, abort, atoi, fclose, fseeko, ftello, gettext, snprintf, strcasecmp, strcmp,
-    strcpy, strlen, strncmp, strstr,
+    strlen, strncmp, strstr,
 };
 use crate::src::nvim::path::{
     FreeWild, FullName_save, path_full_compare, path_has_wildcard, simplify_filename, vim_isAbsName,
@@ -69,9 +68,9 @@ use crate::src::nvim::types::{
     AdditionalData, Callback, Callback_data as C2Rust_Unnamed_5, Direction, FILE, OptInt,
     SpecialVarValue, Timestamp, VarLockStatus, VarType, VimVarIndex, buf_T, colnr_T, dict_T,
     dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, garray_T, getf_retvalues,
-    getf_values, hashitem_T, hashtab_T, ht_stack_T, int64_t, linenr_T, list_T, list_stack_T,
-    listitem_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, size_t,
-    taggy_T, typval_T, typval_vval_union, uint64_t, varnumber_T, vimconv_T, win_T, xp_prefix_T,
+    getf_values, int64_t, linenr_T, list_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t,
+    regmatch_T, regprog_T, size_t, taggy_T, typval_T, typval_vval_union, uint64_t, varnumber_T,
+    vimconv_T, win_T, xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::window::{
@@ -93,7 +92,6 @@ mod list;
 pub(crate) use self::list::*;
 mod query;
 pub use self::query::*;
-use crate::src::nvim::hashtab::hash_removed;
 
 mod tagfunc;
 pub use self::tagfunc::*;
@@ -292,13 +290,6 @@ static ptag_entry: GlobalCell<taggy_T> = GlobalCell::new(taggy_T {
     cur_match: 0 as ::core::ffi::c_int,
     cur_fnum: 0 as ::core::ffi::c_int,
     user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-});
-static tfu_in_use: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static tfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: C2Rust_Unnamed_5 {
-        funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    },
-    type_0: kCallbackNone,
 });
 pub const TAG_SEP: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub unsafe extern "C" fn do_tag(

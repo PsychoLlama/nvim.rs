@@ -1,404 +1,383 @@
 //! `'tagfunc'`, the user-supplied tag lookup.
 //!
 //! [`find_tagfunc_tags`] calls the option's callback instead of reading any
-//! tags file and validates what comes back — a list of dictionaries with at
-//! least `name`, `filename` and `cmd`.
+//! tags file, validates what comes back — a list of dictionaries with at
+//! least `name`, `filename` and `cmd` — and writes each one out in the
+//! same shape a tags file line would have had.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use crate::src::nvim::hashtab::hash_removed;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
-pub unsafe extern "C" fn did_set_tagfunc(mut args: *mut optset_T) -> *const ::core::ffi::c_char {
+/// The global `'tagfunc'` callback. A buffer-local one lives in
+/// `b_tfu_cb`.
+static tfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
+    data: C2Rust_Unnamed_5 {
+        funcref: ptr::null_mut(),
+    },
+    type_0: kCallbackNone,
+});
+
+/// Whether a `'tagfunc'` call is in progress.
+///
+/// It must not start another, and it must not be allowed to rewrite the
+/// tag stack it is being asked to fill.
+pub(crate) static tfu_in_use: GlobalCell<bool> = GlobalCell::new(false);
+
+/// The error every malformed `'tagfunc'` answer is reported with.
+const E_INVALID_RETURN: &CStr = c"E987: Invalid return value from tagfunc";
+
+/// `'tagfunc'` was set: turn the option's value into a callback.
+///
+/// The value can be a function name, `function(<name>)`, `funcref(<name>)`
+/// or a lambda. Answers NULL, or the error message for an invalid one.
+///
+/// # Safety
+/// `args` must describe the option being set.
+pub unsafe extern "C" fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
+    // SAFETY: the caller's promise; the new value is a NUL-terminated
+    // option string and `os_buf` is the buffer it applies to.
     unsafe {
-        let mut buf: *mut buf_T = (*args).os_buf as *mut buf_T;
-        let mut retval: ::core::ffi::c_int = 0;
-        if (*args).os_flags & OPT_LOCAL as ::core::ffi::c_int != 0 {
-            retval =
-                option_set_callback_func((*args).os_newval.string.data, &raw mut (*buf).b_tfu_cb);
+        let buf = (*args).os_buf.cast::<buf_T>();
+        let value = (*args).os_newval.string.data;
+        let retval = if (*args).os_flags & OPT_LOCAL as c_int != 0 {
+            option_set_callback_func(value, &raw mut (*buf).b_tfu_cb)
         } else {
-            retval = option_set_callback_func((*args).os_newval.string.data, tfu_cb.ptr());
-            if retval == OK && (*args).os_flags & OPT_GLOBAL as ::core::ffi::c_int == 0 {
+            let retval = option_set_callback_func(value, tfu_cb.ptr());
+            if retval == OK && (*args).os_flags & OPT_GLOBAL as c_int == 0 {
+                // `:set` without a scope sets the buffer-local copy too.
                 set_buflocal_tfu_callback(buf);
             }
-        }
-        return if retval == FAIL {
-            &raw const e_invarg as *const ::core::ffi::c_char
-        } else {
-            ::core::ptr::null::<::core::ffi::c_char>()
+            retval
         };
+        if retval == FAIL {
+            (&raw const e_invarg).cast()
+        } else {
+            ptr::null()
+        }
     }
 }
 
-pub unsafe extern "C" fn set_ref_in_tagfunc(mut copyID: ::core::ffi::c_int) -> bool {
-    unsafe {
-        return set_ref_in_callback(
-            tfu_cb.ptr(),
-            copyID,
-            ::core::ptr::null_mut::<*mut ht_stack_T>(),
-            ::core::ptr::null_mut::<*mut list_stack_T>(),
-        );
-    }
+/// Mark the global `'tagfunc'` callback so the collector keeps it.
+///
+/// # Safety
+/// Must be called from a garbage-collection sweep.
+pub unsafe fn set_ref_in_tagfunc(copyID: c_int) -> bool {
+    // SAFETY: the caller's promise.
+    unsafe { set_ref_in_callback(tfu_cb.ptr(), copyID, ptr::null_mut(), ptr::null_mut()) }
 }
 
-pub unsafe extern "C" fn set_buflocal_tfu_callback(mut buf: *mut buf_T) {
+/// Copy the global `'tagfunc'` callback into `buf`'s local one.
+///
+/// # Safety
+/// `buf` must be live.
+pub unsafe fn set_buflocal_tfu_callback(buf: *mut buf_T) {
+    // SAFETY: the caller's promise; the buffer owns its own callback.
     unsafe {
         callback_free(&raw mut (*buf).b_tfu_cb);
-        if (*tfu_cb.ptr()).type_0 as ::core::ffi::c_uint
-            != kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if (*tfu_cb.ptr()).type_0 != kCallbackNone {
             callback_copy(&raw mut (*buf).b_tfu_cb, tfu_cb.ptr());
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn find_tagfunc_tags(
-    mut pat: *mut ::core::ffi::c_char,
-    mut ga: *mut garray_T,
-    mut match_count: *mut ::core::ffi::c_int,
-    mut flags: ::core::ffi::c_int,
-    mut buf_ffname: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+/// Ask `'tagfunc'` for the tags matching `pat`, instead of reading a file.
+///
+/// Every answer is kept: filtering is the function's own job. Answers `OK`
+/// when the call succeeded, `NOTDONE` when the function returned
+/// `v:null` (meaning "read the tags files after all"), and `FAIL`
+/// otherwise.
+///
+/// # Safety
+/// `pat` must be NUL-terminated, `buf_ffname` NULL or NUL-terminated, and
+/// `curbuf`/`curwin` must be live.
+pub(crate) unsafe fn find_tagfunc_tags(
+    pat: *mut c_char,
+    found: &mut Vec<Match>,
+    match_count: &mut c_int,
+    flags: c_int,
+    buf_ffname: *mut c_char,
+) -> c_int {
+    // SAFETY: the caller's promise. `flag_string` and `info` outlive the
+    // call they are arguments to, and the list the callback answers is
+    // cleared before returning.
     unsafe {
-        let mut ntags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut args: [typval_T; 4] = [typval_T {
+        // The tag stack entry the jump came from, whose `user_data` the
+        // function may want. One past the top means nothing was popped, so
+        // the newest entry is the interesting one.
+        let win = curwin.get();
+        let from = if (*win).w_tagstacklen > 0 {
+            let at = (*win).w_tagstackidx;
+            let at = if at == (*win).w_tagstacklen {
+                at - 1
+            } else {
+                at
+            };
+            (*win).w_tagstack.get(at as usize)
+        } else {
+            None
+        };
+
+        if *(*curbuf.get()).b_p_tfu == 0 || (*curbuf.get()).b_tfu_cb.type_0 == kCallbackNone {
+            return FAIL;
+        }
+
+        // Which of "c" (the tag is at the cursor), "i" (insert-mode
+        // completion) and "r" (the pattern is a regexp) apply.
+        let mut flag_string = [0 as c_char; 4];
+        let mut at = 0;
+        for (wanted, flag) in [
+            (g_tag_at_cursor.get(), b'c'),
+            (flags & TAG_INS_COMP as c_int != 0, b'i'),
+            (flags & TAG_REGEXP as c_int != 0, b'r'),
+        ] {
+            if wanted {
+                flag_string[at] = flag as c_char;
+                at += 1;
+            }
+        }
+
+        let info = tv_dict_alloc_lock(VAR_FIXED);
+        if flags & TAG_INS_COMP as c_int == 0 {
+            if let Some(from) = from
+                && !from.user_data.is_null()
+            {
+                add_str(info, c"user_data", from.user_data);
+            }
+        }
+        if !buf_ffname.is_null() {
+            add_str(info, c"buf_ffname", buf_ffname);
+        }
+        // Held alive for the call: the dict is ours, not the argument
+        // list's.
+        (*info).dv_refcount += 1;
+
+        let mut args = [typval_T {
             v_type: VAR_UNKNOWN,
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union { v_number: 0 },
         }; 4];
-        let mut rettv: typval_T = typval_T {
+        args[0].v_type = VAR_STRING;
+        args[0].vval.v_string = pat;
+        args[1].v_type = VAR_STRING;
+        args[1].vval.v_string = flag_string.as_mut_ptr();
+        args[2].v_type = VAR_DICT;
+        args[2].vval.v_dict = info;
+
+        let mut rettv = typval_T {
             v_type: VAR_UNKNOWN,
             v_lock: VAR_UNLOCKED,
             vval: typval_vval_union { v_number: 0 },
         };
-        let mut flagString: [::core::ffi::c_char; 4] = [0; 4];
-        let mut tag: *mut taggy_T = ::core::ptr::null_mut::<taggy_T>();
-        if (*curwin.get()).w_tagstacklen > 0 as ::core::ffi::c_int {
-            if (*curwin.get()).w_tagstackidx == (*curwin.get()).w_tagstacklen {
-                tag = (&raw mut (*curwin.get()).w_tagstack as *mut taggy_T)
-                    .offset(((*curwin.get()).w_tagstackidx - 1 as ::core::ffi::c_int) as isize);
-            } else {
-                tag = (&raw mut (*curwin.get()).w_tagstack as *mut taggy_T)
-                    .offset((*curwin.get()).w_tagstackidx as isize);
-            }
-        }
-        if *(*curbuf.get()).b_p_tfu as ::core::ffi::c_int == NUL
-            || (*curbuf.get()).b_tfu_cb.type_0 as ::core::ffi::c_uint
-                == kCallbackNone as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            return FAIL;
-        }
-        args[0 as ::core::ffi::c_int as usize].v_type = VAR_STRING;
-        args[0 as ::core::ffi::c_int as usize].vval.v_string = pat;
-        args[1 as ::core::ffi::c_int as usize].v_type = VAR_STRING;
-        args[1 as ::core::ffi::c_int as usize].vval.v_string =
-            &raw mut flagString as *mut ::core::ffi::c_char;
-        let d: *mut dict_T = tv_dict_alloc_lock(VAR_FIXED);
-        if flags & TAG_INS_COMP as ::core::ffi::c_int == 0
-            && !tag.is_null()
-            && !(*tag).user_data.is_null()
-        {
-            tv_dict_add_str(
-                d,
-                b"user_data\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-                (*tag).user_data,
-            );
-        }
-        if !buf_ffname.is_null() {
-            tv_dict_add_str(
-                d,
-                b"buf_ffname\0".as_ptr() as *const ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 11]>().wrapping_sub(1 as size_t),
-                buf_ffname,
-            );
-        }
-        (*d).dv_refcount += 1;
-        args[2 as ::core::ffi::c_int as usize].v_type = VAR_DICT;
-        args[2 as ::core::ffi::c_int as usize].vval.v_dict = d;
-        args[3 as ::core::ffi::c_int as usize].v_type = VAR_UNKNOWN;
-        vim_snprintf(
-            &raw mut flagString as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 4]>(),
-            b"%s%s%s\0".as_ptr() as *const ::core::ffi::c_char,
-            if g_tag_at_cursor.get() as ::core::ffi::c_int != 0 {
-                b"c\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            },
-            if flags & TAG_INS_COMP as ::core::ffi::c_int != 0 {
-                b"i\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            },
-            if flags & TAG_REGEXP as ::core::ffi::c_int != 0 {
-                b"r\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                b"\0".as_ptr() as *const ::core::ffi::c_char
-            },
-        );
-        let mut save_pos: pos_T = (*curwin.get()).w_cursor;
-        let mut result: ::core::ffi::c_int = callback_call(
+        let save_pos = (*curwin.get()).w_cursor;
+        let mut result = callback_call(
             &raw mut (*curbuf.get()).b_tfu_cb,
-            3 as ::core::ffi::c_int,
-            &raw mut args as *mut typval_T,
+            3,
+            args.as_mut_ptr(),
             &raw mut rettv,
-        ) as ::core::ffi::c_int;
+        ) as c_int;
+        // The function may have moved the cursor, or left it somewhere
+        // that no longer exists.
         (*curwin.get()).w_cursor = save_pos;
         check_cursor(curwin.get());
-        (*d).dv_refcount -= 1;
+        (*info).dv_refcount -= 1;
+
         if result == FAIL {
             return FAIL;
         }
-        if rettv.v_type as ::core::ffi::c_uint
-            == VAR_SPECIAL as ::core::ffi::c_int as ::core::ffi::c_uint
-            && rettv.vval.v_special as ::core::ffi::c_uint
-                == kSpecialVarNull as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        if rettv.v_type == VAR_SPECIAL && rettv.vval.v_special == kSpecialVarNull {
+            // "Read the tags files after all."
             tv_clear(&raw mut rettv);
             return NOTDONE;
         }
-        if rettv.v_type as ::core::ffi::c_uint
-            != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-            || rettv.vval.v_list.is_null()
-        {
+        if rettv.v_type != VAR_LIST || rettv.vval.v_list.is_null() {
             tv_clear(&raw mut rettv);
-            emsg(gettext(
-                (e_invalid_return_value_from_tagfunc.ptr() as *const _)
-                    as *const ::core::ffi::c_char,
-            ));
+            emsg(gettext(E_INVALID_RETURN.as_ptr()));
             return FAIL;
         }
-        let mut taglist: *mut list_T = rettv.vval.v_list;
-        let l_: *const list_T = taglist;
-        if !l_.is_null() {
-            let mut li: *const listitem_T = (*l_).lv_first;
-            while !li.is_null() {
-                let mut res_name: *mut ::core::ffi::c_char =
-                    ::core::ptr::null_mut::<::core::ffi::c_char>();
-                let mut res_fname: *mut ::core::ffi::c_char =
-                    ::core::ptr::null_mut::<::core::ffi::c_char>();
-                let mut res_cmd: *mut ::core::ffi::c_char =
-                    ::core::ptr::null_mut::<::core::ffi::c_char>();
-                let mut res_kind: *mut ::core::ffi::c_char =
-                    ::core::ptr::null_mut::<::core::ffi::c_char>();
-                let mut has_extra: bool = false;
-                let mut name_only: ::core::ffi::c_int = flags & TAG_NAMES as ::core::ffi::c_int;
-                if (*li).li_tv.v_type as ::core::ffi::c_uint
-                    != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    emsg(gettext(
-                        (e_invalid_return_value_from_tagfunc.ptr() as *const _)
-                            as *const ::core::ffi::c_char,
-                    ));
-                    break;
-                } else {
-                    let mut len: size_t = 2 as size_t;
-                    res_name = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                    res_fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                    res_cmd = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                    res_kind = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                    let dihi_ht_: *mut hashtab_T = &raw mut (*(*li).li_tv.vval.v_dict).dv_hashtab;
-                    let mut dihi_todo_: size_t = (*dihi_ht_).ht_used;
-                    let mut dihi_: *mut hashitem_T = (*dihi_ht_).ht_array;
-                    while dihi_todo_ != 0 {
-                        if !((*dihi_).hi_key.is_null()
-                            || (*dihi_).hi_key
-                                == &raw const hash_removed as *mut ::core::ffi::c_char)
-                        {
-                            dihi_todo_ = dihi_todo_.wrapping_sub(1);
-                            let di: *mut dictitem_T = (*dihi_)
-                                .hi_key
-                                .offset(-(17 as ::core::ffi::c_ulong as isize))
-                                as *mut dictitem_T;
-                            let mut dict_key: *const ::core::ffi::c_char =
-                                &raw mut (*di).di_key as *mut ::core::ffi::c_char;
-                            let mut tv: *mut typval_T = &raw mut (*di).di_tv;
-                            if !((*tv).v_type as ::core::ffi::c_uint
-                                != VAR_STRING as ::core::ffi::c_int as ::core::ffi::c_uint
-                                || (*tv).vval.v_string.is_null())
-                            {
-                                len = len.wrapping_add(
-                                    strlen((*tv).vval.v_string).wrapping_add(1 as size_t),
-                                );
-                                if strcmp(
-                                    dict_key,
-                                    b"name\0".as_ptr() as *const ::core::ffi::c_char,
-                                ) == 0
-                                {
-                                    res_name = (*tv).vval.v_string;
-                                } else if strcmp(
-                                    dict_key,
-                                    b"filename\0".as_ptr() as *const ::core::ffi::c_char,
-                                ) == 0
-                                {
-                                    res_fname = (*tv).vval.v_string;
-                                } else if strcmp(
-                                    dict_key,
-                                    b"cmd\0".as_ptr() as *const ::core::ffi::c_char,
-                                ) == 0
-                                {
-                                    res_cmd = (*tv).vval.v_string;
-                                } else {
-                                    has_extra = true;
-                                    if strcmp(
-                                        dict_key,
-                                        b"kind\0".as_ptr() as *const ::core::ffi::c_char,
-                                    ) == 0
-                                    {
-                                        res_kind = (*tv).vval.v_string;
-                                    } else {
-                                        len = len.wrapping_add(
-                                            strlen(dict_key).wrapping_add(1 as size_t),
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                        dihi_ = dihi_.offset(1);
-                    }
-                    if has_extra {
-                        len = len.wrapping_add(2 as size_t);
-                    }
-                    if res_name.is_null() || res_fname.is_null() || res_cmd.is_null() {
-                        emsg(gettext(
-                            (e_invalid_return_value_from_tagfunc.ptr() as *const _)
-                                as *const ::core::ffi::c_char,
-                        ));
-                        break;
-                    } else {
-                        let mfp: *mut ::core::ffi::c_char = (if name_only != 0 {
-                            xstrdup(res_name) as *mut ::core::ffi::c_void
-                        } else {
-                            xmalloc(len.wrapping_add(2 as size_t))
-                        })
-                            as *mut ::core::ffi::c_char;
-                        if name_only == 0 {
-                            let mut p: *mut ::core::ffi::c_char = mfp;
-                            let c2rust_fresh7 = p;
-                            p = p.offset(1);
-                            *c2rust_fresh7 = (MT_GL_OTH as ::core::ffi::c_int
-                                + 1 as ::core::ffi::c_int)
-                                as ::core::ffi::c_char;
-                            let c2rust_fresh8 = p;
-                            p = p.offset(1);
-                            *c2rust_fresh8 = 0x2 as ::core::ffi::c_char;
-                            strcpy(p, res_name);
-                            p = p.offset(strlen(p) as isize);
-                            let c2rust_fresh9 = p;
-                            p = p.offset(1);
-                            *c2rust_fresh9 = '\t' as ::core::ffi::c_char;
-                            strcpy(p, res_fname);
-                            p = p.offset(strlen(p) as isize);
-                            let c2rust_fresh10 = p;
-                            p = p.offset(1);
-                            *c2rust_fresh10 = '\t' as ::core::ffi::c_char;
-                            strcpy(p, res_cmd);
-                            p = p.offset(strlen(p) as isize);
-                            if has_extra {
-                                strcpy(
-                                    p,
-                                    b";\"\0".as_ptr() as *const ::core::ffi::c_char
-                                        as *mut ::core::ffi::c_char,
-                                );
-                                p = p.offset(strlen(p) as isize);
-                                if !res_kind.is_null() {
-                                    let c2rust_fresh11 = p;
-                                    p = p.offset(1);
-                                    *c2rust_fresh11 = '\t' as ::core::ffi::c_char;
-                                    strcpy(p, res_kind);
-                                    p = p.offset(strlen(p) as isize);
-                                }
-                                let dihi_ht__0: *mut hashtab_T =
-                                    &raw mut (*(*li).li_tv.vval.v_dict).dv_hashtab;
-                                let mut dihi_todo__0: size_t = (*dihi_ht__0).ht_used;
-                                let mut dihi__0: *mut hashitem_T = (*dihi_ht__0).ht_array;
-                                while dihi_todo__0 != 0 {
-                                    if !((*dihi__0).hi_key.is_null()
-                                        || (*dihi__0).hi_key
-                                            == &raw const hash_removed as *mut ::core::ffi::c_char)
-                                    {
-                                        dihi_todo__0 = dihi_todo__0.wrapping_sub(1);
-                                        let di_0: *mut dictitem_T = (*dihi__0)
-                                            .hi_key
-                                            .offset(-(17 as ::core::ffi::c_ulong as isize))
-                                            as *mut dictitem_T;
-                                        let mut dict_key_0: *const ::core::ffi::c_char =
-                                            &raw mut (*di_0).di_key as *mut ::core::ffi::c_char;
-                                        let mut tv_0: *mut typval_T = &raw mut (*di_0).di_tv;
-                                        if !((*tv_0).v_type as ::core::ffi::c_uint
-                                            != VAR_STRING as ::core::ffi::c_int
-                                                as ::core::ffi::c_uint
-                                            || (*tv_0).vval.v_string.is_null())
-                                        {
-                                            if strcmp(
-                                                dict_key_0,
-                                                b"name\0".as_ptr() as *const ::core::ffi::c_char,
-                                            ) != 0
-                                            {
-                                                if strcmp(
-                                                    dict_key_0,
-                                                    b"filename\0".as_ptr()
-                                                        as *const ::core::ffi::c_char,
-                                                ) != 0
-                                                {
-                                                    if strcmp(
-                                                        dict_key_0,
-                                                        b"cmd\0".as_ptr()
-                                                            as *const ::core::ffi::c_char,
-                                                    ) != 0
-                                                    {
-                                                        if strcmp(
-                                                            dict_key_0,
-                                                            b"kind\0".as_ptr()
-                                                                as *const ::core::ffi::c_char,
-                                                        ) != 0
-                                                        {
-                                                            let c2rust_fresh12 = p;
-                                                            p = p.offset(1);
-                                                            *c2rust_fresh12 =
-                                                                '\t' as ::core::ffi::c_char;
-                                                            strcpy(
-                                                                p,
-                                                                dict_key_0
-                                                                    as *mut ::core::ffi::c_char,
-                                                            );
-                                                            p = p.offset(strlen(p) as isize);
-                                                            strcpy(
-                                                                p,
-                                                                b":\0".as_ptr()
-                                                                    as *const ::core::ffi::c_char
-                                                                    as *mut ::core::ffi::c_char,
-                                                            );
-                                                            p = p.offset(strlen(p) as isize);
-                                                            strcpy(p, (*tv_0).vval.v_string);
-                                                            p = p.offset(strlen(p) as isize);
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    dihi__0 = dihi__0.offset(1);
-                                }
-                            }
-                        }
-                        ga_grow(ga, 1 as ::core::ffi::c_int);
-                        let c2rust_fresh13 = (*ga).ga_len;
-                        (*ga).ga_len = (*ga).ga_len + 1;
-                        let c2rust_lvalue_ptr = &raw mut *((*ga).ga_data
-                            as *mut *mut ::core::ffi::c_char)
-                            .offset(c2rust_fresh13 as isize);
-                        *c2rust_lvalue_ptr = mfp;
-                        ntags += 1;
-                        result = 1 as ::core::ffi::c_int;
-                        li = (*li).li_next;
-                    }
+
+        let mut ntags = 0;
+        let mut li = (*rettv.vval.v_list).lv_first;
+        while !li.is_null() {
+            if (*li).li_tv.v_type != VAR_DICT {
+                emsg(gettext(E_INVALID_RETURN.as_ptr()));
+                break;
+            }
+            let Some(mfp) = tag_of((*li).li_tv.vval.v_dict, flags) else {
+                emsg(gettext(E_INVALID_RETURN.as_ptr()));
+                break;
+            };
+            // Every match is kept, and none is offered to the duplicate
+            // set: `'tagfunc'` does its own filtering.
+            found.push(mfp);
+            ntags += 1;
+            result = OK;
+            li = (*li).li_next;
+        }
+
+        tv_clear(&raw mut rettv);
+        *match_count = ntags;
+        result
+    }
+}
+
+/// Write one result dictionary out as a match.
+///
+/// The shape is the one a tags file line would have had, with the tags
+/// file name empty: `<priority><TAG_SEP>name<TAB>file<TAB>cmd`, and then
+/// `;"` and the remaining fields when there are any.
+///
+/// Answers `None` when the dictionary is missing `name`, `filename` or
+/// `cmd`.
+///
+/// # Safety
+/// `d` must be a live dictionary.
+unsafe fn tag_of(d: *mut dict_T, flags: c_int) -> Option<Match> {
+    // SAFETY: the caller's promise; every value is a NUL-terminated
+    // string, and the buffer is sized before anything is written.
+    unsafe {
+        let fields = string_fields(d);
+        let mut name = ptr::null_mut::<c_char>();
+        let mut fname = ptr::null_mut::<c_char>();
+        let mut cmd = ptr::null_mut::<c_char>();
+        let mut kind = ptr::null_mut::<c_char>();
+        let mut has_extra = false;
+
+        // Upstream's own sizing: two for the leading bytes, then a
+        // separator and the text of every value, plus each extra field's
+        // key and colon, plus two for the `;"`.
+        let mut len = 2;
+        for field in &fields {
+            len += strlen(field.value) + 1;
+            match field.key().to_bytes() {
+                b"name" => name = field.value,
+                b"filename" => fname = field.value,
+                b"cmd" => cmd = field.value,
+                b"kind" => {
+                    has_extra = true;
+                    kind = field.value;
+                }
+                key => {
+                    has_extra = true;
+                    len += key.len() + 1;
                 }
             }
         }
-        tv_clear(&raw mut rettv);
-        *match_count = ntags;
-        return result;
+        if has_extra {
+            len += 2;
+        }
+        if name.is_null() || fname.is_null() || cmd.is_null() {
+            return None;
+        }
+
+        if flags & TAG_NAMES as c_int != 0 {
+            // Only the name is wanted.
+            let bytes = CStr::from_ptr(name).to_bytes_with_nul();
+            let mut mfp = Match::zeroed(bytes.len());
+            mfp.bytes().copy_from_slice(bytes);
+            return Some(mfp);
+        }
+
+        let mut out = Vec::with_capacity(len);
+        // A `'tagfunc'` match is always a global match in another file,
+        // and it names no tags file.
+        out.push(MT_GL_OTH as u8 + 1);
+        out.push(TAG_SEP as u8);
+        out.extend_from_slice(CStr::from_ptr(name).to_bytes());
+        out.push(b'\t');
+        out.extend_from_slice(CStr::from_ptr(fname).to_bytes());
+        out.push(b'\t');
+        out.extend_from_slice(CStr::from_ptr(cmd).to_bytes());
+        if has_extra {
+            out.extend_from_slice(b";\"");
+            if !kind.is_null() {
+                out.push(b'\t');
+                out.extend_from_slice(CStr::from_ptr(kind).to_bytes());
+            }
+            for field in &fields {
+                if matches!(
+                    field.key().to_bytes(),
+                    b"name" | b"filename" | b"cmd" | b"kind"
+                ) {
+                    continue;
+                }
+                out.push(b'\t');
+                out.extend_from_slice(field.key().to_bytes());
+                out.push(b':');
+                out.extend_from_slice(CStr::from_ptr(field.value).to_bytes());
+            }
+        }
+        out.push(0);
+
+        // Two bytes of slack past the text, as upstream leaves.
+        let mut mfp = Match::zeroed(len + 2);
+        mfp.bytes()[..out.len()].copy_from_slice(&out);
+        Some(mfp)
     }
+}
+
+/// One string-valued entry of a `'tagfunc'` result dictionary.
+struct Field {
+    /// Points into the dictionary item, which outlives the walk.
+    key: *const c_char,
+    value: *mut c_char,
+}
+
+impl Field {
+    /// # Safety
+    /// The dictionary the field came from must still be live.
+    unsafe fn key(&self) -> &CStr {
+        // SAFETY: the caller's promise; a dict key is NUL-terminated.
+        unsafe { CStr::from_ptr(self.key) }
+    }
+}
+
+/// The string-valued entries of a dictionary, in hash order.
+///
+/// Collected once because upstream walks the same table twice — first to
+/// size the match, then to write it — and both walks skip anything that is
+/// not a string.
+///
+/// # Safety
+/// `d` must be a live dictionary.
+unsafe fn string_fields(d: *mut dict_T) -> Vec<Field> {
+    let mut fields = Vec::new();
+    // SAFETY: the caller's promise; the walk visits `ht_used` live items
+    // and every item's key and value are part of it.
+    unsafe {
+        let ht = &raw mut (*d).dv_hashtab;
+        let mut todo = (*ht).ht_used;
+        let mut hi = (*ht).ht_array;
+        while todo != 0 {
+            let key = (*hi).hi_key;
+            if !key.is_null() && key != (&raw const hash_removed).cast_mut() {
+                todo -= 1;
+                let di = key
+                    .byte_sub(core::mem::offset_of!(dictitem_T, di_key))
+                    .cast::<dictitem_T>();
+                let tv = &raw mut (*di).di_tv;
+                if (*tv).v_type == VAR_STRING && !(*tv).vval.v_string.is_null() {
+                    fields.push(Field {
+                        key: (&raw const (*di).di_key).cast(),
+                        value: (*tv).vval.v_string,
+                    });
+                }
+            }
+            hi = hi.add(1);
+        }
+    }
+    fields
+}
+
+/// [`tv_dict_add_str`] with the key's length taken from the literal.
+///
+/// # Safety
+/// `d` must be live and `val` NUL-terminated.
+unsafe fn add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
+    // SAFETY: the caller's promise.
+    unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }

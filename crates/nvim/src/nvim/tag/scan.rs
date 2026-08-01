@@ -454,29 +454,19 @@ impl FindTags {
             {
                 return NOTDONE;
             }
-            let mut ga = GA_EMPTY_INIT_VALUE;
-            ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 100);
             tfu_in_use.set(true);
-            let retval = find_tagfunc_tags(
-                pat,
-                &raw mut ga,
-                &raw mut self.match_count,
-                self.flags,
-                buf_ffname,
-            );
-            tfu_in_use.set(false);
-
             // `'tagfunc'` does its own filtering, so every answer is kept
             // and none of them is looked at for duplicates. Which bucket
             // they land in never reaches the caller: each one carries its
             // own priority in its first byte.
-            let items = ga.ga_data.cast::<*mut c_char>();
-            for i in 0..ga.ga_len as usize {
-                let mfp = *items.add(i);
-                self.found[MT_ST_CUR].push(match_of(mfp));
-                xfree(mfp.cast());
-            }
-            ga_clear(&raw mut ga);
+            let retval = find_tagfunc_tags(
+                pat,
+                &mut self.found[MT_ST_CUR],
+                &mut self.match_count,
+                self.flags,
+                buf_ffname,
+            );
+            tfu_in_use.set(false);
             retval
         }
     }

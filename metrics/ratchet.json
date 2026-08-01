@@ -478,7 +478,7 @@
     "crates/nvim/src/nvim/tag/scan.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/tag/stack.rs": {"unsafe": 20},
     "crates/nvim/src/nvim/tag/tagfile.rs": {"unsafe": 10},
-    "crates/nvim/src/nvim/tag/tagfunc.rs": {"unsafe": 4},
+    "crates/nvim/src/nvim/tag/tagfunc.rs": {"unsafe": 8},
     "crates/nvim/src/nvim/terminal.rs": {"unsafe": 24},
     "crates/nvim/src/nvim/terminal/callbacks.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/terminal/input.rs": {"unsafe": 5},
