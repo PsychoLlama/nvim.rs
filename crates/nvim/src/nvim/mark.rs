@@ -354,7 +354,7 @@ pub unsafe extern "C" fn mark_forget_file(mut wp: *mut win_T, mut fnum: c_int) {
     let mut i: c_int = (*wp).w_tagstacklen - 1;
     while i >= 0 {
         if (*wp).w_tagstack[i as usize].fmark.fnum == fnum {
-            tagstack_clear_entry((&raw mut (*wp).w_tagstack as *mut taggy_T).offset(i as isize));
+            tagstack_clear_entry(&mut (*wp).w_tagstack[i as usize]);
             if (*wp).w_tagstackidx > i {
                 (*wp).w_tagstackidx -= 1;
             }

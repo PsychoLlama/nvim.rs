@@ -7178,7 +7178,7 @@ pub unsafe extern "C" fn win_free(mut wp: *mut win_T, mut tp: *mut tabpage_T) {
     xfree((*wp).w_lines as *mut ::core::ffi::c_void);
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*wp).w_tagstacklen {
-        tagstack_clear_entry((&raw mut (*wp).w_tagstack as *mut taggy_T).offset(i as isize));
+        tagstack_clear_entry(&mut (*wp).w_tagstack[i as usize]);
         i += 1;
     }
     xfree((*wp).w_localdir as *mut ::core::ffi::c_void);

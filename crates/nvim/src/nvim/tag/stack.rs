@@ -1,331 +1,420 @@
 //! The tag stack.
 //!
-//! Each window remembers where it jumped from, so `CTRL-T` and `:pop` can
-//! walk back. [`do_tags`] prints the stack, [`get_tagstack`] and
-//! [`set_tagstack`] are the Vimscript views, and the `tagstack_*` family is
-//! the pushing, shifting and freeing underneath them.
+//! Every window remembers where each tag jump started, so `CTRL-T` and
+//! `:pop` can walk back. [`TagStack`] is that stack — the entries, how many
+//! are in use and which one the walk stands on. [`do_tags`] prints it,
+//! [`get_tagstack`] and [`set_tagstack`] are the Vimscript views.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr;
 
-pub unsafe fn do_tags(mut _eap: *mut exarg_T) {
+/// How many entries a window's stack holds before the oldest is dropped.
+const TAGSTACKSIZE: usize = super::TAGSTACKSIZE as usize;
+
+/// The view a stack entry's mark starts with: no remembered scroll position.
+const NO_VIEW: fmarkv_T = fmarkv_T {
+    topline_offset: MAXLNUM as linenr_T,
+    skipcol: 0,
+};
+
+/// One window's tag stack.
+///
+/// The entries live in the window itself — `w_tagstack`, of which
+/// `w_tagstacklen` are in use, with `w_tagstackidx` the one `CTRL-T` would
+/// pop next. This borrows the three together so the bookkeeping stays in
+/// one place.
+pub(crate) struct TagStack {
+    win: *mut win_T,
+}
+
+/// A new entry for [`TagStack::push`].
+pub(crate) struct Push {
+    /// The tag being jumped to. The entry takes ownership.
+    pub(crate) tagname: *mut c_char,
+    /// The buffer the jump landed in, or 0 when that is not known yet.
+    pub(crate) cur_fnum: c_int,
+    /// Which of the matches was taken, counted from zero.
+    pub(crate) cur_match: c_int,
+    /// Where the cursor was before the jump, and in which buffer.
+    pub(crate) mark: pos_T,
+    pub(crate) fnum: c_int,
+    /// Whatever `'tagfunc'` attached to the match. The entry takes
+    /// ownership.
+    pub(crate) user_data: *mut c_char,
+}
+
+impl TagStack {
+    /// Borrow the tag stack of `wp`.
+    ///
+    /// # Safety
+    /// `wp` must be a live window, and nothing else may be reaching into
+    /// its tag stack for as long as this lives.
+    pub(crate) unsafe fn of(wp: *mut win_T) -> Self {
+        TagStack { win: wp }
+    }
+
+    /// How many entries hold anything.
+    pub(crate) fn len(&self) -> usize {
+        // SAFETY: the window is live, and upstream never lets the count
+        // past the array.
+        unsafe { ((*self.win).w_tagstacklen as usize).min(TAGSTACKSIZE) }
+    }
+
+    /// The entry `CTRL-T` would pop next; one past the end at the top.
+    pub(crate) fn curidx(&self) -> c_int {
+        // SAFETY: the window is live.
+        unsafe { (*self.win).w_tagstackidx }
+    }
+
+    /// The entries in use, oldest first.
+    pub(crate) fn entries(&mut self) -> &mut [taggy_T] {
+        let len = self.len();
+        // SAFETY: `w_tagstack` is an inline array of `TAGSTACKSIZE`
+        // entries, and `len` is clamped to it.
+        unsafe {
+            core::slice::from_raw_parts_mut(
+                (&raw mut (*self.win).w_tagstack).cast::<taggy_T>(),
+                len,
+            )
+        }
+    }
+
+    /// Move the current index, clamped to the entries that exist.
+    ///
+    /// The stack length is a valid index: it means "at the top", where
+    /// `CTRL-T` pops the newest entry.
+    pub(crate) fn set_curidx(&mut self, curidx: c_int) {
+        let len = self.len() as c_int;
+        // SAFETY: the window is live.
+        unsafe { (*self.win).w_tagstackidx = curidx.clamp(0, len) };
+    }
+
+    /// Throw the whole stack away.
+    pub(crate) fn clear(&mut self) {
+        self.truncate(0);
+        // SAFETY: the window is live.
+        unsafe { (*self.win).w_tagstackidx = 0 };
+    }
+
+    /// Drop every entry from `len` on, leaving the index alone.
+    pub(crate) fn truncate(&mut self, len: usize) {
+        for item in &mut self.entries()[len..] {
+            // SAFETY: an entry in use owns its name and user data.
+            unsafe { tagstack_clear_entry(item) };
+        }
+        // SAFETY: the window is live, and `len` is no larger than the
+        // count it replaces.
+        unsafe { (*self.win).w_tagstacklen = len as c_int };
+    }
+
+    /// Drop the oldest entry, shifting the rest down to free the top.
+    fn shift(&mut self) {
+        let entries = self.entries();
+        // SAFETY: entry 0 is in use, so it owns its name and user data.
+        unsafe { tagstack_clear_entry(&mut entries[0]) };
+        entries.rotate_left(1);
+        // SAFETY: the window is live, and the count was at least one.
+        unsafe { (*self.win).w_tagstacklen -= 1 };
+    }
+
+    /// Put a new entry on top, dropping the oldest if the stack is full.
+    pub(crate) fn push(&mut self, item: Push) {
+        if self.len() >= TAGSTACKSIZE {
+            self.shift();
+        }
+        let idx = self.len();
+        // SAFETY: the window is live, and `idx` is now within the array
+        // because `shift` made room for it.
+        unsafe { (*self.win).w_tagstacklen += 1 };
+        // Field by field, not a whole `taggy_T`: the timestamp and the
+        // additional data of the slot are deliberately left as they were.
+        let entry = &mut self.entries()[idx];
+        entry.tagname = item.tagname;
+        entry.cur_fnum = item.cur_fnum;
+        // A match number below zero would index the wrong way on the way
+        // back out.
+        entry.cur_match = item.cur_match.max(0);
+        entry.fmark.mark = item.mark;
+        entry.fmark.fnum = item.fnum;
+        entry.fmark.view = NO_VIEW;
+        entry.user_data = item.user_data;
+    }
+
+    /// Add every dict in `l` that describes a jump, oldest first.
+    ///
+    /// # Safety
+    /// `l` must be a live list.
+    unsafe fn push_items(&mut self, l: *mut list_T) {
+        // SAFETY: the list and its items are live for the whole walk, and
+        // the two strings taken out of each dict are freshly allocated
+        // copies the new entry takes over.
+        unsafe {
+            let mut li = tv_list_first(l);
+            while !li.is_null() {
+                let tv = &raw mut (*li).li_tv;
+                li = (*li).li_next;
+
+                // Skip anything that is not a dict describing a jump.
+                if (*tv).v_type != VAR_DICT || (*tv).vval.v_dict.is_null() {
+                    continue;
+                }
+                let item = (*tv).vval.v_dict;
+                let Some(from) = find(item, c"from") else {
+                    continue;
+                };
+                let mut mark = pos_T::default();
+                let mut fnum = 0;
+                if list2fpos(
+                    &raw mut (*from).di_tv,
+                    &raw mut mark,
+                    &raw mut fnum,
+                    ptr::null_mut(),
+                    false,
+                ) != OK
+                {
+                    continue;
+                }
+                let tagname = tv_dict_get_string(item, c"tagname".as_ptr(), true);
+                if tagname.is_null() {
+                    continue;
+                }
+                // The dict counts columns from one, the mark from zero.
+                if mark.col > 0 {
+                    mark.col -= 1;
+                }
+                self.push(Push {
+                    tagname,
+                    cur_fnum: number(item, c"bufnr"),
+                    cur_match: number(item, c"matchnr") - 1,
+                    mark,
+                    fnum,
+                    user_data: tv_dict_get_string(item, c"user_data".as_ptr(), true),
+                });
+            }
+        }
+    }
+}
+
+/// Free what one stack entry owns, and forget it.
+///
+/// # Safety
+/// The entry's `tagname` and `user_data` must be NULL or allocations the
+/// entry owns.
+pub unsafe fn tagstack_clear_entry(item: &mut taggy_T) {
+    // SAFETY: the caller promises both fields are ours to free.
     unsafe {
-        let mut tagstack: *mut taggy_T = &raw mut (*curwin.get()).w_tagstack as *mut taggy_T;
-        let mut tagstackidx: ::core::ffi::c_int = (*curwin.get()).w_tagstackidx;
-        let mut tagstacklen: ::core::ffi::c_int = (*curwin.get()).w_tagstacklen;
+        xfree(item.tagname.cast());
+        xfree(item.user_data.cast());
+    }
+    item.tagname = ptr::null_mut();
+    item.user_data = ptr::null_mut();
+}
+
+/// `:tags` — print the tag stack of the current window.
+///
+/// # Safety
+/// Must be called with a live `curwin`.
+pub unsafe fn do_tags(_eap: *mut exarg_T) {
+    // SAFETY: `curwin` is live, and `fm_getname` answers an allocation we
+    // free again below.
+    unsafe {
+        let mut stack = TagStack::of(curwin.get());
+        let curidx = stack.curidx();
+        let len = stack.len();
+
         msg_puts_title(gettext(
-            b"\n  # TO tag         FROM line  in file/text\0".as_ptr()
-                as *const ::core::ffi::c_char,
+            c"\n  # TO tag         FROM line  in file/text".as_ptr(),
         ));
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < tagstacklen {
-            if !(*tagstack.offset(i as isize)).tagname.is_null() {
-                let mut name: *mut ::core::ffi::c_char = fm_getname(
-                    &raw mut (*tagstack.offset(i as isize)).fmark,
-                    30 as ::core::ffi::c_int,
-                );
-                if !name.is_null() {
-                    msg_putchar('\n' as ::core::ffi::c_int);
-                    vim_snprintf(
-                        IObuff.ptr() as *mut ::core::ffi::c_char,
-                        IOSIZE as size_t,
-                        b"%c%2d %2d %-15s %5d  \0".as_ptr() as *const ::core::ffi::c_char,
-                        if i == tagstackidx {
-                            '>' as ::core::ffi::c_int
-                        } else {
-                            ' ' as ::core::ffi::c_int
-                        },
-                        i + 1 as ::core::ffi::c_int,
-                        (*tagstack.offset(i as isize)).cur_match + 1 as ::core::ffi::c_int,
-                        (*tagstack.offset(i as isize)).tagname,
-                        (*tagstack.offset(i as isize)).fmark.mark.lnum,
-                    );
-                    msg_outtrans(
-                        IObuff.ptr() as *mut ::core::ffi::c_char,
-                        0 as ::core::ffi::c_int,
-                        false_0 != 0,
-                    );
-                    msg_outtrans(
-                        name,
-                        if (*tagstack.offset(i as isize)).fmark.fnum == (*curbuf.get()).handle {
-                            HLF_D as ::core::ffi::c_int
-                        } else {
-                            0 as ::core::ffi::c_int
-                        },
-                        false_0 != 0,
-                    );
-                    xfree(name as *mut ::core::ffi::c_void);
-                }
+        for (i, item) in stack.entries().iter_mut().enumerate() {
+            if item.tagname.is_null() {
+                continue;
             }
-            i += 1;
-        }
-        if tagstackidx == tagstacklen {
-            msg_puts(b"\n>\0".as_ptr() as *const ::core::ffi::c_char);
-        }
-    }
-}
-
-pub unsafe extern "C" fn tagstack_clear_entry(mut item: *mut taggy_T) {
-    unsafe {
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut (*item).tagname as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr_);
-        *ptr_ = NULL_0;
-        let _ = *ptr_;
-        let mut ptr__0: *mut *mut ::core::ffi::c_void =
-            &raw mut (*item).user_data as *mut *mut ::core::ffi::c_void;
-        xfree(*ptr__0);
-        *ptr__0 = NULL_0;
-        let _ = *ptr__0;
-    }
-}
-
-pub unsafe extern "C" fn get_tagstack(mut wp: *mut win_T, mut retdict: *mut dict_T) {
-    unsafe {
-        tv_dict_add_nr(
-            retdict,
-            b"length\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-            (*wp).w_tagstacklen as varnumber_T,
-        );
-        tv_dict_add_nr(
-            retdict,
-            b"curidx\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-            ((*wp).w_tagstackidx + 1 as ::core::ffi::c_int) as varnumber_T,
-        );
-        let mut l: *mut list_T = tv_list_alloc(2 as ptrdiff_t);
-        tv_dict_add_list(
-            retdict,
-            b"items\0".as_ptr() as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-            l,
-        );
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*wp).w_tagstacklen {
-            let mut d: *mut dict_T = tv_dict_alloc();
-            tv_list_append_dict(l, d);
-            get_tag_details(
-                (&raw mut (*wp).w_tagstack as *mut taggy_T).offset(i as isize),
-                d,
+            let name = fm_getname(&raw mut item.fmark, 30);
+            if name.is_null() {
+                // The file the jump came from is gone.
+                continue;
+            }
+            msg_putchar('\n' as c_int);
+            // Kept in `IObuff` rather than built here: a tag name longer
+            // than the buffer is truncated, as upstream truncates it.
+            vim_snprintf(
+                IObuff.ptr().cast(),
+                IOSIZE as size_t,
+                c"%c%2d %2d %-15s %5d  ".as_ptr(),
+                if i as c_int == curidx { '>' } else { ' ' } as c_int,
+                i as c_int + 1,
+                item.cur_match + 1,
+                item.tagname,
+                item.fmark.mark.lnum,
             );
-            i += 1;
-        }
-    }
-}
-
-pub(crate) unsafe extern "C" fn tagstack_clear(mut wp: *mut win_T) {
-    unsafe {
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*wp).w_tagstacklen {
-            tagstack_clear_entry((&raw mut (*wp).w_tagstack as *mut taggy_T).offset(i as isize));
-            i += 1;
-        }
-        (*wp).w_tagstacklen = 0 as ::core::ffi::c_int;
-        (*wp).w_tagstackidx = 0 as ::core::ffi::c_int;
-    }
-}
-
-pub(crate) unsafe extern "C" fn tagstack_shift(mut wp: *mut win_T) {
-    unsafe {
-        let mut tagstack: *mut taggy_T = &raw mut (*wp).w_tagstack as *mut taggy_T;
-        tagstack_clear_entry(tagstack.offset(0 as ::core::ffi::c_int as isize));
-        let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        while i < (*wp).w_tagstacklen {
-            *tagstack.offset((i - 1 as ::core::ffi::c_int) as isize) = *tagstack.offset(i as isize);
-            i += 1;
-        }
-        (*wp).w_tagstacklen -= 1;
-    }
-}
-
-pub(crate) unsafe extern "C" fn tagstack_push_item(
-    mut wp: *mut win_T,
-    mut tagname: *mut ::core::ffi::c_char,
-    mut cur_fnum: ::core::ffi::c_int,
-    mut cur_match: ::core::ffi::c_int,
-    mut mark: pos_T,
-    mut fnum: ::core::ffi::c_int,
-    mut user_data: *mut ::core::ffi::c_char,
-) {
-    unsafe {
-        let mut tagstack: *mut taggy_T = &raw mut (*wp).w_tagstack as *mut taggy_T;
-        let mut idx: ::core::ffi::c_int = (*wp).w_tagstacklen;
-        if idx >= TAGSTACKSIZE {
-            tagstack_shift(wp);
-            idx = TAGSTACKSIZE - 1 as ::core::ffi::c_int;
-        }
-        (*wp).w_tagstacklen += 1;
-        (*tagstack.offset(idx as isize)).tagname = tagname;
-        (*tagstack.offset(idx as isize)).cur_fnum = cur_fnum;
-        (*tagstack.offset(idx as isize)).cur_match = cur_match;
-        (*tagstack.offset(idx as isize)).cur_match =
-            if (*tagstack.offset(idx as isize)).cur_match > 0 as ::core::ffi::c_int {
-                (*tagstack.offset(idx as isize)).cur_match
+            msg_outtrans(IObuff.ptr().cast(), 0, false);
+            let hl = if item.fmark.fnum == (*curbuf.get()).handle {
+                HLF_D as c_int
             } else {
-                0 as ::core::ffi::c_int
+                0
             };
-        (*tagstack.offset(idx as isize)).fmark.mark = mark;
-        (*tagstack.offset(idx as isize)).fmark.fnum = fnum;
-        (*tagstack.offset(idx as isize)).fmark.view = fmarkv_T {
-            topline_offset: MAXLNUM as ::core::ffi::c_int as linenr_T,
-            skipcol: 0 as colnr_T,
-        };
-        (*tagstack.offset(idx as isize)).user_data = user_data;
-    }
-}
-
-pub(crate) unsafe extern "C" fn tagstack_push_items(mut wp: *mut win_T, mut l: *mut list_T) {
-    unsafe {
-        let mut di: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
-        let mut tagname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut mark: pos_T = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        let mut fnum: ::core::ffi::c_int = 0;
-        let mut li: *mut listitem_T = tv_list_first(l);
-        while !li.is_null() {
-            if !((*li).li_tv.v_type as ::core::ffi::c_uint
-                != VAR_DICT as ::core::ffi::c_int as ::core::ffi::c_uint
-                || (*li).li_tv.vval.v_dict.is_null())
-            {
-                let mut itemdict: *mut dict_T = (*li).li_tv.vval.v_dict;
-                di = tv_dict_find(
-                    itemdict,
-                    b"from\0".as_ptr() as *const ::core::ffi::c_char,
-                    -1 as ptrdiff_t,
-                );
-                if !di.is_null() {
-                    if list2fpos(
-                        &raw mut (*di).di_tv,
-                        &raw mut mark,
-                        &raw mut fnum,
-                        ::core::ptr::null_mut::<colnr_T>(),
-                        false_0 != 0,
-                    ) == OK
-                    {
-                        tagname = tv_dict_get_string(
-                            itemdict,
-                            b"tagname\0".as_ptr() as *const ::core::ffi::c_char,
-                            true_0 != 0,
-                        );
-                        if !tagname.is_null() {
-                            if mark.col > 0 as ::core::ffi::c_int {
-                                mark.col -= 1;
-                            }
-                            tagstack_push_item(
-                                wp,
-                                tagname,
-                                tv_dict_get_number(
-                                    itemdict,
-                                    b"bufnr\0".as_ptr() as *const ::core::ffi::c_char,
-                                ) as ::core::ffi::c_int,
-                                tv_dict_get_number(
-                                    itemdict,
-                                    b"matchnr\0".as_ptr() as *const ::core::ffi::c_char,
-                                ) as ::core::ffi::c_int
-                                    - 1 as ::core::ffi::c_int,
-                                mark,
-                                fnum,
-                                tv_dict_get_string(
-                                    itemdict,
-                                    b"user_data\0".as_ptr() as *const ::core::ffi::c_char,
-                                    true_0 != 0,
-                                ),
-                            );
-                        }
-                    }
-                }
-            }
-            li = (*li).li_next;
+            msg_outtrans(name, hl, false);
+            xfree(name.cast());
+        }
+        if curidx as usize == len {
+            // Nothing has been popped: show where the next CTRL-T lands.
+            msg_puts(c"\n>".as_ptr());
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn tagstack_set_curidx(
-    mut wp: *mut win_T,
-    mut curidx: ::core::ffi::c_int,
-) {
+/// Describe one stack entry the way `gettagstack()` answers it.
+///
+/// # Safety
+/// Both pointers must be live.
+unsafe fn tag_details(tag: &taggy_T, retdict: *mut dict_T) {
+    // SAFETY: the dict is live, and the entry's strings are
+    // NUL-terminated.
     unsafe {
-        (*wp).w_tagstackidx = curidx;
-        (*wp).w_tagstackidx = if (if (*wp).w_tagstackidx > 0 as ::core::ffi::c_int {
-            (*wp).w_tagstackidx
-        } else {
-            0 as ::core::ffi::c_int
-        }) < (*wp).w_tagstacklen
-        {
-            if (*wp).w_tagstackidx > 0 as ::core::ffi::c_int {
-                (*wp).w_tagstackidx
+        add_str(retdict, c"tagname", tag.tagname);
+        add_nr(retdict, c"matchnr", (tag.cur_match + 1) as varnumber_T);
+        add_nr(retdict, c"bufnr", tag.cur_fnum as varnumber_T);
+        if !tag.user_data.is_null() {
+            add_str(retdict, c"user_data", tag.user_data);
+        }
+
+        let pos = tv_list_alloc(4);
+        tv_dict_add_list(retdict, c"from".as_ptr(), c"from".count_bytes(), pos);
+        let mark = &tag.fmark;
+        tv_list_append_number(
+            pos,
+            if mark.fnum != -1 {
+                mark.fnum as varnumber_T
             } else {
-                0 as ::core::ffi::c_int
-            }
-        } else {
-            (*wp).w_tagstacklen
-        };
+                0
+            },
+        );
+        tv_list_append_number(pos, mark.mark.lnum as varnumber_T);
+        // Columns are counted from one outside, except for the "past the
+        // end of the line" sentinel, which is passed through.
+        tv_list_append_number(
+            pos,
+            if mark.mark.col == MAXCOL as colnr_T {
+                MAXCOL as varnumber_T
+            } else {
+                (mark.mark.col + 1) as varnumber_T
+            },
+        );
+        tv_list_append_number(pos, mark.mark.coladd as varnumber_T);
     }
 }
 
-pub unsafe extern "C" fn set_tagstack(
-    mut wp: *mut win_T,
-    mut d: *const dict_T,
-    mut action: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// `gettagstack()` — describe the tag stack of `wp` into `retdict`.
+///
+/// # Safety
+/// Both pointers must be live.
+pub unsafe fn get_tagstack(wp: *mut win_T, retdict: *mut dict_T) {
+    // SAFETY: the window and the dict are live.
+    unsafe {
+        let mut stack = TagStack::of(wp);
+        add_nr(retdict, c"length", stack.len() as varnumber_T);
+        add_nr(retdict, c"curidx", (stack.curidx() + 1) as varnumber_T);
+
+        let items = tv_list_alloc(2);
+        tv_dict_add_list(retdict, c"items".as_ptr(), c"items".count_bytes(), items);
+        for entry in stack.entries() {
+            let d = tv_dict_alloc();
+            tv_list_append_dict(items, d);
+            tag_details(entry, d);
+        }
+    }
+}
+
+/// `settagstack()` — replace, append to or truncate the tag stack of `wp`.
+///
+/// `action` is `'a'` to append, `'r'` to replace and `'t'` to truncate.
+/// Answers `OK`, or `FAIL` with the error already reported.
+///
+/// # Safety
+/// Both pointers must be live.
+pub unsafe fn set_tagstack(wp: *mut win_T, d: *const dict_T, action: c_int) -> c_int {
+    // SAFETY: the window and the dict are live for the whole call.
     unsafe {
         if tfu_in_use.get() {
+            // 'tagfunc' is running: it is the tag stack's own contents
+            // that are being computed.
             emsg(gettext(
-                (e_cannot_modify_tag_stack_within_tagfunc.ptr() as *const _)
-                    as *const ::core::ffi::c_char,
+                e_cannot_modify_tag_stack_within_tagfunc.ptr().cast(),
             ));
             return FAIL;
         }
-        let mut di: *mut dictitem_T = ::core::ptr::null_mut::<dictitem_T>();
-        let mut l: *mut list_T = ::core::ptr::null_mut::<list_T>();
-        di = tv_dict_find(
-            d,
-            b"items\0".as_ptr() as *const ::core::ffi::c_char,
-            -1 as ptrdiff_t,
-        );
-        if !di.is_null() {
-            if (*di).di_tv.v_type as ::core::ffi::c_uint
-                != VAR_LIST as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char));
+
+        let mut items = ptr::null_mut::<list_T>();
+        if let Some(di) = find(d, c"items") {
+            if (*di).di_tv.v_type != VAR_LIST {
+                emsg(gettext((&raw const e_listreq).cast()));
                 return FAIL;
             }
-            l = (*di).di_tv.vval.v_list;
+            items = (*di).di_tv.vval.v_list;
         }
-        di = tv_dict_find(
-            d,
-            b"curidx\0".as_ptr() as *const ::core::ffi::c_char,
-            -1 as ptrdiff_t,
-        );
-        if !di.is_null() {
-            tagstack_set_curidx(
-                wp,
-                tv_get_number(&raw mut (*di).di_tv) as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-            );
+
+        let mut stack = TagStack::of(wp);
+        if let Some(di) = find(d, c"curidx") {
+            stack.set_curidx(tv_get_number(&raw mut (*di).di_tv) as c_int - 1);
         }
-        if action == 't' as ::core::ffi::c_int {
-            let tagstack: *mut taggy_T = &raw mut (*wp).w_tagstack as *mut taggy_T;
-            let tagstackidx: ::core::ffi::c_int = (*wp).w_tagstackidx;
-            let mut tagstacklen: ::core::ffi::c_int = (*wp).w_tagstacklen;
-            while tagstackidx < tagstacklen {
-                tagstacklen -= 1;
-                tagstack_clear_entry(tagstack.offset(tagstacklen as isize));
+
+        if action == 't' as c_int {
+            // Drop everything above the current entry.
+            let keep = stack.curidx().max(0) as usize;
+            if keep < stack.len() {
+                stack.truncate(keep);
             }
-            (*wp).w_tagstacklen = tagstacklen;
         }
-        if !l.is_null() {
-            if action == 'r' as ::core::ffi::c_int {
-                tagstack_clear(wp);
+
+        if !items.is_null() {
+            if action == 'r' as c_int {
+                stack.clear();
             }
-            tagstack_push_items(wp, l);
-            (*wp).w_tagstackidx = (*wp).w_tagstacklen;
+            stack.push_items(items);
+            // Leave the index above the last entry, as a fresh jump would.
+            stack.set_curidx(stack.len() as c_int);
         }
-        return OK;
+        OK
     }
+}
+
+/// [`tv_dict_find`] answering `None` rather than a NULL pointer.
+///
+/// # Safety
+/// `d` must be live.
+unsafe fn find(d: *const dict_T, key: &CStr) -> Option<*mut dictitem_T> {
+    // SAFETY: the dict is live and the key is NUL-terminated.
+    let di = unsafe { tv_dict_find(d, key.as_ptr(), -1) };
+    (!di.is_null()).then_some(di)
+}
+
+/// [`tv_dict_add_nr`] with the key's length taken from the literal.
+///
+/// # Safety
+/// `d` must be live.
+unsafe fn add_nr(d: *mut dict_T, key: &CStr, nr: varnumber_T) {
+    // SAFETY: the dict is live and the key is NUL-terminated.
+    unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
+}
+
+/// [`tv_dict_add_str`] with the key's length taken from the literal.
+///
+/// # Safety
+/// `d` must be live and `val` NUL-terminated.
+unsafe fn add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
+    // SAFETY: the dict is live, and both strings are NUL-terminated.
+    unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
+}
+
+/// A number field of a dict, zero when it is missing.
+///
+/// # Safety
+/// `d` must be live.
+unsafe fn number(d: *const dict_T, key: &CStr) -> c_int {
+    // SAFETY: the dict is live and the key is NUL-terminated.
+    unsafe { tv_dict_get_number(d, key.as_ptr()) as c_int }
 }

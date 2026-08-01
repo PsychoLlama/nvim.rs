@@ -387,7 +387,7 @@ pub unsafe extern "C" fn do_tag(
             use_tagstack = false_0 != 0;
             new_tag = true_0 != 0;
             if g_do_tagpreview.get() != 0 as ::core::ffi::c_int {
-                tagstack_clear_entry(ptag_entry.ptr());
+                tagstack_clear_entry(&mut *ptag_entry.ptr());
                 (*ptag_entry.ptr()).tagname = xstrdup(tag);
             }
         } else {
@@ -409,18 +409,20 @@ pub unsafe extern "C" fn do_tag(
                         cur_match = (*ptag_entry.ptr()).cur_match;
                         cur_fnum = (*ptag_entry.ptr()).cur_fnum;
                     } else {
-                        tagstack_clear_entry(ptag_entry.ptr());
+                        tagstack_clear_entry(&mut *ptag_entry.ptr());
                         (*ptag_entry.ptr()).tagname = xstrdup(tag);
                     }
                 } else {
                     while tagstackidx < tagstacklen {
                         tagstacklen -= 1;
-                        tagstack_clear_entry(tagstack.offset(tagstacklen as isize));
+                        tagstack_clear_entry(&mut *tagstack.offset(tagstacklen as isize));
                     }
                     tagstacklen += 1;
                     if tagstacklen > TAGSTACKSIZE {
                         tagstacklen = TAGSTACKSIZE;
-                        tagstack_clear_entry(tagstack.offset(0 as ::core::ffi::c_int as isize));
+                        tagstack_clear_entry(
+                            &mut *tagstack.offset(0 as ::core::ffi::c_int as isize),
+                        );
                         let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
                         while i < tagstacklen {
                             *tagstack.offset((i - 1 as ::core::ffi::c_int) as isize) =
