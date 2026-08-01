@@ -90,8 +90,8 @@ use crate::src::nvim::os::fs::{
 };
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
-    __assert_fail, __errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets,
-    gettext, snprintf, strcmp, strlen, strncasecmp, time,
+    __errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets, gettext, snprintf,
+    strcmp, strlen, strncasecmp, time,
 };
 use crate::src::nvim::path::{
     FreeWild, PATHSEP, after_pathsep, concat_fnames, fix_fname, gen_expand_wildcards,
@@ -109,10 +109,9 @@ use crate::src::nvim::types::{
     ExtmarkOp, FILE, FileInfo, ListLenSpecials, OptInt, OptVal, OptValData, OptValType,
     QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, TriState, VarLockStatus, VarType, aco_save_T,
     bln_values, buf_T, bufref_T, cleanup_T, cmd_addr_T, cmdidx_T, colnr_T, dict_T, dictitem_T,
-    dobuf_action_values, exarg_T, getf_values, handle_T, ht_stack_T, linenr_T, list_T,
-    list_stack_T, listitem_T, optset_T, pos_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T,
-    qfltype_T, regmatch_T, regmmatch_T, regprog_T, scid_T, size_t, tabpage_T, time_t, typval_T,
-    typval_vval_union, varnumber_T, vimconv_T, win_T,
+    dobuf_action_values, exarg_T, getf_values, handle_T, linenr_T, list_T, listitem_T, optset_T,
+    pos_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T,
+    regprog_T, scid_T, size_t, time_t, typval_T, typval_vval_union, varnumber_T, vimconv_T, win_T,
 };
 use crate::src::nvim::ui::ui_flush;
 use crate::src::nvim::undo::u_clearallandblockfree;
