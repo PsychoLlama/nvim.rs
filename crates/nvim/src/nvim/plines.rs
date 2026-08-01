@@ -19,10 +19,9 @@ use crate::src::nvim::option::get_showbreak_value;
 use crate::src::nvim::pos::{lt, ltoreq};
 use crate::src::nvim::state::{MODE_NORMAL, virtual_active};
 use crate::src::nvim::types::{
-    CSType, CharSize, CharsizeArg, DecorInline, DecorVirtText, MTKey, MTNode, MTPos, MarkTree,
-    MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_14, MetaFilter, MetaIndex, Set_uint32_t,
-    StrCharInfo, VirtLines, VirtTextPos, buf_T, colnr_T, foldinfo_T, int32_t, int64_t, linenr_T,
-    pos_T, schar_T, uint8_t, uint32_t, win_T,
+    CharSize, CharsizeArg, CharsizeKind, DecorInline, DecorVirtText, MTKey, MarkTree, MarkTreeIter,
+    MetaFilter, MetaIndex, Set_uint32_t, StrCharInfo, VirtLines, VirtTextPos, buf_T, colnr_T,
+    foldinfo_T, int32_t, int64_t, linenr_T, pos_T, schar_T, uint8_t, uint32_t, win_T,
 };
 pub const kVPosInline: VirtTextPos = 2;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
@@ -32,9 +31,6 @@ pub const kVTIsLines: C2Rust_Unnamed_13 = 1;
 pub const kMTMetaLines: MetaIndex = 1;
 pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
 pub const kInvalidByteCells: C2Rust_Unnamed_16 = 4;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const kCharsizeFast: C2Rust_Unnamed_17 = 1;
-pub const kCharsizeRegular: C2Rust_Unnamed_17 = 0;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline]
@@ -57,13 +53,13 @@ pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 /// `ptr` must point into the line `csarg` was initialised for.
 #[inline(always)]
 pub unsafe fn win_charsize(
-    cstype: CSType,
+    cstype: CharsizeKind,
     vcol: ::core::ffi::c_int,
     ptr: *mut ::core::ffi::c_char,
     chr: int32_t,
     csarg: *mut CharsizeArg,
 ) -> CharSize {
-    if cstype {
+    if cstype == CharsizeKind::Fast {
         charsize_fast(csarg, ptr, vcol as colnr_T, chr)
     } else {
         charsize_regular(csarg, ptr, vcol as colnr_T, chr)
@@ -76,28 +72,9 @@ pub unsafe fn win_linetabsize(
     mut line: *mut ::core::ffi::c_char,
     mut len: colnr_T,
 ) -> ::core::ffi::c_int {
-    let mut csarg: CharsizeArg = CharsizeArg {
-        win: ::core::ptr::null_mut::<win_T>(),
-        line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        use_tabstop: false,
-        indent_width: 0,
-        virt_row: 0,
-        cur_text_width_left: 0,
-        cur_text_width_right: 0,
-        max_head_vcol: 0,
-        iter: [MarkTreeIter {
-            pos: MTPos { row: 0, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }; 1],
-    };
-    let cstype: CSType = init_charsize_arg(&raw mut csarg, wp, lnum, line);
-    if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
+    let mut csarg: CharsizeArg = CharsizeArg::default();
+    let cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, lnum, line);
+    if cstype == CharsizeKind::Fast {
         return linesize_fast(&raw mut csarg, 0 as ::core::ffi::c_int, len);
     } else {
         return linesize_regular(&raw mut csarg, 0 as ::core::ffi::c_int, len);
@@ -120,28 +97,9 @@ pub unsafe extern "C" fn linetabsize_col(
     mut startvcol: ::core::ffi::c_int,
     mut s: *mut ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    let mut csarg: CharsizeArg = CharsizeArg {
-        win: ::core::ptr::null_mut::<win_T>(),
-        line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        use_tabstop: false,
-        indent_width: 0,
-        virt_row: 0,
-        cur_text_width_left: 0,
-        cur_text_width_right: 0,
-        max_head_vcol: 0,
-        iter: [MarkTreeIter {
-            pos: MTPos { row: 0, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }; 1],
-    };
-    let cstype: CSType = init_charsize_arg(&raw mut csarg, curwin.get(), 0 as linenr_T, s);
-    if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
+    let mut csarg: CharsizeArg = CharsizeArg::default();
+    let cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, curwin.get(), 0 as linenr_T, s);
+    if cstype == CharsizeKind::Fast {
         return linesize_fast(&raw mut csarg, startvcol, MAXCOL as ::core::ffi::c_int);
     } else {
         return linesize_regular(&raw mut csarg, startvcol, MAXCOL as ::core::ffi::c_int);
@@ -172,7 +130,7 @@ pub unsafe extern "C" fn init_charsize_arg(
     mut wp: *mut win_T,
     mut lnum: linenr_T,
     mut line: *mut ::core::ffi::c_char,
-) -> CSType {
+) -> CharsizeKind {
     (*csarg).win = wp;
     (*csarg).line = line;
     (*csarg).max_head_vcol = 0 as ::core::ffi::c_int;
@@ -200,9 +158,9 @@ pub unsafe extern "C" fn init_charsize_arg(
                 || (*wp).w_onebuf_opt.wo_bri != 0
                 || *get_showbreak_value(wp) as ::core::ffi::c_int != NUL)
     {
-        return kCharsizeRegular as ::core::ffi::c_int != 0;
+        return CharsizeKind::Regular;
     } else {
-        return kCharsizeFast as ::core::ffi::c_int != 0;
+        return CharsizeKind::Fast;
     };
 }
 pub unsafe extern "C" fn charsize_regular(
@@ -604,33 +562,14 @@ pub unsafe extern "C" fn getvcol(
 ) {
     let line: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, (*pos).lnum);
     let end_col: colnr_T = (*pos).col;
-    let mut csarg: CharsizeArg = CharsizeArg {
-        win: ::core::ptr::null_mut::<win_T>(),
-        line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        use_tabstop: false,
-        indent_width: 0,
-        virt_row: 0,
-        cur_text_width_left: 0,
-        cur_text_width_right: 0,
-        max_head_vcol: 0,
-        iter: [MarkTreeIter {
-            pos: MTPos { row: 0, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }; 1],
-    };
+    let mut csarg: CharsizeArg = CharsizeArg::default();
     let mut on_NUL: bool = false_0 != 0;
-    let cstype: CSType = init_charsize_arg(&raw mut csarg, wp, (*pos).lnum, line);
+    let cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, (*pos).lnum, line);
     csarg.max_head_vcol = -1 as ::core::ffi::c_int;
     let mut vcol: colnr_T = 0 as colnr_T;
     let mut char_size: CharSize = CharSize { width: 0, head: 0 };
     let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
-    if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
+    if cstype == CharsizeKind::Fast {
         let use_tabstop: bool = csarg.use_tabstop;
         loop {
             if *ci.ptr as ::core::ffi::c_int == NUL {
@@ -888,32 +827,13 @@ pub unsafe extern "C" fn plines_win_nofold(
     mut lnum: linenr_T,
 ) -> ::core::ffi::c_int {
     let mut s: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, lnum);
-    let mut csarg: CharsizeArg = CharsizeArg {
-        win: ::core::ptr::null_mut::<win_T>(),
-        line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        use_tabstop: false,
-        indent_width: 0,
-        virt_row: 0,
-        cur_text_width_left: 0,
-        cur_text_width_right: 0,
-        max_head_vcol: 0,
-        iter: [MarkTreeIter {
-            pos: MTPos { row: 0, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }; 1],
-    };
-    let cstype: CSType = init_charsize_arg(&raw mut csarg, wp, lnum, s);
+    let mut csarg: CharsizeArg = CharsizeArg::default();
+    let cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, lnum, s);
     if *s as ::core::ffi::c_int == NUL && csarg.virt_row < 0 as ::core::ffi::c_int {
         return 1 as ::core::ffi::c_int;
     }
     let mut col: int64_t = 0;
-    if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
+    if cstype == CharsizeKind::Fast {
         col = linesize_fast(
             &raw mut csarg,
             0 as ::core::ffi::c_int,
@@ -959,30 +879,11 @@ pub unsafe extern "C" fn plines_win_col(
         return lines + 1 as ::core::ffi::c_int;
     }
     let mut line: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, lnum);
-    let mut csarg: CharsizeArg = CharsizeArg {
-        win: ::core::ptr::null_mut::<win_T>(),
-        line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        use_tabstop: false,
-        indent_width: 0,
-        virt_row: 0,
-        cur_text_width_left: 0,
-        cur_text_width_right: 0,
-        max_head_vcol: 0,
-        iter: [MarkTreeIter {
-            pos: MTPos { row: 0, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_14 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }; 1],
-    };
-    let cstype: CSType = init_charsize_arg(&raw mut csarg, wp, lnum, line);
+    let mut csarg: CharsizeArg = CharsizeArg::default();
+    let cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, lnum, line);
     let mut vcol: colnr_T = 0 as colnr_T;
     let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
-    if cstype as ::core::ffi::c_int == kCharsizeFast as ::core::ffi::c_int {
+    if cstype == CharsizeKind::Fast {
         let use_tabstop: bool = csarg.use_tabstop;
         while *ci.ptr as ::core::ffi::c_int != NUL && {
             column -= 1;

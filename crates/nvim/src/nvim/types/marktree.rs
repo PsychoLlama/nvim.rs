@@ -28,7 +28,7 @@ pub struct MTPair {
     pub end_pos: MTPos,
     pub end_right_gravity: bool,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct MTPos {
     pub row: int32_t,
@@ -43,7 +43,7 @@ pub struct MarkTree {
     pub n_nodes: size_t,
     pub id2node: [Map_uint64_t_ptr_t; 1],
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct MarkTreeIter {
     pub pos: MTPos,
@@ -55,7 +55,7 @@ pub struct MarkTreeIter {
     pub intersect_pos: MTPos,
     pub intersect_pos_x: MTPos,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct MarkTreeIter_s {
     pub oldcol: ::core::ffi::c_int,

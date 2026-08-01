@@ -77,8 +77,8 @@ use crate::src::nvim::terminal::terminal_paste;
 use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, Arena, BoolVarValue, BufUpdateCallbacks, CMD_index,
-    CSType, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem,
-    CharInfo, CharSize, CharsizeArg, DecorExt, DecorHighlightInline, DecorInlineData,
+    Callback, Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, CharInfo,
+    CharSize, CharsizeArg, CharsizeKind, DecorExt, DecorHighlightInline, DecorInlineData,
     DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1, Direction, ExtmarkMove,
     ExtmarkOp, ExtmarkSavePos, ExtmarkSplice, ExtmarkUndoObject, FileID, FloatAnchor,
     FloatRelative, GRegFlags, GridView, Intersection, LineGetter, LuaRef, MTKey, MTNode, MTPos,
@@ -162,7 +162,6 @@ pub const kFloatRelativeMouse: FloatRelative = 3;
 pub const kFloatRelativeCursor: FloatRelative = 2;
 pub const kFloatRelativeWindow: FloatRelative = 1;
 pub const kFloatRelativeEditor: FloatRelative = 0;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_14 = 2147483647;
 pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
@@ -876,7 +875,6 @@ pub const REMAP_SKIP: RemapValues = -3;
 pub const REMAP_SCRIPT: RemapValues = -2;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
-pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_26 = ::core::ffi::c_uint;
 pub const SIN_NOMARK: C2Rust_Unnamed_26 = 8;
 pub const SIN_UNDO: C2Rust_Unnamed_26 = 4;
@@ -886,9 +884,6 @@ pub type C2Rust_Unnamed_27 = ::core::ffi::c_uint;
 pub const FIND_EVAL: C2Rust_Unnamed_27 = 4;
 pub const FIND_STRING: C2Rust_Unnamed_27 = 2;
 pub const FIND_IDENT: C2Rust_Unnamed_27 = 1;
-pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
-pub const kCharsizeFast: C2Rust_Unnamed_28 = 1;
-pub const kCharsizeRegular: C2Rust_Unnamed_28 = 0;
 pub const RE_SEARCH: C2Rust_Unnamed_29 = 0;
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub const RE_LAST: C2Rust_Unnamed_29 = 2;
@@ -3134,27 +3129,8 @@ pub unsafe extern "C" fn do_put(
                         }
                         let mut oldp: *mut ::core::ffi::c_char = get_cursor_line_ptr();
                         let mut oldlen: colnr_T = get_cursor_line_len();
-                        let mut csarg: CharsizeArg = CharsizeArg {
-                            win: ::core::ptr::null_mut::<win_T>(),
-                            line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            use_tabstop: false,
-                            indent_width: 0,
-                            virt_row: 0,
-                            cur_text_width_left: 0,
-                            cur_text_width_right: 0,
-                            max_head_vcol: 0,
-                            iter: [MarkTreeIter {
-                                pos: MTPos { row: 0, col: 0 },
-                                lvl: 0,
-                                x: ::core::ptr::null_mut::<MTNode>(),
-                                i: 0,
-                                s: [C2Rust_Unnamed_16 { oldcol: 0, i: 0 }; 20],
-                                intersect_idx: 0,
-                                intersect_pos: MTPos { row: 0, col: 0 },
-                                intersect_pos_x: MTPos { row: 0, col: 0 },
-                            }; 1],
-                        };
-                        let mut cstype: CSType = init_charsize_arg(
+                        let mut csarg: CharsizeArg = CharsizeArg::default();
+                        let mut cstype: CharsizeKind = init_charsize_arg(
                             &raw mut csarg,
                             curwin.get(),
                             (*curwin.get()).w_cursor.lnum,

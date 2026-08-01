@@ -144,12 +144,12 @@ use crate::src::nvim::textformat::{
 use crate::src::nvim::textobject::{bck_word, fwd_word};
 use crate::src::nvim::types::ui::kUIMessages;
 pub use crate::src::nvim::types::{
-    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, CSType, Callback,
+    __time_t, AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
     Callback_data as C2Rust_Unnamed_5, CallbackType, ChangedtickDictItem, CharInfo, CharSize,
-    CharsizeArg, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_2, Direction, ExtmarkMove, ExtmarkSavePos, ExtmarkSplice,
-    ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative, GraphemeState, GridView, Intersection,
-    LineGetter, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    CharsizeArg, CharsizeKind, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
+    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Direction, ExtmarkMove, ExtmarkSavePos,
+    ExtmarkSplice, ExtmarkUndoObject, FileID, FloatAnchor, FloatRelative, GraphemeState, GridView,
+    Intersection, LineGetter, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t,
     Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, MarkTreeIter,
     MarkTreeIter_s as C2Rust_Unnamed_16, MetaIndex, MotionType, OptInt, QUEUE, ScopeDictDictItem,
     ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue,
@@ -362,7 +362,6 @@ pub const OPENLINE_MARKFIX: C2Rust_Unnamed_18 = 8;
 pub const OPENLINE_KEEPTRAIL: C2Rust_Unnamed_18 = 4;
 pub const OPENLINE_DO_COM: C2Rust_Unnamed_18 = 2;
 pub const OPENLINE_DELSPACES: C2Rust_Unnamed_18 = 1;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub const INDENT_DEC: C2Rust_Unnamed_23 = 3;
 pub const INDENT_INC: C2Rust_Unnamed_23 = 2;
@@ -519,7 +518,6 @@ pub const VV_COUNT1: VimVarIndex = 1;
 pub const VV_COUNT: VimVarIndex = 0;
 pub const KE_EVENT: key_extra = 102;
 pub const KE_NOP: key_extra = 97;
-pub const kCharsizeFast: C2Rust_Unnamed_33 = 1;
 pub const KE_S_DOWN: key_extra = 5;
 pub const KE_S_UP: key_extra = 4;
 pub const KE_C_RIGHT: key_extra = 86;
@@ -576,7 +574,6 @@ pub const KE_KINS: key_extra = 79;
 pub const MB_MAXBYTES: C2Rust_Unnamed_28 = 21;
 pub type C2Rust_Unnamed_28 = ::core::ffi::c_uint;
 pub const MB_MAXCHAR: C2Rust_Unnamed_28 = 6;
-pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
 pub const KE_WILD: key_extra = 108;
 pub const KE_DROP: key_extra = 95;
 pub const KE_CMDWIN: key_extra = 84;
@@ -647,8 +644,6 @@ pub const PUT_CURSLINE: C2Rust_Unnamed_31 = 4;
 pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
 pub const YREG_PUT: C2Rust_Unnamed_32 = 2;
 pub const YREG_YANK: C2Rust_Unnamed_32 = 1;
-pub type C2Rust_Unnamed_33 = ::core::ffi::c_uint;
-pub const kCharsizeRegular: C2Rust_Unnamed_33 = 0;
 pub type C2Rust_Unnamed_34 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: C2Rust_Unnamed_26 = C2Rust_Unnamed_26 {
@@ -4420,27 +4415,8 @@ unsafe extern "C" fn ins_tab() -> bool {
         let mut tab: *mut ::core::ffi::c_char =
             b"\t\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
         let mut tab_v: int32_t = *tab as uint8_t as int32_t;
-        let mut csarg: CharsizeArg = CharsizeArg {
-            win: ::core::ptr::null_mut::<win_T>(),
-            line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            use_tabstop: false,
-            indent_width: 0,
-            virt_row: 0,
-            cur_text_width_left: 0,
-            cur_text_width_right: 0,
-            max_head_vcol: 0,
-            iter: [MarkTreeIter {
-                pos: MTPos { row: 0, col: 0 },
-                lvl: 0,
-                x: ::core::ptr::null_mut::<MTNode>(),
-                i: 0,
-                s: [C2Rust_Unnamed_16 { oldcol: 0, i: 0 }; 20],
-                intersect_idx: 0,
-                intersect_pos: MTPos { row: 0, col: 0 },
-                intersect_pos_x: MTPos { row: 0, col: 0 },
-            }; 1],
-        };
-        let mut cstype: CSType =
+        let mut csarg: CharsizeArg = CharsizeArg::default();
+        let mut cstype: CharsizeKind =
             init_charsize_arg(&raw mut csarg, curwin.get(), 0 as linenr_T, tab);
         while ascii_iswhite(*ptr as ::core::ffi::c_int) {
             let mut i: ::core::ffi::c_int = win_charsize(
@@ -4648,27 +4624,8 @@ pub unsafe extern "C" fn ins_copychar(mut lnum: linenr_T) -> ::core::ffi::c_int 
     validate_virtcol(curwin.get());
     let end_vcol: ::core::ffi::c_int = (*curwin.get()).w_virtcol as ::core::ffi::c_int;
     let mut line: *mut ::core::ffi::c_char = ml_get(lnum);
-    let mut csarg: CharsizeArg = CharsizeArg {
-        win: ::core::ptr::null_mut::<win_T>(),
-        line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        use_tabstop: false,
-        indent_width: 0,
-        virt_row: 0,
-        cur_text_width_left: 0,
-        cur_text_width_right: 0,
-        max_head_vcol: 0,
-        iter: [MarkTreeIter {
-            pos: MTPos { row: 0, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_16 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }; 1],
-    };
-    let mut cstype: CSType = init_charsize_arg(&raw mut csarg, curwin.get(), lnum, line);
+    let mut csarg: CharsizeArg = CharsizeArg::default();
+    let mut cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, curwin.get(), lnum, line);
     let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
     let mut vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while vcol < end_vcol && *ci.ptr as ::core::ffi::c_int != NUL {

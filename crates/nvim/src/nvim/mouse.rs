@@ -55,15 +55,16 @@ use crate::src::nvim::statusline::stl_connected;
 use crate::src::nvim::strings::vim_strchr;
 pub use crate::src::nvim::types::{
     __time_t, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, Array, BoolVarValue,
-    Boolean, BufUpdateCallbacks, CSType, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
-    ChangedtickDictItem, CharInfo, CharSize, CharsizeArg, DecorExt, DecorHighlightInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
-    Direction, Error, ErrorType, EvalFuncData, ExtmarkUndoObject, FileID, Float, FloatAnchor,
-    FloatRelative, GridView, Integer, Intersection, KeyValuePair, LuaRef, MTKey, MTNode, MTPos,
-    Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash,
-    MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_13, MotionType,
-    MsgpackRpcRequestHandler, Object, ObjectType, OptInt, QUEUE, ScopeDictDictItem, ScopeType,
-    ScreenGrid, Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
+    Boolean, BufUpdateCallbacks, Callback, Callback_data as C2Rust_Unnamed_5, CallbackType,
+    ChangedtickDictItem, CharInfo, CharSize, CharsizeArg, CharsizeKind, DecorExt,
+    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
+    DecorVirtText_data as C2Rust_Unnamed_2, Dict, Direction, Error, ErrorType, EvalFuncData,
+    ExtmarkUndoObject, FileID, Float, FloatAnchor, FloatRelative, GridView, Integer, Intersection,
+    KeyValuePair, LuaRef, MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t,
+    Map_uint32_t_uint32_t, Map_uint64_t_ptr_t, MapHash, MarkTree, MarkTreeIter,
+    MarkTreeIter_s as C2Rust_Unnamed_13, MotionType, MsgpackRpcRequestHandler, Object, ObjectType,
+    OptInt, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid, Set_int64_t, Set_uint32_t,
+    Set_uint64_t, SpecialVarValue, StlClickDefinition,
     StlClickDefinition_type_0 as C2Rust_Unnamed_12, StrCharInfo, String_0, Terminal, Timestamp,
     VarLockStatus, VarType, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo,
     WinSplit, WinStyle, Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T,
@@ -138,8 +139,6 @@ pub const kFloatRelativeCursor: FloatRelative = 2;
 pub const kFloatRelativeWindow: FloatRelative = 1;
 pub const kFloatRelativeEditor: FloatRelative = 0;
 pub const kDirectionNotSet: Direction = 0;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
 pub const KE_WILD: key_extra = 108;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_LUA: key_extra = 103;
@@ -273,7 +272,6 @@ pub const MSCR_DOWN: C2Rust_Unnamed_19 = 0;
 pub const PUT_CURSEND: C2Rust_Unnamed_20 = 2;
 pub const PUT_FIXINDENT: C2Rust_Unnamed_20 = 1;
 pub const OP_NOP: C2Rust_Unnamed_21 = 0;
-pub const kCharsizeFast: C2Rust_Unnamed_22 = 1;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const PUT_BLOCK_INNER: C2Rust_Unnamed_20 = 64;
 pub const PUT_LINE_FORWARD: C2Rust_Unnamed_20 = 32;
@@ -310,8 +308,6 @@ pub const OP_LSHIFT: C2Rust_Unnamed_21 = 4;
 pub const OP_CHANGE: C2Rust_Unnamed_21 = 3;
 pub const OP_YANK: C2Rust_Unnamed_21 = 2;
 pub const OP_DELETE: C2Rust_Unnamed_21 = 1;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const kCharsizeRegular: C2Rust_Unnamed_22 = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_G: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
@@ -2238,27 +2234,8 @@ pub unsafe extern "C" fn vcol2col(
     mut coladdp: *mut colnr_T,
 ) -> colnr_T {
     let mut line: *mut ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, lnum);
-    let mut csarg: CharsizeArg = CharsizeArg {
-        win: ::core::ptr::null_mut::<win_T>(),
-        line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        use_tabstop: false,
-        indent_width: 0,
-        virt_row: 0,
-        cur_text_width_left: 0,
-        cur_text_width_right: 0,
-        max_head_vcol: 0,
-        iter: [MarkTreeIter {
-            pos: MTPos { row: 0, col: 0 },
-            lvl: 0,
-            x: ::core::ptr::null_mut::<MTNode>(),
-            i: 0,
-            s: [C2Rust_Unnamed_13 { oldcol: 0, i: 0 }; 20],
-            intersect_idx: 0,
-            intersect_pos: MTPos { row: 0, col: 0 },
-            intersect_pos_x: MTPos { row: 0, col: 0 },
-        }; 1],
-    };
-    let mut cstype: CSType = init_charsize_arg(&raw mut csarg, wp, lnum, line);
+    let mut csarg: CharsizeArg = CharsizeArg::default();
+    let mut cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, lnum, line);
     let mut ci: StrCharInfo = utf_ptr2StrCharInfo(line);
     let mut cur_vcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while cur_vcol < vcol && *ci.ptr as ::core::ffi::c_int != NUL {

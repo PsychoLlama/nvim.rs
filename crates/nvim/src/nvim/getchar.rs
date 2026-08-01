@@ -82,8 +82,8 @@ pub use crate::src::nvim::types::{
     __off_t, __off64_t, __pthread_internal_list, __pthread_list_t, __pthread_mutex_s,
     __pthread_rwlock_arch_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker,
     _IO_wide_data, AdditionalData, AlignTextPos, ApiDispatchWrapper, Arena, ArenaMem, Array,
-    BoolVarValue, Boolean, BufUpdateCallbacks, CSType, Callback, Callback_data as C2Rust_Unnamed_5,
-    CallbackType, ChangedtickDictItem, CharInfo, CharSize, CharsizeArg, CmdRedraw,
+    BoolVarValue, Boolean, BufUpdateCallbacks, Callback, Callback_data as C2Rust_Unnamed_5,
+    CallbackType, ChangedtickDictItem, CharInfo, CharSize, CharsizeArg, CharsizeKind, CmdRedraw,
     CmdlineColorChunk, CmdlineColors, CmdlineInfo, ColoredCmdline, DecorExt, DecorHighlightInline,
     DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Dict,
     Direction, Error, ErrorType, EvalFuncData, ExtmarkUndoObject, FILE, FileDescriptor, FileID,
@@ -361,7 +361,6 @@ pub struct C2Rust_Unnamed_31 {
 }
 pub const KEYLEN_PART_KEY: C2Rust_Unnamed_37 = -1;
 pub const SHOWCMD_COLS: C2Rust_Unnamed_33 = 10;
-pub const kCharsizeFast: C2Rust_Unnamed_35 = 1;
 pub const map_result_get: map_result_T = 1;
 pub type map_result_T = ::core::ffi::c_uint;
 pub const map_result_nomatch: map_result_T = 3;
@@ -393,7 +392,6 @@ pub const KE_C_HOME: key_extra = 87;
 pub const KE_ZHOME: key_extra = 64;
 pub const KE_XHOME: key_extra = 63;
 pub const KE_MOUSEMOVE: key_extra = 100;
-pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
 pub const KE_WILD: key_extra = 108;
 pub const KE_EVENT: key_extra = 102;
 pub const KE_NOP: key_extra = 97;
@@ -483,8 +481,6 @@ pub const kFileCreateOnly: C2Rust_Unnamed_34 = 16;
 pub const kFileNoSymlink: C2Rust_Unnamed_34 = 8;
 pub const kFileWriteOnly: C2Rust_Unnamed_34 = 4;
 pub const kFileCreate: C2Rust_Unnamed_34 = 2;
-pub type C2Rust_Unnamed_35 = ::core::ffi::c_uint;
-pub const kCharsizeRegular: C2Rust_Unnamed_35 = 0;
 pub type C2Rust_Unnamed_36 = ::core::ffi::c_uint;
 pub type C2Rust_Unnamed_37 = ::core::ffi::c_int;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -3700,27 +3696,8 @@ unsafe extern "C" fn vgetorpeek(mut advance: bool) -> ::core::ffi::c_int {
                                     ptr = get_cursor_line_ptr();
                                     let mut endptr: *mut ::core::ffi::c_char =
                                         ptr.offset((*curwin.get()).w_cursor.col as isize);
-                                    let mut csarg: CharsizeArg = CharsizeArg {
-                                        win: ::core::ptr::null_mut::<win_T>(),
-                                        line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                        use_tabstop: false,
-                                        indent_width: 0,
-                                        virt_row: 0,
-                                        cur_text_width_left: 0,
-                                        cur_text_width_right: 0,
-                                        max_head_vcol: 0,
-                                        iter: [MarkTreeIter {
-                                            pos: MTPos { row: 0, col: 0 },
-                                            lvl: 0,
-                                            x: ::core::ptr::null_mut::<MTNode>(),
-                                            i: 0,
-                                            s: [C2Rust_Unnamed_28 { oldcol: 0, i: 0 }; 20],
-                                            intersect_idx: 0,
-                                            intersect_pos: MTPos { row: 0, col: 0 },
-                                            intersect_pos_x: MTPos { row: 0, col: 0 },
-                                        }; 1],
-                                    };
-                                    let mut cstype: CSType = init_charsize_arg(
+                                    let mut csarg: CharsizeArg = CharsizeArg::default();
+                                    let mut cstype: CharsizeKind = init_charsize_arg(
                                         &raw mut csarg,
                                         curwin.get(),
                                         (*curwin.get()).w_cursor.lnum,

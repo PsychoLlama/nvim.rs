@@ -173,27 +173,8 @@ pub unsafe extern "C" fn get_lisp_indent() -> ::core::ffi::c_int {
             (*curwin.get()).w_cursor.col = (*pos).col;
             let mut col: colnr_T = (*pos).col;
             let mut line: *mut ::core::ffi::c_char = get_cursor_line_ptr();
-            let mut csarg: CharsizeArg = CharsizeArg {
-                win: ::core::ptr::null_mut::<win_T>(),
-                line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                use_tabstop: false,
-                indent_width: 0,
-                virt_row: 0,
-                cur_text_width_left: 0,
-                cur_text_width_right: 0,
-                max_head_vcol: 0,
-                iter: [MarkTreeIter {
-                    pos: MTPos { row: 0, col: 0 },
-                    lvl: 0,
-                    x: ::core::ptr::null_mut::<MTNode>(),
-                    i: 0,
-                    s: [C2Rust_Unnamed_15 { oldcol: 0, i: 0 }; 20],
-                    intersect_idx: 0,
-                    intersect_pos: MTPos { row: 0, col: 0 },
-                    intersect_pos_x: MTPos { row: 0, col: 0 },
-                }; 1],
-            };
-            let mut cstype: CSType =
+            let mut csarg: CharsizeArg = CharsizeArg::default();
+            let mut cstype: CharsizeKind =
                 init_charsize_arg(&raw mut csarg, curwin.get(), (*pos).lnum, line);
             let mut sci: StrCharInfo = utf_ptr2StrCharInfo(line);
             amount = 0 as ::core::ffi::c_int;

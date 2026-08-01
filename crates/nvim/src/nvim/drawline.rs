@@ -74,13 +74,12 @@ use crate::src::nvim::syntax::{
 };
 use crate::src::nvim::terminal::terminal_get_line_attributes;
 use crate::src::nvim::types::{
-    CSType, CharSize, CharsizeArg, DecorRange, DecorRangeSlot, DecorState, DecorVirtText, GridView,
-    HlAttrs, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_16, MetaIndex, NS,
-    OptInt, RgbValue, ScreenGrid, SignTextAttrs, StlFlag, StrCharInfo, TriState, VimVarIndex,
-    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinExtmark, buf_T, colnr_T, diffline_S,
-    diffline_T, diffline_change_T, foldinfo_T, hlf_T, linenr_T, pos_T, ptrdiff_t, sattr_T, schar_T,
-    size_t, smt_T, spellvars_T, ssize_t, statuscol_T, stl_hlrec_t, uint8_t, uint32_t, uint64_t,
-    varnumber_T, virt_line, win_T,
+    CharSize, CharsizeArg, CharsizeKind, DecorRange, DecorRangeSlot, DecorState, DecorVirtText,
+    GridView, HlAttrs, MetaIndex, NS, OptInt, RgbValue, ScreenGrid, SignTextAttrs, StlFlag,
+    StrCharInfo, TriState, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
+    WinExtmark, buf_T, colnr_T, diffline_S, diffline_T, diffline_change_T, foldinfo_T, hlf_T,
+    linenr_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t, smt_T, spellvars_T, ssize_t, statuscol_T,
+    stl_hlrec_t, uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
 };
 use crate::src::nvim::ui::ui_rgb_attached;
 unsafe extern "C" {
@@ -2115,27 +2114,8 @@ pub unsafe extern "C" fn win_line(
             width: 0 as ::core::ffi::c_int,
             head: 0,
         };
-        let mut csarg: CharsizeArg = CharsizeArg {
-            win: ::core::ptr::null_mut::<win_T>(),
-            line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            use_tabstop: false,
-            indent_width: 0,
-            virt_row: 0,
-            cur_text_width_left: 0,
-            cur_text_width_right: 0,
-            max_head_vcol: 0,
-            iter: [MarkTreeIter {
-                pos: MTPos { row: 0, col: 0 },
-                lvl: 0,
-                x: ::core::ptr::null_mut::<MTNode>(),
-                i: 0,
-                s: [C2Rust_Unnamed_16 { oldcol: 0, i: 0 }; 20],
-                intersect_idx: 0,
-                intersect_pos: MTPos { row: 0, col: 0 },
-                intersect_pos_x: MTPos { row: 0, col: 0 },
-            }; 1],
-        };
-        let mut cstype: CSType = init_charsize_arg(&raw mut csarg, wp, lnum, line_1);
+        let mut csarg: CharsizeArg = CharsizeArg::default();
+        let mut cstype: CharsizeKind = init_charsize_arg(&raw mut csarg, wp, lnum, line_1);
         csarg.max_head_vcol = start_vcol;
         let mut vcol: ::core::ffi::c_int = wlv.vcol as ::core::ffi::c_int;
         let mut ci: StrCharInfo = utf_ptr2StrCharInfo(ptr_0);
@@ -3236,27 +3216,8 @@ pub unsafe extern "C" fn win_line(
                             );
                             let mut p_0: *mut ::core::ffi::c_char =
                                 ptr_0.offset(-((mb_off + 1 as ::core::ffi::c_int) as isize));
-                            let mut csarg_0: CharsizeArg = CharsizeArg {
-                                win: ::core::ptr::null_mut::<win_T>(),
-                                line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                                use_tabstop: false,
-                                indent_width: 0,
-                                virt_row: 0,
-                                cur_text_width_left: 0,
-                                cur_text_width_right: 0,
-                                max_head_vcol: 0,
-                                iter: [MarkTreeIter {
-                                    pos: MTPos { row: 0, col: 0 },
-                                    lvl: 0,
-                                    x: ::core::ptr::null_mut::<MTNode>(),
-                                    i: 0,
-                                    s: [C2Rust_Unnamed_16 { oldcol: 0, i: 0 }; 20],
-                                    intersect_idx: 0,
-                                    intersect_pos: MTPos { row: 0, col: 0 },
-                                    intersect_pos_x: MTPos { row: 0, col: 0 },
-                                }; 1],
-                            };
-                            let mut cstype_0: CSType =
+                            let mut csarg_0: CharsizeArg = CharsizeArg::default();
+                            let mut cstype_0: CharsizeKind =
                                 init_charsize_arg(&raw mut csarg_0, wp, 0 as linenr_T, line_1);
                             wlv.n_extra = win_charsize(
                                 cstype_0,
