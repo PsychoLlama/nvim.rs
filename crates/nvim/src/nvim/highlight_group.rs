@@ -1,12 +1,11 @@
 use crate::src::nvim::api::private::helpers::{api_set_error, arena_dict, cstr_as_string};
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::autocmd::{EVENT_COLORSCHEME, EVENT_COLORSCHEMEPRE, apply_autocmds};
 use crate::src::nvim::charset::{skiptowhite, skipwhite, vim_isprintc, vim_strsize};
 use crate::src::nvim::cursor_shape::cursor_mode_uses_syn_id;
 use crate::src::nvim::decoration_provider::decor_provider_invalidate_hl;
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later};
 use crate::src::nvim::eval::last_set_msg;
-use crate::src::nvim::eval::vars::{do_unlet, get_var_value};
+use crate::src::nvim::eval::vars::do_unlet;
 use crate::src::nvim::ex_docmd::ends_excmd;
 use crate::src::nvim::garray::{ga_append_via_ptr, ga_grow, ga_set_growsize};
 use crate::src::nvim::global_cell::GlobalCell;
@@ -18,17 +17,15 @@ use crate::src::nvim::highlight::{
 };
 use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
-    Columns, clear_cmdline, cterm_normal_bg_color, cterm_normal_fg_color, curbuf, current_sctx,
-    curwin, e_highlight_group_name_invalid_char, e_highlight_group_name_too_long, e_invarg2,
-    got_int, highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, hlf_names,
+    Columns, clear_cmdline, cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, curwin,
+    e_highlight_group_name_invalid_char, e_highlight_group_name_too_long, e_invarg2, got_int,
+    highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, hlf_names,
     include_default, include_link, include_none, msg_col, msg_grid, msg_silent,
     need_highlight_changed, normal_bg, normal_fg, normal_sp, p_bg, p_verbose, starting, t_colors,
     updating_screen,
 };
 use crate::src::nvim::map::{map_put_ref_cstr_t_int, mh_get_cstr_t};
-use crate::src::nvim::memory::{
-    ARENA_EMPTY, arena_memdupz, xfree, xmalloc, xmemrchr, xstrdup, xstrlcat,
-};
+use crate::src::nvim::memory::{ARENA_EMPTY, arena_memdupz, xmemrchr, xstrlcat};
 use crate::src::nvim::message::{
     emsg, message_filtered, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_outtrans, msg_putchar,
     msg_puts_hl, msg_source, semsg,
@@ -40,7 +37,7 @@ use crate::src::nvim::os::libc::{
     strchr, strcmp, strlen, strncasecmp, strncmp, strtol,
 };
 use crate::src::nvim::os::time::os_delay;
-use crate::src::nvim::runtime::{exestack, source_runtime_vim_lua};
+use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::strings::{vim_memcpy_up, vim_strup};
 use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
 use crate::src::nvim::types::ui::{kUILinegrid, kUIMessages};
