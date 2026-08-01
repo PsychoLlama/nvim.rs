@@ -25,8 +25,8 @@ use crate::src::nvim::eval::vars::set_vim_var_nr;
 use crate::src::nvim::fold::get_foldtext;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{
-    grid_adjust, grid_put_linebuf, linebuf_mirror, schar_cells, schar_from_char, schar_get_adv,
-    schar_get_ascii, schar_get_first_codepoint, schar_len,
+    LineAttrs, LineSpan, grid_adjust, grid_put_linebuf, linebuf_mirror, schar_cells,
+    schar_from_char, schar_get_adv, schar_get_ascii, schar_get_first_codepoint, schar_len,
 };
 use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight::{
@@ -4317,9 +4317,9 @@ unsafe extern "C" fn wlv_put_linebuf(
     };
     if (*wp).w_onebuf_opt.wo_rl != 0 {
         linebuf_mirror(
-            &raw mut startcol,
-            &raw mut endcol,
-            &raw mut clear_width,
+            &mut startcol,
+            &mut endcol,
+            &mut clear_width,
             (*wp).w_view_width,
         );
         flags |= SLF_RIGHTLEFT as ::core::ffi::c_int;
@@ -4362,11 +4362,15 @@ unsafe extern "C" fn wlv_put_linebuf(
         g,
         row,
         coloff,
-        startcol,
-        endcol,
-        clear_width,
-        bg_attr,
-        0 as ::core::ffi::c_int,
+        LineSpan {
+            col: startcol,
+            endcol,
+            clear_width,
+        },
+        LineAttrs {
+            bg: bg_attr,
+            clear: 0,
+        },
         (*wlv).vcol - 1 as colnr_T,
         flags,
     );

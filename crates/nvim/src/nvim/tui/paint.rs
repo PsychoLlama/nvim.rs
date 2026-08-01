@@ -87,7 +87,7 @@ fn cheap_to_print(tui: &TUIData, row: c_int, col: c_int, next: c_int) -> bool {
             return false;
         }
         // SAFETY: a grapheme handle is always readable.
-        if unsafe { schar_get_ascii(cell.data) } == 0 {
+        if schar_get_ascii(cell.data) == 0 {
             return false;
         }
     }

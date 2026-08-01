@@ -189,8 +189,8 @@
 {"symbol":"re_multiline","kind":"fn","file":"crates/nvim/src/nvim/regexp/chars.rs","class":"internal","refs":[]}
 {"symbol":"reverse_text","kind":"fn","file":"crates/nvim/src/nvim/strings.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"sandbox","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"schar_from_str","kind":"fn","file":"crates/nvim/src/nvim/grid.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"schar_get","kind":"fn","file":"crates/nvim/src/nvim/grid.rs","class":"test","refs":["unit-fixtures.so","unit-specs"]}
+{"symbol":"schar_from_str","kind":"fn","file":"crates/nvim/src/nvim/grid/schar.rs","class":"test","refs":["unit-specs"]}
+{"symbol":"schar_get","kind":"fn","file":"crates/nvim/src/nvim/grid/schar.rs","class":"test","refs":["unit-fixtures.so","unit-specs"]}
 {"symbol":"screen_resize","kind":"fn","file":"crates/nvim/src/nvim/drawscreen.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"search_regcomp","kind":"fn","file":"crates/nvim/src/nvim/search/pattern.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"set_bufref","kind":"fn","file":"crates/nvim/src/nvim/buffer.rs","class":"internal","refs":[]}
