@@ -18,24 +18,8 @@ pub(crate) unsafe extern "C" fn print_tag_list(
     unsafe {
         let mut tagstack: *mut taggy_T = &raw mut (*curwin.get()).w_tagstack as *mut taggy_T;
         let mut tagstackidx: ::core::ffi::c_int = (*curwin.get()).w_tagstackidx;
-        let mut tagp: tagptrs_T = tagptrs_T {
-            tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            command: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            command_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tag_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagkind: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagkind_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            user_data_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagline: 0,
-        };
-        parse_match(
-            *matches.offset(0 as ::core::ffi::c_int as isize),
-            &raw mut tagp,
-        );
+        let mut tagp: TagParts = TagParts::default();
+        parse_match(*matches.offset(0 as ::core::ffi::c_int as isize), &mut tagp);
         let mut taglen: ::core::ffi::c_int = if (tagp.tagname_end.offset_from(tagp.tagname)
             + 2 as isize) as ::core::ffi::c_int
             > 18 as ::core::ffi::c_int
@@ -66,7 +50,7 @@ pub(crate) unsafe extern "C" fn print_tag_list(
         );
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < num_matches && !got_int.get() {
-            parse_match(*matches.offset(i as isize), &raw mut tagp);
+            parse_match(*matches.offset(i as isize), &mut tagp);
             if !new_tag
                 && (g_do_tagpreview.get() != 0 as ::core::ffi::c_int
                     && i == (*ptag_entry.ptr()).cur_match
@@ -105,7 +89,7 @@ pub(crate) unsafe extern "C" fn print_tag_list(
             );
             msg_putchar(' ' as ::core::ffi::c_int);
             taglen_advance(taglen);
-            let mut p: *const ::core::ffi::c_char = tag_full_fname(&raw mut tagp);
+            let mut p: *const ::core::ffi::c_char = tag_full_fname(&mut tagp);
             if !p.is_null() {
                 msg_outtrans(p, HLF_D as ::core::ffi::c_int, false_0 != 0);
                 let mut ptr_: *mut *mut ::core::ffi::c_void =
@@ -275,20 +259,7 @@ pub(crate) unsafe extern "C" fn add_llist_tags(
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut tag_name: [::core::ffi::c_char; 129] = [0; 129];
-        let mut tagp: tagptrs_T = tagptrs_T {
-            tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            command: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            command_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tag_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagkind: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagkind_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            user_data_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagline: 0,
-        };
+        let mut tagp: TagParts = TagParts::default();
         let mut fname: *mut ::core::ffi::c_char =
             xmalloc((MAXPATHL + 1 as ::core::ffi::c_int) as size_t) as *mut ::core::ffi::c_char;
         let mut cmd: *mut ::core::ffi::c_char =
@@ -297,7 +268,7 @@ pub(crate) unsafe extern "C" fn add_llist_tags(
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < num_matches {
             let mut dict: *mut dict_T = ::core::ptr::null_mut::<dict_T>();
-            parse_match(*matches.offset(i as isize), &raw mut tagp);
+            parse_match(*matches.offset(i as isize), &mut tagp);
             let mut len: ::core::ffi::c_int = if (tagp.tagname_end.offset_from(tagp.tagname)
                 as ::core::ffi::c_int)
                 < 128 as ::core::ffi::c_int
@@ -312,7 +283,7 @@ pub(crate) unsafe extern "C" fn add_llist_tags(
                 len as size_t,
             );
             tag_name[len as usize] = NUL as ::core::ffi::c_char;
-            let mut p: *mut ::core::ffi::c_char = tag_full_fname(&raw mut tagp);
+            let mut p: *mut ::core::ffi::c_char = tag_full_fname(&mut tagp);
             if !p.is_null() {
                 xstrlcpy(fname, p, MAXPATHL as size_t);
                 let mut ptr_: *mut *mut ::core::ffi::c_void =

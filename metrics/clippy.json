@@ -141,7 +141,6 @@
     "crates/nvim/src/nvim/strings.rs": 94,
     "crates/nvim/src/nvim/syntax.rs": 265,
     "crates/nvim/src/nvim/tag.rs": 21,
-    "crates/nvim/src/nvim/tag/jump.rs": 13,
     "crates/nvim/src/nvim/tag/list.rs": 19,
     "crates/nvim/src/nvim/tag/query.rs": 15,
     "crates/nvim/src/nvim/tag/tagfunc.rs": 27,

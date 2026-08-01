@@ -541,7 +541,7 @@ impl FindTags {
         // holds points into `lbuf`, which is only replaced at the two
         // points below where nothing holds one.
         unsafe {
-            let mut tagp: tagptrs_T = core::mem::zeroed();
+            let mut tagp = TagParts::default();
             let mut sinfo = SearchInfo::default();
 
             loop {

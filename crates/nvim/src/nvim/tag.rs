@@ -72,9 +72,9 @@ use crate::src::nvim::types::{
     SpecialVarValue, Timestamp, VarLockStatus, VarType, VimVarIndex, buf_T, colnr_T, dict_T,
     dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, garray_T, getf_retvalues,
     getf_values, hashitem_T, hashtab_T, ht_stack_T, int64_t, linenr_T, list_T, list_stack_T,
-    listitem_T, off_T, oparg_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, regprog_T,
-    searchit_arg_T, size_t, taggy_T, typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T,
-    vimconv_T, win_T, xp_prefix_T,
+    listitem_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, size_t,
+    taggy_T, typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T, vimconv_T, win_T,
+    xp_prefix_T,
 };
 use crate::src::nvim::ui::ui_has;
 use crate::src::nvim::window::{
@@ -176,9 +176,13 @@ pub const TAG_NOIC: C2Rust_Unnamed_33 = 8;
 pub const TAG_REGEXP: C2Rust_Unnamed_33 = 4;
 pub const TAG_NAMES: C2Rust_Unnamed_33 = 2;
 pub const TAG_HELP: C2Rust_Unnamed_33 = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct tagptrs_T {
+/// The parts of one tags-file line, as pointers into the buffer holding it.
+///
+/// Each field is bracketed by a start and an `_end` pointer; the parts a
+/// line need not have (the kind, the user data) are NULL when absent. The
+/// buffer is the caller's, and outlives every `TagParts` taken from it.
+#[derive(Copy, Clone, Default)]
+pub struct TagParts {
     pub tagname: *mut ::core::ffi::c_char,
     pub tagname_end: *mut ::core::ffi::c_char,
     pub fname: *mut ::core::ffi::c_char,
@@ -673,40 +677,14 @@ pub unsafe extern "C" fn do_tag(
                 } else {
                     if !new_tag && !other_name {
                         let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                        let mut tagp: tagptrs_T = tagptrs_T {
-                            tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            tagname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            fname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            command: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            command_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            tag_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            tagkind: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            tagkind_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            user_data_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            tagline: 0,
-                        };
-                        let mut tagp2: tagptrs_T = tagptrs_T {
-                            tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            tagname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            fname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            command: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            command_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            tag_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            tagkind: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            tagkind_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            user_data_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            tagline: 0,
-                        };
+                        let mut tagp: TagParts = TagParts::default();
+                        let mut tagp2: TagParts = TagParts::default();
                         let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                         while j < num_matches.get() {
-                            parse_match(*(*matches.ptr()).offset(j as isize), &raw mut tagp);
+                            parse_match(*(*matches.ptr()).offset(j as isize), &mut tagp);
                             let mut i_0: ::core::ffi::c_int = idx;
                             while i_0 < new_num_matches {
-                                parse_match(*new_matches.offset(i_0 as isize), &raw mut tagp2);
+                                parse_match(*new_matches.offset(i_0 as isize), &mut tagp2);
                                 if strcmp(tagp.tagname, tagp2.tagname) == 0 as ::core::ffi::c_int {
                                     let mut p: *mut ::core::ffi::c_char =
                                         *new_matches.offset(i_0 as isize);
@@ -804,27 +782,11 @@ pub unsafe extern "C" fn do_tag(
                     cur_match = num_matches.get() - 1 as ::core::ffi::c_int;
                 }
                 if use_tagstack {
-                    let mut tagp2_0: tagptrs_T = tagptrs_T {
-                        tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        tagname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        fname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        command: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        command_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        tag_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        tagkind: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        tagkind_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        user_data_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        tagline: 0,
-                    };
+                    let mut tagp2_0: TagParts = TagParts::default();
                     (*tagstack.offset(tagstackidx as isize)).cur_match = cur_match;
                     (*tagstack.offset(tagstackidx as isize)).cur_fnum = cur_fnum;
                     if use_tfu as ::core::ffi::c_int != 0
-                        && parse_match(
-                            *(*matches.ptr()).offset(cur_match as isize),
-                            &raw mut tagp2_0,
-                        ) == OK
+                        && parse_match(*(*matches.ptr()).offset(cur_match as isize), &mut tagp2_0)
                         && !tagp2_0.user_data.is_null()
                     {
                         let mut ptr_: *mut *mut ::core::ffi::c_void =

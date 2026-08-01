@@ -51,7 +51,7 @@ impl FindTags {
     #[inline]
     pub(crate) fn add_match(
         &mut self,
-        tagp: &tagptrs_T,
+        tagp: &TagParts,
         margs: &MatchArgs,
         buf_ffname: *mut c_char,
     ) {
@@ -65,8 +65,8 @@ impl FindTags {
                 tagp.fname_end,
                 self.tag_fname.as_ptr().cast_mut(),
                 buf_ffname,
-            ) != 0;
-            let is_static = test_for_static((tagp as *const tagptrs_T).cast_mut());
+            );
+            let is_static = test_for_static(tagp);
             let bucket = self.bucket(is_static, is_current, margs);
 
             let mfp = if self.help_only {
@@ -97,7 +97,7 @@ impl FindTags {
     ///
     /// # Safety
     /// `tagp`'s name must lie in the line buffer, ending at a TAB.
-    unsafe fn help_match(&self, tagp: &tagptrs_T, margs: &MatchArgs) -> Match {
+    unsafe fn help_match(&self, tagp: &TagParts, margs: &MatchArgs) -> Match {
         // SAFETY: the caller's promise; the TAB is put back below.
         unsafe {
             *tagp.tagname_end = 0;
@@ -139,7 +139,7 @@ impl FindTags {
     ///
     /// # Safety
     /// `tagp.command` must point into the line buffer.
-    unsafe fn search_pattern_match(&self, tagp: &tagptrs_T) -> Option<Match> {
+    unsafe fn search_pattern_match(&self, tagp: &TagParts) -> Option<Match> {
         // SAFETY: the caller's promise; the walk stops at the line's NUL.
         unsafe {
             let mut end = tagp.command;
@@ -188,7 +188,7 @@ impl FindTags {
 ///
 /// # Safety
 /// `tagp`'s name must lie in the line buffer.
-unsafe fn name_match(tagp: &tagptrs_T) -> Match {
+unsafe fn name_match(tagp: &TagParts) -> Match {
     // SAFETY: the caller's promise.
     unsafe {
         let len = tagp.tagname_end.offset_from(tagp.tagname) as usize;

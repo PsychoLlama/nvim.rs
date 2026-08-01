@@ -56,21 +56,8 @@ pub unsafe extern "C" fn expand_tags(
         if ret == OK && !tagnames {
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i < *num_file {
-                let mut t_p: tagptrs_T = tagptrs_T {
-                    tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    tagname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    fname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    command: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    command_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    tag_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    tagkind: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    tagkind_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    user_data_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    tagline: 0,
-                };
-                parse_match(*(*file).offset(i as isize), &raw mut t_p);
+                let mut t_p: TagParts = TagParts::default();
+                parse_match(*(*file).offset(i as isize), &mut t_p);
                 let mut len: size_t = t_p.tagname_end.offset_from(t_p.tagname) as size_t;
                 if len > name_buf_size.wrapping_sub(3 as size_t) {
                     name_buf_size = len.wrapping_add(3 as size_t);
@@ -183,20 +170,7 @@ pub unsafe extern "C" fn get_tags(
         let mut num_matches: ::core::ffi::c_int = 0;
         let mut matches: *mut *mut ::core::ffi::c_char =
             ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-        let mut tp: tagptrs_T = tagptrs_T {
-            tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            command: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            command_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tag_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagkind: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagkind_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            user_data_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagline: 0,
-        };
+        let mut tp: TagParts = TagParts::default();
         let mut ret: ::core::ffi::c_int = find_tags(
             pat,
             &raw mut num_matches,
@@ -210,10 +184,10 @@ pub unsafe extern "C" fn get_tags(
         }
         let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         while i < num_matches {
-            if parse_match(*matches.offset(i as isize), &raw mut tp) == FAIL {
+            if !parse_match(*matches.offset(i as isize), &mut tp) {
                 xfree(*matches.offset(i as isize) as *mut ::core::ffi::c_void);
             } else {
-                let mut is_static: bool = test_for_static(&raw mut tp);
+                let mut is_static: bool = test_for_static(&mut tp);
                 if strncmp(
                     tp.tagname,
                     b"!_TAG_\0".as_ptr() as *const ::core::ffi::c_char,
@@ -224,7 +198,7 @@ pub unsafe extern "C" fn get_tags(
                 } else {
                     let mut dict: *mut dict_T = tv_dict_alloc();
                     tv_list_append_dict(list, dict);
-                    let mut full_fname: *mut ::core::ffi::c_char = tag_full_fname(&raw mut tp);
+                    let mut full_fname: *mut ::core::ffi::c_char = tag_full_fname(&mut tp);
                     if add_tag_field(
                         dict,
                         b"name\0".as_ptr() as *const ::core::ffi::c_char,

@@ -1,634 +1,833 @@
 //! Going to a tag.
 //!
-//! [`jumpto_tag`] takes one matching line, opens the file it names and runs
+//! [`jumpto_tag`] takes one stored match, opens the file it names and runs
 //! the search command (or line number) that follows, then puts the cursor
 //! on the tag. [`parse_match`] and [`parse_tag_line`] are the readers for
-//! the two tags-file line formats, and [`find_extra`] finds the optional
-//! extra fields at the end of a line.
+//! the two line formats, and [`find_extra`] finds the optional
+//! `;"<Tab>field:value` fields at the end of a line.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
+use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ptr;
 
-pub(crate) unsafe extern "C" fn parse_tag_line(
-    mut lbuf: *mut ::core::ffi::c_char,
-    mut tagp: *mut tagptrs_T,
-) -> ::core::ffi::c_int {
+/// The buffer a tag's command is copied into, in bytes.
+///
+/// A command longer than this is truncated, as upstream truncates it.
+const LSIZE: usize = super::LSIZE as usize;
+
+/// Split a tags-file line into name, file name and command.
+///
+/// The three are separated by TABs and the command runs to the end of the
+/// line. Answers `false` for a line that is not of that shape, leaving
+/// `tagp` part-filled.
+///
+/// # Safety
+/// `lbuf` must be NUL-terminated, and must outlive `tagp`.
+pub(crate) unsafe fn parse_tag_line(lbuf: *mut c_char, tagp: &mut TagParts) -> bool {
+    // SAFETY: the caller's promise; `vim_strchr` stops at the terminator,
+    // and every pointer stored stays inside the line.
     unsafe {
-        (*tagp).tagname = lbuf;
-        let mut p: *mut ::core::ffi::c_char = vim_strchr(lbuf, TAB);
-        if p.is_null() {
-            return FAIL;
-        }
-        (*tagp).tagname_end = p;
-        if *p as ::core::ffi::c_int != NUL {
-            p = p.offset(1);
-        }
-        (*tagp).fname = p;
-        p = vim_strchr(p, TAB);
-        if p.is_null() {
-            return FAIL;
-        }
-        (*tagp).fname_end = p;
-        if *p as ::core::ffi::c_int != NUL {
-            p = p.offset(1);
-        }
-        if *p as ::core::ffi::c_int == NUL {
-            return FAIL;
-        }
-        (*tagp).command = p;
-        return OK;
+        tagp.tagname = lbuf;
+        let Some(end) = field_end(tagp.tagname) else {
+            return false;
+        };
+        tagp.tagname_end = end;
+
+        tagp.fname = skip_tab(end);
+        let Some(end) = field_end(tagp.fname) else {
+            return false;
+        };
+        tagp.fname_end = end;
+
+        tagp.command = skip_tab(end);
+        // A line that stops after the file name has no command at all.
+        *tagp.command != 0
     }
 }
 
-pub(crate) unsafe extern "C" fn test_for_static(mut tagp: *mut tagptrs_T) -> bool {
+/// Where the TAB after a field is, or `None` when there is no TAB left.
+///
+/// # Safety
+/// `p` must be NUL-terminated.
+unsafe fn field_end(p: *mut c_char) -> Option<*mut c_char> {
+    // SAFETY: the caller's promise.
+    let end = unsafe { vim_strchr(p, TAB) };
+    (!end.is_null()).then_some(end)
+}
+
+/// Step over a field separator, unless the line ended there.
+///
+/// # Safety
+/// `p` must be readable and NUL-terminated.
+unsafe fn skip_tab(p: *mut c_char) -> *mut c_char {
+    // SAFETY: the caller's promise.
+    unsafe { if *p != 0 { p.add(1) } else { p } }
+}
+
+/// Whether the line marks the tag as local to its file — a `file:` field.
+///
+/// # Safety
+/// `tagp.command` must be NUL-terminated.
+pub(crate) unsafe fn test_for_static(tagp: &TagParts) -> bool {
+    // SAFETY: the caller's promise; every step stays before the
+    // terminator.
     unsafe {
-        let mut p: *mut ::core::ffi::c_char = (*tagp).command;
+        let mut p = tagp.command;
         loop {
-            p = vim_strchr(p, '\t' as ::core::ffi::c_int);
+            p = vim_strchr(p, TAB);
             if p.is_null() {
+                return false;
+            }
+            p = p.add(1);
+            if strncmp(p, c"file:".as_ptr(), 5) == 0 {
+                return true;
+            }
+        }
+    }
+}
+
+/// How long a stored match is, not counting its terminator.
+///
+/// A match is `<bucket byte><tags file name>NUL<line>NUL`, so its length is
+/// not one `strlen`.
+///
+/// # Safety
+/// `lbuf` must point at a match of that shape.
+pub(crate) unsafe fn matching_line_len(lbuf: *const c_char) -> size_t {
+    // SAFETY: the caller's promise.
+    unsafe {
+        let line = lbuf.add(1).add(strlen(lbuf.add(1)) + 1);
+        (line.offset_from(lbuf) as size_t) + strlen(line)
+    }
+}
+
+/// Split a stored match into its parts.
+///
+/// On top of what [`parse_tag_line`] finds, this picks the optional
+/// `kind:`, `user_data:` and `line:` fields out of the extra fields at the
+/// end. Answers `false` for a line that is not a tag line.
+///
+/// # Safety
+/// `lbuf` must point at a match as [`matching_line_len`] describes, and
+/// must outlive `tagp`.
+pub(crate) unsafe fn parse_match(lbuf: *mut c_char, tagp: &mut TagParts) -> bool {
+    // SAFETY: the caller's promise. Every pointer written into `tagp`
+    // points into the match, which the caller keeps alive.
+    unsafe {
+        tagp.tag_fname = lbuf.add(1);
+        let line = lbuf.add(strlen(tagp.tag_fname) + 2);
+
+        let parsed = parse_tag_line(line, tagp);
+        tagp.tagkind = ptr::null_mut();
+        tagp.user_data = ptr::null_mut();
+        tagp.tagline = 0;
+        tagp.command_end = ptr::null_mut();
+        if !parsed {
+            return false;
+        }
+
+        if let Some(extra) = find_extra(tagp.command) {
+            // The command ends where the extra fields begin, less the '|'
+            // an ex-command address is terminated with.
+            tagp.command_end = if extra > tagp.command && *extra.sub(1) == b'|' as c_char {
+                extra.sub(1)
+            } else {
+                extra
+            };
+            // Past the `;"`; the fields themselves follow a TAB.
+            let after = extra.add(2);
+            if *after == TAB as c_char {
+                read_extra_fields(tagp, after.add(1));
+            }
+        }
+
+        if !tagp.tagkind.is_null() {
+            tagp.tagkind_end = field_text_end(tagp.tagkind);
+        }
+        if !tagp.user_data.is_null() {
+            tagp.user_data_end = field_text_end(tagp.user_data);
+        }
+        true
+    }
+}
+
+/// Read the `field:value` pairs after a tag's command.
+///
+/// Only `kind:`, `user_data:` and `line:` are wanted. A field with no
+/// colon before the next TAB is the kind written in its short form.
+///
+/// # Safety
+/// `p` must be NUL-terminated.
+unsafe fn read_extra_fields(tagp: &mut TagParts, mut p: *mut c_char) {
+    // SAFETY: the caller's promise; every step stops at the terminator.
+    unsafe {
+        // Field names are ASCII letters, and any multibyte character is
+        // taken for one too: the loop ends at the first byte that is
+        // neither.
+        while (*p as c_uint).wrapping_sub('A' as c_uint) < 26
+            || (*p as c_uint).wrapping_sub('a' as c_uint) < 26
+            || utfc_ptr2len(p) > 1
+        {
+            if strncmp(p, c"kind:".as_ptr(), 5) == 0 {
+                tagp.tagkind = p.add(5);
+            } else if strncmp(p, c"user_data:".as_ptr(), 10) == 0 {
+                tagp.user_data = p.add(10);
+            } else if strncmp(p, c"line:".as_ptr(), 5) == 0 {
+                tagp.tagline = atoi(p.add(5)) as linenr_T;
+            }
+            if !tagp.tagkind.is_null() && !tagp.user_data.is_null() {
+                // Nothing else is read from here.
+                return;
+            }
+
+            let colon = vim_strchr(p, ':' as c_int);
+            let tab = vim_strchr(p, TAB);
+            if colon.is_null() || (!tab.is_null() && colon > tab) {
+                // No colon in this field: it is the kind on its own.
+                tagp.tagkind = p;
+            }
+            if tab.is_null() {
+                return;
+            }
+            p = tab.add(utfc_ptr2len(tab) as usize);
+        }
+    }
+}
+
+/// Where a field's value ends: at a TAB, a line ending or the terminator.
+///
+/// # Safety
+/// `p` must be NUL-terminated.
+unsafe fn field_text_end(mut p: *mut c_char) -> *mut c_char {
+    // SAFETY: the caller's promise.
+    unsafe {
+        while !matches!(*p as u8, 0 | b'\t' | b'\r' | b'\n') {
+            p = p.add(utfc_ptr2len(p) as usize);
+        }
+        p
+    }
+}
+
+/// The name of the file a match points at, as the editor can open it.
+///
+/// The answer is allocated; the caller frees it.
+///
+/// # Safety
+/// `tagp` must describe a live match.
+pub(crate) unsafe fn tag_full_fname(tagp: &TagParts) -> *mut c_char {
+    // SAFETY: the caller's promise. The byte written over the file name's
+    // end, so that it reads as a string, is put back before returning.
+    unsafe {
+        let saved = *tagp.fname_end;
+        *tagp.fname_end = 0;
+        let fullname = expand_tag_fname(tagp.fname, tagp.tag_fname, false);
+        *tagp.fname_end = saved;
+        fullname
+    }
+}
+
+/// Whether a match names the file the search started in.
+///
+/// # Safety
+/// `fname` and `tag_fname` must be NUL-terminated, `buf_ffname` NULL or
+/// NUL-terminated, and `fname_end` must point into `fname`'s buffer.
+pub(crate) unsafe fn test_for_current(
+    fname: *mut c_char,
+    fname_end: *mut c_char,
+    tag_fname: *mut c_char,
+    buf_ffname: *mut c_char,
+) -> bool {
+    if buf_ffname.is_null() {
+        // Nothing to compare against.
+        return false;
+    }
+    // SAFETY: the caller's promise. The byte written over the file name's
+    // end is put back before returning.
+    unsafe {
+        let saved = *fname_end;
+        *fname_end = 0;
+        let fullname = expand_tag_fname(fname, tag_fname, true);
+        let same =
+            path_full_compare(fullname, buf_ffname, true, true) as c_uint & kEqualFiles as c_uint;
+        xfree(fullname.cast());
+        *fname_end = saved;
+        same != 0
+    }
+}
+
+/// Find the `;"` that ends a tag's command, skipping over the command.
+///
+/// A command is a line number, a `/pattern/` or a `?pattern?`, optionally
+/// chained with `;`. Answers where the `;"` starts, or `None` when the
+/// line has no extra fields.
+///
+/// # Safety
+/// `start` must be NUL-terminated.
+pub(crate) unsafe fn find_extra(start: *mut c_char) -> Option<*mut c_char> {
+    // SAFETY: the caller's promise; every scan stops at the terminator.
+    unsafe {
+        let mut p = start;
+        let mut first_char = *start;
+        loop {
+            if ascii_isdigit(*p as c_int) {
+                p = skipdigits(p.add(1));
+            } else if matches!(*p as u8, b'/' | b'?') {
+                p = skip_regexp(p.add(1), *p as c_int, false_0);
+                if *p != first_char {
+                    // The pattern was never closed.
+                    return None;
+                }
+                p = p.add(1);
+            } else {
+                // Not a command we know: look for the fields directly.
+                // The '|' is what an ex-command address ends with.
+                p = strstr(p, c"|;\"".as_ptr());
+                if p.is_null() {
+                    return None;
+                }
+                p = p.add(1);
                 break;
             }
-            p = p.offset(1);
-            if strncmp(
-                p,
-                b"file:\0".as_ptr() as *const ::core::ffi::c_char,
-                5 as size_t,
-            ) == 0 as ::core::ffi::c_int
+            // A ';' chains a second command onto the first.
+            if *p != b';' as c_char
+                || !(ascii_isdigit(*p.add(1) as c_int) || matches!(*p.add(1) as u8, b'/' | b'?'))
             {
-                return true_0 != 0;
+                break;
             }
+            p = p.add(1);
+            first_char = *p;
         }
-        return false_0 != 0;
+        (strncmp(p, c";\"".as_ptr(), 2) == 0).then_some(p)
     }
 }
 
-pub(crate) unsafe extern "C" fn matching_line_len(lbuf: *const ::core::ffi::c_char) -> size_t {
+/// Jump to the tag one stored match describes.
+///
+/// Answers `OK`, `FAIL`, or `NOTAGFILE` when the file the match names does
+/// not exist — the caller reports that one, reading [`nofile_fname`].
+///
+/// With `keep_help` the destination keeps the help-buffer flag of wherever
+/// the jump came from; `forceit` is the `!` of `:tag!`.
+///
+/// # Safety
+/// `lbuf_arg` must point at a stored match.
+pub(crate) unsafe fn jumpto_tag(lbuf_arg: *const c_char, forceit: c_int, keep_help: bool) -> c_int {
+    // SAFETY: the caller's promise. `lbuf` is our own copy of the match and
+    // outlives every pointer `parse_match` takes into it.
     unsafe {
-        let mut p: *const ::core::ffi::c_char = lbuf.offset(1 as ::core::ffi::c_int as isize);
-        p = p.offset(strlen(p).wrapping_add(1 as size_t) as isize);
-        return (p.offset_from(lbuf) as size_t).wrapping_add(strlen(p));
-    }
-}
-
-pub(crate) unsafe extern "C" fn parse_match(
-    mut lbuf: *mut ::core::ffi::c_char,
-    mut tagp: *mut tagptrs_T,
-) -> ::core::ffi::c_int {
-    unsafe {
-        (*tagp).tag_fname = lbuf.offset(1 as ::core::ffi::c_int as isize);
-        lbuf = lbuf.offset(strlen((*tagp).tag_fname).wrapping_add(2 as size_t) as isize);
-        let mut retval: ::core::ffi::c_int = parse_tag_line(lbuf, tagp);
-        (*tagp).tagkind = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        (*tagp).user_data = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        (*tagp).tagline = 0 as ::core::ffi::c_int as linenr_T;
-        (*tagp).command_end = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if retval != OK {
-            return retval;
-        }
-        let mut p: *mut ::core::ffi::c_char = (*tagp).command;
-        if find_extra(&raw mut p) == OK {
-            (*tagp).command_end = p;
-            if p > (*tagp).command
-                && *p.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '|' as ::core::ffi::c_int
-            {
-                (*tagp).command_end = p.offset(-(1 as ::core::ffi::c_int as isize));
-            }
-            p = p.offset(2 as ::core::ffi::c_int as isize);
-            let c2rust_fresh3 = p;
-            p = p.offset(1);
-            if *c2rust_fresh3 as ::core::ffi::c_int == TAB {
-                while *p as ::core::ffi::c_uint >= 'A' as ::core::ffi::c_uint
-                    && *p as ::core::ffi::c_uint <= 'Z' as ::core::ffi::c_uint
-                    || *p as ::core::ffi::c_uint >= 'a' as ::core::ffi::c_uint
-                        && *p as ::core::ffi::c_uint <= 'z' as ::core::ffi::c_uint
-                    || utfc_ptr2len(p) > 1 as ::core::ffi::c_int
-                {
-                    if strncmp(
-                        p,
-                        b"kind:\0".as_ptr() as *const ::core::ffi::c_char,
-                        5 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        (*tagp).tagkind = p.offset(5 as ::core::ffi::c_int as isize);
-                    } else if strncmp(
-                        p,
-                        b"user_data:\0".as_ptr() as *const ::core::ffi::c_char,
-                        10 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        (*tagp).user_data = p.offset(10 as ::core::ffi::c_int as isize);
-                    } else if strncmp(
-                        p,
-                        b"line:\0".as_ptr() as *const ::core::ffi::c_char,
-                        5 as size_t,
-                    ) == 0 as ::core::ffi::c_int
-                    {
-                        (*tagp).tagline =
-                            atoi(p.offset(5 as ::core::ffi::c_int as isize)) as linenr_T;
-                    }
-                    if !(*tagp).tagkind.is_null() && !(*tagp).user_data.is_null() {
-                        break;
-                    }
-                    let mut pc: *mut ::core::ffi::c_char = vim_strchr(p, ':' as ::core::ffi::c_int);
-                    let mut pt: *mut ::core::ffi::c_char =
-                        vim_strchr(p, '\t' as ::core::ffi::c_int);
-                    if pc.is_null() || !pt.is_null() && pc > pt {
-                        (*tagp).tagkind = p;
-                    }
-                    if pt.is_null() {
-                        break;
-                    }
-                    p = pt;
-                    p = p.offset(utfc_ptr2len(p) as isize);
-                }
-            }
-        }
-        if !(*tagp).tagkind.is_null() {
-            p = (*tagp).tagkind;
-            while *p as ::core::ffi::c_int != 0
-                && *p as ::core::ffi::c_int != '\t' as ::core::ffi::c_int
-                && *p as ::core::ffi::c_int != '\r' as ::core::ffi::c_int
-                && *p as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
-            {
-                p = p.offset(utfc_ptr2len(p) as isize);
-            }
-            (*tagp).tagkind_end = p;
-        }
-        if !(*tagp).user_data.is_null() {
-            p = (*tagp).user_data;
-            while *p as ::core::ffi::c_int != 0
-                && *p as ::core::ffi::c_int != '\t' as ::core::ffi::c_int
-                && *p as ::core::ffi::c_int != '\r' as ::core::ffi::c_int
-                && *p as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
-            {
-                p = p.offset(utfc_ptr2len(p) as isize);
-            }
-            (*tagp).user_data_end = p;
-        }
-        return retval;
-    }
-}
-
-pub(crate) unsafe extern "C" fn tag_full_fname(
-    mut tagp: *mut tagptrs_T,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        let mut c: ::core::ffi::c_char = *(*tagp).fname_end;
-        *(*tagp).fname_end = NUL as ::core::ffi::c_char;
-        let mut fullname: *mut ::core::ffi::c_char =
-            expand_tag_fname((*tagp).fname, (*tagp).tag_fname, false_0 != 0);
-        *(*tagp).fname_end = c;
-        return fullname;
-    }
-}
-
-pub(crate) unsafe extern "C" fn jumpto_tag(
-    mut lbuf_arg: *const ::core::ffi::c_char,
-    mut forceit: ::core::ffi::c_int,
-    mut keep_help: bool,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut fname: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut str: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if postponed_split.get() == 0 as ::core::ffi::c_int
-            && !check_can_set_curbuf_forceit(forceit)
-        {
+        if postponed_split.get() == 0 && !check_can_set_curbuf_forceit(forceit) {
             return FAIL;
         }
-        let mut pbuf_end: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut tofree_fname: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut tagp: tagptrs_T = tagptrs_T {
-            tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            fname_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            command: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            command_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tag_fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagkind: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagkind_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            user_data_end: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            tagline: 0,
+
+        // Our own copy: the jump writes terminators into it, and opening
+        // the file may free the caller's.
+        let len = matching_line_len(lbuf_arg) + 1;
+        let mut lbuf = vec![0 as c_char; len];
+        ptr::copy_nonoverlapping(lbuf_arg, lbuf.as_mut_ptr(), len);
+
+        let mut tagp = TagParts::default();
+        let retval = if parse_match(lbuf.as_mut_ptr(), &mut tagp) {
+            // Truncate the file name, so that it reads as a string.
+            *tagp.fname_end = 0;
+            Jump {
+                pattern: Pattern::of_command(&tagp),
+                expanded: expand_tag_fname(tagp.fname, tagp.tag_fname, true),
+                full_fname: ptr::null_mut(),
+                preview: g_do_tagpreview.get() != 0,
+                saved_win: ptr::null_mut(),
+                reused_window: false,
+                // Opening the file may reset it.
+                key_typed: KeyTyped.get(),
+            }
+            .run(&tagp, forceit, keep_help)
+        } else {
+            FAIL
         };
-        let mut retval: ::core::ffi::c_int = FAIL;
-        let mut getfile_result: ::core::ffi::c_int = GETFILE_UNUSED as ::core::ffi::c_int;
-        let mut search_options: ::core::ffi::c_int = 0;
-        let mut curwin_save: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        let mut full_fname: *mut ::core::ffi::c_char =
-            ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let old_KeyTyped: bool = KeyTyped.get();
-        let l_g_do_tagpreview: ::core::ffi::c_int = g_do_tagpreview.get();
-        let len: size_t = matching_line_len(lbuf_arg).wrapping_add(1 as size_t);
-        let mut lbuf: *mut ::core::ffi::c_char = xmalloc(len) as *mut ::core::ffi::c_char;
-        memmove(
-            lbuf as *mut ::core::ffi::c_void,
-            lbuf_arg as *const ::core::ffi::c_void,
-            len,
-        );
-        let mut pbuf: *mut ::core::ffi::c_char =
-            xmalloc(LSIZE as ::core::ffi::c_int as size_t) as *mut ::core::ffi::c_char;
-        '_erret: {
-            if parse_match(lbuf, &raw mut tagp) == FAIL {
-                tagp.fname_end = ::core::ptr::null_mut::<::core::ffi::c_char>();
-            } else {
-                *tagp.fname_end = NUL as ::core::ffi::c_char;
-                fname = tagp.fname;
-                str = tagp.command;
-                pbuf_end = pbuf;
-                while *str as ::core::ffi::c_int != 0
-                    && *str as ::core::ffi::c_int != '\n' as ::core::ffi::c_int
-                    && *str as ::core::ffi::c_int != '\r' as ::core::ffi::c_int
-                {
-                    let c2rust_fresh1 = str;
-                    str = str.offset(1);
-                    let c2rust_fresh2 = pbuf_end;
-                    pbuf_end = pbuf_end.offset(1);
-                    *c2rust_fresh2 = *c2rust_fresh1;
-                    if pbuf_end.offset_from(pbuf) + 1 as isize
-                        >= LSIZE as ::core::ffi::c_int as isize
-                    {
-                        break;
-                    }
-                }
-                *pbuf_end = NUL as ::core::ffi::c_char;
-                str = pbuf;
-                if find_extra(&raw mut str) == OK {
-                    pbuf_end = str;
-                    *pbuf_end = NUL as ::core::ffi::c_char;
-                }
-                fname = expand_tag_fname(fname, tagp.tag_fname, true_0 != 0);
-                tofree_fname = fname;
-                if !os_path_exists(fname)
-                    && !has_autocmd(EVENT_BUFREADCMD, fname, ::core::ptr::null_mut::<buf_T>())
-                {
-                    retval = NOTAGFILE;
-                    xfree(nofile_fname.get() as *mut ::core::ffi::c_void);
-                    nofile_fname.set(xstrdup(fname));
+
+        // For next time.
+        g_do_tagpreview.set(0);
+        retval
+    }
+}
+
+/// One jump in progress, and the two names it has to give back.
+struct Jump {
+    /// The tag's command, as a search pattern or an ex command.
+    pattern: Pattern,
+    /// The expanded name of the file the tag is in. Owned.
+    expanded: *mut c_char,
+    /// Its absolute form, made when a preview window is reused, because
+    /// entering that window may change directory. Owned; once it exists it
+    /// is what gets opened.
+    full_fname: *mut c_char,
+    /// Whether this is a `:ptag`, landing in the preview window.
+    preview: bool,
+    /// The window to go back to afterwards, for a preview jump.
+    saved_win: *mut win_T,
+    /// Whether `'switchbuf'` already put us in a window holding the file,
+    /// so that the usual loading must be skipped.
+    reused_window: bool,
+    /// Whether the key that started the jump was typed. Remembered before
+    /// opening the file, which resets it.
+    key_typed: bool,
+}
+
+impl Drop for Jump {
+    fn drop(&mut self) {
+        // SAFETY: both names are ours to free, or NULL.
+        unsafe {
+            xfree(self.expanded.cast());
+            xfree(self.full_fname.cast());
+        }
+    }
+}
+
+impl Jump {
+    /// The name to open: the absolute form once a preview window made one.
+    fn fname(&self) -> *mut c_char {
+        if self.full_fname.is_null() {
+            self.expanded
+        } else {
+            self.full_fname
+        }
+    }
+
+    /// Open the file and run the tag's command in it.
+    ///
+    /// # Safety
+    /// `tagp` must describe the match, in a buffer that outlives the call.
+    unsafe fn run(&mut self, tagp: &TagParts, forceit: c_int, keep_help: bool) -> c_int {
+        // SAFETY: the caller's promise; the globals are live, and the file
+        // name is NUL-terminated.
+        unsafe {
+            // Check the file exists before abandoning the current one. A
+            // name a BufReadCmd autocommand claims (say "http://sys/file")
+            // counts as existing.
+            if !os_path_exists(self.fname())
+                && !has_autocmd(EVENT_BUFREADCMD, self.fname(), ptr::null_mut())
+            {
+                xfree(nofile_fname.get().cast());
+                nofile_fname.set(xstrdup(self.fname()));
+                return NOTAGFILE;
+            }
+
+            *RedrawingDisabled.ptr() += 1;
+            self.open_preview();
+            if !self.open_window() {
+                *RedrawingDisabled.ptr() -= 1;
+                return FAIL;
+            }
+
+            if keep_help {
+                // A `:ta` from a help file keeps the help flag set. For
+                // `:ptag` it is the flag of the window we came from.
+                keep_help_flag.set(if self.preview {
+                    bt_help((*self.saved_win).w_buffer)
                 } else {
-                    (*RedrawingDisabled.ptr()) += 1;
-                    if l_g_do_tagpreview != 0 as ::core::ffi::c_int {
-                        postponed_split.set(0 as ::core::ffi::c_int);
-                        curwin_save = curwin.get();
-                        if (*curwin.get()).w_onebuf_opt.wo_pvw == 0 {
-                            full_fname = FullName_save(fname, false_0 != 0);
-                            fname = full_fname;
-                            prepare_tagpreview(true_0 != 0);
-                        }
-                    }
-                    if postponed_split.get() != 0
-                        && swb_flags.get()
-                            & (kOptSwbFlagUseopen as ::core::ffi::c_int
-                                | kOptSwbFlagUsetab as ::core::ffi::c_int)
-                                as ::core::ffi::c_uint
-                            != 0
-                    {
-                        let existing_buf: *mut buf_T = buflist_findname_exp(fname);
-                        if !existing_buf.is_null() {
-                            if !swbuf_goto_win_with_buf(existing_buf).is_null() {
-                                getfile_result = GETFILE_SAME_FILE as ::core::ffi::c_int;
-                            }
-                        }
-                    }
-                    if getfile_result == GETFILE_UNUSED as ::core::ffi::c_int
-                        && (postponed_split.get() != 0
-                            || (*cmdmod.ptr()).cmod_tab != 0 as ::core::ffi::c_int)
-                    {
-                        if swb_flags.get()
-                            & kOptSwbFlagVsplit as ::core::ffi::c_int as ::core::ffi::c_uint
-                            != 0
-                        {
-                            (*cmdmod.ptr()).cmod_split |= WSP_VERT as ::core::ffi::c_int;
-                        }
-                        if swb_flags.get()
-                            & kOptSwbFlagNewtab as ::core::ffi::c_int as ::core::ffi::c_uint
-                            != 0
-                            && (*cmdmod.ptr()).cmod_tab == 0 as ::core::ffi::c_int
-                        {
-                            (*cmdmod.ptr()).cmod_tab =
-                                tabpage_index(curtab.get()) + 1 as ::core::ffi::c_int;
-                        }
-                        if win_split(
-                            if postponed_split.get() > 0 as ::core::ffi::c_int {
-                                postponed_split.get()
-                            } else {
-                                0 as ::core::ffi::c_int
-                            },
-                            postponed_split_flags.get(),
-                        ) == FAIL
-                        {
-                            (*RedrawingDisabled.ptr()) -= 1;
-                            break '_erret;
-                        } else {
-                            (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
-                            (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
-                        }
-                    }
-                    if keep_help {
-                        if l_g_do_tagpreview != 0 as ::core::ffi::c_int {
-                            keep_help_flag.set(bt_help((*curwin_save).w_buffer));
-                        } else {
-                            keep_help_flag.set((*curbuf.get()).b_help);
-                        }
-                    }
-                    if getfile_result == GETFILE_UNUSED as ::core::ffi::c_int {
-                        getfile_result = getfile(
-                            0 as ::core::ffi::c_int,
-                            fname,
-                            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                            true_0 != 0,
-                            0 as linenr_T,
-                            forceit != 0,
-                        );
-                    }
-                    keep_help_flag.set(false_0 != 0);
-                    if getfile_result <= 0 as ::core::ffi::c_int {
-                        (*curwin.get()).w_set_curswant = true_0;
-                        postponed_split.set(0 as ::core::ffi::c_int);
-                        let save_magic_overruled: optmagic_T = magic_overruled.get();
-                        magic_overruled.set(OPTION_MAGIC_OFF);
-                        let save_no_hlsearch: bool = no_hlsearch.get();
-                        if !vim_strchr(p_cpo.get(), CPO_TAGPAT).is_null() {
-                            search_options = 0 as ::core::ffi::c_int;
-                        } else {
-                            search_options = SEARCH_KEEP as ::core::ffi::c_int;
-                        }
-                        str = pbuf;
-                        if *pbuf.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            == '/' as ::core::ffi::c_int
-                            || *pbuf.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                                == '?' as ::core::ffi::c_int
-                        {
-                            str = skip_regexp(
-                                pbuf.offset(1 as ::core::ffi::c_int as isize),
-                                *pbuf.offset(0 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int,
-                                false_0,
-                            )
-                            .offset(1 as ::core::ffi::c_int as isize);
-                        }
-                        if str > pbuf_end.offset(-(1 as ::core::ffi::c_int as isize)) {
-                            let mut pbuflen: size_t = pbuf_end.offset_from(pbuf) as size_t;
-                            let mut save_p_ws: bool = p_ws.get() != 0;
-                            let mut save_p_ic: ::core::ffi::c_int = p_ic.get();
-                            let mut save_p_scs: ::core::ffi::c_int = p_scs.get();
-                            p_ws.set(true_0);
-                            p_ic.set(false_0);
-                            p_scs.set(false_0);
-                            let mut save_lnum: linenr_T = (*curwin.get()).w_cursor.lnum;
-                            (*curwin.get()).w_cursor.lnum = if tagp.tagline > 0 as linenr_T {
-                                tagp.tagline - 1 as linenr_T
-                            } else {
-                                0 as linenr_T
-                            };
-                            if do_search(
-                                ::core::ptr::null_mut::<oparg_T>(),
-                                *pbuf.offset(0 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int,
-                                *pbuf.offset(0 as ::core::ffi::c_int as isize)
-                                    as ::core::ffi::c_int,
-                                pbuf.offset(1 as ::core::ffi::c_int as isize),
-                                pbuflen.wrapping_sub(1 as size_t),
-                                1 as ::core::ffi::c_int,
-                                search_options,
-                                ::core::ptr::null_mut::<searchit_arg_T>(),
-                            ) != 0
-                            {
-                                retval = OK;
-                            } else {
-                                let mut found: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                                p_ic.set(true_0);
-                                if do_search(
-                                    ::core::ptr::null_mut::<oparg_T>(),
-                                    *pbuf.offset(0 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int,
-                                    *pbuf.offset(0 as ::core::ffi::c_int as isize)
-                                        as ::core::ffi::c_int,
-                                    pbuf.offset(1 as ::core::ffi::c_int as isize),
-                                    pbuflen.wrapping_sub(1 as size_t),
-                                    1 as ::core::ffi::c_int,
-                                    search_options,
-                                    ::core::ptr::null_mut::<searchit_arg_T>(),
-                                ) == 0
-                                {
-                                    found = 2 as ::core::ffi::c_int;
-                                    test_for_static(&raw mut tagp);
-                                    let mut cc: ::core::ffi::c_char = *tagp.tagname_end;
-                                    *tagp.tagname_end = NUL as ::core::ffi::c_char;
-                                    pbuflen = snprintf(
-                                        pbuf,
-                                        LSIZE as ::core::ffi::c_int as size_t,
-                                        b"^%s\\s\\*(\0".as_ptr() as *const ::core::ffi::c_char,
-                                        tagp.tagname,
-                                    ) as size_t;
-                                    if do_search(
-                                        ::core::ptr::null_mut::<oparg_T>(),
-                                        '/' as ::core::ffi::c_int,
-                                        '/' as ::core::ffi::c_int,
-                                        pbuf,
-                                        pbuflen,
-                                        1 as ::core::ffi::c_int,
-                                        search_options,
-                                        ::core::ptr::null_mut::<searchit_arg_T>(),
-                                    ) == 0
-                                    {
-                                        pbuflen = snprintf(
-                                            pbuf,
-                                            LSIZE as ::core::ffi::c_int as size_t,
-                                            b"^\\[#a-zA-Z_]\\.\\*\\<%s\\s\\*(\0".as_ptr()
-                                                as *const ::core::ffi::c_char,
-                                            tagp.tagname,
-                                        )
-                                            as size_t;
-                                        if do_search(
-                                            ::core::ptr::null_mut::<oparg_T>(),
-                                            '/' as ::core::ffi::c_int,
-                                            '/' as ::core::ffi::c_int,
-                                            pbuf,
-                                            pbuflen,
-                                            1 as ::core::ffi::c_int,
-                                            search_options,
-                                            ::core::ptr::null_mut::<searchit_arg_T>(),
-                                        ) == 0
-                                        {
-                                            found = 0 as ::core::ffi::c_int;
-                                        }
-                                    }
-                                    *tagp.tagname_end = cc;
-                                }
-                                if found == 0 as ::core::ffi::c_int {
-                                    emsg(gettext(b"E434: Can't find tag pattern\0".as_ptr()
-                                        as *const ::core::ffi::c_char));
-                                    (*curwin.get()).w_cursor.lnum = save_lnum;
-                                } else {
-                                    if found == 2 as ::core::ffi::c_int || save_p_ic == 0 {
-                                        msg(
-                                            gettext(
-                                                b"E435: Couldn't find tag, just guessing!\0"
-                                                    .as_ptr()
-                                                    as *const ::core::ffi::c_char,
-                                            ),
-                                            0 as ::core::ffi::c_int,
-                                        );
-                                        if msg_scrolled.get() == 0
-                                            && msg_silent.get() == 0 as ::core::ffi::c_int
-                                        {
-                                            msg_delay(1010 as uint64_t, true_0 != 0);
-                                        }
-                                    }
-                                    retval = OK;
-                                }
-                            }
-                            p_ws.set(save_p_ws as ::core::ffi::c_int);
-                            p_ic.set(save_p_ic);
-                            p_scs.set(save_p_scs);
-                            check_cursor(curwin.get());
-                        } else {
-                            let save_secure: ::core::ffi::c_int = secure.get();
-                            secure.set(1 as ::core::ffi::c_int);
-                            (*sandbox.ptr()) += 1;
-                            (*curwin.get()).w_cursor.lnum = 1 as ::core::ffi::c_int as linenr_T;
-                            (*curwin.get()).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-                            (*curwin.get()).w_cursor.coladd = 0 as ::core::ffi::c_int as colnr_T;
-                            do_cmdline_cmd(pbuf);
-                            retval = OK;
-                            if secure.get() == 2 as ::core::ffi::c_int {
-                                wait_return(true_0);
-                            }
-                            secure.set(save_secure);
-                            (*sandbox.ptr()) -= 1;
-                        }
-                        magic_overruled.set(save_magic_overruled);
-                        if search_options != 0 {
-                            set_no_hlsearch(save_no_hlsearch);
-                        }
-                        if getfile_result == GETFILE_OPEN_OTHER as ::core::ffi::c_int {
-                            retval = OK;
-                        }
-                        if retval == OK {
-                            if (*curbuf.get()).b_help {
-                                set_topline(curwin.get(), (*curwin.get()).w_cursor.lnum);
-                            }
-                            if fdo_flags.get()
-                                & kOptFdoFlagTag as ::core::ffi::c_int as ::core::ffi::c_uint
-                                != 0
-                                && old_KeyTyped as ::core::ffi::c_int != 0
-                            {
-                                foldOpenCursor();
-                            }
-                        }
-                        if l_g_do_tagpreview != 0 as ::core::ffi::c_int
-                            && curwin.get() != curwin_save
-                            && win_valid(curwin_save) as ::core::ffi::c_int != 0
-                        {
-                            validate_cursor(curwin.get());
-                            redraw_later(curwin.get(), UPD_VALID);
-                            win_enter(curwin_save, true_0 != 0);
-                        }
-                        (*RedrawingDisabled.ptr()) -= 1;
-                    } else {
-                        (*RedrawingDisabled.ptr()) -= 1;
-                        if postponed_split.get() != 0 {
-                            win_close(curwin.get(), false_0 != 0, false_0 != 0);
-                            postponed_split.set(0 as ::core::ffi::c_int);
-                        }
-                    }
+                    (*curbuf.get()).b_help
+                });
+            }
+            let opened = if self.reused_window {
+                GETFILE_SAME_FILE as c_int
+            } else {
+                // Careful: this may trigger autocommands, which can call
+                // `jumpto_tag` recursively.
+                getfile(0, self.fname(), ptr::null_mut(), true, 0, forceit != 0)
+            };
+            keep_help_flag.set(false);
+
+            // Anything above zero means the file could not be opened.
+            if opened > 0 {
+                *RedrawingDisabled.ptr() -= 1;
+                if postponed_split.get() != 0 {
+                    win_close(curwin.get(), false, false);
+                    postponed_split.set(0);
+                }
+                return FAIL;
+            }
+
+            (*curwin.get()).w_set_curswant = true_0;
+            postponed_split.set(0);
+            let mut retval = self.run_command(tagp);
+            // Jumping to another file counts as success: at least the file
+            // was found.
+            if opened == GETFILE_OPEN_OTHER as c_int {
+                retval = OK;
+            }
+            if retval == OK {
+                // In a help buffer put the cursor line at the top of the
+                // window: the help subject is below it.
+                if (*curbuf.get()).b_help {
+                    set_topline(curwin.get(), (*curwin.get()).w_cursor.lnum);
+                }
+                if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && self.key_typed {
+                    foldOpenCursor();
                 }
             }
+            if self.preview && curwin.get() != self.saved_win && win_valid(self.saved_win) {
+                // Put the cursor back where it was.
+                validate_cursor(curwin.get());
+                redraw_later(curwin.get(), UPD_VALID);
+                win_enter(self.saved_win, true);
+            }
+            *RedrawingDisabled.ptr() -= 1;
+            retval
         }
-        g_do_tagpreview.set(0 as ::core::ffi::c_int);
-        xfree(lbuf as *mut ::core::ffi::c_void);
-        xfree(pbuf as *mut ::core::ffi::c_void);
-        xfree(tofree_fname as *mut ::core::ffi::c_void);
-        xfree(full_fname as *mut ::core::ffi::c_void);
-        return retval;
     }
-}
 
-pub(crate) unsafe extern "C" fn test_for_current(
-    mut fname: *mut ::core::ffi::c_char,
-    mut fname_end: *mut ::core::ffi::c_char,
-    mut tag_fname: *mut ::core::ffi::c_char,
-    mut buf_ffname: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut retval: ::core::ffi::c_int = false_0;
-        if !buf_ffname.is_null() {
-            let mut c: ::core::ffi::c_char = 0;
-            c = *fname_end;
-            *fname_end = NUL as ::core::ffi::c_char;
-            let mut fullname: *mut ::core::ffi::c_char =
-                expand_tag_fname(fname, tag_fname, true_0 != 0);
-            retval = (path_full_compare(fullname, buf_ffname, true_0 != 0, true_0 != 0)
-                as ::core::ffi::c_uint
-                & kEqualFiles as ::core::ffi::c_int as ::core::ffi::c_uint)
-                as ::core::ffi::c_int;
-            xfree(fullname as *mut ::core::ffi::c_void);
-            *fname_end = c;
+    /// For `:ptag`, make the preview window the current one.
+    ///
+    /// # Safety
+    /// The globals must be live and the file name NUL-terminated.
+    unsafe fn open_preview(&mut self) {
+        if !self.preview {
+            return;
         }
-        return retval;
+        // SAFETY: the caller's promise.
+        unsafe {
+            // Don't split again below.
+            postponed_split.set(0);
+            self.saved_win = curwin.get();
+            if (*curwin.get()).w_onebuf_opt.wo_pvw == 0 {
+                // Entering a reused window may change directory
+                // (autocommands), so make the name absolute first.
+                self.full_fname = FullName_save(self.fname(), false);
+                prepare_tagpreview(true);
+            }
+        }
     }
-}
 
-pub(crate) unsafe extern "C" fn find_extra(
-    mut pp: *mut *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut str: *mut ::core::ffi::c_char = *pp;
-        let mut first_char: ::core::ffi::c_char = **pp;
-        loop {
-            if ascii_isdigit(*str as ::core::ffi::c_int) {
-                str = skipdigits(str.offset(1 as ::core::ffi::c_int as isize));
-            } else if *str as ::core::ffi::c_int == '/' as ::core::ffi::c_int
-                || *str as ::core::ffi::c_int == '?' as ::core::ffi::c_int
+    /// Get to the window the tag should land in.
+    ///
+    /// A `CTRL-W CTRL-]` or a `:tab tag` opens a new window or tab page,
+    /// unless `'switchbuf'` says to go to one that already holds the file.
+    /// Answers `false` when a split was wanted and failed.
+    ///
+    /// # Safety
+    /// The globals must be live and the file name NUL-terminated.
+    unsafe fn open_window(&mut self) -> bool {
+        // SAFETY: the caller's promise.
+        unsafe {
+            let switchbuf = swb_flags.get();
+            if postponed_split.get() != 0
+                && switchbuf & (kOptSwbFlagUseopen | kOptSwbFlagUsetab) as c_uint != 0
             {
-                str = skip_regexp(
-                    str.offset(1 as ::core::ffi::c_int as isize),
-                    *str as ::core::ffi::c_int,
-                    false_0,
-                );
-                if *str as ::core::ffi::c_int != first_char as ::core::ffi::c_int {
-                    str = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                } else {
-                    str = str.offset(1);
+                let existing = buflist_findname_exp(self.fname());
+                if !existing.is_null() && !swbuf_goto_win_with_buf(existing).is_null() {
+                    self.reused_window = true;
                 }
+            }
+            if self.reused_window || (postponed_split.get() == 0 && (*cmdmod.ptr()).cmod_tab == 0) {
+                return true;
+            }
+
+            // 'switchbuf' may ask for the new window to be a vertical
+            // split, or for a whole new tab page.
+            if switchbuf & kOptSwbFlagVsplit as c_uint != 0 {
+                (*cmdmod.ptr()).cmod_split |= WSP_VERT as c_int;
+            }
+            if switchbuf & kOptSwbFlagNewtab as c_uint != 0 && (*cmdmod.ptr()).cmod_tab == 0 {
+                (*cmdmod.ptr()).cmod_tab = tabpage_index(curtab.get()) + 1;
+            }
+            if win_split(postponed_split.get().max(0), postponed_split_flags.get()) == FAIL {
+                return false;
+            }
+            // A fresh window does not inherit the scroll and cursor binding.
+            (*curwin.get()).w_onebuf_opt.wo_scb = false_0;
+            (*curwin.get()).w_onebuf_opt.wo_crb = false_0;
+            true
+        }
+    }
+
+    /// Run the tag's command: a search, or an ex command in the sandbox.
+    ///
+    /// # Safety
+    /// `tagp` must describe the match, and the cursor must be in the
+    /// buffer the jump landed in.
+    unsafe fn run_command(&mut self, tagp: &TagParts) -> c_int {
+        // SAFETY: the caller's promise; the globals are live.
+        unsafe {
+            let save_magic = magic_overruled.get();
+            // Tag commands always run with 'nomagic'.
+            magic_overruled.set(OPTION_MAGIC_OFF);
+            // Jumping to a tag is not a real search, so 'hlsearch' must
+            // not light up because of it.
+            let save_no_hlsearch = no_hlsearch.get();
+            // With 't' in 'cpoptions' the tag's pattern becomes the one
+            // "n" repeats; without it, the pattern is not stored.
+            let search_options = if vim_strchr(p_cpo.get(), CPO_TAGPAT).is_null() {
+                SEARCH_KEEP as c_int
             } else {
-                str = strstr(str, b"|;\"\0".as_ptr() as *const ::core::ffi::c_char);
-                if !str.is_null() {
-                    str = str.offset(1);
+                0
+            };
+
+            let retval = if self.pattern.is_whole_search() {
+                self.search(tagp, search_options)
+            } else {
+                self.pattern.execute();
+                OK
+            };
+
+            magic_overruled.set(save_magic);
+            if search_options != 0 {
+                set_no_hlsearch(save_no_hlsearch);
+            }
+            retval
+        }
+    }
+
+    /// Search for the tag's pattern, guessing at it if it is not there.
+    ///
+    /// # Safety
+    /// `tagp` must describe the match.
+    unsafe fn search(&mut self, tagp: &TagParts, search_options: c_int) -> c_int {
+        // SAFETY: the caller's promise; the globals are live.
+        unsafe {
+            let save_p_ws = p_ws.get() != 0;
+            let save_p_ic = p_ic.get();
+            let save_p_scs = p_scs.get();
+            // 'wrapscan' is needed for a backward search, and the pattern
+            // was not typed by the user, so case must not be folded.
+            p_ws.set(true_0);
+            p_ic.set(false_0);
+            p_scs.set(false_0);
+
+            let save_lnum = (*curwin.get()).w_cursor.lnum;
+            // Start before the line the "line:" field named, or before the
+            // first line.
+            (*curwin.get()).w_cursor.lnum = (tagp.tagline - 1).max(0);
+
+            let found = if self.pattern.search(search_options) {
+                Found::Exactly
+            } else {
+                // Try again, ignoring case this time.
+                p_ic.set(true_0);
+                if self.pattern.search(search_options) {
+                    Found::IgnoringCase
+                } else {
+                    self.guess(tagp, search_options)
+                }
+            };
+
+            let retval = match found {
+                // The tag's own pattern matched: nothing to report.
+                Found::Exactly => OK,
+                Found::Nowhere => {
+                    emsg(gettext(c"E434: Can't find tag pattern".as_ptr()));
+                    (*curwin.get()).w_cursor.lnum = save_lnum;
+                    FAIL
+                }
+                Found::IgnoringCase | Found::Guessing => {
+                    // Only say so when it really was a guess, not when
+                    // 'ignorecase' was already set and the match turned up
+                    // once case was folded.
+                    if matches!(found, Found::Guessing) || save_p_ic == 0 {
+                        msg(
+                            gettext(c"E435: Couldn't find tag, just guessing!".as_ptr()),
+                            0,
+                        );
+                        if msg_scrolled.get() == 0 && msg_silent.get() == 0 {
+                            msg_delay(1010, true);
+                        }
+                    }
+                    OK
+                }
+            };
+
+            p_ws.set(c_int::from(save_p_ws));
+            p_ic.set(save_p_ic);
+            p_scs.set(save_p_scs);
+            // A search command may have put the cursor beyond the end of
+            // the line; correct that here.
+            check_cursor(curwin.get());
+            retval
+        }
+    }
+
+    /// The pattern was not in the file: search for what a declaration of
+    /// the tag would look like instead.
+    ///
+    /// # Safety
+    /// `tagp.tagname` must lie in a writable buffer, ending at
+    /// `tagname_end`.
+    unsafe fn guess(&mut self, tagp: &TagParts, search_options: c_int) -> Found {
+        // SAFETY: the caller's promise. The byte written over the tag
+        // name's end is put back before returning.
+        //
+        // (Upstream calls `test_for_static` here and drops the answer; it
+        // has no side effects, so it is not repeated.)
+        unsafe {
+            let saved = *tagp.tagname_end;
+            *tagp.tagname_end = 0;
+            // "^func  ("
+            let mut found = self
+                .pattern
+                .search_for(c"^%s\\s\\*(", tagp.tagname, search_options);
+            if !found {
+                // "^char * \<func  ("
+                found = self.pattern.search_for(
+                    c"^\\[#a-zA-Z_]\\.\\*\\<%s\\s\\*(",
+                    tagp.tagname,
+                    search_options,
+                );
+            }
+            *tagp.tagname_end = saved;
+            if found {
+                Found::Guessing
+            } else {
+                Found::Nowhere
+            }
+        }
+    }
+}
+
+/// How well the jump found the tag, which decides what the user is told.
+enum Found {
+    /// The tag's own pattern matched.
+    Exactly,
+    /// It matched once case was folded.
+    IgnoringCase,
+    /// Only a guess at what the declaration looks like matched.
+    Guessing,
+    /// Not even a guess matched.
+    Nowhere,
+}
+
+/// A tag's command, in the fixed buffer the guesses are written into.
+struct Pattern {
+    /// `LSIZE` bytes, whatever the command's length: the guesses are
+    /// formatted straight into it.
+    buf: Vec<c_char>,
+    /// How much of it the command uses, not counting the terminator.
+    len: usize,
+}
+
+impl Pattern {
+    /// Copy a tag's command out of its match, dropping any trailing CR/NL
+    /// and the `;"<Tab>field:value` stuff, which is of no use here.
+    ///
+    /// # Safety
+    /// `tagp.command` must be NUL-terminated.
+    unsafe fn of_command(tagp: &TagParts) -> Self {
+        let mut buf = vec![0 as c_char; LSIZE];
+        let mut len = 0;
+        // SAFETY: the caller's promise, and the copy stops one short of
+        // the buffer's end so that the terminator always fits.
+        unsafe {
+            let mut str = tagp.command;
+            while !matches!(*str as u8, 0 | b'\n' | b'\r') {
+                buf[len] = *str;
+                len += 1;
+                str = str.add(1);
+                if len + 1 >= LSIZE {
                     break;
                 }
             }
-            if str.is_null()
-                || *str as ::core::ffi::c_int != ';' as ::core::ffi::c_int
-                || !(ascii_isdigit(
-                    *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                ) as ::core::ffi::c_int
-                    != 0
-                    || *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '/' as ::core::ffi::c_int
-                    || *str.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                        == '?' as ::core::ffi::c_int)
-            {
-                break;
+            buf[len] = 0;
+
+            if let Some(extra) = find_extra(buf.as_mut_ptr()) {
+                len = extra.offset_from(buf.as_ptr()) as usize;
+                buf[len] = 0;
             }
-            str = str.offset(1);
-            first_char = *str;
         }
-        if !str.is_null()
-            && strncmp(
-                str,
-                b";\"\0".as_ptr() as *const ::core::ffi::c_char,
-                2 as size_t,
-            ) == 0 as ::core::ffi::c_int
-        {
-            *pp = str;
-            return OK;
+        Pattern { buf, len }
+    }
+
+    /// Whether the command is a whole search command with nothing after
+    /// it, which is the only form worth handing to [`do_search`].
+    ///
+    /// # Safety
+    /// The buffer must hold a NUL-terminated command.
+    unsafe fn is_whole_search(&self) -> bool {
+        // SAFETY: the caller's promise; `skip_regexp` stops at the
+        // terminator.
+        unsafe {
+            let start = self.buf.as_ptr().cast_mut();
+            let after = if matches!(*start as u8, b'/' | b'?') {
+                skip_regexp(start.add(1), *start as c_int, false_0).add(1)
+            } else {
+                start
+            };
+            after.offset_from(start) as usize >= self.len
         }
-        return FAIL;
+    }
+
+    /// Run the command as a search, its first byte the delimiter.
+    ///
+    /// # Safety
+    /// The editor must be in a buffer a search may run in.
+    unsafe fn search(&mut self, options: c_int) -> bool {
+        // SAFETY: the caller's promise. The length may wrap for an empty
+        // command, exactly as the `size_t` subtraction upstream does.
+        unsafe {
+            let delim = self.buf[0] as c_int;
+            do_search(
+                ptr::null_mut(),
+                delim,
+                delim,
+                self.buf.as_mut_ptr().add(1),
+                self.len.wrapping_sub(1),
+                1,
+                options,
+                ptr::null_mut(),
+            ) != 0
+        }
+    }
+
+    /// Format a guess into the buffer and search for that instead.
+    ///
+    /// # Safety
+    /// `name` must be NUL-terminated.
+    unsafe fn search_for(&mut self, fmt: &CStr, name: *const c_char, options: c_int) -> bool {
+        // SAFETY: the caller's promise; `snprintf` never writes past
+        // `LSIZE`. Its answer is the length it *would* have needed, which
+        // is what upstream hands to `do_search` — kept as it is.
+        unsafe {
+            self.len =
+                snprintf(self.buf.as_mut_ptr(), LSIZE as size_t, fmt.as_ptr(), name) as usize;
+            do_search(
+                ptr::null_mut(),
+                '/' as c_int,
+                '/' as c_int,
+                self.buf.as_mut_ptr(),
+                self.len,
+                1,
+                options,
+                ptr::null_mut(),
+            ) != 0
+        }
+    }
+
+    /// Run the command as an ex command, in the sandbox: it came out of a
+    /// tags file, which is not to be trusted.
+    ///
+    /// # Safety
+    /// The editor must be in a buffer a command may run in.
+    unsafe fn execute(&mut self) {
+        // SAFETY: the caller's promise; the buffer is NUL-terminated.
+        unsafe {
+            let save_secure = secure.get();
+            secure.set(1);
+            *sandbox.ptr() += 1;
+
+            // Start the command in line 1.
+            (*curwin.get()).w_cursor = pos_T {
+                lnum: 1,
+                col: 0,
+                coladd: 0,
+            };
+            do_cmdline_cmd(self.buf.as_mut_ptr());
+
+            // When the command did something that is not allowed, make
+            // sure the error message can be seen.
+            if secure.get() == 2 {
+                wait_return(true_0);
+            }
+            secure.set(save_secure);
+            *sandbox.ptr() -= 1;
+        }
     }
 }

@@ -258,7 +258,7 @@ impl FindTags {
     #[inline]
     pub(crate) fn parse_line(
         &mut self,
-        tagp: &mut tagptrs_T,
+        tagp: &mut TagParts,
         margs: &mut MatchArgs,
         sinfo: &mut SearchInfo,
     ) -> TagMatch {
@@ -268,12 +268,12 @@ impl FindTags {
             if self.orgpat.headlen == 0 {
                 // No head to compare: take the line apart the slow way.
                 return match parse_tag_line(self.lbuf.as_mut_ptr(), tagp) {
-                    FAIL => TagMatch::Fail,
-                    _ => TagMatch::Success,
+                    true => TagMatch::Success,
+                    false => TagMatch::Fail,
                 };
             }
 
-            *tagp = core::mem::zeroed();
+            *tagp = TagParts::default();
             tagp.tagname = self.lbuf.as_mut_ptr();
             tagp.tagname_end = vim_strchr(tagp.tagname, TAB);
             if tagp.tagname_end.is_null() {
@@ -395,7 +395,7 @@ impl FindTags {
     /// and the regexp only afterwards, which is what tells the collector
     /// how good the match was.
     #[inline]
-    pub(crate) fn match_tag(&mut self, tagp: &tagptrs_T, margs: &mut MatchArgs) -> bool {
+    pub(crate) fn match_tag(&mut self, tagp: &TagParts, margs: &mut MatchArgs) -> bool {
         // SAFETY: `tagname` and `tagname_end` bracket the name inside the
         // line buffer; the terminator written over `tagname_end` for the
         // regexp is put back before returning.
