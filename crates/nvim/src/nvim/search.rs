@@ -72,38 +72,12 @@ use crate::src::nvim::regexp::vim_regexec_multi;
 use crate::src::nvim::state::MODE_SHOWMATCH;
 use crate::src::nvim::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
 use crate::src::nvim::types::ui::kUIMessages;
-pub use crate::src::nvim::types::{
-    __off_t, __off64_t, __time_t, _IO_FILE, _IO_codecvt, _IO_lock_t, _IO_marker, _IO_wide_data,
-    AdditionalData, AlignTextPos, BoolVarValue, BufUpdateCallbacks, Callback,
-    Callback_data as C2Rust_Unnamed_4, CallbackType, ChangedtickDictItem, DecorExt,
-    DecorHighlightInline, DecorInlineData, DecorPriority, DecorVirtText,
-    DecorVirtText_data as C2Rust_Unnamed_1, Direction, EvalFuncData, ExtmarkUndoObject, FILE,
-    FileComparison, FileID, FloatAnchor, FloatRelative, GridView, Intersection, LuaRef, MTKey,
-    MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MapHash, MarkTree, MotionType, MsgpackRpcRequestHandler, OptInt, QUEUE,
-    ScopeDictDictItem, ScopeType, ScreenGrid, SearchOffset, SearchPattern, Set_int64_t,
-    Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_11, Terminal, Timestamp, TriState, UIExtension,
-    VarLockStatus, VarType, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    WinConfig, WinInfo, WinSplit, WinStyle, Window, alist_T, auto_event, bhdr_T, blob_T, blobvar_S,
-    blocknr_T, buf_T, bufstate_T, chunksize_T, cmdarg_T, cmdmod_T, colnr_T, dict_T, dictitem_T,
-    dictvar_S, disptick_T, event_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_10,
-    file_buffer_update_callbacks as C2Rust_Unnamed,
-    file_buffer_update_channels as C2Rust_Unnamed_0, file_comparison, float_T, fmark_T, fmarkv_T,
-    frame_S, frame_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_5, funccall_T, garray_T,
-    handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t, lcs_chars_T,
-    linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T, llpos_T, lpos_T,
-    magic_T, mapblock, mapblock_T, match_T, matchitem, matchitem_T, memfile_T, memline_T,
-    mfdirty_T, mtnode_inner_s, mtnode_s, oparg_T, partial_S, partial_T, pos_T, pos_save_T,
-    proftime_T, ptr_t, ptrdiff_t, qf_info_S, qf_info_T, queue, reg_extmatch_T, regmatch_T,
-    regmmatch_T, regprog, regprog_T, sattr_T, schar_T, scid_T, sctx_T, searchit_arg_T, size_t,
-    syn_state, syn_state_sst_union as C2Rust_Unnamed_3, syn_time_T, synblock_T, synstate_T,
-    taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T, u_header,
-    u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_7, u_header_uh_alt_prev as C2Rust_Unnamed_6,
-    u_header_uh_next as C2Rust_Unnamed_9, u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T,
-    uint8_t, uint16_t, uint32_t, uint64_t, undo_object, varnumber_T, virt_line, visualinfo_T,
-    win_T, window_S, wininfo_S, winopt_T, wline_T, xfmark_T,
+use crate::src::nvim::types::{
+    AdditionalData, Direction, EvalFuncData, FILE, MotionType, OptInt, SearchOffset, SearchPattern,
+    Timestamp, TriState, VarType, VimVarIndex, buf_T, cmdarg_T, colnr_T, dict_T, dictitem_T,
+    file_comparison, int64_t, linenr_T, listitem_T, lpos_T, magic_T, oparg_T, pos_T, proftime_T,
+    ptrdiff_t, regmatch_T, regmmatch_T, regprog_T, searchit_arg_T, size_t, typval_T, uint8_t,
+    uint64_t, varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep,
@@ -120,316 +94,42 @@ unsafe extern "C" {
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
 pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
 pub const VAR_UNKNOWN: VarType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_11 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_11 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_11 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_11 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
 pub type C2Rust_Unnamed_12 = ::core::ffi::c_uint;
 pub const MAXCOL: C2Rust_Unnamed_12 = 2147483647;
 pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const HLF_COUNT: C2Rust_Unnamed_13 = 76;
-pub const HLF_PRE: C2Rust_Unnamed_13 = 75;
-pub const HLF_OK: C2Rust_Unnamed_13 = 74;
-pub const HLF_SO: C2Rust_Unnamed_13 = 73;
-pub const HLF_SE: C2Rust_Unnamed_13 = 72;
-pub const HLF_TSNC: C2Rust_Unnamed_13 = 71;
-pub const HLF_TS: C2Rust_Unnamed_13 = 70;
-pub const HLF_BFOOTER: C2Rust_Unnamed_13 = 69;
-pub const HLF_BTITLE: C2Rust_Unnamed_13 = 68;
-pub const HLF_CU: C2Rust_Unnamed_13 = 67;
-pub const HLF_WBRNC: C2Rust_Unnamed_13 = 66;
-pub const HLF_WBR: C2Rust_Unnamed_13 = 65;
-pub const HLF_BORDER: C2Rust_Unnamed_13 = 64;
-pub const HLF_MSG: C2Rust_Unnamed_13 = 63;
-pub const HLF_NFLOAT: C2Rust_Unnamed_13 = 62;
-pub const HLF_MSGSEP: C2Rust_Unnamed_13 = 61;
-pub const HLF_INACTIVE: C2Rust_Unnamed_13 = 60;
-pub const HLF_0: C2Rust_Unnamed_13 = 59;
-pub const HLF_QFL: C2Rust_Unnamed_13 = 58;
-pub const HLF_MC: C2Rust_Unnamed_13 = 57;
-pub const HLF_CUL: C2Rust_Unnamed_13 = 56;
-pub const HLF_CUC: C2Rust_Unnamed_13 = 55;
-pub const HLF_TPF: C2Rust_Unnamed_13 = 54;
-pub const HLF_TPS: C2Rust_Unnamed_13 = 53;
-pub const HLF_TP: C2Rust_Unnamed_13 = 52;
-pub const HLF_PBR: C2Rust_Unnamed_13 = 51;
-pub const HLF_PST: C2Rust_Unnamed_13 = 50;
-pub const HLF_PSB: C2Rust_Unnamed_13 = 49;
-pub const HLF_PSX: C2Rust_Unnamed_13 = 48;
-pub const HLF_PNX: C2Rust_Unnamed_13 = 47;
-pub const HLF_PSK: C2Rust_Unnamed_13 = 46;
-pub const HLF_PNK: C2Rust_Unnamed_13 = 45;
-pub const HLF_PMSI: C2Rust_Unnamed_13 = 44;
-pub const HLF_PMNI: C2Rust_Unnamed_13 = 43;
-pub const HLF_PSI: C2Rust_Unnamed_13 = 42;
-pub const HLF_PNI: C2Rust_Unnamed_13 = 41;
-pub const HLF_SPL: C2Rust_Unnamed_13 = 40;
-pub const HLF_SPR: C2Rust_Unnamed_13 = 39;
-pub const HLF_SPC: C2Rust_Unnamed_13 = 38;
-pub const HLF_SPB: C2Rust_Unnamed_13 = 37;
-pub const HLF_CONCEAL: C2Rust_Unnamed_13 = 36;
-pub const HLF_SC: C2Rust_Unnamed_13 = 35;
-pub const HLF_TXA: C2Rust_Unnamed_13 = 34;
-pub const HLF_TXD: C2Rust_Unnamed_13 = 33;
-pub const HLF_DED: C2Rust_Unnamed_13 = 32;
-pub const HLF_CHD: C2Rust_Unnamed_13 = 31;
-pub const HLF_ADD: C2Rust_Unnamed_13 = 30;
-pub const HLF_FC: C2Rust_Unnamed_13 = 29;
-pub const HLF_FL: C2Rust_Unnamed_13 = 28;
-pub const HLF_WM: C2Rust_Unnamed_13 = 27;
-pub const HLF_W: C2Rust_Unnamed_13 = 26;
-pub const HLF_VNC: C2Rust_Unnamed_13 = 25;
-pub const HLF_V: C2Rust_Unnamed_13 = 24;
-pub const HLF_T: C2Rust_Unnamed_13 = 23;
-pub const HLF_VSP: C2Rust_Unnamed_13 = 22;
-pub const HLF_C: C2Rust_Unnamed_13 = 21;
-pub const HLF_SNC: C2Rust_Unnamed_13 = 20;
-pub const HLF_S: C2Rust_Unnamed_13 = 19;
 pub const HLF_R: C2Rust_Unnamed_13 = 18;
-pub const HLF_CLF: C2Rust_Unnamed_13 = 17;
-pub const HLF_CLS: C2Rust_Unnamed_13 = 16;
-pub const HLF_CLN: C2Rust_Unnamed_13 = 15;
-pub const HLF_LNB: C2Rust_Unnamed_13 = 14;
-pub const HLF_LNA: C2Rust_Unnamed_13 = 13;
 pub const HLF_N: C2Rust_Unnamed_13 = 12;
-pub const HLF_CM: C2Rust_Unnamed_13 = 11;
-pub const HLF_M: C2Rust_Unnamed_13 = 10;
-pub const HLF_LC: C2Rust_Unnamed_13 = 9;
-pub const HLF_L: C2Rust_Unnamed_13 = 8;
-pub const HLF_I: C2Rust_Unnamed_13 = 7;
-pub const HLF_E: C2Rust_Unnamed_13 = 6;
 pub const HLF_D: C2Rust_Unnamed_13 = 5;
-pub const HLF_AT: C2Rust_Unnamed_13 = 4;
-pub const HLF_TERM: C2Rust_Unnamed_13 = 3;
-pub const HLF_EOB: C2Rust_Unnamed_13 = 2;
-pub const HLF_8: C2Rust_Unnamed_13 = 1;
-pub const HLF_NONE: C2Rust_Unnamed_13 = 0;
 pub const BACKWARD_FILE: Direction = -3;
 pub const FORWARD_FILE: Direction = 3;
 pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
-pub const kDirectionNotSet: Direction = 0;
 pub const MAGIC_ALL: magic_T = 4;
 pub const MAGIC_ON: magic_T = 3;
-pub const MAGIC_OFF: magic_T = 2;
-pub const MAGIC_NONE: magic_T = 1;
 pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const CMOD_NOSWAPFILE: C2Rust_Unnamed_14 = 8192;
 pub const CMOD_KEEPPATTERNS: C2Rust_Unnamed_14 = 4096;
-pub const CMOD_LOCKMARKS: C2Rust_Unnamed_14 = 2048;
-pub const CMOD_KEEPJUMPS: C2Rust_Unnamed_14 = 1024;
-pub const CMOD_KEEPMARKS: C2Rust_Unnamed_14 = 512;
-pub const CMOD_KEEPALT: C2Rust_Unnamed_14 = 256;
-pub const CMOD_CONFIRM: C2Rust_Unnamed_14 = 128;
-pub const CMOD_BROWSE: C2Rust_Unnamed_14 = 64;
-pub const CMOD_HIDE: C2Rust_Unnamed_14 = 32;
-pub const CMOD_NOAUTOCMD: C2Rust_Unnamed_14 = 16;
-pub const CMOD_UNSILENT: C2Rust_Unnamed_14 = 8;
-pub const CMOD_ERRSILENT: C2Rust_Unnamed_14 = 4;
-pub const CMOD_SILENT: C2Rust_Unnamed_14 = 2;
-pub const CMOD_SANDBOX: C2Rust_Unnamed_14 = 1;
-pub const NUM_EVENTS: auto_event = 145;
 pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
 pub const SHM_SEARCHCOUNT: C2Rust_Unnamed_17 = 83;
-pub const SHM_FILEINFO: C2Rust_Unnamed_17 = 70;
-pub const SHM_RECORDING: C2Rust_Unnamed_17 = 113;
 pub const SHM_COMPLETIONSCAN: C2Rust_Unnamed_17 = 67;
-pub const SHM_COMPLETIONMENU: C2Rust_Unnamed_17 = 99;
-pub const SHM_INTRO: C2Rust_Unnamed_17 = 73;
-pub const SHM_ATTENTION: C2Rust_Unnamed_17 = 65;
 pub const SHM_SEARCH: C2Rust_Unnamed_17 = 115;
-pub const SHM_OVERALL: C2Rust_Unnamed_17 = 79;
-pub const SHM_OVER: C2Rust_Unnamed_17 = 111;
-pub const SHM_TRUNCALL: C2Rust_Unnamed_17 = 84;
-pub const SHM_TRUNC: C2Rust_Unnamed_17 = 116;
-pub const SHM_WRITE: C2Rust_Unnamed_17 = 87;
-pub const SHM_ABBREVIATIONS: C2Rust_Unnamed_17 = 97;
-pub const SHM_WRI: C2Rust_Unnamed_17 = 119;
-pub const SHM_LINES: C2Rust_Unnamed_17 = 108;
-pub const SHM_MOD: C2Rust_Unnamed_17 = 109;
-pub const SHM_RO: C2Rust_Unnamed_17 = 114;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_int;
-pub const HIST_DEBUG: C2Rust_Unnamed_18 = 4;
-pub const HIST_INPUT: C2Rust_Unnamed_18 = 3;
-pub const HIST_EXPR: C2Rust_Unnamed_18 = 2;
 pub const HIST_SEARCH: C2Rust_Unnamed_18 = 1;
-pub const HIST_CMD: C2Rust_Unnamed_18 = 0;
-pub const HIST_INVALID: C2Rust_Unnamed_18 = -1;
-pub const HIST_DEFAULT: C2Rust_Unnamed_18 = -2;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const VV_EXITREASON: VimVarIndex = 105;
-pub const VV_STARTTIME: VimVarIndex = 104;
-pub const VV_VIRTNUM: VimVarIndex = 103;
-pub const VV_RELNUM: VimVarIndex = 102;
-pub const VV_LUA: VimVarIndex = 101;
-pub const VV__NULL_BLOB: VimVarIndex = 100;
-pub const VV__NULL_DICT: VimVarIndex = 99;
-pub const VV__NULL_LIST: VimVarIndex = 98;
-pub const VV__NULL_STRING: VimVarIndex = 97;
-pub const VV_MSGPACK_TYPES: VimVarIndex = 96;
-pub const VV_STDERR: VimVarIndex = 95;
-pub const VV_VIM_DID_INIT: VimVarIndex = 94;
-pub const VV_STACKTRACE: VimVarIndex = 93;
-pub const VV_MAXCOL: VimVarIndex = 92;
-pub const VV_EXITING: VimVarIndex = 91;
-pub const VV_COLLATE: VimVarIndex = 90;
-pub const VV_ARGV: VimVarIndex = 89;
-pub const VV_ARGF: VimVarIndex = 88;
-pub const VV_ECHOSPACE: VimVarIndex = 87;
-pub const VV_VERSIONLONG: VimVarIndex = 86;
-pub const VV_EVENT: VimVarIndex = 85;
-pub const VV_TYPE_BLOB: VimVarIndex = 84;
-pub const VV_TYPE_BOOL: VimVarIndex = 83;
-pub const VV_TYPE_FLOAT: VimVarIndex = 82;
-pub const VV_TYPE_DICT: VimVarIndex = 81;
-pub const VV_TYPE_LIST: VimVarIndex = 80;
-pub const VV_TYPE_FUNC: VimVarIndex = 79;
-pub const VV_TYPE_STRING: VimVarIndex = 78;
-pub const VV_TYPE_NUMBER: VimVarIndex = 77;
-pub const VV_TESTING: VimVarIndex = 76;
-pub const VV_VIM_DID_ENTER: VimVarIndex = 75;
-pub const VV_NUMBERSIZE: VimVarIndex = 74;
-pub const VV_NUMBERMIN: VimVarIndex = 73;
-pub const VV_NUMBERMAX: VimVarIndex = 72;
-pub const VV_NULL: VimVarIndex = 71;
-pub const VV_TRUE: VimVarIndex = 70;
-pub const VV_FALSE: VimVarIndex = 69;
-pub const VV_ERRORS: VimVarIndex = 68;
-pub const VV_OPTION_TYPE: VimVarIndex = 67;
-pub const VV_OPTION_COMMAND: VimVarIndex = 66;
-pub const VV_OPTION_OLDGLOBAL: VimVarIndex = 65;
-pub const VV_OPTION_OLDLOCAL: VimVarIndex = 64;
-pub const VV_OPTION_OLD: VimVarIndex = 63;
-pub const VV_OPTION_NEW: VimVarIndex = 62;
-pub const VV_COMPLETED_ITEM: VimVarIndex = 61;
-pub const VV_PROGPATH: VimVarIndex = 60;
-pub const VV_WINDOWID: VimVarIndex = 59;
-pub const VV_OLDFILES: VimVarIndex = 58;
-pub const VV_HLSEARCH: VimVarIndex = 57;
 pub const VV_SEARCHFORWARD: VimVarIndex = 56;
-pub const VV_OP: VimVarIndex = 55;
-pub const VV_MOUSE_COL: VimVarIndex = 54;
-pub const VV_MOUSE_LNUM: VimVarIndex = 53;
-pub const VV_MOUSE_WINID: VimVarIndex = 52;
-pub const VV_MOUSE_WIN: VimVarIndex = 51;
-pub const VV_CHAR: VimVarIndex = 50;
-pub const VV_SWAPCOMMAND: VimVarIndex = 49;
-pub const VV_SWAPCHOICE: VimVarIndex = 48;
-pub const VV_SWAPNAME: VimVarIndex = 47;
-pub const VV_SCROLLSTART: VimVarIndex = 46;
-pub const VV_BEVAL_TEXT: VimVarIndex = 45;
-pub const VV_BEVAL_COL: VimVarIndex = 44;
-pub const VV_BEVAL_LNUM: VimVarIndex = 43;
-pub const VV_BEVAL_WINID: VimVarIndex = 42;
-pub const VV_BEVAL_WINNR: VimVarIndex = 41;
-pub const VV_BEVAL_BUFNR: VimVarIndex = 40;
-pub const VV_FCS_CHOICE: VimVarIndex = 39;
-pub const VV_FCS_REASON: VimVarIndex = 38;
-pub const VV_PROFILING: VimVarIndex = 37;
-pub const VV_KEY: VimVarIndex = 36;
-pub const VV_VAL: VimVarIndex = 35;
-pub const VV_INSERTMODE: VimVarIndex = 34;
-pub const VV_CMDBANG: VimVarIndex = 33;
-pub const VV_REG: VimVarIndex = 32;
-pub const VV_THROWPOINT: VimVarIndex = 31;
-pub const VV_EXCEPTION: VimVarIndex = 30;
-pub const VV_DYING: VimVarIndex = 29;
-pub const VV_SEND_SERVER: VimVarIndex = 28;
-pub const VV_PROGNAME: VimVarIndex = 27;
-pub const VV_FOLDLEVEL: VimVarIndex = 26;
-pub const VV_FOLDDASHES: VimVarIndex = 25;
-pub const VV_FOLDEND: VimVarIndex = 24;
-pub const VV_FOLDSTART: VimVarIndex = 23;
-pub const VV_CMDARG: VimVarIndex = 22;
-pub const VV_FNAME_DIFF: VimVarIndex = 21;
-pub const VV_FNAME_NEW: VimVarIndex = 20;
-pub const VV_FNAME_OUT: VimVarIndex = 19;
-pub const VV_FNAME_IN: VimVarIndex = 18;
-pub const VV_CC_TO: VimVarIndex = 17;
-pub const VV_CC_FROM: VimVarIndex = 16;
-pub const VV_CTYPE: VimVarIndex = 15;
-pub const VV_LC_TIME: VimVarIndex = 14;
-pub const VV_LANG: VimVarIndex = 13;
-pub const VV_FNAME: VimVarIndex = 12;
-pub const VV_TERMRESPONSE: VimVarIndex = 11;
-pub const VV_TERMREQUEST: VimVarIndex = 10;
-pub const VV_LNUM: VimVarIndex = 9;
-pub const VV_VERSION: VimVarIndex = 8;
-pub const VV_THIS_SESSION: VimVarIndex = 7;
-pub const VV_SHELL_ERROR: VimVarIndex = 6;
-pub const VV_STATUSMSG: VimVarIndex = 5;
-pub const VV_WARNINGMSG: VimVarIndex = 4;
-pub const VV_ERRMSG: VimVarIndex = 3;
-pub const VV_PREVCOUNT: VimVarIndex = 2;
-pub const VV_COUNT1: VimVarIndex = 1;
-pub const VV_COUNT: VimVarIndex = 0;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const FNAME_UNESC: C2Rust_Unnamed_20 = 32;
 pub const FNAME_REL: C2Rust_Unnamed_20 = 16;
 pub const FNAME_INCL: C2Rust_Unnamed_20 = 8;
-pub const FNAME_HYP: C2Rust_Unnamed_20 = 4;
 pub const FNAME_EXP: C2Rust_Unnamed_20 = 2;
-pub const FNAME_MESS: C2Rust_Unnamed_20 = 1;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const kMTUnknown: MotionType = -1;
-pub const kMTBlockWise: MotionType = 2;
 pub const kMTLineWise: MotionType = 1;
-pub const kMTCharWise: MotionType = 0;
-pub const kEqualFileNames: file_comparison = 7;
-pub const kOneFileMissing: file_comparison = 6;
-pub const kBothFilesMissing: file_comparison = 4;
-pub const kDifferentFiles: file_comparison = 2;
 pub const kEqualFiles: file_comparison = 1;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const CHECK_PATH: C2Rust_Unnamed_22 = 3;
 pub const FIND_DEFINE: C2Rust_Unnamed_22 = 2;
-pub const FIND_ANY: C2Rust_Unnamed_22 = 1;
 pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
 pub const ACTION_EXPAND: C2Rust_Unnamed_23 = 5;
 pub const ACTION_SHOW_ALL: C2Rust_Unnamed_23 = 4;
 pub const ACTION_SPLIT: C2Rust_Unnamed_23 = 3;
-pub const ACTION_GOTO: C2Rust_Unnamed_23 = 2;
 pub const ACTION_SHOW: C2Rust_Unnamed_23 = 1;
 pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
 pub const SEARCH_COL: C2Rust_Unnamed_24 = 4096;
@@ -441,12 +141,10 @@ pub const SEARCH_NOOF: C2Rust_Unnamed_24 = 128;
 pub const SEARCH_END: C2Rust_Unnamed_24 = 64;
 pub const SEARCH_HIS: C2Rust_Unnamed_24 = 32;
 pub const SEARCH_OPT: C2Rust_Unnamed_24 = 16;
-pub const SEARCH_NFMSG: C2Rust_Unnamed_24 = 8;
 pub const SEARCH_MSG: C2Rust_Unnamed_24 = 12;
 pub const SEARCH_ECHO: C2Rust_Unnamed_24 = 2;
 pub const SEARCH_REV: C2Rust_Unnamed_24 = 1;
 pub type C2Rust_Unnamed_25 = ::core::ffi::c_uint;
-pub const FM_SKIPCOMM: C2Rust_Unnamed_25 = 8;
 pub const FM_BLOCKSTOP: C2Rust_Unnamed_25 = 4;
 pub const FM_FORWARD: C2Rust_Unnamed_25 = 2;
 pub const FM_BACKWARD: C2Rust_Unnamed_25 = 1;
@@ -478,7 +176,6 @@ pub struct SearchedFile {
     pub matched: ::core::ffi::c_int,
 }
 pub type C2Rust_Unnamed_29 = ::core::ffi::c_uint;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;

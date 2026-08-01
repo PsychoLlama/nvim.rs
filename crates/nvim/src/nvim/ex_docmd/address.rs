@@ -43,12 +43,13 @@ use crate::src::nvim::quickfix::{
 };
 use crate::src::nvim::regexp::skip_regexp;
 use crate::src::nvim::search::{
-    BACKWARD, Direction, FORWARD, RE_SEARCH, RE_SUBST, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG,
-    do_search, searchit,
+    BACKWARD, FORWARD, RE_SEARCH, RE_SUBST, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search,
+    searchit,
 };
 use crate::src::nvim::strings::vim_strchr;
 use crate::src::nvim::types::{
-    MarkGet, MarkMove, buf_T, cmd_addr_T, colnr_T, exarg_T, linenr_T, pos_T, size_t, uint32_t,
+    Direction, MarkGet, MarkMove, buf_T, cmd_addr_T, colnr_T, exarg_T, linenr_T, pos_T, size_t,
+    uint32_t,
 };
 
 /// Where a `+N`/`-N` offset lands when the addresses count buffers.

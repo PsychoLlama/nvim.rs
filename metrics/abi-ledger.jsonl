@@ -29,7 +29,6 @@
 {"symbol":"close_buffer","kind":"fn","file":"crates/nvim/src/nvim/buffer.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"cmdmod","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"convert_setup","kind":"fn","file":"crates/nvim/src/nvim/mbyte.rs","class":"test","refs":["unit-specs"]}
-{"symbol":"copy_loclist_stack","kind":"fn","file":"crates/nvim/src/nvim/quickfix.rs","class":"internal","refs":[]}
 {"symbol":"curbuf","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"curs_columns","kind":"fn","file":"crates/nvim/src/nvim/move.rs","class":"internal","refs":[]}
 {"symbol":"curtab","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"internal","refs":[]}
@@ -83,7 +82,6 @@
 {"symbol":"lastwin","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"linesize_fast","kind":"fn","file":"crates/nvim/src/nvim/plines.rs","class":"internal","refs":[]}
 {"symbol":"linesize_regular","kind":"fn","file":"crates/nvim/src/nvim/plines.rs","class":"internal","refs":[]}
-{"symbol":"ll_resize_stack","kind":"fn","file":"crates/nvim/src/nvim/quickfix.rs","class":"internal","refs":[]}
 {"symbol":"marktree_check","kind":"fn","file":"crates/nvim/src/nvim/marktree/check.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"marktree_check_intersections","kind":"fn","file":"crates/nvim/src/nvim/marktree/check.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"marktree_clear","kind":"fn","file":"crates/nvim/src/nvim/marktree.rs","class":"test","refs":["unit-specs"]}
@@ -192,11 +190,6 @@
 {"symbol":"path_with_url","kind":"fn","file":"crates/nvim/src/nvim/path.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"prevwin","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"pum_want","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"internal","refs":[]}
-{"symbol":"qf_current_entry","kind":"fn","file":"crates/nvim/src/nvim/quickfix.rs","class":"internal","refs":[]}
-{"symbol":"qf_free_all","kind":"fn","file":"crates/nvim/src/nvim/quickfix.rs","class":"internal","refs":[]}
-{"symbol":"qf_init","kind":"fn","file":"crates/nvim/src/nvim/quickfix.rs","class":"internal","refs":[]}
-{"symbol":"qf_jump","kind":"fn","file":"crates/nvim/src/nvim/quickfix.rs","class":"internal","refs":[]}
-{"symbol":"qf_mark_adjust","kind":"fn","file":"crates/nvim/src/nvim/quickfix.rs","class":"internal","refs":[]}
 {"symbol":"re_multiline","kind":"fn","file":"crates/nvim/src/nvim/regexp/chars.rs","class":"internal","refs":[]}
 {"symbol":"redraw_buf_later","kind":"fn","file":"crates/nvim/src/nvim/drawscreen.rs","class":"internal","refs":[]}
 {"symbol":"redraw_buf_line_later","kind":"fn","file":"crates/nvim/src/nvim/drawscreen.rs","class":"internal","refs":[]}
@@ -208,7 +201,6 @@
 {"symbol":"screen_resize","kind":"fn","file":"crates/nvim/src/nvim/drawscreen.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"search_regcomp","kind":"fn","file":"crates/nvim/src/nvim/search.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"set_bufref","kind":"fn","file":"crates/nvim/src/nvim/buffer.rs","class":"internal","refs":[]}
-{"symbol":"set_errorlist","kind":"fn","file":"crates/nvim/src/nvim/quickfix.rs","class":"internal","refs":[]}
 {"symbol":"set_topline","kind":"fn","file":"crates/nvim/src/nvim/move.rs","class":"internal","refs":[]}
 {"symbol":"setfname","kind":"fn","file":"crates/nvim/src/nvim/buffer.rs","class":"test","refs":["unit-specs"]}
 {"symbol":"shell_argv_to_str","kind":"fn","file":"crates/nvim/src/nvim/os/shell.rs","class":"test","refs":["unit-specs"]}

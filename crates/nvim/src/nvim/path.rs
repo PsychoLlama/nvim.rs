@@ -31,44 +31,11 @@ use crate::src::nvim::os::libc::{
 };
 use crate::src::nvim::os::shell::{get_cmd_output, os_expand_wildcards};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_strchr};
-pub use crate::src::nvim::types::{
-    __compar_fn_t, __gid_t, __mode_t, __off_t, __pthread_internal_list, __pthread_list_t,
-    __pthread_mutex_s, __pthread_rwlock_arch_t, __time_t, __uid_t, AdditionalData, AlignTextPos,
-    BoolVarValue, BufUpdateCallbacks, Callback, Callback_data as C2Rust_Unnamed_4, CallbackType,
-    ChangedtickDictItem, DecorExt, DecorHighlightInline, DecorInlineData, DecorPriority,
-    DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_1, Directory, ExtmarkUndoObject,
-    FileComparison, FileID, FileInfo, FloatAnchor, FloatRelative, GridView, Intersection, LuaRef,
-    MTKey, MTNode, MTPos, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_uint32_t_uint32_t,
-    Map_uint64_t_ptr_t, MapHash, MarkTree, OptInt, QUEUE, ScopeDictDictItem, ScopeType, ScreenGrid,
-    Set_int64_t, Set_uint32_t, Set_uint64_t, SpecialVarValue, StlClickDefinition,
-    StlClickDefinition_type_0 as C2Rust_Unnamed_11, Terminal, Timestamp, VarLockStatus, VarType,
-    VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinConfig, WinInfo, WinSplit, WinStyle,
-    Window, alist_T, bhdr_T, blob_T, blobvar_S, blocknr_T, buf_T, bufstate_T, chunksize_T, colnr_T,
-    dict_T, dictvar_S, disptick_T, extmark_undo_vec_t, fcs_chars_T, file_buffer,
-    file_buffer_b_signcols as C2Rust_Unnamed_2, file_buffer_b_wininfo as C2Rust_Unnamed_10,
-    file_buffer_update_callbacks as C2Rust_Unnamed,
-    file_buffer_update_channels as C2Rust_Unnamed_0, file_comparison, float_T, fmark_T, fmarkv_T,
-    frame_S, frame_T, funccall_S, funccall_S_fc_fixvar as C2Rust_Unnamed_5, funccall_T, garray_T,
-    gid_t, handle_T, hash_T, hashitem_T, hashtab_T, infoptr_T, int16_t, int32_t, int64_t,
-    lcs_chars_T, linenr_T, list_T, listitem_S, listitem_T, listvar_S, listwatch_S, listwatch_T,
-    llpos_T, lpos_T, mapblock, mapblock_T, match_T, matchitem, matchitem_T, memfile_T, memline_T,
-    mfdirty_T, mode_t, mtnode_inner_s, mtnode_s, off_t, partial_S, partial_T, pos_T, pos_save_T,
-    proftime_T, pthread_mutex_t, pthread_rwlock_t, ptr_t, qf_info_S, qf_info_T, queue,
-    reg_extmatch_T, regmatch_T, regmmatch_T, regprog, regprog_T, sattr_T, schar_T, scid_T, sctx_T,
-    size_t, ssize_t, syn_state, syn_state_sst_union as C2Rust_Unnamed_3, syn_time_T, synblock_T,
-    synstate_T, taggy_T, terminal, time_t, typval_T, typval_vval_union, u_entry, u_entry_T,
-    u_header, u_header_T, u_header_uh_alt_next as C2Rust_Unnamed_7,
-    u_header_uh_alt_prev as C2Rust_Unnamed_6, u_header_uh_next as C2Rust_Unnamed_9,
-    u_header_uh_prev as C2Rust_Unnamed_8, ufunc_S, ufunc_T, uid_t, uint8_t, uint16_t, uint32_t,
-    uint64_t, undo_object, uv__io_cb, uv__io_s, uv__io_t, uv__queue, uv__work, uv_async_cb,
-    uv_async_s, uv_async_s_u as C2Rust_Unnamed_17, uv_async_t, uv_buf_t, uv_close_cb, uv_dirent_s,
-    uv_dirent_t, uv_dirent_type_t, uv_file, uv_fs_cb, uv_fs_s, uv_fs_t, uv_fs_type, uv_gid_t,
-    uv_handle_s, uv_handle_s_u as C2Rust_Unnamed_12, uv_handle_t, uv_handle_type, uv_loop_s,
-    uv_loop_s_active_reqs as C2Rust_Unnamed_16, uv_loop_s_timer_heap as C2Rust_Unnamed_15,
-    uv_loop_t, uv_mutex_t, uv_req_type, uv_rwlock_t, uv_signal_cb, uv_signal_s,
-    uv_signal_s_tree_entry as C2Rust_Unnamed_13, uv_signal_s_u as C2Rust_Unnamed_14, uv_signal_t,
-    uv_stat_t, uv_timespec_t, uv_uid_t, varnumber_T, virt_line, visualinfo_T, win_T, window_S,
-    wininfo_S, winopt_T, wline_T, xfmark_T,
+use crate::src::nvim::types::{
+    Directory, FileComparison, FileID, FileInfo, colnr_T, file_comparison, garray_T, linenr_T,
+    regmatch_T, regprog_T, size_t, uint8_t, uv__queue, uv__work, uv_buf_t, uv_dirent_t,
+    uv_dirent_type_t, uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t,
+    uv_timespec_t,
 };
 unsafe extern "C" {
     fn vim_regcomp(
@@ -78,154 +45,14 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub const kVPosWinCol: VirtTextPos = 5;
-pub const kVPosRightAlign: VirtTextPos = 4;
-pub const kVPosOverlay: VirtTextPos = 3;
-pub const kVPosInline: VirtTextPos = 2;
-pub const kVPosEndOfLineRightAlign: VirtTextPos = 1;
-pub const kVPosEndOfLine: VirtTextPos = 0;
-pub const VAR_DEF_SCOPE: ScopeType = 2;
-pub const VAR_SCOPE: ScopeType = 1;
-pub const VAR_NO_SCOPE: ScopeType = 0;
-pub const VAR_FIXED: VarLockStatus = 2;
-pub const VAR_LOCKED: VarLockStatus = 1;
-pub const VAR_UNLOCKED: VarLockStatus = 0;
-pub const kSpecialVarNull: SpecialVarValue = 0;
-pub const kBoolVarTrue: BoolVarValue = 1;
-pub const kBoolVarFalse: BoolVarValue = 0;
-pub const VAR_BLOB: VarType = 10;
-pub const VAR_PARTIAL: VarType = 9;
-pub const VAR_SPECIAL: VarType = 8;
-pub const VAR_BOOL: VarType = 7;
-pub const VAR_FLOAT: VarType = 6;
-pub const VAR_DICT: VarType = 5;
-pub const VAR_LIST: VarType = 4;
-pub const VAR_FUNC: VarType = 3;
-pub const VAR_STRING: VarType = 2;
-pub const VAR_NUMBER: VarType = 1;
-pub const VAR_UNKNOWN: VarType = 0;
-pub const kStlClickFuncRun: C2Rust_Unnamed_11 = 3;
-pub const kStlClickTabClose: C2Rust_Unnamed_11 = 2;
-pub const kStlClickTabSwitch: C2Rust_Unnamed_11 = 1;
-pub const kStlClickDisabled: C2Rust_Unnamed_11 = 0;
-pub const kAlignRight: AlignTextPos = 2;
-pub const kAlignCenter: AlignTextPos = 1;
-pub const kAlignLeft: AlignTextPos = 0;
-pub const kWinStyleMinimal: WinStyle = 1;
-pub const kWinStyleUnused: WinStyle = 0;
-pub const kWinSplitBelow: WinSplit = 3;
-pub const kWinSplitAbove: WinSplit = 2;
-pub const kWinSplitRight: WinSplit = 1;
-pub const kWinSplitLeft: WinSplit = 0;
-pub const kFloatRelativeLaststatus: FloatRelative = 5;
-pub const kFloatRelativeTabline: FloatRelative = 4;
-pub const kFloatRelativeMouse: FloatRelative = 3;
-pub const kFloatRelativeCursor: FloatRelative = 2;
-pub const kFloatRelativeWindow: FloatRelative = 1;
-pub const kFloatRelativeEditor: FloatRelative = 0;
-pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
-pub const UV_FILE: uv_handle_type = 17;
-pub const UV_SIGNAL: uv_handle_type = 16;
-pub const UV_UDP: uv_handle_type = 15;
-pub const UV_TTY: uv_handle_type = 14;
-pub const UV_TIMER: uv_handle_type = 13;
-pub const UV_TCP: uv_handle_type = 12;
-pub const UV_STREAM: uv_handle_type = 11;
-pub const UV_PROCESS: uv_handle_type = 10;
-pub const UV_PREPARE: uv_handle_type = 9;
-pub const UV_POLL: uv_handle_type = 8;
-pub const UV_NAMED_PIPE: uv_handle_type = 7;
-pub const UV_IDLE: uv_handle_type = 6;
-pub const UV_HANDLE: uv_handle_type = 5;
-pub const UV_FS_POLL: uv_handle_type = 4;
-pub const UV_FS_EVENT: uv_handle_type = 3;
-pub const UV_CHECK: uv_handle_type = 2;
-pub const UV_ASYNC: uv_handle_type = 1;
-pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
-pub const UV_RANDOM: uv_req_type = 10;
-pub const UV_GETNAMEINFO: uv_req_type = 9;
-pub const UV_GETADDRINFO: uv_req_type = 8;
-pub const UV_WORK: uv_req_type = 7;
-pub const UV_FS: uv_req_type = 6;
-pub const UV_UDP_SEND: uv_req_type = 5;
-pub const UV_SHUTDOWN: uv_req_type = 4;
-pub const UV_WRITE: uv_req_type = 3;
-pub const UV_CONNECT: uv_req_type = 2;
-pub const UV_REQ: uv_req_type = 1;
 pub const UV_UNKNOWN_REQ: uv_req_type = 0;
-pub const UV_DIRENT_BLOCK: uv_dirent_type_t = 7;
-pub const UV_DIRENT_CHAR: uv_dirent_type_t = 6;
-pub const UV_DIRENT_SOCKET: uv_dirent_type_t = 5;
-pub const UV_DIRENT_FIFO: uv_dirent_type_t = 4;
-pub const UV_DIRENT_LINK: uv_dirent_type_t = 3;
-pub const UV_DIRENT_DIR: uv_dirent_type_t = 2;
-pub const UV_DIRENT_FILE: uv_dirent_type_t = 1;
 pub const UV_DIRENT_UNKNOWN: uv_dirent_type_t = 0;
-pub const UV_FS_LUTIME: uv_fs_type = 36;
-pub const UV_FS_MKSTEMP: uv_fs_type = 35;
-pub const UV_FS_STATFS: uv_fs_type = 34;
-pub const UV_FS_CLOSEDIR: uv_fs_type = 33;
-pub const UV_FS_READDIR: uv_fs_type = 32;
-pub const UV_FS_OPENDIR: uv_fs_type = 31;
-pub const UV_FS_LCHOWN: uv_fs_type = 30;
-pub const UV_FS_COPYFILE: uv_fs_type = 29;
-pub const UV_FS_REALPATH: uv_fs_type = 28;
-pub const UV_FS_FCHOWN: uv_fs_type = 27;
-pub const UV_FS_CHOWN: uv_fs_type = 26;
-pub const UV_FS_READLINK: uv_fs_type = 25;
-pub const UV_FS_SYMLINK: uv_fs_type = 24;
-pub const UV_FS_LINK: uv_fs_type = 23;
-pub const UV_FS_SCANDIR: uv_fs_type = 22;
-pub const UV_FS_RENAME: uv_fs_type = 21;
-pub const UV_FS_MKDTEMP: uv_fs_type = 20;
-pub const UV_FS_MKDIR: uv_fs_type = 19;
-pub const UV_FS_RMDIR: uv_fs_type = 18;
-pub const UV_FS_UNLINK: uv_fs_type = 17;
-pub const UV_FS_FDATASYNC: uv_fs_type = 16;
-pub const UV_FS_FSYNC: uv_fs_type = 15;
-pub const UV_FS_FCHMOD: uv_fs_type = 14;
-pub const UV_FS_CHMOD: uv_fs_type = 13;
-pub const UV_FS_ACCESS: uv_fs_type = 12;
-pub const UV_FS_FUTIME: uv_fs_type = 11;
-pub const UV_FS_UTIME: uv_fs_type = 10;
-pub const UV_FS_FTRUNCATE: uv_fs_type = 9;
-pub const UV_FS_FSTAT: uv_fs_type = 8;
-pub const UV_FS_LSTAT: uv_fs_type = 7;
-pub const UV_FS_STAT: uv_fs_type = 6;
-pub const UV_FS_SENDFILE: uv_fs_type = 5;
-pub const UV_FS_WRITE: uv_fs_type = 4;
-pub const UV_FS_READ: uv_fs_type = 3;
-pub const UV_FS_CLOSE: uv_fs_type = 2;
-pub const UV_FS_OPEN: uv_fs_type = 1;
 pub const UV_FS_CUSTOM: uv_fs_type = 0;
-pub const UV_FS_UNKNOWN: uv_fs_type = -1;
 pub type C2Rust_Unnamed_18 = ::core::ffi::c_uint;
-pub const WILD_FUNC_TRIGGER: C2Rust_Unnamed_18 = 65536;
-pub const WILD_MAY_EXPAND_PATTERN: C2Rust_Unnamed_18 = 32768;
-pub const WILD_NOSELECT: C2Rust_Unnamed_18 = 16384;
-pub const BUF_DIFF_FILTER: C2Rust_Unnamed_18 = 8192;
-pub const WILD_BUFLASTUSED: C2Rust_Unnamed_18 = 4096;
-pub const WILD_NOERROR: C2Rust_Unnamed_18 = 2048;
-pub const WILD_IGNORE_COMPLETESLASH: C2Rust_Unnamed_18 = 1024;
-pub const WILD_ALLLINKS: C2Rust_Unnamed_18 = 512;
 pub const WILD_ICASE: C2Rust_Unnamed_18 = 256;
-pub const WILD_ESCAPE: C2Rust_Unnamed_18 = 128;
-pub const WILD_SILENT: C2Rust_Unnamed_18 = 64;
-pub const WILD_KEEP_ALL: C2Rust_Unnamed_18 = 32;
 pub const WILD_ADD_SLASH: C2Rust_Unnamed_18 = 16;
-pub const WILD_NO_BEEP: C2Rust_Unnamed_18 = 8;
-pub const WILD_USE_NL: C2Rust_Unnamed_18 = 4;
-pub const WILD_HOME_REPLACE: C2Rust_Unnamed_18 = 2;
-pub const WILD_LIST_NOTFOUND: C2Rust_Unnamed_18 = 1;
 pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
-pub const kShellOptHideMess: C2Rust_Unnamed_19 = 64;
-pub const kShellOptWrite: C2Rust_Unnamed_19 = 32;
-pub const kShellOptRead: C2Rust_Unnamed_19 = 16;
 pub const kShellOptSilent: C2Rust_Unnamed_19 = 8;
-pub const kShellOptDoOut: C2Rust_Unnamed_19 = 4;
-pub const kShellOptExpand: C2Rust_Unnamed_19 = 2;
-pub const kShellOptFilter: C2Rust_Unnamed_19 = 1;
 pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
 pub const EW_NOBREAK: C2Rust_Unnamed_20 = 262144;
 pub const EW_CDPATH: C2Rust_Unnamed_20 = 131072;
