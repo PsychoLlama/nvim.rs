@@ -9,6 +9,12 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Rewrote the persistence layer, covering swap files and crash recovery
+  (`'directory'`, `:preserve`, the ATTENTION prompt, `:recover` and
+  `swapinfo()`), reading a file into a buffer and writing one back out
+  (`'fileformat'`, `'fileencoding'`, `'fileencodings'`, BOM handling,
+  `'charconvert'`, backups and `'patchmode'`), and the ShaDa file
+  (`:rshada`, `:wshada`, the merge with an existing file, and `v:oldfiles`).
 - Rewrote spell checking, covering the `.aff`/`.dic` compiler behind
   `:mkspell`, the `.spl` and `.sug` file formats on both the reading and
   writing side, word lookup with its prefixes and compounding, `'spelllang'`
