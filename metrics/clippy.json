@@ -135,7 +135,7 @@
     "crates/nvim/src/nvim/quickfix/make.rs": 13,
     "crates/nvim/src/nvim/quickfix/navigate.rs": 7,
     "crates/nvim/src/nvim/quickfix/parse.rs": 1,
-    "crates/nvim/src/nvim/quickfix/read.rs": 16,
+    "crates/nvim/src/nvim/quickfix/read.rs": 1,
     "crates/nvim/src/nvim/quickfix/setprops.rs": 41,
     "crates/nvim/src/nvim/quickfix/vimgrep.rs": 13,
     "crates/nvim/src/nvim/quickfix/window.rs": 20,

@@ -92,7 +92,7 @@ use crate::src::nvim::os::fs::{
 use crate::src::nvim::os::input::{line_breakcheck, os_breakcheck};
 use crate::src::nvim::os::libc::{
     __assert_fail, __errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets,
-    gettext, memcpy, memset, snprintf, strcat, strcmp, strcpy, strlen, strncasecmp, time,
+    gettext, memset, snprintf, strcat, strcmp, strcpy, strlen, strncasecmp, time,
 };
 use crate::src::nvim::path::{
     FreeWild, add_pathsep, concat_fnames, fix_fname, gen_expand_wildcards, path_fnamecmp,
@@ -258,23 +258,6 @@ pub struct qf_delq_S {
     pub next: *mut qf_delq_S,
     pub qi: *mut qf_info_T,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct qfstate_T {
-    pub linebuf: *mut ::core::ffi::c_char,
-    pub linelen: size_t,
-    pub growbuf: *mut ::core::ffi::c_char,
-    pub growbufsiz: size_t,
-    pub fd: *mut FILE,
-    pub tv: *mut typval_T,
-    pub p_str: *mut ::core::ffi::c_char,
-    pub p_list: *mut list_T,
-    pub p_li: *mut listitem_T,
-    pub buf: *mut buf_T,
-    pub buflnum: linenr_T,
-    pub lnumlast: linenr_T,
-    pub vc: vimconv_T,
-}
 pub const QF_FAIL: C2Rust_Unnamed_34 = 0;
 pub const QF_OK: C2Rust_Unnamed_34 = 1;
 pub const QF_END_OF_INPUT: C2Rust_Unnamed_34 = 2;
@@ -366,7 +349,6 @@ static qfga: GlobalCell<garray_T> = GlobalCell::new(garray_T {
 static quickfix_busy: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static qf_delq_head: GlobalCell<*mut qf_delq_T> =
     GlobalCell::new(::core::ptr::null_mut::<qf_delq_T>());
-static LINE_MAXLEN: GlobalCell<size_t> = GlobalCell::new(4096 as size_t);
 static qftf_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: C2Rust_Unnamed_6 {
         funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
