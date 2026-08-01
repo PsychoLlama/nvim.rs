@@ -32,8 +32,7 @@ use crate::src::nvim::os::shell::{get_cmd_output, os_expand_wildcards};
 use crate::src::nvim::strings::{concat_str, vim_snprintf, vim_strchr};
 use crate::src::nvim::types::{
     Directory, FileComparison, FileID, FileInfo, colnr_T, file_comparison, garray_T, linenr_T,
-    regmatch_T, regprog_T, size_t, uint8_t, uv__queue, uv__work, uv_buf_t, uv_dirent_t,
-    uv_dirent_type_t, uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t,
+    regmatch_T, regprog_T, size_t, uint8_t, uv_dirent_type_t, uv_fs_type, uv_req_type, uv_stat_t,
     uv_timespec_t,
 };
 
