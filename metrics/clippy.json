@@ -125,7 +125,6 @@
     "crates/nvim/src/nvim/profile.rs": 7,
     "crates/nvim/src/nvim/quickfix.rs": 3,
     "crates/nvim/src/nvim/quickfix/eval.rs": 6,
-    "crates/nvim/src/nvim/quickfix/getprops.rs": 87,
     "crates/nvim/src/nvim/quickfix/parse.rs": 1,
     "crates/nvim/src/nvim/quickfix/read.rs": 1,
     "crates/nvim/src/nvim/quickfix/setprops.rs": 41,
