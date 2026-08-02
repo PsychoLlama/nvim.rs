@@ -314,7 +314,7 @@ impl WinLineVars {
     ) {
         // SAFETY: the caller's window and index.
         unsafe {
-            let sattr = self.sattrs[sign_idx as usize];
+            let sattr = self.sign_attrs[sign_idx as usize];
             let scl_attr = win_hl_attr(
                 wp,
                 if use_cursor_line_highlight(wp, self.lnum) {
@@ -499,7 +499,7 @@ impl WinLineVars {
             let first_row = self.row == self.startrow + self.filler_lines;
             // 'signcolumn'=number: a sign on this line replaces the number.
             if (*wp).w_minscwidth == SCL_NUM
-                && self.sattrs[0].text[0] != 0
+                && self.sign_attrs[0].text[0] != 0
                 && first_row
                 && self.filler_todo <= 0
             {
@@ -790,10 +790,10 @@ impl WinLineVars {
             let sbr = get_showbreak_value(wp);
             if *sbr != NUL as ::core::ffi::c_char && self.need_showbreak {
                 // 'showbreak' combined with 'cursorline', 'showbreak' winning.
-                let attr = hl_combine_attr(self.cul_attr, win_hl_attr(wp, HLF_AT));
+                let attr = hl_combine_attr(self.cursorline_attr, win_hl_attr(wp, HLF_AT));
                 let vcol_before = self.vcol;
                 self.draw_col_buf(wp, sbr, strlen(sbr), attr, ::core::ptr::null(), true);
-                self.vcol_sbr = self.vcol;
+                self.showbreak_vcol = self.vcol;
 
                 // As in `handle_breakindent`: move the highlighted area past
                 // what was just drawn.

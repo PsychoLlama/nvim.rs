@@ -57,7 +57,7 @@ pub struct WinLineVars {
     pub off: ::core::ffi::c_int,
 
     /// `'cursorline'` attribute, 0 when it does not apply here.
-    pub cul_attr: ::core::ffi::c_int,
+    pub cursorline_attr: ::core::ffi::c_int,
     /// Attribute for the whole line.
     pub line_attr: ::core::ffi::c_int,
     /// Low-priority attribute for the whole line.
@@ -76,7 +76,7 @@ pub struct WinLineVars {
     pub tocol: ::core::ffi::c_int,
 
     /// Virtual column just after `'showbreak'`.
-    pub vcol_sbr: colnr_T,
+    pub showbreak_vcol: colnr_T,
     /// This row still owes a `'showbreak'`.
     pub need_showbreak: bool,
 
@@ -116,7 +116,7 @@ pub struct WinLineVars {
     /// Filler lines still to do, plus one.
     pub filler_todo: ::core::ffi::c_int,
     /// Signs to show in the sign column.
-    pub sattrs: [SignTextAttrs; 9],
+    pub sign_attrs: [SignTextAttrs; 9],
     /// In `'linebreak'` mode, only consider wrapping after a non-blank.
     pub need_lbr: bool,
 
@@ -270,6 +270,11 @@ pub(crate) struct LineSetup {
 
     // -- columns and decorations ---------------------------------------------
     /// `'statuscolumn'` request; `draw` is false when the option is empty.
+    ///
+    /// Its `sattrs` is left null here and attached by `win_line` itself: the
+    /// signs it points at are [`WinLineVars::sign_attrs`], which lives in
+    /// `win_line`'s own frame, and a pointer derived from the `&mut` the
+    /// setup half borrows would not outlive that borrow.
     pub(crate) statuscol: statuscol_T,
     /// Virtual lines to draw above or below this buffer line.
     pub(crate) virt_lines: VirtLines,
@@ -557,19 +562,19 @@ impl WinLineVars {
     pub(crate) unsafe fn apply_cursorline_highlight(&mut self, wp: *mut win_T) {
         // SAFETY: the caller's window.
         unsafe {
-            self.cul_attr = win_hl_attr(wp, HLF_CUL);
-            let ae = syn_attr2entry(self.cul_attr);
+            self.cursorline_attr = win_hl_attr(wp, HLF_CUL);
+            let ae = syn_attr2entry(self.cursorline_attr);
             if ae.rgb_fg_color == -1 as RgbValue && ae.cterm_fg_color == 0 {
-                self.line_attr_lowprio = self.cul_attr;
+                self.line_attr_lowprio = self.cursorline_attr;
             } else if State.get() & MODE_INSERT == 0
                 && bt_quickfix((*wp).w_buffer)
                 && qf_current_entry(wp) == self.lnum
             {
                 // A quickfix window's current-entry highlight keeps its own
                 // colours; CursorLine goes underneath it.
-                self.line_attr = hl_combine_attr(self.cul_attr, self.line_attr);
+                self.line_attr = hl_combine_attr(self.cursorline_attr, self.line_attr);
             } else {
-                self.line_attr = self.cul_attr;
+                self.line_attr = self.cursorline_attr;
             }
         }
     }
@@ -582,14 +587,14 @@ impl WinLineVars {
         // SAFETY: the caller's window.
         unsafe {
             self.line_attr = win_hl_attr(wp, self.diff_hlf);
-            if self.cul_attr != 0 {
+            if self.cursorline_attr != 0 {
                 self.line_attr = if self.line_attr_lowprio != 0 {
                     hl_combine_attr(
-                        hl_combine_attr(self.cul_attr, self.line_attr),
+                        hl_combine_attr(self.cursorline_attr, self.line_attr),
                         hl_get_underline(),
                     )
                 } else {
-                    hl_combine_attr(self.line_attr, self.cul_attr)
+                    hl_combine_attr(self.line_attr, self.cursorline_attr)
                 };
             }
         }

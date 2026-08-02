@@ -529,7 +529,7 @@ impl LineSetup {
                 wp,
                 (*wp).w_buffer,
                 wlv.lnum - 1,
-                &raw mut wlv.sattrs as *mut SignTextAttrs,
+                &raw mut wlv.sign_attrs as *mut SignTextAttrs,
                 &raw mut sign_line_attr,
                 &raw mut wlv.sign_cul_attr,
                 &raw mut wlv.sign_num_attr,
@@ -539,7 +539,6 @@ impl LineSetup {
                 // 'statuscolumn' replaces the fold, sign and number columns;
                 // the expression is evaluated per row by `draw_statuscol`.
                 self.statuscol.draw = true;
-                self.statuscol.sattrs = &raw mut wlv.sattrs as *mut SignTextAttrs;
                 self.statuscol.lnum = wlv.lnum;
                 self.statuscol.foldinfo = wlv.foldinfo;
                 self.statuscol.width =

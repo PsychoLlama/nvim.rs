@@ -226,7 +226,7 @@ pub unsafe extern "C" fn win_line(
         old_boguscols: 0 as ::core::ffi::c_int,
         vcol_off_co: 0,
         off: 0,
-        cul_attr: 0,
+        cursorline_attr: 0,
         line_attr: 0,
         line_attr_lowprio: 0,
         sign_num_attr: 0,
@@ -234,7 +234,7 @@ pub unsafe extern "C" fn win_line(
         sign_cul_attr: 0,
         fromcol: -10 as ::core::ffi::c_int,
         tocol: MAXCOL as ::core::ffi::c_int,
-        vcol_sbr: -1 as colnr_T,
+        showbreak_vcol: -1 as colnr_T,
         need_showbreak: false,
         char_attr: 0,
         n_extra: 0,
@@ -250,7 +250,7 @@ pub unsafe extern "C" fn win_line(
         n_virt_below: 0,
         filler_lines: 0,
         filler_todo: 0,
-        sattrs: [SignTextAttrs {
+        sign_attrs: [SignTextAttrs {
             text: [0; 2],
             hl_id: 0,
         }; 9],
@@ -318,6 +318,7 @@ pub unsafe extern "C" fn win_line(
         mut word_end,
         cur_checked_col,
     } = prepare_line(&mut wlv, wp, endrow, col_rows, concealed, spv, &mut scratch);
+    statuscol.sattrs = &raw mut wlv.sign_attrs as *mut SignTextAttrs;
     let mut lcs_eol_todo: bool = true_0 != 0;
     let mut draw_cols: bool = true_0 != 0;
     let mut leftcols_width: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
@@ -356,7 +357,7 @@ pub unsafe extern "C" fn win_line(
         '_end_check: {
             if draw_cols {
                 if cul_screenline {
-                    wlv.cul_attr = 0 as ::core::ffi::c_int;
+                    wlv.cursorline_attr = 0 as ::core::ffi::c_int;
                     wlv.line_attr = line_attr_save;
                     wlv.line_attr_lowprio = line_attr_lowprio_save;
                 }
@@ -831,11 +832,11 @@ pub unsafe extern "C" fn win_line(
                             mb_l = 1 as ::core::ffi::c_int;
                             mb_schar = mb_c as schar_T;
                             multi_attr = win_hl_attr(wp, HLF_AT);
-                            if wlv.cul_attr != 0 {
+                            if wlv.cursorline_attr != 0 {
                                 multi_attr = if 0 as ::core::ffi::c_int != wlv.line_attr_lowprio {
-                                    hl_combine_attr(wlv.cul_attr, multi_attr)
+                                    hl_combine_attr(wlv.cursorline_attr, multi_attr)
                                 } else {
-                                    hl_combine_attr(multi_attr, wlv.cul_attr)
+                                    hl_combine_attr(multi_attr, wlv.cursorline_attr)
                                 };
                             }
                         } else {
@@ -1352,7 +1353,7 @@ pub unsafe extern "C" fn win_line(
                             }
                             let sbr: *mut ::core::ffi::c_char = get_showbreak_value(wp);
                             if *sbr as ::core::ffi::c_int != NUL
-                                && wlv.vcol == wlv.vcol_sbr
+                                && wlv.vcol == wlv.showbreak_vcol
                                 && (*wp).w_onebuf_opt.wo_wrap != 0
                             {
                                 vcol_adjusted =
@@ -1745,8 +1746,8 @@ pub unsafe extern "C" fn win_line(
                                 &raw mut wlv.char_attr,
                             );
                         }
-                        let eol_attr: ::core::ffi::c_int = if wlv.cul_attr != 0 {
-                            hl_combine_attr(wlv.cul_attr, wlv.char_attr)
+                        let eol_attr: ::core::ffi::c_int = if wlv.cursorline_attr != 0 {
+                            hl_combine_attr(wlv.cursorline_attr, wlv.char_attr)
                         } else {
                             wlv.char_attr
                         };
