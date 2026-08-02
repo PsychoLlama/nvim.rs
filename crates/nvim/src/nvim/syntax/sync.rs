@@ -495,7 +495,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_sync(
                             (*(*curwin.get()).w_s).b_syn_linecont_prog =
                                 vim_regcomp((*(*curwin.get()).w_s).b_syn_linecont_pat, RE_MAGIC);
                             p_cpo.set(cpo_save);
-                            syn_clear_time(&raw mut (*(*curwin.get()).w_s).b_syn_linecont_time);
+                            syn_clear_time(&mut (*(*curwin.get()).w_s).b_syn_linecont_time);
                             if (*(*curwin.get()).w_s).b_syn_linecont_prog.is_null() {
                                 let mut ptr_: *mut *mut ::core::ffi::c_void =
                                     &raw mut (*(*curwin.get()).w_s).b_syn_linecont_pat

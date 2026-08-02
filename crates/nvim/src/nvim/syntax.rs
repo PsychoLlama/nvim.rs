@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::autocmd::{EVENT_SYNTAX, apply_autocmds};
 use crate::src::nvim::buffer::buf_get_changedtick;
@@ -226,17 +228,6 @@ pub const EXP_SYNC: C2Rust_Unnamed_24 = 3;
 pub const EXP_SPELL: C2Rust_Unnamed_24 = 2;
 pub const EXP_CASE: C2Rust_Unnamed_24 = 1;
 pub const EXP_SUBCMD: C2Rust_Unnamed_24 = 0;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct time_entry_T {
-    pub total: proftime_T,
-    pub count: ::core::ffi::c_int,
-    pub match_0: ::core::ffi::c_int,
-    pub slowest: proftime_T,
-    pub average: proftime_T,
-    pub id: ::core::ffi::c_int,
-    pub pattern: *mut ::core::ffi::c_char,
-}
 static namelist1: GlobalCell<[keyvalue_T; 10]> = GlobalCell::new(
     [keyvalue_T {
         key: 0,
@@ -353,11 +344,45 @@ static dumkey: GlobalCell<keyentry_T> = GlobalCell::new(keyentry_T {
     keyword: [],
 });
 static keepend_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-static msg_no_items: GlobalCell<[::core::ffi::c_char; 40]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 40], [::core::ffi::c_char; 40]>(
-        *b"No Syntax items defined for this buffer\0",
-    )
-});
+/// What every `:syntax`/`:syntime` listing answers when there is nothing to
+/// list.
+pub(crate) const MSG_NO_ITEMS: &::core::ffi::CStr = c"No Syntax items defined for this buffer";
+
+/// The syntax block being *configured* — `curwin`'s, which during a `:syntax`
+/// command is not necessarily [`syn_block`], the one being *parsed*.
+#[inline]
+pub(crate) unsafe fn cur_syn_block() -> *mut synblock_T {
+    unsafe { (*curwin.get()).w_s }
+}
+
+/// The `synpat_T` at `idx` in [`cur_syn_block`]'s pattern array.
+///
+/// An accessor and not a borrow because every `:syntax` command that adds a
+/// pattern can `ga_grow` the array out from under one.
+#[inline]
+pub(crate) unsafe fn cur_pattern(idx: ::core::ffi::c_int) -> *mut synpat_T {
+    unsafe { ((*cur_syn_block()).b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize) }
+}
+
+/// Number of patterns in [`cur_syn_block`].
+#[inline]
+pub(crate) unsafe fn cur_pattern_count() -> ::core::ffi::c_int {
+    unsafe { (*cur_syn_block()).b_syn_patterns.ga_len }
+}
+
+/// The `syn_cluster_T` at `idx` in [`cur_syn_block`]'s cluster array.
+#[inline]
+pub(crate) unsafe fn cur_cluster(idx: ::core::ffi::c_int) -> *mut syn_cluster_T {
+    unsafe {
+        ((*cur_syn_block()).b_syn_clusters.ga_data as *mut syn_cluster_T).offset(idx as isize)
+    }
+}
+
+/// Number of clusters in [`cur_syn_block`].
+#[inline]
+pub(crate) unsafe fn cur_cluster_count() -> ::core::ffi::c_int {
+    unsafe { (*cur_syn_block()).b_syn_clusters.ga_len }
+}
 pub const KEYWORD_IDX: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const ID_LIST_ALL: *mut int16_t = -1 as ::core::ffi::c_int as *mut int16_t;
 static next_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);

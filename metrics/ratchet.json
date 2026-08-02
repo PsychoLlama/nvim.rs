@@ -1,7 +1,7 @@
 {
   "internal_exports": 46,
   "files_without_forbid_unsafe": 609,
-  "files_without_deny_unsafe_op": 204,
+  "files_without_deny_unsafe_op": 203,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -514,7 +514,7 @@
     "crates/nvim/src/nvim/state.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/statusline.rs": {"lines": 3332, "no_mangle": 1, "unsafe": 15},
     "crates/nvim/src/nvim/strings.rs": {"lines": 4007, "no_mangle": 1, "unsafe": 113, "variadic": 5},
-    "crates/nvim/src/nvim/syntax.rs": {"unsafe": 11},
+    "crates/nvim/src/nvim/syntax.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/syntax/attr.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/syntax/cluster.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/syntax/command.rs": {"unsafe": 40},
@@ -528,7 +528,7 @@
     "crates/nvim/src/nvim/syntax/stack.rs": {"unsafe": 17},
     "crates/nvim/src/nvim/syntax/state.rs": {"unsafe": 13},
     "crates/nvim/src/nvim/syntax/sync.rs": {"unsafe": 9},
-    "crates/nvim/src/nvim/syntax/syntime.rs": {"unsafe": 6},
+    "crates/nvim/src/nvim/syntax/syntime.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/tag.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/tag/collect.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/tag/command.rs": {"unsafe": 23},

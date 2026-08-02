@@ -6,210 +6,181 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{CStr, c_char, c_int, c_void};
+
 #[allow(unused_imports)]
 use super::*;
 
-pub unsafe fn ex_syntime(mut eap: *mut exarg_T) {
+/// `:syntime {on,off,clear,report}`.
+pub unsafe fn ex_syntime(eap: *mut exarg_T) {
     unsafe {
-        if strcmp((*eap).arg, b"on\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        {
-            syn_time_on.set(true_0 != 0);
-        } else if strcmp((*eap).arg, b"off\0".as_ptr() as *const ::core::ffi::c_char)
-            == 0 as ::core::ffi::c_int
-        {
-            syn_time_on.set(false_0 != 0);
-        } else if strcmp(
-            (*eap).arg,
-            b"clear\0".as_ptr() as *const ::core::ffi::c_char,
-        ) == 0 as ::core::ffi::c_int
-        {
-            syntime_clear();
-        } else if strcmp(
-            (*eap).arg,
-            b"report\0".as_ptr() as *const ::core::ffi::c_char,
-        ) == 0 as ::core::ffi::c_int
-        {
-            syntime_report();
-        } else {
-            semsg(
-                gettext(&raw const e_invarg2 as *const ::core::ffi::c_char),
-                (*eap).arg,
-            );
-        };
-    }
-}
-
-pub(crate) unsafe extern "C" fn syn_clear_time(mut st: *mut syn_time_T) {
-    unsafe {
-        (*st).total = profile_zero();
-        (*st).slowest = profile_zero();
-        (*st).count = 0 as ::core::ffi::c_int;
-        (*st).match_0 = 0 as ::core::ffi::c_int;
-    }
-}
-
-pub(crate) unsafe extern "C" fn syntime_clear() {
-    unsafe {
-        let mut spp: *mut synpat_T = ::core::ptr::null_mut::<synpat_T>();
-        if !syntax_present(curwin.get()) {
-            msg(
-                gettext(msg_no_items.ptr() as *mut ::core::ffi::c_char),
-                0 as ::core::ffi::c_int,
-            );
-            return;
-        }
-        let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while idx < (*(*curwin.get()).w_s).b_syn_patterns.ga_len {
-            spp = ((*(*curwin.get()).w_s).b_syn_patterns.ga_data as *mut synpat_T)
-                .offset(idx as isize);
-            syn_clear_time(&raw mut (*spp).sp_time);
-            idx += 1;
-        }
-    }
-}
-
-pub unsafe extern "C" fn get_syntime_arg(
-    mut _xp: *mut expand_T,
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    match idx {
-        0 => {
-            return b"on\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        1 => {
-            return b"off\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        2 => {
-            return b"clear\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        3 => {
-            return b"report\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char;
-        }
-        _ => {}
-    }
-    return ::core::ptr::null_mut::<::core::ffi::c_char>();
-}
-
-pub(crate) unsafe extern "C" fn syn_compare_syntime(
-    mut v1: *const ::core::ffi::c_void,
-    mut v2: *const ::core::ffi::c_void,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut s1: *const time_entry_T = v1 as *const time_entry_T;
-        let mut s2: *const time_entry_T = v2 as *const time_entry_T;
-        return profile_cmp((*s1).total, (*s2).total);
-    }
-}
-
-pub(crate) unsafe extern "C" fn syntime_report() {
-    unsafe {
-        if !syntax_present(curwin.get()) {
-            msg(
-                gettext(msg_no_items.ptr() as *mut ::core::ffi::c_char),
-                0 as ::core::ffi::c_int,
-            );
-            return;
-        }
-        let mut ga: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        };
-        ga_init(
-            &raw mut ga,
-            ::core::mem::size_of::<time_entry_T>() as ::core::ffi::c_int,
-            50 as ::core::ffi::c_int,
-        );
-        let mut total_total: proftime_T = profile_zero();
-        let mut total_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut p: *mut time_entry_T = ::core::ptr::null_mut::<time_entry_T>();
-        let mut idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while idx < (*(*curwin.get()).w_s).b_syn_patterns.ga_len {
-            let mut spp: *mut synpat_T = ((*(*curwin.get()).w_s).b_syn_patterns.ga_data
-                as *mut synpat_T)
-                .offset(idx as isize);
-            if (*spp).sp_time.count > 0 as ::core::ffi::c_int {
-                p = ga_append_via_ptr(&raw mut ga, ::core::mem::size_of::<time_entry_T>())
-                    as *mut time_entry_T;
-                (*p).total = (*spp).sp_time.total;
-                total_total = profile_add(total_total, (*spp).sp_time.total);
-                (*p).count = (*spp).sp_time.count;
-                (*p).match_0 = (*spp).sp_time.match_0;
-                total_count += (*spp).sp_time.count;
-                (*p).slowest = (*spp).sp_time.slowest;
-                let mut tm: proftime_T = profile_divide((*spp).sp_time.total, (*spp).sp_time.count);
-                (*p).average = tm;
-                (*p).id = (*spp).sp_syn.id as ::core::ffi::c_int;
-                (*p).pattern = (*spp).sp_pattern;
+        let arg = CStr::from_ptr((*eap).arg);
+        match arg.to_bytes() {
+            b"on" => syn_time_on.set(true),
+            b"off" => syn_time_on.set(false),
+            b"clear" => syntime_clear(),
+            b"report" => syntime_report(),
+            _ => {
+                semsg(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg);
             }
-            idx += 1;
         }
-        if ga.ga_len > 1 as ::core::ffi::c_int {
+    }
+}
+
+/// Forget everything one pattern's timer accumulated.
+pub(crate) unsafe fn syn_clear_time(st: &mut syn_time_T) {
+    st.total = profile_zero();
+    st.slowest = profile_zero();
+    st.count = 0;
+    st.match_0 = 0;
+}
+
+/// `:syntime clear` — forget the timings of every pattern in this window.
+unsafe fn syntime_clear() {
+    unsafe {
+        if !syntax_present(curwin.get()) {
+            msg(gettext(MSG_NO_ITEMS.as_ptr()), 0);
+            return;
+        }
+        for idx in 0..cur_pattern_count() {
+            syn_clear_time(&mut (*cur_pattern(idx)).sp_time);
+        }
+    }
+}
+
+/// The arguments `:syntime` takes, for command-line completion.
+pub unsafe extern "C" fn get_syntime_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+    const ARGS: [&CStr; 4] = [c"on", c"off", c"clear", c"report"];
+    match ARGS.get(idx as usize) {
+        Some(s) => s.as_ptr().cast_mut(),
+        None => ::core::ptr::null_mut(),
+    }
+}
+
+/// One row of the `:syntime report` table: a pattern's accumulated timings,
+/// copied out of its `syn_time_T` so the table can be sorted.
+#[derive(Copy, Clone)]
+struct TimeEntry {
+    total: proftime_T,
+    count: c_int,
+    matches: c_int,
+    slowest: proftime_T,
+    average: proftime_T,
+    id: c_int,
+    pattern: *mut c_char,
+}
+
+/// Order two rows by total time, for [`qsort`].
+///
+/// Still `qsort` and not `sort_by`: two patterns can accumulate exactly the
+/// same total, and which of them the sort leaves first is then unprovable for
+/// any other algorithm.
+unsafe extern "C" fn syn_compare_syntime(v1: *const c_void, v2: *const c_void) -> c_int {
+    unsafe {
+        profile_cmp(
+            (*(v1 as *const TimeEntry)).total,
+            (*(v2 as *const TimeEntry)).total,
+        )
+    }
+}
+
+/// `:syntime report` — the timing table, slowest pattern last.
+unsafe fn syntime_report() {
+    unsafe {
+        if !syntax_present(curwin.get()) {
+            msg(gettext(MSG_NO_ITEMS.as_ptr()), 0);
+            return;
+        }
+
+        let mut entries: Vec<TimeEntry> = Vec::new();
+        let mut total_total = profile_zero();
+        let mut total_count: c_int = 0;
+        for idx in 0..cur_pattern_count() {
+            let spp = cur_pattern(idx);
+            let time = (*spp).sp_time;
+            if time.count <= 0 {
+                continue;
+            }
+            total_total = profile_add(total_total, time.total);
+            total_count += time.count;
+            entries.push(TimeEntry {
+                total: time.total,
+                count: time.count,
+                matches: time.match_0,
+                slowest: time.slowest,
+                average: profile_divide(time.total, time.count),
+                id: (*spp).sp_syn.id as c_int,
+                pattern: (*spp).sp_pattern,
+            });
+        }
+
+        // Skip the sort when there is nothing to sort: `qsort` may not be
+        // handed a NULL pointer, which an empty `Vec` would be.
+        if entries.len() > 1 {
             qsort(
-                ga.ga_data,
-                ga.ga_len as size_t,
-                ::core::mem::size_of::<time_entry_T>(),
-                Some(
-                    syn_compare_syntime
-                        as unsafe extern "C" fn(
-                            *const ::core::ffi::c_void,
-                            *const ::core::ffi::c_void,
-                        ) -> ::core::ffi::c_int,
-                ),
+                entries.as_mut_ptr() as *mut c_void,
+                entries.len(),
+                ::core::mem::size_of::<TimeEntry>(),
+                Some(syn_compare_syntime),
             );
         }
+
         msg_puts_title(gettext(
-            b"  TOTAL      COUNT  MATCH   SLOWEST     AVERAGE   NAME               PATTERN\0"
-                .as_ptr() as *const ::core::ffi::c_char,
+            c"  TOTAL      COUNT  MATCH   SLOWEST     AVERAGE   NAME               PATTERN"
+                .as_ptr(),
         ));
-        msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-        let mut idx_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while idx_0 < ga.ga_len && !got_int.get() {
-            p = (ga.ga_data as *mut time_entry_T).offset(idx_0 as isize);
-            msg_puts(profile_msg((*p).total));
-            msg_puts(b" \0".as_ptr() as *const ::core::ffi::c_char);
-            msg_advance(13 as ::core::ffi::c_int);
-            msg_outnum((*p).count);
-            msg_puts(b" \0".as_ptr() as *const ::core::ffi::c_char);
-            msg_advance(20 as ::core::ffi::c_int);
-            msg_outnum((*p).match_0);
-            msg_puts(b" \0".as_ptr() as *const ::core::ffi::c_char);
-            msg_advance(26 as ::core::ffi::c_int);
-            msg_puts(profile_msg((*p).slowest));
-            msg_puts(b" \0".as_ptr() as *const ::core::ffi::c_char);
-            msg_advance(38 as ::core::ffi::c_int);
-            msg_puts(profile_msg((*p).average));
-            msg_puts(b" \0".as_ptr() as *const ::core::ffi::c_char);
-            msg_advance(50 as ::core::ffi::c_int);
-            msg_outtrans(
-                highlight_group_name((*p).id - 1 as ::core::ffi::c_int),
-                0 as ::core::ffi::c_int,
-                false_0 != 0,
-            );
-            msg_puts(b" \0".as_ptr() as *const ::core::ffi::c_char);
-            msg_advance(69 as ::core::ffi::c_int);
-            let mut len: ::core::ffi::c_int = 0;
-            if Columns.get() < 80 as ::core::ffi::c_int {
-                len = 20 as ::core::ffi::c_int;
-            } else {
-                len = Columns.get() - 70 as ::core::ffi::c_int;
+        msg_puts(c"\n".as_ptr());
+        for entry in &entries {
+            if got_int.get() {
+                break;
             }
-            let mut patlen: ::core::ffi::c_int = strlen((*p).pattern) as ::core::ffi::c_int;
-            len = if len < patlen { len } else { patlen };
-            msg_outtrans_len((*p).pattern, len, 0 as ::core::ffi::c_int, false_0 != 0);
-            msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
-            idx_0 += 1;
+            report_row(entry);
         }
-        ga_clear(&raw mut ga);
         if !got_int.get() {
-            msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
+            msg_puts(c"\n".as_ptr());
             msg_puts(profile_msg(total_total));
-            msg_advance(13 as ::core::ffi::c_int);
+            msg_advance(13);
             msg_outnum(total_count);
-            msg_puts(b"\n\0".as_ptr() as *const ::core::ffi::c_char);
+            msg_puts(c"\n".as_ptr());
         }
+    }
+}
+
+/// Print one row of the report, each field in its own fixed column.
+///
+/// `msg_advance` pads to a column, so a value wider than its field simply
+/// pushes the rest of the row right; the trailing space after each value is
+/// what keeps two of them from running together when that happens.
+unsafe fn report_row(entry: &TimeEntry) {
+    unsafe {
+        msg_puts(profile_msg(entry.total));
+        msg_puts(c" ".as_ptr());
+        msg_advance(13);
+        msg_outnum(entry.count);
+        msg_puts(c" ".as_ptr());
+        msg_advance(20);
+        msg_outnum(entry.matches);
+        msg_puts(c" ".as_ptr());
+        msg_advance(26);
+        msg_puts(profile_msg(entry.slowest));
+        msg_puts(c" ".as_ptr());
+        msg_advance(38);
+        msg_puts(profile_msg(entry.average));
+        msg_puts(c" ".as_ptr());
+        msg_advance(50);
+        msg_outtrans(highlight_group_name(entry.id - 1), 0, false);
+        msg_puts(c" ".as_ptr());
+        msg_advance(69);
+
+        // The pattern gets whatever is left of the line; under 80 columns it
+        // will wrap anyway, so a fixed 20 is as good as any.
+        let room = if Columns.get() < 80 {
+            20
+        } else {
+            Columns.get() - 70
+        };
+        let len = room.min(strlen(entry.pattern) as c_int);
+        msg_outtrans_len(entry.pattern, len, 0, false);
+        msg_puts(c"\n".as_ptr());
     }
 }

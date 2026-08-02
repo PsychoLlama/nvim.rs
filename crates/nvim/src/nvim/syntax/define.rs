@@ -582,7 +582,7 @@ pub(crate) unsafe extern "C" fn get_syn_pattern(
             return ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
         (*ci).sp_ic = (*(*curwin.get()).w_s).b_syn_ic;
-        syn_clear_time(&raw mut (*ci).sp_time);
+        syn_clear_time(&mut (*ci).sp_time);
         end = end.offset(1);
         loop {
             idx = SPO_COUNT;

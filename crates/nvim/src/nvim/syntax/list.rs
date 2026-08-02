@@ -23,10 +23,7 @@ pub(crate) unsafe extern "C" fn syn_cmd_list(
         }
         msg_ext_set_kind(b"list_cmd\0".as_ptr() as *const ::core::ffi::c_char);
         if !syntax_present(curwin.get()) {
-            msg(
-                gettext(msg_no_items.ptr() as *mut ::core::ffi::c_char),
-                0 as ::core::ffi::c_int,
-            );
+            msg(gettext(MSG_NO_ITEMS.as_ptr()), 0 as ::core::ffi::c_int);
             return;
         }
         if syncing != 0 {
