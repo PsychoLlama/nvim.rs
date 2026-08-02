@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::src::nvim::buffer::bt_quickfix;
 use crate::src::nvim::buffer::buf_meta_total;
@@ -64,7 +66,7 @@ use crate::src::nvim::options::{
     kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,
     kOptSpoFlagNoplainbuffer,
 };
-use crate::src::nvim::os::libc::{__assert_fail, abs, memcpy, memset, snprintf, strlen};
+use crate::src::nvim::os::libc::{abs, memcpy, memset, snprintf, strlen};
 use crate::src::nvim::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
 use crate::src::nvim::pos::ltoreq;
 use crate::src::nvim::quickfix::qf_current_entry;
@@ -81,10 +83,10 @@ use crate::src::nvim::syntax::{
 use crate::src::nvim::terminal::terminal_get_line_attributes;
 use crate::src::nvim::types::{
     CharSize, CharsizeArg, DecorRange, DecorRangeKind, DecorVirtText, GridView, MetaIndex, NS,
-    RgbValue, ScreenGrid, SignTextAttrs, StlFlag, TriState, VimVarIndex, VirtLines, VirtText,
-    VirtTextChunk, VirtTextPos, WinExtmark, buf_T, colnr_T, diffline_T, foldinfo_T, hlf_T,
-    linenr_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t, smt_T, spellvars_T, ssize_t, statuscol_T,
-    uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
+    RgbValue, SignTextAttrs, StlFlag, TriState, VimVarIndex, VirtLines, VirtText, VirtTextChunk,
+    VirtTextPos, WinExtmark, buf_T, colnr_T, diffline_T, foldinfo_T, hlf_T, linenr_T, pos_T,
+    ptrdiff_t, sattr_T, schar_T, size_t, smt_T, spellvars_T, ssize_t, statuscol_T, uint8_t,
+    uint32_t, uint64_t, varnumber_T, virt_line, win_T,
 };
 use crate::src::nvim::ui::ui_rgb_attached;
 
@@ -146,6 +148,9 @@ pub type C2Rust_Unnamed_32 = ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DEFAULT_MAXPATHL: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
 pub const MAXPATHL: ::core::ffi::c_int = DEFAULT_MAXPATHL;
+/// The most negative `int`, which `draw_virt_text` uses as "this virtual
+/// text has no column yet".
+pub const INT_MIN: ::core::ffi::c_int = ::core::ffi::c_int::MIN;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
@@ -294,165 +299,170 @@ pub unsafe extern "C" fn win_line(
 /// How many bytes of the next line the spell checker joins onto this one, so
 /// that a word wrapping across the line break can be checked whole.
 pub const SPWORDLEN: ::core::ffi::c_int = 150;
-unsafe extern "C" fn wlv_put_linebuf(
-    mut wp: *mut win_T,
-    mut wlv: *const WinLineVars,
+/// Hand the line buffer to the grid.
+///
+/// `endcol` is one past the last column drawn; `clear_end` clears from there
+/// to the right edge of the window. `flags` are `grid_put_linebuf`'s and may
+/// not already carry `SLF_RIGHTLEFT` — this is where that is decided.
+///
+/// It is also where the `<<<` marker goes on the first row when
+/// `'smoothscroll'` has taken part of the line off the top.
+///
+/// # Safety
+/// `wp` must be a live window and the line buffers filled for it.
+unsafe fn wlv_put_linebuf(
+    wp: *mut win_T,
+    wlv: &WinLineVars,
     mut endcol: ::core::ffi::c_int,
-    mut clear_end: bool,
-    mut bg_attr: ::core::ffi::c_int,
+    clear_end: bool,
+    bg_attr: ::core::ffi::c_int,
     mut flags: ::core::ffi::c_int,
 ) {
-    let mut grid: *mut GridView = &raw mut (*wp).w_grid;
-    let mut startcol: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut clear_width: ::core::ffi::c_int = if clear_end as ::core::ffi::c_int != 0 {
-        (*wp).w_view_width
-    } else {
-        endcol
-    };
-    '_c2rust_label: {
-        if flags & SLF_RIGHTLEFT as ::core::ffi::c_int == 0 {
+    // SAFETY: the caller's window and line buffers.
+    unsafe {
+        let grid: *mut GridView = &raw mut (*wp).w_grid;
+        let mut startcol = 0;
+        let mut clear_width = if clear_end {
+            (*wp).w_view_width
         } else {
-            __assert_fail(
-                b"!(flags & SLF_RIGHTLEFT)\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                3253 as ::core::ffi::c_uint,
-                b"void wlv_put_linebuf(win_T *, const WinLineVars *, int, _Bool, int, int)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
+            endcol
+        };
+
+        assert!(flags & SLF_RIGHTLEFT as ::core::ffi::c_int == 0);
+        if (*wp).w_onebuf_opt.wo_rl != 0 {
+            linebuf_mirror(
+                &mut startcol,
+                &mut endcol,
+                &mut clear_width,
+                (*wp).w_view_width,
             );
+            flags |= SLF_RIGHTLEFT as ::core::ffi::c_int;
         }
-    };
-    if (*wp).w_onebuf_opt.wo_rl != 0 {
-        linebuf_mirror(
-            &mut startcol,
-            &mut endcol,
-            &mut clear_width,
-            (*wp).w_view_width,
-        );
-        flags |= SLF_RIGHTLEFT as ::core::ffi::c_int;
-    }
-    if (*wlv).row == 0 as ::core::ffi::c_int
-        && (*wp).w_skipcol > 0 as ::core::ffi::c_int
-        && *get_showbreak_value(wp) as ::core::ffi::c_int == NUL
-        && !((*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.prec != 0 as schar_T)
-    {
-        let mut off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if (*wp).w_onebuf_opt.wo_nu != 0 && (*wp).w_onebuf_opt.wo_rnu != 0 {
-            while off < (*wp).w_view_width
-                && ascii_isdigit(schar_get_ascii(*(*linebuf_char.ptr()).offset(off as isize))
-                    as ::core::ffi::c_int) as ::core::ffi::c_int
-                    != 0
-            {
+
+        if wlv.row == 0
+            && (*wp).w_skipcol > 0
+            // Do not overwrite the 'showbreak' text with "<<<" ...
+            && *get_showbreak_value(wp) as ::core::ffi::c_int == NUL
+            // ... nor the 'listchars' "precedes" text.
+            && !((*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.prec != 0)
+        {
+            let mut off = 0;
+            if (*wp).w_onebuf_opt.wo_nu != 0 && (*wp).w_onebuf_opt.wo_rnu != 0 {
+                // Do not overwrite the line number either: "123 text" becomes
+                // "123<<<xt".
+                while off < (*wp).w_view_width
+                    && ascii_isdigit(schar_get_ascii(*linebuf_char.get().add(off as usize))
+                        as ::core::ffi::c_int)
+                {
+                    off += 1;
+                }
+            }
+            for _ in 0..3 {
+                if off >= (*wp).w_view_width {
+                    break;
+                }
+                if off + 1 < (*wp).w_view_width
+                    && *linebuf_char.get().add(off as usize + 1) == NUL as schar_T
+                {
+                    // The first half of a double-width character is being
+                    // overwritten; blank its second half.
+                    *linebuf_char.get().add(off as usize + 1) = schar_from_ascii(b' ');
+                }
+                *linebuf_char.get().add(off as usize) = schar_from_ascii(b'<');
+                *linebuf_attr.get().add(off as usize) =
+                    *hl_attr_active.get().add(HLF_AT as usize) as sattr_T;
                 off += 1;
             }
         }
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < 3 as ::core::ffi::c_int && off < (*wp).w_view_width {
-            if (off + 1 as ::core::ffi::c_int) < (*wp).w_view_width
-                && *(*linebuf_char.ptr()).offset((off + 1 as ::core::ffi::c_int) as isize)
-                    == NUL as schar_T
-            {
-                *(*linebuf_char.ptr()).offset((off + 1 as ::core::ffi::c_int) as isize) =
-                    ' ' as ::core::ffi::c_int as schar_T;
-            }
-            *(*linebuf_char.ptr()).offset(off as isize) = '<' as ::core::ffi::c_int as schar_T;
-            *(*linebuf_attr.ptr()).offset(off as isize) =
-                *(*hl_attr_active.ptr()).offset(HLF_AT as isize) as sattr_T;
-            off += 1;
-            i += 1;
+
+        let mut row = wlv.row;
+        let mut coloff = 0;
+        let g = grid_adjust(grid, &raw mut row, &raw mut coloff);
+        grid_put_linebuf(
+            g,
+            row,
+            coloff,
+            LineSpan {
+                col: startcol,
+                endcol,
+                clear_width,
+            },
+            LineAttrs {
+                bg: bg_attr,
+                clear: 0,
+            },
+            wlv.vcol - 1,
+            flags,
+        );
+    }
+}
+
+/// Tell the decoration providers that a line is about to be drawn, and ask
+/// them for the first chunk of it.
+///
+/// The chunk size is only an approximation of how many bytes will be drawn:
+/// it assumes single-cell ASCII and ignores `'linebreak'`, `'breakindent'`
+/// and the rest. The character loop asks for more when it walks past what the
+/// answer covered.
+///
+/// # Safety
+/// `wp` must be a live window and `lnum` one of its buffer's lines.
+unsafe fn decor_providers_setup(
+    rows_to_draw: ::core::ffi::c_int,
+    draw_from_line_start: bool,
+    lnum: linenr_T,
+    col: colnr_T,
+    wp: *mut win_T,
+) -> ::core::ffi::c_int {
+    // SAFETY: the caller's window and line; the callbacks re-enter the editor.
+    unsafe {
+        let rem_vcols = if (*wp).w_onebuf_opt.wo_wrap != 0 {
+            let width = (*wp).w_view_width - win_col_off(wp);
+            let width2 = width + win_col_off2(wp);
+            let first_row_width = if draw_from_line_start { width } else { width2 };
+            first_row_width + (rows_to_draw - 1) * width2
+        } else {
+            (*wp).w_view_width - win_col_off(wp)
+        };
+
+        // Called here because the line pointer has to be invalidated anyway.
+        decor_providers_invoke_line(wp, lnum - 1);
+        validate_virtcol(wp);
+
+        invoke_range_next(wp, lnum, col, rem_vcols + 1)
+    }
+}
+
+/// Drive the decoration providers over the next span of a line.
+///
+/// Answers the byte column their answers now reach, or `INT_MAX` once the
+/// span runs to the end of the line.
+///
+/// # Safety
+/// `wp` must be a live window and `lnum` one of its buffer's lines.
+unsafe fn invoke_range_next(
+    wp: *mut win_T,
+    lnum: linenr_T,
+    begin_col: colnr_T,
+    col_off: colnr_T,
+) -> ::core::ffi::c_int {
+    // SAFETY: the caller's window and line; the callbacks re-enter the editor.
+    unsafe {
+        let line = ml_get_buf((*wp).w_buffer, lnum);
+        let line_len = ml_get_buf_len((*wp).w_buffer, lnum);
+        let col_off = col_off.max(1);
+
+        if col_off <= line_len - begin_col {
+            let mut end_col = begin_col + col_off;
+            // Do not cut a character in half.
+            end_col += mb_off_next(line, line.offset(end_col as isize));
+            decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum - 1, end_col);
+            validate_virtcol(wp);
+            end_col
+        } else {
+            decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum, 0);
+            validate_virtcol(wp);
+            ::core::ffi::c_int::MAX
         }
     }
-    let mut row: ::core::ffi::c_int = (*wlv).row;
-    let mut coloff: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut g: *mut ScreenGrid = grid_adjust(grid, &raw mut row, &raw mut coloff);
-    grid_put_linebuf(
-        g,
-        row,
-        coloff,
-        LineSpan {
-            col: startcol,
-            endcol,
-            clear_width,
-        },
-        LineAttrs {
-            bg: bg_attr,
-            clear: 0,
-        },
-        (*wlv).vcol - 1 as colnr_T,
-        flags,
-    );
 }
-unsafe extern "C" fn decor_providers_setup(
-    mut rows_to_draw: ::core::ffi::c_int,
-    mut draw_from_line_start: bool,
-    mut lnum: linenr_T,
-    mut col: colnr_T,
-    mut wp: *mut win_T,
-) -> ::core::ffi::c_int {
-    let mut rem_vcols: ::core::ffi::c_int = 0;
-    if (*wp).w_onebuf_opt.wo_wrap != 0 {
-        let mut width: ::core::ffi::c_int = (*wp).w_view_width - win_col_off(wp);
-        let mut width2: ::core::ffi::c_int = width + win_col_off2(wp);
-        let mut first_row_width: ::core::ffi::c_int =
-            if draw_from_line_start as ::core::ffi::c_int != 0 {
-                width
-            } else {
-                width2
-            };
-        rem_vcols = first_row_width + (rows_to_draw - 1 as ::core::ffi::c_int) * width2;
-    } else {
-        rem_vcols = (*wp).w_view_width - win_col_off(wp);
-    }
-    decor_providers_invoke_line(wp, lnum as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-    validate_virtcol(wp);
-    return invoke_range_next(
-        wp,
-        lnum as ::core::ffi::c_int,
-        col,
-        rem_vcols as colnr_T + 1 as colnr_T,
-    );
-}
-unsafe extern "C" fn invoke_range_next(
-    mut wp: *mut win_T,
-    mut lnum: ::core::ffi::c_int,
-    mut begin_col: colnr_T,
-    mut col_off: colnr_T,
-) -> ::core::ffi::c_int {
-    let line: *const ::core::ffi::c_char = ml_get_buf((*wp).w_buffer, lnum as linenr_T);
-    let line_len: ::core::ffi::c_int = ml_get_buf_len((*wp).w_buffer, lnum as linenr_T);
-    col_off = (if col_off > 1 as ::core::ffi::c_int {
-        col_off as ::core::ffi::c_int
-    } else {
-        1 as ::core::ffi::c_int
-    }) as colnr_T;
-    let mut new_col: colnr_T = 0;
-    if col_off <= line_len as colnr_T - begin_col {
-        let mut end_col: ::core::ffi::c_int =
-            begin_col as ::core::ffi::c_int + col_off as ::core::ffi::c_int;
-        end_col += mb_off_next(line, line.offset(end_col as isize));
-        decor_providers_invoke_range(
-            wp,
-            lnum - 1 as ::core::ffi::c_int,
-            begin_col as ::core::ffi::c_int,
-            lnum - 1 as ::core::ffi::c_int,
-            end_col,
-        );
-        validate_virtcol(wp);
-        new_col = end_col as colnr_T;
-    } else {
-        decor_providers_invoke_range(
-            wp,
-            lnum - 1 as ::core::ffi::c_int,
-            begin_col as ::core::ffi::c_int,
-            lnum,
-            0 as ::core::ffi::c_int,
-        );
-        validate_virtcol(wp);
-        new_col = INT_MAX as colnr_T;
-    }
-    return new_col as ::core::ffi::c_int;
-}
-pub const INT_MIN: ::core::ffi::c_int = -INT_MAX - 1 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
