@@ -125,9 +125,8 @@ pub unsafe fn spell_move_to(
 
         // Ephemeral extmarks live in the global decor_state, so it has to be
         // put aside and rebuilt per line here, then restored.
-        let saved_decor_start: DecorState = decor_state.get();
+        let saved_decor_start: DecorState = decor_state.with_mut(mem::take);
         let mut decor_lnum: linenr_T = -1;
-        decor_state.set(mem::zeroed());
 
         while !got_int.get() {
             let mut line = ml_get_buf((*wp).w_buffer, lnum);
@@ -327,7 +326,7 @@ pub unsafe fn spell_move_to(
         }
 
         decor_state_free(decor_state.ptr());
-        decor_state.set(saved_decor_start);
+        decor_state.with_mut(|state| *state = saved_decor_start);
         xfree(buf as *mut core::ffi::c_void);
         ret
     }

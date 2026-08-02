@@ -104,12 +104,16 @@ pub struct DecorSignHighlight {
     pub next: uint32_t,
     pub url: *const ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
+/// Not `Copy`: the two vectors below own their storage. `spell/navigate.rs`
+/// puts the state aside for the length of a scan, which is a `mem::take`
+/// rather than the struct copy upstream does.
+#[derive(Default)]
 pub struct DecorState {
     pub itr: [MarkTreeIter; 1],
-    pub slots: DecorState_slots,
-    pub ranges_i: DecorState_ranges_i,
+    /// The `DecorRange` slab, with a freelist through `next_free_i`.
+    pub slots: Vec<DecorRangeSlot>,
+    /// Two sorted index lists over `slots`; see `decoration::state`.
+    pub ranges_i: Vec<::core::ffi::c_int>,
     pub current_end: ::core::ffi::c_int,
     pub future_begin: ::core::ffi::c_int,
     pub free_slot_i: ::core::ffi::c_int,
@@ -126,20 +130,6 @@ pub struct DecorState {
     pub spell: TriState,
     pub running_decor_provider: bool,
     pub itr_valid: bool,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct DecorState_ranges_i {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ::core::ffi::c_int,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct DecorState_slots {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut DecorRangeSlot,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

@@ -25,7 +25,7 @@ use crate::src::nvim::api::extmark::describe_ns;
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_array, api_free_object, api_object_to_bool,
 };
-use crate::src::nvim::decoration::decor_check_to_be_deleted;
+use crate::src::nvim::decoration::{decor_check_to_be_deleted, decor_range_count};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::hl_check_ns;
 use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
@@ -319,7 +319,7 @@ pub unsafe fn decor_providers_invoke_win(wp: *mut win_T) {
         // `decor_state.running_decor_provider` just like "on_line" below.
         assert!(
             (*decor_state.ptr()).current_end == 0
-                && (*decor_state.ptr()).future_begin == (*decor_state.ptr()).ranges_i.size as c_int
+                && (*decor_state.ptr()).future_begin == decor_range_count(decor_state.ptr())
         );
 
         if provider_count() > 0 {

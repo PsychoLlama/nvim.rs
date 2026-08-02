@@ -10,9 +10,10 @@ use crate::src::nvim::cursor::get_cursor_rel_lnum;
 use crate::src::nvim::cursor_shape::cursor_is_block_during_visual;
 use crate::src::nvim::decoration::decor_redraw_col;
 use crate::src::nvim::decoration::{
-    clear_virttext, decor_has_more_decorations, decor_init_draw_col, decor_recheck_draw_col,
-    decor_redraw_eol, decor_redraw_line, decor_redraw_signs, decor_virt_lines, decor_virt_pos,
-    decor_virt_pos_kind, next_virt_text_chunk,
+    clear_virttext, decor_has_more_decorations, decor_init_draw_col, decor_range_at,
+    decor_range_count, decor_recheck_draw_col, decor_redraw_eol, decor_redraw_line,
+    decor_redraw_signs, decor_virt_lines, decor_virt_pos, decor_virt_pos_kind,
+    next_virt_text_chunk,
 };
 use crate::src::nvim::decoration_provider::{
     decor_providers_invoke_line, decor_providers_invoke_range,
@@ -78,12 +79,12 @@ use crate::src::nvim::syntax::{
 };
 use crate::src::nvim::terminal::terminal_get_line_attributes;
 use crate::src::nvim::types::{
-    CharSize, CharsizeArg, CharsizeKind, DecorRange, DecorRangeSlot, DecorState, DecorVirtText,
-    GridView, HlAttrs, MetaIndex, NS, OptInt, RgbValue, ScreenGrid, SignTextAttrs, StlFlag,
-    StrCharInfo, TriState, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    WinExtmark, buf_T, colnr_T, diffline_S, diffline_T, diffline_change_T, foldinfo_T, hlf_T,
-    linenr_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t, smt_T, spellvars_T, ssize_t, statuscol_T,
-    stl_hlrec_t, uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
+    CharSize, CharsizeArg, CharsizeKind, DecorRange, DecorState, DecorVirtText, GridView, HlAttrs,
+    MetaIndex, NS, OptInt, RgbValue, ScreenGrid, SignTextAttrs, StlFlag, StrCharInfo, TriState,
+    VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos, WinExtmark, buf_T, colnr_T,
+    diffline_S, diffline_T, diffline_change_T, foldinfo_T, hlf_T, linenr_T, pos_T, ptrdiff_t,
+    sattr_T, schar_T, size_t, smt_T, spellvars_T, ssize_t, statuscol_T, stl_hlrec_t, uint8_t,
+    uint32_t, uint64_t, varnumber_T, virt_line, win_T,
 };
 use crate::src::nvim::ui::ui_rgb_attached;
 unsafe extern "C" {
@@ -353,13 +354,10 @@ unsafe extern "C" fn draw_virt_text(
     let mut right_pos: ::core::ffi::c_int = max_col;
     let do_eol: bool = (*state).eol_col > -1 as ::core::ffi::c_int;
     let end: ::core::ffi::c_int = (*state).current_end;
-    let indices: *mut ::core::ffi::c_int = (*state).ranges_i.items;
-    let slots: *mut DecorRangeSlot = (*state).slots.items;
     let mut totalWidthOfEolRightAlignedVirtText: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < end {
-        let mut item: *mut DecorRange =
-            &raw mut (*slots.offset(*indices.offset(i as isize) as isize)).range;
+        let mut item: *mut DecorRange = decor_range_at(state, i);
         if (*item).start_row == (*state).row && decor_virt_pos(item) as ::core::ffi::c_int != 0 {
             let mut vt: *mut DecorVirtText = ::core::ptr::null_mut::<DecorVirtText>();
             if (*item).kind as ::core::ffi::c_int == kDecorKindVirtText as ::core::ffi::c_int {
@@ -390,9 +388,7 @@ unsafe extern "C" fn draw_virt_text(
                     if totalWidthOfEolRightAlignedVirtText == 0 as ::core::ffi::c_int {
                         let mut j: ::core::ffi::c_int = i;
                         while j < end {
-                            let mut lookaheadItem: *mut DecorRange = &raw mut (*slots
-                                .offset(*indices.offset(j as isize) as isize))
-                            .range;
+                            let mut lookaheadItem: *mut DecorRange = decor_range_at(state, j);
                             if !((*lookaheadItem).start_row != (*state).row
                                 || !decor_virt_pos(lookaheadItem)
                                 || (*lookaheadItem).draw_col != -1 as ::core::ffi::c_int)
@@ -1336,19 +1332,16 @@ unsafe extern "C" fn has_more_inline_virt(mut wlv: *mut winlinevars_T, mut v: pt
     if (*wlv).virt_inline_i < (*wlv).virt_inline.size {
         return true_0 != 0;
     }
-    let count: ::core::ffi::c_int = (*decor_state.ptr()).ranges_i.size as ::core::ffi::c_int;
+    let count: ::core::ffi::c_int = decor_range_count(decor_state.ptr());
     let cur_end: ::core::ffi::c_int = (*decor_state.ptr()).current_end;
     let fut_beg: ::core::ffi::c_int = (*decor_state.ptr()).future_begin;
-    let indices: *mut ::core::ffi::c_int = (*decor_state.ptr()).ranges_i.items;
-    let slots: *mut DecorRangeSlot = (*decor_state.ptr()).slots.items;
     let beg_pos: [::core::ffi::c_int; 2] = [0 as ::core::ffi::c_int, fut_beg];
     let end_pos: [::core::ffi::c_int; 2] = [cur_end, count];
     let mut pos_i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while pos_i < 2 as ::core::ffi::c_int {
         let mut i: ::core::ffi::c_int = beg_pos[pos_i as usize];
         while i < end_pos[pos_i as usize] {
-            let mut item: *mut DecorRange =
-                &raw mut (*slots.offset(*indices.offset(i as isize) as isize)).range;
+            let mut item: *mut DecorRange = decor_range_at(decor_state.ptr(), i);
             if !((*item).start_row != (*decor_state.ptr()).row
                 || (*item).kind as ::core::ffi::c_int != kDecorKindVirtText as ::core::ffi::c_int
                 || (*(*item).data.vt).pos as ::core::ffi::c_uint
@@ -1379,12 +1372,9 @@ unsafe extern "C" fn handle_inline_virtual_text(
             (*wlv).virt_inline_i = 0 as size_t;
             let mut state: *mut DecorState = decor_state.ptr();
             let end: ::core::ffi::c_int = (*state).current_end;
-            let indices: *mut ::core::ffi::c_int = (*state).ranges_i.items;
-            let slots: *mut DecorRangeSlot = (*state).slots.items;
             let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
             while i < end {
-                let mut item: *mut DecorRange =
-                    &raw mut (*slots.offset(*indices.offset(i as isize) as isize)).range;
+                let mut item: *mut DecorRange = decor_range_at(state, i);
                 if (*item).draw_col == -3 as ::core::ffi::c_int {
                     decor_init_draw_col((*wlv).off, selected, item);
                 }
