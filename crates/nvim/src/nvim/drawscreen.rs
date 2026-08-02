@@ -1,3 +1,5 @@
+use core::ffi::{c_char, c_int};
+
 use crate::src::nvim::autocmd::{EVENT_VIMRESIZED, apply_autocmds};
 use crate::src::nvim::buffer::buf_meta_total;
 use crate::src::nvim::buffer::maketitle;
@@ -99,7 +101,7 @@ use crate::src::nvim::types::{
     OptInt, ScreenGrid, TriState, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
     WinExtmark, Window, buf_T, colnr_T, foldinfo_T, frame_T, handle_T, hlf_T, int64_t, linenr_T,
     matchitem_T, pos_T, proftime_T, regprog_T, schar_T, size_t, spellvars_T, tabpage_T, uint16_t,
-    uint32_t, varnumber_T, win_T,
+    varnumber_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,
@@ -177,6 +179,28 @@ pub const CPO_NUMCOL: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const SCL_NUM: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const Ctrl_V: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
+/// The windows of the current tab page, in layout order.
+///
+/// `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`. The current tab page keeps its window
+/// list in the global `firstwin` rather than in its own struct, which is why
+/// c2rust rendered the macro as `if curtab == curtab { firstwin } else { … }` --
+/// i.e. as `firstwin` and nothing else.
+///
+/// # Safety
+/// The window list must not be restructured while the iterator is live.
+pub(crate) unsafe fn windows_in_curtab() -> impl Iterator<Item = *mut win_T> {
+    let mut wp = firstwin.get();
+    ::core::iter::from_fn(move || {
+        if wp.is_null() {
+            return None;
+        }
+        let cur = wp;
+        // SAFETY: the caller promises the list is not restructured under us.
+        wp = unsafe { (*cur).w_next };
+        Some(cur)
+    })
+}
+
 static redraw_popupmenu: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static msg_grid_invalid: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 static resizing_autocmd: GlobalCell<bool> = GlobalCell::new(false_0 != 0);

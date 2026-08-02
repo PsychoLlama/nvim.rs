@@ -12,7 +12,7 @@ pub struct lpos_T {
     pub lnum: linenr_T,
     pub col: colnr_T,
 }
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, PartialEq, Eq)]
 #[repr(C)]
 pub struct pos_T {
     pub lnum: linenr_T,

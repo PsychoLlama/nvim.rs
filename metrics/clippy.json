@@ -40,7 +40,6 @@
     "crates/nvim/src/nvim/drawline/columns.rs": 1,
     "crates/nvim/src/nvim/drawscreen.rs": 8,
     "crates/nvim/src/nvim/drawscreen/mode.rs": 30,
-    "crates/nvim/src/nvim/drawscreen/redraw.rs": 6,
     "crates/nvim/src/nvim/edit.rs": 33,
     "crates/nvim/src/nvim/eval/callback.rs": 1,
     "crates/nvim/src/nvim/eval/collect.rs": 2,
