@@ -141,7 +141,6 @@
     "crates/nvim/src/nvim/syntax/cluster.rs": 7,
     "crates/nvim/src/nvim/syntax/command.rs": 65,
     "crates/nvim/src/nvim/syntax/define.rs": 19,
-    "crates/nvim/src/nvim/syntax/endpos.rs": 4,
     "crates/nvim/src/nvim/syntax/keyword.rs": 5,
     "crates/nvim/src/nvim/syntax/list.rs": 50,
     "crates/nvim/src/nvim/syntax/options.rs": 35,

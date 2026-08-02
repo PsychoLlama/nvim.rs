@@ -170,15 +170,13 @@ pub(crate) unsafe extern "C" fn syn_current_attr(
                                 syn_buf.get(),
                             ))
                     {
-                        syn_id = check_keyword_id(
-                            line,
-                            current_col.get(),
-                            &raw mut endcol,
-                            &raw mut flags,
-                            &raw mut next_list,
-                            cur_si,
-                            &raw mut cchar,
-                        );
+                        if let Some(kw) = check_keyword_id(line, current_col.get(), cur_si) {
+                            syn_id = kw.id;
+                            endcol = kw.endcol;
+                            flags = kw.flags;
+                            next_list = kw.next_list;
+                            cchar = kw.cchar;
+                        }
                         if syn_id != 0 as ::core::ffi::c_int {
                             push_current_state(KEYWORD_IDX);
                             cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(
@@ -309,13 +307,7 @@ pub(crate) unsafe extern "C" fn syn_current_attr(
                             if r == 0 {
                                 (*spp).sp_startcol = MAXCOL as ::core::ffi::c_int;
                             } else {
-                                syn_add_start_off(
-                                    &raw mut pos,
-                                    &raw mut regmatch,
-                                    spp,
-                                    SPO_MS_OFF,
-                                    -1 as ::core::ffi::c_int,
-                                );
+                                pos = syn_add_start_off(spp, &regmatch, SPO_MS_OFF, -1);
                                 if pos.lnum > current_lnum.get() {
                                     (*spp).sp_startcol = MAXCOL as ::core::ffi::c_int;
                                 } else {
@@ -331,20 +323,9 @@ pub(crate) unsafe extern "C" fn syn_current_attr(
                                             regmatch.endpos[0 as ::core::ffi::c_int as usize].lnum;
                                         endpos.col =
                                             regmatch.endpos[0 as ::core::ffi::c_int as usize].col;
-                                        syn_add_start_off(
-                                            &raw mut hl_startpos,
-                                            &raw mut regmatch,
-                                            spp,
-                                            SPO_HS_OFF,
-                                            -1 as ::core::ffi::c_int,
-                                        );
-                                        syn_add_end_off(
-                                            &raw mut eos_pos,
-                                            &raw mut regmatch,
-                                            spp,
-                                            SPO_RS_OFF,
-                                            0 as ::core::ffi::c_int,
-                                        );
+                                        hl_startpos =
+                                            syn_add_start_off(spp, &regmatch, SPO_HS_OFF, -1);
+                                        eos_pos = syn_add_end_off(spp, &regmatch, SPO_RS_OFF, 0);
                                         unref_extmatch(cur_extmatch);
                                         cur_extmatch = re_extmatch_out.get();
                                         re_extmatch_out
@@ -357,38 +338,23 @@ pub(crate) unsafe extern "C" fn syn_current_attr(
                                         if (*spp).sp_type as ::core::ffi::c_int == SPTYPE_START
                                             && (*spp).sp_flags & HL_ONELINE != 0
                                         {
-                                            let mut startpos: lpos_T = lpos_T { lnum: 0, col: 0 };
-                                            startpos = endpos;
-                                            find_endpos(
-                                                idx,
-                                                &raw mut startpos,
-                                                &raw mut endpos,
-                                                &raw mut hl_endpos,
-                                                &raw mut flags,
-                                                &raw mut eoe_pos,
-                                                &raw mut end_idx,
-                                                cur_extmatch,
-                                            );
-                                            if endpos.lnum == 0 as linenr_T {
+                                            let end = find_endpos(idx, endpos, cur_extmatch);
+                                            if end.m_endpos.lnum == 0 as linenr_T {
                                                 continue;
+                                            }
+                                            endpos = end.m_endpos;
+                                            hl_endpos = end.hl_endpos;
+                                            eoe_pos = end.eoe_pos;
+                                            end_idx = end.end_idx;
+                                            if let Some(f) = end.flags {
+                                                flags = f;
                                             }
                                         } else if (*spp).sp_type as ::core::ffi::c_int
                                             == SPTYPE_MATCH
                                         {
-                                            syn_add_end_off(
-                                                &raw mut hl_endpos,
-                                                &raw mut regmatch,
-                                                spp,
-                                                SPO_HE_OFF,
-                                                0 as ::core::ffi::c_int,
-                                            );
-                                            syn_add_end_off(
-                                                &raw mut endpos,
-                                                &raw mut regmatch,
-                                                spp,
-                                                SPO_ME_OFF,
-                                                0 as ::core::ffi::c_int,
-                                            );
+                                            hl_endpos =
+                                                syn_add_end_off(spp, &regmatch, SPO_HE_OFF, 0);
+                                            endpos = syn_add_end_off(spp, &regmatch, SPO_ME_OFF, 0);
                                             if endpos.lnum == current_lnum.get()
                                                 && (endpos.col + syncing as ::core::ffi::c_int)
                                                     < startcol
@@ -410,7 +376,7 @@ pub(crate) unsafe extern "C" fn syn_current_attr(
                                         {
                                             hl_startpos.col = startcol as colnr_T;
                                         }
-                                        limit_pos_zero(&raw mut hl_endpos, &raw mut endpos);
+                                        limit_pos_zero(&mut hl_endpos, endpos);
                                         next_match_idx.set(idx);
                                         next_match_col.set(startcol);
                                         next_match_m_endpos.set(endpos);
