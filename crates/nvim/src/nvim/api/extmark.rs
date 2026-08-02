@@ -8,7 +8,9 @@ use crate::src::nvim::decoration::{
     clear_virtlines, clear_virttext, decor_free, decor_put_sh, decor_put_vt, decor_range_add_sh,
     decor_range_add_virt, decor_sh_from_inline, decor_to_dict_legacy, hl_group_name,
 };
-use crate::src::nvim::decoration_provider::{decor_provider_clear, get_decor_provider};
+use crate::src::nvim::decoration_provider::{
+    decor_provider_clear, get_decor_provider, kDecorProviderActive,
+};
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::src::nvim::extmark::{
     extmark_clear, extmark_del_id, extmark_from_id, extmark_get, extmark_set,
@@ -156,10 +158,6 @@ pub const kVTRepeatLinebreak: C2Rust_Unnamed_19 = 8;
 pub const kVTLinesAbove: C2Rust_Unnamed_19 = 4;
 pub const kVTHide: C2Rust_Unnamed_19 = 2;
 pub const kVTIsLines: C2Rust_Unnamed_19 = 1;
-pub const kDecorProviderDisabled: C2Rust_Unnamed_20 = 4;
-pub const kDecorProviderRedrawDisabled: C2Rust_Unnamed_20 = 3;
-pub const kDecorProviderWinDisabled: C2Rust_Unnamed_20 = 2;
-pub const kDecorProviderActive: C2Rust_Unnamed_20 = 1;
 pub const kMHNewKeyRealloc: MHPutStatus = 2;
 pub const kMHNewKeyDidFit: MHPutStatus = 1;
 pub const kMHExisting: MHPutStatus = 0;

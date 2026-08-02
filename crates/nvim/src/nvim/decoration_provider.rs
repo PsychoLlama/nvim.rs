@@ -1,3 +1,26 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
+//! Decoration providers: the Lua callbacks a plugin registers with
+//! `nvim_set_decoration_provider` to decorate a redraw as it happens.
+//!
+//! A provider is a bundle of callbacks keyed by namespace. The redraw calls
+//! them in a fixed order — `on_start` once per redraw, then `on_buf` per
+//! buffer, `on_win` per window, then `on_line`/`on_range` per line or span
+//! while `win_line` is drawing, and `on_end` at the end — and each of them
+//! can turn the provider off for the rest of the redraw by answering `false`
+//! or by raising an error.
+//!
+//! Two rules run through the whole file:
+//!
+//! * **Every callback pumps.** `nlua_call_ref` runs arbitrary Lua, which can
+//!   register another provider and so grow [`PROVIDERS`]. Nothing here holds
+//!   a reference or an index-derived pointer across a call: the provider is
+//!   re-resolved by index afterwards, which is exactly what the C does with
+//!   its `kv_A(decor_providers, i)` re-fetch and the comment explaining it.
+//! * **Errors are budgeted.** A provider that raises is reported at most
+//!   [`CB_MAX_ERROR`] times and then disabled, so a broken plugin cannot
+//!   flood the message area on every redraw.
+
 use crate::src::nvim::api::extmark::describe_ns;
 use crate::src::nvim::api::private::helpers::{
     api_clear_error, api_free_array, api_free_object, api_object_to_bool,
@@ -8,744 +31,576 @@ use crate::src::nvim::highlight::hl_check_ns;
 use crate::src::nvim::log::{LOGLVL_ERR, logmsg};
 use crate::src::nvim::lua::executor::{api_free_luaref, nlua_call_ref};
 use crate::src::nvim::main::{decor_state, display_tick, ns_hl_active, textlock};
-use crate::src::nvim::memory::xrealloc;
 use crate::src::nvim::message::msg_schedule_semsg_multiline;
 use crate::src::nvim::r#move::validate_botline_win;
-use crate::src::nvim::os::libc::__assert_fail;
 use crate::src::nvim::types::api::kErrorTypeNone;
+use crate::src::nvim::types::builders::ArrayBuf;
 use crate::src::nvim::types::{
-    Arena, Array, DecorProvider, DecorProvider_state as C2Rust_Unnamed_13, Error, Integer, LuaRef,
-    LuaRetMode, MarkTree, NS, Object, buf_T, int64_t, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeBuffer, kObjectTypeInteger, kObjectTypeNil, kObjectTypeWindow, linenr_T, object,
-    object_data as C2Rust_Unnamed_12, size_t, uint8_t, win_T,
+    Array, DecorProvider, DecorProvider_state, Error, Integer, LuaRef, LuaRetMode, NS, Object,
+    buf_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeInteger, linenr_T, win_T,
 };
-pub const kDecorProviderDisabled: C2Rust_Unnamed_13 = 4;
-pub const kDecorProviderRedrawDisabled: C2Rust_Unnamed_13 = 3;
-pub const kDecorProviderWinDisabled: C2Rust_Unnamed_13 = 2;
-pub const kDecorProviderActive: C2Rust_Unnamed_13 = 1;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_19 {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut DecorProvider,
-}
-pub const kRetMulti: LuaRetMode = 3;
-pub const kRetNilBool: LuaRetMode = 1;
-pub const CB_MAX_ERROR: C2Rust_Unnamed_20 = 3;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const ARRAY_DICT_INIT: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
+
+use ::core::ffi::{c_char, c_int};
+use ::core::ptr;
+
+// The provider's own lifecycle state. `Disabled` is sticky (only a fresh
+// `nvim_set_decoration_provider` clears it); the other two are per-redraw.
+/// Set up for this redraw and taking calls.
+pub const kDecorProviderActive: DecorProvider_state = 1;
+/// Turned off for the rest of *this window* — `on_win` or `on_line` declined.
+pub const kDecorProviderWinDisabled: DecorProvider_state = 2;
+/// Turned off for the rest of *this redraw* — `on_start` declined.
+pub const kDecorProviderRedrawDisabled: DecorProvider_state = 3;
+/// Turned off until it is registered again.
+pub const kDecorProviderDisabled: DecorProvider_state = 4;
+
+/// `LuaRef` value meaning "no callback".
+const LUA_NOREF: LuaRef = -2;
+/// Errors reported from one provider before it is disabled.
+const CB_MAX_ERROR: u8 = 3;
+/// Ask `nlua_call_ref` for all return values (an `Array`).
+const kRetMulti: LuaRetMode = 3;
+/// Ask `nlua_call_ref` for one value, interpreted as a boolean.
+const kRetNilBool: LuaRetMode = 1;
+
+const ERROR_INIT: Error = Error {
+    type_0: kErrorTypeNone,
+    msg: ptr::null_mut(),
 };
-static decor_providers: GlobalCell<C2Rust_Unnamed_19> = GlobalCell::new(C2Rust_Unnamed_19 {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<DecorProvider>(),
-});
-unsafe extern "C" fn decor_provider_error(
-    mut provider: *mut DecorProvider,
-    mut name: *const ::core::ffi::c_char,
-    mut msg: *const ::core::ffi::c_char,
-) {
-    let mut ns: *const ::core::ffi::c_char = describe_ns(
-        (*provider).ns_id,
-        b"(UNKNOWN PLUGIN)\0".as_ptr() as *const ::core::ffi::c_char,
-    );
-    logmsg(
-        LOGLVL_ERR,
-        ::core::ptr::null::<::core::ffi::c_char>(),
-        b"decor_provider_error\0".as_ptr() as *const ::core::ffi::c_char,
-        29 as ::core::ffi::c_int,
-        true_0 != 0,
-        b"Error in decoration provider \"%s\" (ns=%s):\n%s\0".as_ptr()
-            as *const ::core::ffi::c_char,
-        name,
-        ns,
-        msg,
-    );
-    msg_schedule_semsg_multiline(
-        b"Decoration provider \"%s\" (ns=%s):\n%s\0".as_ptr() as *const ::core::ffi::c_char,
-        name,
-        ns,
-        msg,
-    );
+
+/// The registered providers, in registration order — which is the order every
+/// callback runs in. Entries are never removed: unregistering clears the
+/// callbacks and marks the provider disabled, because `w_ns_hl_winhl` and the
+/// namespace highlight cache keep referring to it by namespace id.
+static PROVIDERS: GlobalCell<Vec<DecorProvider>> = GlobalCell::new(Vec::new());
+
+/// How many providers are registered. Read fresh on every loop iteration: a
+/// callback can register one more.
+fn provider_count() -> usize {
+    PROVIDERS.with(Vec::len)
 }
-unsafe extern "C" fn decor_provider_invoke(
-    mut provider_idx: ::core::ffi::c_int,
-    mut name: *const ::core::ffi::c_char,
-    mut ref_0: LuaRef,
-    mut args: Array,
-    mut default_true: bool,
-    mut res: *mut Array,
+
+/// A copy of provider `idx`. `DecorProvider` is `Copy` and small, so the
+/// loops here take a snapshot rather than hold a borrow across a Lua call.
+fn provider(idx: usize) -> DecorProvider {
+    PROVIDERS.with(|providers| providers[idx])
+}
+
+/// Runs `f` on provider `idx`. The borrow must not outlive `f` — in
+/// particular `f` must not call Lua.
+fn with_provider<R>(idx: usize, f: impl FnOnce(&mut DecorProvider) -> R) -> R {
+    PROVIDERS.with_mut(|providers| f(&mut providers[idx]))
+}
+
+fn set_state(idx: usize, state: DecorProvider_state) {
+    with_provider(idx, |p| p.state = state);
+}
+
+/// Report a provider's error, both to the log and to the message area.
+///
+/// # Safety
+/// `name` and `msg` must be NUL-terminated.
+unsafe fn decor_provider_error(ns_id: NS, name: *const c_char, msg: *const c_char) {
+    // SAFETY: the caller's NUL-terminated strings, plus the editor's own
+    // namespace table.
+    unsafe {
+        let ns = describe_ns(ns_id, c"(UNKNOWN PLUGIN)".as_ptr());
+        logmsg(
+            LOGLVL_ERR,
+            ptr::null(),
+            c"decor_provider_error".as_ptr(),
+            29,
+            true,
+            c"Error in decoration provider \"%s\" (ns=%s):\n%s".as_ptr(),
+            name,
+            ns,
+            msg,
+        );
+        msg_schedule_semsg_multiline(
+            c"Decoration provider \"%s\" (ns=%s):\n%s".as_ptr(),
+            name,
+            ns,
+            msg,
+        );
+    }
+}
+
+/// Call one provider callback and answer whether the provider is still good.
+///
+/// `res`, when given, asks for the callback's whole return list and receives
+/// it; otherwise the single return value is read as a boolean, with
+/// `default_true` standing in for `nil`.
+///
+/// The provider is named by *index*, not by pointer: the call below can
+/// register another provider and move the vector out from under us.
+///
+/// # Safety
+/// `name` must be NUL-terminated; `args` must be a live `Array` the callee
+/// may consume.
+unsafe fn decor_provider_invoke(
+    idx: usize,
+    name: *const c_char,
+    callback: LuaRef,
+    args: Array,
+    default_true: bool,
+    res: Option<&mut Array>,
 ) -> bool {
-    let mut err: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
-    (*textlock.ptr()) += 1;
-    let mut ret: Object = nlua_call_ref(
-        ref_0,
-        name,
-        args,
-        (if !res.is_null() {
-            kRetMulti as ::core::ffi::c_int
-        } else {
-            kRetNilBool as ::core::ffi::c_int
-        }) as LuaRetMode,
-        ::core::ptr::null_mut::<Arena>(),
-        &raw mut err,
-    );
-    (*textlock.ptr()) -= 1;
-    let mut provider: *mut DecorProvider =
-        (*decor_providers.ptr()).items.offset(provider_idx as isize);
-    if !(err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
-        (*provider).error_count = 0 as uint8_t;
-        if !res.is_null() {
-            '_c2rust_label: {
-                if ret.type_0 as ::core::ffi::c_uint
-                    == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                } else {
-                    __assert_fail(
-                        b"ret.type == kObjectTypeArray\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                        b"src/nvim/decoration_provider.rs\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                        50 as ::core::ffi::c_uint,
-                        b"_Bool decor_provider_invoke(int, const char *, LuaRef, Array, _Bool, Array *)\0"
-                            .as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            *res = ret.data.array;
-            return true_0 != 0;
-        } else if api_object_to_bool(
-            ret,
-            b"provider %s retval\0".as_ptr() as *const ::core::ffi::c_char,
-            default_true,
+    // SAFETY: the caller's arguments; `nlua_call_ref` owns `args` from here.
+    unsafe {
+        let mut err = ERROR_INIT;
+        let want_list = res.is_some();
+
+        *textlock.ptr() += 1;
+        let ret = nlua_call_ref(
+            callback,
+            name,
+            args,
+            if want_list { kRetMulti } else { kRetNilBool },
+            ptr::null_mut(),
             &raw mut err,
-        ) {
-            return true_0 != 0;
-        }
-    }
-    if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
-        && ((*provider).error_count as ::core::ffi::c_int) < CB_MAX_ERROR as ::core::ffi::c_int
-    {
-        decor_provider_error(provider, name, err.msg);
-        (*provider).error_count = (*provider).error_count.wrapping_add(1);
-        if (*provider).error_count as ::core::ffi::c_int >= CB_MAX_ERROR as ::core::ffi::c_int {
-            (*provider).state = kDecorProviderDisabled;
-        }
-    }
-    api_clear_error(&raw mut err);
-    api_free_object(ret);
-    return false_0 != 0;
-}
-pub unsafe extern "C" fn decor_providers_invoke_spell(
-    mut wp: *mut win_T,
-    mut start_row: ::core::ffi::c_int,
-    mut start_col: ::core::ffi::c_int,
-    mut end_row: ::core::ffi::c_int,
-    mut end_col: ::core::ffi::c_int,
-) {
-    let mut i: size_t = 0 as size_t;
-    while i < (*decor_providers.ptr()).size {
-        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
-        if (*p).state as ::core::ffi::c_uint
-            != kDecorProviderDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*p).spell_nav != LUA_NOREF
-        {
-            let mut args: Array = ARRAY_DICT_INIT;
-            let mut args__items: [Object; 6] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 { boolean: false },
-            }; 6];
-            args.capacity = 6 as size_t;
-            args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh0 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh0 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: (*wp).handle as Integer,
-                },
-            };
-            let c2rust_fresh1 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh1 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: (*(*wp).w_buffer).handle as Integer,
-                },
-            };
-            let c2rust_fresh2 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh2 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: start_row as Integer,
-                },
-            };
-            let c2rust_fresh3 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh3 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: start_col as Integer,
-                },
-            };
-            let c2rust_fresh4 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh4 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: end_row as Integer,
-                },
-            };
-            let c2rust_fresh5 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh5 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: end_col as Integer,
-                },
-            };
-            decor_provider_invoke(
-                i as ::core::ffi::c_int,
-                b"spell\0".as_ptr() as *const ::core::ffi::c_char,
-                (*p).spell_nav,
-                args,
-                true_0 != 0,
-                ::core::ptr::null_mut::<Array>(),
-            );
-        }
-        i = i.wrapping_add(1);
-    }
-}
-pub unsafe extern "C" fn decor_providers_invoke_conceal_line(
-    mut wp: *mut win_T,
-    mut row: ::core::ffi::c_int,
-) -> bool {
-    let mut keys: size_t = (*(&raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree)).n_keys;
-    let mut i: size_t = 0 as size_t;
-    while i < (*decor_providers.ptr()).size {
-        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
-        if (*p).state as ::core::ffi::c_uint
-            != kDecorProviderDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*p).conceal_line != LUA_NOREF
-        {
-            let mut args: Array = ARRAY_DICT_INIT;
-            let mut args__items: [Object; 4] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 { boolean: false },
-            }; 4];
-            args.capacity = 4 as size_t;
-            args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh6 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh6 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: (*wp).handle as Integer,
-                },
-            };
-            let c2rust_fresh7 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh7 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: (*(*wp).w_buffer).handle as Integer,
-                },
-            };
-            let c2rust_fresh8 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh8 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: row as Integer,
-                },
-            };
-            decor_provider_invoke(
-                i as ::core::ffi::c_int,
-                b"conceal_line\0".as_ptr() as *const ::core::ffi::c_char,
-                (*p).conceal_line,
-                args,
-                true_0 != 0,
-                ::core::ptr::null_mut::<Array>(),
-            );
-        }
-        i = i.wrapping_add(1);
-    }
-    return (*(&raw mut (*(*wp).w_buffer).b_marktree as *mut MarkTree)).n_keys > keys;
-}
-pub unsafe extern "C" fn decor_providers_start() {
-    let mut i: size_t = 0 as size_t;
-    while i < (*decor_providers.ptr()).size {
-        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
-        if (*p).state as ::core::ffi::c_uint
-            != kDecorProviderDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*p).redraw_start != LUA_NOREF
-        {
-            let mut args: Array = ARRAY_DICT_INIT;
-            let mut args__items: [Object; 2] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 { boolean: false },
-            }; 2];
-            args.capacity = 2 as size_t;
-            args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh9 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh9 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: display_tick.get() as ::core::ffi::c_int as Integer,
-                },
-            };
-            let mut active: bool = decor_provider_invoke(
-                i as ::core::ffi::c_int,
-                b"start\0".as_ptr() as *const ::core::ffi::c_char,
-                (*p).redraw_start,
-                args,
-                true_0 != 0,
-                ::core::ptr::null_mut::<Array>(),
-            );
-            (*(*decor_providers.ptr()).items.offset(i as isize)).state =
-                (if active as ::core::ffi::c_int != 0 {
-                    kDecorProviderActive as ::core::ffi::c_int
-                } else {
-                    kDecorProviderRedrawDisabled as ::core::ffi::c_int
-                }) as C2Rust_Unnamed_13;
-        } else if (*p).state as ::core::ffi::c_uint
-            != kDecorProviderDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            (*(*decor_providers.ptr()).items.offset(i as isize)).state = kDecorProviderActive;
-        }
-        i = i.wrapping_add(1);
-    }
-}
-pub unsafe extern "C" fn decor_providers_invoke_win(mut wp: *mut win_T) {
-    '_c2rust_label: {
-        if (*decor_state.ptr()).current_end == 0 as ::core::ffi::c_int
-            && (*decor_state.ptr()).future_begin
-                == (*decor_state.ptr()).ranges_i.size as ::core::ffi::c_int
-        {
-        } else {
-            __assert_fail(
-                b"decor_state.current_end == 0 && decor_state.future_begin == (int)kv_size(decor_state.ranges_i)\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/decoration_provider.rs\0"
-                    .as_ptr() as *const ::core::ffi::c_char,
-                139 as ::core::ffi::c_uint,
-                b"void decor_providers_invoke_win(win_T *)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    if (*decor_providers.ptr()).size > 0 as size_t {
-        validate_botline_win(wp);
-    }
-    let mut botline: linenr_T = if (*wp).w_botline < (*(*wp).w_buffer).b_ml.ml_line_count {
-        (*wp).w_botline
-    } else {
-        (*(*wp).w_buffer).b_ml.ml_line_count
-    };
-    let mut i: size_t = 0 as size_t;
-    while i < (*decor_providers.ptr()).size {
-        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
-        if (*p).state as ::core::ffi::c_uint
-            == kDecorProviderWinDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            (*p).state = kDecorProviderActive;
-        }
-        (*p).win_skip_row = 0 as ::core::ffi::c_int;
-        (*p).win_skip_col = 0 as ::core::ffi::c_int;
-        if (*p).state as ::core::ffi::c_uint
-            == kDecorProviderActive as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*p).redraw_win != LUA_NOREF
-        {
-            let mut args: Array = ARRAY_DICT_INIT;
-            let mut args__items: [Object; 4] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 { boolean: false },
-            }; 4];
-            args.capacity = 4 as size_t;
-            args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh10 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh10 as isize) = object {
-                type_0: kObjectTypeWindow,
-                data: C2Rust_Unnamed_12 {
-                    integer: (*wp).handle as Integer,
-                },
-            };
-            let c2rust_fresh11 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh11 as isize) = object {
-                type_0: kObjectTypeBuffer,
-                data: C2Rust_Unnamed_12 {
-                    integer: (*(*wp).w_buffer).handle as Integer,
-                },
-            };
-            let c2rust_fresh12 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh12 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: ((*wp).w_topline - 1 as linenr_T) as Integer,
-                },
-            };
-            let c2rust_fresh13 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh13 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: (botline - 1 as linenr_T) as Integer,
-                },
-            };
-            if !decor_provider_invoke(
-                i as ::core::ffi::c_int,
-                b"win\0".as_ptr() as *const ::core::ffi::c_char,
-                (*p).redraw_win,
-                args,
-                true_0 != 0,
-                ::core::ptr::null_mut::<Array>(),
+        );
+        *textlock.ptr() -= 1;
+
+        if err.type_0 == kErrorTypeNone {
+            with_provider(idx, |p| p.error_count = 0);
+            if let Some(res) = res {
+                assert!(ret.type_0 == kObjectTypeArray);
+                *res = ret.data.array;
+                return true;
+            }
+            if api_object_to_bool(
+                ret,
+                c"provider %s retval".as_ptr(),
+                default_true,
+                &raw mut err,
             ) {
-                (*(*decor_providers.ptr()).items.offset(i as isize)).state =
-                    kDecorProviderWinDisabled;
+                return true;
             }
         }
-        i = i.wrapping_add(1);
-    }
-}
-pub unsafe extern "C" fn decor_providers_invoke_line(
-    mut wp: *mut win_T,
-    mut row: ::core::ffi::c_int,
-) {
-    (*decor_state.ptr()).running_decor_provider = true_0 != 0;
-    let mut i: size_t = 0 as size_t;
-    while i < (*decor_providers.ptr()).size {
-        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
-        if (*p).state as ::core::ffi::c_uint
-            == kDecorProviderActive as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*p).redraw_line != LUA_NOREF
-        {
-            let mut args: Array = ARRAY_DICT_INIT;
-            let mut args__items: [Object; 3] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 { boolean: false },
-            }; 3];
-            args.capacity = 3 as size_t;
-            args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh14 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh14 as isize) = object {
-                type_0: kObjectTypeWindow,
-                data: C2Rust_Unnamed_12 {
-                    integer: (*wp).handle as Integer,
-                },
-            };
-            let c2rust_fresh15 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh15 as isize) = object {
-                type_0: kObjectTypeBuffer,
-                data: C2Rust_Unnamed_12 {
-                    integer: (*(*wp).w_buffer).handle as Integer,
-                },
-            };
-            let c2rust_fresh16 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh16 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: row as Integer,
-                },
-            };
-            if !decor_provider_invoke(
-                i as ::core::ffi::c_int,
-                b"line\0".as_ptr() as *const ::core::ffi::c_char,
-                (*p).redraw_line,
-                args,
-                true_0 != 0,
-                ::core::ptr::null_mut::<Array>(),
-            ) {
-                (*(*decor_providers.ptr()).items.offset(i as isize)).state =
-                    kDecorProviderWinDisabled;
-            }
-            hl_check_ns();
-        }
-        i = i.wrapping_add(1);
-    }
-    (*decor_state.ptr()).running_decor_provider = false_0 != 0;
-}
-pub unsafe extern "C" fn decor_providers_invoke_range(
-    mut wp: *mut win_T,
-    mut start_row: ::core::ffi::c_int,
-    mut start_col: ::core::ffi::c_int,
-    mut end_row: ::core::ffi::c_int,
-    mut end_col: ::core::ffi::c_int,
-) {
-    (*decor_state.ptr()).running_decor_provider = true_0 != 0;
-    let mut i: size_t = 0 as size_t;
-    while i < (*decor_providers.ptr()).size {
-        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
-        if (*p).state as ::core::ffi::c_uint
-            == kDecorProviderActive as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*p).redraw_range != LUA_NOREF
-        {
-            if !((*p).win_skip_row > end_row
-                || (*p).win_skip_row == end_row && (*p).win_skip_col >= end_col)
-            {
-                let mut args: Array = ARRAY_DICT_INIT;
-                let mut args__items: [Object; 6] = [Object {
-                    type_0: kObjectTypeNil,
-                    data: C2Rust_Unnamed_12 { boolean: false },
-                }; 6];
-                args.capacity = 6 as size_t;
-                args.items = &raw mut args__items as *mut Object;
-                let c2rust_fresh17 = args.size;
-                args.size = args.size.wrapping_add(1);
-                *args.items.offset(c2rust_fresh17 as isize) = object {
-                    type_0: kObjectTypeWindow,
-                    data: C2Rust_Unnamed_12 {
-                        integer: (*wp).handle as Integer,
-                    },
-                };
-                let c2rust_fresh18 = args.size;
-                args.size = args.size.wrapping_add(1);
-                *args.items.offset(c2rust_fresh18 as isize) = object {
-                    type_0: kObjectTypeBuffer,
-                    data: C2Rust_Unnamed_12 {
-                        integer: (*(*wp).w_buffer).handle as Integer,
-                    },
-                };
-                let c2rust_fresh19 = args.size;
-                args.size = args.size.wrapping_add(1);
-                *args.items.offset(c2rust_fresh19 as isize) = object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed_12 {
-                        integer: start_row as Integer,
-                    },
-                };
-                let c2rust_fresh20 = args.size;
-                args.size = args.size.wrapping_add(1);
-                *args.items.offset(c2rust_fresh20 as isize) = object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed_12 {
-                        integer: start_col as Integer,
-                    },
-                };
-                let c2rust_fresh21 = args.size;
-                args.size = args.size.wrapping_add(1);
-                *args.items.offset(c2rust_fresh21 as isize) = object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed_12 {
-                        integer: end_row as Integer,
-                    },
-                };
-                let c2rust_fresh22 = args.size;
-                args.size = args.size.wrapping_add(1);
-                *args.items.offset(c2rust_fresh22 as isize) = object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed_12 {
-                        integer: end_col as Integer,
-                    },
-                };
-                let mut res: Array = ARRAY_DICT_INIT;
-                let mut status: bool = decor_provider_invoke(
-                    i as ::core::ffi::c_int,
-                    b"range\0".as_ptr() as *const ::core::ffi::c_char,
-                    (*p).redraw_range,
-                    args,
-                    true_0 != 0,
-                    &raw mut res,
-                );
-                p = (*decor_providers.ptr()).items.offset(i as isize);
-                if !status {
-                    (*p).state = kDecorProviderWinDisabled;
-                } else if res.size >= 1 as size_t {
-                    let mut first: Object = *res.items.offset(0 as ::core::ffi::c_int as isize);
-                    if first.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeBoolean as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        if first.data.boolean as ::core::ffi::c_int == false_0 {
-                            (*p).state = kDecorProviderWinDisabled;
-                        }
-                    } else if first.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        let mut row: Integer = first.data.integer;
-                        let mut col: Integer = 0 as Integer;
-                        if res.size >= 2 as size_t {
-                            let mut second: Object =
-                                *res.items.offset(1 as ::core::ffi::c_int as isize);
-                            if second.type_0 as ::core::ffi::c_uint
-                                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                col = second.data.integer;
-                            }
-                        }
-                        (*p).win_skip_row = row as ::core::ffi::c_int;
-                        (*p).win_skip_col = col as ::core::ffi::c_int;
+
+        if err.type_0 != kErrorTypeNone {
+            let (ns_id, count) = with_provider(idx, |p| (p.ns_id, p.error_count));
+            if count < CB_MAX_ERROR {
+                decor_provider_error(ns_id, name, err.msg);
+                // The report can reach Lua through the message area, so the
+                // count is bumped through a fresh borrow.
+                with_provider(idx, |p| {
+                    p.error_count = count + 1;
+                    if p.error_count >= CB_MAX_ERROR {
+                        p.state = kDecorProviderDisabled;
                     }
+                });
+            }
+        }
+
+        api_clear_error(&raw mut err);
+        // TODO(bfredl): wants to be on an arena
+        api_free_object(ret);
+        false
+    }
+}
+
+/// Tell every provider with an `_on_spell_nav` callback that the spell
+/// checker is looking at this span.
+///
+/// # Safety
+/// `wp` must point to a live window.
+pub unsafe fn decor_providers_invoke_spell(
+    wp: *mut win_T,
+    start_row: c_int,
+    start_col: c_int,
+    end_row: c_int,
+    end_col: c_int,
+) {
+    // SAFETY: the caller's window; the callbacks re-enter the editor.
+    unsafe {
+        for idx in 0..provider_count() {
+            let p = provider(idx);
+            if p.state != kDecorProviderDisabled && p.spell_nav != LUA_NOREF {
+                let mut args = ArrayBuf::<6>::new();
+                args.push(Object::integer((*wp).handle.into()));
+                args.push(Object::integer((*(*wp).w_buffer).handle.into()));
+                args.push(Object::integer(start_row.into()));
+                args.push(Object::integer(start_col.into()));
+                args.push(Object::integer(end_row.into()));
+                args.push(Object::integer(end_col.into()));
+                decor_provider_invoke(
+                    idx,
+                    c"spell".as_ptr(),
+                    p.spell_nav,
+                    args.array(),
+                    true,
+                    None,
+                );
+            }
+        }
+    }
+}
+
+/// Ask every `_on_conceal_line` callback about `row`.
+///
+/// # Safety
+/// `wp` must point to a live window.
+///
+/// @return whether a provider placed any marks in the callback.
+pub unsafe fn decor_providers_invoke_conceal_line(wp: *mut win_T, row: c_int) -> bool {
+    // SAFETY: the caller's window; the callbacks re-enter the editor.
+    unsafe {
+        let keys = (*(*wp).w_buffer).b_marktree[0].n_keys;
+        for idx in 0..provider_count() {
+            let p = provider(idx);
+            if p.state != kDecorProviderDisabled && p.conceal_line != LUA_NOREF {
+                let mut args = ArrayBuf::<4>::new();
+                args.push(Object::integer((*wp).handle.into()));
+                args.push(Object::integer((*(*wp).w_buffer).handle.into()));
+                args.push(Object::integer(row.into()));
+                decor_provider_invoke(
+                    idx,
+                    c"conceal_line".as_ptr(),
+                    p.conceal_line,
+                    args.array(),
+                    true,
+                    None,
+                );
+            }
+        }
+        (*(*wp).w_buffer).b_marktree[0].n_keys > keys
+    }
+}
+
+/// Start a redraw: run every `on_start` callback and put the providers that
+/// did not decline into the active state.
+///
+/// # Safety
+/// Runs Lua; main thread only.
+pub unsafe fn decor_providers_start() {
+    // SAFETY: the callbacks re-enter the editor.
+    unsafe {
+        for idx in 0..provider_count() {
+            let p = provider(idx);
+            if p.state == kDecorProviderDisabled {
+                continue;
+            }
+            if p.redraw_start != LUA_NOREF {
+                let mut args = ArrayBuf::<2>::new();
+                args.push(Object::integer(display_tick.get() as c_int as Integer));
+                let active = decor_provider_invoke(
+                    idx,
+                    c"start".as_ptr(),
+                    p.redraw_start,
+                    args.array(),
+                    true,
+                    None,
+                );
+                set_state(
+                    idx,
+                    if active {
+                        kDecorProviderActive
+                    } else {
+                        kDecorProviderRedrawDisabled
+                    },
+                );
+            } else {
+                set_state(idx, kDecorProviderActive);
+            }
+        }
+    }
+}
+
+/// Start a window: run every `on_win` callback. A provider that declines is
+/// skipped for the rest of this window.
+///
+/// # Safety
+/// `wp` must point to a live window; runs Lua.
+pub unsafe fn decor_providers_invoke_win(wp: *mut win_T) {
+    // SAFETY: the caller's window; the callbacks re-enter the editor.
+    unsafe {
+        // This might change in the future; then this would need
+        // `decor_state.running_decor_provider` just like "on_line" below.
+        assert!(
+            (*decor_state.ptr()).current_end == 0
+                && (*decor_state.ptr()).future_begin == (*decor_state.ptr()).ranges_i.size as c_int
+        );
+
+        if provider_count() > 0 {
+            validate_botline_win(wp);
+        }
+        let botline: linenr_T = (*wp).w_botline.min((*(*wp).w_buffer).b_ml.ml_line_count);
+
+        for idx in 0..provider_count() {
+            let p = with_provider(idx, |p| {
+                if p.state == kDecorProviderWinDisabled {
+                    p.state = kDecorProviderActive;
                 }
-                api_free_array(res);
+                p.win_skip_row = 0;
+                p.win_skip_col = 0;
+                *p
+            });
+
+            if p.state == kDecorProviderActive && p.redraw_win != LUA_NOREF {
+                let mut args = ArrayBuf::<4>::new();
+                args.push(Object::window((*wp).handle));
+                args.push(Object::buffer((*(*wp).w_buffer).handle));
+                // TODO(bfredl): we are not using this, but should be first drawn line?
+                args.push(Object::integer(((*wp).w_topline - 1).into()));
+                args.push(Object::integer((botline - 1).into()));
+                // TODO(bfredl): could skip a call if retval was interpreted like range?
+                if !decor_provider_invoke(
+                    idx,
+                    c"win".as_ptr(),
+                    p.redraw_win,
+                    args.array(),
+                    true,
+                    None,
+                ) {
+                    set_state(idx, kDecorProviderWinDisabled);
+                }
+            }
+        }
+    }
+}
+
+/// Run every `on_line` callback for one window row.
+///
+/// # Safety
+/// `wp` must point to a live window; runs Lua.
+pub unsafe fn decor_providers_invoke_line(wp: *mut win_T, row: c_int) {
+    // SAFETY: the caller's window; the callbacks re-enter the editor and may
+    // place ephemeral decorations, which is what the flag below announces.
+    unsafe {
+        (*decor_state.ptr()).running_decor_provider = true;
+        for idx in 0..provider_count() {
+            let p = provider(idx);
+            if p.state == kDecorProviderActive && p.redraw_line != LUA_NOREF {
+                let mut args = ArrayBuf::<3>::new();
+                args.push(Object::window((*wp).handle));
+                args.push(Object::buffer((*(*wp).w_buffer).handle));
+                args.push(Object::integer(row.into()));
+                if !decor_provider_invoke(
+                    idx,
+                    c"line".as_ptr(),
+                    p.redraw_line,
+                    args.array(),
+                    true,
+                    None,
+                ) {
+                    // returned 'false' or errored: skip the rest of this window
+                    set_state(idx, kDecorProviderWinDisabled);
+                }
                 hl_check_ns();
             }
         }
-        i = i.wrapping_add(1);
+        (*decor_state.ptr()).running_decor_provider = false;
     }
-    (*decor_state.ptr()).running_decor_provider = false_0 != 0;
 }
-pub unsafe extern "C" fn decor_providers_invoke_buf(mut buf: *mut buf_T) {
-    let mut i: size_t = 0 as size_t;
-    while i < (*decor_providers.ptr()).size {
-        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
-        if (*p).state as ::core::ffi::c_uint
-            == kDecorProviderActive as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*p).redraw_buf != LUA_NOREF
-        {
-            let mut args: Array = ARRAY_DICT_INIT;
-            let mut args__items: [Object; 2] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 { boolean: false },
-            }; 2];
-            args.capacity = 2 as size_t;
-            args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh23 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh23 as isize) = object {
-                type_0: kObjectTypeBuffer,
-                data: C2Rust_Unnamed_12 {
-                    integer: (*buf).handle as Integer,
-                },
+
+/// Run every `on_range` callback for one span.
+///
+/// A callback may answer `false` to be skipped for the rest of the window, or
+/// a `(row, col)` pair saying "everything up to here is already decorated",
+/// which the next call for an earlier span skips on.
+///
+/// # Safety
+/// `wp` must point to a live window; runs Lua.
+pub unsafe fn decor_providers_invoke_range(
+    wp: *mut win_T,
+    start_row: c_int,
+    start_col: c_int,
+    end_row: c_int,
+    end_col: c_int,
+) {
+    // SAFETY: the caller's window; the callbacks re-enter the editor.
+    unsafe {
+        (*decor_state.ptr()).running_decor_provider = true;
+        for idx in 0..provider_count() {
+            let p = provider(idx);
+            if p.state != kDecorProviderActive || p.redraw_range == LUA_NOREF {
+                continue;
+            }
+            if p.win_skip_row > end_row || (p.win_skip_row == end_row && p.win_skip_col >= end_col)
+            {
+                continue;
+            }
+
+            let mut args = ArrayBuf::<6>::new();
+            args.push(Object::window((*wp).handle));
+            args.push(Object::buffer((*(*wp).w_buffer).handle));
+            args.push(Object::integer(start_row.into()));
+            args.push(Object::integer(start_col.into()));
+            args.push(Object::integer(end_row.into()));
+            args.push(Object::integer(end_col.into()));
+
+            let mut res = Array {
+                size: 0,
+                capacity: 0,
+                items: ptr::null_mut(),
             };
-            let c2rust_fresh24 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh24 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: display_tick.get() as int64_t,
-                },
-            };
-            decor_provider_invoke(
-                i as ::core::ffi::c_int,
-                b"buf\0".as_ptr() as *const ::core::ffi::c_char,
-                (*p).redraw_buf,
-                args,
-                true_0 != 0,
-                ::core::ptr::null_mut::<Array>(),
+            let status = decor_provider_invoke(
+                idx,
+                c"range".as_ptr(),
+                p.redraw_range,
+                args.array(),
+                true,
+                Some(&mut res),
             );
+
+            // The Lua call may have reallocated the provider vector, so
+            // everything below goes through the index again.
+            if !status {
+                // errored: skip the rest of this window
+                set_state(idx, kDecorProviderWinDisabled);
+            } else if res.size >= 1 {
+                let first = *res.items;
+                if first.type_0 == kObjectTypeBoolean {
+                    if !first.data.boolean {
+                        set_state(idx, kDecorProviderWinDisabled);
+                    }
+                } else if first.type_0 == kObjectTypeInteger {
+                    let row = first.data.integer;
+                    let mut col = 0;
+                    if res.size >= 2 {
+                        let second = *res.items.add(1);
+                        if second.type_0 == kObjectTypeInteger {
+                            col = second.data.integer;
+                        }
+                    }
+                    with_provider(idx, |p| {
+                        p.win_skip_row = row as c_int;
+                        p.win_skip_col = col as c_int;
+                    });
+                }
+            }
+
+            api_free_array(res);
+            hl_check_ns();
         }
-        i = i.wrapping_add(1);
+        (*decor_state.ptr()).running_decor_provider = false;
     }
 }
-pub unsafe extern "C" fn decor_providers_invoke_end() {
-    let mut i: size_t = 0 as size_t;
-    while i < (*decor_providers.ptr()).size {
-        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
-        if (*p).state as ::core::ffi::c_uint
-            != kDecorProviderDisabled as ::core::ffi::c_int as ::core::ffi::c_uint
-            && (*p).redraw_end != LUA_NOREF
-        {
-            let mut args: Array = ARRAY_DICT_INIT;
-            let mut args__items: [Object; 1] = [Object {
-                type_0: kObjectTypeNil,
-                data: C2Rust_Unnamed_12 { boolean: false },
-            }; 1];
-            args.capacity = 1 as size_t;
-            args.items = &raw mut args__items as *mut Object;
-            let c2rust_fresh25 = args.size;
-            args.size = args.size.wrapping_add(1);
-            *args.items.offset(c2rust_fresh25 as isize) = object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_12 {
-                    integer: display_tick.get() as ::core::ffi::c_int as Integer,
-                },
-            };
-            decor_provider_invoke(
-                i as ::core::ffi::c_int,
-                b"end\0".as_ptr() as *const ::core::ffi::c_char,
-                (*p).redraw_end,
-                args,
-                true_0 != 0,
-                ::core::ptr::null_mut::<Array>(),
-            );
+
+/// Run every `on_buf` callback for one buffer.
+///
+/// # Safety
+/// `buf` must point to a live buffer; runs Lua.
+pub unsafe fn decor_providers_invoke_buf(buf: *mut buf_T) {
+    // SAFETY: the caller's buffer; the callbacks re-enter the editor.
+    unsafe {
+        for idx in 0..provider_count() {
+            let p = provider(idx);
+            if p.state == kDecorProviderActive && p.redraw_buf != LUA_NOREF {
+                let mut args = ArrayBuf::<2>::new();
+                args.push(Object::buffer((*buf).handle));
+                args.push(Object::integer(display_tick.get() as Integer));
+                decor_provider_invoke(idx, c"buf".as_ptr(), p.redraw_buf, args.array(), true, None);
+            }
         }
-        i = i.wrapping_add(1);
     }
-    decor_check_to_be_deleted();
 }
-pub unsafe extern "C" fn decor_provider_invalidate_hl() {
-    let mut i: size_t = 0 as size_t;
-    while i < (*decor_providers.ptr()).size {
-        (*(*decor_providers.ptr()).items.offset(i as isize)).hl_cached = false_0 != 0;
-        i = i.wrapping_add(1);
+
+/// Finish a redraw: run every `on_end` callback, then free the decorations a
+/// callback asked to delete while they were still being drawn.
+///
+/// # Safety
+/// Runs Lua; main thread only.
+pub unsafe fn decor_providers_invoke_end() {
+    // SAFETY: the callbacks re-enter the editor.
+    unsafe {
+        for idx in 0..provider_count() {
+            let p = provider(idx);
+            if p.state != kDecorProviderDisabled && p.redraw_end != LUA_NOREF {
+                let mut args = ArrayBuf::<1>::new();
+                args.push(Object::integer(display_tick.get() as c_int as Integer));
+                decor_provider_invoke(idx, c"end".as_ptr(), p.redraw_end, args.array(), true, None);
+            }
+        }
+        decor_check_to_be_deleted();
     }
+}
+
+/// Mark all cached state of per-namespace highlights as invalid, and
+/// revalidate the current namespace.
+///
+/// Expensive! Should only be called by an already throttled validity check
+/// like `highlight_changed()` (throttled to the next redraw or mode change).
+///
+/// # Safety
+/// Reaches the highlight tables; main thread only.
+pub unsafe fn decor_provider_invalidate_hl() {
+    PROVIDERS.with_mut(|providers| {
+        for p in providers.iter_mut() {
+            p.hl_cached = false;
+        }
+    });
+
     if ns_hl_active.get() != 0 {
-        ns_hl_active.set(-1 as ::core::ffi::c_int as NS);
-        hl_check_ns();
+        ns_hl_active.set(-1);
+        // SAFETY: the editor's own highlight tables.
+        unsafe { hl_check_ns() };
     }
 }
-pub unsafe extern "C" fn get_decor_provider(mut ns_id: NS, mut force: bool) -> *mut DecorProvider {
-    '_c2rust_label: {
-        if ns_id > 0 as ::core::ffi::c_int {
-        } else {
-            __assert_fail(
-                b"ns_id > 0\0".as_ptr() as *const ::core::ffi::c_char,
-                b"src/nvim/decoration_provider.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                305 as ::core::ffi::c_uint,
-                b"DecorProvider *get_decor_provider(NS, _Bool)\0".as_ptr()
-                    as *const ::core::ffi::c_char,
-            );
-        }
-    };
-    let mut len: size_t = (*decor_providers.ptr()).size;
-    let mut i: size_t = 0 as size_t;
-    while i < len {
-        let mut p: *mut DecorProvider = (*decor_providers.ptr()).items.offset(i as isize);
-        if (*p).ns_id == ns_id {
-            return p;
-        }
-        i = i.wrapping_add(1);
+
+/// The provider for namespace `ns_id`, registering an empty one if `force`
+/// and there is none.
+///
+/// The pointer is into the provider vector and is invalidated by anything
+/// that can register a provider — that is, by any Lua call. Callers that keep
+/// it across one must use [`with_decor_provider`] instead.
+///
+/// # Safety
+/// The answer must not outlive the next registration.
+pub unsafe fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider {
+    assert!(ns_id > 0);
+    match provider_index(ns_id, force) {
+        Some(idx) => PROVIDERS.with(|providers| providers.as_ptr().cast_mut().wrapping_add(idx)),
+        None => ptr::null_mut(),
     }
-    if !force {
-        return ::core::ptr::null_mut::<DecorProvider>();
-    }
-    if (*decor_providers.ptr()).capacity <= len {
-        (*decor_providers.ptr()).size = len.wrapping_add(1 as size_t);
-        (*decor_providers.ptr()).capacity = (*decor_providers.ptr()).size;
-        (*decor_providers.ptr()).capacity = (*decor_providers.ptr()).capacity.wrapping_sub(1);
-        (*decor_providers.ptr()).capacity |=
-            (*decor_providers.ptr()).capacity >> 1 as ::core::ffi::c_int;
-        (*decor_providers.ptr()).capacity |=
-            (*decor_providers.ptr()).capacity >> 2 as ::core::ffi::c_int;
-        (*decor_providers.ptr()).capacity |=
-            (*decor_providers.ptr()).capacity >> 4 as ::core::ffi::c_int;
-        (*decor_providers.ptr()).capacity |=
-            (*decor_providers.ptr()).capacity >> 8 as ::core::ffi::c_int;
-        (*decor_providers.ptr()).capacity |=
-            (*decor_providers.ptr()).capacity >> 16 as ::core::ffi::c_int;
-        (*decor_providers.ptr()).capacity = (*decor_providers.ptr()).capacity.wrapping_add(1);
-        (*decor_providers.ptr()).capacity = (*decor_providers.ptr()).capacity;
-        (*decor_providers.ptr()).items = xrealloc(
-            (*decor_providers.ptr()).items as *mut ::core::ffi::c_void,
-            ::core::mem::size_of::<DecorProvider>().wrapping_mul((*decor_providers.ptr()).capacity),
-        ) as *mut DecorProvider;
-    } else {
-        if (*decor_providers.ptr()).size <= len {
-            (*decor_providers.ptr()).size = len.wrapping_add(1 as size_t);
-        } else {
-        };
-    };
-    let mut item: *mut DecorProvider = (*decor_providers.ptr()).items.offset(len as isize);
-    *item = DecorProvider {
-        ns_id: ns_id,
+}
+
+/// Runs `f` on the provider for namespace `ns_id`, registering an empty one
+/// if `force` and there is none. Answers `None` when there is no provider and
+/// `force` is false.
+///
+/// This is the form to use around anything that can run Lua: it resolves the
+/// provider afresh, so a callback that registered another provider in between
+/// cannot leave a stale pointer behind.
+pub fn with_decor_provider<R>(
+    ns_id: NS,
+    force: bool,
+    f: impl FnOnce(&mut DecorProvider) -> R,
+) -> Option<R> {
+    assert!(ns_id > 0);
+    let idx = provider_index(ns_id, force)?;
+    Some(with_provider(idx, f))
+}
+
+/// The index of `ns_id`'s provider, appending a fresh one if `force`.
+fn provider_index(ns_id: NS, force: bool) -> Option<usize> {
+    PROVIDERS.with_mut(|providers| {
+        if let Some(idx) = providers.iter().position(|p| p.ns_id == ns_id) {
+            return Some(idx);
+        }
+        if !force {
+            return None;
+        }
+        providers.push(new_provider(ns_id));
+        Some(providers.len() - 1)
+    })
+}
+
+/// A provider with no callbacks, disabled until one is registered.
+///
+/// `conceal_line` starts at `LUA_REFNIL` (-1) rather than `LUA_NOREF` (-2),
+/// which `DECORATION_PROVIDER_INIT` has done since the field was added. It is
+/// harmless because a provider born here is `Disabled` and every caller tests
+/// that first, and because registering callbacks runs `decor_provider_clear`
+/// beforehand, which sets the slot properly. Preserved rather than corrected:
+/// changing it would be a semantic change with no observable trigger.
+const fn new_provider(ns_id: NS) -> DecorProvider {
+    DecorProvider {
+        ns_id,
         state: kDecorProviderDisabled,
-        win_skip_row: 0 as ::core::ffi::c_int,
-        win_skip_col: 0 as ::core::ffi::c_int,
+        win_skip_row: 0,
+        win_skip_col: 0,
         redraw_start: LUA_NOREF,
         redraw_buf: LUA_NOREF,
         redraw_win: LUA_NOREF,
@@ -754,50 +609,39 @@ pub unsafe extern "C" fn get_decor_provider(mut ns_id: NS, mut force: bool) -> *
         redraw_end: LUA_NOREF,
         hl_def: LUA_NOREF,
         spell_nav: LUA_NOREF,
-        conceal_line: -1 as LuaRef,
-        hl_valid: false_0,
-        hl_cached: false_0 != 0,
-        error_count: 0 as uint8_t,
-    };
-    return item;
+        conceal_line: -1,
+        hl_valid: 0,
+        hl_cached: false,
+        error_count: 0,
+    }
 }
-pub unsafe extern "C" fn decor_provider_clear(mut p: *mut DecorProvider) {
+
+/// Drop every callback `p` holds and disable it.
+///
+/// # Safety
+/// `p` must be null or point to a live provider.
+pub unsafe fn decor_provider_clear(p: *mut DecorProvider) {
     if p.is_null() {
         return;
     }
-    if (*p).redraw_start != LUA_NOREF {
-        api_free_luaref((*p).redraw_start);
-        (*p).redraw_start = LUA_NOREF as LuaRef;
+    // SAFETY: the caller's provider. `api_free_luaref` only touches the Lua
+    // registry, so the provider vector cannot move under this.
+    unsafe {
+        for slot in [
+            &raw mut (*p).redraw_start,
+            &raw mut (*p).redraw_buf,
+            &raw mut (*p).redraw_win,
+            &raw mut (*p).redraw_line,
+            &raw mut (*p).redraw_range,
+            &raw mut (*p).redraw_end,
+            &raw mut (*p).spell_nav,
+            &raw mut (*p).conceal_line,
+        ] {
+            if *slot != LUA_NOREF {
+                api_free_luaref(*slot);
+                *slot = LUA_NOREF;
+            }
+        }
+        (*p).state = kDecorProviderDisabled;
     }
-    if (*p).redraw_buf != LUA_NOREF {
-        api_free_luaref((*p).redraw_buf);
-        (*p).redraw_buf = LUA_NOREF as LuaRef;
-    }
-    if (*p).redraw_win != LUA_NOREF {
-        api_free_luaref((*p).redraw_win);
-        (*p).redraw_win = LUA_NOREF as LuaRef;
-    }
-    if (*p).redraw_line != LUA_NOREF {
-        api_free_luaref((*p).redraw_line);
-        (*p).redraw_line = LUA_NOREF as LuaRef;
-    }
-    if (*p).redraw_range != LUA_NOREF {
-        api_free_luaref((*p).redraw_range);
-        (*p).redraw_range = LUA_NOREF as LuaRef;
-    }
-    if (*p).redraw_end != LUA_NOREF {
-        api_free_luaref((*p).redraw_end);
-        (*p).redraw_end = LUA_NOREF as LuaRef;
-    }
-    if (*p).spell_nav != LUA_NOREF {
-        api_free_luaref((*p).spell_nav);
-        (*p).spell_nav = LUA_NOREF as LuaRef;
-    }
-    if (*p).conceal_line != LUA_NOREF {
-        api_free_luaref((*p).conceal_line);
-        (*p).conceal_line = LUA_NOREF as LuaRef;
-    }
-    (*p).state = kDecorProviderDisabled;
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
