@@ -16,7 +16,7 @@ use crate::src::nvim::main::{
     curtab, curwin, decor_state, first_tabpage, firstwin, hl_mode_str, namespace_localscope,
     virt_text_pos_str,
 };
-use crate::src::nvim::map::mh_get_uint32_t;
+use crate::src::nvim::map::set_has_uint32_t;
 use crate::src::nvim::marktree::key::{
     MT_FLAG_DECOR_EXT, MT_FLAG_DECOR_HL, MT_FLAG_DECOR_SIGNTEXT, kMTFilterSelect, mt_conceal_lines,
     mt_decor, mt_decor_any, mt_decor_sign, mt_end, mt_invalid,
@@ -35,11 +35,11 @@ use crate::src::nvim::types::{
     DecorPriorityInternal, DecorRange, DecorRange_data as C2Rust_Unnamed_22, DecorRangeKind,
     DecorRangeSlot, DecorSignHighlight, DecorState, DecorVirtText, Dict, Error, Integer, MTKey,
     MTNode, MTPair, MTPos, MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_19, MetaFilter,
-    MetaIndex, Object, OptInt, Set_uint32_t, SignItem, SignTextAttrs, TriState, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, buf_T, colnr_T, int32_t, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString, key_value_pair, linenr_T, lpos_T,
-    object, object_data as C2Rust_Unnamed_14, sattr_T, schar_T, size_t, tabpage_T, uint16_t,
-    uint32_t, uint64_t, virt_line, win_T,
+    MetaIndex, Object, OptInt, SignItem, SignTextAttrs, TriState, VirtLines, VirtText,
+    VirtTextChunk, VirtTextPos, buf_T, colnr_T, int32_t, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeInteger, kObjectTypeString, key_value_pair, linenr_T, lpos_T, object,
+    object_data as C2Rust_Unnamed_14, sattr_T, schar_T, size_t, tabpage_T, uint16_t, uint32_t,
+    uint64_t, virt_line, win_T,
 };
 unsafe extern "C" {
     static decor_items: GlobalCell<C2Rust_Unnamed_26>;
@@ -137,17 +137,20 @@ pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
         hl: DECOR_HIGHLIGHT_INLINE_INIT,
     },
 };
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
+/// Whether marks in namespace `ns_id` are visible in `wp`. A namespace that is
+/// not window-local is visible in every window; a window-local one only in the
+/// windows that opted in.
+///
+/// # Safety
+/// `wp` must point to a live window.
 #[inline]
-unsafe extern "C" fn set_has_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> bool {
-    return mh_get_uint32_t(set, key) != MH_TOMBSTONE as uint32_t;
-}
-#[inline]
-unsafe extern "C" fn ns_in_win(mut ns_id: uint32_t, mut wp: *mut win_T) -> bool {
-    if !set_has_uint32_t(namespace_localscope.ptr(), ns_id) {
-        return true_0 != 0;
+pub unsafe fn ns_in_win(ns_id: uint32_t, wp: *mut win_T) -> bool {
+    unsafe {
+        if !set_has_uint32_t(namespace_localscope.ptr(), ns_id) {
+            return true;
+        }
+        set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id)
     }
-    return set_has_uint32_t(&raw mut (*wp).w_ns_set, ns_id);
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub static decor_freelist: GlobalCell<uint32_t> = GlobalCell::new(UINT32_MAX as uint32_t);

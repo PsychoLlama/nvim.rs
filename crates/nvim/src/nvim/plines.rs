@@ -19,13 +19,12 @@
 use crate::src::nvim::buffer::buf_meta_total;
 use crate::src::nvim::charset::vim_isbreak;
 use crate::src::nvim::charset::{ptr2cells, vim_isprintc, vim_strsize};
-use crate::src::nvim::decoration::{decor_conceal_line, decor_virt_lines};
+use crate::src::nvim::decoration::{decor_conceal_line, decor_virt_lines, ns_in_win};
 use crate::src::nvim::diff::{diff_check_fill, diffopt_filler};
 use crate::src::nvim::fold::{hasFolding, hasFoldingWin, lineFolded};
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::indent::{get_breakindent_win, tabstop_padding};
-use crate::src::nvim::main::{State, VIsual, VIsual_active, curwin, namespace_localscope, p_sel};
-use crate::src::nvim::map::mh_get_uint32_t;
+use crate::src::nvim::main::{State, VIsual, VIsual_active, curwin, p_sel};
 use crate::src::nvim::marktree::key::{kMTFilterSelect, mt_decor, mt_invalid, mt_right};
 use crate::src::nvim::marktree::{
     marktree_itr_current, marktree_itr_get_filter, marktree_itr_next_filter,
@@ -38,8 +37,8 @@ use crate::src::nvim::pos::{lt, ltoreq};
 use crate::src::nvim::state::{MODE_NORMAL, virtual_active};
 use crate::src::nvim::types::{
     CharSize, CharsizeArg, CharsizeKind, MarkTree, MarkTreeIter, MetaFilter, MetaIndex,
-    Set_uint32_t, StrCharInfo, VirtLines, buf_T, colnr_T, foldinfo_T, int32_t, int64_t, linenr_T,
-    pos_T, uint32_t, win_T,
+    StrCharInfo, VirtLines, buf_T, colnr_T, foldinfo_T, int32_t, int64_t, linenr_T, pos_T,
+    uint32_t, win_T,
 };
 
 use ::core::ffi::{c_char, c_int, c_long};
@@ -64,26 +63,6 @@ static INLINE_FILTER: GlobalCell<[uint32_t; 5]> = GlobalCell::new([kMTFilterSele
 
 fn inline_filter() -> MetaFilter {
     INLINE_FILTER.ptr().cast::<uint32_t>()
-}
-
-/// # Safety
-/// `set` must point to a live `Set_uint32_t`.
-unsafe fn set_has(set: *mut Set_uint32_t, key: uint32_t) -> bool {
-    unsafe { mh_get_uint32_t(set, key) != uint32_t::MAX }
-}
-
-/// Whether marks in namespace `ns_id` are visible in `wp`. A namespace that
-/// is not window-local is visible everywhere.
-///
-/// # Safety
-/// `wp` must point to a live window.
-unsafe fn ns_in_win(ns_id: uint32_t, wp: *mut win_T) -> bool {
-    unsafe {
-        if !set_has(namespace_localscope.ptr(), ns_id) {
-            return true;
-        }
-        set_has(&raw mut (*wp).w_ns_set, ns_id)
-    }
 }
 
 // ---------------------------------------------------------------------------

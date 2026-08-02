@@ -86,6 +86,13 @@ pub unsafe fn mh_get_String(set: *mut Set_String, key: String_0) -> uint32_t {
     table::get(&(*set).h, (*set).keys, &key)
 }
 
+// Membership.
+
+/// Whether `key` is in `set`.
+pub unsafe fn set_has_uint32_t(set: *mut Set_uint32_t, key: uint32_t) -> bool {
+    mh_get_uint32_t(set, key) != MH_TOMBSTONE
+}
+
 // Insert a key into a set, or find it. See `table::put`.
 
 pub unsafe fn mh_put_cstr_t(

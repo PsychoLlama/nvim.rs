@@ -20,8 +20,8 @@ use crate::src::nvim::main::{
     next_namespace_id,
 };
 use crate::src::nvim::map::{
-    map_put_ref_String_int, mh_delete_uint32_t, mh_get_String, mh_get_ptr_t, mh_get_uint32_t,
-    mh_put_ptr_t, mh_put_uint32_t,
+    map_put_ref_String_int, mh_delete_uint32_t, mh_get_String, mh_get_ptr_t, mh_put_ptr_t,
+    mh_put_uint32_t, set_has_uint32_t,
 };
 use crate::src::nvim::marktree::key::{
     MT_FLAG_DECOR_CONCEAL_LINES, MT_FLAG_DECOR_HL, MT_FLAG_DECOR_SIGNHL, MT_FLAG_DECOR_SIGNTEXT,
@@ -254,10 +254,6 @@ unsafe extern "C" fn set_put_ptr_t(
     }
     return status as ::core::ffi::c_uint
         != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint;
-}
-#[inline]
-unsafe extern "C" fn set_has_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> bool {
-    return mh_get_uint32_t(set, key) != MH_TOMBSTONE as uint32_t;
 }
 #[inline]
 unsafe extern "C" fn set_del_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> uint32_t {
