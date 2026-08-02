@@ -18,7 +18,7 @@ use super::*;
 
 pub(crate) unsafe extern "C" fn draw_col_buf(
     mut wp: *mut win_T,
-    mut wlv: *mut winlinevars_T,
+    mut wlv: *mut WinLineVars,
     mut text: *const ::core::ffi::c_char,
     mut len: size_t,
     mut attr: ::core::ffi::c_int,
@@ -37,7 +37,7 @@ pub(crate) unsafe extern "C" fn draw_col_buf(
             );
             let mut myattr: ::core::ffi::c_int = attr;
             if inc_vcol {
-                advance_color_col(wlv, (*wlv).vcol as ::core::ffi::c_int);
+                (*wlv).advance_color_col((*wlv).vcol);
                 if !(*wlv).color_cols.is_null() && (*wlv).vcol == *(*wlv).color_cols {
                     myattr = hl_combine_attr(win_hl_attr(wp, HLF_MC), myattr);
                 }
@@ -65,7 +65,7 @@ pub(crate) unsafe extern "C" fn draw_col_buf(
 }
 
 pub(crate) unsafe extern "C" fn draw_col_fill(
-    mut wlv: *mut winlinevars_T,
+    mut wlv: *mut WinLineVars,
     mut fillchar: schar_T,
     mut width: ::core::ffi::c_int,
     mut attr: ::core::ffi::c_int,
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn use_cursor_line_highlight(mut wp: *mut win_T, mut lnum:
     }
 }
 
-pub(crate) unsafe extern "C" fn draw_foldcolumn(mut wp: *mut win_T, mut wlv: *mut winlinevars_T) {
+pub(crate) unsafe extern "C" fn draw_foldcolumn(mut wp: *mut win_T, mut wlv: *mut WinLineVars) {
     unsafe {
         let mut fdc: ::core::ffi::c_int = compute_foldcolumn(wp, 0 as ::core::ffi::c_int);
         if fdc > 0 as ::core::ffi::c_int {
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn fill_foldcolumn(
 pub(crate) unsafe extern "C" fn draw_sign(
     mut nrcol: bool,
     mut wp: *mut win_T,
-    mut wlv: *mut winlinevars_T,
+    mut wlv: *mut WinLineVars,
     mut sign_idx: ::core::ffi::c_int,
 ) {
     unsafe {
@@ -263,7 +263,7 @@ pub(crate) unsafe extern "C" fn draw_sign(
                         b"sign_pos >= 0\0".as_ptr() as *const ::core::ffi::c_char,
                         b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         580 as ::core::ffi::c_uint,
-                        b"void draw_sign(_Bool, win_T *, winlinevars_T *, int)\0".as_ptr()
+                        b"void draw_sign(_Bool, win_T *, WinLineVars *, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
                     );
                 }
@@ -280,7 +280,7 @@ pub(crate) unsafe extern "C" fn draw_sign(
                         b"!nrcol\0".as_ptr() as *const ::core::ffi::c_char,
                         b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                         584 as ::core::ffi::c_uint,
-                        b"void draw_sign(_Bool, win_T *, winlinevars_T *, int)\0".as_ptr()
+                        b"void draw_sign(_Bool, win_T *, WinLineVars *, int)\0".as_ptr()
                             as *const ::core::ffi::c_char,
                     );
                 }
@@ -324,7 +324,7 @@ pub(crate) unsafe extern "C" fn get_line_number_str(
 
 pub(crate) unsafe extern "C" fn use_cursor_line_nr(
     mut wp: *mut win_T,
-    mut wlv: *mut winlinevars_T,
+    mut wlv: *mut WinLineVars,
 ) -> bool {
     unsafe {
         return (*wp).w_onebuf_opt.wo_cul != 0
@@ -342,7 +342,7 @@ pub(crate) unsafe extern "C" fn use_cursor_line_nr(
 
 pub(crate) unsafe extern "C" fn get_line_number_attr(
     mut wp: *mut win_T,
-    mut wlv: *mut winlinevars_T,
+    mut wlv: *mut WinLineVars,
 ) -> ::core::ffi::c_int {
     unsafe {
         let mut numhl_attr: ::core::ffi::c_int = (*wlv).sign_num_attr;
@@ -378,7 +378,7 @@ pub(crate) unsafe extern "C" fn get_line_number_attr(
     }
 }
 
-pub(crate) unsafe extern "C" fn draw_lnum_col(mut wp: *mut win_T, mut wlv: *mut winlinevars_T) {
+pub(crate) unsafe extern "C" fn draw_lnum_col(mut wp: *mut win_T, mut wlv: *mut WinLineVars) {
     unsafe {
         let mut has_cpo_n: bool = !vim_strchr(p_cpo.get(), CPO_NUMCOL).is_null();
         if ((*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0)
@@ -445,7 +445,7 @@ pub(crate) unsafe extern "C" fn draw_lnum_col(mut wp: *mut win_T, mut wlv: *mut 
 
 pub(crate) unsafe extern "C" fn draw_statuscol(
     mut wp: *mut win_T,
-    mut wlv: *mut winlinevars_T,
+    mut wlv: *mut WinLineVars,
     mut virtnum: ::core::ffi::c_int,
     mut col_rows: ::core::ffi::c_int,
     mut stcp: *mut statuscol_T,
@@ -625,10 +625,7 @@ pub(crate) unsafe extern "C" fn draw_statuscol(
     }
 }
 
-pub(crate) unsafe extern "C" fn handle_breakindent(
-    mut wp: *mut win_T,
-    mut wlv: *mut winlinevars_T,
-) {
+pub(crate) unsafe extern "C" fn handle_breakindent(mut wp: *mut win_T, mut wlv: *mut WinLineVars) {
     unsafe {
         if (*wp).w_onebuf_opt.wo_bri != 0
             && ((*wlv).row > (*wlv).startrow + (*wlv).filler_lines
@@ -651,7 +648,7 @@ pub(crate) unsafe extern "C" fn handle_breakindent(
             while i < num {
                 *(*linebuf_char.ptr()).offset((*wlv).off as isize) =
                     ' ' as ::core::ffi::c_int as schar_T;
-                advance_color_col(wlv, (*wlv).vcol as ::core::ffi::c_int);
+                (*wlv).advance_color_col((*wlv).vcol);
                 let mut myattr: ::core::ffi::c_int = attr;
                 if !(*wlv).color_cols.is_null() && (*wlv).vcol == *(*wlv).color_cols {
                     myattr = hl_combine_attr(win_hl_attr(wp, HLF_MC), myattr);
@@ -682,7 +679,7 @@ pub(crate) unsafe extern "C" fn handle_breakindent(
 
 pub(crate) unsafe extern "C" fn handle_showbreak_and_filler(
     mut wp: *mut win_T,
-    mut wlv: *mut winlinevars_T,
+    mut wlv: *mut WinLineVars,
 ) {
     unsafe {
         let mut remaining: ::core::ffi::c_int = (*wp).w_view_width - (*wlv).off;

@@ -27,7 +27,8 @@ use crate::src::nvim::fold::get_foldtext;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{
     LineAttrs, LineSpan, grid_adjust, grid_put_linebuf, linebuf_mirror, schar_cells,
-    schar_from_char, schar_get_adv, schar_get_ascii, schar_get_first_codepoint, schar_len,
+    schar_from_ascii, schar_from_char, schar_get_adv, schar_get_ascii, schar_get_first_codepoint,
+    schar_len,
 };
 use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight::{
@@ -254,7 +255,7 @@ pub unsafe extern "C" fn win_line(
             );
         }
     };
-    let mut wlv: winlinevars_T = winlinevars_T {
+    let mut wlv: WinLineVars = WinLineVars {
         lnum: lnum,
         foldinfo: foldinfo,
         startrow: startrow,
@@ -336,10 +337,7 @@ pub unsafe extern "C" fn win_line(
         } else {
             (*wp).w_p_cc_cols
         };
-        advance_color_col(
-            &raw mut wlv,
-            wlv.vcol as ::core::ffi::c_int - wlv.vcol_off_co,
-        );
+        wlv.advance_color_col(wlv.vcol - wlv.vcol_off_co);
         if VIsual_active.get() as ::core::ffi::c_int != 0
             && (*wp).w_buffer == (*curwin.get()).w_buffer
         {
@@ -536,9 +534,9 @@ pub unsafe extern "C" fn win_line(
                 & kOptCuloptFlagScreenline as ::core::ffi::c_int
                 != 0;
         if !cul_screenline {
-            apply_cursorline_highlight(wp, &raw mut wlv);
+            wlv.apply_cursorline_highlight(wp);
         } else {
-            margin_columns_win(wp, &raw mut left_curline_col, &raw mut right_curline_col);
+            (left_curline_col, right_curline_col) = margin_columns_win(wp);
         }
         area_highlighting = true_0 != 0;
     }
@@ -923,7 +921,7 @@ pub unsafe extern "C" fn win_line(
     {
         area_highlighting = true_0 != 0;
     }
-    win_line_start(wp, &raw mut wlv);
+    wlv.start_line(wp);
     let mut draw_cols: bool = true_0 != 0;
     let mut leftcols_width: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut term_attrs: [::core::ffi::c_int; 1024] = [0 as ::core::ffi::c_int; 1024];
@@ -1125,7 +1123,7 @@ pub unsafe extern "C" fn win_line(
                 && wlv.vcol >= left_curline_col
                 && wlv.vcol < right_curline_col
             {
-                apply_cursorline_highlight(wp, &raw mut wlv);
+                wlv.apply_cursorline_highlight(wp);
             }
             if dollar_vcol.get() >= 0 as ::core::ffi::c_int
                 && in_curline as ::core::ffi::c_int != 0
@@ -1335,7 +1333,7 @@ pub unsafe extern "C" fn win_line(
                         {
                             wlv.diff_hlf = HLF_CHD;
                         }
-                        set_line_attr_for_diff(wp, &raw mut wlv);
+                        wlv.set_line_attr_for_diff(wp);
                     }
                     if area_attr != 0 as ::core::ffi::c_int {
                         char_attr_pri = hl_combine_attr(wlv.line_attr, area_attr);
@@ -1864,7 +1862,7 @@ pub unsafe extern "C" fn win_line(
                                 && ascii_iswhite(mb_c) as ::core::ffi::c_int != 0
                             {
                                 if mb_c == TAB {
-                                    fix_for_boguscols(&raw mut wlv);
+                                    wlv.fix_for_boguscols();
                                 }
                                 if (*wp).w_onebuf_opt.wo_list == 0 {
                                     mb_c = ' ' as ::core::ffi::c_int;
@@ -2066,7 +2064,7 @@ pub unsafe extern "C" fn win_line(
                                 }
                             }
                             let mut vc_saved: ::core::ffi::c_int = wlv.vcol_off_co;
-                            fix_for_boguscols(&raw mut wlv);
+                            wlv.fix_for_boguscols();
                             if wlv.n_extra == tab_len + vc_saved
                                 && (*wp).w_onebuf_opt.wo_list != 0
                                 && (*wp).w_p_lcs_chars.tab1 != 0
@@ -2404,10 +2402,7 @@ pub unsafe extern "C" fn win_line(
                     }) as colnr_T;
                     wlv.col -= wlv.boguscols;
                     wlv.boguscols = 0 as ::core::ffi::c_int;
-                    advance_color_col(
-                        &raw mut wlv,
-                        wlv.vcol as ::core::ffi::c_int - wlv.vcol_off_co,
-                    );
+                    wlv.advance_color_col(wlv.vcol - wlv.vcol_off_co);
                     let eol_skip: ::core::ffi::c_int = if lcs_eol_todo as ::core::ffi::c_int != 0
                         && eol_hl_off == 0 as ::core::ffi::c_int
                     {
@@ -2451,7 +2446,7 @@ pub unsafe extern "C" fn win_line(
                             || wlv.diff_hlf as ::core::ffi::c_uint == HLF_TXA as ::core::ffi::c_uint
                         {
                             wlv.diff_hlf = HLF_CHD;
-                            set_line_attr_for_diff(wp, &raw mut wlv);
+                            wlv.set_line_attr_for_diff(wp);
                         }
                         let diff_attr: ::core::ffi::c_int =
                             if wlv.diff_hlf as ::core::ffi::c_uint != 0 as ::core::ffi::c_uint {
@@ -2470,10 +2465,7 @@ pub unsafe extern "C" fn win_line(
                         while wlv.col < view_width {
                             *(*linebuf_char.ptr()).offset(wlv.off as isize) =
                                 ' ' as ::core::ffi::c_int as schar_T;
-                            advance_color_col(
-                                &raw mut wlv,
-                                wlv.vcol as ::core::ffi::c_int - wlv.vcol_off_co,
-                            );
+                            wlv.advance_color_col(wlv.vcol - wlv.vcol_off_co);
                             let mut col_attr: ::core::ffi::c_int = base_attr;
                             if (*wp).w_onebuf_opt.wo_cuc != 0
                                 && wlv.vcol as ::core::ffi::c_int - wlv.vcol_off_co
@@ -2566,10 +2558,7 @@ pub unsafe extern "C" fn win_line(
                             mb_c = schar_get_first_codepoint(mb_schar);
                         }
                     }
-                    advance_color_col(
-                        &raw mut wlv,
-                        wlv.vcol as ::core::ffi::c_int - wlv.vcol_off_co,
-                    );
+                    wlv.advance_color_col(wlv.vcol - wlv.vcol_off_co);
                     vcol_save_attr = -1 as ::core::ffi::c_int;
                     if !lnum_in_visual_area
                         && search_attr == 0 as ::core::ffi::c_int
@@ -2862,7 +2851,7 @@ pub unsafe extern "C" fn win_line(
             wlv.row += 1;
             break;
         } else {
-            win_line_start(wp, &raw mut wlv);
+            wlv.start_line(wp);
             draw_cols = true_0 != 0;
             lcs_prec_todo = (*wp).w_p_lcs_chars.prec;
             if wlv.filler_todo <= 0 as ::core::ffi::c_int {
@@ -2895,7 +2884,7 @@ pub unsafe extern "C" fn win_line(
 pub const SPWORDLEN: ::core::ffi::c_int = 150 as ::core::ffi::c_int;
 unsafe extern "C" fn wlv_put_linebuf(
     mut wp: *mut win_T,
-    mut wlv: *const winlinevars_T,
+    mut wlv: *const WinLineVars,
     mut endcol: ::core::ffi::c_int,
     mut clear_end: bool,
     mut bg_attr: ::core::ffi::c_int,
@@ -2915,7 +2904,7 @@ unsafe extern "C" fn wlv_put_linebuf(
                 b"!(flags & SLF_RIGHTLEFT)\0".as_ptr() as *const ::core::ffi::c_char,
                 b"src/nvim/drawline.rs\0".as_ptr() as *const ::core::ffi::c_char,
                 3253 as ::core::ffi::c_uint,
-                b"void wlv_put_linebuf(win_T *, const winlinevars_T *, int, _Bool, int, int)\0"
+                b"void wlv_put_linebuf(win_T *, const WinLineVars *, int, _Bool, int, int)\0"
                     .as_ptr() as *const ::core::ffi::c_char,
             );
         }

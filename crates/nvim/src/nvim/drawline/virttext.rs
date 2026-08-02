@@ -396,7 +396,7 @@ pub(crate) unsafe extern "C" fn draw_virt_text_item(
 }
 
 pub(crate) unsafe extern "C" fn has_more_inline_virt(
-    mut wlv: *mut winlinevars_T,
+    mut wlv: *mut WinLineVars,
     mut v: ptrdiff_t,
 ) -> bool {
     unsafe {
@@ -436,7 +436,7 @@ pub(crate) unsafe extern "C" fn has_more_inline_virt(
 
 pub(crate) unsafe extern "C" fn handle_inline_virtual_text(
     mut _wp: *mut win_T,
-    mut wlv: *mut winlinevars_T,
+    mut wlv: *mut WinLineVars,
     mut v: ptrdiff_t,
     mut selected: bool,
 ) {
@@ -527,7 +527,7 @@ pub(crate) unsafe extern "C" fn handle_inline_virtual_text(
                         b"src/nvim/drawline.rs\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                         1017 as ::core::ffi::c_uint,
-                        b"void handle_inline_virtual_text(win_T *, winlinevars_T *, ptrdiff_t, _Bool)\0"
+                        b"void handle_inline_virtual_text(win_T *, WinLineVars *, ptrdiff_t, _Bool)\0"
                             .as_ptr() as *const ::core::ffi::c_char,
                     );
                     }
