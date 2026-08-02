@@ -13,6 +13,7 @@ use crate::src::nvim::decoration::{
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_buf_later};
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::funcs::get_buf_arg;
+use crate::src::nvim::eval::typval::tv_list_first;
 use crate::src::nvim::eval::typval::{
     tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg, tv_check_for_string_arg,
     tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find,
@@ -40,7 +41,7 @@ use crate::src::nvim::marktree::{
     marktree_itr_current, marktree_itr_get, marktree_itr_get_overlap, marktree_itr_next,
     marktree_itr_step_overlap, marktree_lookup_ns,
 };
-use crate::src::nvim::mbyte::{utf_ptr2cells, utfc_ptr2len, utfc_ptr2schar};
+use crate::src::nvim::mbyte::{MAX_SCHAR_SIZE, utf_ptr2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::src::nvim::memory::{xcalloc, xfree, xmallocz, xrealloc, xstrdup};
 use crate::src::nvim::message::{
     emsg, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg_puts_title, semsg, smsg,
@@ -589,6 +590,78 @@ unsafe extern "C" fn buf_delete_signs(
     }
     return OK;
 }
+/// Room for [`describe_sign_text`]'s answer: SIGN_WIDTH cells of up to
+/// `MAX_SCHAR_SIZE` bytes each, the last of which carries the NUL
+/// `schar_get` writes.
+pub(crate) const SIGN_TEXT_BUF: usize = SIGN_WIDTH as usize * MAX_SCHAR_SIZE as usize;
+
+/// [`group_get_ns`]'s answer for the group `"*"`: every namespace, the
+/// global one included.
+pub(crate) const ALL_GROUPS: int64_t = UINT32_MAX as int64_t;
+
+/// Orders marks the way `:sign` reports them and removes them: by row, then
+/// by [`sign_item_cmp`] — priority, then mark id, then placement serial, all
+/// with the newest first.
+///
+/// A stable sort is provably the permutation the `qsort` upstream uses
+/// produced: `buf_put_decor_sh` hands every placed sign a distinct
+/// `sign_add_id`, so the comparator is a total order and no two entries tie.
+///
+/// # Safety
+/// Every mark must carry a live sign decoration.
+pub(crate) unsafe fn sort_signs(signs: &mut [MTKey]) {
+    // SAFETY: the caller's marks.
+    unsafe {
+        signs.sort_by(|a, b| {
+            if a.pos.row != b.pos.row {
+                return a.pos.row.cmp(&b.pos.row);
+            }
+            let (sh1, sh2) = (decor_find_sign(mt_decor(*a)), decor_find_sign(mt_decor(*b)));
+            assert!(!sh1.is_null() && !sh2.is_null(), "sign mark without a sign");
+            sign_item_cmp(
+                &SignItem { sh: sh1, id: a.id },
+                &SignItem { sh: sh2, id: b.id },
+            )
+            .cmp(&0)
+        });
+    }
+}
+
+/// The definition `:sign define` recorded under `name`, or null.
+///
+/// # Safety
+/// `name` must be a NUL-terminated string.
+pub(crate) unsafe fn sign_find(name: *const ::core::ffi::c_char) -> *mut sign_T {
+    // SAFETY: the caller's name.
+    unsafe { map_get_cstr_t_ptr_t(sign_map.ptr(), name as cstr_t) as *mut sign_T }
+}
+
+/// Every defined sign, in definition order.
+///
+/// A snapshot rather than an iterator: `:sign list` and `sign_getdefined()`
+/// both format each entry as they walk, and formatting can re-enter.
+pub(crate) fn sign_defs() -> Vec<*mut sign_T> {
+    // SAFETY: reading the map's dense key array, which is what the
+    // transpiled `map_foreach_value` expanded to.
+    unsafe {
+        let map = sign_map.ptr();
+        (0..(*map).set.h.n_keys)
+            .map(|i| *(*map).values.offset(i as isize) as *mut sign_T)
+            .collect()
+    }
+}
+
+/// The names of every defined sign, in definition order.
+pub(crate) fn sign_names() -> Vec<*const ::core::ffi::c_char> {
+    // SAFETY: as [`sign_defs`].
+    unsafe {
+        let map = sign_map.ptr();
+        (0..(*map).set.h.n_keys)
+            .map(|i| *(*map).set.keys.offset(i as isize))
+            .collect()
+    }
+}
+
 pub unsafe extern "C" fn buf_has_signs(mut buf: *const buf_T) -> bool {
     return buf_meta_total(buf, kMTMetaSignHL).wrapping_add(buf_meta_total(buf, kMTMetaSignText))
         != 0;
