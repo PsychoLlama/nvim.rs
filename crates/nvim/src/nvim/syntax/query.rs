@@ -121,20 +121,10 @@ pub unsafe extern "C" fn get_syntax_name(
     unsafe {
         match expand_what.get() as ::core::ffi::c_uint {
             0 => {
-                if idx < 0 as ::core::ffi::c_int
-                    || idx
-                        >= ::core::mem::size_of::<[subcommand; 19]>()
-                            .wrapping_div(::core::mem::size_of::<subcommand>())
-                            .wrapping_div(
-                                (::core::mem::size_of::<[subcommand; 19]>()
-                                    .wrapping_rem(::core::mem::size_of::<subcommand>())
-                                    == 0) as ::core::ffi::c_int
-                                    as usize,
-                            ) as ::core::ffi::c_int
-                {
+                if idx < 0 as ::core::ffi::c_int || idx >= SUBCOMMANDS.len() as ::core::ffi::c_int {
                     return ::core::ptr::null_mut::<::core::ffi::c_char>();
                 }
-                return (*subcommands.ptr())[idx as usize].name;
+                return SUBCOMMANDS[idx as usize].name.as_ptr().cast_mut();
             }
             1 => {
                 static case_args: GlobalCell<[*mut ::core::ffi::c_char; 3]> = GlobalCell::new([

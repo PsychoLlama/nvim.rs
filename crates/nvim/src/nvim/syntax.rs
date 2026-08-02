@@ -42,8 +42,7 @@ use crate::src::nvim::message::{
 use crate::src::nvim::optionstr::clear_string_option;
 use crate::src::nvim::os::input::line_breakcheck;
 use crate::src::nvim::os::libc::{
-    gettext, memcpy, memmove, qsort, strcasecmp, strcmp, strcpy, strlen, strncasecmp, strncmp,
-    strpbrk,
+    gettext, memmove, qsort, strcasecmp, strcmp, strcpy, strlen, strncasecmp, strncmp, strpbrk,
 };
 use crate::src::nvim::path::path_is_absolute;
 use crate::src::nvim::pos::MAXLNUM;
@@ -57,10 +56,10 @@ use crate::src::nvim::strings::{
     vim_snprintf, vim_strchr, vim_strnsave_up, vim_strsave_up, xstrnsave,
 };
 use crate::src::nvim::types::{
-    CMD_index, OptInt, buf_T, bufstate_T, cmd_addr_T, colnr_T, cstack_T, exarg_T, expand_T,
-    garray_T, hashtab_T, int16_t, int32_t, linenr_T, lpos_T, proftime_T, reg_extmatch_T,
-    regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T, synstate_T, uint8_t,
-    uint32_t, uint64_t, varnumber_T, win_T,
+    CMD_index, OptInt, buf_T, bufstate_T, cmd_addr_T, colnr_T, exarg_T, expand_T, garray_T,
+    hashtab_T, int16_t, int32_t, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T,
+    regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T, synstate_T, uint8_t, uint32_t,
+    uint64_t, varnumber_T, win_T,
 };
 
 mod flags;
@@ -81,6 +80,8 @@ mod endpos;
 pub(crate) use self::endpos::*;
 mod command;
 pub use self::command::*;
+mod clear;
+pub use self::clear::*;
 mod list;
 pub(crate) use self::list::*;
 mod keyword;
@@ -249,9 +250,8 @@ pub const SYNSPL_TOP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SYNSPL_NOTOP: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SYNFLD_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SYNFLD_MINIMUM: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const SYNTAX_FNAME: [::core::ffi::c_char; 26] = unsafe {
-    ::core::mem::transmute::<[u8; 26], [::core::ffi::c_char; 26]>(*b"$VIMRUNTIME/syntax/%s.vim\0")
-};
+/// The `:source` argument the on/off commands build; `%s` is the file's name.
+pub(crate) const SYNTAX_FNAME: &::core::ffi::CStr = c"$VIMRUNTIME/syntax/%s.vim";
 pub const SST_MIN_ENTRIES: ::core::ffi::c_int = 150 as ::core::ffi::c_int;
 pub const SST_MAX_ENTRIES: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
 pub const SST_FIX_STATES: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
@@ -265,9 +265,7 @@ pub const SPO_RS_OFF: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const SPO_RE_OFF: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const SPO_LC_OFF: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const SPO_COUNT: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
-static e_illegal_arg: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E390: Illegal argument: %s\0")
-});
+pub(crate) const E_ILLEGAL_ARG: &::core::ffi::CStr = c"E390: Illegal argument: %s";
 pub(crate) const E_CONTAINS_NOT_ACCEPTED_HERE: &::core::ffi::CStr =
     c"E395: Contains argument not accepted here";
 pub(crate) const E_INVALID_CCHAR_VALUE: &::core::ffi::CStr = c"E844: Invalid cchar value";

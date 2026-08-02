@@ -1,6 +1,6 @@
 {
   "internal_exports": 46,
-  "files_without_forbid_unsafe": 609,
+  "files_without_forbid_unsafe": 610,
   "files_without_deny_unsafe_op": 203,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
@@ -514,10 +514,11 @@
     "crates/nvim/src/nvim/state.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/statusline.rs": {"lines": 3332, "no_mangle": 1, "unsafe": 15},
     "crates/nvim/src/nvim/strings.rs": {"lines": 4007, "no_mangle": 1, "unsafe": 113, "variadic": 5},
-    "crates/nvim/src/nvim/syntax.rs": {"unsafe": 9},
+    "crates/nvim/src/nvim/syntax.rs": {"unsafe": 7},
     "crates/nvim/src/nvim/syntax/attr.rs": {"unsafe": 10},
+    "crates/nvim/src/nvim/syntax/clear.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/syntax/cluster.rs": {"unsafe": 9},
-    "crates/nvim/src/nvim/syntax/command.rs": {"unsafe": 40},
+    "crates/nvim/src/nvim/syntax/command.rs": {"unsafe": 18},
     "crates/nvim/src/nvim/syntax/define.rs": {"unsafe": 14},
     "crates/nvim/src/nvim/syntax/endpos.rs": {"unsafe": 15},
     "crates/nvim/src/nvim/syntax/items.rs": {"unsafe": 10},
