@@ -400,11 +400,13 @@ pub unsafe fn highlight_exists(name: *const c_char) -> c_int {
 
 /// The name of the group with id `id`, or `""` for an id that names none.
 pub fn syn_id2name(id: c_int) -> *mut c_char {
+    // The bound has to be tested BEFORE the index is formed: `id` of 0 is the
+    // "no group" answer every caller may pass, and `0usize - 1` panics.
+    let index = id.checked_sub(1).and_then(|i| usize::try_from(i).ok());
     GROUPS.with(|table| {
-        let name = match table.entries.get(id as usize - 1) {
-            Some(group) if id > 0 => group.name,
-            _ => c"",
-        };
+        let name = index
+            .and_then(|i| table.entries.get(i))
+            .map_or(c"", |group| group.name);
         name.as_ptr().cast_mut()
     })
 }
