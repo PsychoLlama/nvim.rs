@@ -485,8 +485,8 @@ pub(crate) unsafe fn syn_regexec(
         if timing {
             let took = profile_end(start);
             (*st).total = profile_add((*st).total, took);
-            // `<` and not `>`: `slowest` starts at zero and profile_cmp orders
-            // the other way round. Upstream's spelling, kept.
+            // `profile_cmp(a, b)` is negative when `a` is the *larger* time, so
+            // this really does keep the slowest.
             if profile_cmp(took, (*st).slowest) < 0 {
                 (*st).slowest = took;
             }

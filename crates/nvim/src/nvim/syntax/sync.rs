@@ -9,288 +9,353 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{c_char, c_int};
+
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn syn_sync(
-    mut wp: *mut win_T,
-    mut start_lnum: linenr_T,
-    mut last_valid: *mut synstate_T,
-) {
+/// Find a synchronisation point for line `start_lnum`, setting `current_lnum`
+/// and the current state to it.
+///
+/// One of three methods, in this order: search backwards for the end of a
+/// C comment, search backwards for the `:syntax sync match` patterns, or simply
+/// start a given number of lines above.
+///
+/// `last_valid` is the last cached state before `start_lnum` that is still
+/// trustworthy; running into it during the backward scan ends the search.
+pub(crate) unsafe fn syn_sync(wp: *mut win_T, start_lnum: linenr_T, last_valid: *mut synstate_T) {
     unsafe {
-        let mut cursor_save: pos_T = pos_T {
-            lnum: 0,
-            col: 0,
-            coladd: 0,
-        };
-        let mut lnum: linenr_T = 0;
-        let mut break_lnum: linenr_T = 0;
-        let mut cur_si: *mut stateitem_T = ::core::ptr::null_mut::<stateitem_T>();
-        let mut spp: *mut synpat_T = ::core::ptr::null_mut::<synpat_T>();
-        let mut found_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut found_match_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut found_current_lnum: linenr_T = 0 as linenr_T;
-        let mut found_current_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut found_m_endpos: lpos_T = lpos_T { lnum: 0, col: 0 };
+        // Clear any current state that might be hanging around.
         invalidate_current_state();
-        if (*syn_block.get()).b_syn_sync_minlines > start_lnum {
-            start_lnum = 1 as ::core::ffi::c_int as linenr_T;
-        } else {
-            if (*syn_block.get()).b_syn_sync_minlines == 1 as linenr_T {
-                lnum = 1 as ::core::ffi::c_int as linenr_T;
-            } else if (*syn_block.get()).b_syn_sync_minlines < 10 as linenr_T {
-                lnum = (*syn_block.get()).b_syn_sync_minlines * 2 as linenr_T;
-            } else {
-                lnum = (*syn_block.get()).b_syn_sync_minlines * 3 as linenr_T / 2 as linenr_T;
-            }
-            if (*syn_block.get()).b_syn_sync_maxlines != 0 as linenr_T
-                && lnum > (*syn_block.get()).b_syn_sync_maxlines
-            {
-                lnum = (*syn_block.get()).b_syn_sync_maxlines;
-            }
-            if lnum >= start_lnum {
-                start_lnum = 1 as ::core::ffi::c_int as linenr_T;
-            } else {
-                start_lnum -= lnum;
-            }
-        }
+
+        let start_lnum = sync_backoff(start_lnum);
         current_lnum.set(start_lnum);
-        if (*syn_block.get()).b_syn_sync_flags & SF_CCOMMENT != 0 {
-            let mut curwin_save: *mut win_T = curwin.get();
-            curwin.set(wp);
-            let mut curbuf_save: *mut buf_T = curbuf.get();
-            curbuf.set(syn_buf.get());
-            while start_lnum > 1 as linenr_T {
-                let mut l: *mut ::core::ffi::c_char = ml_get(start_lnum - 1 as linenr_T);
-                if *l as ::core::ffi::c_int == NUL
-                    || *l
-                        .offset(ml_get_len(start_lnum - 1 as linenr_T) as isize)
-                        .offset(-(1 as ::core::ffi::c_int as isize))
-                        as ::core::ffi::c_int
-                        != '\\' as ::core::ffi::c_int
-                {
-                    break;
-                }
-                start_lnum -= 1;
-            }
-            current_lnum.set(start_lnum);
-            cursor_save = (*wp).w_cursor;
-            (*wp).w_cursor.lnum = start_lnum;
-            (*wp).w_cursor.col = 0 as ::core::ffi::c_int as colnr_T;
-            if !find_start_comment((*syn_block.get()).b_syn_sync_maxlines as ::core::ffi::c_int)
-                .is_null()
-            {
-                let mut idx: ::core::ffi::c_int = (*syn_block.get()).b_syn_patterns.ga_len;
-                loop {
-                    idx -= 1;
-                    if idx < 0 as ::core::ffi::c_int {
-                        break;
-                    }
-                    if !((*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
-                        .offset(idx as isize))
-                    .sp_syn
-                    .id as ::core::ffi::c_int
-                        == (*syn_block.get()).b_syn_sync_id as ::core::ffi::c_int
-                        && (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
-                            .offset(idx as isize))
-                        .sp_type as ::core::ffi::c_int
-                            == SPTYPE_START)
-                    {
-                        continue;
-                    }
-                    validate_current_state();
-                    push_current_state(idx);
-                    update_si_attr((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
-                    break;
-                }
-            }
-            (*wp).w_cursor = cursor_save;
-            curwin.set(curwin_save);
-            curbuf.set(curbuf_save);
-        } else if (*syn_block.get()).b_syn_sync_flags & SF_MATCH != 0 {
-            if (*syn_block.get()).b_syn_sync_maxlines != 0 as linenr_T
-                && start_lnum > (*syn_block.get()).b_syn_sync_maxlines
-            {
-                break_lnum = start_lnum - (*syn_block.get()).b_syn_sync_maxlines;
-            } else {
-                break_lnum = 0 as ::core::ffi::c_int as linenr_T;
-            }
-            found_m_endpos.lnum = 0 as ::core::ffi::c_int as linenr_T;
-            found_m_endpos.col = 0 as ::core::ffi::c_int as colnr_T;
-            let mut end_lnum: linenr_T = start_lnum;
-            lnum = start_lnum;
-            loop {
-                lnum -= 1;
-                if lnum <= break_lnum {
-                    break;
-                }
-                line_breakcheck();
-                if got_int.get() {
-                    invalidate_current_state();
-                    current_lnum.set(start_lnum);
-                    break;
-                } else if !last_valid.is_null() && lnum == (*last_valid).sst_lnum {
-                    load_current_state(last_valid);
-                    break;
-                } else {
-                    if lnum > 1 as linenr_T && syn_match_linecont(lnum - 1 as linenr_T) != 0 {
-                        continue;
-                    }
-                    validate_current_state();
-                    current_lnum.set(lnum);
-                    while current_lnum.get() < end_lnum {
-                        syn_start_line();
-                        loop {
-                            let mut had_sync_point: bool = syn_finish_line(true_0 != 0);
-                            if !(had_sync_point as ::core::ffi::c_int != 0
-                                && (*current_state.ptr()).ga_len != 0)
-                            {
-                                break;
-                            }
-                            cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(
-                                ((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize,
-                            );
-                            if (*cur_si).si_m_endpos.lnum > start_lnum {
-                                current_lnum.set(end_lnum);
-                                break;
-                            } else {
-                                if (*cur_si).si_idx < 0 as ::core::ffi::c_int {
-                                    found_flags = 0 as ::core::ffi::c_int;
-                                    found_match_idx = KEYWORD_IDX;
-                                } else {
-                                    spp = ((*syn_block.get()).b_syn_patterns.ga_data
-                                        as *mut synpat_T)
-                                        .offset((*cur_si).si_idx as isize);
-                                    found_flags = (*spp).sp_flags;
-                                    found_match_idx = (*spp).sp_sync_idx;
-                                }
-                                found_current_lnum = current_lnum.get();
-                                found_current_col = current_col.get() as ::core::ffi::c_int;
-                                found_m_endpos = (*cur_si).si_m_endpos;
-                                if found_m_endpos.lnum > current_lnum.get() {
-                                    current_lnum.set(found_m_endpos.lnum);
-                                    current_col.set(found_m_endpos.col);
-                                    if current_lnum.get() >= end_lnum {
-                                        break;
-                                    }
-                                } else if found_m_endpos.col > current_col.get() {
-                                    current_col.set(found_m_endpos.col);
-                                } else {
-                                    (*current_col.ptr()) += 1;
-                                }
-                                let mut prev_current_col: colnr_T = current_col.get();
-                                if *syn_getcurline().offset(current_col.get() as isize)
-                                    as ::core::ffi::c_int
-                                    != NUL
-                                {
-                                    (*current_col.ptr()) += 1;
-                                }
-                                check_state_ends();
-                                current_col.set(prev_current_col);
-                            }
-                        }
-                        (*current_lnum.ptr()) += 1;
-                    }
-                    if found_flags != 0 {
-                        clear_current_state();
-                        if found_match_idx >= 0 as ::core::ffi::c_int {
-                            push_current_state(found_match_idx);
-                            update_si_attr((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
-                        }
-                        if found_flags & HL_SYNC_HERE != 0 {
-                            current_lnum.set(found_m_endpos.lnum);
-                            current_col.set(found_m_endpos.col);
-                            if !((*current_state.ptr()).ga_len <= 0 as ::core::ffi::c_int) {
-                                cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T)
-                                    .offset(
-                                        ((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int)
-                                            as isize,
-                                    );
-                                (*cur_si).si_h_startpos.lnum = found_current_lnum;
-                                (*cur_si).si_h_startpos.col = found_current_col as colnr_T;
-                                update_si_end(cur_si, current_col.get(), true_0 != 0);
-                                check_keepend();
-                            }
-                            syn_finish_line(false_0 != 0);
-                            (*current_lnum.ptr()) += 1;
-                        } else {
-                            current_lnum.set(start_lnum);
-                        }
-                        break;
-                    } else {
-                        end_lnum = lnum;
-                        invalidate_current_state();
-                    }
-                }
-            }
-            if lnum <= break_lnum {
-                invalidate_current_state();
-                current_lnum.set(break_lnum + 1 as linenr_T);
-            }
+
+        let flags = (*syn_block.get()).b_syn_sync_flags;
+        if flags & SF_CCOMMENT != 0 {
+            sync_by_ccomment(wp, start_lnum);
+        } else if flags & SF_MATCH != 0 {
+            sync_by_match(start_lnum, last_valid);
         }
         validate_current_state();
     }
 }
 
-pub(crate) unsafe extern "C" fn save_chartab(mut chartab: *mut ::core::ffi::c_char) {
+/// How far above `start_lnum` parsing starts by default.
+///
+/// At least "minlines" back, but further, so that scrolling backwards does not
+/// resync on every line: it then resyncs one line in N, where N is minlines
+/// times 1.5 -- or times 2 when minlines is small. Watch out for overflow when
+/// minlines is MAXLNUM.
+unsafe fn sync_backoff(start_lnum: linenr_T) -> linenr_T {
     unsafe {
-        if (*syn_block.get()).b_syn_isk == empty_string_option.ptr() as *mut ::core::ffi::c_char {
+        let minlines = (*syn_block.get()).b_syn_sync_minlines;
+        if minlines > start_lnum {
+            return 1;
+        }
+        let mut back = if minlines == 1 {
+            1
+        } else if minlines < 10 {
+            minlines * 2
+        } else {
+            minlines * 3 / 2
+        };
+        let maxlines = (*syn_block.get()).b_syn_sync_maxlines;
+        if maxlines != 0 && back > maxlines {
+            back = maxlines;
+        }
+        if back >= start_lnum {
+            1
+        } else {
+            start_lnum - back
+        }
+    }
+}
+
+/// Search backwards for the end of a C-style comment, and if the start line
+/// turns out to be inside one, push the syntax item that defines it.
+unsafe fn sync_by_ccomment(wp: *mut win_T, mut start_lnum: linenr_T) {
+    unsafe {
+        // `find_start_comment` works on the current buffer, so make syn_buf it
+        // for a moment.
+        let curwin_save = curwin.get();
+        curwin.set(wp);
+        let curbuf_save = curbuf.get();
+        curbuf.set(syn_buf.get());
+
+        // Skip lines that end in a backslash.
+        while start_lnum > 1 {
+            let l = ml_get(start_lnum - 1);
+            if *l as c_int == NUL
+                || *l.offset(ml_get_len(start_lnum - 1) as isize - 1) as c_int != '\\' as c_int
+            {
+                break;
+            }
+            start_lnum -= 1;
+        }
+        current_lnum.set(start_lnum);
+
+        // Set the cursor to the start of the search.
+        let cursor_save = (*wp).w_cursor;
+        (*wp).w_cursor.lnum = start_lnum;
+        (*wp).w_cursor.col = 0;
+
+        // Restrict the search for the end of the comment to "maxlines".
+        if !find_start_comment((*syn_block.get()).b_syn_sync_maxlines as c_int).is_null() {
+            let mut idx = syn_pattern_count();
+            while idx > 0 {
+                idx -= 1;
+                let spp = syn_pattern(idx);
+                if (*spp).sp_syn.id as c_int == (*syn_block.get()).b_syn_sync_id as c_int
+                    && (*spp).sp_type as c_int == SPTYPE_START
+                {
+                    validate_current_state();
+                    push_current_state(idx);
+                    update_si_attr(state_len() - 1);
+                    break;
+                }
+            }
+        }
+
+        (*wp).w_cursor = cursor_save;
+        curwin.set(curwin_save);
+        curbuf.set(curbuf_save);
+    }
+}
+
+/// Where a `:syntax sync match` matched, and what it said to do there.
+struct SyncPoint {
+    /// The sync item's flags -- `grouphere` or `groupthere`.
+    flags: c_int,
+    /// The pattern index of the group to push, or negative for none.
+    match_idx: c_int,
+    /// Where the match itself began.
+    lnum: linenr_T,
+    col: c_int,
+    /// Where it ended.
+    m_endpos: lpos_T,
+}
+
+/// Search backwards, one line at a time, for a `:syntax sync match`.
+unsafe fn sync_by_match(start_lnum: linenr_T, last_valid: *mut synstate_T) {
+    unsafe {
+        let maxlines = (*syn_block.get()).b_syn_sync_maxlines;
+        let break_lnum = if maxlines != 0 && start_lnum > maxlines {
+            start_lnum - maxlines
+        } else {
+            0
+        };
+
+        let mut end_lnum = start_lnum;
+        let mut lnum = start_lnum;
+        loop {
+            lnum -= 1;
+            if lnum <= break_lnum {
+                break;
+            }
+
+            // This can take a long time: stop when CTRL-C is pressed.
+            line_breakcheck();
+            if got_int.get() {
+                invalidate_current_state();
+                current_lnum.set(start_lnum);
+                break;
+            }
+            // Have we run into a saved state stack that is still valid?
+            if !last_valid.is_null() && lnum == (*last_valid).sst_lnum {
+                load_current_state(last_valid);
+                break;
+            }
+            // Does the previous line have the line-continuation pattern?
+            if lnum > 1 && syn_match_linecont(lnum - 1) {
+                continue;
+            }
+
+            // Start with nothing on the state stack.
+            validate_current_state();
+            let found = scan_for_sync_point(lnum, end_lnum, start_lnum);
+
+            let Some(found) = found else {
+                end_lnum = lnum;
+                invalidate_current_state();
+                continue;
+            };
+
+            // Put the item the sync point named on the state stack. With no
+            // item named, leave the stack empty.
+            clear_current_state();
+            if found.match_idx >= 0 {
+                push_current_state(found.match_idx);
+                update_si_attr(state_len() - 1);
+            }
+            if found.flags & HL_SYNC_HERE != 0 {
+                // "grouphere": continue from the sync point match to the end of
+                // that line, and start parsing at the next one.
+                current_lnum.set(found.m_endpos.lnum);
+                current_col.set(found.m_endpos.col);
+                if state_len() > 0 {
+                    let cur_si = state_top();
+                    (*cur_si).si_h_startpos.lnum = found.lnum;
+                    (*cur_si).si_h_startpos.col = found.col;
+                    update_si_end(cur_si, current_col.get(), true);
+                    check_keepend();
+                }
+                syn_finish_line(false);
+                current_lnum.set(current_lnum.get() + 1);
+            } else {
+                // "groupthere": parsing starts at the line we synced for, with
+                // the item already in effect.
+                current_lnum.set(start_lnum);
+            }
+            break;
+        }
+
+        // Ran into the start of the file, or exceeded the maximum number of
+        // lines. (Every `break` above leaves `lnum` above `break_lnum`, so this
+        // only fires on the loop's own exhaustion.)
+        if lnum <= break_lnum {
+            invalidate_current_state();
+            current_lnum.set(break_lnum + 1);
+        }
+    }
+}
+
+/// Parse lines `from`..`end_lnum` looking for a sync point, answering the last
+/// one found in them.
+///
+/// The scan does not stop at the first sync point: it keeps looking further on
+/// in the line, so the one that wins is the closest to `end_lnum`.
+unsafe fn scan_for_sync_point(
+    from: linenr_T,
+    end_lnum: linenr_T,
+    start_lnum: linenr_T,
+) -> Option<SyncPoint> {
+    unsafe {
+        let mut found: Option<SyncPoint> = None;
+        current_lnum.set(from);
+        while current_lnum.get() < end_lnum {
+            syn_start_line();
+            loop {
+                let had_sync_point = syn_finish_line(true);
+                if !had_sync_point || state_len() == 0 {
+                    break;
+                }
+                let cur_si = state_top();
+                if (*cur_si).si_m_endpos.lnum > start_lnum {
+                    // Ignore a match that reaches past where we started.
+                    current_lnum.set(end_lnum);
+                    break;
+                }
+                let (flags, match_idx) = if (*cur_si).si_idx < 0 {
+                    (0, KEYWORD_IDX) // cannot happen?
+                } else {
+                    let spp = syn_pattern((*cur_si).si_idx);
+                    ((*spp).sp_flags, (*spp).sp_sync_idx)
+                };
+                let m_endpos = (*cur_si).si_m_endpos;
+                found = Some(SyncPoint {
+                    flags,
+                    match_idx,
+                    lnum: current_lnum.get(),
+                    col: current_col.get(),
+                    m_endpos,
+                });
+
+                // Continue after the match, being aware of a zero-length one.
+                if m_endpos.lnum > current_lnum.get() {
+                    current_lnum.set(m_endpos.lnum);
+                    current_col.set(m_endpos.col);
+                    if current_lnum.get() >= end_lnum {
+                        break;
+                    }
+                } else if m_endpos.col > current_col.get() {
+                    current_col.set(m_endpos.col);
+                } else {
+                    current_col.set(current_col.get() + 1);
+                }
+
+                // syn_current_attr() skipped the check for an item that ends
+                // here; do it now. Be careful not to go past the NUL.
+                let prev_col = current_col.get();
+                if *syn_getcurline().offset(current_col.get() as isize) as c_int != NUL {
+                    current_col.set(current_col.get() + 1);
+                }
+                check_state_ends();
+                current_col.set(prev_col);
+            }
+            current_lnum.set(current_lnum.get() + 1);
+        }
+        // A sync point whose item has no flags names nothing to sync on, which
+        // upstream spells as `if (found_flags)` -- the zero case falls through
+        // to the next line back.
+        found.filter(|f| f.flags != 0)
+    }
+}
+
+/// Save `syn_buf`'s character table and install the one `syntax iskeyword` set.
+///
+/// A no-op when the syntax has no `iskeyword` of its own, in which case
+/// [`restore_chartab`] is a no-op too and the saved buffer is never read.
+pub(crate) unsafe fn save_chartab(chartab: *mut c_char) {
+    unsafe {
+        if (*syn_block.get()).b_syn_isk == empty_string_option.ptr() as *mut c_char {
             return;
         }
         memmove(
             chartab as *mut ::core::ffi::c_void,
             &raw mut (*syn_buf.get()).b_chartab as *mut uint64_t as *const ::core::ffi::c_void,
-            32 as ::core::ffi::c_int as size_t,
+            32,
         );
         memmove(
             &raw mut (*syn_buf.get()).b_chartab as *mut uint64_t as *mut ::core::ffi::c_void,
             &raw mut (*(*syn_win.get()).w_s).b_syn_chartab as *mut uint8_t
                 as *const ::core::ffi::c_void,
-            32 as ::core::ffi::c_int as size_t,
+            32,
         );
     }
 }
 
-pub(crate) unsafe extern "C" fn restore_chartab(mut chartab: *mut ::core::ffi::c_char) {
+/// Put back what [`save_chartab`] saved.
+pub(crate) unsafe fn restore_chartab(chartab: *mut c_char) {
     unsafe {
-        if (*(*syn_win.get()).w_s).b_syn_isk
-            != empty_string_option.ptr() as *mut ::core::ffi::c_char
-        {
+        if (*(*syn_win.get()).w_s).b_syn_isk != empty_string_option.ptr() as *mut c_char {
             memmove(
                 &raw mut (*syn_buf.get()).b_chartab as *mut uint64_t as *mut ::core::ffi::c_void,
                 chartab as *const ::core::ffi::c_void,
-                32 as ::core::ffi::c_int as size_t,
+                32,
             );
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn syn_match_linecont(mut lnum: linenr_T) -> ::core::ffi::c_int {
+/// Does line `lnum` match the `:syntax sync linecont` pattern, i.e. does the
+/// line after it continue it?
+pub(crate) unsafe fn syn_match_linecont(lnum: linenr_T) -> bool {
     unsafe {
         if (*syn_block.get()).b_syn_linecont_prog.is_null() {
-            return false_0;
+            return false;
         }
-        let mut regmatch: regmmatch_T = regmmatch_T {
-            regprog: ::core::ptr::null_mut::<regprog_T>(),
+        let mut buf_chartab: [c_char; 32] = [0; 32];
+        save_chartab(&raw mut buf_chartab as *mut c_char);
+
+        let mut regmatch = regmmatch_T {
+            regprog: (*syn_block.get()).b_syn_linecont_prog,
             startpos: [lpos_T { lnum: 0, col: 0 }; 10],
             endpos: [lpos_T { lnum: 0, col: 0 }; 10],
             rmm_matchcol: 0,
-            rmm_ic: 0,
+            rmm_ic: (*syn_block.get()).b_syn_linecont_ic,
             rmm_maxcol: 0,
         };
-        let mut buf_chartab: [::core::ffi::c_char; 32] = [0; 32];
-        save_chartab(&raw mut buf_chartab as *mut ::core::ffi::c_char);
-        regmatch.rmm_ic = (*syn_block.get()).b_syn_linecont_ic;
-        regmatch.regprog = (*syn_block.get()).b_syn_linecont_prog;
-        let mut r: ::core::ffi::c_int = syn_regexec(
+        let r = syn_regexec(
             &raw mut regmatch,
             lnum,
-            0 as colnr_T,
+            0,
             &raw mut (*syn_block.get()).b_syn_linecont_time,
-        ) as ::core::ffi::c_int;
+        );
         (*syn_block.get()).b_syn_linecont_prog = regmatch.regprog;
-        restore_chartab(&raw mut buf_chartab as *mut ::core::ffi::c_char);
-        return r;
+
+        restore_chartab(&raw mut buf_chartab as *mut c_char);
+        r
     }
 }
 

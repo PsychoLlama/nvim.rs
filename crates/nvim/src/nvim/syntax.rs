@@ -26,7 +26,7 @@ use crate::src::nvim::highlight_group::{
 };
 use crate::src::nvim::indent_c::find_start_comment;
 use crate::src::nvim::main::{
-    Columns, Rows, curbuf, curtab, curwin, display_tick, e_invarg2, e_nogroup, e_notopen,
+    Columns, Rows, curbuf, curwin, display_tick, e_invarg2, e_nogroup, e_notopen,
     empty_string_option, emsg_skip, firstwin, got_int, include_default, include_link, include_none,
     msg_col, p_cpo, re_extmatch_in, re_extmatch_out, reg_do_extmatch,
 };
@@ -55,10 +55,10 @@ use crate::src::nvim::strings::{
     vim_snprintf, vim_strchr, vim_strnsave_up, vim_strsave_up, xstrnsave,
 };
 use crate::src::nvim::types::{
-    CMD_index, OptInt, buf_T, bufstate_T, cmd_addr_T, colnr_T, cstack_T, disptick_T, exarg_T,
-    expand_T, garray_T, hash_T, hashitem_T, hashtab_T, int16_t, int32_t, keyvalue_T, linenr_T,
-    lpos_T, pos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t,
-    syn_time_T, synblock_T, synstate_T, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
+    CMD_index, OptInt, buf_T, bufstate_T, cmd_addr_T, colnr_T, cstack_T, exarg_T, expand_T,
+    garray_T, hash_T, hashitem_T, hashtab_T, int16_t, int32_t, keyvalue_T, linenr_T, lpos_T,
+    proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T,
+    synstate_T, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
 
 mod flags;

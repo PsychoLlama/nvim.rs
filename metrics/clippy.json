@@ -145,7 +145,6 @@
     "crates/nvim/src/nvim/syntax/list.rs": 50,
     "crates/nvim/src/nvim/syntax/options.rs": 35,
     "crates/nvim/src/nvim/syntax/query.rs": 23,
-    "crates/nvim/src/nvim/syntax/stack.rs": 5,
     "crates/nvim/src/nvim/syntax/sync.rs": 13,
     "crates/nvim/src/nvim/syntax/syntime.rs": 19,
     "crates/nvim/src/nvim/tag.rs": 8,

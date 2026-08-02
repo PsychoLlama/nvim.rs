@@ -9,18 +9,24 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::c_int;
+
 #[allow(unused_imports)]
 use super::*;
 
-pub unsafe extern "C" fn syntax_start(mut wp: *mut win_T, mut lnum: linenr_T) {
+/// Start syntax recognition for a line.
+///
+/// Normally called from the screen update, once per displayed line. The window
+/// and buffer are remembered in `syn_win`/`syn_buf`/`syn_block`, because
+/// [`get_syntax_attr`] is not given them -- and careful: `curwin` and `curbuf`
+/// are likely to point somewhere else entirely.
+pub unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
     unsafe {
-        let mut last_valid: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
-        let mut last_min_valid: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
-        let mut sp: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
-        let mut prev: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
-        let mut first_stored: linenr_T = 0;
-        let mut dist: ::core::ffi::c_int = 0;
-        static changedtick: GlobalCell<varnumber_T> = GlobalCell::new(0 as varnumber_T);
+        // The last change id we parsed at. A change may have invalidated the
+        // current state, so this is checked as if it were part of the identity
+        // of the buffer.
+        static changedtick: GlobalCell<varnumber_T> = GlobalCell::new(0);
+
         current_sub_char.set(NUL);
         if syn_block.get() != (*wp).w_s
             || syn_buf.get() != (*wp).w_buffer
@@ -32,35 +38,40 @@ pub unsafe extern "C" fn syntax_start(mut wp: *mut win_T, mut lnum: linenr_T) {
         }
         changedtick.set(buf_get_changedtick(syn_buf.get()));
         syn_win.set(wp);
+
         syn_stack_alloc();
         if (*syn_block.get()).b_sst_array.is_null() {
-            return;
+            return; // out of memory
         }
         (*syn_block.get()).b_sst_lasttick = display_tick.get();
-        if (*current_state.ptr()).ga_itemsize != 0 as ::core::ffi::c_int
+
+        // If the state at the end of the previous line is useful, store it.
+        if current_state_valid()
             && current_lnum.get() < lnum
             && current_lnum.get() < (*syn_buf.get()).b_ml.ml_line_count
         {
-            syn_finish_line(false_0 != 0);
+            syn_finish_line(false);
             if !current_state_stored.get() {
-                (*current_lnum.ptr()) += 1;
+                current_lnum.set(current_lnum.get() + 1);
                 store_current_state();
             }
+            // If current_lnum is now "lnum", keep the current state -- which
+            // happens very often. Otherwise work it out below.
             if current_lnum.get() != lnum {
                 invalidate_current_state();
             }
         } else {
             invalidate_current_state();
         }
-        if (*current_state.ptr()).ga_itemsize == 0 as ::core::ffi::c_int
-            && !(*syn_block.get()).b_sst_array.is_null()
-        {
-            let mut p: *mut synstate_T = (*syn_block.get()).b_sst_first;
-            while !p.is_null() {
-                if (*p).sst_lnum > lnum {
-                    break;
-                }
-                if (*p).sst_change_lnum == 0 as linenr_T {
+
+        // Try to synchronise from a saved state, but only if "lnum" is neither
+        // before one nor too far beyond one.
+        let mut last_valid = ::core::ptr::null_mut::<synstate_T>();
+        if !current_state_valid() {
+            let mut last_min_valid = ::core::ptr::null_mut::<synstate_T>();
+            let mut p = (*syn_block.get()).b_sst_first;
+            while !p.is_null() && (*p).sst_lnum <= lnum {
+                if (*p).sst_change_lnum == 0 {
                     last_valid = p;
                     if (*p).sst_lnum >= lnum - (*syn_block.get()).b_syn_sync_minlines {
                         last_min_valid = p;
@@ -72,272 +83,349 @@ pub unsafe extern "C" fn syntax_start(mut wp: *mut win_T, mut lnum: linenr_T) {
                 load_current_state(last_min_valid);
             }
         }
-        if (*current_state.ptr()).ga_itemsize == 0 as ::core::ffi::c_int {
+
+        // Still nothing: re-synchronise.
+        let first_stored = if !current_state_valid() {
             syn_sync(wp, lnum, last_valid);
-            if current_lnum.get() == 1 as linenr_T {
-                first_stored = 1 as ::core::ffi::c_int as linenr_T;
+            if current_lnum.get() == 1 {
+                1 // the first line is always valid, whatever "minlines" says
             } else {
-                first_stored = current_lnum.get() + (*syn_block.get()).b_syn_sync_minlines;
+                // "minlines" lines have to be parsed before a state can be
+                // considered valid enough to store.
+                current_lnum.get() + (*syn_block.get()).b_syn_sync_minlines
             }
         } else {
-            first_stored = current_lnum.get();
-        }
-        if (*syn_block.get()).b_sst_len <= Rows.get() {
-            dist = 999999 as ::core::ffi::c_int;
-        } else {
-            dist = ((*syn_buf.get()).b_ml.ml_line_count
-                / ((*syn_block.get()).b_sst_len as linenr_T - Rows.get() as linenr_T)
-                + 1 as linenr_T) as ::core::ffi::c_int;
-        }
+            current_lnum.get()
+        };
+
+        // Advance from the sync point or the saved state to the wanted line,
+        // saving some entries along the way to sync with later on.
+        let dist = store_distance();
+        let mut prev = ::core::ptr::null_mut::<synstate_T>();
         while current_lnum.get() < lnum {
             syn_start_line();
-            syn_finish_line(false_0 != 0);
-            (*current_lnum.ptr()) += 1;
+            syn_finish_line(false);
+            current_lnum.set(current_lnum.get() + 1);
             if current_lnum.get() >= first_stored {
-                if prev.is_null() {
-                    prev = syn_stack_find_entry(current_lnum.get() - 1 as linenr_T);
-                }
-                if prev.is_null() {
-                    sp = (*syn_block.get()).b_sst_first;
-                } else {
-                    sp = prev;
-                }
-                while !sp.is_null() && (*sp).sst_lnum < current_lnum.get() {
-                    sp = (*sp).sst_next;
-                }
-                if !sp.is_null()
-                    && (*sp).sst_lnum == current_lnum.get()
-                    && syn_stack_equal(sp) as ::core::ffi::c_int != 0
-                {
-                    let mut parsed_lnum: linenr_T = current_lnum.get();
-                    prev = sp;
-                    while !sp.is_null() && (*sp).sst_change_lnum <= parsed_lnum {
-                        if (*sp).sst_lnum <= lnum {
-                            prev = sp;
-                        } else if (*sp).sst_change_lnum == 0 as linenr_T {
-                            break;
-                        }
-                        (*sp).sst_change_lnum = 0 as ::core::ffi::c_int as linenr_T;
-                        sp = (*sp).sst_next;
-                    }
-                    load_current_state(prev);
-                } else if prev.is_null()
-                    || current_lnum.get() == lnum
-                    || current_lnum.get() >= (*prev).sst_lnum + dist as linenr_T
-                {
-                    prev = store_current_state();
-                }
+                prev = record_line(prev, lnum, dist);
             }
+
+            // This can take a long time: stop when CTRL-C is pressed. The
+            // current state is then wrong.
             line_breakcheck();
-            if !got_int.get() {
-                continue;
+            if got_int.get() {
+                current_lnum.set(lnum);
+                break;
             }
-            current_lnum.set(lnum);
-            break;
         }
         syn_start_line();
     }
 }
 
-pub(crate) unsafe extern "C" fn clear_syn_state(mut p: *mut synstate_T) {
+/// Is the current state valid, i.e. does it describe a real position?
+///
+/// Upstream spells this `VALID_STATE`, and stores the answer in the growarray's
+/// `ga_itemsize`: `invalidate_current_state` zeroes it.
+#[inline]
+pub(crate) unsafe fn current_state_valid() -> bool {
+    unsafe { (*current_state.ptr()).ga_itemsize != 0 }
+}
+
+/// How many lines apart to store cache entries for lines that are not
+/// displayed. Displayed lines get one each; the rest share what is left.
+unsafe fn store_distance() -> linenr_T {
+    unsafe {
+        if (*syn_block.get()).b_sst_len <= Rows.get() {
+            999999
+        } else {
+            (*syn_buf.get()).b_ml.ml_line_count
+                / ((*syn_block.get()).b_sst_len - Rows.get()) as linenr_T
+                + 1
+        }
+    }
+}
+
+/// After parsing up to `current_lnum`, either adopt the cached state for this
+/// line or store the one we just computed. Answers the cache entry to carry
+/// into the next line.
+///
+/// When the cached entry for this line matches what we parsed, every entry
+/// below it that was only waiting on a change *before* this line becomes valid
+/// again -- which is what turns one re-parse into a whole valid tail.
+unsafe fn record_line(
+    mut prev: *mut synstate_T,
+    lnum: linenr_T,
+    dist: linenr_T,
+) -> *mut synstate_T {
+    unsafe {
+        if prev.is_null() {
+            prev = syn_stack_find_entry(current_lnum.get() - 1);
+        }
+        let mut sp = if prev.is_null() {
+            (*syn_block.get()).b_sst_first
+        } else {
+            prev
+        };
+        while !sp.is_null() && (*sp).sst_lnum < current_lnum.get() {
+            sp = (*sp).sst_next;
+        }
+
+        if !sp.is_null() && (*sp).sst_lnum == current_lnum.get() && syn_stack_equal(sp) {
+            let parsed_lnum = current_lnum.get();
+            prev = sp;
+            while !sp.is_null() && (*sp).sst_change_lnum <= parsed_lnum {
+                if (*sp).sst_lnum <= lnum {
+                    prev = sp; // a valid state before the desired line
+                } else if (*sp).sst_change_lnum == 0 {
+                    break; // past the states that depend on a change
+                }
+                (*sp).sst_change_lnum = 0;
+                sp = (*sp).sst_next;
+            }
+            load_current_state(prev);
+            return prev;
+        }
+
+        // Store the state at this line when it is the first one, the line we
+        // are parsing for, or far enough from the last stored one.
+        if prev.is_null()
+            || current_lnum.get() == lnum
+            || current_lnum.get() >= (*prev).sst_lnum + dist
+        {
+            return store_current_state();
+        }
+        prev
+    }
+}
+
+/// Release the extmatch references a cached state holds.
+///
+/// A growarray full of `bufstate_T` cannot simply be discarded: each entry may
+/// hold a reference to the submatches of the pattern that started it.
+pub(crate) unsafe fn clear_syn_state(p: *mut synstate_T) {
     unsafe {
         if (*p).sst_stacksize > SST_FIX_STATES {
-            let mut _gap: *mut garray_T = &raw mut (*p).sst_union.sst_ga;
-            if !(*_gap).ga_data.is_null() {
-                let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while i < (*_gap).ga_len {
-                    let mut _item: *mut bufstate_T =
-                        ((*_gap).ga_data as *mut bufstate_T).offset(i as isize);
-                    unref_extmatch((*_item).bs_extmatch);
+            let gap = &raw mut (*p).sst_union.sst_ga;
+            if !(*gap).ga_data.is_null() {
+                let mut i = 0;
+                while i < (*gap).ga_len {
+                    unref_extmatch(
+                        (*((*gap).ga_data as *mut bufstate_T).offset(i as isize)).bs_extmatch,
+                    );
                     i += 1;
                 }
             }
-            ga_clear(_gap);
+            ga_clear(gap);
         } else {
-            let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i_0 < (*p).sst_stacksize {
-                unref_extmatch((*p).sst_union.sst_stack[i_0 as usize].bs_extmatch);
-                i_0 += 1;
-            }
-        };
-    }
-}
-
-pub(crate) unsafe extern "C" fn clear_current_state() {
-    unsafe {
-        let mut _gap: *mut garray_T = current_state.ptr();
-        if !(*_gap).ga_data.is_null() {
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < (*_gap).ga_len {
-                let mut _item: *mut stateitem_T =
-                    ((*_gap).ga_data as *mut stateitem_T).offset(i as isize);
-                unref_extmatch((*_item).si_extmatch);
+            let mut i = 0;
+            while i < (*p).sst_stacksize {
+                unref_extmatch((*p).sst_union.sst_stack[i as usize].bs_extmatch);
                 i += 1;
             }
         }
-        ga_clear(_gap);
     }
 }
 
-pub(crate) unsafe extern "C" fn syn_start_line() {
+/// Empty the current state stack, releasing its extmatch references.
+pub(crate) unsafe fn clear_current_state() {
     unsafe {
-        current_finished.set(false_0 != 0);
-        current_col.set(0 as ::core::ffi::c_int as colnr_T);
-        if !((*current_state.ptr()).ga_len <= 0 as ::core::ffi::c_int) {
-            syn_update_ends(true_0 != 0);
+        let gap = current_state.ptr();
+        if !(*gap).ga_data.is_null() {
+            let mut i = 0;
+            while i < (*gap).ga_len {
+                unref_extmatch(
+                    (*((*gap).ga_data as *mut stateitem_T).offset(i as isize)).si_extmatch,
+                );
+                i += 1;
+            }
+        }
+        ga_clear(gap);
+    }
+}
+
+/// Reset the per-line state before parsing a line.
+pub(crate) unsafe fn syn_start_line() {
+    unsafe {
+        current_finished.set(false);
+        current_col.set(0);
+
+        // The end of a start/skip/end that continues from the previous line
+        // needs updating, and so do regions with "keepend".
+        if state_len() > 0 {
+            syn_update_ends(true);
             check_state_ends();
         }
-        next_match_idx.set(-1 as ::core::ffi::c_int);
-        (*current_line_id.ptr()) += 1;
-        next_seqnr.set(1 as ::core::ffi::c_int);
+
+        next_match_idx.set(-1);
+        current_line_id.set(current_line_id.get() + 1);
+        next_seqnr.set(1);
     }
 }
 
-pub(crate) unsafe extern "C" fn syn_update_ends(mut startofline: bool) {
+/// Recompute where the items on the stack end.
+///
+/// `startofline` says we are at the start of a line, in which case the
+/// innermost item is always updated; otherwise the update is forced only on the
+/// items with "keepend", because they influence what they contain.
+pub(crate) unsafe fn syn_update_ends(startofline: bool) {
     unsafe {
-        let mut cur_si: *mut stateitem_T = ::core::ptr::null_mut::<stateitem_T>();
         if startofline {
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < (*current_state.ptr()).ga_len {
-                cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize);
-                if (*cur_si).si_idx >= 0 as ::core::ffi::c_int
-                    && (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
-                        .offset((*cur_si).si_idx as isize))
-                    .sp_type as ::core::ffi::c_int
-                        == SPTYPE_MATCH
+            // A match carried over from a previous line with a contained
+            // region ends as soon as that region ends, so drop the end it has
+            // and mark it as continued.
+            let mut i = 0;
+            while i < state_len() {
+                let cur_si = state_at(i);
+                if (*cur_si).si_idx >= 0
+                    && (*syn_pattern((*cur_si).si_idx)).sp_type as c_int == SPTYPE_MATCH
                     && (*cur_si).si_m_endpos.lnum < current_lnum.get()
                 {
                     (*cur_si).si_flags |= HL_MATCHCONT;
-                    (*cur_si).si_m_endpos.lnum = 0 as ::core::ffi::c_int as linenr_T;
-                    (*cur_si).si_m_endpos.col = 0 as ::core::ffi::c_int as colnr_T;
+                    (*cur_si).si_m_endpos = lpos_T { lnum: 0, col: 0 };
                     (*cur_si).si_h_endpos = (*cur_si).si_m_endpos;
                     (*cur_si).si_ends = true_0;
                 }
                 i += 1;
             }
         }
-        let mut i_0: ::core::ffi::c_int = (*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int;
-        if keepend_level.get() >= 0 as ::core::ffi::c_int {
-            while i_0 > keepend_level.get() {
-                if (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i_0 as isize))
-                    .si_flags
-                    & HL_EXTEND
-                    != 0
-                {
+
+        // Start from the innermost "extend" item, as check_keepend does: a
+        // "keepend" outside it does nothing. If "extend" has just been removed
+        // (`!startofline`) the normal regions inside a "keepend" need updating
+        // too, because "extend" could have extended those as well.
+        let mut i = state_len() - 1;
+        if keepend_level.get() >= 0 {
+            while i > keepend_level.get() {
+                if (*state_at(i)).si_flags & HL_EXTEND != 0 {
                     break;
                 }
-                i_0 -= 1;
+                i -= 1;
             }
         }
-        let mut seen_keepend: bool = false_0 != 0;
-        while i_0 < (*current_state.ptr()).ga_len {
-            cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i_0 as isize);
+
+        let mut seen_keepend = false;
+        while i < state_len() {
+            let cur_si = state_at(i);
+            let innermost = i == state_len() - 1;
             if (*cur_si).si_flags & HL_KEEPEND != 0
-                || seen_keepend as ::core::ffi::c_int != 0 && !startofline
-                || i_0 == (*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int
-                    && startofline as ::core::ffi::c_int != 0
+                || (seen_keepend && !startofline)
+                || (innermost && startofline)
             {
-                (*cur_si).si_h_startpos.col = 0 as ::core::ffi::c_int as colnr_T;
+                // Highlighting starts in column 0.
+                (*cur_si).si_h_startpos.col = 0;
                 (*cur_si).si_h_startpos.lnum = current_lnum.get();
+
                 if (*cur_si).si_flags & HL_MATCHCONT == 0 {
                     update_si_end(cur_si, current_col.get(), !startofline);
                 }
                 if !startofline && (*cur_si).si_flags & HL_KEEPEND != 0 {
-                    seen_keepend = true_0 != 0;
+                    seen_keepend = true;
                 }
             }
-            i_0 += 1;
+            i += 1;
         }
         check_keepend();
     }
 }
 
-pub unsafe extern "C" fn syntax_end_parsing(mut wp: *mut win_T, mut lnum: linenr_T) {
+/// Stop parsing syntax above line `lnum`.
+///
+/// If the stored state at or below this line depended on a change before it, it
+/// now depends on the line below the last parsed one. The window looks like:
+/// the line which changed, the displayed lines, then `lnum` -- the line below
+/// the window.
+pub unsafe fn syntax_end_parsing(wp: *mut win_T, lnum: linenr_T) {
     unsafe {
-        let mut sp: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
         if syn_block.get() != (*wp).w_s {
-            return;
+            return; // not the right window
         }
-        sp = syn_stack_find_entry(lnum);
+        let mut sp = syn_stack_find_entry(lnum);
         if !sp.is_null() && (*sp).sst_lnum < lnum {
             sp = (*sp).sst_next;
         }
-        if !sp.is_null() && (*sp).sst_change_lnum != 0 as linenr_T {
+        if !sp.is_null() && (*sp).sst_change_lnum != 0 {
             (*sp).sst_change_lnum = lnum;
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn invalidate_current_state() {
+/// Throw the current state away and mark it invalid.
+pub(crate) unsafe fn invalidate_current_state() {
     unsafe {
         clear_current_state();
-        (*current_state.ptr()).ga_itemsize = 0 as ::core::ffi::c_int;
-        current_next_list.set(::core::ptr::null_mut::<int16_t>());
-        keepend_level.set(-1 as ::core::ffi::c_int);
+        (*current_state.ptr()).ga_itemsize = 0; // marks current_state invalid
+        current_next_list.set(::core::ptr::null_mut());
+        keepend_level.set(-1);
     }
 }
 
-pub(crate) unsafe extern "C" fn validate_current_state() {
+/// Mark the current state valid and ready to be pushed onto.
+pub(crate) unsafe fn validate_current_state() {
     unsafe {
-        (*current_state.ptr()).ga_itemsize =
-            ::core::mem::size_of::<stateitem_T>() as ::core::ffi::c_int;
-        ga_set_growsize(current_state.ptr(), 3 as ::core::ffi::c_int);
+        (*current_state.ptr()).ga_itemsize = ::core::mem::size_of::<stateitem_T>() as c_int;
+        ga_set_growsize(current_state.ptr(), 3);
     }
 }
 
-pub unsafe extern "C" fn syntax_check_changed(mut lnum: linenr_T) -> bool {
+/// Has the syntax at the start of `lnum` changed since last time?
+///
+/// Only called just after [`get_syntax_attr`] for the previous line, to decide
+/// whether the next line has to be redrawn too.
+pub unsafe fn syntax_check_changed(lnum: linenr_T) -> bool {
     unsafe {
-        let mut retval: bool = true_0 != 0;
-        let mut sp: *mut synstate_T = ::core::ptr::null_mut::<synstate_T>();
-        if (*current_state.ptr()).ga_itemsize != 0 as ::core::ffi::c_int
-            && lnum == current_lnum.get() + 1 as linenr_T
-        {
-            sp = syn_stack_find_entry(lnum);
-            if !sp.is_null() && (*sp).sst_lnum == lnum {
-                syn_finish_line(false_0 != 0);
-                if syn_stack_equal(sp) {
-                    retval = false_0 != 0;
-                }
-                (*current_lnum.ptr()) += 1;
-                store_current_state();
-            }
+        // Only worth checking when `lnum` is just below the line we last
+        // parsed and there is a saved state for it.
+        if !current_state_valid() || lnum != current_lnum.get() + 1 {
+            return true;
         }
-        return retval;
+        let sp = syn_stack_find_entry(lnum);
+        if sp.is_null() || (*sp).sst_lnum != lnum {
+            return true;
+        }
+
+        // Finish the previous line, which is needed when not all of it was
+        // drawn, and compare with the state saved for this one.
+        syn_finish_line(false);
+        let changed = !syn_stack_equal(sp);
+
+        // Store the current state for later use.
+        current_lnum.set(current_lnum.get() + 1);
+        store_current_state();
+        changed
     }
 }
 
-pub(crate) unsafe extern "C" fn syn_finish_line(syncing: bool) -> bool {
+/// Parse to the end of the current line without answering any attributes; only
+/// the state at the end of the line is wanted.
+///
+/// May start anywhere in the line, as long as the current state is valid.
+/// While syncing, answers whether a sync point was found.
+pub(crate) unsafe fn syn_finish_line(syncing: bool) -> bool {
     unsafe {
         while !current_finished.get() {
-            syn_current_attr(
-                syncing,
-                false_0 != 0,
-                ::core::ptr::null_mut::<bool>(),
-                false_0 != 0,
-            );
-            if syncing as ::core::ffi::c_int != 0 && (*current_state.ptr()).ga_len != 0 {
-                let cur_si: *const stateitem_T = ((*current_state.ptr()).ga_data
-                    as *mut stateitem_T)
-                    .offset(((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int) as isize);
-                if (*cur_si).si_idx >= 0 as ::core::ffi::c_int
-                    && (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
-                        .offset((*cur_si).si_idx as isize))
-                    .sp_flags
-                        & (HL_SYNC_HERE | HL_SYNC_THERE)
+            syn_current_attr(syncing, false, ::core::ptr::null_mut(), false);
+
+            if syncing && state_len() != 0 {
+                // Check for a match with a sync item.
+                let cur_si = state_top();
+                if (*cur_si).si_idx >= 0
+                    && (*syn_pattern((*cur_si).si_idx)).sp_flags & (HL_SYNC_HERE | HL_SYNC_THERE)
                         != 0
                 {
-                    return true_0 != 0;
+                    return true;
                 }
-                let prev_current_col: colnr_T = current_col.get();
-                if *syn_getcurline().offset(current_col.get() as isize) as ::core::ffi::c_int != NUL
-                {
-                    (*current_col.ptr()) += 1;
+
+                // syn_current_attr() skipped the check for an item that ends
+                // here; do it now. Be careful not to go past the NUL.
+                let prev_col = current_col.get();
+                if *syn_getcurline().offset(current_col.get() as isize) as c_int != NUL {
+                    current_col.set(current_col.get() + 1);
                 }
                 check_state_ends();
-                current_col.set(prev_current_col);
+                current_col.set(prev_col);
             }
-            (*current_col.ptr()) += 1;
+            current_col.set(current_col.get() + 1);
         }
-        return false_0 != 0;
+        false
     }
 }
