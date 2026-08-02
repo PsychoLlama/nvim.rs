@@ -59,7 +59,7 @@ use crate::src::nvim::mbyte::{
     utf_ptr2StrCharInfo, utf_ptr2cells, utfc_next, utfc_ptr2len, utfc_ptr2schar,
 };
 use crate::src::nvim::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
-use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
+use crate::src::nvim::memory::{xfree, xmalloc};
 use crate::src::nvim::r#move::{set_empty_rows, validate_virtcol, win_col_off, win_col_off2};
 use crate::src::nvim::option::{get_showbreak_value, kOptFlagInsecure};
 use crate::src::nvim::options::{

@@ -12,7 +12,7 @@ pub struct WinExtmark {
     pub win_row: ::core::ffi::c_int,
     pub win_col: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(C)]
 pub struct spellvars_T {
     pub spv_has_spell: bool,

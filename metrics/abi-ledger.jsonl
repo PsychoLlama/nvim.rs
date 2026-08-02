@@ -369,7 +369,6 @@
 {"symbol":"win_close","kind":"fn","file":"crates/nvim/src/nvim/window.rs","class":"internal","refs":[]}
 {"symbol":"win_col_off","kind":"fn","file":"crates/nvim/src/nvim/move.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"win_enter","kind":"fn","file":"crates/nvim/src/nvim/window.rs","class":"internal","refs":[]}
-{"symbol":"win_extmark_arr","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"win_goto","kind":"fn","file":"crates/nvim/src/nvim/window.rs","class":"internal","refs":[]}
 {"symbol":"win_valid","kind":"fn","file":"crates/nvim/src/nvim/window.rs","class":"internal","refs":[]}
 {"symbol":"wipe_buffer","kind":"fn","file":"crates/nvim/src/nvim/buffer.rs","class":"internal","refs":[]}

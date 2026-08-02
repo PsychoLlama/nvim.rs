@@ -88,13 +88,6 @@ pub struct AucmdWinVec {
     pub items: *mut aucmdwin_T,
 }
 pub(crate) const BLN_LISTED: bln_values = 2;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct WinExtmarkVec {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut WinExtmark,
-}
 pub(crate) const VV_EXITREASON: VimVarIndex = 105;
 pub(crate) const VV_STARTTIME: VimVarIndex = 104;
 pub(crate) const VV_VIM_DID_INIT: VimVarIndex = 94;
@@ -366,12 +359,13 @@ pub static diff_context: GlobalCell<c_int> = GlobalCell::new(6 as c_int);
 pub static diff_foldcolumn: GlobalCell<c_int> = GlobalCell::new(2 as c_int);
 pub static diff_need_scrollbind: GlobalCell<bool> = GlobalCell::new(false);
 pub static need_diff_redraw: GlobalCell<bool> = GlobalCell::new(false);
-#[unsafe(no_mangle)]
-pub static win_extmark_arr: GlobalCell<WinExtmarkVec> = GlobalCell::new(WinExtmarkVec {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<WinExtmark>(),
-});
+/// The `ui_watched` extmarks the redraw in progress has passed positions for.
+///
+/// Filled by `draw_virt_text` one window line at a time and drained by
+/// `win_update` once the window is done, so it never outlives one window's
+/// redraw. It was upstream's hand-rolled growable array; nothing outside the
+/// two of them ever named its layout.
+pub static win_extmark_arr: GlobalCell<Vec<WinExtmark>> = GlobalCell::new(Vec::new());
 pub static updating_screen: GlobalCell<bool> = GlobalCell::new(false);
 pub static redraw_not_allowed: GlobalCell<bool> = GlobalCell::new(false);
 pub static screen_search_hl: GlobalCell<match_T> = GlobalCell::new(match_T {

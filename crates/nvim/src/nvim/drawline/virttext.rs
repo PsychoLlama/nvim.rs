@@ -82,32 +82,9 @@ pub(crate) unsafe fn line_putchar(
 // Line-positioned virtual text
 // ---------------------------------------------------------------------------
 
-/// Append to the per-redraw `win_extmark` list that `ui_flush` drains.
-///
-/// `win_extmark_arr` is still upstream's hand-rolled growable array because
-/// drawscreen.rs resets and walks it; this is `kv_push` written once.
-///
-/// # Safety
-/// Runs only while a redraw owns the list.
-unsafe fn push_win_extmark(m: WinExtmark) {
-    // SAFETY: the list is process-global and only touched during a redraw.
-    unsafe {
-        let arr = win_extmark_arr.ptr();
-        if (*arr).size == (*arr).capacity {
-            (*arr).capacity = if (*arr).capacity != 0 {
-                (*arr).capacity << 1
-            } else {
-                8
-            };
-            (*arr).items = xrealloc(
-                (*arr).items.cast::<::core::ffi::c_void>(),
-                size_of::<WinExtmark>() * (*arr).capacity,
-            )
-            .cast::<WinExtmark>();
-        }
-        *(*arr).items.add((*arr).size) = m;
-        (*arr).size += 1;
-    }
+/// Append to the per-redraw `win_extmark` list `win_update` drains.
+fn push_win_extmark(m: WinExtmark) {
+    win_extmark_arr.with_mut(|marks| marks.push(m));
 }
 
 /// Paint every line-positioned virtual text of the row just laid out, and
