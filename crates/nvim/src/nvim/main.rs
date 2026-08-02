@@ -6,7 +6,7 @@ use crate::src::nvim::options::{
 use crate::src::nvim::profile::time_msg;
 use crate::src::nvim::types::{
     __pthread_internal_list, __pthread_list_t, __pthread_mutex_s, __pthread_rwlock_arch_t,
-    AdditionalData, Array, Callback, Callback_data, DecorRangeSlot, DecorSignHighlight, DecorState,
+    AdditionalData, Array, Callback, Callback_data, DecorRangeSlot, DecorState,
     DecorState_ranges_i, DecorState_slots, FILE, GridView, ListLenSpecials, Loop, LuaRef,
     LuaRetMode, MTNode, MTPos, Map_String_int, Map_int_ptr_t, Map_uint64_t_ptr_t, MapHash,
     MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptValType, Proc, RgbValue,
@@ -89,13 +89,6 @@ pub struct AucmdWinVec {
     pub items: *mut aucmdwin_T,
 }
 pub(crate) const BLN_LISTED: bln_values = 2;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct DecorSignHighlightVec {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut DecorSignHighlight,
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct WinExtmarkVec {
@@ -392,13 +385,6 @@ pub static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
     running_decor_provider: false,
     itr_valid: false,
 });
-#[unsafe(no_mangle)]
-pub static decor_items: GlobalCell<DecorSignHighlightVec> =
-    GlobalCell::new(DecorSignHighlightVec {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<DecorSignHighlight>(),
-    });
 pub static diff_context: GlobalCell<c_int> = GlobalCell::new(6 as c_int);
 pub static diff_foldcolumn: GlobalCell<c_int> = GlobalCell::new(2 as c_int);
 pub static diff_need_scrollbind: GlobalCell<bool> = GlobalCell::new(false);

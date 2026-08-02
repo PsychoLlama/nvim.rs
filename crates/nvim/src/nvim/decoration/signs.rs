@@ -320,8 +320,7 @@ pub unsafe extern "C" fn decor_find_sign(mut decor: DecorInline) -> *mut DecorSi
             if decor_id == DECOR_ID_INVALID as uint32_t {
                 return ::core::ptr::null_mut::<DecorSignHighlight>();
             }
-            let mut sh: *mut DecorSignHighlight =
-                (*decor_items.ptr()).items.offset(decor_id as isize);
+            let mut sh: *mut DecorSignHighlight = decor_item(decor_id);
             if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
                 return sh;
             }

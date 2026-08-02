@@ -7,7 +7,9 @@ use crate::src::nvim::charset::{
     backslash_halve, getdigits_int, skiptowhite, skiptowhite_esc, skipwhite, vim_isprintc,
 };
 use crate::src::nvim::cursor::check_cursor_lnum;
-use crate::src::nvim::decoration::{decor_find_sign, decor_put_sh, sign_item_cmp};
+use crate::src::nvim::decoration::{
+    decor_find_sign, decor_item, decor_item_count, decor_put_sh, sign_item_cmp,
+};
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, redraw_buf_later};
 use crate::src::nvim::edit::beginline;
 use crate::src::nvim::eval::funcs::get_buf_arg;
@@ -57,9 +59,6 @@ use crate::src::nvim::types::{
     varnumber_T, win_T,
 };
 use crate::src::nvim::window::buf_jump_open_win;
-unsafe extern "C" {
-    static decor_items: GlobalCell<C2Rust_Unnamed_20>;
-}
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
 pub const SIGN_WIDTH: C2Rust_Unnamed = 2;
 pub const VAR_DICT: VarType = 5;
@@ -874,8 +873,8 @@ unsafe extern "C" fn sign_define_by_name(
     if !new_sign {
         let mut did_redraw: bool = false_0 != 0;
         let mut i_0: size_t = 0 as size_t;
-        while i_0 < (*decor_items.ptr()).size {
-            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(i_0 as isize);
+        while i_0 < decor_item_count() {
+            let mut sh: *mut DecorSignHighlight = decor_item(i_0 as uint32_t);
             if !(*sh).sign_name.is_null()
                 && strcmp((*sh).sign_name, name) == 0 as ::core::ffi::c_int
             {

@@ -237,8 +237,7 @@ pub(crate) unsafe extern "C" fn decor_range_add_from_inline(
             }
             let mut idx: uint32_t = decor.data.ext.sh_idx;
             while idx != DECOR_ID_INVALID as uint32_t {
-                let mut sh: *mut DecorSignHighlight =
-                    (*decor_items.ptr()).items.offset(idx as isize);
+                let mut sh: *mut DecorSignHighlight = decor_item(idx);
                 decor_range_add_sh(
                     state,
                     start_row,

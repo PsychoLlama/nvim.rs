@@ -35,8 +35,7 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
             }
             let mut idx: uint32_t = decor.data.ext.sh_idx;
             while idx != DECOR_ID_INVALID as uint32_t {
-                let mut sh: *mut DecorSignHighlight =
-                    (*decor_items.ptr()).items.offset(idx as isize);
+                let mut sh: *mut DecorSignHighlight = decor_item(idx);
                 if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
                     sh_sign = *sh;
                 } else {
@@ -425,8 +424,7 @@ pub unsafe extern "C" fn decor_type_flags(mut decor: DecorInline) -> uint16_t {
             }
             let mut idx: uint32_t = decor.data.ext.sh_idx;
             while idx != DECOR_ID_INVALID as uint32_t {
-                let mut sh: *mut DecorSignHighlight =
-                    (*decor_items.ptr()).items.offset(idx as isize);
+                let mut sh: *mut DecorSignHighlight = decor_item(idx);
                 type_flags = (type_flags as ::core::ffi::c_int
                     | if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
                         kExtmarkSign as ::core::ffi::c_int

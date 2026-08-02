@@ -33,7 +33,6 @@
 {"symbol":"curs_columns","kind":"fn","file":"crates/nvim/src/nvim/move.rs","class":"internal","refs":[]}
 {"symbol":"curtab","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"curwin","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["unit-specs","functional-specs"]}
-{"symbol":"decor_items","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"internal","refs":[]}
 {"symbol":"deleted_lines_buf","kind":"fn","file":"crates/nvim/src/nvim/change.rs","class":"internal","refs":[]}
 {"symbol":"display_tick","kind":"static","file":"crates/nvim/src/nvim/main.rs","class":"test","refs":["functional-specs"]}
 {"symbol":"do_ecmd","kind":"fn","file":"crates/nvim/src/nvim/ex_cmds.rs","class":"internal","refs":[]}

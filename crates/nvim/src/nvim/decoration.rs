@@ -51,9 +51,6 @@ mod query;
 pub use self::query::*;
 mod state;
 pub use self::state::*;
-unsafe extern "C" {
-    static decor_items: GlobalCell<C2Rust_Unnamed_26>;
-}
 pub const kTrue: TriState = 1;
 pub const kFalse: TriState = 0;
 pub const kNone: TriState = -1;
@@ -163,7 +160,38 @@ pub unsafe fn ns_in_win(ns_id: uint32_t, wp: *mut win_T) -> bool {
     }
 }
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub static decor_freelist: GlobalCell<uint32_t> = GlobalCell::new(UINT32_MAX as uint32_t);
+/// Every `DecorSignHighlight` that any extmark anywhere points at, in one
+/// array. An extmark stores the *index* of the first item of its decoration
+/// and each item the index of the next, so one decoration is a chain through
+/// this store and `DECOR_ID_INVALID` ends it.
+///
+/// Entries are never removed. An index handed to a marktree entry has to stay
+/// valid until that entry is deleted, so a freed item goes on a freelist
+/// threaded through the same `next` field ([`DECOR_FREELIST`]) and is reused
+/// in place.
+static DECOR_ITEMS: GlobalCell<Vec<DecorSignHighlight>> = GlobalCell::new(Vec::new());
+
+/// Index of the first free slot of [`DECOR_ITEMS`], or `DECOR_ID_INVALID`.
+static DECOR_FREELIST: GlobalCell<uint32_t> = GlobalCell::new(DECOR_ID_INVALID);
+
+/// A pointer to decoration item `idx`.
+///
+/// A pointer and not a borrow, because upstream hands these out and then
+/// keeps writing through them across calls that can add another item — see
+/// [`decor_put_sh`], which is what invalidates them. Panics on an index no
+/// [`decor_put_sh`] handed out, where upstream would read past the array.
+pub(crate) fn decor_item(idx: uint32_t) -> *mut DecorSignHighlight {
+    DECOR_ITEMS.with(|items| {
+        let items = &items[..];
+        assert!((idx as usize) < items.len(), "decoration item out of range");
+        items.as_ptr().cast_mut().wrapping_add(idx as usize)
+    })
+}
+
+/// How many slots [`DECOR_ITEMS`] has handed out, free ones included.
+pub(crate) fn decor_item_count() -> usize {
+    DECOR_ITEMS.with(Vec::len)
+}
 pub static to_free_virt: GlobalCell<*mut DecorVirtText> =
     GlobalCell::new(::core::ptr::null_mut::<DecorVirtText>());
 pub static to_free_sh: GlobalCell<uint32_t> = GlobalCell::new(UINT32_MAX as uint32_t);
@@ -265,7 +293,7 @@ pub unsafe extern "C" fn decor_redraw(
         }
         let mut idx: uint32_t = decor.data.ext.sh_idx;
         while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
+            let mut sh: *mut DecorSignHighlight = decor_item(idx);
             decor_redraw_sh(buf, row1, row2, *sh);
             idx = (*sh).next;
         }
@@ -313,37 +341,22 @@ pub unsafe extern "C" fn decor_redraw_sh(
         redraw_buf_line_later(buf, row1 as linenr_T + 1 as linenr_T, false_0 != 0);
     }
 }
-pub unsafe extern "C" fn decor_put_sh(mut item: DecorSignHighlight) -> uint32_t {
-    if decor_freelist.get() != UINT32_MAX as uint32_t {
-        let mut pos: uint32_t = decor_freelist.get();
-        decor_freelist.set(
-            (*(*decor_items.ptr())
-                .items
-                .offset(decor_freelist.get() as isize))
-            .next,
-        );
-        *(*decor_items.ptr()).items.offset(pos as isize) = item;
-        return pos;
-    } else {
-        let mut pos_0: uint32_t = (*decor_items.ptr()).size as uint32_t;
-        if (*decor_items.ptr()).size == (*decor_items.ptr()).capacity {
-            (*decor_items.ptr()).capacity = if (*decor_items.ptr()).capacity != 0 {
-                (*decor_items.ptr()).capacity << 1 as ::core::ffi::c_int
-            } else {
-                8 as size_t
-            };
-            (*decor_items.ptr()).items = xrealloc(
-                (*decor_items.ptr()).items as *mut ::core::ffi::c_void,
-                ::core::mem::size_of::<DecorSignHighlight>()
-                    .wrapping_mul((*decor_items.ptr()).capacity),
-            ) as *mut DecorSignHighlight;
-        } else {
-        };
-        let c2rust_fresh0 = (*decor_items.ptr()).size;
-        (*decor_items.ptr()).size = (*decor_items.ptr()).size.wrapping_add(1);
-        *(*decor_items.ptr()).items.offset(c2rust_fresh0 as isize) = item;
-        return pos_0;
-    };
+/// Stores `item` and answers the index other code refers to it by, reusing a
+/// freed slot when there is one.
+///
+/// Invalidates every pointer [`decor_item`] has handed out.
+pub fn decor_put_sh(item: DecorSignHighlight) -> uint32_t {
+    let free = DECOR_FREELIST.get();
+    if free != DECOR_ID_INVALID {
+        // SAFETY: a freelist index is one this store handed out.
+        DECOR_FREELIST.set(unsafe { (*decor_item(free)).next });
+        DECOR_ITEMS.with_mut(|items| items[free as usize] = item);
+        return free;
+    }
+    DECOR_ITEMS.with_mut(|items| {
+        items.push(item);
+        (items.len() - 1) as uint32_t
+    })
 }
 pub unsafe extern "C" fn decor_put_vt(
     mut vt: DecorVirtText,
@@ -399,7 +412,7 @@ pub unsafe extern "C" fn buf_put_decor(
             row2 as linenr_T
         }) as ::core::ffi::c_int;
         while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
+            let mut sh: *mut DecorSignHighlight = decor_item(idx);
             buf_put_decor_sh(buf, sh, row, row2);
             idx = (*sh).next;
         }
@@ -422,7 +435,7 @@ pub unsafe extern "C" fn buf_decor_remove(
             row2 as linenr_T
         }) as ::core::ffi::c_int;
         while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
+            let mut sh: *mut DecorSignHighlight = decor_item(idx);
             buf_remove_decor_sh(buf, row1, row2, sh);
             idx = (*sh).next;
         }
@@ -448,7 +461,7 @@ pub unsafe extern "C" fn decor_free(mut decor: DecorInline) {
             }
         }
         while idx != DECOR_ID_INVALID as uint32_t {
-            let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
+            let mut sh: *mut DecorSignHighlight = decor_item(idx);
             if (*sh).next == DECOR_ID_INVALID as uint32_t {
                 (*sh).next = to_free_sh.get();
                 to_free_sh.set(decor.data.ext.sh_idx);
@@ -474,7 +487,7 @@ unsafe extern "C" fn decor_free_inner(mut vt: *mut DecorVirtText, mut first_idx:
     }
     let mut idx: uint32_t = first_idx;
     while idx != DECOR_ID_INVALID as uint32_t {
-        let mut sh: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(idx as isize);
+        let mut sh: *mut DecorSignHighlight = decor_item(idx);
         if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
             let mut ptr_: *mut *mut ::core::ffi::c_void =
                 &raw mut (*sh).sign_name as *mut *mut ::core::ffi::c_void;
@@ -491,8 +504,8 @@ unsafe extern "C" fn decor_free_inner(mut vt: *mut DecorVirtText, mut first_idx:
             let _ = *ptr__0;
         }
         if (*sh).next == DECOR_ID_INVALID as uint32_t {
-            (*sh).next = decor_freelist.get();
-            decor_freelist.set(first_idx);
+            (*sh).next = DECOR_FREELIST.get();
+            DECOR_FREELIST.set(first_idx);
             break;
         } else {
             idx = (*sh).next;
@@ -550,8 +563,8 @@ pub unsafe extern "C" fn clear_virtlines(mut lines: *mut VirtLines) {
 }
 pub unsafe extern "C" fn decor_check_invalid_glyphs() {
     let mut i: size_t = 0 as size_t;
-    while i < (*decor_items.ptr()).size {
-        let mut it: *mut DecorSignHighlight = (*decor_items.ptr()).items.offset(i as isize);
+    while i < decor_item_count() {
+        let mut it: *mut DecorSignHighlight = decor_item(i as uint32_t);
         let mut width: ::core::ffi::c_int =
             if (*it).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
                 SIGN_WIDTH as ::core::ffi::c_int
