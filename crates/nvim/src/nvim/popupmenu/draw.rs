@@ -1,410 +1,788 @@
 //! Painting the menu onto its own grid.
 //!
-//! [`pum_redraw`] draws one row per visible item: the three item columns
-//! in `'completeitemalign'` order, the truncation marker when a column
-//! does not fit, and the scrollbar. Everything else here serves it --
-//! [`pum_compute_text_attrs`] works out the per-cell attributes that make
-//! the typed leader stand out inside a match.
+//! [`pum_redraw`] draws one row per visible item: the three item columns in
+//! `'completeitemalign'` order, the truncation marker when a column does not
+//! fit, and the scrollbar. Everything else here serves it —
+//! [`pum_compute_text_attrs`] works out the per-cell attributes that make the
+//! typed leader stand out inside a match.
+//!
+//! The menu has a grid of its own (`pum_grid`), composited over the editor
+//! grid, so every row is one `screengrid_line_start` .. `grid_line_flush`
+//! batch and all the columns below are grid columns, not screen columns.
+//! Under `'rightleft'` the row is drawn from the right edge leftwards, which
+//! is why nearly every step here has two spellings.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[allow(unused_imports)]
 use super::*;
 
-pub(crate) unsafe extern "C" fn pum_compute_text_attrs(
-    mut text: *mut ::core::ffi::c_char,
-    mut hlf: hlf_T,
-    mut user_hlattr: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_int {
+/// `WIN_CONFIG_INIT`: the float config a fresh `parse_winborder` writes into.
+///
+/// Only the border half is used here, but `grid_draw_border` also reads the
+/// title and footer fields, so the whole thing has to start out empty.
+const WIN_CONFIG_INIT: WinConfig = WinConfig {
+    window: 0,
+    bufpos: lpos_T { lnum: -1, col: 0 },
+    height: 0,
+    width: 0,
+    row: 0.0,
+    col: 0.0,
+    anchor: 0,
+    relative: kFloatRelativeEditor,
+    external: false,
+    focusable: true,
+    mouse: true,
+    split: kWinSplitLeft,
+    zindex: kZIndexFloatDefault as c_int,
+    style: kWinStyleUnused,
+    border: false,
+    shadow: false,
+    border_chars: [[0; 32]; 8],
+    border_hl_ids: [0; 8],
+    border_attr: [0; 8],
+    title: false,
+    title_pos: kAlignLeft,
+    title_chunks: VirtText {
+        size: 0,
+        capacity: 0,
+        items: ::core::ptr::null_mut::<VirtTextChunk>(),
+    },
+    title_width: 0,
+    footer: false,
+    footer_pos: kAlignLeft,
+    footer_chunks: VirtText {
+        size: 0,
+        capacity: 0,
+        items: ::core::ptr::null_mut::<VirtTextChunk>(),
+    },
+    footer_width: 0,
+    noautocmd: false,
+    fixed: false,
+    hide: false,
+    _cmdline_offset: c_int::MAX,
+};
+
+/// The order the three item columns are drawn in, per `'completeitemalign'`.
+///
+/// `cia_flags` holds the three column kinds as decimal digits, most
+/// significant first; zero means the option is at its default.
+#[inline]
+fn pum_align_order() -> [c_int; 3] {
+    let flags = cia_flags.get();
+    if flags == 0 {
+        return [CPT_ABBR as c_int, CPT_KIND as c_int, CPT_MENU as c_int];
+    }
+    [
+        (flags / 100) as c_int,
+        (flags / 10 % 10) as c_int,
+        (flags % 10) as c_int,
+    ]
+}
+
+/// One item's text for a column kind, or null when it has none.
+///
+/// # Safety
+/// `idx` must be in range for the live item array.
+#[inline]
+unsafe fn pum_get_item(index: c_int, item_type: c_int) -> *mut c_char {
+    // SAFETY: the caller guarantees `index` addresses a live item.
+    let item = unsafe { &pum_items()[index as usize] };
+    match item_type as c_uint {
+        CPT_ABBR => item.pum_text,
+        CPT_KIND => item.pum_kind,
+        CPT_MENU => item.pum_extra,
+        _ => ::core::ptr::null_mut(),
+    }
+}
+
+/// Fold an item's own `abbr_hlattr`/`kind_hlattr` into the column attribute.
+///
+/// Only the first two column kinds can carry one; the caller never asks for
+/// the third.
+///
+/// # Safety
+/// `idx` must be in range for the live item array, `item_type` 0 or 1.
+#[inline]
+unsafe fn pum_user_attr_combine(idx: c_int, item_type: c_int, attr: c_int) -> c_int {
+    // SAFETY: the caller guarantees both indices.
     unsafe {
-        if *text as ::core::ffi::c_int == NUL
-            || hlf as ::core::ffi::c_uint != HLF_PSI as ::core::ffi::c_uint
-                && hlf as ::core::ffi::c_uint != HLF_PNI as ::core::ffi::c_uint
-            || win_hl_attr(curwin.get(), HLF_PMSI) == win_hl_attr(curwin.get(), HLF_PSI)
-                && win_hl_attr(curwin.get(), HLF_PMNI) == win_hl_attr(curwin.get(), HLF_PNI)
-        {
-            return ::core::ptr::null_mut::<::core::ffi::c_int>();
+        let item = &pum_items()[idx as usize];
+        let user_attr = [item.pum_user_abbr_hlattr, item.pum_user_kind_hlattr][item_type as usize];
+        if user_attr > 0 {
+            hl_combine_attr(attr, user_attr)
+        } else {
+            attr
         }
-        let mut leader: *mut ::core::ffi::c_char = if State.get() & MODE_CMDLINE != 0 {
+    }
+}
+
+/// Per-cell attributes for one item's text, or `None` for "all the same".
+///
+/// The point is to show which part of the item the typed leader matched:
+/// those cells get `PmenuMatch`/`PmenuMatchSel` blended over the column's own
+/// highlight. With `'completeopt'` containing `fuzzy` the matched cells are
+/// whatever the fuzzy matcher scored; otherwise it is the leading run that
+/// case-insensitively equals the leader.
+///
+/// `None` is answered whenever no cell could differ from the rest — which is
+/// the common case, and is why the caller can skip the per-cell path.
+///
+/// # Safety
+/// `text` must be NUL-terminated.
+unsafe fn pum_compute_text_attrs(
+    text: *mut c_char,
+    hlf: hlf_T,
+    user_hlattr: c_int,
+) -> Option<Vec<c_int>> {
+    // SAFETY: `text` is the caller's NUL-terminated string; `ins_compl_leader`
+    // and `cmdline_compl_pattern` answer editor-owned strings.
+    unsafe {
+        let win = curwin.get();
+        if *text == 0
+            || (hlf != HLF_PSI as hlf_T && hlf != HLF_PNI as hlf_T)
+            || (win_hl_attr(win, HLF_PMSI) == win_hl_attr(win, HLF_PSI)
+                && win_hl_attr(win, HLF_PMNI) == win_hl_attr(win, HLF_PNI))
+        {
+            return None;
+        }
+
+        let leader = if State.get() & MODE_CMDLINE != 0 {
             cmdline_compl_pattern()
         } else {
             ins_compl_leader()
         };
-        if leader.is_null() || *leader as ::core::ffi::c_int == NUL {
-            return ::core::ptr::null_mut::<::core::ffi::c_int>();
+        if leader.is_null() || *leader == 0 {
+            return None;
         }
-        let mut attrs: *mut ::core::ffi::c_int = xmalloc(
-            ::core::mem::size_of::<::core::ffi::c_int>().wrapping_mul(vim_strsize(text) as size_t),
-        ) as *mut ::core::ffi::c_int;
-        let mut in_fuzzy: bool = if State.get() & MODE_CMDLINE != 0 {
-            cmdline_compl_is_fuzzy() as ::core::ffi::c_int
+
+        let in_fuzzy = if State.get() & MODE_CMDLINE != 0 {
+            cmdline_compl_is_fuzzy()
         } else {
-            (get_cot_flags() & kOptCotFlagFuzzy as ::core::ffi::c_int as ::core::ffi::c_uint
-                != 0 as ::core::ffi::c_uint) as ::core::ffi::c_int
-        } != 0;
-        let mut leader_len: size_t = strlen(leader);
-        let mut ga: *mut garray_T = ::core::ptr::null_mut::<garray_T>();
-        let mut matched_len: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        if in_fuzzy {
-            ga = fuzzy_match_str_with_pos(text, leader);
+            get_cot_flags() & kOptCotFlagFuzzy != 0
+        };
+        // The fuzzy matcher answers the character positions it matched, or
+        // null when the item does not match at all.
+        let ga = if in_fuzzy {
+            let ga = fuzzy_match_str_with_pos(text, leader);
             if ga.is_null() {
-                xfree(attrs as *mut ::core::ffi::c_void);
-                return ::core::ptr::null_mut::<::core::ffi::c_int>();
+                return None;
             }
-        }
-        let mut ptr: *const ::core::ffi::c_char = text;
-        let mut cell_idx: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut char_pos: uint32_t = 0 as uint32_t;
-        let mut is_select: bool = hlf as ::core::ffi::c_uint == HLF_PSI as ::core::ffi::c_uint;
-        while *ptr as ::core::ffi::c_int != NUL {
-            let mut new_attr: ::core::ffi::c_int =
-                win_hl_attr(curwin.get(), hlf as ::core::ffi::c_int);
-            if !ga.is_null() {
-                let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while i < (*ga).ga_len {
-                    if char_pos == *((*ga).ga_data as *mut uint32_t).offset(i as isize) {
-                        new_attr = win_hl_attr(
-                            curwin.get(),
-                            if is_select as ::core::ffi::c_int != 0 {
-                                HLF_PMSI
-                            } else {
-                                HLF_PMNI
-                            },
-                        );
-                        new_attr = hl_combine_attr(win_hl_attr(curwin.get(), HLF_PMNI), new_attr);
-                        new_attr = hl_combine_attr(
-                            win_hl_attr(curwin.get(), hlf as ::core::ffi::c_int),
-                            new_attr,
-                        );
+            Some(ga)
+        } else {
+            None
+        };
+
+        // The attribute a matched cell gets. Upstream rebuilds it from three
+        // lookups per matched *character*; it cannot change during the walk,
+        // so it is built at most once, and not at all when nothing matches.
+        let is_select = hlf == HLF_PSI as hlf_T;
+        let mut matched: Option<c_int> = None;
+        let mut matched_attr = |win| {
+            *matched.get_or_insert_with(|| {
+                let a = hl_combine_attr(
+                    win_hl_attr(win, HLF_PMNI),
+                    win_hl_attr(win, if is_select { HLF_PMSI } else { HLF_PMNI }),
+                );
+                hl_combine_attr(win_hl_attr(win, hlf as c_int), a)
+            })
+        };
+
+        let leader_len = strlen(leader);
+        let mut attrs = vec![0; vim_strsize(text) as usize];
+        let mut ptr: *const c_char = text;
+        let mut cell_idx = 0;
+        let mut char_pos: uint32_t = 0;
+        // Outside fuzzy matching the leader matches one leading run, counted
+        // down in bytes as the walk passes over it.
+        let mut matched_len: c_int = -1;
+
+        while *ptr != 0 {
+            let mut new_attr = win_hl_attr(win, hlf as c_int);
+            if let Some(ga) = ga {
+                let positions = (*ga).ga_data.cast::<uint32_t>();
+                for i in 0..(*ga).ga_len {
+                    if char_pos == *positions.offset(i as isize) {
+                        new_attr = matched_attr(win);
                         break;
-                    } else {
-                        i += 1;
                     }
                 }
             } else {
-                if matched_len < 0 as ::core::ffi::c_int
-                    && mb_strnicmp(ptr, leader, leader_len) == 0 as ::core::ffi::c_int
-                {
-                    matched_len = leader_len as ::core::ffi::c_int;
+                if matched_len < 0 && mb_strnicmp(ptr, leader, leader_len) == 0 {
+                    matched_len = leader_len as c_int;
                 }
-                if matched_len > 0 as ::core::ffi::c_int {
-                    new_attr = win_hl_attr(
-                        curwin.get(),
-                        if is_select as ::core::ffi::c_int != 0 {
-                            HLF_PMSI
-                        } else {
-                            HLF_PMNI
-                        },
-                    );
-                    new_attr = hl_combine_attr(win_hl_attr(curwin.get(), HLF_PMNI), new_attr);
-                    new_attr = hl_combine_attr(
-                        win_hl_attr(curwin.get(), hlf as ::core::ffi::c_int),
-                        new_attr,
-                    );
+                if matched_len > 0 {
+                    new_attr = matched_attr(win);
                     matched_len -= 1;
                 }
             }
-            new_attr = hl_combine_attr(win_hl_attr(curwin.get(), HLF_PNI), new_attr);
-            if user_hlattr > 0 as ::core::ffi::c_int {
+
+            new_attr = hl_combine_attr(win_hl_attr(win, HLF_PNI), new_attr);
+            if user_hlattr > 0 {
                 new_attr = hl_combine_attr(new_attr, user_hlattr);
             }
-            let mut char_cells: ::core::ffi::c_int = utf_ptr2cells(ptr);
-            let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i_0 < char_cells {
-                *attrs.offset((cell_idx + i_0) as isize) = new_attr;
-                i_0 += 1;
+
+            let char_cells = utf_ptr2cells(ptr);
+            for i in 0..char_cells {
+                attrs[(cell_idx + i) as usize] = new_attr;
             }
             cell_idx += char_cells;
-            ptr = ptr.offset(utfc_ptr2len(ptr as *mut ::core::ffi::c_char) as isize);
-            char_pos = char_pos.wrapping_add(1);
+
+            ptr = ptr.offset(utfc_ptr2len(ptr) as isize);
+            char_pos += 1;
         }
-        if !ga.is_null() {
+
+        if let Some(ga) = ga {
             ga_clear(ga);
-            xfree(ga as *mut ::core::ffi::c_void);
+            xfree(ga.cast());
         }
-        return attrs;
+        Some(attrs)
     }
 }
 
-pub(crate) unsafe extern "C" fn pum_grid_puts_with_attrs(
-    mut col: ::core::ffi::c_int,
-    mut cells: ::core::ffi::c_int,
-    mut text: *const ::core::ffi::c_char,
-    mut textlen: ::core::ffi::c_int,
-    mut attrs: *const ::core::ffi::c_int,
-) {
+/// Put `text` at `col` one character at a time, each with its own attribute.
+///
+/// `attrs` is indexed by cell offset into the *unreversed* text, so under
+/// `'rightleft'` — where `text` has already been reversed — the index is
+/// mirrored across the `cells` the run occupies.
+///
+/// # Safety
+/// A line batch must be in progress and `text` must be NUL-terminated.
+unsafe fn pum_grid_puts_with_attrs(col: c_int, cells: c_int, text: *const c_char, attrs: &[c_int]) {
+    // SAFETY: the caller holds the batch and owns `text`.
     unsafe {
-        let col_start: ::core::ffi::c_int = col;
-        let mut ptr: *const ::core::ffi::c_char = text;
-        while *ptr as ::core::ffi::c_int != NUL
-            && (textlen < 0 as ::core::ffi::c_int || ptr < text.offset(textlen as isize))
-        {
-            let mut char_len: ::core::ffi::c_int = utfc_ptr2len(ptr);
-            let mut attr: ::core::ffi::c_int = *attrs.offset(
-                (if pum_rl.get() as ::core::ffi::c_int != 0 {
-                    col_start + cells - col - 1 as ::core::ffi::c_int
-                } else {
-                    col - col_start
-                }) as isize,
-            );
-            grid_line_puts(col, ptr, char_len, attr);
+        let col_start = col;
+        let mut col = col;
+        let mut ptr = text;
+        while *ptr != 0 {
+            let char_len = utfc_ptr2len(ptr);
+            let at = if pum_rl.get() {
+                col_start + cells - col - 1
+            } else {
+                col - col_start
+            };
+            grid_line_puts(col, ptr, char_len, attrs[at as usize]);
             col += utf_ptr2cells(ptr);
             ptr = ptr.offset(char_len as isize);
         }
     }
 }
 
-#[inline]
-pub(crate) unsafe extern "C" fn pum_align_order(mut order: *mut ::core::ffi::c_int) {
-    unsafe {
-        let mut is_default: bool = cia_flags.get() == 0 as ::core::ffi::c_uint;
-        *order.offset(0 as ::core::ffi::c_int as isize) = (if is_default as ::core::ffi::c_int != 0
-        {
-            CPT_ABBR as ::core::ffi::c_int as ::core::ffi::c_uint
-        } else {
-            (*cia_flags.ptr()).wrapping_div(100 as ::core::ffi::c_uint)
-        }) as ::core::ffi::c_int;
-        *order.offset(1 as ::core::ffi::c_int as isize) = (if is_default as ::core::ffi::c_int != 0
-        {
-            CPT_KIND as ::core::ffi::c_int as ::core::ffi::c_uint
-        } else {
-            (*cia_flags.ptr())
-                .wrapping_div(10 as ::core::ffi::c_uint)
-                .wrapping_rem(10 as ::core::ffi::c_uint)
-        }) as ::core::ffi::c_int;
-        *order.offset(2 as ::core::ffi::c_int as isize) = (if is_default as ::core::ffi::c_int != 0
-        {
-            CPT_MENU as ::core::ffi::c_int as ::core::ffi::c_uint
-        } else {
-            (*cia_flags.ptr()).wrapping_rem(10 as ::core::ffi::c_uint)
-        }) as ::core::ffi::c_int;
-    }
+/// `'pumborder'`, resolved to what a redraw needs.
+///
+/// The config it is read into stays in the caller's frame: it is ~460 bytes
+/// and `grid_draw_border` wants a pointer to it, so moving it around costs
+/// more than it reads.
+#[derive(Clone, Copy)]
+struct PumBorder {
+    /// Cells the border costs: 0 (none), 1 (shadow, right and bottom only)
+    /// or 2 (a full box).
+    width: c_int,
+    /// Glyph and attribute the scrollbar trough borrows from the border's
+    /// right edge. Only set when there is a scrollbar to draw.
+    scrollbar: Option<(schar_T, c_int)>,
 }
 
-#[inline]
-pub(crate) unsafe extern "C" fn pum_get_item(
-    mut index: ::core::ffi::c_int,
-    mut type_0: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+/// Read `'pumborder'` into `config`.
+///
+/// Answers `None` only when the option fails to parse, in which case the
+/// message has already been given and the caller must draw nothing.
+///
+/// # Safety
+/// The highlight tables must be initialised.
+unsafe fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
+    // SAFETY: `p_pumborder` and `opt_winborder_values` are editor-owned
+    // strings; `parse_winborder` writes through the config pointer.
     unsafe {
-        match type_0 {
-            0 => return (*(*pum_array.ptr()).offset(index as isize)).pum_text,
-            1 => return (*(*pum_array.ptr()).offset(index as isize)).pum_kind,
-            2 => return (*(*pum_array.ptr()).offset(index as isize)).pum_extra,
-            _ => {}
+        let width = pum_border_width();
+        if width == 0 {
+            return Some(PumBorder {
+                width,
+                scrollbar: None,
+            });
         }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    }
-}
 
-#[inline]
-pub(crate) unsafe extern "C" fn pum_user_attr_combine(
-    mut idx: ::core::ffi::c_int,
-    mut type_0: ::core::ffi::c_int,
-    mut attr: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let mut user_attr: [::core::ffi::c_int; 2] = [
-            (*(*pum_array.ptr()).offset(idx as isize)).pum_user_abbr_hlattr,
-            (*(*pum_array.ptr()).offset(idx as isize)).pum_user_kind_hlattr,
-        ];
-        return if user_attr[type_0 as usize] > 0 as ::core::ffi::c_int {
-            hl_combine_attr(attr, user_attr[type_0 as usize])
-        } else {
-            attr
+        let mut err = Error {
+            type_0: kErrorTypeNone,
+            msg: ::core::ptr::null_mut(),
         };
-    }
-}
-
-pub unsafe extern "C" fn pum_redraw() {
-    unsafe {
-        let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut attr_scroll: ::core::ffi::c_int = win_hl_attr(curwin.get(), HLF_PSB);
-        let mut attr_thumb: ::core::ffi::c_int = win_hl_attr(curwin.get(), HLF_PST);
-        let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut thumb_pos: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut thumb_height: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-        let mut n: ::core::ffi::c_int = 0;
-        let fcs_trunc: schar_T = if pum_rl.get() as ::core::ffi::c_int != 0 {
-            (*curwin.get()).w_p_fcs_chars.truncrl
-        } else {
-            (*curwin.get()).w_p_fcs_chars.trunc
-        };
-        let hlfsNorm: [hlf_T; 3] = [HLF_PNI, HLF_PNK, HLF_PNX];
-        let hlfsSel: [hlf_T; 3] = [HLF_PSI, HLF_PSK, HLF_PSX];
-        let mut grid_width: ::core::ffi::c_int = pum_width.get();
-        let mut col_off: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut extra_space: bool = false_0 != 0;
-        if pum_rl.get() {
-            col_off = pum_width.get() - 1 as ::core::ffi::c_int;
-            '_c2rust_label: {
-                if State.get() & MODE_CMDLINE == 0 {
-                } else {
-                    __assert_fail(
-                        b"!(State & MODE_CMDLINE)\0".as_ptr() as *const ::core::ffi::c_char,
-                        b"src/nvim/popupmenu.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        584 as ::core::ffi::c_uint,
-                        b"void pum_redraw(void)\0".as_ptr() as *const ::core::ffi::c_char,
-                    );
-                }
-            };
-            let mut win_end_col: ::core::ffi::c_int =
-                (*curwin.get()).w_wincol + (*curwin.get()).w_width;
-            if pum_col.get() < win_end_col - 1 as ::core::ffi::c_int {
-                grid_width += 1 as ::core::ffi::c_int;
-                extra_space = true_0 != 0;
-            }
-        } else {
-            let mut min_col: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            if pum_col.get() > min_col {
-                grid_width += 1 as ::core::ffi::c_int;
-                col_off = 1 as ::core::ffi::c_int;
-                extra_space = true_0 != 0;
-            }
-        }
-        let mut fconfig: WinConfig = WinConfig {
-            window: 0,
-            bufpos: lpos_T {
-                lnum: -1 as linenr_T,
-                col: 0 as colnr_T,
-            },
-            height: 0 as ::core::ffi::c_int,
-            width: 0 as ::core::ffi::c_int,
-            row: 0 as ::core::ffi::c_int as ::core::ffi::c_double,
-            col: 0 as ::core::ffi::c_int as ::core::ffi::c_double,
-            anchor: 0 as FloatAnchor,
-            relative: kFloatRelativeEditor,
-            external: false_0 != 0,
-            focusable: true_0 != 0,
-            mouse: true_0 != 0,
-            split: kWinSplitLeft,
-            zindex: kZIndexFloatDefault as ::core::ffi::c_int,
-            style: kWinStyleUnused,
-            border: false,
-            shadow: false,
-            border_chars: [[0; 32]; 8],
-            border_hl_ids: [0; 8],
-            border_attr: [0; 8],
-            title: false,
-            title_pos: kAlignLeft,
-            title_chunks: VirtText {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut::<VirtTextChunk>(),
-            },
-            title_width: 0,
-            footer: false,
-            footer_pos: kAlignLeft,
-            footer_chunks: VirtText {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut::<VirtTextChunk>(),
-            },
-            footer_width: 0,
-            noautocmd: false_0 != 0,
-            fixed: false_0 != 0,
-            hide: false_0 != 0,
-            _cmdline_offset: INT_MAX,
-        };
-        let mut border_width: ::core::ffi::c_int = pum_border_width();
-        let mut border_attr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut border_char: schar_T = 0 as schar_T;
-        let mut fill_char: schar_T = ' ' as ::core::ffi::c_int as schar_T;
-        let mut has_border: bool = border_width > 0 as ::core::ffi::c_int;
-        if border_width > 0 as ::core::ffi::c_int {
-            let mut err: Error = Error {
-                type_0: kErrorTypeNone,
-                msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            };
-            if !parse_winborder(&raw mut fconfig, p_pumborder.get(), &raw mut err) {
-                if err.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                    emsg(err.msg);
-                }
-                api_clear_error(&raw mut err);
-                return;
-            }
-            if strequal(
-                p_pumborder.get(),
-                (*opt_winborder_values.ptr())[3 as ::core::ffi::c_int as usize]
-                    as *const ::core::ffi::c_char,
-            ) {
-                fconfig.shadow = true_0 != 0;
-                let mut blend: ::core::ffi::c_int = syn_check_group(
-                    b"PmenuShadow\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
-                );
-                let mut through: ::core::ffi::c_int = syn_check_group(
-                    b"PmenuShadowThrough\0".as_ptr() as *const ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 19]>().wrapping_sub(1 as size_t),
-                );
-                fconfig.border_hl_ids[2 as ::core::ffi::c_int as usize] = through;
-                fconfig.border_hl_ids[3 as ::core::ffi::c_int as usize] = blend;
-                fconfig.border_hl_ids[4 as ::core::ffi::c_int as usize] = blend;
-                fconfig.border_hl_ids[5 as ::core::ffi::c_int as usize] = blend;
-                fconfig.border_hl_ids[6 as ::core::ffi::c_int as usize] = through;
-            }
-            let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while i < 8 as ::core::ffi::c_int {
-                let mut attr: ::core::ffi::c_int =
-                    *(*hl_attr_active.ptr()).offset(HLF_PBR as isize);
-                if fconfig.border_hl_ids[i as usize] != 0 {
-                    attr = hl_get_ui_attr(
-                        -1 as ::core::ffi::c_int,
-                        HLF_PBR,
-                        fconfig.border_hl_ids[i as usize],
-                        false_0 != 0,
-                    );
-                }
-                fconfig.border_attr[i as usize] = attr;
-                i += 1;
+        if !parse_winborder(&raw mut *config, p_pumborder.get(), &raw mut err) {
+            if err.type_0 != kErrorTypeNone {
+                emsg(err.msg);
             }
             api_clear_error(&raw mut err);
-            if pum_scrollbar.get() != 0 {
-                border_char = schar_from_str(
-                    &raw mut *(&raw mut fconfig.border_chars as *mut [::core::ffi::c_char; 32])
-                        .offset(3 as ::core::ffi::c_int as isize)
-                        as *mut ::core::ffi::c_char,
-                );
-                border_attr = fconfig.border_attr[3 as ::core::ffi::c_int as usize];
+            return None;
+        }
+        api_clear_error(&raw mut err);
+
+        // The shadow style is not a box: it darkens the cells to the right
+        // and below instead, in two dedicated highlight groups.
+        if strequal(p_pumborder.get(), opt_winborder_values.get()[3]) {
+            config.shadow = true;
+            let blend = syn_check_group(c"PmenuShadow".as_ptr(), 11);
+            let through = syn_check_group(c"PmenuShadowThrough".as_ptr(), 18);
+            config.border_hl_ids[2] = through;
+            config.border_hl_ids[3] = blend;
+            config.border_hl_ids[4] = blend;
+            config.border_hl_ids[5] = blend;
+            config.border_hl_ids[6] = through;
+        }
+
+        // Resolve the eight edges' highlight ids, PmenuBorder by default.
+        for i in 0..8 {
+            config.border_attr[i] = if config.border_hl_ids[i] != 0 {
+                hl_get_ui_attr(-1, HLF_PBR, config.border_hl_ids[i], false)
+            } else {
+                *hl_attr_active.get().offset(HLF_PBR as isize)
+            };
+        }
+
+        let scrollbar = (pum_scrollbar.get() != 0).then(|| {
+            let right = (&raw const config.border_chars[3]).cast::<c_char>();
+            (schar_from_str(right), config.border_attr[3])
+        });
+        Some(PumBorder { width, scrollbar })
+    }
+}
+
+/// What every row of the menu draws the same way.
+#[derive(Clone, Copy)]
+struct RowStyle {
+    /// Grid column the item text starts at: the left edge, or the right one
+    /// under `'rightleft'`.
+    col_off: c_int,
+    /// There is room for a padding space before the text (after it, under
+    /// `'rightleft'`).
+    extra_space: bool,
+    /// The `'fillchars'` `trunc`/`truncrl` glyph, 0 when unset.
+    fcs_trunc: schar_T,
+    /// Scrollbar trough and thumb attributes.
+    attr_scroll: c_int,
+    attr_thumb: c_int,
+    /// Trough glyph and attribute borrowed from a box border, if there is one.
+    border_scroll: Option<(schar_T, c_int)>,
+    /// The thumb's rows, as a start and a length.
+    thumb_pos: c_int,
+    thumb_height: c_int,
+}
+
+/// One row of the menu, mid-draw.
+struct PumRow {
+    /// The item this row shows.
+    idx: c_int,
+    /// Highlight groups for this row's three columns, selected or not.
+    hlfs: [hlf_T; 3],
+    /// Grid column the next glyph goes at.
+    grid_col: c_int,
+    /// Cells of `pum_width` used so far — what the width limit is against.
+    totwidth: c_int,
+    /// A column did not fit: the row gets a truncation marker.
+    need_trunc: bool,
+    /// The last column's own attribute, which the trailing fill uses.
+    orig_attr: c_int,
+}
+
+impl PumRow {
+    /// Draw one run of an item's text, ending at the truncation point.
+    ///
+    /// `text` is an owned `transstr` result (already reversed under
+    /// `'rightleft'`) and `width` the cells the run was measured at; the
+    /// truncating branch shortens both. Advances `grid_col` past the run.
+    ///
+    /// # Safety
+    /// A line batch must be in progress and `text` must be a live
+    /// NUL-terminated buffer of the run.
+    unsafe fn emit(
+        &mut self,
+        style: &RowStyle,
+        text: *mut c_char,
+        mut width: c_int,
+        attrs: Option<&[c_int]>,
+        attr: c_int,
+        next_isempty: bool,
+    ) {
+        // SAFETY: the caller holds the batch and owns `text`.
+        unsafe {
+            let width_limit = pum_width.get();
+            // Two cells are kept for the separator unless nothing follows.
+            let pad = if next_isempty { 0 } else { 2 };
+            let mut cells = mb_string2cells(text) as c_int;
+            if width_limit - self.totwidth < cells + pad {
+                self.need_trunc = true;
+            }
+
+            if pum_rl.get() {
+                let mut rt = text;
+                // Drop leading characters until what is left fits.
+                if self.grid_col - cells < style.col_off - width_limit {
+                    loop {
+                        cells -= utf_ptr2cells(rt);
+                        rt = rt.offset(utfc_ptr2len(rt) as isize);
+                        if self.grid_col - cells >= style.col_off - width_limit {
+                            break;
+                        }
+                    }
+                    if self.grid_col - cells > style.col_off - width_limit {
+                        // The leftmost character wants two cells and only one
+                        // is left: mark it with a '<' instead.
+                        rt = rt.offset(-1);
+                        *rt = b'<' as c_char;
+                        cells += 1;
+                    }
+                }
+
+                match attrs {
+                    None => {
+                        grid_line_puts(self.grid_col - cells + 1, rt, -1, attr);
+                    }
+                    Some(attrs) => {
+                        pum_grid_puts_with_attrs(self.grid_col - cells + 1, cells, rt, attrs);
+                    }
+                }
+                self.grid_col -= width;
+            } else {
+                if self.need_trunc {
+                    // Cut the run at the last character that still fits.
+                    let available_cells = width_limit - self.totwidth;
+                    let mut p_end = text;
+                    let mut displayed = 0;
+                    while *p_end != 0 {
+                        let char_cells = utf_ptr2cells(p_end);
+                        if displayed + char_cells > available_cells {
+                            break;
+                        }
+                        displayed += char_cells;
+                        p_end = p_end.offset(utfc_ptr2len(p_end) as isize);
+                    }
+                    *p_end = 0;
+                    cells = displayed;
+                    width = displayed;
+                }
+
+                match attrs {
+                    None => {
+                        grid_line_puts(self.grid_col, text, -1, attr);
+                    }
+                    Some(attrs) => {
+                        pum_grid_puts_with_attrs(self.grid_col, cells, text, attrs);
+                    }
+                }
+                self.grid_col += width;
             }
         }
-        if pum_scrollbar.get() > 0 as ::core::ffi::c_int
-            && (!fconfig.border || fconfig.shadow as ::core::ffi::c_int != 0)
-        {
+    }
+
+    /// Draw one of the three item columns.
+    ///
+    /// The text is walked forwards until it runs out, hits a Tab or would
+    /// exceed `pum_width`; each such run is made printable with `transstr`
+    /// and drawn, and a Tab is drawn as two spaces before the walk resumes.
+    ///
+    /// # Safety
+    /// A line batch must be in progress and `self.idx` must address a live
+    /// item.
+    unsafe fn put_column(&mut self, style: &RowStyle, item_type: c_int, next_isempty: bool) {
+        // SAFETY: the caller holds the batch; `p` walks an item string, which
+        // is NUL-terminated and stays live for the whole redraw.
+        unsafe {
+            let win = curwin.get();
+            let hlf = self.hlfs[item_type as usize];
+            self.orig_attr =
+                hl_combine_attr(win_hl_attr(win, HLF_PNI), win_hl_attr(win, hlf as c_int));
+            let attr = if item_type < 2 {
+                pum_user_attr_combine(self.idx, item_type, self.orig_attr)
+            } else {
+                self.orig_attr
+            };
+
+            let mut p = pum_get_item(self.idx, item_type);
+            if p.is_null() {
+                return;
+            }
+            let mut run_start: *mut c_char = ::core::ptr::null_mut();
+            let mut width = 0;
+
+            loop {
+                if run_start.is_null() {
+                    run_start = p;
+                }
+                let w = ptr2cells(p);
+                if *p != 0 && *p != b'\t' as c_char && self.totwidth + w <= pum_width.get() {
+                    width += w;
+                    p = p.offset(utfc_ptr2len(p) as isize);
+                    continue;
+                }
+
+                // Draw [run_start, p). The item string is NUL-terminated in
+                // place for `transstr`, then put back.
+                let saved = *p;
+                if saved != 0 {
+                    *p = 0;
+                }
+                let st = transstr(run_start, true);
+                if saved != 0 {
+                    *p = saved;
+                }
+
+                let attrs = if item_type == CPT_ABBR as c_int {
+                    let user = pum_items()[self.idx as usize].pum_user_abbr_hlattr;
+                    pum_compute_text_attrs(st, hlf, user)
+                } else {
+                    None
+                };
+
+                if pum_rl.get() {
+                    let rt = reverse_text(st);
+                    self.emit(style, rt, width, attrs.as_deref(), attr, next_isempty);
+                    xfree(rt.cast());
+                } else {
+                    self.emit(style, st, width, attrs.as_deref(), attr, next_isempty);
+                }
+                xfree(st.cast());
+
+                if *p != b'\t' as c_char {
+                    break;
+                }
+
+                // A Tab shows as two spaces, and the walk starts a new run.
+                if pum_rl.get() {
+                    grid_line_puts(self.grid_col - 1, c"  ".as_ptr(), 2, attr);
+                    self.grid_col -= 2;
+                } else {
+                    grid_line_puts(self.grid_col, c"  ".as_ptr(), 2, attr);
+                    self.grid_col += 2;
+                }
+                self.totwidth += 2;
+                run_start = ::core::ptr::null_mut();
+                width = 0;
+                p = p.offset(utfc_ptr2len(p) as isize);
+            }
+        }
+    }
+}
+
+/// Draw one row of the menu: its item, the truncation marker, the scrollbar.
+///
+/// # Safety
+/// No line batch may be in progress; `pum_grid` must be allocated for
+/// `pum_height` rows.
+unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
+    // SAFETY: the item indices come from `pum_first`/`pum_height`, which
+    // `pum_redraw` has already clamped to the array.
+    unsafe {
+        let win = curwin.get();
+        let idx = i + pum_first.get();
+        let selected = idx == pum_selected.get();
+        let mut row = PumRow {
+            idx,
+            hlfs: if selected {
+                [HLF_PSI as hlf_T, HLF_PSK as hlf_T, HLF_PSX as hlf_T]
+            } else {
+                [HLF_PNI as hlf_T, HLF_PNK as hlf_T, HLF_PNX as hlf_T]
+            },
+            grid_col: style.col_off,
+            totwidth: 0,
+            need_trunc: false,
+            orig_attr: -1,
+        };
+        let trunc_attr = win_hl_attr(win, if selected { HLF_PSI } else { HLF_PNI });
+
+        screengrid_line_start(pum_grid.ptr(), grid_row, 0);
+
+        if style.extra_space {
+            let attr = hl_combine_attr(
+                win_hl_attr(win, HLF_PNI),
+                win_hl_attr(win, row.hlfs[0] as c_int),
+            );
+            let col = if pum_rl.get() {
+                style.col_off + 1
+            } else {
+                style.col_off - 1
+            };
+            grid_line_puts(col, c" ".as_ptr(), 1, attr);
+        }
+
+        let order = pum_align_order();
+        let widths = [
+            pum_base_width.get(),
+            pum_kind_width.get(),
+            pum_extra_width.get(),
+        ];
+        // Where the second and third columns start: the first column's width,
+        // plus the separator the layout reserved.
+        let basic_width = widths[order[0] as usize];
+        let last_isabbr = order[2] == CPT_ABBR as c_int;
+
+        for j in 0..3 {
+            let item_type = order[j];
+            let next_isempty = j + 1 >= 3 || pum_get_item(idx, order[j + 1]).is_null();
+            row.put_column(style, item_type, next_isempty);
+
+            let n = if j > 0 {
+                widths[order[1] as usize] + c_int::from(!last_isabbr)
+            } else {
+                c_int::from(order[j] == CPT_ABBR as c_int)
+            };
+
+            // Stop when there is nothing more to display.
+            if j == 2
+                || (next_isempty
+                    && (j == 1 || (j == 0 && pum_get_item(idx, order[j + 2]).is_null())))
+                || basic_width + n >= pum_width.get()
+            {
+                break;
+            }
+
+            // Pad out to where the next column starts.
+            if pum_rl.get() {
+                grid_line_fill(
+                    style.col_off - basic_width - n + 1,
+                    row.grid_col + 1,
+                    schar_from_ascii(b' '),
+                    row.orig_attr,
+                );
+                row.grid_col = style.col_off - basic_width - n;
+            } else {
+                grid_line_fill(
+                    row.grid_col,
+                    style.col_off + basic_width + n,
+                    schar_from_ascii(b' '),
+                    row.orig_attr,
+                );
+                row.grid_col = style.col_off + basic_width + n;
+            }
+            row.totwidth = basic_width + n;
+        }
+
+        // Blank the rest of the row, then overwrite its far cell with the
+        // truncation marker if anything was cut. The marker is written
+        // straight into the line buffer because it replaces a cell
+        // `grid_line_fill` has already put there.
+        let chars = linebuf_char.get();
+        let attrs = linebuf_attr.get();
+        if pum_rl.get() {
+            let lcol = style.col_off - pum_width.get() + 1;
+            grid_line_fill(
+                lcol,
+                row.grid_col + 1,
+                schar_from_ascii(b' '),
+                row.orig_attr,
+            );
+            if row.need_trunc {
+                *chars.offset(lcol as isize) = if style.fcs_trunc != 0 {
+                    style.fcs_trunc
+                } else {
+                    schar_from_ascii(b'<')
+                };
+                *attrs.offset(lcol as isize) = trunc_attr as sattr_T;
+                // The marker may have replaced the left half of a wide
+                // character; give the orphaned right half a space.
+                if pum_width.get() > 1 && *chars.offset((lcol + 1) as isize) == 0 {
+                    *chars.offset((lcol + 1) as isize) = schar_from_ascii(b' ');
+                }
+            }
+        } else {
+            let rcol = style.col_off + pum_width.get();
+            grid_line_fill(row.grid_col, rcol, schar_from_ascii(b' '), row.orig_attr);
+            if row.need_trunc {
+                if pum_width.get() > 1 && *chars.offset((rcol - 1) as isize) == 0 {
+                    *chars.offset((rcol - 2) as isize) = schar_from_ascii(b' ');
+                }
+                *chars.offset((rcol - 1) as isize) = if style.fcs_trunc != 0 {
+                    style.fcs_trunc
+                } else {
+                    schar_from_ascii(b'>')
+                };
+                *attrs.offset((rcol - 1) as isize) = trunc_attr as sattr_T;
+            }
+        }
+
+        if pum_scrollbar.get() > 0 {
+            let thumb = i >= style.thumb_pos && i < style.thumb_pos + style.thumb_height;
+            let scrollbar_col = style.col_off
+                + if pum_rl.get() {
+                    -pum_width.get()
+                } else {
+                    pum_width.get()
+                };
+            let (sc, attr) = match (thumb, style.border_scroll) {
+                (true, _) => (schar_from_ascii(b' '), style.attr_thumb),
+                (false, Some(border)) => border,
+                (false, None) => (schar_from_ascii(b' '), style.attr_scroll),
+            };
+            grid_line_put_schar(scrollbar_col, sc, attr);
+        }
+        grid_line_flush();
+    }
+}
+
+/// Redraw the popup menu, using `pum_first` and `pum_selected`.
+///
+/// # Safety
+/// The menu must be displayed (`pum_display` or `pum_show_popupmenu` has run
+/// the placement) and no line batch may be in progress.
+pub unsafe fn pum_redraw() {
+    // SAFETY: the placement functions have filled the state cells and the
+    // item array is live.
+    unsafe {
+        let win = curwin.get();
+
+        // Room for one padding cell beside the text, when there is any.
+        let mut grid_width = pum_width.get();
+        let mut col_off = 0;
+        let mut extra_space = false;
+        if pum_rl.get() {
+            col_off = pum_width.get() - 1;
+            assert!(State.get() & MODE_CMDLINE == 0, "!(State & MODE_CMDLINE)");
+            let win_end_col = (*win).w_wincol + (*win).w_width;
+            if pum_col.get() < win_end_col - 1 {
+                grid_width += 1;
+                extra_space = true;
+            }
+        } else if pum_col.get() > 0 {
+            grid_width += 1;
+            col_off = 1;
+            extra_space = true;
+        }
+
+        let mut config = WIN_CONFIG_INIT;
+        let Some(border) = resolve_border(&mut config) else {
+            return; // 'pumborder' did not parse; the message is already out
+        };
+
+        // A scrollbar drawn by the menu itself needs a column of its own; one
+        // drawn into a box border reuses the border's.
+        if pum_scrollbar.get() > 0 && (!config.border || config.shadow) {
             grid_width += 1;
             if pum_rl.get() {
                 col_off += 1;
             }
         }
-        (*pum_grid.ptr()).blending =
-            p_pb.get() > 0 as OptInt || fconfig.shadow as ::core::ffi::c_int != 0;
+
+        (*pum_grid.ptr()).blending = p_pb.get() > 0 || config.shadow;
         grid_assign_handle(pum_grid.ptr());
+
         pum_left_col.set(pum_col.get() - col_off);
         pum_right_col.set(pum_left_col.get() + grid_width);
-        let mut moved: bool = ui_comp_put_grid(
+        let moved = ui_comp_put_grid(
             pum_grid.ptr(),
             pum_row.get(),
             pum_left_col.get(),
-            pum_height.get() + border_width,
-            grid_width + border_width,
-            false_0 != 0,
-            true_0 != 0,
+            pum_height.get() + border.width,
+            grid_width + border.width,
+            false,
+            true,
         );
-        let mut invalid_grid: bool =
-            moved as ::core::ffi::c_int != 0 || pum_invalid.get() as ::core::ffi::c_int != 0;
-        pum_invalid.set(false_0 != 0);
-        must_redraw_pum.set(false_0 != 0);
+        let invalid_grid = moved || pum_invalid.get();
+        pum_invalid.set(false);
+        must_redraw_pum.set(false);
+
+        let (rows, cols) = (pum_height.get() + border.width, grid_width + border.width);
         if (*pum_grid.ptr()).chars.is_null()
-            || (*pum_grid.ptr()).rows != pum_height.get() + border_width
-            || (*pum_grid.ptr()).cols != grid_width + border_width
+            || (*pum_grid.ptr()).rows != rows
+            || (*pum_grid.ptr()).cols != cols
         {
-            grid_alloc(
-                pum_grid.ptr(),
-                pum_height.get() + border_width,
-                grid_width + border_width,
-                !invalid_grid,
-                false_0 != 0,
-            );
+            grid_alloc(pum_grid.ptr(), rows, cols, !invalid_grid, false);
             ui_call_grid_resize(
                 (*pum_grid.ptr()).handle as Integer,
                 (*pum_grid.ptr()).cols as Integer,
@@ -414,406 +792,57 @@ pub unsafe extern "C" fn pum_redraw() {
             grid_invalidate(pum_grid.ptr());
         }
         if ui_has(kUIMultigrid) {
-            let mut anchor: *const ::core::ffi::c_char =
-                if pum_above.get() as ::core::ffi::c_int != 0 {
-                    b"SW\0".as_ptr() as *const ::core::ffi::c_char
-                } else {
-                    b"NW\0".as_ptr() as *const ::core::ffi::c_char
-                };
-            let mut row_off: ::core::ffi::c_int = if pum_above.get() as ::core::ffi::c_int != 0 {
-                -pum_height.get()
-            } else {
-                0 as ::core::ffi::c_int
-            };
-            ui_call_win_float_pos(
-                (*pum_grid.ptr()).handle as Integer,
-                -1 as Window,
-                cstr_as_string(anchor),
-                pum_anchor_grid.get() as Integer,
-                (pum_row.get() - row_off - pum_win_row_offset.get()) as Float,
-                (pum_left_col.get() - pum_win_col_offset.get()) as Float,
-                false_0 != 0,
-                (*pum_grid.ptr()).zindex as Integer,
-                (*pum_grid.ptr()).comp_index as ::core::ffi::c_int as Integer,
-                (*pum_grid.ptr()).comp_row as Integer,
-                (*pum_grid.ptr()).comp_col as Integer,
-            );
+            pum_send_float_pos();
         }
-        let mut scroll_range: ::core::ffi::c_int = pum_size.get() - pum_height.get();
-        if fconfig.border {
+
+        let mut grid_row = 0;
+        if config.border {
             grid_draw_border(
                 pum_grid.ptr(),
-                &raw mut fconfig,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                0 as ::core::ffi::c_int,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
+                &raw mut config,
+                ::core::ptr::null_mut(),
+                0,
+                ::core::ptr::null_mut(),
             );
-            if !fconfig.shadow {
-                row += 1;
+            if !config.shadow {
+                grid_row += 1;
                 col_off += 1;
             }
         }
-        pum_first.set(if pum_first.get() < scroll_range {
-            pum_first.get()
-        } else {
-            scroll_range
-        });
+
+        // Never display more than there is.
+        let scroll_range = pum_size.get() - pum_height.get();
+        pum_first.set(pum_first.get().min(scroll_range));
+
+        let (mut thumb_pos, mut thumb_height) = (0, 1);
         if pum_scrollbar.get() != 0 {
-            thumb_height = pum_height.get() * pum_height.get() / pum_size.get();
-            if thumb_height == 0 as ::core::ffi::c_int {
-                thumb_height = 1 as ::core::ffi::c_int;
-            }
-            thumb_pos = (pum_first.get() * (pum_height.get() - thumb_height)
-                + scroll_range / 2 as ::core::ffi::c_int)
+            thumb_height = (pum_height.get() * pum_height.get() / pum_size.get()).max(1);
+            thumb_pos = (pum_first.get() * (pum_height.get() - thumb_height) + scroll_range / 2)
                 / scroll_range;
         }
-        let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i_0 < pum_height.get() {
-            let mut idx: ::core::ffi::c_int = i_0 + pum_first.get();
-            let selected: bool = idx == pum_selected.get();
-            let hlfs: *const hlf_T = if selected as ::core::ffi::c_int != 0 {
-                &raw const hlfsSel as *const hlf_T
+
+        let style = RowStyle {
+            col_off,
+            extra_space,
+            fcs_trunc: if pum_rl.get() {
+                (*win).w_p_fcs_chars.truncrl
             } else {
-                &raw const hlfsNorm as *const hlf_T
-            };
-            let trunc_attr: ::core::ffi::c_int = win_hl_attr(
-                curwin.get(),
-                if selected as ::core::ffi::c_int != 0 {
-                    HLF_PSI
-                } else {
-                    HLF_PNI
-                },
-            );
-            let mut hlf: hlf_T = *hlfs.offset(0 as ::core::ffi::c_int as isize);
-            let mut attr_0: ::core::ffi::c_int =
-                win_hl_attr(curwin.get(), hlf as ::core::ffi::c_int);
-            attr_0 = hl_combine_attr(win_hl_attr(curwin.get(), HLF_PNI), attr_0);
-            screengrid_line_start(pum_grid.ptr(), row, 0 as ::core::ffi::c_int);
-            if extra_space {
-                if pum_rl.get() {
-                    grid_line_puts(
-                        col_off + 1 as ::core::ffi::c_int,
-                        b" \0".as_ptr() as *const ::core::ffi::c_char,
-                        1 as ::core::ffi::c_int,
-                        attr_0,
-                    );
-                } else {
-                    grid_line_puts(
-                        col_off - 1 as ::core::ffi::c_int,
-                        b" \0".as_ptr() as *const ::core::ffi::c_char,
-                        1 as ::core::ffi::c_int,
-                        attr_0,
-                    );
-                }
-            }
-            let mut grid_col: ::core::ffi::c_int = col_off;
-            let mut totwidth: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            let mut need_fcs_trunc: bool = false_0 != 0;
-            let mut order: [::core::ffi::c_int; 3] = [0; 3];
-            let mut items_width_array: [::core::ffi::c_int; 3] = [
-                pum_base_width.get(),
-                pum_kind_width.get(),
-                pum_extra_width.get(),
-            ];
-            pum_align_order(&raw mut order as *mut ::core::ffi::c_int);
-            let mut basic_width: ::core::ffi::c_int =
-                items_width_array[order[0 as ::core::ffi::c_int as usize] as usize];
-            let mut last_isabbr: bool =
-                order[2 as ::core::ffi::c_int as usize] == CPT_ABBR as ::core::ffi::c_int;
-            let mut orig_attr: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-            let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while j < 3 as ::core::ffi::c_int {
-                let mut item_type: ::core::ffi::c_int = order[j as usize];
-                hlf = *hlfs.offset(item_type as isize);
-                attr_0 = win_hl_attr(curwin.get(), hlf as ::core::ffi::c_int);
-                attr_0 = hl_combine_attr(win_hl_attr(curwin.get(), HLF_PNI), attr_0);
-                orig_attr = attr_0;
-                if item_type < 2 as ::core::ffi::c_int {
-                    attr_0 = pum_user_attr_combine(idx, item_type, attr_0);
-                }
-                let mut width: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                let mut s: *mut ::core::ffi::c_char =
-                    ::core::ptr::null_mut::<::core::ffi::c_char>();
-                p = pum_get_item(idx, item_type);
-                let next_isempty: bool = j + 1 as ::core::ffi::c_int >= 3 as ::core::ffi::c_int
-                    || pum_get_item(idx, order[(j + 1 as ::core::ffi::c_int) as usize]).is_null();
-                if !p.is_null() {
-                    loop {
-                        if s.is_null() {
-                            s = p;
-                        }
-                        let mut w: ::core::ffi::c_int = ptr2cells(p);
-                        if *p as ::core::ffi::c_int != NUL
-                            && *p as ::core::ffi::c_int != TAB
-                            && totwidth + w <= pum_width.get()
-                        {
-                            width += w;
-                        } else {
-                            let width_limit: ::core::ffi::c_int = pum_width.get();
-                            let mut saved: ::core::ffi::c_char = *p;
-                            if saved as ::core::ffi::c_int != NUL {
-                                *p = NUL as ::core::ffi::c_char;
-                            }
-                            let mut st: *mut ::core::ffi::c_char = transstr(s, true_0 != 0);
-                            if saved as ::core::ffi::c_int != NUL {
-                                *p = saved;
-                            }
-                            let mut attrs: *mut ::core::ffi::c_int =
-                                ::core::ptr::null_mut::<::core::ffi::c_int>();
-                            if item_type == CPT_ABBR as ::core::ffi::c_int {
-                                attrs = pum_compute_text_attrs(
-                                    st,
-                                    hlf,
-                                    (*(*pum_array.ptr()).offset(idx as isize)).pum_user_abbr_hlattr,
-                                );
-                            }
-                            if pum_rl.get() {
-                                let mut rt: *mut ::core::ffi::c_char = reverse_text(st);
-                                let mut rt_start: *mut ::core::ffi::c_char = rt;
-                                let mut cells: ::core::ffi::c_int =
-                                    mb_string2cells(rt) as ::core::ffi::c_int;
-                                let mut pad: ::core::ffi::c_int =
-                                    if next_isempty as ::core::ffi::c_int != 0 {
-                                        0 as ::core::ffi::c_int
-                                    } else {
-                                        2 as ::core::ffi::c_int
-                                    };
-                                if width_limit - totwidth < cells + pad {
-                                    need_fcs_trunc = true_0 != 0;
-                                }
-                                if grid_col - cells < col_off - width_limit {
-                                    loop {
-                                        cells -= utf_ptr2cells(rt);
-                                        rt = rt.offset(utfc_ptr2len(rt) as isize);
-                                        if grid_col - cells >= col_off - width_limit {
-                                            break;
-                                        }
-                                    }
-                                    if grid_col - cells > col_off - width_limit {
-                                        rt = rt.offset(-1);
-                                        *rt = '<' as ::core::ffi::c_char;
-                                        cells += 1;
-                                    }
-                                }
-                                if attrs.is_null() {
-                                    grid_line_puts(
-                                        grid_col - cells + 1 as ::core::ffi::c_int,
-                                        rt,
-                                        -1 as ::core::ffi::c_int,
-                                        attr_0,
-                                    );
-                                } else {
-                                    pum_grid_puts_with_attrs(
-                                        grid_col - cells + 1 as ::core::ffi::c_int,
-                                        cells,
-                                        rt,
-                                        -1 as ::core::ffi::c_int,
-                                        attrs,
-                                    );
-                                }
-                                xfree(rt_start as *mut ::core::ffi::c_void);
-                                xfree(st as *mut ::core::ffi::c_void);
-                                grid_col -= width;
-                            } else {
-                                let mut cells_0: ::core::ffi::c_int =
-                                    mb_string2cells(st) as ::core::ffi::c_int;
-                                let mut pad_0: ::core::ffi::c_int =
-                                    if next_isempty as ::core::ffi::c_int != 0 {
-                                        0 as ::core::ffi::c_int
-                                    } else {
-                                        2 as ::core::ffi::c_int
-                                    };
-                                if width_limit - totwidth < cells_0 + pad_0 {
-                                    need_fcs_trunc = true_0 != 0;
-                                }
-                                if need_fcs_trunc {
-                                    let mut available_cells: ::core::ffi::c_int =
-                                        width_limit - totwidth;
-                                    let mut p_end: *mut ::core::ffi::c_char = st;
-                                    let mut displayed: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                                    while *p_end as ::core::ffi::c_int != NUL {
-                                        let mut char_cells: ::core::ffi::c_int =
-                                            utf_ptr2cells(p_end);
-                                        if displayed + char_cells > available_cells {
-                                            break;
-                                        }
-                                        displayed += char_cells;
-                                        p_end = p_end.offset(utfc_ptr2len(p_end) as isize);
-                                    }
-                                    *p_end = NUL as ::core::ffi::c_char;
-                                    cells_0 = displayed;
-                                    width = displayed;
-                                }
-                                if attrs.is_null() {
-                                    grid_line_puts(grid_col, st, -1 as ::core::ffi::c_int, attr_0);
-                                } else {
-                                    pum_grid_puts_with_attrs(
-                                        grid_col,
-                                        cells_0,
-                                        st,
-                                        -1 as ::core::ffi::c_int,
-                                        attrs,
-                                    );
-                                }
-                                xfree(st as *mut ::core::ffi::c_void);
-                                grid_col += width;
-                            }
-                            if !attrs.is_null() {
-                                let mut ptr_: *mut *mut ::core::ffi::c_void =
-                                    &raw mut attrs as *mut *mut ::core::ffi::c_void;
-                                xfree(*ptr_);
-                                *ptr_ = NULL;
-                                let _ = *ptr_;
-                            }
-                            if *p as ::core::ffi::c_int != TAB {
-                                break;
-                            }
-                            if pum_rl.get() {
-                                grid_line_puts(
-                                    grid_col - 1 as ::core::ffi::c_int,
-                                    b"  \0".as_ptr() as *const ::core::ffi::c_char,
-                                    2 as ::core::ffi::c_int,
-                                    attr_0,
-                                );
-                                grid_col -= 2 as ::core::ffi::c_int;
-                            } else {
-                                grid_line_puts(
-                                    grid_col,
-                                    b"  \0".as_ptr() as *const ::core::ffi::c_char,
-                                    2 as ::core::ffi::c_int,
-                                    attr_0,
-                                );
-                                grid_col += 2 as ::core::ffi::c_int;
-                            }
-                            totwidth += 2 as ::core::ffi::c_int;
-                            s = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                            width = 0 as ::core::ffi::c_int;
-                        }
-                        p = p.offset(utfc_ptr2len(p) as isize);
-                    }
-                }
-                if j > 0 as ::core::ffi::c_int {
-                    n = items_width_array[order[1 as ::core::ffi::c_int as usize] as usize]
-                        + (if last_isabbr as ::core::ffi::c_int != 0 {
-                            0 as ::core::ffi::c_int
-                        } else {
-                            1 as ::core::ffi::c_int
-                        });
-                } else {
-                    n = if order[j as usize] == CPT_ABBR as ::core::ffi::c_int {
-                        1 as ::core::ffi::c_int
-                    } else {
-                        0 as ::core::ffi::c_int
-                    };
-                }
-                if j == 2 as ::core::ffi::c_int
-                    || next_isempty as ::core::ffi::c_int != 0
-                        && (j == 1 as ::core::ffi::c_int
-                            || j == 0 as ::core::ffi::c_int
-                                && pum_get_item(idx, order[(j + 2 as ::core::ffi::c_int) as usize])
-                                    .is_null())
-                    || basic_width + n >= pum_width.get()
-                {
-                    break;
-                }
-                if pum_rl.get() {
-                    grid_line_fill(
-                        col_off - basic_width - n + 1 as ::core::ffi::c_int,
-                        grid_col + 1 as ::core::ffi::c_int,
-                        ' ' as ::core::ffi::c_int as schar_T,
-                        orig_attr,
-                    );
-                    grid_col = col_off - basic_width - n;
-                } else {
-                    grid_line_fill(
-                        grid_col,
-                        col_off + basic_width + n,
-                        ' ' as ::core::ffi::c_int as schar_T,
-                        orig_attr,
-                    );
-                    grid_col = col_off + basic_width + n;
-                }
-                totwidth = basic_width + n;
-                j += 1;
-            }
-            if pum_rl.get() {
-                let lcol: ::core::ffi::c_int = col_off - pum_width.get() + 1 as ::core::ffi::c_int;
-                grid_line_fill(
-                    lcol,
-                    grid_col + 1 as ::core::ffi::c_int,
-                    ' ' as ::core::ffi::c_int as schar_T,
-                    orig_attr,
-                );
-                if need_fcs_trunc {
-                    *(*linebuf_char.ptr()).offset(lcol as isize) = if fcs_trunc != NUL as schar_T {
-                        fcs_trunc
-                    } else {
-                        '<' as ::core::ffi::c_int as schar_T
-                    };
-                    *(*linebuf_attr.ptr()).offset(lcol as isize) = trunc_attr as sattr_T;
-                    if pum_width.get() > 1 as ::core::ffi::c_int
-                        && *(*linebuf_char.ptr()).offset((lcol + 1 as ::core::ffi::c_int) as isize)
-                            == NUL as schar_T
-                    {
-                        *(*linebuf_char.ptr()).offset((lcol + 1 as ::core::ffi::c_int) as isize) =
-                            ' ' as ::core::ffi::c_int as schar_T;
-                    }
-                }
+                (*win).w_p_fcs_chars.trunc
+            },
+            attr_scroll: win_hl_attr(win, HLF_PSB),
+            attr_thumb: win_hl_attr(win, HLF_PST),
+            border_scroll: if border.width > 0 && !config.shadow {
+                border.scrollbar
             } else {
-                let rcol: ::core::ffi::c_int = col_off + pum_width.get();
-                grid_line_fill(
-                    grid_col,
-                    rcol,
-                    ' ' as ::core::ffi::c_int as schar_T,
-                    orig_attr,
-                );
-                if need_fcs_trunc {
-                    if pum_width.get() > 1 as ::core::ffi::c_int
-                        && *(*linebuf_char.ptr()).offset((rcol - 1 as ::core::ffi::c_int) as isize)
-                            == NUL as schar_T
-                    {
-                        *(*linebuf_char.ptr()).offset((rcol - 2 as ::core::ffi::c_int) as isize) =
-                            ' ' as ::core::ffi::c_int as schar_T;
-                    }
-                    *(*linebuf_char.ptr()).offset((rcol - 1 as ::core::ffi::c_int) as isize) =
-                        if fcs_trunc != NUL as schar_T {
-                            fcs_trunc
-                        } else {
-                            '>' as ::core::ffi::c_int as schar_T
-                        };
-                    *(*linebuf_attr.ptr()).offset((rcol - 1 as ::core::ffi::c_int) as isize) =
-                        trunc_attr as sattr_T;
-                }
-            }
-            if pum_scrollbar.get() > 0 as ::core::ffi::c_int {
-                let mut thumb: bool = i_0 >= thumb_pos && i_0 < thumb_pos + thumb_height;
-                let mut scrollbar_col: ::core::ffi::c_int = col_off
-                    + (if pum_rl.get() as ::core::ffi::c_int != 0 {
-                        -pum_width.get()
-                    } else {
-                        pum_width.get()
-                    });
-                let mut use_border_style: bool =
-                    has_border as ::core::ffi::c_int != 0 && !fconfig.shadow;
-                grid_line_put_schar(
-                    scrollbar_col,
-                    if use_border_style as ::core::ffi::c_int != 0 && !thumb {
-                        border_char
-                    } else {
-                        fill_char
-                    },
-                    if thumb as ::core::ffi::c_int != 0 {
-                        attr_thumb
-                    } else if use_border_style as ::core::ffi::c_int != 0 {
-                        border_attr
-                    } else {
-                        attr_scroll
-                    },
-                );
-            }
-            grid_line_flush();
-            row += 1;
-            i_0 += 1;
+                None
+            },
+            thumb_pos,
+            thumb_height,
+        };
+
+        for i in 0..pum_height.get() {
+            pum_draw_row(&style, i, grid_row);
+            grid_row += 1;
         }
     }
 }

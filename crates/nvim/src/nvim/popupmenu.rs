@@ -1,4 +1,4 @@
-use core::ffi::c_int;
+use core::ffi::{c_char, c_int, c_uint};
 
 use crate::src::nvim::api::buffer::nvim_buf_set_lines;
 use crate::src::nvim::api::private::helpers::{
@@ -21,7 +21,7 @@ use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::grid::{
     get_win_by_grid_handle, grid_alloc, grid_assign_handle, grid_draw_border, grid_free,
     grid_invalidate, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
-    schar_from_str, screengrid_line_start,
+    schar_from_ascii, schar_from_str, screengrid_line_start,
 };
 use crate::src::nvim::highlight::win_hl_attr;
 use crate::src::nvim::highlight::{hl_combine_attr, hl_get_ui_attr};
@@ -42,7 +42,7 @@ use crate::src::nvim::main::{
 };
 use crate::src::nvim::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::src::nvim::memory::{
-    ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xcalloc, xfree, xmalloc, xrealloc, xstrdup,
+    ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xcalloc, xfree, xrealloc, xstrdup,
 };
 use crate::src::nvim::menu::{execute_menu, get_menu_mode_flag, menu_find, menu_is_separator};
 use crate::src::nvim::message::emsg;
@@ -55,7 +55,7 @@ use crate::src::nvim::options::{
     kOptBufhidden, kOptBuflisted, kOptBuftype, kOptCotFlagFuzzy, kOptCotFlagPopup,
     kOptCotFlagPreview, kOptDiff, kOptSwapfile, opt_winborder_values,
 };
-use crate::src::nvim::os::libc::{__assert_fail, gettext, memset, strchr, strlen};
+use crate::src::nvim::os::libc::{gettext, memset, strchr, strlen};
 use crate::src::nvim::plines::plines_m_win;
 use crate::src::nvim::plines::win_linetabsize;
 use crate::src::nvim::state::MODE_CMDLINE;
@@ -66,10 +66,10 @@ use crate::src::nvim::types::{
     AlignTextPos, Arena, Array, BoolVarValue, Buffer, CMD_index, Error, Float, FloatAnchor,
     FloatRelative, Integer, Object, OptInt, OptVal, OptValData, OptValType, String_0, TriState,
     VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, buf_T, cmd_addr_T, colnr_T,
-    cstack_T, dict_T, exarg_T, float_T, garray_T, handle_T, hlf_T, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeString, key_extra, linenr_T, lpos_T, object,
-    object_data as C2Rust_Unnamed_12, pumitem_T, sattr_T, schar_T, size_t, tabpage_T, uint32_t,
-    uint64_t, varnumber_T, vimmenu_T, win_T,
+    cstack_T, dict_T, exarg_T, float_T, handle_T, hlf_T, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeString, key_extra, linenr_T, lpos_T, object, object_data as C2Rust_Unnamed_12,
+    pumitem_T, sattr_T, schar_T, size_t, tabpage_T, uint32_t, uint64_t, varnumber_T, vimmenu_T,
+    win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -188,6 +188,7 @@ static pum_invalid: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
 /// # Safety
 /// The result must not be held across `pum_undisplay`, which drops the
 /// caller's array.
+#[inline]
 unsafe fn pum_items() -> &'static [pumitem_T] {
     let array = pum_array.get();
     if array.is_null() {
@@ -549,37 +550,47 @@ pub unsafe extern "C" fn pum_set_event_info(mut dict: *mut dict_T) {
         }) as BoolVarValue,
     );
 }
-pub unsafe extern "C" fn pum_ui_flush() {
-    if ui_has(kUIMultigrid) as ::core::ffi::c_int != 0
-        && pum_is_drawn.get() as ::core::ffi::c_int != 0
-        && !pum_external.get()
-        && (*pum_grid.ptr()).handle != 0 as ::core::ffi::c_int
-        && (*pum_grid.ptr()).pending_comp_index_update as ::core::ffi::c_int != 0
-    {
-        let mut anchor: *const ::core::ffi::c_char = if pum_above.get() as ::core::ffi::c_int != 0 {
-            b"SW\0".as_ptr() as *const ::core::ffi::c_char
-        } else {
-            b"NW\0".as_ptr() as *const ::core::ffi::c_char
-        };
-        let mut row_off: ::core::ffi::c_int = if pum_above.get() as ::core::ffi::c_int != 0 {
-            -pum_height.get()
-        } else {
-            0 as ::core::ffi::c_int
-        };
+/// Tell a multigrid UI where the menu's grid sits.
+///
+/// The anchor is the corner the menu grows away from the anchor row: a menu
+/// drawn above the cursor line is anchored by its bottom-left corner, so the
+/// row reported is its last one.
+///
+/// # Safety
+/// `pum_grid` must be allocated and its placement settled.
+unsafe fn pum_send_float_pos() {
+    // SAFETY: `pum_grid` is the editor's own grid.
+    unsafe {
+        let above = pum_above.get();
+        let anchor = if above { c"SW" } else { c"NW" };
+        let row_off = if above { -pum_height.get() } else { 0 };
         ui_call_win_float_pos(
             (*pum_grid.ptr()).handle as Integer,
             -1 as Window,
-            cstr_as_string(anchor),
+            cstr_as_string(anchor.as_ptr()),
             pum_anchor_grid.get() as Integer,
             (pum_row.get() - row_off - pum_win_row_offset.get()) as Float,
             (pum_left_col.get() - pum_win_col_offset.get()) as Float,
-            false_0 != 0,
+            false,
             (*pum_grid.ptr()).zindex as Integer,
-            (*pum_grid.ptr()).comp_index as ::core::ffi::c_int as Integer,
+            (*pum_grid.ptr()).comp_index as c_int as Integer,
             (*pum_grid.ptr()).comp_row as Integer,
             (*pum_grid.ptr()).comp_col as Integer,
         );
-        (*pum_grid.ptr()).pending_comp_index_update = false_0 != 0;
+    }
+}
+
+pub unsafe extern "C" fn pum_ui_flush() {
+    unsafe {
+        if ui_has(kUIMultigrid)
+            && pum_is_drawn.get()
+            && !pum_external.get()
+            && (*pum_grid.ptr()).handle != 0
+            && (*pum_grid.ptr()).pending_comp_index_update
+        {
+            pum_send_float_pos();
+            (*pum_grid.ptr()).pending_comp_index_update = false;
+        }
     }
 }
 pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
