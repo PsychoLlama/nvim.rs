@@ -27,7 +27,7 @@ use super::{
 };
 use crate::src::nvim::api::private::dispatch::KeyDict_highlight_get_field;
 use crate::src::nvim::api::private::helpers::{api_dict_to_keydict, cstr_as_string};
-use crate::src::nvim::decoration_provider::get_decor_provider;
+use crate::src::nvim::decoration_provider::with_decor_provider;
 use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight_group::hlf_names;
 use crate::src::nvim::highlight_group::{
@@ -45,8 +45,8 @@ use crate::src::nvim::popupmenu::pum_drawn;
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::builders::ArrayBuf;
 use crate::src::nvim::types::{
-    ColorItem, ColorKey, Error, HlAttrs, HlEntry, KeyDict_highlight, KeySetLink, LuaRetMode, NS,
-    Object, kObjectTypeDict, size_t, win_T,
+    ColorItem, ColorKey, DecorProvider, Error, HlAttrs, HlEntry, KeyDict_highlight, KeySetLink,
+    LuaRetMode, NS, Object, kObjectTypeDict, size_t, win_T,
 };
 use ::core::ffi::{c_char, c_int};
 use core::hash::BuildHasherDefault;
@@ -56,6 +56,19 @@ use std::hash::DefaultHasher;
 /// The two maps here are keyed by small integers and never iterated, so a
 /// fixed-seed hasher is both enough and constructible in a `static`.
 type Table<K, V> = HashMap<K, V, BuildHasherDefault<DefaultHasher>>;
+
+/// Reads or writes one field of `ns_id`'s decoration provider, registering an
+/// empty provider if there is none.
+///
+/// Everything in this file that touches a provider goes through here, because
+/// almost everything here can run Lua — a `hl_def` callback, or the attribute
+/// tables rebuilding — and Lua can register a provider, which moves the
+/// provider list. A pointer held across one of those is a use-after-free;
+/// upstream has exactly that shape and gets away with it only because nothing
+/// has done it yet.
+fn provider_field<R>(ns_id: NS, f: impl FnOnce(&mut DecorProvider) -> R) -> R {
+    with_decor_provider(ns_id, true, f).expect("force registers one")
+}
 
 /// `nlua_call_ref`'s "give me the value as an Object" mode.
 const kRetObject: LuaRetMode = 0;
@@ -144,7 +157,9 @@ pub unsafe fn ns_hl_def(
         if is_default && NS_HLS.with(|hls| hls.contains_key(&key)) {
             return;
         }
-        let provider = get_decor_provider(ns_id, true);
+        // Registered before the lookup, as upstream does: a provider's
+        // position in the list is the order its callbacks run in.
+        provider_field(ns_id, |_| ());
         // A link is resolved lazily, so it has no attribute set of its own.
         let attr_id = if link_id > 0 {
             -1
@@ -154,12 +169,15 @@ pub unsafe fn ns_hl_def(
         let item = ColorItem {
             attr_id,
             link_id,
-            version: (*provider).hl_valid,
+            // Re-resolved rather than held: `hl_get_syn_attr` can rebuild the
+            // attribute tables and reach a Lua callback, which can register
+            // another provider and move the list.
+            version: provider_field(ns_id, |p| p.hl_valid),
             is_default,
             link_global: attrs.rgb_ae_attr & HL_GLOBAL != 0,
         };
         NS_HLS.with_mut(|hls| hls.insert(key, item));
-        (*provider).hl_cached = false;
+        provider_field(ns_id, |p| p.hl_cached = false);
     }
 }
 
@@ -199,11 +217,11 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
 
     // SAFETY: the editor's own tables, plus a Lua callback that may re-enter.
     unsafe {
-        let provider = get_decor_provider(ns_id, true);
         let mut item = NS_HLS.with(|hls| hls.get(&key).copied()).unwrap_or(UNSET);
-        let mut valid = item.version >= (*provider).hl_valid;
+        let hl_def = provider_field(ns_id, |p| p.hl_def);
+        let mut valid = item.version >= provider_field(ns_id, |p| p.hl_valid);
 
-        if !valid && (*provider).hl_def != LUA_NOREF && RECURSIVE.get() == 0 {
+        if !valid && hl_def != LUA_NOREF && RECURSIVE.get() == 0 {
             let mut args = ArrayBuf::<3>::new();
             args.push(Object::integer(ns_id.into()));
             args.push(Object::string(cstr_as_string(syn_id2name(hl_id))));
@@ -216,7 +234,7 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
             RECURSIVE.set(RECURSIVE.get() + 1);
             let name = c"hl_def".as_ptr();
             let ret = nlua_call_ref(
-                (*provider).hl_def,
+                hl_def,
                 name,
                 args.array(),
                 kRetObject,
@@ -257,7 +275,9 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
             } else {
                 hl_get_syn_attr(ns_id, hl_id, attrs)
             };
-            item.version = (*provider).hl_valid - c_int::from(provisional);
+            // The callback and `hl_get_syn_attr` both pump, so the provider
+            // is resolved again rather than read through a stale pointer.
+            item.version = provider_field(ns_id, |p| p.hl_valid) - c_int::from(provisional);
             item.is_default = attrs.rgb_ae_attr & HL_DEFAULT != 0;
             item.link_global = attrs.rgb_ae_attr & HL_GLOBAL != 0;
             NS_HLS.with_mut(|hls| hls.insert(key, item));
@@ -503,8 +523,7 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
     }
     // SAFETY: the editor's own tables.
     unsafe {
-        let provider = get_decor_provider(ns_id, true);
-        if (*provider).hl_cached {
+        if provider_field(ns_id, |p| p.hl_cached) {
             return;
         }
 
@@ -528,7 +547,7 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
         *table.add(HLF_NONE as usize) = hl_get_ui_attr(ns_id, -1, normality, true);
 
         // hl_get_ui_attr might have invalidated the decor provider.
-        (*get_decor_provider(ns_id, true)).hl_cached = true;
+        provider_field(ns_id, |p| p.hl_cached = true);
     }
 }
 
