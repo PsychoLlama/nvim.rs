@@ -37,7 +37,7 @@
     "crates/nvim/src/nvim/debugger.rs": 41,
     "crates/nvim/src/nvim/diff.rs": 103,
     "crates/nvim/src/nvim/digraph.rs": 9,
-    "crates/nvim/src/nvim/drawline.rs": 38,
+    "crates/nvim/src/nvim/drawline.rs": 3,
     "crates/nvim/src/nvim/drawline/columns.rs": 1,
     "crates/nvim/src/nvim/drawscreen.rs": 44,
     "crates/nvim/src/nvim/edit.rs": 33,

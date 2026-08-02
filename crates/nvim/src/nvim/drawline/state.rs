@@ -480,6 +480,17 @@ impl WinLineVars {
         }
     }
 
+    /// The virtual column the *highlighting* is at, which is the buffer's own
+    /// virtual column less whatever concealment swallowed.
+    ///
+    /// `'colorcolumn'` and `'cursorcolumn'` are buffer columns, so they have
+    /// to be compared against this rather than against [`WinLineVars::vcol`],
+    /// which counts the cells the line would have taken unconcealed.
+    #[inline(always)]
+    pub(crate) fn hl_vcol(&self) -> ::core::ffi::c_int {
+        self.vcol - self.vcol_off_co
+    }
+
     /// Undo the fake columns concealment added to force a wrap.
     ///
     /// Concealed text is drawn as nothing, but the character loop still has to
