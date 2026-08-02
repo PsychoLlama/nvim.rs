@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::src::nvim::api::buffer::nvim_buf_set_lines;
@@ -37,11 +39,11 @@ use crate::src::nvim::keycodes::{
     K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_UP,
 };
 use crate::src::nvim::main::{
-    Columns, RedrawingDisabled, Rows, State, cia_flags, cmdline_row, cmdline_win, cmdwin_type,
-    curbuf, curtab, curwin, default_grid, e_menu_only_exists_in_another_mode, firstwin,
-    g_do_tagpreview, hl_attr_active, linebuf_attr, linebuf_char, mouse_col, mouse_grid, mouse_row,
-    must_redraw_pum, no_u_sync, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder, p_pvh, p_pw, pum_grid,
-    textlock,
+    Columns, PumWant, RedrawingDisabled, Rows, State, cia_flags, cmdline_row, cmdline_win,
+    cmdwin_type, curbuf, curtab, curwin, default_grid, e_menu_only_exists_in_another_mode,
+    firstwin, g_do_tagpreview, hl_attr_active, linebuf_attr, linebuf_char, mouse_col, mouse_grid,
+    mouse_row, must_redraw_pum, no_u_sync, p_mousemev, p_pb, p_ph, p_pmw, p_pumborder, p_pvh, p_pw,
+    pum_grid, pum_want, textlock,
 };
 use crate::src::nvim::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::src::nvim::memory::{
@@ -66,12 +68,11 @@ use crate::src::nvim::strings::reverse_text;
 use crate::src::nvim::types::api::kErrorTypeNone;
 use crate::src::nvim::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::src::nvim::types::{
-    AlignTextPos, Arena, Array, BoolVarValue, Buffer, CMD_index, Error, Float, FloatRelative,
-    Integer, Object, OptInt, OptVal, OptValData, OptValType, String_0, TriState, VirtText,
-    VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, cmd_addr_T, dict_T, exarg_T, float_T,
-    handle_T, hlf_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeString, linenr_T, lpos_T,
-    object, object_data as C2Rust_Unnamed_12, pumitem_T, sattr_T, schar_T, size_t, tabpage_T,
-    uint32_t, varnumber_T, vimmenu_T, win_T,
+    AlignTextPos, Array, BoolVarValue, Buffer, Error, Float, FloatRelative, Integer, Object,
+    OptInt, OptVal, OptValData, OptValType, String_0, TriState, VirtText, VirtTextChunk, WinConfig,
+    WinSplit, WinStyle, Window, dict_T, exarg_T, float_T, handle_T, hlf_T, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeString, linenr_T, lpos_T, object_data as C2Rust_Unnamed_12,
+    pumitem_T, sattr_T, schar_T, size_t, tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
 };
 use crate::src::nvim::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -95,9 +96,7 @@ mod preview;
 pub use self::preview::*;
 mod menu;
 pub use self::menu::*;
-unsafe extern "C" {
-    static pum_want: GlobalCell<C2Rust_Unnamed_24>;
-}
+
 pub const kFalse: TriState = 0;
 pub const kTrue: TriState = 1;
 pub const kBoolVarTrue: BoolVarValue = 1;
@@ -106,71 +105,83 @@ pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
 pub const kFloatRelativeEditor: FloatRelative = 0;
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub const kZIndexCmdlinePopupMenu: C2Rust_Unnamed_14 = 250;
-pub const kZIndexPopupMenu: C2Rust_Unnamed_14 = 100;
-pub const kZIndexFloatDefault: C2Rust_Unnamed_14 = 50;
+pub const MAXCOL: c_uint = 2147483647;
+pub const kZIndexCmdlinePopupMenu: c_uint = 250;
+pub const kZIndexPopupMenu: c_uint = 100;
+pub const kZIndexFloatDefault: c_uint = 50;
 pub const kOptValTypeString: OptValType = 2;
 pub const kOptValTypeBoolean: OptValType = 0;
-pub const CMD_append: CMD_index = 0;
-pub const ADDR_LINES: cmd_addr_T = 0;
-pub type C2Rust_Unnamed_19 = ::core::ffi::c_int;
-pub const ECMD_ONE: C2Rust_Unnamed_19 = 1;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const CPT_MENU: C2Rust_Unnamed_21 = 2;
-pub const CPT_KIND: C2Rust_Unnamed_21 = 1;
-pub const CPT_ABBR: C2Rust_Unnamed_21 = 0;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const OPT_LOCAL: C2Rust_Unnamed_22 = 2;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_24 {
-    pub active: bool,
-    pub item: ::core::ffi::c_int,
-    pub insert: bool,
-    pub finish: bool,
-}
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
+pub const ECMD_ONE: c_int = 1;
+pub const CPT_MENU: c_uint = 2;
+pub const CPT_KIND: c_uint = 1;
+pub const CPT_ABBR: c_uint = 0;
+pub const OPT_LOCAL: c_uint = 2;
+pub const ARRAY_DICT_INIT: Array = Array {
+    size: 0,
+    capacity: 0,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
-pub const Ctrl_C: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const DEFAULT_GRID_HANDLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub const OK: c_int = 1;
+pub const NL: c_int = '\n' as c_int;
+pub const CAR: c_int = '\r' as c_int;
+pub const ESC: c_int = '\u{1b}' as c_int;
+pub const Ctrl_C: c_int = 3;
+pub const DEFAULT_GRID_HANDLE: c_int = 1;
+
+// The menu's state. Every one of these is written by one of the placement
+// steps in `layout` and read by `draw`; they are separate cells rather than
+// one struct because `pum_set_selected` re-enters the editor (autocommands,
+// `update_screen`) between writes, and no borrow may span that.
+
+/// The items being shown. Borrowed from the caller of [`pum_display`], or
+/// owned by `pum_show_popupmenu`; null while the menu is down.
 static pum_array: GlobalCell<*mut pumitem_T> =
     GlobalCell::new(::core::ptr::null_mut::<pumitem_T>());
-static pum_size: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_selected: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_first: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static pum_height: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_width: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_base_width: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_kind_width: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_extra_width: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_scrollbar: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// Number of items in `pum_array`.
+static pum_size: GlobalCell<c_int> = GlobalCell::new(0);
+/// Index of the selected item, or -1.
+static pum_selected: GlobalCell<c_int> = GlobalCell::new(0);
+/// Index of the item on the menu's top row.
+static pum_first: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// Number of rows the menu shows.
+static pum_height: GlobalCell<c_int> = GlobalCell::new(0);
+/// Cells the item text may use, excluding padding and the scrollbar.
+static pum_width: GlobalCell<c_int> = GlobalCell::new(0);
+/// Width of the widest `word`.
+static pum_base_width: GlobalCell<c_int> = GlobalCell::new(0);
+/// Width of the `kind` column, including its separating space.
+static pum_kind_width: GlobalCell<c_int> = GlobalCell::new(0);
+/// Width of the `menu` column, including its separating space.
+static pum_extra_width: GlobalCell<c_int> = GlobalCell::new(0);
+/// One when there is a scrollbar, zero when there is not.
+static pum_scrollbar: GlobalCell<c_int> = GlobalCell::new(0);
+/// The menu is drawn `'rightleft'`.
 static pum_rl: GlobalCell<bool> = GlobalCell::new(false);
-static pum_anchor_grid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_win_row_offset: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_win_col_offset: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_left_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pum_right_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+
+/// Handle of the grid the position below is relative to.
+static pum_anchor_grid: GlobalCell<c_int> = GlobalCell::new(0);
+/// Top row of the menu.
+static pum_row: GlobalCell<c_int> = GlobalCell::new(0);
+/// Left column of the menu, or its right column under `'rightleft'`.
+static pum_col: GlobalCell<c_int> = GlobalCell::new(0);
+/// Offsets from grid coordinates back to window-relative ones.
+static pum_win_row_offset: GlobalCell<c_int> = GlobalCell::new(0);
+static pum_win_col_offset: GlobalCell<c_int> = GlobalCell::new(0);
+/// Left column before padding and the scrollbar, and the column after them.
+static pum_left_col: GlobalCell<c_int> = GlobalCell::new(0);
+static pum_right_col: GlobalCell<c_int> = GlobalCell::new(0);
+/// The menu is above the cursor line rather than below it.
 static pum_above: GlobalCell<bool> = GlobalCell::new(false);
-static pum_is_visible: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static pum_is_drawn: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static pum_external: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static pum_invalid: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+
+/// The menu is wanted on screen.
+static pum_is_visible: GlobalCell<bool> = GlobalCell::new(false);
+/// The menu's grid (or the external UI's menu) is still up.
+static pum_is_drawn: GlobalCell<bool> = GlobalCell::new(false);
+/// The UI draws the menu itself; nothing here paints anything.
+static pum_external: GlobalCell<bool> = GlobalCell::new(false);
+/// The screen was cleared, so the whole grid has to be sent again.
+static pum_invalid: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The items the menu is showing, empty while it is down.
 ///
@@ -192,251 +203,318 @@ unsafe fn pum_items() -> &'static [pumitem_T] {
     // outlives the menu.
     unsafe { ::core::slice::from_raw_parts(array, pum_size.get() as usize) }
 }
+
+/// Cells `'pumborder'` costs on each side of the menu.
+///
+/// Zero for no border, one for the shadow style — which only darkens the
+/// right and bottom edges — and two for any of the box styles.
+///
+/// # Safety
+/// `'pumborder'` must be a live option string.
 #[inline]
-unsafe extern "C" fn pum_border_width() -> ::core::ffi::c_int {
-    if *p_pumborder.get() as ::core::ffi::c_int == NUL
-        || strequal(
-            p_pumborder.get(),
-            (*opt_winborder_values.ptr())[7 as ::core::ffi::c_int as usize]
-                as *const ::core::ffi::c_char,
-        ) as ::core::ffi::c_int
-            != 0
-    {
-        return 0 as ::core::ffi::c_int;
-    }
-    return if strequal(
-        p_pumborder.get(),
-        (*opt_winborder_values.ptr())[3 as ::core::ffi::c_int as usize]
-            as *const ::core::ffi::c_char,
-    ) as ::core::ffi::c_int
-        != 0
-    {
-        1 as ::core::ffi::c_int
-    } else {
-        2 as ::core::ffi::c_int
-    };
-}
-pub unsafe extern "C" fn pum_display(
-    mut array: *mut pumitem_T,
-    mut size: ::core::ffi::c_int,
-    mut selected: ::core::ffi::c_int,
-    mut array_changed: bool,
-    mut cmd_startcol: ::core::ffi::c_int,
-) {
-    let mut redo_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut pum_win_row: ::core::ffi::c_int = 0;
-    let mut cursor_col: ::core::ffi::c_int = 0;
-    if !pum_is_visible.get() {
-        pum_external.set(
-            ui_has(kUIPopupmenu) as ::core::ffi::c_int != 0
-                || State.get() & MODE_CMDLINE != 0
-                    && ui_has(kUIWildmenu) as ::core::ffi::c_int != 0,
-        );
-    }
-    pum_rl.set(
-        State.get() & MODE_CMDLINE == 0 as ::core::ffi::c_int
-            && (*curwin.get()).w_onebuf_opt.wo_rl != 0,
-    );
-    let mut border_width: ::core::ffi::c_int = pum_border_width();
-    loop {
-        pum_is_visible.set(true_0 != 0);
-        pum_is_drawn.set(true_0 != 0);
-        validate_cursor_col(curwin.get());
-        let mut above_row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut below_row: ::core::ffi::c_int =
-            if cmdline_row.get() > (*curwin.get()).w_winrow + (*curwin.get()).w_view_height {
-                cmdline_row.get()
-            } else {
-                (*curwin.get()).w_winrow + (*curwin.get()).w_view_height
-            };
-        if State.get() & MODE_CMDLINE != 0 {
-            below_row = cmdline_row.get();
+unsafe fn pum_border_width() -> c_int {
+    // SAFETY: `p_pumborder` and the option's value table are editor-owned
+    // NUL-terminated strings.
+    unsafe {
+        let border = p_pumborder.get();
+        if *border == 0 || strequal(border, opt_winborder_values.get()[7]) {
+            return 0;
         }
-        let mut target_win: *mut win_T = if State.get() & MODE_CMDLINE != 0 {
-            cmdline_win.get()
+        if strequal(border, opt_winborder_values.get()[3]) {
+            1
         } else {
-            curwin.get()
+            2
+        }
+    }
+}
+
+/// Where the menu is anchored: the position the placement is computed from.
+struct PumAnchor {
+    /// The window the menu belongs to. Null only for a cmdline menu with no
+    /// cmdline window, which is why the placement code guards on it.
+    target_win: *mut win_T,
+    /// Grid row of the line the menu hangs off.
+    win_row: c_int,
+    /// Grid column the menu is aligned with.
+    cursor_col: c_int,
+    /// Rows the menu may not draw above/below.
+    above_row: c_int,
+    below_row: c_int,
+}
+
+/// Work out the anchor, and set `pum_anchor_grid` and the two offsets.
+///
+/// `cmd_startcol` is the column of the completed match, and only means
+/// anything for a cmdline menu.
+///
+/// # Safety
+/// `curwin` must be live and the cursor column validated.
+unsafe fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
+    // SAFETY: `curwin`, `cmdline_win` and the window tree are the editor's.
+    unsafe {
+        let win = curwin.get();
+        let cmdline = State.get() & MODE_CMDLINE != 0;
+        let target_win = if cmdline { cmdline_win.get() } else { win };
+        let mut above_row = 0;
+        let mut below_row = if cmdline {
+            cmdline_row.get()
+        } else {
+            cmdline_row
+                .get()
+                .max((*win).w_winrow + (*win).w_view_height)
         };
-        pum_win_row_offset.set(0 as ::core::ffi::c_int);
-        pum_win_col_offset.set(0 as ::core::ffi::c_int);
-        if State.get() & MODE_CMDLINE != 0 {
-            pum_win_row = if !(*cmdline_win.ptr()).is_null() {
-                (*cmdline_win.get()).w_wrow
-            } else if ui_has(kUICmdline) as ::core::ffi::c_int != 0 {
-                0 as ::core::ffi::c_int
+
+        pum_win_row_offset.set(0);
+        pum_win_col_offset.set(0);
+
+        let (mut win_row, mut cursor_col);
+        if cmdline {
+            // wildoptions=pum
+            let cw = cmdline_win.get();
+            win_row = if !cw.is_null() {
+                (*cw).w_wrow
+            } else if ui_has(kUICmdline) {
+                0
             } else {
                 cmdline_row.get()
             };
-            cursor_col = (if !(*cmdline_win.ptr()).is_null() {
-                (*cmdline_win.get()).w_config._cmdline_offset
+            cursor_col = if cw.is_null() {
+                0
             } else {
-                0 as ::core::ffi::c_int
-            }) + cmd_startcol;
-            cursor_col %= if !(*cmdline_win.ptr()).is_null() {
-                (*cmdline_win.get()).w_view_width
-            } else {
+                (*cw).w_config._cmdline_offset
+            } + cmd_startcol;
+            cursor_col %= if cw.is_null() {
                 Columns.get()
+            } else {
+                (*cw).w_view_width
             };
-            pum_anchor_grid.set(if ui_has(kUICmdline) as ::core::ffi::c_int != 0 {
-                -1 as ::core::ffi::c_int
+            pum_anchor_grid.set(if ui_has(kUICmdline) {
+                -1
             } else {
                 DEFAULT_GRID_HANDLE
             });
         } else {
-            pum_win_row = (*curwin.get()).w_wrow;
-            if pum_rl.get() {
-                cursor_col =
-                    (*curwin.get()).w_view_width - (*curwin.get()).w_wcol - 1 as ::core::ffi::c_int;
+            // The start of the completed word.
+            win_row = (*win).w_wrow;
+            cursor_col = if pum_rl.get() {
+                (*win).w_view_width - (*win).w_wcol - 1
             } else {
-                cursor_col = (*curwin.get()).w_wcol;
-            }
+                (*win).w_wcol
+            };
         }
+
         if !target_win.is_null() {
-            pum_anchor_grid.set((*(*target_win).w_grid.target).handle as ::core::ffi::c_int);
-            pum_win_row += (*target_win).w_grid.row_offset;
+            pum_anchor_grid.set((*(*target_win).w_grid.target).handle as c_int);
+            win_row += (*target_win).w_grid.row_offset;
             cursor_col += (*target_win).w_grid.col_offset;
             if (*target_win).w_grid.target != default_grid.ptr() {
-                pum_win_row += (*target_win).w_winrow;
+                win_row += (*target_win).w_winrow;
                 cursor_col += (*target_win).w_wincol;
-                if !ui_has(kUIMultigrid) {
-                    pum_anchor_grid.set(DEFAULT_GRID_HANDLE);
-                } else {
+                if ui_has(kUIMultigrid) {
                     pum_win_row_offset.set((*target_win).w_winrow);
                     pum_win_col_offset.set((*target_win).w_wincol);
+                } else {
+                    // ext_popupmenu always anchors to the default grid when
+                    // multigrid is off.
+                    pum_anchor_grid.set(DEFAULT_GRID_HANDLE);
                 }
             }
         }
-        if pum_external.get() {
-            if array_changed {
-                let mut arena: Arena = ARENA_EMPTY;
-                let mut arr: Array = arena_array(&raw mut arena, size as size_t);
-                let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while i < size {
-                    let mut item: Array = arena_array(&raw mut arena, 4 as size_t);
-                    let c2rust_fresh0 = item.size;
-                    item.size = item.size.wrapping_add(1);
-                    *item.items.offset(c2rust_fresh0 as isize) = object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_12 {
-                            string: cstr_as_string((*array.offset(i as isize)).pum_text),
-                        },
-                    };
-                    let c2rust_fresh1 = item.size;
-                    item.size = item.size.wrapping_add(1);
-                    *item.items.offset(c2rust_fresh1 as isize) = object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_12 {
-                            string: cstr_as_string((*array.offset(i as isize)).pum_kind),
-                        },
-                    };
-                    let c2rust_fresh2 = item.size;
-                    item.size = item.size.wrapping_add(1);
-                    *item.items.offset(c2rust_fresh2 as isize) = object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_12 {
-                            string: cstr_as_string((*array.offset(i as isize)).pum_extra),
-                        },
-                    };
-                    let c2rust_fresh3 = item.size;
-                    item.size = item.size.wrapping_add(1);
-                    *item.items.offset(c2rust_fresh3 as isize) = object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_12 {
-                            string: cstr_as_string((*array.offset(i as isize)).pum_info),
-                        },
-                    };
-                    let c2rust_fresh4 = arr.size;
-                    arr.size = arr.size.wrapping_add(1);
-                    *arr.items.offset(c2rust_fresh4 as isize) = object {
-                        type_0: kObjectTypeArray,
-                        data: C2Rust_Unnamed_12 { array: item },
-                    };
-                    i += 1;
-                }
-                ui_call_popupmenu_show(
-                    arr,
-                    selected as Integer,
-                    (pum_win_row - pum_win_row_offset.get()) as Integer,
-                    (cursor_col - pum_win_col_offset.get()) as Integer,
-                    pum_anchor_grid.get() as Integer,
-                );
-                arena_mem_free(arena_finish(&raw mut arena));
-            } else {
-                ui_call_popupmenu_select(selected as Integer);
-                return;
-            }
-        }
-        let mut pvwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
+
+        // A preview window takes its space away from the menu.
+        let mut pvwin = ::core::ptr::null_mut::<win_T>();
+        let mut wp = firstwin.get();
         while !wp.is_null() {
             if (*wp).w_onebuf_opt.wo_pvw != 0 {
                 pvwin = wp;
                 break;
-            } else {
-                wp = (*wp).w_next;
             }
+            wp = (*wp).w_next;
         }
         if !pvwin.is_null() {
-            if (*pvwin).w_winrow < (*curwin.get()).w_winrow {
+            if (*pvwin).w_winrow < (*win).w_winrow {
                 above_row = (*pvwin).w_winrow + (*pvwin).w_height;
-            } else if (*pvwin).w_winrow > (*curwin.get()).w_winrow + (*curwin.get()).w_height {
+            } else if (*pvwin).w_winrow > (*win).w_winrow + (*win).w_height {
                 below_row = (*pvwin).w_winrow;
             }
         }
-        pum_compute_vertical_placement(
-            size,
+
+        PumAnchor {
             target_win,
-            pum_win_row,
+            win_row,
+            cursor_col,
             above_row,
             below_row,
-            border_width,
+        }
+    }
+}
+
+/// Hand the whole item list to a UI that draws the menu itself.
+///
+/// # Safety
+/// `array` must hold `size` items whose strings are NUL-terminated.
+unsafe fn pum_publish_external(
+    array: *mut pumitem_T,
+    size: c_int,
+    selected: c_int,
+    anchor: &PumAnchor,
+) {
+    // SAFETY: the arena owns the arrays until `arena_mem_free`, and
+    // `cstr_as_string` borrows the item strings for the duration of the call.
+    unsafe {
+        let mut arena = ARENA_EMPTY;
+        let mut arr = arena_array(&raw mut arena, size as size_t);
+        for i in 0..size as isize {
+            let src = &*array.offset(i);
+            let mut item = arena_array(&raw mut arena, 4);
+            for text in [src.pum_text, src.pum_kind, src.pum_extra, src.pum_info] {
+                *item.items.offset(item.size as isize) = Object {
+                    type_0: kObjectTypeString,
+                    data: C2Rust_Unnamed_12 {
+                        string: cstr_as_string(text),
+                    },
+                };
+                item.size += 1;
+            }
+            *arr.items.offset(arr.size as isize) = Object {
+                type_0: kObjectTypeArray,
+                data: C2Rust_Unnamed_12 { array: item },
+            };
+            arr.size += 1;
+        }
+        ui_call_popupmenu_show(
+            arr,
+            selected as Integer,
+            (anchor.win_row - pum_win_row_offset.get()) as Integer,
+            (anchor.cursor_col - pum_win_col_offset.get()) as Integer,
+            pum_anchor_grid.get() as Integer,
         );
-        if border_width == 0 as ::core::ffi::c_int
-            && (pum_height.get() < 1 as ::core::ffi::c_int
-                || pum_height.get() == 1 as ::core::ffi::c_int && size > 1 as ::core::ffi::c_int)
-        {
-            return;
+        arena_mem_free(arena_finish(&raw mut arena));
+    }
+}
+
+/// Show the popup menu with `array[size]`.
+///
+/// `array` must stay valid until [`pum_undisplay`]. `selected` is the
+/// initially selected item, or -1 for none; `array_changed` says whether the
+/// items differ from the last call, which is all an external UI needs to know
+/// to redraw. `cmd_startcol` is the column of the completed match and only
+/// applies in cmdline mode.
+///
+/// # Safety
+/// `array` must hold `size` items with NUL-terminated strings and outlive the
+/// menu. Autocommands run from here.
+pub unsafe fn pum_display(
+    array: *mut pumitem_T,
+    size: c_int,
+    selected: c_int,
+    array_changed: bool,
+    cmd_startcol: c_int,
+) {
+    // SAFETY: `array` is the caller's and outlives the menu.
+    unsafe {
+        if !pum_is_visible.get() {
+            // The draw mode may only change while the menu is down, which
+            // keeps everything below from having to handle both.
+            pum_external.set(
+                ui_has(kUIPopupmenu) || (State.get() & MODE_CMDLINE != 0 && ui_has(kUIWildmenu)),
+            );
         }
-        pum_array.set(array);
-        pum_size.set(size);
-        if pum_external.get() {
-            return;
+        pum_rl.set(State.get() & MODE_CMDLINE == 0 && (*curwin.get()).w_onebuf_opt.wo_rl != 0);
+        let border_width = pum_border_width();
+
+        // Placing the menu can resize a window, which invalidates the
+        // placement. Redo it at most twice: with little room the size keeps
+        // changing.
+        for redo_count in 0..=2 {
+            // Mark the menu visible up front, so that `'cursorcolumn'` does
+            // not set `must_redraw` under us.
+            pum_is_visible.set(true);
+            pum_is_drawn.set(true);
+            validate_cursor_col(curwin.get());
+
+            let anchor = pum_compute_anchor(cmd_startcol);
+
+            if pum_external.get() {
+                if !array_changed {
+                    ui_call_popupmenu_select(selected as Integer);
+                    return;
+                }
+                pum_publish_external(array, size, selected, &anchor);
+            }
+
+            pum_compute_vertical_placement(
+                size,
+                anchor.target_win,
+                anchor.win_row,
+                anchor.above_row,
+                anchor.below_row,
+                border_width,
+            );
+
+            // Do not display when there is only room for one line.
+            if border_width == 0 && (pum_height.get() < 1 || (pum_height.get() == 1 && size > 1)) {
+                return;
+            }
+
+            pum_array.set(array);
+            // Set before returning, so `pum_set_event_info` sees the size.
+            pum_size.set(size);
+            if pum_external.get() {
+                return;
+            }
+
+            pum_compute_size();
+            // More items than room means a scrollbar.
+            pum_scrollbar.set(c_int::from(pum_height.get() < size));
+            pum_compute_horizontal_placement(anchor.target_win, anchor.cursor_col, border_width);
+
+            if !pum_set_selected(selected, redo_count) {
+                break;
+            }
         }
-        pum_compute_size();
-        pum_scrollbar.set(if pum_height.get() < size {
-            1 as ::core::ffi::c_int
+
+        (*pum_grid.ptr()).zindex = if State.get() & MODE_CMDLINE != 0 {
+            kZIndexCmdlinePopupMenu as c_int
         } else {
-            0 as ::core::ffi::c_int
-        });
-        pum_compute_horizontal_placement(target_win, cursor_col, border_width);
-        if !(pum_set_selected(selected, redo_count) as ::core::ffi::c_int != 0 && {
-            redo_count += 1;
-            redo_count <= 2 as ::core::ffi::c_int
-        }) {
-            break;
-        }
+            kZIndexPopupMenu as c_int
+        };
+        pum_redraw();
     }
-    (*pum_grid.ptr()).zindex = if State.get() & MODE_CMDLINE != 0 {
-        kZIndexCmdlinePopupMenu as ::core::ffi::c_int
-    } else {
-        kZIndexPopupMenu as ::core::ffi::c_int
-    };
-    pum_redraw();
 }
-pub unsafe extern "C" fn pum_undisplay(mut immediate: bool) {
-    pum_is_visible.set(false_0 != 0);
-    pum_array.set(::core::ptr::null_mut::<pumitem_T>());
-    must_redraw_pum.set(false_0 != 0);
+
+/// Take the menu down.
+///
+/// `immediate` tears the grid down now rather than at the next
+/// [`pum_check_clear`], which is what a caller that is about to draw
+/// something else in its place wants.
+///
+/// # Safety
+/// Autocommands run when `immediate` closes an info window.
+pub unsafe fn pum_undisplay(immediate: bool) {
+    pum_is_visible.set(false);
+    pum_array.set(::core::ptr::null_mut());
+    must_redraw_pum.set(false);
+
     if immediate {
-        pum_check_clear();
+        // SAFETY: the caller accepts the window close.
+        unsafe { pum_check_clear() };
     }
 }
-pub unsafe extern "C" fn pum_check_clear() {
-    if !pum_is_visible.get() && pum_is_drawn.get() as ::core::ffi::c_int != 0 {
+
+/// Free the menu's grid once it is no longer wanted.
+///
+/// Split from [`pum_undisplay`] because the menu is taken down in the middle
+/// of a redraw, where the grid may not be freed yet.
+///
+/// # Safety
+/// Closing the info window runs autocommands.
+pub unsafe fn pum_check_clear() {
+    // SAFETY: `pum_grid` is the editor's own grid.
+    unsafe {
+        if pum_is_visible.get() || !pum_is_drawn.get() {
+            return;
+        }
         if pum_external.get() {
             ui_call_popupmenu_hide();
         } else {
@@ -445,105 +523,101 @@ pub unsafe extern "C" fn pum_check_clear() {
                 ui_call_win_close((*pum_grid.ptr()).handle as Integer);
                 ui_call_grid_destroy((*pum_grid.ptr()).handle as Integer);
             }
+            // TODO(bfredl): consider keeping float grids allocated.
             grid_free(pum_grid.ptr());
         }
-        pum_is_drawn.set(false_0 != 0);
-        pum_external.set(false_0 != 0);
-        let mut wp: *mut win_T = win_float_find_preview();
+        pum_is_drawn.set(false);
+        pum_external.set(false);
+
+        let wp = win_float_find_preview();
         if !wp.is_null() {
-            win_close(wp, false_0 != 0, false_0 != 0);
+            win_close(wp, false, false);
         }
     }
 }
-pub unsafe extern "C" fn pum_clear() {
-    pum_first.set(0 as ::core::ffi::c_int);
+
+/// Scroll the menu back to the top. Nothing else is reset.
+pub fn pum_clear() {
+    pum_first.set(0);
 }
-pub unsafe extern "C" fn pum_visible() -> bool {
-    return pum_is_visible.get();
+
+/// Whether the menu is wanted on screen.
+pub fn pum_visible() -> bool {
+    pum_is_visible.get()
 }
-pub unsafe extern "C" fn pum_drawn() -> bool {
-    return pum_visible() as ::core::ffi::c_int != 0 && !pum_external.get();
+
+/// Whether the menu is on screen *and* drawn here rather than by the UI.
+pub fn pum_drawn() -> bool {
+    pum_visible() && !pum_external.get()
 }
-pub unsafe extern "C" fn pum_invalidate() {
-    pum_invalid.set(true_0 != 0);
+
+/// The screen was cleared: the whole grid has to be sent again.
+pub fn pum_invalidate() {
+    pum_invalid.set(true);
 }
-pub unsafe extern "C" fn pum_ext_select_item(
-    mut item: ::core::ffi::c_int,
-    mut insert: bool,
-    mut finish: bool,
-) {
-    if !pum_visible() || item < -1 as ::core::ffi::c_int || item >= pum_size.get() {
+
+/// Ask for an item to be selected, from a UI that draws the menu itself.
+///
+/// The request is picked up by `insexpand` on the next key.
+pub fn pum_ext_select_item(item: c_int, insert: bool, finish: bool) {
+    if !pum_visible() || item < -1 || item >= pum_size.get() {
         return;
     }
-    (*pum_want.ptr()).active = true_0 != 0;
-    (*pum_want.ptr()).item = item;
-    (*pum_want.ptr()).insert = insert;
-    (*pum_want.ptr()).finish = finish;
+    pum_want.set(PumWant {
+        active: true,
+        item,
+        insert,
+        finish,
+    });
 }
-pub unsafe extern "C" fn pum_get_height() -> ::core::ffi::c_int {
+
+/// Rows the menu shows. Only meaningful while [`pum_visible`].
+pub fn pum_get_height() -> c_int {
     if pum_external.get() {
-        let mut ui_pum_height: ::core::ffi::c_int = ui_pum_get_height();
+        let ui_pum_height = ui_pum_get_height();
         if ui_pum_height != 0 {
             return ui_pum_height;
         }
     }
-    return pum_height.get();
+    pum_height.get()
 }
-pub unsafe extern "C" fn pum_set_event_info(mut dict: *mut dict_T) {
-    if !pum_visible() {
-        return;
+
+/// Add the menu's geometry to `dict`, for `v:event` of `CompleteChanged`.
+///
+/// An external UI's own geometry wins when it has one.
+///
+/// # Safety
+/// `dict` must be a live dictionary.
+pub unsafe fn pum_set_event_info(dict: *mut dict_T) {
+    // SAFETY: `dict` is live and the keys are static strings.
+    unsafe {
+        if !pum_visible() {
+            return;
+        }
+        let (mut w, mut h, mut r, mut c) = (0.0, 0.0, 0.0, 0.0);
+        if !ui_pum_get_pos(&raw mut w, &raw mut h, &raw mut r, &raw mut c) {
+            w = f64::from(pum_width.get());
+            h = f64::from(pum_height.get());
+            r = f64::from(pum_row.get());
+            c = f64::from(pum_col.get());
+        }
+        for (key, value) in [(c"height", h), (c"width", w), (c"row", r), (c"col", c)] {
+            tv_dict_add_float(dict, key.as_ptr(), key.count_bytes(), value as float_T);
+        }
+        tv_dict_add_nr(dict, c"size".as_ptr(), 4, pum_size.get() as varnumber_T);
+        tv_dict_add_bool(
+            dict,
+            c"scrollbar".as_ptr(),
+            9,
+            if pum_scrollbar.get() != 0 {
+                kBoolVarTrue
+            } else {
+                kBoolVarFalse
+            },
+        );
     }
-    let mut w: ::core::ffi::c_double = 0.;
-    let mut h: ::core::ffi::c_double = 0.;
-    let mut r: ::core::ffi::c_double = 0.;
-    let mut c: ::core::ffi::c_double = 0.;
-    if !ui_pum_get_pos(&raw mut w, &raw mut h, &raw mut r, &raw mut c) {
-        w = pum_width.get() as ::core::ffi::c_double;
-        h = pum_height.get() as ::core::ffi::c_double;
-        r = pum_row.get() as ::core::ffi::c_double;
-        c = pum_col.get() as ::core::ffi::c_double;
-    }
-    tv_dict_add_float(
-        dict,
-        b"height\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-        h as float_T,
-    );
-    tv_dict_add_float(
-        dict,
-        b"width\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 6]>().wrapping_sub(1 as size_t),
-        w as float_T,
-    );
-    tv_dict_add_float(
-        dict,
-        b"row\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
-        r as float_T,
-    );
-    tv_dict_add_float(
-        dict,
-        b"col\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 4]>().wrapping_sub(1 as size_t),
-        c as float_T,
-    );
-    tv_dict_add_nr(
-        dict,
-        b"size\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        pum_size.get() as varnumber_T,
-    );
-    tv_dict_add_bool(
-        dict,
-        b"scrollbar\0".as_ptr() as *const ::core::ffi::c_char,
-        ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-        (if pum_scrollbar.get() != 0 {
-            kBoolVarTrue as ::core::ffi::c_int
-        } else {
-            kBoolVarFalse as ::core::ffi::c_int
-        }) as BoolVarValue,
-    );
 }
+
 /// Tell a multigrid UI where the menu's grid sits.
 ///
 /// The anchor is the corner the menu grows away from the anchor row: a menu
@@ -574,7 +648,13 @@ unsafe fn pum_send_float_pos() {
     }
 }
 
-pub unsafe extern "C" fn pum_ui_flush() {
+/// Re-send the menu's float position if the compositor moved it since the
+/// last redraw.
+///
+/// # Safety
+/// Called from the UI flush, with the grid still allocated.
+pub unsafe fn pum_ui_flush() {
+    // SAFETY: `pum_grid` is the editor's own grid.
     unsafe {
         if ui_has(kUIMultigrid)
             && pum_is_drawn.get()
@@ -587,7 +667,3 @@ pub unsafe extern "C" fn pum_ui_flush() {
         }
     }
 }
-pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;

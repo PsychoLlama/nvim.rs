@@ -1,7 +1,7 @@
 {
   "internal_exports": 46,
   "files_without_forbid_unsafe": 595,
-  "files_without_deny_unsafe_op": 205,
+  "files_without_deny_unsafe_op": 204,
   "files": {
     "crates/nvim/src/cjson/fpconv.rs": {"unsafe": 8},
     "crates/nvim/src/cjson/lua_cjson.rs": {"lines": 2610, "unsafe": 56},
@@ -393,7 +393,7 @@
     "crates/nvim/src/nvim/plines.rs": {"unsafe": 20},
     "crates/nvim/src/nvim/plines/lines.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/plines/vcol.rs": {"unsafe": 4},
-    "crates/nvim/src/nvim/popupmenu.rs": {"unsafe": 18},
+    "crates/nvim/src/nvim/popupmenu.rs": {"unsafe": 10},
     "crates/nvim/src/nvim/popupmenu/draw.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/popupmenu/layout.rs": {"unsafe": 4},
     "crates/nvim/src/nvim/popupmenu/menu.rs": {"unsafe": 6},
