@@ -9,7 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 #[allow(unused_imports)]
 use super::*;
@@ -359,189 +359,215 @@ pub(crate) unsafe fn syn_match_linecont(lnum: linenr_T) -> bool {
     }
 }
 
-pub(crate) unsafe extern "C" fn syn_cmd_sync(
-    mut eap: *mut exarg_T,
-    mut _syncing: ::core::ffi::c_int,
-) {
+/// Which counted `:syntax sync` setting a keyword names, and where its digits
+/// begin inside the upper-cased copy of it.
+///
+/// Upstream parses the number out of that copy rather than out of the command
+/// line, at a fixed offset per keyword — hence the offsets here, which are the
+/// keyword's length plus one for the `=`.
+struct SyncCount {
+    digits_at: usize,
+    field: SyncField,
+}
+
+/// The three counters `:syntax sync` keeps.
+#[derive(Copy, Clone)]
+enum SyncField {
+    MinLines,
+    MaxLines,
+    LineBreaks,
+}
+
+/// The counted settings, matched on their **prefix**: a longer keyword with
+/// the same start fails on the `=` test rather than on the name.
+const SYNC_COUNTS: [(&CStr, SyncCount); 4] = [
+    (
+        c"LINES",
+        SyncCount {
+            digits_at: 6,
+            field: SyncField::MinLines,
+        },
+    ),
+    (
+        c"MINLINES",
+        SyncCount {
+            digits_at: 9,
+            field: SyncField::MinLines,
+        },
+    ),
+    (
+        c"MAXLINES",
+        SyncCount {
+            digits_at: 9,
+            field: SyncField::MaxLines,
+        },
+    ),
+    (
+        c"LINEBREAKS",
+        SyncCount {
+            digits_at: 11,
+            field: SyncField::LineBreaks,
+        },
+    ),
+];
+
+/// `:syntax sync {settings}`, `:syntax sync match|region|clear ..`, and with no
+/// argument the sync listing.
+pub(crate) unsafe extern "C" fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
     unsafe {
-        let mut arg_start: *mut ::core::ffi::c_char = (*eap).arg;
-        let mut key: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut illegal: bool = false_0 != 0;
-        let mut finished: bool = false_0 != 0;
-        if ends_excmd(*arg_start as ::core::ffi::c_int) != 0 {
+        let mut arg_start = (*eap).arg;
+        if ends_excmd(*arg_start as c_int) != 0 {
             syn_cmd_list(eap, true_0);
             return;
         }
-        while ends_excmd(*arg_start as ::core::ffi::c_int) == 0 {
-            let mut arg_end: *mut ::core::ffi::c_char = skiptowhite(arg_start);
-            let mut next_arg: *mut ::core::ffi::c_char = skipwhite(arg_end);
+
+        let mut key = ::core::ptr::null_mut::<c_char>();
+        let mut illegal = false;
+        let mut finished = false;
+
+        while ends_excmd(*arg_start as c_int) == 0 {
+            let mut arg_end = skiptowhite(arg_start);
+            let mut next_arg = skipwhite(arg_end);
             xfree(key as *mut ::core::ffi::c_void);
             key = vim_strnsave_up(arg_start, arg_end.offset_from(arg_start) as size_t);
-            if strcmp(key, b"CCOMMENT\0".as_ptr() as *const ::core::ffi::c_char)
-                == 0 as ::core::ffi::c_int
-            {
+
+            if strcmp(key, c"CCOMMENT".as_ptr()) == 0 {
                 if (*eap).skip == 0 {
-                    (*(*curwin.get()).w_s).b_syn_sync_flags |= SF_CCOMMENT;
+                    (*cur_syn_block()).b_syn_sync_flags |= SF_CCOMMENT;
                 }
-                if ends_excmd(*next_arg as ::core::ffi::c_int) == 0 {
+                if ends_excmd(*next_arg as c_int) == 0 {
                     arg_end = skiptowhite(next_arg);
                     if (*eap).skip == 0 {
-                        (*(*curwin.get()).w_s).b_syn_sync_id =
+                        (*cur_syn_block()).b_syn_sync_id =
                             syn_check_group(next_arg, arg_end.offset_from(next_arg) as size_t)
                                 as int16_t;
                     }
                     next_arg = skipwhite(arg_end);
                 } else if (*eap).skip == 0 {
-                    (*(*curwin.get()).w_s).b_syn_sync_id =
-                        syn_name2id(b"Comment\0".as_ptr() as *const ::core::ffi::c_char) as int16_t;
+                    (*cur_syn_block()).b_syn_sync_id = syn_name2id(c"Comment".as_ptr()) as int16_t;
                 }
-            } else if strncmp(
-                key,
-                b"LINES\0".as_ptr() as *const ::core::ffi::c_char,
-                5 as size_t,
-            ) == 0 as ::core::ffi::c_int
-                || strncmp(
-                    key,
-                    b"MINLINES\0".as_ptr() as *const ::core::ffi::c_char,
-                    8 as size_t,
-                ) == 0 as ::core::ffi::c_int
-                || strncmp(
-                    key,
-                    b"MAXLINES\0".as_ptr() as *const ::core::ffi::c_char,
-                    8 as size_t,
-                ) == 0 as ::core::ffi::c_int
-                || strncmp(
-                    key,
-                    b"LINEBREAKS\0".as_ptr() as *const ::core::ffi::c_char,
-                    10 as size_t,
-                ) == 0 as ::core::ffi::c_int
-            {
-                if *key.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'S' as ::core::ffi::c_int
-                {
-                    arg_end = key.offset(6 as ::core::ffi::c_int as isize);
-                } else if *key.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == 'L' as ::core::ffi::c_int
-                {
-                    arg_end = key.offset(11 as ::core::ffi::c_int as isize);
-                } else {
-                    arg_end = key.offset(9 as ::core::ffi::c_int as isize);
-                }
-                if *arg_end.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != '=' as ::core::ffi::c_int
-                    || !ascii_isdigit(*arg_end as ::core::ffi::c_int)
-                {
-                    illegal = true_0 != 0;
+            } else if let Some(count) = sync_count_key(key) {
+                let mut digits = key.add(count.digits_at);
+                if *digits.offset(-1) as c_int != '=' as c_int || !ascii_isdigit(*digits as c_int) {
+                    illegal = true;
                     break;
-                } else {
-                    let mut n: linenr_T =
-                        getdigits_int32(&raw mut arg_end, false_0 != 0, 0 as int32_t);
-                    if (*eap).skip == 0 {
-                        if *key.offset(4 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                            == 'B' as ::core::ffi::c_int
-                        {
-                            (*(*curwin.get()).w_s).b_syn_sync_linebreaks = n;
-                        } else if *key.offset(1 as ::core::ffi::c_int as isize)
-                            as ::core::ffi::c_int
-                            == 'A' as ::core::ffi::c_int
-                        {
-                            (*(*curwin.get()).w_s).b_syn_sync_maxlines = n;
-                        } else {
-                            (*(*curwin.get()).w_s).b_syn_sync_minlines = n;
-                        }
-                    }
                 }
-            } else if strcmp(key, b"FROMSTART\0".as_ptr() as *const ::core::ffi::c_char)
-                == 0 as ::core::ffi::c_int
-            {
+                let n = getdigits_int32(&raw mut digits, false, 0);
                 if (*eap).skip == 0 {
-                    (*(*curwin.get()).w_s).b_syn_sync_minlines =
-                        MAXLNUM as ::core::ffi::c_int as linenr_T;
-                    (*(*curwin.get()).w_s).b_syn_sync_maxlines =
-                        0 as ::core::ffi::c_int as linenr_T;
-                }
-            } else if strcmp(key, b"LINECONT\0".as_ptr() as *const ::core::ffi::c_char)
-                == 0 as ::core::ffi::c_int
-            {
-                if *next_arg as ::core::ffi::c_int == NUL {
-                    illegal = true_0 != 0;
-                    break;
-                } else if !(*(*curwin.get()).w_s).b_syn_linecont_pat.is_null() {
-                    emsg(gettext(
-                        b"E403: syntax sync: line continuations pattern specified twice\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                    ));
-                    finished = true_0 != 0;
-                    break;
-                } else {
-                    arg_end = skip_regexp(
-                        next_arg.offset(1 as ::core::ffi::c_int as isize),
-                        *next_arg as ::core::ffi::c_int,
-                        true_0,
-                    );
-                    if *arg_end as ::core::ffi::c_int != *next_arg as ::core::ffi::c_int {
-                        illegal = true_0 != 0;
-                        break;
-                    } else {
-                        if (*eap).skip == 0 {
-                            (*(*curwin.get()).w_s).b_syn_linecont_pat = xstrnsave(
-                                next_arg.offset(1 as ::core::ffi::c_int as isize),
-                                (arg_end.offset_from(next_arg) as size_t).wrapping_sub(1 as size_t),
-                            );
-                            (*(*curwin.get()).w_s).b_syn_linecont_ic =
-                                (*(*curwin.get()).w_s).b_syn_ic;
-                            let mut cpo_save: *mut ::core::ffi::c_char = p_cpo.get();
-                            p_cpo.set(empty_string_option.ptr() as *mut ::core::ffi::c_char);
-                            (*(*curwin.get()).w_s).b_syn_linecont_prog =
-                                vim_regcomp((*(*curwin.get()).w_s).b_syn_linecont_pat, RE_MAGIC);
-                            p_cpo.set(cpo_save);
-                            syn_clear_time(&mut (*(*curwin.get()).w_s).b_syn_linecont_time);
-                            if (*(*curwin.get()).w_s).b_syn_linecont_prog.is_null() {
-                                let mut ptr_: *mut *mut ::core::ffi::c_void =
-                                    &raw mut (*(*curwin.get()).w_s).b_syn_linecont_pat
-                                        as *mut *mut ::core::ffi::c_void;
-                                xfree(*ptr_);
-                                *ptr_ = NULL;
-                                let _ = *ptr_;
-                                finished = true_0 != 0;
-                                break;
-                            }
-                        }
-                        next_arg = skipwhite(arg_end.offset(1 as ::core::ffi::c_int as isize));
+                    let block = cur_syn_block();
+                    match count.field {
+                        SyncField::MinLines => (*block).b_syn_sync_minlines = n,
+                        SyncField::MaxLines => (*block).b_syn_sync_maxlines = n,
+                        SyncField::LineBreaks => (*block).b_syn_sync_linebreaks = n,
                     }
+                }
+            } else if strcmp(key, c"FROMSTART".as_ptr()) == 0 {
+                if (*eap).skip == 0 {
+                    (*cur_syn_block()).b_syn_sync_minlines = MAXLNUM as linenr_T;
+                    (*cur_syn_block()).b_syn_sync_maxlines = 0;
+                }
+            } else if strcmp(key, c"LINECONT".as_ptr()) == 0 {
+                match sync_linecont(eap, next_arg) {
+                    Err(LineContError::Illegal) => {
+                        illegal = true;
+                        break;
+                    }
+                    Err(LineContError::Reported) => {
+                        finished = true;
+                        break;
+                    }
+                    Ok(after) => next_arg = after,
                 }
             } else {
+                // Everything else is a subcommand of its own, run in syncing
+                // mode; it consumes the rest of the line either way.
                 (*eap).arg = next_arg;
-                if strcmp(key, b"MATCH\0".as_ptr() as *const ::core::ffi::c_char)
-                    == 0 as ::core::ffi::c_int
-                {
+                if strcmp(key, c"MATCH".as_ptr()) == 0 {
                     syn_cmd_match(eap, true_0);
-                } else if strcmp(key, b"REGION\0".as_ptr() as *const ::core::ffi::c_char)
-                    == 0 as ::core::ffi::c_int
-                {
+                } else if strcmp(key, c"REGION".as_ptr()) == 0 {
                     syn_cmd_region(eap, true_0);
-                } else if strcmp(key, b"CLEAR\0".as_ptr() as *const ::core::ffi::c_char)
-                    == 0 as ::core::ffi::c_int
-                {
+                } else if strcmp(key, c"CLEAR".as_ptr()) == 0 {
                     syn_cmd_clear(eap, true_0);
                 } else {
-                    illegal = true_0 != 0;
+                    illegal = true;
                 }
-                finished = true_0 != 0;
+                finished = true;
                 break;
             }
             arg_start = next_arg;
         }
+
         xfree(key as *mut ::core::ffi::c_void);
         if illegal {
-            semsg(
-                gettext(b"E404: Illegal arguments: %s\0".as_ptr() as *const ::core::ffi::c_char),
-                arg_start,
-            );
+            semsg(gettext(c"E404: Illegal arguments: %s".as_ptr()), arg_start);
         } else if !finished {
             (*eap).nextcmd = check_nextcmd(arg_start);
             redraw_curbuf_later(UPD_SOME_VALID);
-            syn_stack_free_all((*curwin.get()).w_s);
+            syn_stack_free_all(cur_syn_block()); // Need to recompute all syntax.
         }
+    }
+}
+
+/// Which counted setting `key` names.
+unsafe fn sync_count_key(key: *const c_char) -> Option<&'static SyncCount> {
+    unsafe {
+        SYNC_COUNTS
+            .iter()
+            .find(|(name, _)| strncmp(key, name.as_ptr(), name.count_bytes()) == 0)
+            .map(|(_, count)| count)
+    }
+}
+
+/// Why a `linecont=` argument was rejected.
+enum LineContError {
+    /// Report E404 against the whole argument.
+    Illegal,
+    /// A message has already been given.
+    Reported,
+}
+
+/// `:syntax sync linecont /{pattern}/` — the pattern whose match on a line
+/// means the next one continues it.
+///
+/// Answers what follows the pattern.
+unsafe fn sync_linecont(
+    eap: *mut exarg_T,
+    next_arg: *mut c_char,
+) -> Result<*mut c_char, LineContError> {
+    unsafe {
+        if *next_arg as c_int == NUL {
+            return Err(LineContError::Illegal); // missing pattern
+        }
+        if !(*cur_syn_block()).b_syn_linecont_pat.is_null() {
+            emsg(gettext(
+                c"E403: syntax sync: line continuations pattern specified twice".as_ptr(),
+            ));
+            return Err(LineContError::Reported);
+        }
+        let arg_end = skip_regexp(next_arg.add(1), *next_arg as c_int, true_0);
+        if *arg_end as c_int != *next_arg as c_int {
+            return Err(LineContError::Illegal); // end delimiter not found
+        }
+
+        if (*eap).skip == 0 {
+            let block = cur_syn_block();
+            // Store the pattern and its compiled program. 'cpoptions' is
+            // emptied first, to avoid the 'l' flag.
+            (*block).b_syn_linecont_pat =
+                xstrnsave(next_arg.add(1), arg_end.offset_from(next_arg) as size_t - 1);
+            (*block).b_syn_linecont_ic = (*block).b_syn_ic;
+            let cpo_save = p_cpo.get();
+            p_cpo.set(empty_string_option.ptr() as *mut c_char);
+            (*block).b_syn_linecont_prog = vim_regcomp((*block).b_syn_linecont_pat, RE_MAGIC);
+            p_cpo.set(cpo_save);
+            syn_clear_time(&mut (*block).b_syn_linecont_time);
+
+            if (*block).b_syn_linecont_prog.is_null() {
+                xfree((*block).b_syn_linecont_pat as *mut ::core::ffi::c_void);
+                (*block).b_syn_linecont_pat = ::core::ptr::null_mut();
+                return Err(LineContError::Reported);
+            }
+        }
+        Ok(skipwhite(arg_end.add(1)))
     }
 }

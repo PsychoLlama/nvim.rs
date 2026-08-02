@@ -7,196 +7,172 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use core::ffi::{CStr, c_char, c_int};
+
 #[allow(unused_imports)]
 use super::*;
 
-pub unsafe extern "C" fn syntax_present(mut win: *mut win_T) -> bool {
+/// Does this window's block define any syntax at all?
+pub unsafe fn syntax_present(win: *mut win_T) -> bool {
     unsafe {
-        return (*(*win).w_s).b_syn_patterns.ga_len != 0 as ::core::ffi::c_int
-            || (*(*win).w_s).b_syn_clusters.ga_len != 0 as ::core::ffi::c_int
-            || (*(*win).w_s).b_keywtab.ht_used > 0 as size_t
-            || (*(*win).w_s).b_keywtab_ic.ht_used > 0 as size_t;
+        (*(*win).w_s).b_syn_patterns.ga_len != 0
+            || (*(*win).w_s).b_syn_clusters.ga_len != 0
+            || (*(*win).w_s).b_keywtab.ht_used > 0
+            || (*(*win).w_s).b_keywtab_ic.ht_used > 0
     }
 }
 
-pub(crate) static expand_what: GlobalCell<C2Rust_Unnamed_24> = GlobalCell::new(EXP_SUBCMD);
-
-pub unsafe extern "C" fn reset_expand_highlight() {
-    include_none.set(0 as ::core::ffi::c_int);
-    include_default.set(include_none.get());
-    include_link.set(include_default.get());
+/// What the next `get_syntax_name` call should offer, which
+/// `set_context_in_syntax_cmd` decides from the part of the command already
+/// typed.
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum ExpandWhat {
+    /// `:syntax` subcommand names.
+    SubCmd,
+    /// `:syntax case` arguments.
+    Case,
+    /// `:syntax spell` arguments.
+    Spell,
+    /// `:syntax sync` arguments.
+    Sync,
+    /// `:syntax list @cluster` arguments.
+    Cluster,
 }
 
-pub unsafe extern "C" fn set_context_in_echohl_cmd(
-    mut xp: *mut expand_T,
-    mut arg: *const ::core::ffi::c_char,
-) {
+static EXPAND_WHAT: GlobalCell<ExpandWhat> = GlobalCell::new(ExpandWhat::SubCmd);
+
+/// Done expanding: forget what `:highlight` completion was asked to include.
+pub unsafe fn reset_expand_highlight() {
+    include_none.set(0);
+    include_default.set(0);
+    include_link.set(0);
+}
+
+/// Command-line completion for `:match` and `:echohl`: highlight group names,
+/// plus `None`.
+pub unsafe fn set_context_in_echohl_cmd(xp: *mut expand_T, arg: *const c_char) {
     unsafe {
-        (*xp).xp_context = EXPAND_HIGHLIGHT as ::core::ffi::c_int;
-        (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
-        include_none.set(1 as ::core::ffi::c_int);
+        (*xp).xp_context = EXPAND_HIGHLIGHT;
+        (*xp).xp_pattern = arg as *mut c_char;
+        include_none.set(1);
     }
 }
 
-pub unsafe extern "C" fn set_context_in_syntax_cmd(
-    mut xp: *mut expand_T,
-    mut arg: *const ::core::ffi::c_char,
-) {
+/// Command-line completion for `:syntax`.
+pub unsafe fn set_context_in_syntax_cmd(xp: *mut expand_T, arg: *const c_char) {
     unsafe {
-        (*xp).xp_context = EXPAND_SYNTAX as ::core::ffi::c_int;
-        expand_what.set(EXP_SUBCMD);
-        (*xp).xp_pattern = arg as *mut ::core::ffi::c_char;
-        include_link.set(0 as ::core::ffi::c_int);
-        include_default.set(0 as ::core::ffi::c_int);
-        if *arg as ::core::ffi::c_int == NUL {
+        // Default: expand subcommands.
+        (*xp).xp_context = EXPAND_SYNTAX;
+        EXPAND_WHAT.set(ExpandWhat::SubCmd);
+        (*xp).xp_pattern = arg as *mut c_char;
+        include_link.set(0);
+        include_default.set(0);
+        if *arg as c_int == NUL {
             return;
         }
-        let mut p: *const ::core::ffi::c_char = skiptowhite(arg);
-        if *p as ::core::ffi::c_int == NUL {
+
+        // (Part of) the subcommand has been typed.
+        let mut p = skiptowhite(arg);
+        if *p as c_int == NUL {
             return;
         }
+
+        // Past the first word.
         (*xp).xp_pattern = skipwhite(p);
-        if *skiptowhite((*xp).xp_pattern) as ::core::ffi::c_int != NUL {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
-        } else if strncasecmp(
-            arg as *mut ::core::ffi::c_char,
-            b"case\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            p.offset_from(arg) as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            expand_what.set(EXP_CASE);
-        } else if strncasecmp(
-            arg as *mut ::core::ffi::c_char,
-            b"spell\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            p.offset_from(arg) as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            expand_what.set(EXP_SPELL);
-        } else if strncasecmp(
-            arg as *mut ::core::ffi::c_char,
-            b"sync\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            p.offset_from(arg) as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
-            expand_what.set(EXP_SYNC);
-        } else if strncasecmp(
-            arg as *mut ::core::ffi::c_char,
-            b"list\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            p.offset_from(arg) as size_t,
-        ) == 0 as ::core::ffi::c_int
-        {
+        let word_len = p.offset_from(arg) as size_t;
+        let first_word_is = |name: &CStr| strncasecmp(arg, name.as_ptr(), word_len) == 0;
+
+        if *skiptowhite((*xp).xp_pattern) as c_int != NUL {
+            (*xp).xp_context = EXPAND_NOTHING;
+        } else if first_word_is(c"case") {
+            EXPAND_WHAT.set(ExpandWhat::Case);
+        } else if first_word_is(c"spell") {
+            EXPAND_WHAT.set(ExpandWhat::Spell);
+        } else if first_word_is(c"sync") {
+            EXPAND_WHAT.set(ExpandWhat::Sync);
+        } else if first_word_is(c"list") {
             p = skipwhite(p);
-            if *p as ::core::ffi::c_int == '@' as ::core::ffi::c_int {
-                expand_what.set(EXP_CLUSTER);
+            if *p as c_int == '@' as c_int {
+                EXPAND_WHAT.set(ExpandWhat::Cluster);
             } else {
-                (*xp).xp_context = EXPAND_HIGHLIGHT as ::core::ffi::c_int;
+                (*xp).xp_context = EXPAND_HIGHLIGHT;
             }
-        } else if strncasecmp(
-            arg as *mut ::core::ffi::c_char,
-            b"keyword\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            p.offset_from(arg) as size_t,
-        ) == 0 as ::core::ffi::c_int
-            || strncasecmp(
-                arg as *mut ::core::ffi::c_char,
-                b"region\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                p.offset_from(arg) as size_t,
-            ) == 0 as ::core::ffi::c_int
-            || strncasecmp(
-                arg as *mut ::core::ffi::c_char,
-                b"match\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                p.offset_from(arg) as size_t,
-            ) == 0 as ::core::ffi::c_int
-        {
-            (*xp).xp_context = EXPAND_HIGHLIGHT as ::core::ffi::c_int;
+        } else if first_word_is(c"keyword") || first_word_is(c"region") || first_word_is(c"match") {
+            (*xp).xp_context = EXPAND_HIGHLIGHT;
         } else {
-            (*xp).xp_context = EXPAND_NOTHING as ::core::ffi::c_int;
-        };
-    }
-}
-
-pub unsafe extern "C" fn get_syntax_name(
-    mut xp: *mut expand_T,
-    mut idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    unsafe {
-        match expand_what.get() as ::core::ffi::c_uint {
-            0 => {
-                if idx < 0 as ::core::ffi::c_int || idx >= SUBCOMMANDS.len() as ::core::ffi::c_int {
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-                return SUBCOMMANDS[idx as usize].name.as_ptr().cast_mut();
-            }
-            1 => {
-                static case_args: GlobalCell<[*mut ::core::ffi::c_char; 3]> = GlobalCell::new([
-                    b"match\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"ignore\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ]);
-                return (*case_args.ptr())[idx as usize];
-            }
-            2 => {
-                static spell_args: GlobalCell<[*mut ::core::ffi::c_char; 4]> = GlobalCell::new([
-                    b"toplevel\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    b"notoplevel\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    b"default\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ]);
-                return (*spell_args.ptr())[idx as usize];
-            }
-            3 => {
-                static sync_args: GlobalCell<[*mut ::core::ffi::c_char; 11]> = GlobalCell::new([
-                    b"ccomment\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    b"clear\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"fromstart\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    b"linebreaks=\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    b"linecont\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    b"lines=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"match\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    b"maxlines=\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    b"minlines=\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    b"region\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ]);
-                return (*sync_args.ptr())[idx as usize];
-            }
-            4 => {
-                if idx < (*(*curwin.get()).w_s).b_syn_clusters.ga_len {
-                    vim_snprintf(
-                        &raw mut (*xp).xp_buf as *mut ::core::ffi::c_char,
-                        EXPAND_BUF_LEN as ::core::ffi::c_int as size_t,
-                        b"@%s\0".as_ptr() as *const ::core::ffi::c_char,
-                        (*((*(*curwin.get()).w_s).b_syn_clusters.ga_data as *mut syn_cluster_T)
-                            .offset(idx as isize))
-                        .scl_name,
-                    );
-                    return &raw mut (*xp).xp_buf as *mut ::core::ffi::c_char;
-                } else {
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-            }
-            _ => {}
+            (*xp).xp_context = EXPAND_NOTHING;
         }
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
 }
 
-pub unsafe extern "C" fn syn_get_id(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-    mut col: colnr_T,
-    mut trans: ::core::ffi::c_int,
-    mut spellp: *mut bool,
-    mut keep_state: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// The arguments `:syntax case` takes.
+const CASE_ARGS: [&CStr; 2] = [c"match", c"ignore"];
+/// The arguments `:syntax spell` takes.
+const SPELL_ARGS: [&CStr; 3] = [c"toplevel", c"notoplevel", c"default"];
+/// The arguments `:syntax sync` takes.
+const SYNC_ARGS: [&CStr; 10] = [
+    c"ccomment",
+    c"clear",
+    c"fromstart",
+    c"linebreaks=",
+    c"linecont",
+    c"lines=",
+    c"match",
+    c"maxlines=",
+    c"minlines=",
+    c"region",
+];
+
+/// `ExpandGeneric`'s callback: the `idx`th completion candidate, or NULL past
+/// the end.
+pub unsafe extern "C" fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     unsafe {
+        let nth = |names: &[&CStr]| {
+            usize::try_from(idx)
+                .ok()
+                .and_then(|i| names.get(i))
+                .map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut())
+        };
+        match EXPAND_WHAT.get() {
+            ExpandWhat::SubCmd => usize::try_from(idx)
+                .ok()
+                .and_then(|i| SUBCOMMANDS.get(i))
+                .map_or(::core::ptr::null_mut(), |s| s.name.as_ptr().cast_mut()),
+            ExpandWhat::Case => nth(&CASE_ARGS),
+            ExpandWhat::Spell => nth(&SPELL_ARGS),
+            ExpandWhat::Sync => nth(&SYNC_ARGS),
+            ExpandWhat::Cluster => {
+                if idx >= cur_cluster_count() {
+                    return ::core::ptr::null_mut();
+                }
+                vim_snprintf(
+                    &raw mut (*xp).xp_buf as *mut c_char,
+                    EXPAND_BUF_LEN as size_t,
+                    c"@%s".as_ptr(),
+                    (*cur_cluster(idx)).scl_name,
+                );
+                &raw mut (*xp).xp_buf as *mut c_char
+            }
+        }
+    }
+}
+
+/// The syntax id at a buffer position, for expression evaluation.
+///
+/// `trans` removes transparency; `spellp` answers whether spell checking
+/// applies there; `keep_state` keeps the state of the character at `col` so
+/// that [`syn_get_stack_item`] can be asked about it afterwards.
+pub unsafe fn syn_get_id(
+    wp: *mut win_T,
+    lnum: linenr_T,
+    col: colnr_T,
+    trans: c_int,
+    spellp: *mut bool,
+    keep_state: c_int,
+) -> c_int {
+    unsafe {
+        // Parsing has to restart unless this position is at or after the
+        // current one, in the same line of the same window and buffer.
         if wp != syn_win.get()
             || (*wp).w_buffer != syn_buf.get()
             || lnum != current_lnum.get()
@@ -204,96 +180,101 @@ pub unsafe extern "C" fn syn_get_id(
         {
             syntax_start(wp, lnum);
         } else if col > current_col.get() {
-            next_match_idx.set(-1 as ::core::ffi::c_int);
+            // `next_match` may be wrong when moving around, e.g. with the
+            // "skip" expression of `searchpair()`.
+            next_match_idx.set(-1);
         }
+
         get_syntax_attr(col, spellp, keep_state != 0);
-        return if trans != 0 {
+        if trans != 0 {
             current_trans_id.get()
         } else {
             current_id.get()
-        };
+        }
     }
 }
 
-pub unsafe extern "C" fn get_syntax_info(
-    mut seqnrp: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+/// Extra information about the current syntax item: answers its flags and
+/// stores its sequence number. Must be called right after [`get_syntax_attr`].
+pub unsafe fn get_syntax_info(seqnrp: *mut c_int) -> c_int {
     unsafe {
         *seqnrp = current_seqnr.get();
-        return current_flags.get();
+        current_flags.get()
     }
 }
 
-pub unsafe extern "C" fn syn_get_sub_char() -> ::core::ffi::c_int {
-    return current_sub_char.get();
+/// The conceal substitution character of the current item.
+pub unsafe fn syn_get_sub_char() -> c_int {
+    current_sub_char.get()
 }
 
-pub unsafe extern "C" fn syn_get_stack_item(mut i: ::core::ffi::c_int) -> ::core::ffi::c_int {
+/// The syntax id at position `i` of the current state stack, or -1 when `i` is
+/// out of range.
+///
+/// The caller must have called [`syn_get_id`] first, to fill the stack.
+pub unsafe fn syn_get_stack_item(i: c_int) -> c_int {
     unsafe {
-        if i >= (*current_state.ptr()).ga_len {
+        if i >= state_len() {
+            // The state was not properly finished for the last character
+            // (`keep_state` was true), so it has to be invalidated.
             invalidate_current_state();
-            current_col.set(MAXCOL as ::core::ffi::c_int as colnr_T);
-            return -1 as ::core::ffi::c_int;
+            current_col.set(MAXCOL as colnr_T);
+            return -1;
         }
-        return (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_id;
+        (*state_at(i)).si_id
     }
 }
 
-pub(crate) unsafe extern "C" fn syn_cur_foldlevel() -> ::core::ffi::c_int {
+/// How many `fold` items are open at the current position.
+unsafe fn syn_cur_foldlevel() -> c_int {
     unsafe {
-        let mut level: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*current_state.ptr()).ga_len {
-            if (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_flags
-                & HL_FOLD
-                != 0
-            {
+        let mut level = 0;
+        for i in 0..state_len() {
+            if (*state_at(i)).si_flags & HL_FOLD != 0 {
                 level += 1;
             }
-            i += 1;
         }
-        return level;
+        level
     }
 }
 
-pub unsafe extern "C" fn syn_get_foldlevel(
-    mut wp: *mut win_T,
-    mut lnum: linenr_T,
-) -> ::core::ffi::c_int {
+/// The fold level of line `lnum`, for `'foldmethod'=syntax`.
+pub unsafe fn syn_get_foldlevel(wp: *mut win_T, lnum: linenr_T) -> c_int {
     unsafe {
-        let mut level: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        if (*(*wp).w_s).b_syn_folditems != 0 as ::core::ffi::c_int
+        let mut level = 0;
+
+        // Answer quickly when there are no fold items at all.
+        if (*(*wp).w_s).b_syn_folditems != 0
             && !(*(*wp).w_s).b_syn_error
             && !(*(*wp).w_s).b_syn_slow
         {
             syntax_start(wp, lnum);
+
+            // Start with the fold level at the start of the line.
             level = syn_cur_foldlevel();
+
             if (*(*wp).w_s).b_syn_foldlevel == SYNFLD_MINIMUM {
-                let mut cur_level: ::core::ffi::c_int = level;
-                let mut low_level: ::core::ffi::c_int = cur_level;
+                // Find the lowest fold level that is followed by a higher one.
+                let mut low_level = level;
                 while !current_finished.get() {
-                    syn_current_attr(
-                        false_0 != 0,
-                        false_0 != 0,
-                        ::core::ptr::null_mut::<bool>(),
-                        false_0 != 0,
-                    );
-                    cur_level = syn_cur_foldlevel();
+                    syn_current_attr(false, false, ::core::ptr::null_mut(), false);
+                    let cur_level = syn_cur_foldlevel();
                     if cur_level < low_level {
                         low_level = cur_level;
                     } else if cur_level > low_level {
                         level = low_level;
                     }
-                    (*current_col.ptr()) += 1;
+                    current_col.set(current_col.get() + 1);
                 }
             }
         }
+
         if level as OptInt > (*wp).w_onebuf_opt.wo_fdn {
-            level = (*wp).w_onebuf_opt.wo_fdn as ::core::ffi::c_int;
-            if level < 0 as ::core::ffi::c_int {
-                level = 0 as ::core::ffi::c_int;
+            level = (*wp).w_onebuf_opt.wo_fdn as c_int;
+            if level < 0 {
+                level = 0;
             }
         }
-        return level;
+        level
     }
 }

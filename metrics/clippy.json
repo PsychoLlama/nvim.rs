@@ -138,8 +138,6 @@
     "crates/nvim/src/nvim/statusline.rs": 73,
     "crates/nvim/src/nvim/strings.rs": 94,
     "crates/nvim/src/nvim/syntax/options.rs": 1,
-    "crates/nvim/src/nvim/syntax/query.rs": 23,
-    "crates/nvim/src/nvim/syntax/sync.rs": 13,
     "crates/nvim/src/nvim/tag.rs": 8,
     "crates/nvim/src/nvim/terminal.rs": 2,
     "crates/nvim/src/nvim/terminal/input.rs": 2,

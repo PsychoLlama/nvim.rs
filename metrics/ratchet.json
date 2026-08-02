@@ -528,7 +528,7 @@
     "crates/nvim/src/nvim/syntax/query.rs": {"unsafe": 9},
     "crates/nvim/src/nvim/syntax/stack.rs": {"unsafe": 17},
     "crates/nvim/src/nvim/syntax/state.rs": {"unsafe": 13},
-    "crates/nvim/src/nvim/syntax/sync.rs": {"unsafe": 9},
+    "crates/nvim/src/nvim/syntax/sync.rs": {"unsafe": 11},
     "crates/nvim/src/nvim/syntax/syntime.rs": {"unsafe": 5},
     "crates/nvim/src/nvim/tag.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/tag/collect.rs": {"unsafe": 6},

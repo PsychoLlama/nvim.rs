@@ -57,9 +57,9 @@ use crate::src::nvim::strings::{
 };
 use crate::src::nvim::types::{
     CMD_index, OptInt, buf_T, bufstate_T, cmd_addr_T, colnr_T, exarg_T, expand_T, garray_T,
-    hashtab_T, int16_t, int32_t, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T,
-    regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T, synstate_T, uint8_t, uint32_t,
-    uint64_t, varnumber_T, win_T,
+    hashtab_T, int16_t, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T,
+    regprog_T, size_t, syn_time_T, synblock_T, synstate_T, uint8_t, uint32_t, uint64_t,
+    varnumber_T, win_T,
 };
 
 mod flags;
