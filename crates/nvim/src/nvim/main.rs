@@ -330,20 +330,6 @@ pub static on_print: GlobalCell<Callback> = GlobalCell::new(Callback {
     },
     type_0: kCallbackNone,
 });
-pub static virt_text_pos_str: GlobalCell<[*const c_char; 6]> = GlobalCell::new([
-    b"eol\0".as_ptr() as *const c_char,
-    b"eol_right_align\0".as_ptr() as *const c_char,
-    b"inline\0".as_ptr() as *const c_char,
-    b"overlay\0".as_ptr() as *const c_char,
-    b"right_align\0".as_ptr() as *const c_char,
-    b"win_col\0".as_ptr() as *const c_char,
-]);
-pub static hl_mode_str: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    b"\0".as_ptr() as *const c_char,
-    b"replace\0".as_ptr() as *const c_char,
-    b"combine\0".as_ptr() as *const c_char,
-    b"blend\0".as_ptr() as *const c_char,
-]);
 pub static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
     itr: [MarkTreeIter {
         pos: MTPos {

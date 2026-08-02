@@ -1,5 +1,3 @@
-use crate::src::nvim::api::extmark::virt_text_to_array;
-use crate::src::nvim::api::private::helpers::{arena_array, arena_string, cstr_as_string};
 use crate::src::nvim::buffer::buf_meta_total;
 use crate::src::nvim::change::changed_lines_invalidate_buf;
 use crate::src::nvim::decoration_provider::decor_providers_invoke_conceal_line;
@@ -9,37 +7,30 @@ use crate::src::nvim::drawscreen::{
 use crate::src::nvim::extmark::extmark_set;
 use crate::src::nvim::fold::{hasAnyFolding, hasFolding};
 use crate::src::nvim::global_cell::GlobalCell;
-use crate::src::nvim::grid::{schar_from_char, schar_get, schar_get_first_codepoint, schar_high};
+use crate::src::nvim::grid::{schar_from_char, schar_get_first_codepoint, schar_high};
 use crate::src::nvim::highlight::{hl_add_url, hl_combine_attr};
-use crate::src::nvim::highlight_group::{syn_id2attr, syn_id2name};
-use crate::src::nvim::main::{
-    curtab, curwin, decor_state, first_tabpage, firstwin, hl_mode_str, namespace_localscope,
-    virt_text_pos_str,
-};
+use crate::src::nvim::highlight_group::syn_id2attr;
+use crate::src::nvim::main::{curtab, curwin, decor_state, firstwin, namespace_localscope};
 use crate::src::nvim::map::set_has_uint32_t;
 use crate::src::nvim::marktree::key::{
-    MT_FLAG_DECOR_EXT, MT_FLAG_DECOR_HL, MT_FLAG_DECOR_SIGNTEXT, kMTFilterSelect, mt_conceal_lines,
-    mt_decor, mt_decor_any, mt_decor_sign, mt_end, mt_invalid,
+    MT_FLAG_DECOR_EXT, MT_FLAG_DECOR_HL, kMTFilterSelect, mt_conceal_lines, mt_decor, mt_decor_any,
+    mt_end, mt_invalid,
 };
 use crate::src::nvim::marktree::{
     marktree_get_altpos, marktree_itr_current, marktree_itr_get, marktree_itr_get_filter,
     marktree_itr_get_overlap, marktree_itr_next, marktree_itr_next_filter,
     marktree_itr_step_out_filter, marktree_itr_step_overlap,
 };
-use crate::src::nvim::memory::{xcalloc, xfree, xmalloc, xrealloc};
+use crate::src::nvim::memory::{xfree, xmalloc, xrealloc};
 use crate::src::nvim::r#move::changed_window_setting;
-use crate::src::nvim::os::libc::{__assert_fail, memcpy, memmove, qsort};
-use crate::src::nvim::sign::{buf_has_signs, describe_sign_text};
+use crate::src::nvim::os::libc::{__assert_fail, memcpy, memmove};
 use crate::src::nvim::types::{
-    Arena, Array, DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority,
-    DecorPriorityInternal, DecorRange, DecorRange_data as C2Rust_Unnamed_22, DecorRangeKind,
-    DecorRangeSlot, DecorSignHighlight, DecorState, DecorVirtText, Dict, Error, Integer, MTKey,
-    MTNode, MTPair, MTPos, MarkTree, MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_19, MetaFilter,
-    MetaIndex, Object, OptInt, SignItem, SignTextAttrs, TriState, VirtLines, VirtText,
-    VirtTextChunk, VirtTextPos, buf_T, colnr_T, int32_t, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeInteger, kObjectTypeString, key_value_pair, linenr_T, lpos_T, object,
-    object_data as C2Rust_Unnamed_14, sattr_T, schar_T, size_t, tabpage_T, uint16_t, uint32_t,
-    uint64_t, virt_line, win_T,
+    DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, DecorPriorityInternal,
+    DecorRange, DecorRange_data as C2Rust_Unnamed_22, DecorRangeKind, DecorRangeSlot,
+    DecorSignHighlight, DecorState, DecorVirtText, Error, MTKey, MTNode, MTPair, MTPos, MarkTree,
+    MarkTreeIter, MarkTreeIter_s as C2Rust_Unnamed_19, MetaFilter, MetaIndex, OptInt, SignItem,
+    TriState, VirtLines, VirtText, VirtTextChunk, VirtTextPos, buf_T, colnr_T, int32_t, linenr_T,
+    lpos_T, schar_T, size_t, uint16_t, uint32_t, uint64_t, virt_line, win_T,
 };
 
 // The carve of the transpiled module; see each child's docs.

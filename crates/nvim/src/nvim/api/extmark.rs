@@ -572,7 +572,7 @@ unsafe extern "C" fn extmark_to_array(
                 },
             };
         }
-        decor_to_dict_legacy(&raw mut dict, mt_decor(start), hl_name, arena);
+        decor_to_dict_legacy(&mut dict, mt_decor(start), hl_name, arena);
         let c2rust_fresh19 = rv.size;
         rv.size = rv.size.wrapping_add(1);
         *rv.items.offset(c2rust_fresh19 as isize) = object {

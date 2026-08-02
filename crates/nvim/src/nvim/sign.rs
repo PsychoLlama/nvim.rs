@@ -422,10 +422,7 @@ unsafe extern "C" fn sign_row_cmp(
         sh: sh2,
         id: (*s2).id,
     };
-    return sign_item_cmp(
-        &raw mut si1 as *const ::core::ffi::c_void,
-        &raw mut si2 as *const ::core::ffi::c_void,
-    );
+    return sign_item_cmp(&si1, &si2);
 }
 unsafe extern "C" fn buf_delete_signs(
     mut buf: *mut buf_T,

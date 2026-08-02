@@ -3,40 +3,100 @@
 //! [`decor_to_dict_legacy`] is what `nvim_buf_get_extmark*(details = true)`
 //! answers with: one flat dictionary carrying whichever of the virt-text,
 //! virt-lines, sign and highlight parts the decoration has. It assumes at
-//! most one of each kind, which is not always true — the name says
-//! "legacy" for that reason.
+//! most one of each kind, which is not always true — the name says "legacy"
+//! for that reason.
+//!
+//! The dictionary is the caller's, already sized for the whole `set_extmark`
+//! keyset, and is filled by appending: `put` panics rather than overflowing
+//! it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use super::{
+    DECOR_ID_INVALID, DECOR_SIGN_HIGHLIGHT_INIT, SIGN_WIDTH, decor_item, decor_sh_from_inline,
+    kSHConceal, kSHConcealLines, kSHHlEol, kSHIsSign, kSHSpellOff, kSHSpellOn, kSHUIWatched,
+    kVLLeftcol, kVLScroll, kVPosWinCol, kVTHide, kVTIsLines, kVTLinesAbove, kVTRepeatLinebreak,
+};
+use crate::src::nvim::api::extmark::virt_text_to_array;
+use crate::src::nvim::api::private::helpers::{arena_array, arena_string, cstr_as_string};
+use crate::src::nvim::grid::MAX_SCHAR_SIZE;
+use crate::src::nvim::grid::schar_get;
+use crate::src::nvim::highlight::dict::put;
+use crate::src::nvim::highlight_group::syn_id2name;
+use crate::src::nvim::sign::describe_sign_text;
+use crate::src::nvim::types::{
+    Arena, Array, DecorInline, DecorSignHighlight, DecorVirtText, Dict, Object, uint16_t, uint32_t,
+};
+use ::core::ffi::{CStr, c_char, c_int};
+use ::core::ptr;
 
-pub unsafe extern "C" fn decor_to_dict_legacy(
-    mut dict: *mut Dict,
-    mut decor: DecorInline,
-    mut hl_name: bool,
-    mut arena: *mut Arena,
+/// `kExtmark*`: which kinds of decoration a mark carries, as the bit mask the
+/// marktree stores beside it.
+const kExtmarkNone: uint16_t = 1;
+const kExtmarkSign: uint16_t = 2;
+const kExtmarkVirtText: uint16_t = 8;
+const kExtmarkVirtLines: uint16_t = 16;
+const kExtmarkHighlight: uint16_t = 32;
+
+/// `VirtTextPos` as the API spells it. Keep in sync with `VirtTextPos`.
+const VIRT_TEXT_POS_STR: [&CStr; 6] = [
+    c"eol",
+    c"eol_right_align",
+    c"inline",
+    c"overlay",
+    c"right_align",
+    c"win_col",
+];
+
+/// `HlMode` as the API spells it; index 0 is "unset". Keep in sync with
+/// `HlMode`.
+const HL_MODE_STR: [&CStr; 4] = [c"", c"replace", c"combine", c"blend"];
+
+/// Writes `decor` out as dictionary entries appended to `dict`.
+///
+/// Only one entry of each kind is described, which is what makes this the
+/// "legacy" form: a mark may carry several virt texts or several highlights,
+/// and the last of each wins here.
+///
+/// The `priority` reported is the *last* part's, in the fixed order
+/// highlight, virt text, virt lines, sign — so a decoration with both a sign
+/// and a highlight reports the sign's.
+///
+/// # Safety
+/// `dict` must have room for every key below (its callers size it for the
+/// whole `set_extmark` keyset); `decor` must be live, and `arena` valid or
+/// null.
+pub unsafe fn decor_to_dict_legacy(
+    dict: &mut Dict,
+    decor: DecorInline,
+    hl_name: bool,
+    arena: *mut Arena,
 ) {
+    // SAFETY: the caller's decoration, dictionary and arena.
     unsafe {
         let mut sh_hl: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
         let mut sh_sign: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
-        let mut virt_text: *mut DecorVirtText = ::core::ptr::null_mut::<DecorVirtText>();
-        let mut virt_lines: *mut DecorVirtText = ::core::ptr::null_mut::<DecorVirtText>();
-        let mut priority: int32_t = -1 as int32_t;
+        let mut virt_text: *mut DecorVirtText = ptr::null_mut();
+        let mut virt_lines: *mut DecorVirtText = ptr::null_mut();
+        // A sentinel no real priority can take, so that "nothing here has a
+        // priority" stays distinct from priority 0.
+        let mut priority: i32 = -1;
+
         if decor.ext {
-            let mut vt: *mut DecorVirtText = decor.data.ext.vt;
+            let mut vt = decor.data.ext.vt;
             while !vt.is_null() {
-                if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0 {
+                if (*vt).flags as c_int & kVTIsLines as c_int != 0 {
                     virt_lines = vt;
                 } else {
                     virt_text = vt;
                 }
                 vt = (*vt).next;
             }
+
             let mut idx: uint32_t = decor.data.ext.sh_idx;
-            while idx != DECOR_ID_INVALID as uint32_t {
-                let mut sh: *mut DecorSignHighlight = decor_item(idx);
-                if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
+            while idx != DECOR_ID_INVALID {
+                let sh = decor_item(idx);
+                if (*sh).flags as c_int & kSHIsSign as c_int != 0 {
                     sh_sign = *sh;
                 } else {
                     sh_hl = *sh;
@@ -46,422 +106,243 @@ pub unsafe extern "C" fn decor_to_dict_legacy(
         } else {
             sh_hl = decor_sh_from_inline(decor.data.hl);
         }
+
+        let flags = sh_hl.flags as c_int;
         if sh_hl.hl_id != 0 {
-            let c2rust_fresh8 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh8 as isize) = key_value_pair {
-                key: cstr_as_string(b"hl_group\0".as_ptr() as *const ::core::ffi::c_char),
-                value: hl_group_name(sh_hl.hl_id, hl_name),
-            };
-            let c2rust_fresh9 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh9 as isize) = key_value_pair {
-                key: cstr_as_string(b"hl_eol\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed_14 {
-                        boolean: sh_hl.flags as ::core::ffi::c_int & kSHHlEol as ::core::ffi::c_int
-                            != 0,
-                    },
-                },
-            };
-            priority = sh_hl.priority as int32_t;
-        }
-        if sh_hl.flags as ::core::ffi::c_int & kSHConceal as ::core::ffi::c_int != 0 {
-            let mut buf: [::core::ffi::c_char; 32] = [0; 32];
-            schar_get(
-                &raw mut buf as *mut ::core::ffi::c_char,
-                sh_hl.text[0 as ::core::ffi::c_int as usize],
+            put(dict, c"hl_group", hl_group_name(sh_hl.hl_id, hl_name));
+            put(
+                dict,
+                c"hl_eol",
+                Object::boolean(flags & kSHHlEol as c_int != 0),
             );
-            let c2rust_fresh10 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh10 as isize) = key_value_pair {
-                key: cstr_as_string(b"conceal\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed_14 {
-                        string: arena_string(
-                            arena,
-                            cstr_as_string(&raw mut buf as *mut ::core::ffi::c_char),
-                        ),
-                    },
-                },
-            };
+            priority = i32::from(sh_hl.priority);
         }
-        if sh_hl.flags as ::core::ffi::c_int & kSHConcealLines as ::core::ffi::c_int != 0 {
-            let c2rust_fresh11 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh11 as isize) = key_value_pair {
-                key: cstr_as_string(b"conceal_lines\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed_14 {
-                        string: cstr_as_string(b"\0".as_ptr() as *const ::core::ffi::c_char),
-                    },
-                },
-            };
+
+        if flags & kSHConceal as c_int != 0 {
+            let mut buf = [0 as c_char; MAX_SCHAR_SIZE as usize];
+            schar_get(buf.as_mut_ptr(), sh_hl.text[0]);
+            put(
+                dict,
+                c"conceal",
+                Object::string(arena_string(arena, cstr_as_string(buf.as_ptr()))),
+            );
         }
-        if sh_hl.flags as ::core::ffi::c_int & kSHSpellOn as ::core::ffi::c_int != 0 {
-            let c2rust_fresh12 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh12 as isize) = key_value_pair {
-                key: cstr_as_string(b"spell\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed_14 { boolean: true },
-                },
-            };
-        } else if sh_hl.flags as ::core::ffi::c_int & kSHSpellOff as ::core::ffi::c_int != 0 {
-            let c2rust_fresh13 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh13 as isize) = key_value_pair {
-                key: cstr_as_string(b"spell\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed_14 { boolean: false },
-                },
-            };
+
+        if flags & kSHConcealLines as c_int != 0 {
+            put(dict, c"conceal_lines", Object::literal(""));
         }
-        if sh_hl.flags as ::core::ffi::c_int & kSHUIWatched as ::core::ffi::c_int != 0 {
-            let c2rust_fresh14 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh14 as isize) = key_value_pair {
-                key: cstr_as_string(b"ui_watched\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed_14 { boolean: true },
-                },
-            };
+
+        if flags & kSHSpellOn as c_int != 0 {
+            put(dict, c"spell", Object::boolean(true));
+        } else if flags & kSHSpellOff as c_int != 0 {
+            put(dict, c"spell", Object::boolean(false));
         }
+
+        if flags & kSHUIWatched as c_int != 0 {
+            put(dict, c"ui_watched", Object::boolean(true));
+        }
+
         if !sh_hl.url.is_null() {
-            let c2rust_fresh15 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh15 as isize) = key_value_pair {
-                key: cstr_as_string(b"url\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed_14 {
-                        string: cstr_as_string(sh_hl.url),
-                    },
-                },
-            };
+            put(dict, c"url", Object::string(cstr_as_string(sh_hl.url)));
         }
+
         if !virt_text.is_null() {
-            if (*virt_text).hl_mode != 0 {
-                let c2rust_fresh16 = (*dict).size;
-                (*dict).size = (*dict).size.wrapping_add(1);
-                *(*dict).items.offset(c2rust_fresh16 as isize) = key_value_pair {
-                    key: cstr_as_string(b"hl_mode\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_14 {
-                            string: cstr_as_string(
-                                *(&raw const hl_mode_str as *const *const ::core::ffi::c_char)
-                                    .offset((*virt_text).hl_mode as isize),
-                            ),
-                        },
-                    },
-                };
-            }
-            let mut chunks: Array = virt_text_to_array((*virt_text).data.virt_text, hl_name, arena);
-            let c2rust_fresh17 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh17 as isize) = key_value_pair {
-                key: cstr_as_string(b"virt_text\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed_14 { array: chunks },
-                },
-            };
-            let c2rust_fresh18 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh18 as isize) = key_value_pair {
-                key: cstr_as_string(b"virt_text_hide\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed_14 {
-                        boolean: (*virt_text).flags as ::core::ffi::c_int
-                            & kVTHide as ::core::ffi::c_int
-                            != 0,
-                    },
-                },
-            };
-            let c2rust_fresh19 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh19 as isize) = key_value_pair {
-                key: cstr_as_string(
-                    b"virt_text_repeat_linebreak\0".as_ptr() as *const ::core::ffi::c_char
-                ),
-                value: object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed_14 {
-                        boolean: (*virt_text).flags as ::core::ffi::c_int
-                            & kVTRepeatLinebreak as ::core::ffi::c_int
-                            != 0,
-                    },
-                },
-            };
-            if (*virt_text).pos as ::core::ffi::c_uint
-                == kVPosWinCol as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let c2rust_fresh20 = (*dict).size;
-                (*dict).size = (*dict).size.wrapping_add(1);
-                *(*dict).items.offset(c2rust_fresh20 as isize) = key_value_pair {
-                    key: cstr_as_string(
-                        b"virt_text_win_col\0".as_ptr() as *const ::core::ffi::c_char
-                    ),
-                    value: object {
-                        type_0: kObjectTypeInteger,
-                        data: C2Rust_Unnamed_14 {
-                            integer: (*virt_text).col as Integer,
-                        },
-                    },
-                };
-            }
-            let c2rust_fresh21 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh21 as isize) = key_value_pair {
-                key: cstr_as_string(b"virt_text_pos\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed_14 {
-                        string: cstr_as_string(
-                            *(&raw const virt_text_pos_str as *const *const ::core::ffi::c_char)
-                                .offset((*virt_text).pos as isize),
-                        ),
-                    },
-                },
-            };
-            priority = (*virt_text).priority as int32_t;
+            put_virt_text(dict, &*virt_text, hl_name, arena);
+            priority = i32::from((*virt_text).priority);
         }
+
         if !virt_lines.is_null() {
-            let mut all_chunks: Array = arena_array(arena, (*virt_lines).data.virt_lines.size);
-            let mut virt_lines_flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            let mut i: size_t = 0 as size_t;
-            while i < (*virt_lines).data.virt_lines.size {
-                virt_lines_flags = (*(*virt_lines).data.virt_lines.items.offset(i as isize)).flags;
-                let mut chunks_0: Array = virt_text_to_array(
-                    (*(*virt_lines).data.virt_lines.items.offset(i as isize)).line,
-                    hl_name,
-                    arena,
-                );
-                if all_chunks.size == all_chunks.capacity {
-                    all_chunks.capacity = if all_chunks.capacity != 0 {
-                        all_chunks.capacity << 1 as ::core::ffi::c_int
-                    } else {
-                        8 as size_t
-                    };
-                    all_chunks.items = xrealloc(
-                        all_chunks.items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of::<Object>().wrapping_mul(all_chunks.capacity),
-                    ) as *mut Object;
-                } else {
-                };
-                let c2rust_fresh22 = all_chunks.size;
-                all_chunks.size = all_chunks.size.wrapping_add(1);
-                *all_chunks.items.offset(c2rust_fresh22 as isize) = object {
-                    type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed_14 { array: chunks_0 },
-                };
-                i = i.wrapping_add(1);
-            }
-            let c2rust_fresh23 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh23 as isize) = key_value_pair {
-                key: cstr_as_string(b"virt_lines\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeArray,
-                    data: C2Rust_Unnamed_14 { array: all_chunks },
-                },
-            };
-            let c2rust_fresh24 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh24 as isize) = key_value_pair {
-                key: cstr_as_string(b"virt_lines_above\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed_14 {
-                        boolean: (*virt_lines).flags as ::core::ffi::c_int
-                            & kVTLinesAbove as ::core::ffi::c_int
-                            != 0,
-                    },
-                },
-            };
-            let c2rust_fresh25 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh25 as isize) = key_value_pair {
-                key: cstr_as_string(b"virt_lines_leftcol\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed_14 {
-                        boolean: virt_lines_flags & kVLLeftcol as ::core::ffi::c_int != 0,
-                    },
-                },
-            };
-            let c2rust_fresh26 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh26 as isize) = key_value_pair {
-                key: cstr_as_string(b"virt_lines_overflow\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed_14 {
-                        string: cstr_as_string(
-                            if virt_lines_flags & kVLScroll as ::core::ffi::c_int != 0 {
-                                b"scroll\0".as_ptr() as *const ::core::ffi::c_char
-                            } else {
-                                b"trunc\0".as_ptr() as *const ::core::ffi::c_char
-                            },
-                        ),
-                    },
-                },
-            };
-            priority = (*virt_lines).priority as int32_t;
+            put_virt_lines(dict, &*virt_lines, hl_name, arena);
+            priority = i32::from((*virt_lines).priority);
         }
-        if sh_sign.flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
-            if sh_sign.text[0 as ::core::ffi::c_int as usize] != 0 {
-                let mut buf_0: [::core::ffi::c_char; 64] = [0; 64];
-                describe_sign_text(
-                    &raw mut buf_0 as *mut ::core::ffi::c_char,
-                    &raw mut sh_sign.text as *mut schar_T,
-                );
-                let c2rust_fresh27 = (*dict).size;
-                (*dict).size = (*dict).size.wrapping_add(1);
-                *(*dict).items.offset(c2rust_fresh27 as isize) = key_value_pair {
-                    key: cstr_as_string(b"sign_text\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_14 {
-                            string: arena_string(
-                                arena,
-                                cstr_as_string(&raw mut buf_0 as *mut ::core::ffi::c_char),
-                            ),
-                        },
-                    },
-                };
-            }
-            if !sh_sign.sign_name.is_null() {
-                let c2rust_fresh28 = (*dict).size;
-                (*dict).size = (*dict).size.wrapping_add(1);
-                *(*dict).items.offset(c2rust_fresh28 as isize) = key_value_pair {
-                    key: cstr_as_string(b"sign_name\0".as_ptr() as *const ::core::ffi::c_char),
-                    value: object {
-                        type_0: kObjectTypeString,
-                        data: C2Rust_Unnamed_14 {
-                            string: cstr_as_string(sh_sign.sign_name),
-                        },
-                    },
-                };
-            }
-            let mut hls: [C2Rust_Unnamed_28; 5] = [
-                C2Rust_Unnamed_28 {
-                    name: b"sign_hl_group\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    val: sh_sign.hl_id,
-                },
-                C2Rust_Unnamed_28 {
-                    name: b"number_hl_group\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    val: sh_sign.number_hl_id,
-                },
-                C2Rust_Unnamed_28 {
-                    name: b"line_hl_group\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    val: sh_sign.line_hl_id,
-                },
-                C2Rust_Unnamed_28 {
-                    name: b"cursorline_hl_group\0".as_ptr() as *const ::core::ffi::c_char
-                        as *mut ::core::ffi::c_char,
-                    val: sh_sign.cursorline_hl_id,
-                },
-                C2Rust_Unnamed_28 {
-                    name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    val: 0 as ::core::ffi::c_int,
-                },
-            ];
-            let mut j: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            while !hls[j as usize].name.is_null() {
-                if hls[j as usize].val != 0 {
-                    let c2rust_fresh29 = (*dict).size;
-                    (*dict).size = (*dict).size.wrapping_add(1);
-                    *(*dict).items.offset(c2rust_fresh29 as isize) = key_value_pair {
-                        key: cstr_as_string(hls[j as usize].name),
-                        value: hl_group_name(hls[j as usize].val, hl_name),
-                    };
-                }
-                j += 1;
-            }
-            priority = sh_sign.priority as int32_t;
+
+        if sh_sign.flags as c_int & kSHIsSign as c_int != 0 {
+            put_sign(dict, &mut sh_sign, hl_name, arena);
+            priority = i32::from(sh_sign.priority);
         }
-        if priority != -1 as int32_t {
-            let c2rust_fresh30 = (*dict).size;
-            (*dict).size = (*dict).size.wrapping_add(1);
-            *(*dict).items.offset(c2rust_fresh30 as isize) = key_value_pair {
-                key: cstr_as_string(b"priority\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeInteger,
-                    data: C2Rust_Unnamed_14 {
-                        integer: priority as Integer,
-                    },
-                },
-            };
+
+        if priority != -1 {
+            put(dict, c"priority", Object::integer(priority.into()));
         }
     }
 }
 
-pub unsafe extern "C" fn decor_type_flags(mut decor: DecorInline) -> uint16_t {
+/// The virt-text half of [`decor_to_dict_legacy`].
+///
+/// # Safety
+/// `vt` must be a live virtual *text* item, not a virtual-lines one.
+unsafe fn put_virt_text(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, arena: *mut Arena) {
+    // SAFETY: the caller's virtual text and arena.
     unsafe {
-        if decor.ext {
-            let mut type_flags: uint16_t = kExtmarkNone as ::core::ffi::c_int as uint16_t;
-            let mut vt: *mut DecorVirtText = decor.data.ext.vt;
-            while !vt.is_null() {
-                type_flags = (type_flags as ::core::ffi::c_int
-                    | if (*vt).flags as ::core::ffi::c_int & kVTIsLines as ::core::ffi::c_int != 0 {
-                        kExtmarkVirtLines as ::core::ffi::c_int
-                    } else {
-                        kExtmarkVirtText as ::core::ffi::c_int
-                    }) as uint16_t;
-                vt = (*vt).next;
-            }
-            let mut idx: uint32_t = decor.data.ext.sh_idx;
-            while idx != DECOR_ID_INVALID as uint32_t {
-                let mut sh: *mut DecorSignHighlight = decor_item(idx);
-                type_flags = (type_flags as ::core::ffi::c_int
-                    | if (*sh).flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int != 0 {
-                        kExtmarkSign as ::core::ffi::c_int
-                    } else {
-                        kExtmarkHighlight as ::core::ffi::c_int
-                    }) as uint16_t;
-                idx = (*sh).next;
-            }
-            return type_flags;
+        if vt.hl_mode != 0 {
+            let mode = HL_MODE_STR[vt.hl_mode as usize];
+            put(
+                dict,
+                c"hl_mode",
+                Object::string(cstr_as_string(mode.as_ptr())),
+            );
+        }
+
+        let chunks = virt_text_to_array(vt.data.virt_text, hl_name, arena);
+        put(dict, c"virt_text", Object::array(chunks));
+        put(
+            dict,
+            c"virt_text_hide",
+            Object::boolean(vt.flags as c_int & kVTHide as c_int != 0),
+        );
+        put(
+            dict,
+            c"virt_text_repeat_linebreak",
+            Object::boolean(vt.flags as c_int & kVTRepeatLinebreak as c_int != 0),
+        );
+        if vt.pos == kVPosWinCol {
+            put(dict, c"virt_text_win_col", Object::integer(vt.col.into()));
+        }
+        let pos = VIRT_TEXT_POS_STR[vt.pos as usize];
+        put(
+            dict,
+            c"virt_text_pos",
+            Object::string(cstr_as_string(pos.as_ptr())),
+        );
+    }
+}
+
+/// The virt-lines half of [`decor_to_dict_legacy`].
+///
+/// `virt_lines_leftcol` and `virt_lines_overflow` come from the *last* line's
+/// flags: the flags are per line, the dictionary has one slot for them. That
+/// is upstream's shape.
+///
+/// # Safety
+/// `vt` must be a live virtual *lines* item.
+unsafe fn put_virt_lines(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, arena: *mut Arena) {
+    // SAFETY: the caller's virtual lines and arena.
+    unsafe {
+        let lines = vt.data.virt_lines;
+        let mut all_chunks: Array = arena_array(arena, lines.size);
+        let mut line_flags: c_int = 0;
+        for i in 0..lines.size {
+            let line = *lines.items.add(i);
+            line_flags = line.flags;
+            let chunks = virt_text_to_array(line.line, hl_name, arena);
+            // `arena_array` was asked for exactly this many.
+            assert!(all_chunks.size < all_chunks.capacity, "virt_lines overflow");
+            *all_chunks.items.add(all_chunks.size) = Object::array(chunks);
+            all_chunks.size += 1;
+        }
+
+        put(dict, c"virt_lines", Object::array(all_chunks));
+        put(
+            dict,
+            c"virt_lines_above",
+            Object::boolean(vt.flags as c_int & kVTLinesAbove as c_int != 0),
+        );
+        put(
+            dict,
+            c"virt_lines_leftcol",
+            Object::boolean(line_flags & kVLLeftcol as c_int != 0),
+        );
+        let overflow = if line_flags & kVLScroll as c_int != 0 {
+            c"scroll"
         } else {
-            return (if decor.data.hl.flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int
-                != 0
-            {
-                kExtmarkSign as ::core::ffi::c_int
+            c"trunc"
+        };
+        put(
+            dict,
+            c"virt_lines_overflow",
+            Object::string(cstr_as_string(overflow.as_ptr())),
+        );
+    }
+}
+
+/// The sign half of [`decor_to_dict_legacy`].
+///
+/// # Safety
+/// `sh` must be a live sign item; `arena` valid or null.
+unsafe fn put_sign(dict: &mut Dict, sh: &mut DecorSignHighlight, hl_name: bool, arena: *mut Arena) {
+    // SAFETY: the caller's sign and arena.
+    unsafe {
+        if sh.text[0] != 0 {
+            let mut buf = [0 as c_char; SIGN_WIDTH as usize * MAX_SCHAR_SIZE as usize];
+            describe_sign_text(buf.as_mut_ptr(), sh.text.as_mut_ptr());
+            put(
+                dict,
+                c"sign_text",
+                Object::string(arena_string(arena, cstr_as_string(buf.as_ptr()))),
+            );
+        }
+
+        if !sh.sign_name.is_null() {
+            put(
+                dict,
+                c"sign_name",
+                Object::string(cstr_as_string(sh.sign_name)),
+            );
+        }
+
+        for (key, id) in [
+            (c"sign_hl_group", sh.hl_id),
+            (c"number_hl_group", sh.number_hl_id),
+            (c"line_hl_group", sh.line_hl_id),
+            (c"cursorline_hl_group", sh.cursorline_hl_id),
+        ] {
+            if id != 0 {
+                put(dict, key, hl_group_name(id, hl_name));
+            }
+        }
+    }
+}
+
+/// Which kinds of decoration `decor` carries, as the `kExtmark*` mask the
+/// marktree stores beside the mark.
+///
+/// # Safety
+/// `decor` must be live.
+pub unsafe fn decor_type_flags(decor: DecorInline) -> uint16_t {
+    // SAFETY: the caller's decoration.
+    unsafe {
+        if !decor.ext {
+            return if decor.data.hl.flags as c_int & kSHIsSign as c_int != 0 {
+                kExtmarkSign
             } else {
-                kExtmarkHighlight as ::core::ffi::c_int
-            }) as uint16_t;
-        };
+                kExtmarkHighlight
+            };
+        }
+
+        let mut type_flags = kExtmarkNone;
+        let mut vt = decor.data.ext.vt;
+        while !vt.is_null() {
+            type_flags |= if (*vt).flags as c_int & kVTIsLines as c_int != 0 {
+                kExtmarkVirtLines
+            } else {
+                kExtmarkVirtText
+            };
+            vt = (*vt).next;
+        }
+        let mut idx: uint32_t = decor.data.ext.sh_idx;
+        while idx != DECOR_ID_INVALID {
+            let sh = decor_item(idx);
+            type_flags |= if (*sh).flags as c_int & kSHIsSign as c_int != 0 {
+                kExtmarkSign
+            } else {
+                kExtmarkHighlight
+            };
+            idx = (*sh).next;
+        }
+        type_flags
     }
 }
 
-pub unsafe extern "C" fn hl_group_name(mut hl_id: ::core::ffi::c_int, mut hl_name: bool) -> Object {
-    unsafe {
-        if hl_name {
-            return object {
-                type_0: kObjectTypeString,
-                data: C2Rust_Unnamed_14 {
-                    string: cstr_as_string(syn_id2name(hl_id)),
-                },
-            };
-        } else {
-            return object {
-                type_0: kObjectTypeInteger,
-                data: C2Rust_Unnamed_14 {
-                    integer: hl_id as Integer,
-                },
-            };
-        };
+/// A highlight group as the API reports it: its name when the caller asked
+/// for names, otherwise its id.
+///
+/// # Safety
+/// Reaches the group table; main thread only.
+pub unsafe fn hl_group_name(hl_id: c_int, hl_name: bool) -> Object {
+    if hl_name {
+        // SAFETY: `syn_id2name` answers a static or table-owned string.
+        Object::string(unsafe { cstr_as_string(syn_id2name(hl_id)) })
+    } else {
+        Object::integer(hl_id.into())
     }
 }
