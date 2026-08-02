@@ -83,26 +83,30 @@ pub struct WinLineVars {
     /// Attribute for the next character.
     pub char_attr: ::core::ffi::c_int,
 
-    /// Bytes left in `p_extra`/`sc_extra`.
-    pub n_extra: ::core::ffi::c_int,
+    /// How much of the run in [`WinLineVars::extra_text`] or
+    /// [`WinLineVars::extra_fill`] is still to be drawn — bytes for the
+    /// former, repeats for the latter.
+    pub extra_todo: ::core::ffi::c_int,
     /// Characters left that take `extra_attr`.
     pub n_attr: ::core::ffi::c_int,
-    /// Text to draw instead of buffer text; only used when `sc_extra` and
-    /// `sc_final` are NUL.
-    pub p_extra: *mut ::core::ffi::c_char,
-    /// Attribute for `p_extra`.
+    /// Text to draw instead of buffer text; only used when `extra_fill` and
+    /// `extra_last` are NUL.
+    pub extra_text: *mut ::core::ffi::c_char,
+    /// Attribute for `extra_text`.
     pub extra_attr: ::core::ffi::c_int,
-    /// One character repeated `n_extra` times.
-    pub sc_extra: schar_T,
+    /// One character repeated `extra_todo` times.
+    pub extra_fill: schar_T,
     /// Mandatory last character of a repeated run, when set.
-    pub sc_final: schar_T,
+    pub extra_last: schar_T,
 
-    /// `n_extra` came from inline virtual text.
-    pub extra_for_extmark: bool,
+    /// The run came from inline virtual text rather than from a form of the
+    /// buffer's own text, which is what decides whether the diff and Visual
+    /// highlighting apply to it.
+    pub extra_is_virt_text: bool,
 
-    /// Scratch for one character's display form; must be as large as
+    /// Scratch for the `<xx>` form of one character; must be as large as
     /// `transchar_charbuf` in charset.c.
-    pub extra: [::core::ffi::c_char; 11],
+    pub escape_buf: [::core::ffi::c_char; 11],
 
     /// Kind of diff highlighting, `HLF_NONE` for none.
     pub diff_hlf: hlf_T,
@@ -117,8 +121,10 @@ pub struct WinLineVars {
     pub filler_todo: ::core::ffi::c_int,
     /// Signs to show in the sign column.
     pub sign_attrs: [SignTextAttrs; 9],
-    /// In `'linebreak'` mode, only consider wrapping after a non-blank.
-    pub need_lbr: bool,
+    /// A character outside `'breakat'` has been seen on this line, so
+    /// `'linebreak'` may now break at the next blank. Leading indent must not
+    /// arm it, or every long word would be broken at column zero.
+    pub linebreak_armed: bool,
 
     /// Inline virtual text being fed to the character loop.
     pub virt_inline: VirtText,
@@ -470,7 +476,7 @@ impl WinLineVars {
     pub(crate) unsafe fn start_line(&mut self, wp: *mut win_T) {
         self.col = 0;
         self.off = 0;
-        self.need_lbr = false;
+        self.linebreak_armed = false;
         // SAFETY: `grid_alloc` keeps the line buffers at least `w_view_width`
         // wide, which is the invariant every writer here relies on.
         unsafe {
@@ -499,7 +505,7 @@ impl WinLineVars {
     /// counters back, and remembers how many there were: `old_boguscols` is
     /// read after the fact when the cursor position is worked out.
     pub(crate) fn fix_for_boguscols(&mut self) {
-        self.n_extra += self.vcol_off_co;
+        self.extra_todo += self.vcol_off_co;
         self.vcol -= self.vcol_off_co;
         self.vcol_off_co = 0;
         self.col -= self.boguscols;

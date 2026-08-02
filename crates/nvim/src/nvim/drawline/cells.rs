@@ -8,7 +8,7 @@
 //!
 //! One pass round the loop produces at most one cell. That is not the same as
 //! one buffer character: a Tab, a `<xx>` escape, a `'listchars'` replacement
-//! and an inline virtual text all feed [`WinLineVars::n_extra`] and are then
+//! and an inline virtual text all feed [`WinLineVars::extra_todo`] and are then
 //! spent one cell per pass, and a concealed character produces no cell at all.
 //! The order of a pass is fixed and each step is a method here or in
 //! [`chars`](super::chars):
@@ -58,7 +58,7 @@ pub(crate) enum Step {
 /// The parts of `win_line`'s own frame the character loop borrows.
 ///
 /// All raw pointers on purpose: `fold_buf` in particular has its address
-/// stored in [`WinLineVars::p_extra`] and read again on later passes, so it
+/// stored in [`WinLineVars::extra_text`] and read again on later passes, so it
 /// may not be derived from a `&mut` that ends when the method does.
 pub(crate) struct LineFrame {
     /// Row after the last one this buffer line may use.
@@ -254,7 +254,7 @@ pub(crate) struct Cells {
     /// One cell was added past the end of the line to carry a highlight.
     pub(super) eol_extra_cell: ::core::ffi::c_int,
 
-    /// Inline virtual text lends [`WinLineVars::n_extra`] to whatever was
+    /// Inline virtual text lends [`WinLineVars::extra_todo`] to whatever was
     /// being drawn; these four hold what it displaced until it is spent.
     pub(super) saved_search_attr: ::core::ffi::c_int,
     /// See [`Cells::saved_search_attr`].
@@ -486,7 +486,7 @@ impl Cells {
                     }
 
                     self.draw_folded = self.has_fold && wlv.row == wlv.startrow + wlv.filler_lines;
-                    if self.draw_folded && wlv.n_extra == 0 {
+                    if self.draw_folded && wlv.extra_todo == 0 {
                         self.fold_attr = win_hl_attr(wp, HLF_FL);
                         wlv.char_attr = self.fold_attr;
                         self.decor_attr = 0;
@@ -661,16 +661,16 @@ impl Cells {
             wlv.vcol += 1;
             wlv.vcol_off_co += 1;
         }
-        if wlv.n_extra > 0 {
-            wlv.vcol_off_co += wlv.n_extra;
+        if wlv.extra_todo > 0 {
+            wlv.vcol_off_co += wlv.extra_todo;
         }
 
         if self.is_wrapped {
-            if wlv.n_extra > 0 {
-                wlv.vcol += wlv.n_extra;
-                wlv.col += wlv.n_extra;
-                wlv.boguscols += wlv.n_extra;
-                wlv.n_extra = 0;
+            if wlv.extra_todo > 0 {
+                wlv.vcol += wlv.extra_todo;
+                wlv.col += wlv.extra_todo;
+                wlv.boguscols += wlv.extra_todo;
+                wlv.extra_todo = 0;
                 wlv.n_attr = 0;
             }
             if concealed_wide {
@@ -679,9 +679,9 @@ impl Cells {
             }
             wlv.boguscols += 1;
             wlv.col += 1;
-        } else if wlv.n_extra > 0 {
-            wlv.vcol += wlv.n_extra;
-            wlv.n_extra = 0;
+        } else if wlv.extra_todo > 0 {
+            wlv.vcol += wlv.extra_todo;
+            wlv.extra_todo = 0;
             wlv.n_attr = 0;
         }
     }
@@ -727,7 +727,7 @@ impl Cells {
             if !self.has_decor || wlv.filler_todo > 0 || wlv.col < self.view_width {
                 return;
             }
-            if self.is_wrapped && wlv.n_extra == 0 {
+            if self.is_wrapped && wlv.extra_todo == 0 {
                 decor_redraw_col(
                     wp,
                     self.byte_col(),

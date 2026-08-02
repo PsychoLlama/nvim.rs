@@ -7,9 +7,9 @@
 //!
 //! There are four sources, tried in order:
 //!
-//! 1. a run already in progress — [`WinLineVars::n_extra`] cells of either one
-//!    repeated character ([`WinLineVars::sc_extra`]) or a string
-//!    ([`WinLineVars::p_extra`]). Tabs, `<xx>` escapes, `'listchars'`
+//! 1. a run already in progress — [`WinLineVars::extra_todo`] cells of either one
+//!    repeated character ([`WinLineVars::extra_fill`]) or a string
+//!    ([`WinLineVars::extra_text`]). Tabs, `<xx>` escapes, `'listchars'`
 //!    replacements, the fold fill and inline virtual text all become one of
 //!    these;
 //! 2. a blank, while diff or virtual-line filler is being drawn;
@@ -37,7 +37,7 @@ impl Cells {
     ) {
         // SAFETY: the caller's window and frame.
         unsafe {
-            if wlv.n_extra > 0 {
+            if wlv.extra_todo > 0 {
                 self.char_from_extra(wlv, wp);
             } else if wlv.filler_todo > 0 {
                 // Wait with reading text until the filler lines are done, but
@@ -53,31 +53,31 @@ impl Cells {
         }
     }
 
-    /// Take one cell from the run in [`WinLineVars::n_extra`].
+    /// Take one cell from the run in [`WinLineVars::extra_todo`].
     ///
     /// # Safety
     /// `wp` must be a live window.
     pub(super) unsafe fn char_from_extra(&mut self, wlv: &mut WinLineVars, wp: *mut win_T) {
-        // SAFETY: the caller's window; `p_extra` is NUL-terminated whenever
-        // `sc_extra` and `sc_final` are not set.
+        // SAFETY: the caller's window; `extra_text` is NUL-terminated whenever
+        // `extra_fill` and `extra_last` are not set.
         unsafe {
-            if wlv.sc_extra != NUL as schar_T
-                || (wlv.n_extra == 1 && wlv.sc_final != NUL as schar_T)
+            if wlv.extra_fill != NUL as schar_T
+                || (wlv.extra_todo == 1 && wlv.extra_last != NUL as schar_T)
             {
                 // One character repeated, with an optional different last one.
-                self.cell_char = if wlv.n_extra == 1 && wlv.sc_final != NUL as schar_T {
-                    wlv.sc_final
+                self.cell_char = if wlv.extra_todo == 1 && wlv.extra_last != NUL as schar_T {
+                    wlv.extra_last
                 } else {
-                    wlv.sc_extra
+                    wlv.extra_fill
                 };
                 self.char_code = schar_get_first_codepoint(self.cell_char);
-                wlv.n_extra -= 1;
+                wlv.extra_todo -= 1;
             } else {
-                assert!(!wlv.p_extra.is_null());
-                self.char_len = utfc_ptr2len(wlv.p_extra);
-                self.cell_char = utfc_ptr2schar(wlv.p_extra, &raw mut self.char_code);
+                assert!(!wlv.extra_text.is_null());
+                self.char_len = utfc_ptr2len(wlv.extra_text);
+                self.cell_char = utfc_ptr2schar(wlv.extra_text, &raw mut self.char_code);
                 // `char_len` is 0 at the end-of-line NUL.
-                if self.char_len > wlv.n_extra || self.char_len == 0 {
+                if self.char_len > wlv.extra_todo || self.char_len == 0 {
                     self.char_len = 1;
                 }
 
@@ -97,20 +97,20 @@ impl Cells {
                         };
                     }
                 } else {
-                    wlv.n_extra -= self.char_len;
-                    wlv.p_extra = wlv.p_extra.offset(self.char_len as isize);
+                    wlv.extra_todo -= self.char_len;
+                    wlv.extra_text = wlv.extra_text.offset(self.char_len as isize);
                 }
 
                 if wlv.filler_todo <= 0 && wlv.skip_cells > 0 && self.char_len > 1 {
                     // A double-width character half scrolled off the left
                     // edge: show a `<` for the half that is on screen.
-                    if wlv.n_extra > 0 {
-                        self.extra_todo_next = wlv.n_extra;
+                    if wlv.extra_todo > 0 {
+                        self.extra_todo_next = wlv.extra_todo;
                         self.extra_attr_next = wlv.extra_attr;
                     }
-                    wlv.n_extra = 1;
-                    wlv.sc_extra = schar_from_ascii(MB_FILLER_CHAR);
-                    wlv.sc_final = NUL as schar_T;
+                    wlv.extra_todo = 1;
+                    wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
+                    wlv.extra_last = NUL as schar_T;
                     self.cell_char = schar_from_ascii(b' ');
                     self.char_code = ' ' as ::core::ffi::c_int;
                     self.char_len = 1;
@@ -119,7 +119,7 @@ impl Cells {
                 }
             }
 
-            if wlv.n_extra > 0 {
+            if wlv.extra_todo > 0 {
                 return;
             }
             if self.extra_todo_next <= 0 {
@@ -137,19 +137,19 @@ impl Cells {
                     self.decor_attr = self.saved_decor_attr;
                     self.saved_decor_attr = 0;
                 }
-                if wlv.extra_for_extmark {
+                if wlv.extra_is_virt_text {
                     // `extra_attr` applies at this position but no further.
                     wlv.reset_extra_attr = true;
                     self.extra_attr_next = -1;
                 }
-                wlv.extra_for_extmark = false;
+                wlv.extra_is_virt_text = false;
             } else {
                 // A `<` filler interrupted a longer run; resume it.
-                assert!(wlv.sc_extra != NUL as schar_T || wlv.sc_final != NUL as schar_T);
-                assert!(!wlv.p_extra.is_null());
-                wlv.sc_extra = NUL as schar_T;
-                wlv.sc_final = NUL as schar_T;
-                wlv.n_extra = self.extra_todo_next;
+                assert!(wlv.extra_fill != NUL as schar_T || wlv.extra_last != NUL as schar_T);
+                assert!(!wlv.extra_text.is_null());
+                wlv.extra_fill = NUL as schar_T;
+                wlv.extra_last = NUL as schar_T;
+                wlv.extra_todo = self.extra_todo_next;
                 self.extra_todo_next = 0;
                 // `extra_attr` applies at this position; `extra_attr_next`
                 // after it.
@@ -197,20 +197,20 @@ impl Cells {
             {
                 // An illegal UTF-8 byte shows as `<xx>`; an unprintable
                 // character as `?` or its fullwidth form.
-                transchar_hex(wlv.extra.as_mut_ptr(), self.char_code);
+                transchar_hex(wlv.escape_buf.as_mut_ptr(), self.char_code);
                 if (*wp).w_onebuf_opt.wo_rl != 0 {
-                    rl_mirror_ascii(wlv.extra.as_mut_ptr(), ::core::ptr::null_mut());
+                    rl_mirror_ascii(wlv.escape_buf.as_mut_ptr(), ::core::ptr::null_mut());
                 }
-                wlv.p_extra = wlv.extra.as_mut_ptr();
-                let mut p: *const ::core::ffi::c_char = wlv.p_extra;
+                wlv.extra_text = wlv.escape_buf.as_mut_ptr();
+                let mut p: *const ::core::ffi::c_char = wlv.extra_text;
                 self.char_code = mb_ptr2char_adv(&raw mut p);
-                wlv.p_extra = p as *mut ::core::ffi::c_char;
+                wlv.extra_text = p as *mut ::core::ffi::c_char;
                 self.cell_char = schar_from_char(self.char_code);
-                wlv.n_extra = strlen(wlv.p_extra) as ::core::ffi::c_int;
-                wlv.sc_extra = NUL as schar_T;
-                wlv.sc_final = NUL as schar_T;
+                wlv.extra_todo = strlen(wlv.extra_text) as ::core::ffi::c_int;
+                wlv.extra_fill = NUL as schar_T;
+                wlv.extra_last = NUL as schar_T;
                 if self.area_attr == 0 && self.search_attr == 0 {
-                    wlv.n_attr = wlv.n_extra + 1;
+                    wlv.n_attr = wlv.extra_todo + 1;
                     wlv.extra_attr = win_hl_attr(wp, HLF_8);
                     self.attr_before_run = wlv.char_attr;
                 }
@@ -233,18 +233,18 @@ impl Cells {
                 self.ptr = self.ptr.offset(self.char_len as isize - 1);
             }
 
-            if wlv.skip_cells > 0 && self.char_len > 1 && wlv.n_extra == 0 {
+            if wlv.skip_cells > 0 && self.char_len > 1 && wlv.extra_todo == 0 {
                 // A double-width character half scrolled off the left edge
                 // shows a `<`. Not for unprintable characters, which took the
                 // branch above.
-                wlv.n_extra = 1;
-                wlv.sc_extra = schar_from_ascii(MB_FILLER_CHAR);
-                wlv.sc_final = NUL as schar_T;
+                wlv.extra_todo = 1;
+                wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
+                wlv.extra_last = NUL as schar_T;
                 self.cell_char = schar_from_ascii(b' ');
                 self.char_code = ' ' as ::core::ffi::c_int;
                 self.char_len = 1;
                 if self.area_attr == 0 && self.search_attr == 0 {
-                    wlv.n_attr = wlv.n_extra + 1;
+                    wlv.n_attr = wlv.extra_todo + 1;
                     wlv.extra_attr = win_hl_attr(wp, HLF_AT);
                     self.attr_before_run = wlv.char_attr;
                 }
@@ -517,16 +517,16 @@ impl Cells {
             // word: the break would land at the very beginning, which is not
             // what anyone means by 'linebreak'. So arm it only once a
             // character outside 'breakat' has been seen.
-            if !wlv.need_lbr
+            if !wlv.linebreak_armed
                 && self.cell_char != NUL as schar_T
                 && !vim_isbreak(*self.ptr as uint8_t as ::core::ffi::c_int)
             {
-                wlv.need_lbr = true;
+                wlv.linebreak_armed = true;
             }
             // The last blank before a word: this is where the break goes.
             if !(c0 == self.char_code
                 && self.char_code < 128
-                && wlv.need_lbr
+                && wlv.linebreak_armed
                 && vim_isbreak(self.char_code)
                 && !vim_isbreak(*self.ptr as uint8_t as ::core::ffi::c_int))
             {
@@ -538,7 +538,7 @@ impl Cells {
             let mut csarg = CharsizeArg::default();
             // `lnum` 0: virtual text is not to be counted here.
             let cstype = init_charsize_arg(&mut csarg, wp, 0, self.line);
-            wlv.n_extra =
+            wlv.extra_todo =
                 win_charsize(cstype, wlv.vcol, p, utf_ptr2CharInfo(p).value, &mut csarg).width - 1;
 
             if self.on_last_col && self.char_code != TAB {
@@ -546,15 +546,15 @@ impl Cells {
                 // break — but a Tab's highlight covers its whole width.
                 self.search_attr = 0;
             }
-            if self.char_code == TAB && wlv.n_extra + wlv.col > self.view_width {
-                wlv.n_extra = tabstop_padding(
+            if self.char_code == TAB && wlv.extra_todo + wlv.col > self.view_width {
+                wlv.extra_todo = tabstop_padding(
                     wlv.vcol,
                     (*(*wp).w_buffer).b_p_ts,
                     (*(*wp).w_buffer).b_p_vts_array,
                 ) - 1;
             }
-            wlv.sc_extra = schar_from_ascii(if mb_off > 0 { MB_FILLER_CHAR } else { b' ' });
-            wlv.sc_final = NUL as schar_T;
+            wlv.extra_fill = schar_from_ascii(if mb_off > 0 { MB_FILLER_CHAR } else { b' ' });
+            wlv.extra_last = NUL as schar_T;
             if self.char_code < 128 && ascii_iswhite(self.char_code) {
                 if self.char_code == TAB {
                     // See "Tab alignment" in `unprintable`.

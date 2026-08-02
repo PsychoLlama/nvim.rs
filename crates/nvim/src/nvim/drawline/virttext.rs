@@ -416,7 +416,7 @@ impl WinLineVars {
     }
 
     /// Load the inline virtual text that starts at byte `v` into
-    /// [`WinLineVars::p_extra`], so the character loop draws it as if it were
+    /// [`WinLineVars::extra_text`], so the character loop draws it as if it were
     /// buffer text.
     ///
     /// Runs until something is loaded or there is nothing left: a chunk may be
@@ -426,10 +426,10 @@ impl WinLineVars {
     /// # Safety
     /// The decoration state must hold this row's ranges.
     pub(crate) unsafe fn handle_inline_virtual_text(&mut self, v: ptrdiff_t, selected: bool) {
-        // SAFETY: the redraw's decoration state; `p_extra` borrows the chunk,
+        // SAFETY: the redraw's decoration state; `extra_text` borrows the chunk,
         // which the decoration state owns for the rest of the redraw.
         unsafe {
-            while self.n_extra == 0 {
+            while self.extra_todo == 0 {
                 if self.virt_inline_i >= self.virt_inline.size {
                     // Find the next inline text to start.
                     self.virt_inline = VIRTTEXT_EMPTY;
@@ -467,19 +467,19 @@ impl WinLineVars {
                 if text.is_null() {
                     continue;
                 }
-                self.p_extra = text;
-                self.n_extra = strlen(text) as ::core::ffi::c_int;
-                if self.n_extra == 0 {
+                self.extra_text = text;
+                self.extra_todo = strlen(text) as ::core::ffi::c_int;
+                if self.extra_todo == 0 {
                     continue;
                 }
-                self.sc_extra = NUL as schar_T;
-                self.sc_final = NUL as schar_T;
+                self.extra_fill = NUL as schar_T;
+                self.extra_last = NUL as schar_T;
                 self.extra_attr = attr;
                 self.n_attr = mb_charlen(text);
 
                 if self.skip_cells > 0 {
                     // The text starts left of the first visible column.
-                    let width = mb_string2cells(self.p_extra) as ::core::ffi::c_int;
+                    let width = mb_string2cells(self.extra_text) as ::core::ffi::c_int;
                     if width <= self.skip_cells {
                         // Entirely off-screen: drop it and take the next
                         // chunk. The cells it would have taken still count
@@ -487,7 +487,7 @@ impl WinLineVars {
                         self.skip_cells -= width;
                         self.skipped_cells += width;
                         self.n_attr = 0;
-                        self.n_extra = 0;
+                        self.extra_todo = 0;
                         continue;
                     }
                     // Partly visible: step over whole characters until the
@@ -495,22 +495,22 @@ impl WinLineVars {
                     // the skip to the character loop.
                     let mut remaining = self.skip_cells;
                     while remaining > 0 {
-                        let cells = utf_ptr2cells(self.p_extra);
+                        let cells = utf_ptr2cells(self.extra_text);
                         if cells > remaining {
                             break;
                         }
-                        let c_len = utfc_ptr2len(self.p_extra);
+                        let c_len = utfc_ptr2len(self.extra_text);
                         remaining -= cells;
-                        self.p_extra = self.p_extra.add(c_len as usize);
-                        self.n_extra -= c_len;
+                        self.extra_text = self.extra_text.add(c_len as usize);
+                        self.extra_todo -= c_len;
                         self.n_attr -= 1;
                     }
                     self.skipped_cells += self.skip_cells - remaining;
                     self.skip_cells = remaining;
                 }
 
-                assert!(self.n_extra > 0);
-                self.extra_for_extmark = true;
+                assert!(self.extra_todo > 0);
+                self.extra_is_virt_text = true;
             }
         }
     }

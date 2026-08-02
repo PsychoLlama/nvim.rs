@@ -185,9 +185,9 @@ impl Cells {
                     || ((*wp).w_onebuf_opt.wo_list != 0
                         && (*wp).w_p_lcs_chars.eol != NUL as schar_T
                         && self.lcs_eol_todo)
-                    || (wlv.n_extra != 0
-                        && (wlv.sc_extra != NUL as schar_T
-                            || *wlv.p_extra as ::core::ffi::c_int != NUL))
+                    || (wlv.extra_todo != 0
+                        && (wlv.extra_fill != NUL as schar_T
+                            || *wlv.extra_text as ::core::ffi::c_int != NUL))
                     || (self.may_have_inline_virt
                         && wlv.has_more_inline_virt(self.ptr.offset_from(self.line))))
         }

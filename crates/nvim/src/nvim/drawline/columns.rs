@@ -728,7 +728,7 @@ impl WinLineVars {
                     // The first row of a line whose top is scrolled off: the
                     // indent is measured from the second row's left edge.
                     num -= win_col_off2(wp);
-                    if self.n_extra < 0 {
+                    if self.extra_todo < 0 {
                         num = 0;
                     }
                 }

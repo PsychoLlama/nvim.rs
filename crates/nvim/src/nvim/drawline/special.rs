@@ -8,7 +8,7 @@
 //! concealed run becomes one stand-in character followed by nothing at all.
 //!
 //! What these have in common is that they all set up a run in
-//! [`WinLineVars::n_extra`] and hand the first cell of it back to the loop.
+//! [`WinLineVars::extra_todo`] and hand the first cell of it back to the loop.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -42,17 +42,17 @@ impl Cells {
             if schar_cells(self.cell_char) > 1 {
                 // The "precedes" character overwrites a double-width one;
                 // fill up its other half.
-                wlv.sc_extra = schar_from_ascii(MB_FILLER_CHAR);
-                wlv.sc_final = NUL as schar_T;
-                if wlv.n_extra > 0 {
-                    assert!(!wlv.p_extra.is_null());
-                    self.extra_todo_next = wlv.n_extra;
+                wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
+                wlv.extra_last = NUL as schar_T;
+                if wlv.extra_todo > 0 {
+                    assert!(!wlv.extra_text.is_null());
+                    self.extra_todo_next = wlv.extra_todo;
                     self.extra_attr_next = wlv.extra_attr;
                     wlv.n_attr = (wlv.n_attr + 1).max(2);
                 } else {
                     wlv.n_attr = 2;
                 }
-                wlv.n_extra = 1;
+                wlv.extra_todo = 1;
                 wlv.extra_attr = win_hl_attr(wp, HLF_AT);
             }
             self.cell_char = (*wp).w_p_lcs_chars.prec;
@@ -97,9 +97,9 @@ impl Cells {
             }
             if *self.ptr as ::core::ffi::c_int != NUL
                 || (self.lcs_eol > 0 && self.lcs_eol_todo)
-                || (wlv.n_extra > 0
-                    && (wlv.sc_extra != NUL as schar_T
-                        || *wlv.p_extra as ::core::ffi::c_int != NUL))
+                || (wlv.extra_todo > 0
+                    && (wlv.extra_fill != NUL as schar_T
+                        || *wlv.extra_text as ::core::ffi::c_int != NUL))
                 || (self.may_have_inline_virt
                     && wlv.has_more_inline_virt(self.ptr.offset_from(self.line)))
             {
@@ -125,7 +125,7 @@ impl Cells {
         unsafe {
             if self.draw_folded
                 && self.has_foldtext
-                && wlv.n_extra == 0
+                && wlv.extra_todo == 0
                 && wlv.col == self.text_start_col
             {
                 let at = self.byte_col();
@@ -135,7 +135,7 @@ impl Cells {
                     ' ' as ::core::ffi::c_int,
                     FOLD_TEXT_LEN as size_t,
                 );
-                wlv.p_extra = get_foldtext(
+                wlv.extra_text = get_foldtext(
                     wp,
                     wlv.lnum,
                     lnume,
@@ -143,14 +143,14 @@ impl Cells {
                     f.fold_buf,
                     &raw mut self.fold_vt,
                 );
-                wlv.n_extra = strlen(wlv.p_extra) as ::core::ffi::c_int;
-                if wlv.p_extra != f.fold_buf {
+                wlv.extra_todo = strlen(wlv.extra_text) as ::core::ffi::c_int;
+                if wlv.extra_text != f.fold_buf {
                     assert!(self.foldtext_free.is_null());
-                    self.foldtext_free = wlv.p_extra;
+                    self.foldtext_free = wlv.extra_text;
                 }
-                wlv.sc_extra = NUL as schar_T;
-                wlv.sc_final = NUL as schar_T;
-                *wlv.p_extra.offset(wlv.n_extra as isize) = NUL as ::core::ffi::c_char;
+                wlv.extra_fill = NUL as schar_T;
+                wlv.extra_last = NUL as schar_T;
+                *wlv.extra_text.offset(wlv.extra_todo as isize) = NUL as ::core::ffi::c_char;
                 // Evaluating 'foldtext' may have freed the line.
                 self.refetch_line(wp, wlv.lnum, at);
             }
@@ -158,7 +158,7 @@ impl Cells {
             // Fill the rest of the row with the 'fold' fillchar — after the
             // fold text, or after the "eol" listchar for a transparent one.
             if self.draw_folded
-                && wlv.n_extra == 0
+                && wlv.extra_todo == 0
                 && wlv.col < self.view_width
                 && (self.has_foldtext
                     || (*self.ptr as ::core::ffi::c_int == NUL
@@ -166,16 +166,16 @@ impl Cells {
                             || !self.lcs_eol_todo
                             || self.lcs_eol == NUL as schar_T)))
             {
-                wlv.sc_extra = (*wp).w_p_fcs_chars.fold;
-                wlv.sc_final = NUL as schar_T;
-                wlv.n_extra = self.view_width - wlv.col;
+                wlv.extra_fill = (*wp).w_p_fcs_chars.fold;
+                wlv.extra_last = NUL as schar_T;
+                wlv.extra_todo = self.view_width - wlv.col;
                 // Search highlighting stops at the first filler character.
                 self.search_attr = 0;
             }
 
-            if self.draw_folded && wlv.n_extra != 0 && wlv.col >= self.view_width {
+            if self.draw_folded && wlv.extra_todo != 0 && wlv.col >= self.view_width {
                 // Truncate the folding.
-                wlv.n_extra = 0;
+                wlv.extra_todo = 0;
             }
         }
     }
@@ -306,16 +306,16 @@ impl Cells {
             ) - 1;
 
             if (*wp).w_onebuf_opt.wo_lbr == 0 || (*wp).w_onebuf_opt.wo_list == 0 {
-                wlv.n_extra = tab_len;
+                wlv.extra_todo = tab_len;
             } else {
-                let saved_nextra = wlv.n_extra;
+                let saved_nextra = wlv.extra_todo;
                 if wlv.vcol_off_co > 0 {
                     // There are characters to conceal.
                     tab_len += wlv.vcol_off_co;
                 }
                 // The bogus columns from before `fix_for_boguscols` above.
-                if lcs_tab1 != 0 && wlv.old_boguscols > 0 && wlv.n_extra > tab_len {
-                    tab_len += wlv.n_extra - tab_len;
+                if lcs_tab1 != 0 && wlv.old_boguscols > 0 && wlv.extra_todo > tab_len {
+                    tab_len += wlv.extra_todo - tab_len;
                 }
                 if tab_len > 0 {
                     // With 'linebreak' the Tab is spelled out rather than
@@ -323,7 +323,7 @@ impl Cells {
                     //
                     // Both corrections below are genuinely negative sometimes
                     // — a one-byte "tab3" after a two-byte "tab2", and an
-                    // `n_extra` shorter than the Tab — so the running total is
+                    // `extra_todo` shorter than the Tab — so the running total is
                     // signed. Upstream lets `size_t` wrap through the same
                     // arithmetic and relies on the total coming back positive.
                     let tab2_len = schar_len(lcs_tab2) as isize;
@@ -331,8 +331,8 @@ impl Cells {
                     if lcs_tab3 != 0 {
                         len += schar_len(lcs_tab3) as isize - tab2_len;
                     }
-                    if wlv.n_extra > 0 {
-                        len += (wlv.n_extra - tab_len) as isize;
+                    if wlv.extra_todo > 0 {
+                        len += (wlv.extra_todo - tab_len) as isize;
                     }
                     let len = len as size_t;
                     self.cell_char = lcs_tab1;
@@ -344,7 +344,7 @@ impl Cells {
                         len,
                     );
                     *p.add(len) = NUL as ::core::ffi::c_char;
-                    wlv.p_extra = p;
+                    wlv.extra_text = p;
                     for i in 0..tab_len {
                         if *p == NUL as ::core::ffi::c_char {
                             tab_len = i;
@@ -357,12 +357,12 @@ impl Cells {
                             lcs_tab2
                         };
                         let slen = schar_get_adv(&raw mut p, lcs_here);
-                        wlv.n_extra +=
+                        wlv.extra_todo +=
                             slen as ::core::ffi::c_int - ::core::ffi::c_int::from(saved_nextra > 0);
                     }
                     if wlv.vcol_off_co > 0 {
                         // `fix_for_boguscols` below adds it back.
-                        wlv.n_extra -= wlv.vcol_off_co;
+                        wlv.extra_todo -= wlv.vcol_off_co;
                     }
                 }
             }
@@ -376,7 +376,7 @@ impl Cells {
                 wlv.fix_for_boguscols();
                 // Put back what the line below needs to get the Tab's own
                 // highlight right.
-                if wlv.n_extra == tab_len + vc_saved
+                if wlv.extra_todo == tab_len + vc_saved
                     && (*wp).w_onebuf_opt.wo_list != 0
                     && (*wp).w_p_lcs_chars.tab1 != 0
                 {
@@ -385,27 +385,27 @@ impl Cells {
             }
 
             if (*wp).w_onebuf_opt.wo_list != 0 {
-                self.cell_char = if wlv.n_extra == 0 && lcs_tab3 != 0 {
+                self.cell_char = if wlv.extra_todo == 0 && lcs_tab3 != 0 {
                     lcs_tab3
                 } else {
                     lcs_tab1
                 };
                 if (*wp).w_onebuf_opt.wo_lbr != 0
-                    && !wlv.p_extra.is_null()
-                    && *wlv.p_extra != NUL as ::core::ffi::c_char
+                    && !wlv.extra_text.is_null()
+                    && *wlv.extra_text != NUL as ::core::ffi::c_char
                 {
-                    // Using `p_extra` from above.
-                    wlv.sc_extra = NUL as schar_T;
+                    // Using `extra_text` from above.
+                    wlv.extra_fill = NUL as schar_T;
                 } else {
-                    wlv.sc_extra = lcs_tab2;
+                    wlv.extra_fill = lcs_tab2;
                 }
-                wlv.sc_final = lcs_tab3;
+                wlv.extra_last = lcs_tab3;
                 wlv.n_attr = tab_len + 1;
                 wlv.extra_attr = win_hl_attr(wp, HLF_0);
                 self.attr_before_run = wlv.char_attr;
             } else {
-                wlv.sc_final = NUL as schar_T;
-                wlv.sc_extra = schar_from_ascii(b' ');
+                wlv.extra_last = NUL as schar_T;
+                wlv.extra_fill = schar_from_ascii(b' ');
                 self.cell_char = schar_from_ascii(b' ');
             }
             self.char_code = schar_get_first_codepoint(self.cell_char);
@@ -420,39 +420,39 @@ impl Cells {
         // SAFETY: the caller's window; `transchar_buf` answers a static
         // NUL-terminated buffer.
         unsafe {
-            wlv.p_extra = transchar_buf((*wp).w_buffer, self.char_code);
-            if wlv.n_extra == 0 {
-                wlv.n_extra = byte2cells(self.char_code) - 1;
+            wlv.extra_text = transchar_buf((*wp).w_buffer, self.char_code);
+            if wlv.extra_todo == 0 {
+                wlv.extra_todo = byte2cells(self.char_code) - 1;
             }
             if dy_flags.get() & kOptDyFlagUhex as uint32_t != 0 && (*wp).w_onebuf_opt.wo_rl != 0 {
                 // Reverse "<12>".
-                rl_mirror_ascii(wlv.p_extra, ::core::ptr::null_mut());
+                rl_mirror_ascii(wlv.extra_text, ::core::ptr::null_mut());
             }
-            wlv.sc_extra = NUL as schar_T;
-            wlv.sc_final = NUL as schar_T;
+            wlv.extra_fill = NUL as schar_T;
+            wlv.extra_last = NUL as schar_T;
             if (*wp).w_onebuf_opt.wo_lbr != 0 {
                 // With 'linebreak' the escape has to be padded out to the
                 // width the character would have had.
-                self.char_code = *wlv.p_extra as uint8_t as ::core::ffi::c_int;
-                let p = get_extra_buf(wlv.n_extra as size_t + 1);
+                self.char_code = *wlv.extra_text as uint8_t as ::core::ffi::c_int;
+                let p = get_extra_buf(wlv.extra_todo as size_t + 1);
                 memset(
                     p.cast::<::core::ffi::c_void>(),
                     ' ' as ::core::ffi::c_int,
-                    wlv.n_extra as size_t,
+                    wlv.extra_todo as size_t,
                 );
                 memcpy(
                     p.cast::<::core::ffi::c_void>(),
-                    wlv.p_extra.offset(1).cast::<::core::ffi::c_void>(),
-                    strlen(wlv.p_extra) - 1,
+                    wlv.extra_text.offset(1).cast::<::core::ffi::c_void>(),
+                    strlen(wlv.extra_text) - 1,
                 );
-                *p.offset(wlv.n_extra as isize) = NUL as ::core::ffi::c_char;
-                wlv.p_extra = p;
+                *p.offset(wlv.extra_todo as isize) = NUL as ::core::ffi::c_char;
+                wlv.extra_text = p;
             } else {
-                wlv.n_extra = byte2cells(self.char_code) - 1;
-                self.char_code = *wlv.p_extra as uint8_t as ::core::ffi::c_int;
-                wlv.p_extra = wlv.p_extra.offset(1);
+                wlv.extra_todo = byte2cells(self.char_code) - 1;
+                self.char_code = *wlv.extra_text as uint8_t as ::core::ffi::c_int;
+                wlv.extra_text = wlv.extra_text.offset(1);
             }
-            wlv.n_attr = wlv.n_extra + 1;
+            wlv.n_attr = wlv.extra_todo + 1;
             wlv.extra_attr = win_hl_attr(wp, HLF_8);
             self.attr_before_run = wlv.char_attr;
             self.cell_char = schar_from_ascii(self.char_code as u8);
@@ -499,9 +499,9 @@ impl Cells {
                 {
                     // Under 'virtualedit' a Visual selection may extend past
                     // the end of the line, and then the run has to survive.
-                    wlv.p_extra = c"".as_ptr() as *mut ::core::ffi::c_char;
+                    wlv.extra_text = c"".as_ptr() as *mut ::core::ffi::c_char;
                 }
-                wlv.n_extra = 0;
+                wlv.extra_todo = 0;
             }
             self.cell_char = if (*wp).w_onebuf_opt.wo_list != 0 && (*wp).w_p_lcs_chars.eol > 0 {
                 (*wp).w_p_lcs_chars.eol
@@ -559,7 +559,7 @@ impl Cells {
                 if schar_cells(self.cell_char) > 1 {
                     // The first concealed character is double-width, so one
                     // more virtual column goes with it.
-                    wlv.n_extra += 1;
+                    wlv.extra_todo += 1;
                 }
                 self.cell_char = if self.has_match_conc != 0 && self.match_conc != 0 {
                     schar_from_char(self.match_conc)
@@ -578,15 +578,15 @@ impl Cells {
                 self.char_code = schar_get_first_codepoint(self.cell_char);
                 self.prev_syntax_id = self.syntax_seqnr;
 
-                if wlv.n_extra > 0 {
-                    wlv.vcol_off_co += wlv.n_extra;
+                if wlv.extra_todo > 0 {
+                    wlv.vcol_off_co += wlv.extra_todo;
                 }
-                wlv.vcol += wlv.n_extra;
-                if self.is_wrapped && wlv.n_extra > 0 {
-                    wlv.boguscols += wlv.n_extra;
-                    wlv.col += wlv.n_extra;
+                wlv.vcol += wlv.extra_todo;
+                if self.is_wrapped && wlv.extra_todo > 0 {
+                    wlv.boguscols += wlv.extra_todo;
+                    wlv.col += wlv.extra_todo;
                 }
-                wlv.n_extra = 0;
+                wlv.extra_todo = 0;
                 wlv.n_attr = 0;
             } else if wlv.skip_cells == 0 {
                 self.is_concealing = true;

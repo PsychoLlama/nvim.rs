@@ -27,18 +27,18 @@ impl Cells {
     pub(super) unsafe fn cell_attributes(&mut self, wlv: &mut WinLineVars, wp: *mut win_T) {
         // SAFETY: the caller's window and frame.
         unsafe {
-            if wlv.n_extra == 0 || !wlv.extra_for_extmark {
+            if wlv.extra_todo == 0 || !wlv.extra_is_virt_text {
                 wlv.reset_extra_attr = false;
             }
 
-            if self.has_decor && wlv.n_extra == 0 {
+            if self.has_decor && wlv.extra_todo == 0 {
                 self.decorations_at(wlv, wp);
             }
 
             // While inline virtual text is being drawn the real area
             // attribute is parked in `saved_area_attr`; the two are the same
             // slot as far as this test is concerned.
-            let use_saved = wlv.extra_for_extmark && wlv.virt_inline_hl_mode <= kHlModeReplace;
+            let use_saved = wlv.extra_is_virt_text && wlv.virt_inline_hl_mode <= kHlModeReplace;
             let mut area = if use_saved {
                 self.saved_area_attr
             } else {
@@ -59,7 +59,7 @@ impl Cells {
                 self.area_attr = area;
             }
 
-            if !self.has_foldtext && wlv.n_extra == 0 {
+            if !self.has_foldtext && wlv.extra_todo == 0 {
                 self.search_highlight(wlv, wp);
             }
 
@@ -103,16 +103,16 @@ impl Cells {
     /// `prev_vcol == fromcol_prev` says.
     ///
     /// # Safety
-    /// `ptr` and `p_extra` must be readable.
+    /// `ptr` and `extra_text` must be readable.
     pub(super) unsafe fn area_starts_here(&self, wlv: &WinLineVars) -> bool {
         // SAFETY: the loop's own pointers.
         unsafe {
             wlv.vcol == wlv.fromcol
                 || (wlv.vcol + 1 == wlv.fromcol
-                    && ((wlv.n_extra == 0 && utf_ptr2cells(self.ptr) > 1)
-                        || (wlv.n_extra > 0
-                            && !wlv.p_extra.is_null()
-                            && utf_ptr2cells(wlv.p_extra) > 1)))
+                    && ((wlv.extra_todo == 0 && utf_ptr2cells(self.ptr) > 1)
+                        || (wlv.extra_todo > 0
+                            && !wlv.extra_text.is_null()
+                            && utf_ptr2cells(wlv.extra_text) > 1)))
                 || (self.prev_vcol == self.fromcol_prev
                     && self.prev_vcol < wlv.vcol
                     && wlv.vcol < wlv.tocol)
@@ -128,9 +128,11 @@ impl Cells {
         // SAFETY: the caller's window and the redraw's decoration state.
         unsafe {
             // The Visual-area test below is repeated here rather than shared,
-            // because this one may not look inside `p_extra`.
+            // because this one may not look inside `extra_text`.
             if wlv.vcol == wlv.fromcol
-                || (wlv.vcol + 1 == wlv.fromcol && wlv.n_extra == 0 && utf_ptr2cells(self.ptr) > 1)
+                || (wlv.vcol + 1 == wlv.fromcol
+                    && wlv.extra_todo == 0
+                    && utf_ptr2cells(self.ptr) > 1)
                 || (self.prev_vcol == self.fromcol_prev
                     && self.prev_vcol < wlv.vcol
                     && wlv.vcol < wlv.tocol)
@@ -169,9 +171,9 @@ impl Cells {
                 return;
             }
             wlv.handle_inline_virtual_text(self.ptr.offset_from(self.line), selected);
-            if wlv.n_extra > 0 && wlv.virt_inline_hl_mode <= kHlModeReplace {
+            if wlv.extra_todo > 0 && wlv.virt_inline_hl_mode <= kHlModeReplace {
                 // Park the attributes the virtual text replaces; they come
-                // back when `n_extra` is spent.
+                // back when `extra_todo` is spent.
                 self.saved_search_attr = self.search_attr;
                 self.saved_area_attr = self.area_attr;
                 self.saved_decor_attr = self.decor_attr;
@@ -260,12 +262,12 @@ impl Cells {
             }
             // Extra text (virtual text, say) takes the *line's* diff
             // highlight, never the changed-text one.
-            if wlv.diff_hlf == HLF_CHD && at >= self.change_start as isize && wlv.n_extra == 0 {
+            if wlv.diff_hlf == HLF_CHD && at >= self.change_start as isize && wlv.extra_todo == 0 {
                 wlv.diff_hlf = if added { HLF_TXA } else { HLF_TXD };
             }
             if (wlv.diff_hlf == HLF_TXD || wlv.diff_hlf == HLF_TXA)
-                && ((at >= self.change_end as isize && wlv.n_extra == 0)
-                    || (wlv.n_extra > 0 && wlv.extra_for_extmark))
+                && ((at >= self.change_end as isize && wlv.extra_todo == 0)
+                    || (wlv.extra_todo > 0 && wlv.extra_is_virt_text))
             {
                 wlv.diff_hlf = HLF_CHD;
             }
