@@ -1,3 +1,21 @@
+//! Syntax highlighting: `:syntax` and the state machine behind it.
+//!
+//! The module is the parent of sixteen children and holds what they share --
+//! the item types, the `SYN*`/`SPO_*`/`HL_*` vocabulary, and the statics that
+//! are the parser's whole state. Broadly:
+//!
+//! - **Defining items**: [`command`] (`:syntax` itself and the per-block
+//!   modes), [`keyword`], [`define`] (`match`/`region`/`include`), [`cluster`],
+//!   [`options`] (the flag words and the `contains=` lists) and [`clear`].
+//! - **Parsing**: [`state`] (the driver), [`stack`] (the cache of saved
+//!   states), [`sync`] (where parsing may start), [`items`] (the state stack),
+//!   [`endpos`] (finding a region's end) and [`attr`] (the per-cell answer).
+//! - **Answering**: [`query`], [`list`] (`:syntax list`) and [`syntime`].
+//!
+//! Two blocks matter and are easy to confuse: [`syn_block`] is the one being
+//! *parsed*, and [`cur_syn_block`] -- `curwin`'s -- is the one a `:syntax`
+//! command *configures*. Each has its own accessors.
+
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
@@ -56,10 +74,9 @@ use crate::src::nvim::strings::{
     vim_snprintf, vim_strchr, vim_strnsave_up, vim_strsave_up, xstrnsave,
 };
 use crate::src::nvim::types::{
-    CMD_index, OptInt, buf_T, bufstate_T, cmd_addr_T, colnr_T, exarg_T, expand_T, garray_T,
-    hashtab_T, int16_t, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T,
-    regprog_T, size_t, syn_time_T, synblock_T, synstate_T, uint8_t, uint32_t, uint64_t,
-    varnumber_T, win_T,
+    OptInt, buf_T, bufstate_T, colnr_T, exarg_T, expand_T, garray_T, hashtab_T, int16_t, linenr_T,
+    lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T,
+    synblock_T, synstate_T, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
 
 mod flags;
@@ -105,19 +122,17 @@ unsafe extern "C" {
     fn vim_regfree(prog: *mut regprog_T);
     fn vim_regexec(rmp: *mut regmatch_T, line: *const ::core::ffi::c_char, col: colnr_T) -> bool;
 }
-pub type C2Rust_Unnamed_13 = ::core::ffi::c_uint;
-pub const MAXCOL: C2Rust_Unnamed_13 = 2147483647;
-pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
-pub const EXPAND_BUF_LEN: C2Rust_Unnamed_15 = 256;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_int;
-pub const EXPAND_HIGHLIGHT: C2Rust_Unnamed_16 = 13;
-pub const EXPAND_SYNTAX: C2Rust_Unnamed_16 = 12;
-pub const EXPAND_NOTHING: C2Rust_Unnamed_16 = 0;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
-pub const NSUBEXP: C2Rust_Unnamed_17 = 10;
-pub const CMD_append: CMD_index = 0;
-pub const ADDR_LINES: cmd_addr_T = 0;
+/// The largest possible column number.
+pub const MAXCOL: ::core::ffi::c_uint = 2147483647;
+/// How many `\(..\)` submatches a pattern can have.
+pub const NSUBEXP: ::core::ffi::c_uint = 10;
+/// Size of `expand_T::xp_buf`, the scratch buffer a completion callback may
+/// answer from.
+pub const EXPAND_BUF_LEN: ::core::ffi::c_uint = 256;
+// The `expand_T::xp_context` values this module sets.
+pub const EXPAND_NOTHING: ::core::ffi::c_int = 0;
+pub const EXPAND_SYNTAX: ::core::ffi::c_int = 12;
+pub const EXPAND_HIGHLIGHT: ::core::ffi::c_int = 13;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct sp_syn {
@@ -136,15 +151,15 @@ pub struct keyentry {
     pub keyword: [::core::ffi::c_char; 0],
 }
 pub type keyentry_T = keyentry;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const MAX_HL_ID: C2Rust_Unnamed_20 = 20000;
+/// The highest highlight id there can be.
+pub const MAX_HL_ID: ::core::ffi::c_uint = 20000;
 /// The `contains=ALL`/`ALLBUT` marker, which shares its value with the highest
 /// possible highlight id and is offset by the `:syntax include` tag.
 pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = MAX_HL_ID as ::core::ffi::c_int;
-pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
-pub const DOSO_NONE: C2Rust_Unnamed_21 = 0;
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub const DIP_ALL: C2Rust_Unnamed_22 = 1;
+/// `do_source` flag: this is not a plugin or a package.
+pub const DOSO_NONE: ::core::ffi::c_uint = 0;
+/// `source_runtime` flag: source every match, not just the first.
+pub const DIP_ALL: ::core::ffi::c_uint = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct stateitem_T {
@@ -197,12 +212,6 @@ pub struct syn_cluster_T {
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct subcommand {
-    pub name: *mut ::core::ffi::c_char,
-    pub func: Option<unsafe extern "C" fn(*mut exarg_T, ::core::ffi::c_int) -> ()>,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct syn_opt_arg_T {
     pub flags: ::core::ffi::c_int,
     pub keyword: bool,
@@ -212,26 +221,6 @@ pub struct syn_opt_arg_T {
     pub cont_in_list: *mut int16_t,
     pub next_list: *mut int16_t,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct pat_ptr {
-    pub pp_synp: *mut synpat_T,
-    pub pp_matchgroup_id: ::core::ffi::c_int,
-    pub pp_next: *mut pat_ptr,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct flag {
-    pub name: *mut ::core::ffi::c_char,
-    pub argtype: ::core::ffi::c_int,
-    pub flags: ::core::ffi::c_int,
-}
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_uint;
-pub const EXP_CLUSTER: C2Rust_Unnamed_24 = 4;
-pub const EXP_SYNC: C2Rust_Unnamed_24 = 3;
-pub const EXP_SPELL: C2Rust_Unnamed_24 = 2;
-pub const EXP_CASE: C2Rust_Unnamed_24 = 1;
-pub const EXP_SUBCMD: C2Rust_Unnamed_24 = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
@@ -256,7 +245,9 @@ pub const SST_MIN_ENTRIES: ::core::ffi::c_int = 150 as ::core::ffi::c_int;
 pub const SST_MAX_ENTRIES: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
 pub const SST_FIX_STATES: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
 pub const SST_DIST: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-static did_syntax_onoff: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+/// Whether `:syntax on|off|enable|manual` has been used, which is what stops
+/// [`syn_maybe_enable`] from overriding a deliberate choice.
+static did_syntax_onoff: GlobalCell<bool> = GlobalCell::new(false);
 pub const SPO_MS_OFF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SPO_ME_OFF: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SPO_HS_OFF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -280,12 +271,22 @@ pub const NONE_IDX: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const SF_CCOMMENT: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const SF_MATCH: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const MAXKEYWLEN: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
-static current_attr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static current_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static current_trans_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static current_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static current_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static current_sub_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
+// What the last `syn_current_attr` decided about the current position. The
+// query API reads these back, so they outlive the call that set them.
+
+/// Attribute number of the current character.
+static current_attr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// Syntax id of the current character, before transparency.
+static current_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// Syntax id of the current character, after transparency.
+static current_trans_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// `HL_*` flags of the current character.
+static current_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// Sequence number of the item the current character belongs to, which is what
+/// tells two runs of the same group apart.
+static current_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// The `cchar=` of the current character, for `conceal`.
+static current_sub_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const CLUSTER_REPLACE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const CLUSTER_ADD: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CLUSTER_SUBTRACT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
@@ -294,13 +295,17 @@ pub const SYNID_CONTAINED: ::core::ffi::c_int = 22000 as ::core::ffi::c_int;
 pub const SYNID_CLUSTER: ::core::ffi::c_int = 23000 as ::core::ffi::c_int;
 pub const MAX_SYN_INC_TAG: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
 pub const MAX_CLUSTER_ID: ::core::ffi::c_int = 32767 as ::core::ffi::c_int - SYNID_CLUSTER;
+/// The `:syntax` command line being executed, which `:syntax include` needs to
+/// expand a file name against.
 static syn_cmdlinep: GlobalCell<*mut *mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<*mut ::core::ffi::c_char>());
-static current_syn_inc_tag: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
-static running_syn_inc_tag: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
-static keepend_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
+    GlobalCell::new(::core::ptr::null_mut());
+/// The `:syntax include` nesting tag items are being defined under; 0 outside
+/// an inclusion.
+static current_syn_inc_tag: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// The highest tag handed out so far, capped at [`MAX_SYN_INC_TAG`].
+static running_syn_inc_tag: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// Stack index of the outermost `keepend` item currently in effect, or -1.
+static keepend_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1);
 /// What every `:syntax`/`:syntime` listing answers when there is nothing to
 /// list.
 pub(crate) const MSG_NO_ITEMS: &::core::ffi::CStr = c"No Syntax items defined for this buffer";
@@ -340,9 +345,19 @@ pub(crate) unsafe fn cur_cluster(idx: ::core::ffi::c_int) -> *mut syn_cluster_T 
 pub(crate) unsafe fn cur_cluster_count() -> ::core::ffi::c_int {
     unsafe { (*cur_syn_block()).b_syn_clusters.ga_len }
 }
-pub const KEYWORD_IDX: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
+/// `stateitem_T::si_idx` for a keyword, which has no pattern.
+pub const KEYWORD_IDX: ::core::ffi::c_int = -1;
+/// The `contains=` list of a transparent item that is not inside anything: it
+/// admits every not-`contained` group.
 pub const ID_LIST_ALL: *mut int16_t = -1 as ::core::ffi::c_int as *mut int16_t;
-static next_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
+/// The sequence number the next pushed item gets.
+static next_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1);
+
+// The match `syn_current_attr` found ahead of the current column and has not
+// pushed yet. `next_match_col` is MAXCOL for "nothing found" and -1 for "not
+// looked yet".
+
+/// Column the pending match starts at.
 static next_match_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static next_match_m_endpos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
 static next_match_h_startpos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
@@ -354,23 +369,40 @@ static next_match_eoe_pos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0
 static next_match_end_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static next_match_extmatch: GlobalCell<*mut reg_extmatch_T> =
     GlobalCell::new(::core::ptr::null_mut::<reg_extmatch_T>());
-static syn_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-static syn_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
-static syn_block: GlobalCell<*mut synblock_T> =
-    GlobalCell::new(::core::ptr::null_mut::<synblock_T>());
-static syn_tm: GlobalCell<*mut proftime_T> = GlobalCell::new(::core::ptr::null_mut::<proftime_T>());
-static current_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-static current_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
-static current_state_stored: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-static current_finished: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
+// Where the parser currently is. `syntax_start` sets the first four together
+// and everything else is relative to them.
+
+/// The window being parsed for.
+static syn_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut());
+/// The buffer being parsed.
+static syn_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut());
+/// The syntax block being parsed -- `syn_win`'s, which for `:ownsyntax` is not
+/// the buffer's.
+static syn_block: GlobalCell<*mut synblock_T> = GlobalCell::new(::core::ptr::null_mut());
+/// When parsing must give up, or NULL for no limit.
+static syn_tm: GlobalCell<*mut proftime_T> = GlobalCell::new(::core::ptr::null_mut());
+/// The line being parsed.
+static current_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
+/// The column being parsed.
+static current_col: GlobalCell<colnr_T> = GlobalCell::new(0);
+/// Whether the state at `current_lnum` has been put in the cache.
+static current_state_stored: GlobalCell<bool> = GlobalCell::new(false);
+/// Whether the line has been parsed to its end.
+static current_finished: GlobalCell<bool> = GlobalCell::new(false);
+/// The state stack: a `garray_T` of [`stateitem_T`], outermost item first.
 static current_state: GlobalCell<garray_T> = GlobalCell::new(GA_EMPTY_INIT_VALUE);
-static current_next_list: GlobalCell<*mut int16_t> =
-    GlobalCell::new(::core::ptr::null_mut::<int16_t>());
-static current_next_flags: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
-static current_line_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static syn_time_on: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-pub unsafe extern "C" fn syn_set_timeout(mut tm: *mut proftime_T) {
+/// The `nextgroup=` list in effect, or NULL.
+static current_next_list: GlobalCell<*mut int16_t> = GlobalCell::new(::core::ptr::null_mut());
+/// The `skipwhite`/`skipnl`/`skipempty` flags that came with it.
+static current_next_flags: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// `display_tick` when the current line was parsed, which is how a `display`
+/// item knows it is being drawn rather than scanned.
+static current_line_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// Whether `:syntime on` is in effect.
+static syn_time_on: GlobalCell<bool> = GlobalCell::new(false);
+
+/// Set the time limit for parsing, or clear it with NULL.
+pub unsafe fn syn_set_timeout(tm: *mut proftime_T) {
     syn_tm.set(tm);
 }
 pub const ITEM_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
