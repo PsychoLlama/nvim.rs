@@ -1,10 +1,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{CStr, c_int};
+use core::ffi::{CStr, c_int, c_uint};
 
 use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::decoration_provider::decor_provider_invalidate_hl;
-use crate::src::nvim::global_cell::GlobalCell;
 use crate::src::nvim::highlight::{
     HL_ALTFONT, HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DIM, HL_INVERSE, HL_ITALIC, HL_NOCOMBINE,
     HL_OVERLINE, HL_STANDOUT, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDASHED, HL_UNDERDOTTED,
@@ -14,15 +13,8 @@ use crate::src::nvim::main::{
     clear_cmdline, highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, msg_grid,
     need_highlight_changed,
 };
-use crate::src::nvim::types::{
-    Dict, Integer, KeyValuePair, Object, OptValType, RgbValue, TriState, size_t,
-};
+use crate::src::nvim::types::{Integer, OptValType, TriState, size_t};
 use crate::src::nvim::ui::ui_call_hl_group_set;
-pub type C2Rust_Unnamed = ::core::ffi::c_uint;
-pub const _ISxdigit: C2Rust_Unnamed = 4096;
-pub const kTrue: TriState = 1;
-pub const kFalse: TriState = 0;
-pub const kNone: TriState = -1;
 mod hlf;
 
 pub use self::hlf::*;
@@ -44,57 +36,66 @@ mod command;
 pub use self::command::*;
 mod apply;
 pub use self::apply::*;
-pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
-pub const HLATTRS_DICT_SIZE: C2Rust_Unnamed_16 = 24;
-pub type C2Rust_Unnamed_17 = ::core::ffi::c_int;
-pub const EXPAND_HIGHLIGHT: C2Rust_Unnamed_17 = 13;
-pub const EXPAND_NOTHING: C2Rust_Unnamed_17 = 0;
+
+/// `TriState`: an answer that can also be "leave it alone".
+pub const kTrue: TriState = 1;
+pub const kFalse: TriState = 0;
+pub const kNone: TriState = -1;
+
+/// The most entries `hlattrs2dict` can write, which is what its callers have
+/// to allocate.
+pub const HLATTRS_DICT_SIZE: size_t = 24;
+
+/// `xp_context` values: what `:highlight`'s completion is expanding.
+pub const EXPAND_HIGHLIGHT: c_int = 13;
+pub const EXPAND_NOTHING: c_int = 0;
+
+/// `OptValType`, for the one option this family sets (`'background'`).
 pub const kOptValTypeString: OptValType = 2;
-pub type C2Rust_Unnamed_20 = ::core::ffi::c_uint;
-pub const MAX_HL_ID: C2Rust_Unnamed_20 = 20000;
-pub const kColorIdxNone: C2Rust_Unnamed_24 = -1;
-pub const kColorIdxBg: C2Rust_Unnamed_24 = -4;
-pub const kColorIdxFg: C2Rust_Unnamed_24 = -3;
-pub const SG_LINK: C2Rust_Unnamed_23 = 8;
-pub const kColorIdxHex: C2Rust_Unnamed_24 = -2;
-pub const SG_GUI: C2Rust_Unnamed_23 = 4;
-pub const SG_CTERM: C2Rust_Unnamed_23 = 2;
-pub const DIP_OPT: C2Rust_Unnamed_22 = 16;
-pub const DIP_START: C2Rust_Unnamed_22 = 8;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct C2Rust_Unnamed_21 {
-    pub dest: *mut ::core::ffi::c_int,
-    pub val: RgbValue,
-    pub name: Object,
-}
-pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub type C2Rust_Unnamed_24 = ::core::ffi::c_int;
-pub const __ASSERT_FUNCTION: [::core::ffi::c_char; 45] = unsafe {
-    ::core::mem::transmute::<[u8; 45], [::core::ffi::c_char; 45]>(
-        *b"_Bool hlgroup2dict(Dict *, NS, int, Arena *)\0",
-    )
-};
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: Dict = Dict {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<KeyValuePair>(),
-};
-pub const ARRAY_DICT_INIT: Dict = KV_INITIAL_VALUE;
-pub const KEYSET_OPTIDX_highlight__bg: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_highlight__fg: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_highlight__sp: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_highlight__update: ::core::ffi::c_int = 13 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_highlight__id: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_highlight__link: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_highlight__name: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_highlight__create: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
-pub const MAX_SYN_NAME: ::core::ffi::c_int = 200 as ::core::ffi::c_int;
+
+/// `source_runtime_vim_lua` flags: where a colour scheme may be found.
+pub const DIP_START: c_uint = 8;
+pub const DIP_OPT: c_uint = 16;
+
+/// The highest highlight id, and the longest group name.
+pub const MAX_HL_ID: c_uint = 20000;
+pub const MAX_SYN_NAME: c_int = 200;
+
+/// `HlGroup::set`: which parts of a group have been given explicitly, so
+/// that `init` definitions know what not to overwrite.
+pub const SG_CTERM: c_uint = 2;
+pub const SG_GUI: c_uint = 4;
+pub const SG_LINK: c_uint = 8;
+
+/// `HlGroup::rgb_*_idx`: where an RGB colour came from. A non-negative value
+/// is an index into `COLOR_NAMES` instead.
+pub const kColorIdxNone: c_int = -1;
+pub const kColorIdxHex: c_int = -2;
+pub const kColorIdxFg: c_int = -3;
+pub const kColorIdxBg: c_int = -4;
+
+/// Keyset bit positions, from `api/keysets_defs.h`.
+pub const KEYSET_OPTIDX_highlight__bg: c_int = 1;
+pub const KEYSET_OPTIDX_highlight__fg: c_int = 2;
+pub const KEYSET_OPTIDX_highlight__sp: c_int = 3;
+pub const KEYSET_OPTIDX_highlight__update: c_int = 13;
+pub const KEYSET_OPTIDX_get_highlight__id: c_int = 1;
+pub const KEYSET_OPTIDX_get_highlight__link: c_int = 2;
+pub const KEYSET_OPTIDX_get_highlight__name: c_int = 3;
+pub const KEYSET_OPTIDX_get_highlight__create: c_int = 4;
+
+/// `OK`, the answer `:colorscheme` reads from `load_colors`.
+pub const OK: c_int = 1;
+
+/// The `:highlight` parse errors.
+pub(crate) const e_highlight_group_name_not_found_str: &CStr =
+    c"E411: Highlight group not found: %s";
+pub(crate) const e_group_has_settings_highlight_link_ignored: &CStr =
+    c"E414: Group has settings, highlight link ignored";
+pub(crate) const e_unexpected_equal_sign_str: &CStr = c"E415: Unexpected equal sign: %s";
+pub(crate) const e_missing_equal_sign_str_2: &CStr = c"E416: Missing equal sign: %s";
+pub(crate) const e_missing_argument_str: &CStr = c"E417: Missing argument: %s";
+
 /// The names `term=`/`cterm=`/`gui=` accept, and the `HL_*` bit each one
 /// means. `reverse` and `inverse` are the same bit; the `NONE` sentinel ends
 /// the list, and is what makes an unrecognised name an error.
@@ -118,33 +119,6 @@ pub(crate) static ATTR_NAMES: [(&CStr, c_int); 18] = [
     (c"nocombine", HL_NOCOMBINE),
     (c"NONE", 0),
 ];
-static e_highlight_group_name_not_found_str: GlobalCell<[::core::ffi::c_char; 36]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(
-            *b"E411: Highlight group not found: %s\0",
-        )
-    });
-static e_group_has_settings_highlight_link_ignored: GlobalCell<[::core::ffi::c_char; 49]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 49], [::core::ffi::c_char; 49]>(
-            *b"E414: Group has settings, highlight link ignored\0",
-        )
-    });
-static e_unexpected_equal_sign_str: GlobalCell<[::core::ffi::c_char; 32]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 32], [::core::ffi::c_char; 32]>(
-            *b"E415: Unexpected equal sign: %s\0",
-        )
-    });
-static e_missing_equal_sign_str_2: GlobalCell<[::core::ffi::c_char; 29]> =
-    GlobalCell::new(unsafe {
-        ::core::mem::transmute::<[u8; 29], [::core::ffi::c_char; 29]>(
-            *b"E416: Missing equal sign: %s\0",
-        )
-    });
-static e_missing_argument_str: GlobalCell<[::core::ffi::c_char; 27]> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 27], [::core::ffi::c_char; 27]>(*b"E417: Missing argument: %s\0")
-});
 /// Applies the difference between `User{i+1}` and `StatusLine` to
 /// `StatusLineNC`, in scratch entry `hlcnt + i`, and answers the attribute
 /// id that combination resolves to.

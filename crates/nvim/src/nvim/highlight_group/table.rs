@@ -177,17 +177,6 @@ impl GroupTable {
 
 static GROUPS: GlobalCell<GroupTable> = GlobalCell::new(GroupTable::new());
 
-/// The group array, for the bodies in this family that are still transpiled.
-///
-/// # Safety
-/// The pointer is invalidated by anything that adds a group; main thread
-/// only. Nothing outside `highlight_group` may call this, and it goes with
-/// the last transpiled reader.
-pub(crate) unsafe fn hl_table() -> *mut HlGroup {
-    // SAFETY: the editor's own table, on the main thread.
-    unsafe { (*GROUPS.ptr()).entries.as_mut_ptr() }
-}
-
 /// The number of highlight groups.
 pub fn highlight_num_groups() -> c_int {
     GROUPS.with(|table| table.entries.len() as c_int)

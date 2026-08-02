@@ -149,7 +149,7 @@ pub unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool) {
             let id = syn_name2id_len(name.as_ptr().cast(), name.len());
             if id == 0 {
                 semsg(
-                    gettext(e_highlight_group_name_not_found_str.as_raw().cast()),
+                    gettext(e_highlight_group_name_not_found_str.as_ptr()),
                     name.as_ptr(),
                 );
             } else {
@@ -330,7 +330,7 @@ unsafe fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: 
             // unless '!' is used.
             if sourcing_name_is_null() && !dodefault {
                 emsg(gettext(
-                    e_group_has_settings_highlight_link_ignored.as_raw().cast(),
+                    e_group_has_settings_highlight_link_ignored.as_ptr(),
                 ));
             }
         } else if entry.link != to_id
@@ -383,7 +383,7 @@ impl KeyLoop {
                 let key_at = line.at;
                 if line.peek() == b'=' {
                     semsg(
-                        gettext(e_unexpected_equal_sign_str.as_raw().cast()),
+                        gettext(e_unexpected_equal_sign_str.as_ptr()),
                         line.ptr(key_at),
                     );
                     break;
@@ -413,7 +413,7 @@ impl KeyLoop {
 
                 if line.peek() != b'=' {
                     semsg(
-                        gettext(e_missing_equal_sign_str_2.as_raw().cast()),
+                        gettext(e_missing_equal_sign_str_2.as_ptr()),
                         line.ptr(key_at),
                     );
                     break;
@@ -441,10 +441,7 @@ impl KeyLoop {
                 };
                 line.at = end;
                 if end == arg_at {
-                    semsg(
-                        gettext(e_missing_argument_str.as_raw().cast()),
-                        line.ptr(key_at),
-                    );
+                    semsg(gettext(e_missing_argument_str.as_ptr()), line.ptr(key_at));
                     break;
                 }
                 if end - arg_at > 511 {
