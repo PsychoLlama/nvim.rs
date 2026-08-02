@@ -7,56 +7,27 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+Ongoing migration of the transpiled code toward safe, idiomatic Rust.
+
 ### Changed
 
-- Rewrote the screen pipeline, covering the cell grid and its double-width
-  and combining-character handling, screen-line measurement (`virtcol()`,
-  `strdisplaywidth()`, `'linebreak'`, `'breakindent'`, `'vartabstop'`),
-  highlight attributes and the `:highlight` group table (colour names,
-  `nvim_set_hl`, namespaces, `'winblend'` and `'pumblend'`), decorations and
-  decoration providers (extmark highlights, virtual text and virtual lines),
-  signs and the `:sign` command, `matchadd()` and search highlighting, the
-  popup menu behind insert-mode completion and `:popup`, syntax highlighting
-  (`:syntax` in all its forms, clusters, regions, `:syntax sync`, conceal and
-  `:syntime`), the line drawer (the number, fold and sign columns,
-  `'statuscolumn'`, `'list'`, conceal, spelling, and diff and Visual
-  highlighting) and the screen updater (`:redraw`, the scroll optimisation,
-  window separators, `showmode()` and the message-area restore).
-- Rewrote searching and navigation, covering `/` and `?` with their search
-  offsets, `n`, `*`, `#` and `gd`, `searchcount()` and the search-stat
-  message, `%` and the `[`/`]` bracket motions, `:checkpath` and the
-  `'include'`/`'define'` lookups, tags (the tag-file readers, the tag stack,
-  `:tag`, `:tselect`, `:ptag`, `taglist()` and `'tagfunc'`), path handling
-  (`glob()`, `expand()`, `fnamemodify()`, `findfile()`, `:find` and the
-  `'path'` upward and downward searches), fuzzy matching (`matchfuzzy()` and
-  `'wildoptions'=fuzzy`), and the quickfix and location lists (`'errorformat'`
-  parsing, `:cfile`, `:cexpr`, `setqflist()`, the quickfix window with
-  `'quickfixtextfunc'`, `:cdo`, and `:vimgrep`, `:make` and `:helpgrep`).
-- Rewrote the persistence layer, covering swap files and crash recovery
-  (`'directory'`, `:preserve`, the ATTENTION prompt, `:recover` and
-  `swapinfo()`), reading a file into a buffer and writing one back out
-  (`'fileformat'`, `'fileencoding'`, `'fileencodings'`, BOM handling,
-  `'charconvert'`, backups and `'patchmode'`), and the ShaDa file
-  (`:rshada`, `:wshada`, the merge with an existing file, and `v:oldfiles`).
-- Rewrote spell checking, covering the `.aff`/`.dic` compiler behind
-  `:mkspell`, the `.spl` and `.sug` file formats on both the reading and
-  writing side, word lookup with its prefixes and compounding, `'spelllang'`
-  and `'spellfile'` handling, `]s` navigation, `z=` suggestions, `zg` and
-  friends, and `:spelldump`.
-- Rewrote the user interface, covering the built-in terminal UI (terminfo
-  resolution and quirks, painting, cursor shapes, and the input parser
-  behind mouse reporting, bracketed paste and the kitty keyboard
-  protocol), `:terminal` buffers (the emulator's screen and scrollback,
-  terminal mode, mouse forwarding, `TermRequest` and the other terminal
-  autocommands, `b:term_title`, and OSC 52 clipboard writes), and the
-  remote-UI protocol on both ends: `nvim_ui_attach` and its options, the
-  serialisation of every UI event, and the `--remote-ui` client.
+- Rewrote the screen pipeline, covering the cell grid, screen-line
+  measurement, highlight groups, decorations and virtual text, signs,
+  matches, the popup menu, syntax highlighting, and redrawing.
+- Rewrote searching and navigation, covering `/` and `?`, `n`, `*` and `gd`,
+  the bracket motions, tags, path expansion and `:find`, fuzzy matching, and
+  the quickfix and location lists.
+- Rewrote the persistence layer, covering swap files and crash recovery,
+  reading and writing files with their encodings and backups, and shada.
+- Rewrote spell checking, covering `:mkspell`, the `.spl` and `.sug` formats,
+  `'spelllang'` and `'spellfile'`, `]s`, `z=`, and `:spelldump`.
+- Rewrote the user interface, covering the built-in terminal UI and its input
+  parser, `:terminal` buffers, and the remote-UI protocol on both ends.
 
 ### Fixed
 
-- A sign whose text is wider than two cells no longer overruns the buffer it
-  is stored in, whether it comes from `:sign define` or an extmark's
-  `sign_text`.
+- A sign text wider than two cells no longer overruns its buffer, whether it
+  comes from `:sign define` or an extmark's `sign_text`.
 
 ## [2026.07.30-4b9dee25d3]
 
