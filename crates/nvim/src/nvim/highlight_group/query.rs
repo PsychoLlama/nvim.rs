@@ -1,453 +1,300 @@
 //! Answering questions about a group from outside.
 //!
-//! [`ns_get_hl_defs`] is `nvim_get_hl()`, building a dictionary per group
-//! via [`hlgroup2dict`]; [`highlight_has_attr`] and [`highlight_color`] are
-//! what `synIDattr()` calls for one attribute at a time.
+//! [`ns_get_hl_defs`] is `nvim_get_hl()`, building a dictionary per group via
+//! [`hlgroup2dict`]; [`highlight_has_attr`] and [`highlight_color`] are what
+//! `synIDattr()` calls for one attribute at a time.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[allow(unused_imports)]
-use super::*;
+use core::ffi::{CStr, c_char, c_int};
 
-/// Where [`highlight_color`] formats a `#rrggbb` answer. Static because the
-/// answer is a borrowed pointer, overwritten on the next call — which is
-/// what upstream documents for this function.
-static HEXBUF: GlobalCell<HexBuf> = GlobalCell::new([0; 8]);
+use crate::src::nvim::api::private::helpers::{api_set_error, arena_dict, cstr_as_string};
+use crate::src::nvim::global_cell::GlobalCell;
+use crate::src::nvim::highlight::dict::put;
+use crate::src::nvim::highlight::{
+    HL_DEFAULT, HLATTRS_DICT_SIZE, hlattrs2dict, ns_get_hl, syn_attr2entry,
+};
+use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
+use crate::src::nvim::types::{
+    Arena, Dict, Error, KeyDict_get_highlight, KeyValuePair, NS, Object, size_t,
+};
+use crate::src::nvim::ui::ui_rgb_attached;
 
-pub(crate) unsafe extern "C" fn hlgroup2dict(
-    mut hl: *mut Dict,
-    mut ns_id: NS,
-    mut hl_id: ::core::ffi::c_int,
-    mut arena: *mut Arena,
-) -> bool {
-    unsafe {
-        let mut sgp: *mut HlGroup = (hl_table()).offset((hl_id - 1 as ::core::ffi::c_int) as isize);
-        let mut ns: NS = ns_id;
-        let mut link: ::core::ffi::c_int = if ns_id == 0 as ::core::ffi::c_int {
-            (*sgp).link
-        } else {
-            ns_get_hl(&mut ns, hl_id, true_0 != 0, (*sgp).set != 0)
-        };
-        if link == -1 as ::core::ffi::c_int {
-            return false_0 != 0;
-        }
-        if ns_id == 0 as ::core::ffi::c_int
-            && (*sgp).cleared as ::core::ffi::c_int != 0
-            && (*sgp).set == 0 as ::core::ffi::c_int
-        {
-            return false_0 != 0;
-        }
-        ns = ns_id;
-        let mut attr: HlAttrs = syn_attr2entry(if ns_id == 0 as ::core::ffi::c_int {
-            (*sgp).attr
-        } else {
-            ns_get_hl(&mut ns, hl_id, false_0 != 0, (*sgp).set != 0)
-        });
-        *hl = arena_dict(
-            arena,
-            (HLATTRS_DICT_SIZE as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as size_t,
-        );
-        if attr.rgb_ae_attr & HL_DEFAULT as int32_t != 0 {
-            let c2rust_fresh1 = (*hl).size;
-            (*hl).size = (*hl).size.wrapping_add(1);
-            *(*hl).items.offset(c2rust_fresh1 as isize) = key_value_pair {
-                key: cstr_as_string(b"default\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeBoolean,
-                    data: C2Rust_Unnamed_0 { boolean: true },
-                },
-            };
-        }
-        if link > 0 as ::core::ffi::c_int {
-            '_c2rust_label: {
-                if 1 as ::core::ffi::c_int <= link && link <= highlight_num_groups() {
-                } else {
-                    __assert_fail(
-                        b"1 <= link && link <= highlight_ga.ga_len\0".as_ptr()
-                            as *const ::core::ffi::c_char,
-                        b"src/nvim/highlight_group.rs\0".as_ptr() as *const ::core::ffi::c_char,
-                        1661 as ::core::ffi::c_uint,
-                        __ASSERT_FUNCTION.as_ptr(),
-                    );
-                }
-            };
-            let c2rust_fresh2 = (*hl).size;
-            (*hl).size = (*hl).size.wrapping_add(1);
-            *(*hl).items.offset(c2rust_fresh2 as isize) = key_value_pair {
-                key: cstr_as_string(b"link\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeString,
-                    data: C2Rust_Unnamed_0 {
-                        string: cstr_as_string(
-                            (*(hl_table()).offset((link - 1 as ::core::ffi::c_int) as isize))
-                                .name
-                                .as_ptr()
-                                .cast_mut(),
-                        ),
-                    },
-                },
-            };
-        }
-        let mut hl_cterm: Dict =
-            arena_dict(arena, HLATTRS_DICT_SIZE as ::core::ffi::c_int as size_t);
-        hlattrs2dict(&mut *hl, None, attr, true_0 != 0, true_0 != 0);
-        hlattrs2dict(
-            &mut *hl,
-            Some(&mut hl_cterm),
-            attr,
-            false_0 != 0,
-            true_0 != 0,
-        );
-        if hl_cterm.size != 0 {
-            let c2rust_fresh3 = (*hl).size;
-            (*hl).size = (*hl).size.wrapping_add(1);
-            *(*hl).items.offset(c2rust_fresh3 as isize) = key_value_pair {
-                key: cstr_as_string(b"cterm\0".as_ptr() as *const ::core::ffi::c_char),
-                value: object {
-                    type_0: kObjectTypeDict,
-                    data: C2Rust_Unnamed_0 { dict: hl_cterm },
-                },
-            };
-        }
-        return true_0 != 0;
-    }
+use super::{
+    HL_UNDERLINE_MASK, HexBuf, KEYSET_OPTIDX_get_highlight__create,
+    KEYSET_OPTIDX_get_highlight__id, KEYSET_OPTIDX_get_highlight__link,
+    KEYSET_OPTIDX_get_highlight__name, coloridx_to_name, group, highlight_num_groups,
+    syn_check_group, syn_get_final_id, syn_name2id_len,
+};
+
+/// The empty dict every "nothing to say" path answers.
+const NO_DICT: Dict = Dict {
+    size: 0,
+    capacity: 0,
+    items: core::ptr::null_mut::<KeyValuePair>(),
+};
+
+/// Whether the caller set key `bit` of `Dict(get_highlight)`.
+///
+/// # Safety
+/// `opts` is a live keydict.
+unsafe fn has_key(opts: *mut KeyDict_get_highlight, bit: c_int) -> bool {
+    // SAFETY: the caller's keydict.
+    unsafe { (*opts).is_set__get_highlight_ & (1u64 << bit) != 0 }
 }
 
-pub unsafe extern "C" fn ns_get_hl_defs(
-    mut ns_id: NS,
-    mut opts: *mut KeyDict_get_highlight,
-    mut arena: *mut Arena,
-    mut err: *mut Error,
-) -> Dict {
-    unsafe {
-        let mut rv: Dict = Dict {
-            size: 0,
-            capacity: 0,
-            items: ::core::ptr::null_mut::<KeyValuePair>(),
-        };
-        let mut link: Boolean = if (*opts).is_set__get_highlight_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_highlight__link
-            != 0 as ::core::ffi::c_ulonglong
-        {
-            (*opts).link as ::core::ffi::c_int
+/// Describes the group with id `hl_id`, as namespace `ns_id` sees it.
+///
+/// Answers false — leaving `hl` alone — for a group the namespace says
+/// nothing about, and for a table entry that was created by a lookup and
+/// never given settings.
+///
+/// # Safety
+/// Reaches the group and namespace tables; `arena` is live; main thread only.
+unsafe fn hlgroup2dict(hl: &mut Dict, ns_id: NS, hl_id: c_int, arena: *mut Arena) -> bool {
+    let entry = group(hl_id);
+    let mut ns = ns_id;
+    // SAFETY: the editor's own tables.
+    let link = if ns_id == 0 {
+        entry.link
+    } else {
+        unsafe { ns_get_hl(&mut ns, hl_id, true, entry.set != 0) }
+    };
+    if link == -1 {
+        return false;
+    }
+    if ns_id == 0 && entry.cleared && entry.set == 0 {
+        // The table entry was created but never set.
+        return false;
+    }
+
+    ns = ns_id;
+    // SAFETY: as above.
+    let attr = unsafe {
+        syn_attr2entry(if ns_id == 0 {
+            entry.attr
         } else {
-            true_0
-        } != 0;
-        let mut id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-        if (*opts).is_set__get_highlight_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_highlight__name
-            != 0 as ::core::ffi::c_ulonglong
-        {
-            let mut create: Boolean = if (*opts).is_set__get_highlight_ as ::core::ffi::c_ulonglong
-                & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_highlight__create
-                != 0 as ::core::ffi::c_ulonglong
-            {
-                (*opts).create as ::core::ffi::c_int
-            } else {
-                true_0
-            } != 0;
-            id = if create as ::core::ffi::c_int != 0 {
-                syn_check_group((*opts).name.data, (*opts).name.size)
-            } else {
-                syn_name2id_len((*opts).name.data, (*opts).name.size)
-            };
-            if id == 0 as ::core::ffi::c_int && !create {
-                let mut attrs: Dict = ARRAY_DICT_INIT;
-                return attrs;
-            }
-        } else if (*opts).is_set__get_highlight_ as ::core::ffi::c_ulonglong
-            & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_get_highlight__id
-            != 0 as ::core::ffi::c_ulonglong
-        {
-            id = (*opts).id as ::core::ffi::c_int;
+            ns_get_hl(&mut ns, hl_id, false, entry.set != 0)
+        })
+    };
+
+    // SAFETY: the arena hands out `HLATTRS_DICT_SIZE + 1` writable entries.
+    unsafe {
+        *hl = arena_dict(arena, HLATTRS_DICT_SIZE + 1);
+        if attr.rgb_ae_attr & HL_DEFAULT != 0 {
+            put(hl, c"default", Object::boolean(true));
         }
-        if id != -1 as ::core::ffi::c_int {
-            if !(1 as ::core::ffi::c_int <= id && id <= highlight_num_groups()) {
+        if link > 0 {
+            assert!(link <= highlight_num_groups(), "link out of bounds");
+            put(
+                hl,
+                c"link",
+                Object::string(cstr_as_string(group(link).name.as_ptr())),
+            );
+        }
+        let mut cterm = arena_dict(arena, HLATTRS_DICT_SIZE);
+        hlattrs2dict(hl, None, attr, true, true);
+        hlattrs2dict(hl, Some(&mut cterm), attr, false, true);
+        if cterm.size != 0 {
+            put(hl, c"cterm", Object::dict(cterm));
+        }
+    }
+    true
+}
+
+/// `nvim_get_hl()`: one group's definition, or every group's.
+///
+/// `name`/`id` pick a single group — `name` with `create` set adds it if it
+/// does not exist — and `link` chooses between reporting the link and
+/// following it.
+///
+/// # Safety
+/// `opts`, `arena` and `err` are live; main thread only.
+pub unsafe fn ns_get_hl_defs(
+    ns_id: NS,
+    opts: *mut KeyDict_get_highlight,
+    arena: *mut Arena,
+    err: *mut Error,
+) -> Dict {
+    // SAFETY: the caller's keydict, arena and error slot.
+    unsafe {
+        let link = !has_key(opts, KEYSET_OPTIDX_get_highlight__link) || (*opts).link;
+
+        let mut id = -1;
+        if has_key(opts, KEYSET_OPTIDX_get_highlight__name) {
+            let create = !has_key(opts, KEYSET_OPTIDX_get_highlight__create) || (*opts).create;
+            let (name, len) = ((*opts).name.data, (*opts).name.size);
+            id = if create {
+                syn_check_group(name, len)
+            } else {
+                syn_name2id_len(name, len)
+            };
+            if id == 0 && !create {
+                return NO_DICT;
+            }
+        } else if has_key(opts, KEYSET_OPTIDX_get_highlight__id) {
+            id = (*opts).id as c_int;
+        }
+
+        if id != -1 {
+            if id < 1 || id > highlight_num_groups() {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
-                    b"%s\0".as_ptr() as *const ::core::ffi::c_char,
-                    b"Highlight id out of bounds\0".as_ptr() as *const ::core::ffi::c_char,
+                    c"%s".as_ptr(),
+                    c"Highlight id out of bounds".as_ptr(),
                 );
-            } else {
-                let mut attrs_0: Dict = ARRAY_DICT_INIT;
-                hlgroup2dict(
-                    &raw mut attrs_0,
-                    ns_id,
-                    if link as ::core::ffi::c_int != 0 {
-                        id
-                    } else {
-                        syn_get_final_id(id)
-                    },
-                    arena,
-                );
-                return attrs_0;
+                return NO_DICT;
             }
-        } else if (*err).type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
-            rv = arena_dict(arena, highlight_num_groups() as size_t);
-            let mut i: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            while i <= highlight_num_groups() {
-                let mut attrs_1: Dict = ARRAY_DICT_INIT;
-                if hlgroup2dict(&raw mut attrs_1, ns_id, i, arena) {
-                    let c2rust_fresh0 = rv.size;
-                    rv.size = rv.size.wrapping_add(1);
-                    *rv.items.offset(c2rust_fresh0 as isize) = key_value_pair {
-                        key: cstr_as_string(
-                            (*(hl_table()).offset(
-                                ((if link as ::core::ffi::c_int != 0 {
-                                    i
-                                } else {
-                                    syn_get_final_id(i)
-                                }) - 1 as ::core::ffi::c_int)
-                                    as isize,
-                            ))
-                            .name
-                            .as_ptr()
-                            .cast_mut(),
-                        ),
-                        value: object {
-                            type_0: kObjectTypeDict,
-                            data: C2Rust_Unnamed_0 { dict: attrs_1 },
-                        },
-                    };
-                }
-                i += 1;
-            }
-            return rv;
+            let mut attrs = NO_DICT;
+            hlgroup2dict(
+                &mut attrs,
+                ns_id,
+                if link { id } else { syn_get_final_id(id) },
+                arena,
+            );
+            return attrs;
         }
-        return ARRAY_DICT_INIT;
+
+        if (*err).type_0 != kErrorTypeNone {
+            return NO_DICT;
+        }
+
+        let mut rv = arena_dict(arena, highlight_num_groups() as size_t);
+        for id in 1..=highlight_num_groups() {
+            let mut attrs = NO_DICT;
+            if !hlgroup2dict(&mut attrs, ns_id, id, arena) {
+                continue;
+            }
+            let named = if link { id } else { syn_get_final_id(id) };
+            assert!(rv.size < rv.capacity, "highlight dict overflow");
+            *rv.items.add(rv.size) = KeyValuePair {
+                key: cstr_as_string(group(named).name.as_ptr()),
+                value: Object::dict(attrs),
+            };
+            rv.size += 1;
+        }
+        rv
     }
 }
 
-pub unsafe extern "C" fn highlight_has_attr(
-    id: ::core::ffi::c_int,
-    flag: ::core::ffi::c_int,
-    modec: ::core::ffi::c_int,
-) -> *const ::core::ffi::c_char {
-    unsafe {
-        if id <= 0 as ::core::ffi::c_int || id > highlight_num_groups() {
-            return ::core::ptr::null::<::core::ffi::c_char>();
-        }
-        let mut attr: ::core::ffi::c_int = 0;
-        if modec == 'g' as ::core::ffi::c_int {
-            attr = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).gui;
-        } else {
-            attr = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).cterm;
-        }
-        if flag & HL_UNDERLINE_MASK != 0 {
-            let mut ul: ::core::ffi::c_int = attr & HL_UNDERLINE_MASK;
-            return if ul == flag {
-                b"1\0".as_ptr() as *const ::core::ffi::c_char
+/// `synIDattr({id}, {flag})` for a boolean attribute: `"1"` if the group has
+/// it, NULL if not.
+///
+/// `modec` is `'g'` for `gui=` and anything else for `cterm=`.
+pub fn highlight_has_attr(id: c_int, flag: c_int, modec: c_int) -> *const c_char {
+    if id <= 0 || id > highlight_num_groups() {
+        return core::ptr::null();
+    }
+    let entry = group(id);
+    let attr = if modec == 'g' as c_int {
+        entry.gui
+    } else {
+        entry.cterm
+    };
+    // The underline styles share a field, so the answer is an equality test
+    // rather than a mask test.
+    let has = if flag & HL_UNDERLINE_MASK != 0 {
+        attr & HL_UNDERLINE_MASK == flag
+    } else {
+        attr & flag != 0
+    };
+    if has {
+        c"1".as_ptr()
+    } else {
+        core::ptr::null()
+    }
+}
+
+/// Where a `#rrggbb` or decimal answer from [`highlight_color`] is formatted.
+///
+/// Static because the answer is a borrowed pointer, overwritten on the next
+/// call — which is what upstream documents for this function.
+static ANSWER: GlobalCell<[u8; 20]> = GlobalCell::new([0; 20]);
+
+/// `synIDattr({id}, {what})` for a colour: `"fg"`, `"bg"`, `"sp"`, any of
+/// those with a `#` suffix, or `"font"`.
+///
+/// `modec` is `'g'` for `gui=`, `'c'` for `cterm=` and `'t'` for `term=`,
+/// which has no colours at all. NULL means "nothing to report".
+///
+/// # Safety
+/// `what` is NUL-terminated and at least four bytes readable — upstream reads
+/// `what[3]` unconditionally, which its own callers guarantee. Main thread
+/// only.
+pub unsafe fn highlight_color(id: c_int, what: *const c_char, modec: c_int) -> *const c_char {
+    if id <= 0 || id > highlight_num_groups() {
+        return core::ptr::null();
+    }
+    // SAFETY: the caller's NUL-terminated selector.
+    let what = unsafe { CStr::from_ptr(what) }.to_bytes();
+    let lower = |i: usize| what.get(i).copied().unwrap_or(0).to_ascii_lowercase();
+
+    let (mut fg, mut sp, mut font) = (false, false, false);
+    if lower(0) == b'f' && lower(1) == b'g' {
+        fg = true;
+    } else if lower(0) == b'f' && lower(1) == b'o' && lower(2) == b'n' && lower(3) == b't' {
+        font = true;
+    } else if lower(0) == b's' && lower(1) == b'p' {
+        sp = true;
+    } else if !(lower(0) == b'b' && lower(1) == b'g') {
+        return core::ptr::null();
+    }
+
+    let entry = group(id);
+    if modec == 'g' as c_int {
+        if what.get(2) == Some(&b'#') && ui_rgb_attached() {
+            let n = if fg {
+                entry.rgb_fg
+            } else if sp {
+                entry.rgb_sp
             } else {
-                ::core::ptr::null::<::core::ffi::c_char>()
+                entry.rgb_bg
             };
+            if !(0..=0xffffff).contains(&n) {
+                return core::ptr::null();
+            }
+            return answer(format_args!("#{n:06x}"));
+        }
+        let (idx, value) = if fg {
+            (entry.rgb_fg_idx, entry.rgb_fg)
+        } else if sp {
+            (entry.rgb_sp_idx, entry.rgb_sp)
         } else {
-            return if attr & flag != 0 {
-                b"1\0".as_ptr() as *const ::core::ffi::c_char
-            } else {
-                ::core::ptr::null::<::core::ffi::c_char>()
-            };
+            (entry.rgb_bg_idx, entry.rgb_bg)
+        };
+        // The name goes in the same buffer as the formatted answers, so that
+        // every answer this function gives has the same lifetime.
+        let mut hexbuf: HexBuf = [0; 8];
+        return match coloridx_to_name(idx, value, &mut hexbuf) {
+            Some(name) => answer(format_args!("{}", name.to_string_lossy())),
+            None => core::ptr::null(),
         };
     }
+
+    if font || sp {
+        return core::ptr::null();
+    }
+    if modec == 'c' as c_int {
+        let n = if fg { entry.cterm_fg } else { entry.cterm_bg } - 1;
+        if n < 0 {
+            return core::ptr::null();
+        }
+        return answer(format_args!("{n}"));
+    }
+    // `term` has no colours.
+    core::ptr::null()
 }
 
-pub unsafe extern "C" fn highlight_color(
-    id: ::core::ffi::c_int,
-    what: *const ::core::ffi::c_char,
-    modec: ::core::ffi::c_int,
-) -> *const ::core::ffi::c_char {
-    unsafe {
-        static name: GlobalCell<[::core::ffi::c_char; 20]> = GlobalCell::new([0; 20]);
-        let mut fg: bool = false_0 != 0;
-        let mut sp: bool = false_0 != 0;
-        let mut font: bool = false_0 != 0;
-        if id <= 0 as ::core::ffi::c_int || id > highlight_num_groups() {
-            return ::core::ptr::null::<::core::ffi::c_char>();
-        }
-        if (if (*what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-            < 'A' as ::core::ffi::c_int
-            || *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                > 'Z' as ::core::ffi::c_int
-        {
-            *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        } else {
-            *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-        }) == 'f' as ::core::ffi::c_int
-            && (if (*what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                < 'A' as ::core::ffi::c_int
-                || *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    > 'Z' as ::core::ffi::c_int
-            {
-                *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            } else {
-                *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-            }) == 'g' as ::core::ffi::c_int
-        {
-            fg = true_0 != 0;
-        } else if (if (*what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-            < 'A' as ::core::ffi::c_int
-            || *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                > 'Z' as ::core::ffi::c_int
-        {
-            *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        } else {
-            *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-        }) == 'f' as ::core::ffi::c_int
-            && (if (*what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                < 'A' as ::core::ffi::c_int
-                || *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    > 'Z' as ::core::ffi::c_int
-            {
-                *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            } else {
-                *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-            }) == 'o' as ::core::ffi::c_int
-            && (if (*what.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                < 'A' as ::core::ffi::c_int
-                || *what.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    > 'Z' as ::core::ffi::c_int
-            {
-                *what.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            } else {
-                *what.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-            }) == 'n' as ::core::ffi::c_int
-            && (if (*what.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                < 'A' as ::core::ffi::c_int
-                || *what.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    > 'Z' as ::core::ffi::c_int
-            {
-                *what.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            } else {
-                *what.offset(3 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-            }) == 't' as ::core::ffi::c_int
-        {
-            font = true_0 != 0;
-        } else if (if (*what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-            < 'A' as ::core::ffi::c_int
-            || *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                > 'Z' as ::core::ffi::c_int
-        {
-            *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        } else {
-            *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-        }) == 's' as ::core::ffi::c_int
-            && (if (*what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                < 'A' as ::core::ffi::c_int
-                || *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    > 'Z' as ::core::ffi::c_int
-            {
-                *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            } else {
-                *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-            }) == 'p' as ::core::ffi::c_int
-        {
-            sp = true_0 != 0;
-        } else if !((if (*what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-            < 'A' as ::core::ffi::c_int
-            || *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                > 'Z' as ::core::ffi::c_int
-        {
-            *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-        } else {
-            *what.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-        }) == 'b' as ::core::ffi::c_int
-            && (if (*what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int)
-                < 'A' as ::core::ffi::c_int
-                || *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    > 'Z' as ::core::ffi::c_int
-            {
-                *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            } else {
-                *what.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    + ('a' as ::core::ffi::c_int - 'A' as ::core::ffi::c_int)
-            }) == 'g' as ::core::ffi::c_int)
-        {
-            return ::core::ptr::null::<::core::ffi::c_char>();
-        }
-        let mut n: ::core::ffi::c_int = 0;
-        if modec == 'g' as ::core::ffi::c_int {
-            if *what.offset(2 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '#' as ::core::ffi::c_int
-                && ui_rgb_attached() as ::core::ffi::c_int != 0
-            {
-                if fg {
-                    n = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_fg
-                        as ::core::ffi::c_int;
-                } else if sp {
-                    n = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_sp
-                        as ::core::ffi::c_int;
-                } else {
-                    n = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_bg
-                        as ::core::ffi::c_int;
-                }
-                if n < 0 as ::core::ffi::c_int || n > 0xffffff as ::core::ffi::c_int {
-                    return ::core::ptr::null::<::core::ffi::c_char>();
-                }
-                snprintf(
-                    name.ptr() as *mut ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 20]>(),
-                    b"#%06x\0".as_ptr() as *const ::core::ffi::c_char,
-                    n,
-                );
-                return name.ptr() as *mut ::core::ffi::c_char;
-            }
-            if fg {
-                return coloridx_to_name(
-                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_fg_idx,
-                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_fg
-                        as ::core::ffi::c_int,
-                    &mut *HEXBUF.ptr(),
-                )
-                .map_or(::core::ptr::null(), |s| s.as_ptr());
-            } else if sp {
-                return coloridx_to_name(
-                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_sp_idx,
-                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_sp
-                        as ::core::ffi::c_int,
-                    &mut *HEXBUF.ptr(),
-                )
-                .map_or(::core::ptr::null(), |s| s.as_ptr());
-            } else {
-                return coloridx_to_name(
-                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_bg_idx,
-                    (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).rgb_bg
-                        as ::core::ffi::c_int,
-                    &mut *HEXBUF.ptr(),
-                )
-                .map_or(::core::ptr::null(), |s| s.as_ptr());
-            }
-        }
-        if font as ::core::ffi::c_int != 0 || sp as ::core::ffi::c_int != 0 {
-            return ::core::ptr::null::<::core::ffi::c_char>();
-        }
-        if modec == 'c' as ::core::ffi::c_int {
-            if fg {
-                n = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).cterm_fg
-                    - 1 as ::core::ffi::c_int;
-            } else {
-                n = (*(hl_table()).offset((id - 1 as ::core::ffi::c_int) as isize)).cterm_bg
-                    - 1 as ::core::ffi::c_int;
-            }
-            if n < 0 as ::core::ffi::c_int {
-                return ::core::ptr::null::<::core::ffi::c_char>();
-            }
-            snprintf(
-                name.ptr() as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 20]>(),
-                b"%d\0".as_ptr() as *const ::core::ffi::c_char,
-                n,
-            );
-            return name.ptr() as *mut ::core::ffi::c_char;
-        }
-        return ::core::ptr::null::<::core::ffi::c_char>();
-    }
+/// Parks `text` in [`ANSWER`] and hands back a pointer to it, truncating at
+/// 19 bytes as upstream's `char[20]` did.
+fn answer(text: core::fmt::Arguments) -> *const c_char {
+    let text = text.to_string();
+    let bytes = text.as_bytes();
+    ANSWER.with_mut(|buf| {
+        let len = bytes.len().min(buf.len() - 1);
+        buf[..len].copy_from_slice(&bytes[..len]);
+        buf[len] = 0;
+    });
+    ANSWER.as_raw().cast()
 }

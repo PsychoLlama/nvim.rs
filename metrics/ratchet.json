@@ -233,7 +233,7 @@
     "crates/nvim/src/nvim/highlight_group/command.rs": {"unsafe": 2},
     "crates/nvim/src/nvim/highlight_group/defaults.rs": {"no_mangle": 1, "unsafe": 3},
     "crates/nvim/src/nvim/highlight_group/list.rs": {"unsafe": 8},
-    "crates/nvim/src/nvim/highlight_group/query.rs": {"unsafe": 4},
+    "crates/nvim/src/nvim/highlight_group/query.rs": {"unsafe": 6},
     "crates/nvim/src/nvim/highlight_group/table.rs": {"unsafe": 19},
     "crates/nvim/src/nvim/indent.rs": {"no_mangle": 2, "unsafe": 22},
     "crates/nvim/src/nvim/indent/breakindent.rs": {"unsafe": 2},

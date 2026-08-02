@@ -2,13 +2,12 @@
 
 use core::ffi::{CStr, c_int};
 
-use crate::src::nvim::api::private::helpers::{api_set_error, arena_dict, cstr_as_string};
+use crate::src::nvim::api::private::helpers::cstr_as_string;
 use crate::src::nvim::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::src::nvim::charset::{skiptowhite, skipwhite, vim_strsize};
+use crate::src::nvim::charset::{skiptowhite, skipwhite};
 use crate::src::nvim::cursor_shape::cursor_mode_uses_syn_id;
 use crate::src::nvim::decoration_provider::decor_provider_invalidate_hl;
 use crate::src::nvim::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later};
-use crate::src::nvim::eval::last_set_msg;
 use crate::src::nvim::eval::vars::do_unlet;
 use crate::src::nvim::ex_docmd::ends_excmd;
 use crate::src::nvim::global_cell::GlobalCell;
@@ -16,39 +15,31 @@ use crate::src::nvim::highlight::{
     HL_ALTFONT, HL_BLINK, HL_BOLD, HL_CONCEALED, HL_DEFAULT, HL_DIM, HL_INVERSE, HL_ITALIC,
     HL_NOCOMBINE, HL_OVERLINE, HL_STANDOUT, HL_STRIKETHROUGH, HL_UNDERCURL, HL_UNDERDASHED,
     HL_UNDERDOTTED, HL_UNDERDOUBLE, HL_UNDERLINE, HL_UNDERLINE_MASK, hl_get_syn_attr,
-    hl_get_ui_attr, hlattrs2dict, ns_get_hl, syn_attr2entry,
+    hl_get_ui_attr, syn_attr2entry,
 };
 use crate::src::nvim::lua::executor::nlua_set_sctx;
 use crate::src::nvim::main::{
-    Columns, clear_cmdline, cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, e_invarg2,
-    got_int, highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, include_default,
-    include_link, include_none, msg_col, msg_grid, msg_silent, need_highlight_changed, normal_bg,
-    normal_fg, normal_sp, p_bg, p_verbose, starting, t_colors, updating_screen,
+    clear_cmdline, cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, e_invarg2, got_int,
+    highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, msg_grid,
+    need_highlight_changed, normal_bg, normal_fg, normal_sp, p_bg, starting, t_colors,
+    updating_screen,
 };
-use crate::src::nvim::memory::xstrlcat;
-use crate::src::nvim::message::{
-    emsg, message_filtered, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_outtrans, msg_putchar,
-    msg_puts_hl, semsg,
-};
+use crate::src::nvim::message::{emsg, msg_ext_set_kind, semsg};
 use crate::src::nvim::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
 use crate::src::nvim::options::kOptBackground;
 use crate::src::nvim::os::libc::{
-    __assert_fail, atoi, gettext, memcmp, memcpy, snprintf, strcasecmp, strchr, strcmp, strlen,
-    strncasecmp, strncmp, strtol,
+    atoi, gettext, memcmp, memcpy, strcasecmp, strchr, strcmp, strlen, strncasecmp, strncmp, strtol,
 };
-use crate::src::nvim::os::time::os_delay;
 use crate::src::nvim::runtime::exestack;
 use crate::src::nvim::strings::vim_memcpy_up;
-use crate::src::nvim::types::api::{kErrorTypeNone, kErrorTypeValidation};
-use crate::src::nvim::types::ui::{kUILinegrid, kUIMessages};
+use crate::src::nvim::types::ui::kUILinegrid;
 use crate::src::nvim::types::{
-    Arena, Boolean, Dict, Error, HlAttrs, Integer, KeyDict_get_highlight, KeyDict_highlight,
-    KeyValuePair, NS, Object, OptInt, OptVal, OptValData, OptValType, RgbValue, TriState, estack_T,
-    expand_T, int32_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeNil, kObjectTypeString,
-    key_value_pair, object, object_data as C2Rust_Unnamed_0, size_t, uint8_t, uint64_t,
+    Dict, HlAttrs, Integer, KeyDict_highlight, KeyValuePair, Object, OptVal, OptValData,
+    OptValType, RgbValue, TriState, estack_T, int32_t, kObjectTypeNil, kObjectTypeString, object,
+    object_data as C2Rust_Unnamed_0, size_t, uint8_t,
 };
 use crate::src::nvim::ui::{
-    ui_call_hl_group_set, ui_default_colors_set, ui_flush, ui_has, ui_mode_info_set, ui_refresh,
+    ui_call_hl_group_set, ui_default_colors_set, ui_has, ui_mode_info_set, ui_refresh,
     ui_rgb_attached,
 };
 pub type C2Rust_Unnamed = ::core::ffi::c_uint;
@@ -128,46 +119,29 @@ pub const KEYSET_OPTIDX_get_highlight__create: ::core::ffi::c_int = 4 as ::core:
 pub const OK: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const MAX_SYN_NAME: ::core::ffi::c_int = 200 as ::core::ffi::c_int;
-static hl_name_table: GlobalCell<[*mut ::core::ffi::c_char; 18]> = GlobalCell::new([
-    c"bold".as_ptr().cast_mut(),
-    c"standout".as_ptr().cast_mut(),
-    c"underline".as_ptr().cast_mut(),
-    c"undercurl".as_ptr().cast_mut(),
-    c"underdouble".as_ptr().cast_mut(),
-    c"underdotted".as_ptr().cast_mut(),
-    c"underdashed".as_ptr().cast_mut(),
-    c"italic".as_ptr().cast_mut(),
-    c"reverse".as_ptr().cast_mut(),
-    c"inverse".as_ptr().cast_mut(),
-    c"strikethrough".as_ptr().cast_mut(),
-    c"altfont".as_ptr().cast_mut(),
-    c"dim".as_ptr().cast_mut(),
-    c"blink".as_ptr().cast_mut(),
-    c"conceal".as_ptr().cast_mut(),
-    c"overline".as_ptr().cast_mut(),
-    c"nocombine".as_ptr().cast_mut(),
-    c"NONE".as_ptr().cast_mut(),
-]);
-static hl_attr_table: GlobalCell<[::core::ffi::c_int; 18]> = GlobalCell::new([
-    HL_BOLD,
-    HL_STANDOUT,
-    HL_UNDERLINE,
-    HL_UNDERCURL,
-    HL_UNDERDOUBLE,
-    HL_UNDERDOTTED,
-    HL_UNDERDASHED,
-    HL_ITALIC,
-    HL_INVERSE,
-    HL_INVERSE,
-    HL_STRIKETHROUGH,
-    HL_ALTFONT,
-    HL_DIM,
-    HL_BLINK,
-    HL_CONCEALED,
-    HL_OVERLINE,
-    HL_NOCOMBINE,
-    0 as ::core::ffi::c_int,
-]);
+/// The names `term=`/`cterm=`/`gui=` accept, and the `HL_*` bit each one
+/// means. `reverse` and `inverse` are the same bit; the `NONE` sentinel ends
+/// the list, and is what makes an unrecognised name an error.
+pub(crate) static ATTR_NAMES: [(&CStr, c_int); 18] = [
+    (c"bold", HL_BOLD),
+    (c"standout", HL_STANDOUT),
+    (c"underline", HL_UNDERLINE),
+    (c"undercurl", HL_UNDERCURL),
+    (c"underdouble", HL_UNDERDOUBLE),
+    (c"underdotted", HL_UNDERDOTTED),
+    (c"underdashed", HL_UNDERDASHED),
+    (c"italic", HL_ITALIC),
+    (c"reverse", HL_INVERSE),
+    (c"inverse", HL_INVERSE),
+    (c"strikethrough", HL_STRIKETHROUGH),
+    (c"altfont", HL_ALTFONT),
+    (c"dim", HL_DIM),
+    (c"blink", HL_BLINK),
+    (c"conceal", HL_CONCEALED),
+    (c"overline", HL_OVERLINE),
+    (c"nocombine", HL_NOCOMBINE),
+    (c"NONE", 0),
+];
 static e_highlight_group_name_not_found_str: GlobalCell<[::core::ffi::c_char; 36]> =
     GlobalCell::new(unsafe {
         ::core::mem::transmute::<[u8; 36], [::core::ffi::c_char; 36]>(

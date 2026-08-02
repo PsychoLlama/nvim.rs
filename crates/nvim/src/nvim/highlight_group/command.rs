@@ -408,26 +408,25 @@ pub unsafe extern "C" fn do_highlight(
                                                     break;
                                                 }
                                                 let mut len: ::core::ffi::c_int = strlen(
-                                                    (*hl_name_table.ptr())[i_0 as usize]
+                                                    ATTR_NAMES[i_0 as usize].0.as_ptr().cast_mut()
                                                         as *const ::core::ffi::c_char,
                                                 )
                                                     as ::core::ffi::c_int;
                                                 if strncasecmp(
                                                     (&raw mut arg as *mut ::core::ffi::c_char)
                                                         .offset(off as isize),
-                                                    (*hl_name_table.ptr())[i_0 as usize],
+                                                    ATTR_NAMES[i_0 as usize].0.as_ptr().cast_mut(),
                                                     len as size_t,
                                                 ) != 0 as ::core::ffi::c_int
                                                 {
                                                     continue;
                                                 }
-                                                if (*hl_attr_table.ptr())[i_0 as usize]
-                                                    & HL_UNDERLINE_MASK
+                                                if ATTR_NAMES[i_0 as usize].1 & HL_UNDERLINE_MASK
                                                     != 0
                                                 {
                                                     attr &= !(HL_UNDERLINE_MASK);
                                                 }
-                                                attr |= (*hl_attr_table.ptr())[i_0 as usize];
+                                                attr |= ATTR_NAMES[i_0 as usize].1;
                                                 off += len;
                                                 break;
                                             }

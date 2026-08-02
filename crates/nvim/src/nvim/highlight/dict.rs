@@ -92,7 +92,7 @@ fn is_set(dict: &KeyDict_highlight, opt_index: c_int) -> bool {
 ///
 /// # Safety
 /// `dict.items` must point at `dict.capacity` writable entries.
-unsafe fn put(dict: &mut Dict, key: &'static CStr, value: Object) {
+pub(crate) unsafe fn put(dict: &mut Dict, key: &'static CStr, value: Object) {
     assert!(dict.size < dict.capacity, "highlight dict overflow");
     // SAFETY: the assert above kept the index inside the caller's storage.
     unsafe {
