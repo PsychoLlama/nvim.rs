@@ -207,31 +207,38 @@ unsafe fn line_needs_drawing(wp: *mut win_T, buf: *mut buf_T, rg: &Regions, w: &
             || rg.top_to_mod
             || w.idx >= (*wp).w_lines_valid
             || w.row + (*(*wp).w_lines.add(w.idx as usize)).wl_size as c_int > rg.bot_start
-            || w.lnum == (*wp).w_cursorline
-            || w.lnum == (*wp).w_last_cursorline
         {
             return true;
         }
-        if rg.mod_top == 0 {
-            return false;
-        }
-        if w.lnum == rg.mod_top {
+
+        // The changed range. This is asked BEFORE the cursor-line tests below,
+        // as upstream orders it, and the order is load-bearing:
+        // `syntax_check_changed` finishes the previous line and stores the
+        // syntax state for this one, so short-circuiting past it on the cursor
+        // line would leave the state cache one line behind.
+        if rg.mod_top != 0
+            && (w.lnum == rg.mod_top
+                || (w.lnum >= rg.mod_top
+                    // Keep going past the change while the highlighting can
+                    // still differ from what is on screen: after a folded line
+                    // the syntax state is unknown, after a normal one the
+                    // syntax machinery can be asked.
+                    && (w.lnum < rg.mod_bot
+                        || w.did_update == DidUpdate::Fold
+                        || (w.did_update == DidUpdate::Line
+                            && syntax_present(wp)
+                            && ((foldmethodIsSyntax(wp) && hasAnyFolding(wp) != 0)
+                                || syntax_check_changed(w.lnum)))
+                        // A match at a fixed position may need redrawing when
+                        // lines were inserted or deleted.
+                        || (!(*wp).w_match_head.is_null()
+                            && (*buf).b_mod_set
+                            && (*buf).b_mod_xlines != 0))))
+        {
             return true;
         }
-        if w.lnum < rg.mod_top {
-            return false;
-        }
-        // At or past the change: keep going while the highlighting can still
-        // differ from what is on screen. After a folded line the syntax state is
-        // unknown; after a normal one the syntax machinery can be asked.
-        w.lnum < rg.mod_bot
-            || w.did_update == DidUpdate::Fold
-            || (w.did_update == DidUpdate::Line
-                && syntax_present(wp)
-                && ((foldmethodIsSyntax(wp) && hasAnyFolding(wp) != 0) || syntax_check_changed(w.lnum)))
-            // A match at a fixed position may need redrawing when lines were
-            // inserted or deleted.
-            || (!(*wp).w_match_head.is_null() && (*buf).b_mod_set && (*buf).b_mod_xlines != 0)
+
+        w.lnum == (*wp).w_cursorline || w.lnum == (*wp).w_last_cursorline
     }
 }
 
