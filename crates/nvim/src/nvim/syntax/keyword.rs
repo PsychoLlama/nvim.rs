@@ -31,7 +31,7 @@ pub(crate) unsafe fn key_to_entry(key: *mut c_char) -> *mut keyentry_T {
 /// array, so an autoref would cover no bytes and the pointer could not be
 /// walked.
 #[inline]
-unsafe fn entry_to_key(kp: *mut keyentry_T) -> *mut c_char {
+pub(crate) unsafe fn entry_to_key(kp: *mut keyentry_T) -> *mut c_char {
     unsafe { (&raw mut (*kp).keyword).cast::<c_char>() }
 }
 

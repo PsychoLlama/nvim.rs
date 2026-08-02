@@ -58,9 +58,9 @@ use crate::src::nvim::strings::{
 };
 use crate::src::nvim::types::{
     CMD_index, OptInt, buf_T, bufstate_T, cmd_addr_T, colnr_T, cstack_T, exarg_T, expand_T,
-    garray_T, hashitem_T, hashtab_T, int16_t, int32_t, keyvalue_T, linenr_T, lpos_T, proftime_T,
-    reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T, synstate_T,
-    uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
+    garray_T, hashtab_T, int16_t, int32_t, linenr_T, lpos_T, proftime_T, reg_extmatch_T,
+    regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T, synstate_T, uint8_t,
+    uint32_t, uint64_t, varnumber_T, win_T,
 };
 
 mod flags;
@@ -231,20 +231,6 @@ pub const EXP_SYNC: C2Rust_Unnamed_24 = 3;
 pub const EXP_SPELL: C2Rust_Unnamed_24 = 2;
 pub const EXP_CASE: C2Rust_Unnamed_24 = 1;
 pub const EXP_SUBCMD: C2Rust_Unnamed_24 = 0;
-static namelist1: GlobalCell<[keyvalue_T; 10]> = GlobalCell::new(
-    [keyvalue_T {
-        key: 0,
-        value: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        length: 0,
-    }; 10],
-);
-static namelist2: GlobalCell<[keyvalue_T; 3]> = GlobalCell::new(
-    [keyvalue_T {
-        key: 0,
-        value: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        length: 0,
-    }; 3],
-);
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NUL: ::core::ffi::c_int = '\0' as ::core::ffi::c_int;
 pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
@@ -288,15 +274,6 @@ pub(crate) const E_INVALID_CCHAR_VALUE: &::core::ffi::CStr = c"E844: Invalid cch
 /// `%s` is the text before the `]`, `%s` the text after it.
 pub(crate) const E_TRAILING_CHAR_AFTER_RSB: &::core::ffi::CStr =
     c"E890: Trailing char after ']': %s]%s";
-static spo_name_tab: GlobalCell<[*mut ::core::ffi::c_char; 7]> = GlobalCell::new([
-    b"ms=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"me=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"hs=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"he=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"rs=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"re=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-    b"lc=\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-]);
 pub const SPTYPE_MATCH: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SPTYPE_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SPTYPE_END: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
@@ -407,85 +384,3 @@ pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const RE_MAGIC: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const REX_SET: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const REX_USE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-unsafe extern "C" fn c2rust_run_static_initializers() {
-    namelist1.set([
-        keyvalue_T {
-            key: HL_DISPLAY,
-            value: b"display\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: HL_CONTAINED,
-            value: b"contained\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: HL_ONELINE,
-            value: b"oneline\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: HL_KEEPEND,
-            value: b"keepend\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: HL_EXTEND,
-            value: b"extend\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: HL_EXCLUDENL,
-            value: b"excludenl\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: HL_TRANSP,
-            value: b"transparent\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: HL_FOLD,
-            value: b"fold\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: HL_CONCEAL,
-            value: b"conceal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: HL_CONCEALENDS,
-            value: b"concealends\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
-        },
-    ]);
-    namelist2.set([
-        keyvalue_T {
-            key: HL_SKIPWHITE,
-            value: b"skipwhite\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: HL_SKIPNL,
-            value: b"skipnl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
-        },
-        keyvalue_T {
-            key: HL_SKIPEMPTY,
-            value: b"skipempty\0".as_ptr() as *const ::core::ffi::c_char
-                as *mut ::core::ffi::c_char,
-            length: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
-        },
-    ]);
-}
-#[used]
-#[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
-#[cfg_attr(target_os = "windows", unsafe(link_section = ".CRT$XIB"))]
-#[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
-static INIT_ARRAY: [unsafe extern "C" fn(); 1] = [c2rust_run_static_initializers];

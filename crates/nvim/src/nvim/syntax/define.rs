@@ -527,7 +527,7 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
 }
 
 /// The offset names, indexed by `SPO_*`.
-static SPO_NAME_TAB: [&CStr; SPO_COUNT as usize] =
+pub(crate) static SPO_NAME_TAB: [&CStr; SPO_COUNT as usize] =
     [c"ms=", c"me=", c"hs=", c"he=", c"rs=", c"re=", c"lc="];
 
 /// Which `SPO_*` offset the three characters at `end` name.
