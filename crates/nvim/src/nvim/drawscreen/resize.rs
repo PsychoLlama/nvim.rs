@@ -12,228 +12,267 @@
 #[allow(unused_imports)]
 use super::*;
 
-pub unsafe extern "C" fn default_grid_alloc() -> bool {
+/// The largest screen this port will allocate, so that `Rows * Columns` cannot
+/// overflow.
+const MAX_ROWS: c_int = 1000;
+const MAX_COLUMNS: c_int = 10000;
+
+/// Resize `default_grid` to `Rows` x `Columns`, and answer whether it moved.
+///
+/// The allocation only happens when the size actually changed and both
+/// dimensions are known: there is a window between setting `Rows`/`Columns` and
+/// getting here, at startup and on a manual resize, so everything that indexes
+/// the grid uses `default_grid.rows`/`.cols` rather than the globals.
+pub unsafe fn default_grid_alloc() -> bool {
+    // An out-of-memory message from inside the allocation redraws, which lands
+    // back here; break the loop rather than recursing.
+    static RESIZING: GlobalCell<bool> = GlobalCell::new(false);
+
+    // SAFETY: `default_grid` is the editor's screen grid, on the main thread.
     unsafe {
-        static resizing: GlobalCell<bool> = GlobalCell::new(false_0 != 0);
-        if resizing.get() {
-            return false_0 != 0;
+        if RESIZING.get() {
+            return false;
         }
-        resizing.set(true_0 != 0);
-        if !(*default_grid.ptr()).chars.is_null()
-            && Rows.get() == (*default_grid.ptr()).rows
-            && Columns.get() == (*default_grid.ptr()).cols
-            || Rows.get() == 0 as ::core::ffi::c_int
-            || Columns.get() == 0 as ::core::ffi::c_int
-        {
-            resizing.set(false_0 != 0);
-            return false_0 != 0;
+        RESIZING.set(true);
+
+        let grid = default_grid.ptr();
+        let unchanged =
+            !(*grid).chars.is_null() && Rows.get() == (*grid).rows && Columns.get() == (*grid).cols;
+        if unchanged || Rows.get() == 0 || Columns.get() == 0 {
+            RESIZING.set(false);
+            return false;
         }
-        grid_alloc(
-            default_grid.ptr(),
-            Rows.get(),
-            Columns.get(),
-            true_0 != 0,
-            true_0 != 0,
-        );
+
+        // Allocates new arrays, moves the old lines across, clears the rest and
+        // frees the old ones. On failure the arrays are left NULL rather than
+        // at the old size, because the wrong size is a crash.
+        grid_alloc(grid, Rows.get(), Columns.get(), true, true);
+
         stl_clear_click_defs(tab_page_click_defs.get(), tab_page_click_defs_size.get());
         tab_page_click_defs.set(stl_alloc_click_defs(
             tab_page_click_defs.get(),
             Columns.get(),
             tab_page_click_defs_size.ptr(),
         ));
-        (*default_grid.ptr()).comp_height = Rows.get();
-        (*default_grid.ptr()).comp_width = Columns.get();
-        (*default_grid.ptr()).handle = DEFAULT_GRID_HANDLE as handle_T;
-        resizing.set(false_0 != 0);
-        return true_0 != 0;
+
+        (*grid).comp_height = Rows.get();
+        (*grid).comp_width = Columns.get();
+        (*grid).handle = DEFAULT_GRID_HANDLE as handle_T;
+
+        RESIZING.set(false);
+        true
     }
 }
 
-pub unsafe extern "C" fn screenclear() {
+/// Blank the screen and mark everything on it for redraw.
+pub unsafe fn screenclear() {
+    // SAFETY: the screen grid and the message grid, on the main thread.
     unsafe {
-        msg_check_for_delay(false_0 != 0);
+        msg_check_for_delay(false);
+
         if starting.get() == NO_SCREEN || (*default_grid.ptr()).chars.is_null() {
             return;
         }
-        let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        while i < (*default_grid.ptr()).rows {
+
+        let grid = default_grid.ptr();
+        for row in 0..(*grid).rows {
             grid_clear_line(
-                default_grid.ptr(),
-                *(*default_grid.ptr()).line_offset.offset(i as isize),
-                (*default_grid.ptr()).cols,
-                true_0 != 0,
+                grid,
+                *(*grid).line_offset.add(row as usize),
+                (*grid).cols,
+                true,
             );
-            i += 1;
         }
-        ui_call_grid_clear(1 as Integer);
-        ui_comp_set_screen_valid(true_0 != 0);
-        ns_hl_fast.set(-1 as ::core::ffi::c_int as NS);
-        clear_cmdline.set(false_0 != 0);
-        mode_displayed.set(false_0 != 0);
+        ui_call_grid_clear(1);
+        ui_comp_set_screen_valid(true);
+
+        ns_hl_fast.set(-1);
+
+        clear_cmdline.set(false);
+        mode_displayed.set(false);
+
+        // Sets UPD_NOT_VALID on every window.
         redraw_all_later(UPD_NOT_VALID);
-        cmdline_was_last_drawn.set(false_0 != 0);
-        redraw_cmdline.set(true_0 != 0);
-        redraw_tabline.set(true_0 != 0);
-        redraw_popupmenu.set(true_0 != 0);
+        cmdline_was_last_drawn.set(false);
+        redraw_cmdline.set(true);
+        redraw_tabline.set(true);
+        redraw_popupmenu.set(true);
         pum_invalidate();
-        let mut wp: *mut win_T = if curtab.get() == curtab.get() {
-            firstwin.get()
-        } else {
-            (*curtab.get()).tp_firstwin
-        };
-        while !wp.is_null() {
+        for wp in windows_in_curtab() {
             if (*wp).w_floating {
                 (*wp).w_redr_type = UPD_CLEAR;
             }
-            wp = (*wp).w_next;
         }
         if must_redraw.get() == UPD_CLEAR {
-            must_redraw.set(UPD_NOT_VALID);
+            must_redraw.set(UPD_NOT_VALID); // no need to clear again
         }
+
         compute_cmdrow();
-        msg_row.set(cmdline_row.get());
-        msg_col.set(0 as ::core::ffi::c_int);
-        msg_reset_scroll();
-        msg_didany.set(false_0 != 0);
-        msg_didout.set(false_0 != 0);
-        if *(*hl_attr_active.ptr()).offset(HLF_MSG as isize) > 0 as ::core::ffi::c_int
-            && msg_use_grid() as ::core::ffi::c_int != 0
+        msg_row.set(cmdline_row.get()); // put the cursor on the last line for messages
+        msg_col.set(0);
+        msg_reset_scroll(); // can't scroll back
+        msg_didany.set(false);
+        msg_didout.set(false);
+
+        if *(*hl_attr_active.ptr()).add(HLF_MSG as usize) > 0
+            && msg_use_grid()
             && !(*msg_grid.ptr()).chars.is_null()
         {
             grid_invalidate(msg_grid.ptr());
             msg_grid_validate();
-            msg_grid_invalid.set(false_0 != 0);
-            clear_cmdline.set(true_0 != 0);
+            msg_grid_invalid.set(false);
+            clear_cmdline.set(true);
         }
     }
 }
 
-pub(crate) unsafe extern "C" fn cmdline_number_prompt() -> bool {
+/// Whether a `:` prompt that reads one key is on screen.
+///
+/// Unlike a cmdline "one_key" prompt, the message half of such a prompt is not
+/// stored to be re-emitted, so it must not be cleared from the message grid --
+/// which is why redrawing is refused entirely while one is up.
+pub(crate) unsafe fn cmdline_number_prompt() -> bool {
+    // SAFETY: the cmdline state is the editor's, on the main thread.
     unsafe {
-        return !ui_has(kUIMessages)
+        !ui_has(kUIMessages)
             && State.get() & MODE_CMDLINE != 0
-            && !(*get_cmdline_info()).mouse_used.is_null();
+            && !(*get_cmdline_info()).mouse_used.is_null()
     }
 }
 
+/// Set the dimensions of the Nvim application "screen".
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn screen_resize(
-    mut width: ::core::ffi::c_int,
-    mut height: ::core::ffi::c_int,
-) {
+pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
+    // SAFETY: the screen, the window layout and the autocommand machinery, all
+    // on the main thread.
     unsafe {
-        if updating_screen.get() as ::core::ffi::c_int != 0
-            || resizing_screen.get() as ::core::ffi::c_int != 0
-            || cmdline_number_prompt() as ::core::ffi::c_int != 0
-        {
+        // Setting the window size can produce another window-changed signal.
+        if updating_screen.get() || resizing_screen.get() || cmdline_number_prompt() {
             return;
         }
-        if width < 0 as ::core::ffi::c_int || height < 0 as ::core::ffi::c_int {
+        if width < 0 || height < 0 {
             return;
         }
         if State.get() == MODE_HITRETURN || State.get() == MODE_SETWSIZE {
-            State.set(MODE_SETWSIZE);
+            State.set(MODE_SETWSIZE); // postpone the resize
             return;
         }
-        resizing_screen.set(true_0 != 0);
+
+        resizing_screen.set(true);
+
         Rows.set(height);
         Columns.set(width);
         check_screensize();
+
         if !ui_has(kUIMessages) {
-            let mut max_p_ch: ::core::ffi::c_int =
-                Rows.get() - min_rows(curtab.get()) + 1 as ::core::ffi::c_int;
-            if p_ch.get() > 0 as OptInt && p_ch.get() > max_p_ch as OptInt {
-                p_ch.set(
-                    (if max_p_ch > 1 as ::core::ffi::c_int {
-                        max_p_ch
-                    } else {
-                        1 as ::core::ffi::c_int
-                    }) as OptInt,
-                );
+            // Clamp 'cmdheight' so the windows still fit, on this tab page and
+            // on every other one.
+            let max_p_ch = Rows.get() - min_rows(curtab.get()) + 1;
+            if p_ch.get() > 0 && p_ch.get() > max_p_ch as OptInt {
+                p_ch.set(max_p_ch.max(1) as OptInt);
                 (*curtab.get()).tp_ch_used = p_ch.get();
             }
-            let mut tp: *mut tabpage_T = first_tabpage.get() as *mut tabpage_T;
+            let mut tp = first_tabpage.get();
             while !tp.is_null() {
                 if tp != curtab.get() {
-                    let mut max_tp_ch: ::core::ffi::c_int =
-                        Rows.get() - min_rows(tp as *mut tabpage_T) + 1 as ::core::ffi::c_int;
-                    if (*tp).tp_ch_used > 0 as OptInt && (*tp).tp_ch_used > max_tp_ch as OptInt {
-                        (*tp).tp_ch_used = (if max_tp_ch > 1 as ::core::ffi::c_int {
-                            max_tp_ch
-                        } else {
-                            1 as ::core::ffi::c_int
-                        }) as OptInt;
+                    let max_tp_ch = Rows.get() - min_rows(tp) + 1;
+                    if (*tp).tp_ch_used > 0 && (*tp).tp_ch_used > max_tp_ch as OptInt {
+                        (*tp).tp_ch_used = max_tp_ch.max(1) as OptInt;
                     }
                 }
-                tp = (*tp).tp_next as *mut tabpage_T;
+                tp = (*tp).tp_next;
             }
         }
-        height = Rows.get();
-        width = Columns.get();
-        p_lines.set(Rows.get() as OptInt);
-        p_columns.set(Columns.get() as OptInt);
-        ui_call_grid_resize(1 as Integer, width as Integer, height as Integer);
-        let mut retry_count: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        resizing_autocmd.set(true_0 != 0);
+
+        // `check_screensize` may have clamped them.
+        let height = Rows.get();
+        let width = Columns.get();
+        p_lines.set(height as OptInt);
+        p_columns.set(width as OptInt);
+
+        ui_call_grid_resize(1, width as Integer, height as Integer);
+
+        // An autocommand may change Rows or Columns again, so the allocation is
+        // retried -- but at most three times, or an autocommand that always
+        // changes them never terminates.
+        let mut retry_count = 0;
+        resizing_autocmd.set(true);
         while default_grid_alloc() {
-            ui_comp_set_screen_valid(false_0 != 0);
+            // `win_new_screensize` recomputes float positions; tell the
+            // compositor not to draw them yet.
+            ui_comp_set_screen_valid(false);
             if !(*msg_grid.ptr()).chars.is_null() {
-                msg_grid_invalid.set(true_0 != 0);
+                msg_grid_invalid.set(true);
             }
-            (*RedrawingDisabled.ptr()) += 1;
-            win_new_screensize();
-            comp_col();
-            (*RedrawingDisabled.ptr()) -= 1;
+
+            RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+            win_new_screensize(); // fit the windows in the new screen
+            comp_col(); // recompute the shown-command and ruler columns
+            RedrawingDisabled.set(RedrawingDisabled.get() - 1);
+
             retry_count += 1;
-            if retry_count > 3 as ::core::ffi::c_int {
+            if retry_count > 3 {
                 break;
             }
             apply_autocmds(
                 EVENT_VIMRESIZED,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false_0 != 0,
+                ::core::ptr::null_mut(),
+                ::core::ptr::null_mut(),
+                false,
                 curbuf.get(),
             );
         }
-        resizing_autocmd.set(false_0 != 0);
+        resizing_autocmd.set(false);
+
         redraw_all_later(UPD_CLEAR);
+
         if State.get() != MODE_ASKMORE && State.get() != MODE_EXTERNCMD {
             screenclear();
         }
+
         if starting.get() != NO_SCREEN {
             maketitle();
+
             changed_line_abv_curs();
             invalidate_botline_win(curwin.get());
-            if State.get() == MODE_ASKMORE
+
+            // At a more prompt, running an external command, in Ex mode or at a
+            // one-key cmdline prompt, only the cursor is repositioned; anywhere
+            // else the screen is redrawn now.
+            let deferred = State.get() == MODE_ASKMORE
                 || State.get() == MODE_EXTERNCMD
-                || exmode_active.get() as ::core::ffi::c_int != 0
-                || State.get() & MODE_CMDLINE != 0
-                    && (*get_cmdline_info()).one_key as ::core::ffi::c_int != 0
-            {
+                || exmode_active.get()
+                || (State.get() & MODE_CMDLINE != 0 && (*get_cmdline_info()).one_key);
+            if deferred {
                 if State.get() & MODE_CMDLINE != 0 {
                     update_screen();
                 }
                 if !(*msg_grid.ptr()).chars.is_null() {
                     msg_grid_validate();
                 }
-                ui_comp_set_screen_valid(true_0 != 0);
+                ui_comp_set_screen_valid(true);
                 repeat_message();
             } else {
                 if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
-                    do_check_scrollbind(true_0 != 0);
+                    do_check_scrollbind(true);
                 }
                 if State.get() & MODE_CMDLINE != 0 {
-                    redraw_popupmenu.set(false_0 != 0);
+                    // The pum is redrawn by `cmdline_pum_display` below, at the
+                    // new position; keep `update_screen` from drawing it at the
+                    // old one.
+                    redraw_popupmenu.set(false);
                     update_screen();
                     redrawcmdline();
                     if pum_drawn() {
-                        cmdline_pum_display(false_0 != 0);
+                        cmdline_pum_display(false);
                     }
                 } else {
                     update_topline(curwin.get());
                     if pum_drawn() {
-                        redraw_popupmenu.set(false_0 != 0);
+                        // Same again: `ins_compl_show_pum` wants the screen
+                        // redrawn first, and the nested `update_screen` inside
+                        // it must not draw the pum at its old position.
+                        redraw_popupmenu.set(false);
                         ins_compl_show_pum();
                     }
                     update_screen();
@@ -244,43 +283,19 @@ pub unsafe extern "C" fn screen_resize(
             }
             ui_flush();
         }
-        resizing_screen.set(false_0 != 0);
+
+        resizing_screen.set(false);
     }
 }
 
-pub unsafe extern "C" fn check_screensize() {
+/// Clamp the screen size to something the editor can lay out and index.
+pub unsafe fn check_screensize() {
+    // SAFETY: `min_rows_for_all_tabpages` walks the window layout on the main
+    // thread.
     unsafe {
-        Rows.set(
-            if (if Rows.get() > min_rows_for_all_tabpages() {
-                Rows.get()
-            } else {
-                min_rows_for_all_tabpages()
-            }) < 1000 as ::core::ffi::c_int
-            {
-                if Rows.get() > min_rows_for_all_tabpages() {
-                    Rows.get()
-                } else {
-                    min_rows_for_all_tabpages()
-                }
-            } else {
-                1000 as ::core::ffi::c_int
-            },
-        );
-        Columns.set(
-            if (if Columns.get() > MIN_COLUMNS as ::core::ffi::c_int {
-                Columns.get()
-            } else {
-                MIN_COLUMNS as ::core::ffi::c_int
-            }) < 10000 as ::core::ffi::c_int
-            {
-                if Columns.get() > MIN_COLUMNS as ::core::ffi::c_int {
-                    Columns.get()
-                } else {
-                    MIN_COLUMNS as ::core::ffi::c_int
-                }
-            } else {
-                10000 as ::core::ffi::c_int
-            },
-        );
+        // Room for one window and the command line at the low end; a bound on
+        // `Rows * Columns` at the high end.
+        Rows.set(Rows.get().max(min_rows_for_all_tabpages()).min(MAX_ROWS));
+        Columns.set(Columns.get().max(MIN_COLUMNS as c_int).min(MAX_COLUMNS));
     }
 }

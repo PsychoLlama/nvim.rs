@@ -39,7 +39,7 @@
     "crates/nvim/src/nvim/digraph.rs": 9,
     "crates/nvim/src/nvim/drawline/columns.rs": 1,
     "crates/nvim/src/nvim/drawscreen.rs": 8,
-    "crates/nvim/src/nvim/drawscreen/mode.rs": 30,
+    "crates/nvim/src/nvim/drawscreen/mode.rs": 1,
     "crates/nvim/src/nvim/edit.rs": 33,
     "crates/nvim/src/nvim/eval/callback.rs": 1,
     "crates/nvim/src/nvim/eval/collect.rs": 2,

@@ -71,7 +71,7 @@ use crate::src::nvim::option::{get_ve_flags, shortmess};
 use crate::src::nvim::options::{
     kOptDyFlagLastline, kOptDyFlagTruncate, kOptVeFlagAll, kOptVeFlagBlock,
 };
-use crate::src::nvim::os::libc::{__assert_fail, abs, gettext, snprintf};
+use crate::src::nvim::os::libc::{__assert_fail, abs, gettext};
 use crate::src::nvim::plines::{
     getvcols, getvvcol, plines_m_win, plines_win, win_get_fill, win_may_fill,
 };
@@ -97,7 +97,7 @@ use crate::src::nvim::syntax::{
 use crate::src::nvim::terminal::{terminal_check_size, terminal_suspended};
 use crate::src::nvim::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::src::nvim::types::{
-    DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Integer, MetaIndex, NS,
+    DecorPriority, DecorVirtText, DecorVirtText_data as C2Rust_Unnamed_2, Integer, MetaIndex,
     OptInt, ScreenGrid, TriState, VimVarIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
     WinExtmark, Window, buf_T, colnr_T, foldinfo_T, frame_T, handle_T, hlf_T, int64_t, linenr_T,
     matchitem_T, pos_T, proftime_T, regprog_T, schar_T, size_t, spellvars_T, tabpage_T, uint16_t,
