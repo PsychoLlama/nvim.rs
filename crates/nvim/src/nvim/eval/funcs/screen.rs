@@ -416,7 +416,7 @@ pub unsafe extern "C" fn f_synconcealed(
             // reports on the position it last looked at.
             syn_get_id(curwin.get(), lnum, col, false_0, ptr::null_mut(), false_0);
             syntax_flags = get_syntax_info(&raw mut matchid);
-            if syntax_flags & HL_CONCEAL as c_int != 0 && (*curwin.get()).w_onebuf_opt.wo_cole < 3 {
+            if syntax_flags & HL_CONCEAL != 0 && (*curwin.get()).w_onebuf_opt.wo_cole < 3 {
                 let mut cchar = schar_from_char(syn_get_sub_char());
                 // At 'conceallevel' 1 a group with no `cchar` falls back to
                 // 'listchars' "conceal", and to a space if that is unset.
@@ -435,7 +435,7 @@ pub unsafe extern "C" fn f_synconcealed(
         let list = tv_list_alloc_ret(rettv, 3);
         tv_list_append_number(
             list,
-            (syntax_flags & HL_CONCEAL as c_int != 0) as c_int as varnumber_T,
+            (syntax_flags & HL_CONCEAL != 0) as c_int as varnumber_T,
         );
         tv_list_append_string(list, text.as_ptr(), -1);
         tv_list_append_number(list, matchid as varnumber_T);

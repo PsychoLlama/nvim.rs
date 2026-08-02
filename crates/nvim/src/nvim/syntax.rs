@@ -60,6 +60,10 @@ use crate::src::nvim::types::{
     lpos_T, pos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t,
     syn_time_T, synblock_T, synstate_T, uint8_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
+
+mod flags;
+pub use self::flags::*;
+
 unsafe extern "C" {
     fn vim_regcomp(
         expr_arg: *const ::core::ffi::c_char,
@@ -105,27 +109,6 @@ pub type C2Rust_Unnamed_21 = ::core::ffi::c_uint;
 pub const DOSO_NONE: C2Rust_Unnamed_21 = 0;
 pub type C2Rust_Unnamed_22 = ::core::ffi::c_uint;
 pub const DIP_ALL: C2Rust_Unnamed_22 = 1;
-pub type C2Rust_Unnamed_23 = ::core::ffi::c_uint;
-pub const HL_INCLUDED_TOPLEVEL: C2Rust_Unnamed_23 = 524288;
-pub const HL_CONCEALENDS: C2Rust_Unnamed_23 = 262144;
-pub const HL_CONCEAL: C2Rust_Unnamed_23 = 131072;
-pub const HL_TRANS_CONT: C2Rust_Unnamed_23 = 65536;
-pub const HL_MATCHCONT: C2Rust_Unnamed_23 = 32768;
-pub const HL_EXTEND: C2Rust_Unnamed_23 = 16384;
-pub const HL_FOLD: C2Rust_Unnamed_23 = 8192;
-pub const HL_DISPLAY: C2Rust_Unnamed_23 = 4096;
-pub const HL_EXCLUDENL: C2Rust_Unnamed_23 = 2048;
-pub const HL_KEEPEND: C2Rust_Unnamed_23 = 1024;
-pub const HL_SKIPEMPTY: C2Rust_Unnamed_23 = 512;
-pub const HL_SKIPWHITE: C2Rust_Unnamed_23 = 256;
-pub const HL_SKIPNL: C2Rust_Unnamed_23 = 128;
-pub const HL_MATCH: C2Rust_Unnamed_23 = 64;
-pub const HL_SYNC_THERE: C2Rust_Unnamed_23 = 32;
-pub const HL_SYNC_HERE: C2Rust_Unnamed_23 = 16;
-pub const HL_HAS_EOL: C2Rust_Unnamed_23 = 8;
-pub const HL_ONELINE: C2Rust_Unnamed_23 = 4;
-pub const HL_TRANSP: C2Rust_Unnamed_23 = 2;
-pub const HL_CONTAINED: C2Rust_Unnamed_23 = 1;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct stateitem_T {
@@ -719,7 +702,7 @@ unsafe extern "C" fn syn_sync(
                         push_current_state(found_match_idx);
                         update_si_attr((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
                     }
-                    if found_flags & HL_SYNC_HERE as ::core::ffi::c_int != 0 {
+                    if found_flags & HL_SYNC_HERE != 0 {
                         current_lnum.set(found_m_endpos.lnum);
                         current_col.set(found_m_endpos.col);
                         if !((*current_state.ptr()).ga_len <= 0 as ::core::ffi::c_int) {
@@ -825,7 +808,7 @@ unsafe extern "C" fn syn_update_ends(mut startofline: bool) {
                     == SPTYPE_MATCH
                 && (*cur_si).si_m_endpos.lnum < current_lnum.get()
             {
-                (*cur_si).si_flags |= HL_MATCHCONT as ::core::ffi::c_int;
+                (*cur_si).si_flags |= HL_MATCHCONT;
                 (*cur_si).si_m_endpos.lnum = 0 as ::core::ffi::c_int as linenr_T;
                 (*cur_si).si_m_endpos.col = 0 as ::core::ffi::c_int as colnr_T;
                 (*cur_si).si_h_endpos = (*cur_si).si_m_endpos;
@@ -838,7 +821,7 @@ unsafe extern "C" fn syn_update_ends(mut startofline: bool) {
     if keepend_level.get() >= 0 as ::core::ffi::c_int {
         while i_0 > keepend_level.get() {
             if (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i_0 as isize)).si_flags
-                & HL_EXTEND as ::core::ffi::c_int
+                & HL_EXTEND
                 != 0
             {
                 break;
@@ -849,17 +832,17 @@ unsafe extern "C" fn syn_update_ends(mut startofline: bool) {
     let mut seen_keepend: bool = false_0 != 0;
     while i_0 < (*current_state.ptr()).ga_len {
         cur_si = ((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i_0 as isize);
-        if (*cur_si).si_flags & HL_KEEPEND as ::core::ffi::c_int != 0
+        if (*cur_si).si_flags & HL_KEEPEND != 0
             || seen_keepend as ::core::ffi::c_int != 0 && !startofline
             || i_0 == (*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int
                 && startofline as ::core::ffi::c_int != 0
         {
             (*cur_si).si_h_startpos.col = 0 as ::core::ffi::c_int as colnr_T;
             (*cur_si).si_h_startpos.lnum = current_lnum.get();
-            if (*cur_si).si_flags & HL_MATCHCONT as ::core::ffi::c_int == 0 {
+            if (*cur_si).si_flags & HL_MATCHCONT == 0 {
                 update_si_end(cur_si, current_col.get(), !startofline);
             }
-            if !startofline && (*cur_si).si_flags & HL_KEEPEND as ::core::ffi::c_int != 0 {
+            if !startofline && (*cur_si).si_flags & HL_KEEPEND != 0 {
                 seen_keepend = true_0 != 0;
             }
         }
@@ -1231,7 +1214,7 @@ unsafe extern "C" fn load_current_state(mut from: *mut synstate_T) {
             if keepend_level.get() < 0 as ::core::ffi::c_int
                 && (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize))
                     .si_flags
-                    & HL_KEEPEND as ::core::ffi::c_int
+                    & HL_KEEPEND
                     != 0
             {
                 keepend_level.set(i);
@@ -1389,7 +1372,7 @@ unsafe extern "C" fn syn_finish_line(syncing: bool) -> bool {
                 && (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
                     .offset((*cur_si).si_idx as isize))
                 .sp_flags
-                    & (HL_SYNC_HERE as ::core::ffi::c_int | HL_SYNC_THERE as ::core::ffi::c_int)
+                    & (HL_SYNC_HERE | HL_SYNC_THERE)
                     != 0
             {
                 return true_0 != 0;
@@ -1590,11 +1573,11 @@ unsafe extern "C" fn syn_current_attr(
                                         as isize,
                                 ))
                                 .si_flags
-                                    & HL_CONCEAL as ::core::ffi::c_int;
+                                    & HL_CONCEAL;
                         }
                         (*cur_si).si_id = syn_id;
                         (*cur_si).si_trans_id = syn_id;
-                        if flags & HL_TRANSP as ::core::ffi::c_int != 0 {
+                        if flags & HL_TRANSP != 0 {
                             if (*current_state.ptr()).ga_len < 2 as ::core::ffi::c_int {
                                 (*cur_si).si_attr = 0 as ::core::ffi::c_int;
                                 (*cur_si).si_trans_id = 0 as ::core::ffi::c_int;
@@ -1639,7 +1622,7 @@ unsafe extern "C" fn syn_current_attr(
                         if !((*spp).sp_syncing as ::core::ffi::c_int
                             == syncing as ::core::ffi::c_int
                             && (displaying as ::core::ffi::c_int != 0
-                                || (*spp).sp_flags & HL_DISPLAY as ::core::ffi::c_int == 0)
+                                || (*spp).sp_flags & HL_DISPLAY == 0)
                             && ((*spp).sp_type as ::core::ffi::c_int == SPTYPE_MATCH
                                 || (*spp).sp_type as ::core::ffi::c_int == SPTYPE_START)
                             && (if !(*current_next_list.ptr()).is_null() {
@@ -1651,8 +1634,7 @@ unsafe extern "C" fn syn_current_attr(
                                 )
                             } else {
                                 if cur_si.is_null() {
-                                    ((*spp).sp_flags & HL_CONTAINED as ::core::ffi::c_int == 0)
-                                        as ::core::ffi::c_int
+                                    ((*spp).sp_flags & HL_CONTAINED == 0) as ::core::ffi::c_int
                                 } else {
                                     in_id_list(
                                         cur_si,
@@ -1734,7 +1716,7 @@ unsafe extern "C" fn syn_current_attr(
                                     end_idx = 0 as ::core::ffi::c_int;
                                     hl_endpos.lnum = 0 as ::core::ffi::c_int as linenr_T;
                                     if (*spp).sp_type as ::core::ffi::c_int == SPTYPE_START
-                                        && (*spp).sp_flags & HL_ONELINE as ::core::ffi::c_int != 0
+                                        && (*spp).sp_flags & HL_ONELINE != 0
                                     {
                                         let mut startpos: lpos_T = lpos_T { lnum: 0, col: 0 };
                                         startpos = endpos;
@@ -1832,11 +1814,11 @@ unsafe extern "C" fn syn_current_attr(
         if !(*current_next_list.ptr()).is_null() && !keep_next_list {
             if !found_match {
                 line = syn_getcurline();
-                if current_next_flags.get() & HL_SKIPWHITE as ::core::ffi::c_int != 0
+                if current_next_flags.get() & HL_SKIPWHITE != 0
                     && ascii_iswhite(*line.offset(current_col.get() as isize) as ::core::ffi::c_int)
                         as ::core::ffi::c_int
                         != 0
-                    || current_next_flags.get() & HL_SKIPEMPTY as ::core::ffi::c_int != 0
+                    || current_next_flags.get() & HL_SKIPEMPTY != 0
                         && *line as ::core::ffi::c_int == NUL
                 {
                     break;
@@ -1955,9 +1937,7 @@ unsafe extern "C" fn syn_current_attr(
             .offset((current_col.get() as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as isize)
             as ::core::ffi::c_int
             == NUL
-        && current_next_flags.get()
-            & (HL_SKIPNL as ::core::ffi::c_int | HL_SKIPEMPTY as ::core::ffi::c_int)
-            == 0
+        && current_next_flags.get() & (HL_SKIPNL | HL_SKIPEMPTY) == 0
     {
         current_next_list.set(::core::ptr::null_mut::<int16_t>());
     }
@@ -2022,13 +2002,11 @@ unsafe extern "C" fn push_next_match() -> *mut stateitem_T {
         (*cur_si).si_flags |= (*((*current_state.ptr()).ga_data as *mut stateitem_T)
             .offset(((*current_state.ptr()).ga_len - 2 as ::core::ffi::c_int) as isize))
         .si_flags
-            & HL_CONCEAL as ::core::ffi::c_int;
+            & HL_CONCEAL;
     }
     (*cur_si).si_next_list = (*spp).sp_next_list;
     (*cur_si).si_extmatch = ref_extmatch(next_match_extmatch.get());
-    if (*spp).sp_type as ::core::ffi::c_int == SPTYPE_START
-        && (*spp).sp_flags & HL_ONELINE as ::core::ffi::c_int == 0
-    {
+    if (*spp).sp_type as ::core::ffi::c_int == SPTYPE_START && (*spp).sp_flags & HL_ONELINE == 0 {
         update_si_end(cur_si, (*next_match_m_endpos.ptr()).col, true_0 != 0);
         check_keepend();
     } else {
@@ -2039,15 +2017,12 @@ unsafe extern "C" fn push_next_match() -> *mut stateitem_T {
         (*cur_si).si_eoe_pos = next_match_eoe_pos.get();
         (*cur_si).si_end_idx = next_match_end_idx.get();
     }
-    if keepend_level.get() < 0 as ::core::ffi::c_int
-        && (*cur_si).si_flags & HL_KEEPEND as ::core::ffi::c_int != 0
-    {
+    if keepend_level.get() < 0 as ::core::ffi::c_int && (*cur_si).si_flags & HL_KEEPEND != 0 {
         keepend_level.set((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
     }
     check_keepend();
     update_si_attr((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
-    save_flags = (*cur_si).si_flags
-        & (HL_CONCEAL as ::core::ffi::c_int | HL_CONCEALENDS as ::core::ffi::c_int);
+    save_flags = (*cur_si).si_flags & (HL_CONCEAL | HL_CONCEALENDS);
     if (*spp).sp_type as ::core::ffi::c_int == SPTYPE_START
         && (*spp).sp_syn_match_id as ::core::ffi::c_int != 0 as ::core::ffi::c_int
     {
@@ -2061,13 +2036,13 @@ unsafe extern "C" fn push_next_match() -> *mut stateitem_T {
         (*cur_si).si_h_endpos = next_match_eos_pos.get();
         (*cur_si).si_ends = true_0;
         (*cur_si).si_end_idx = 0 as ::core::ffi::c_int;
-        (*cur_si).si_flags = HL_MATCH as ::core::ffi::c_int;
+        (*cur_si).si_flags = HL_MATCH;
         let c2rust_fresh5 = next_seqnr.get();
         next_seqnr.set(next_seqnr.get() + 1);
         (*cur_si).si_seqnr = c2rust_fresh5;
         (*cur_si).si_flags |= save_flags;
-        if (*cur_si).si_flags & HL_CONCEALENDS as ::core::ffi::c_int != 0 {
-            (*cur_si).si_flags |= HL_CONCEAL as ::core::ffi::c_int;
+        if (*cur_si).si_flags & HL_CONCEALENDS != 0 {
+            (*cur_si).si_flags |= HL_CONCEAL;
         }
         (*cur_si).si_next_list = ::core::ptr::null_mut::<int16_t>();
         check_keepend();
@@ -2095,12 +2070,12 @@ unsafe extern "C" fn check_state_ends() {
             (*cur_si).si_end_idx = 0 as ::core::ffi::c_int;
             (*cur_si).si_m_endpos = (*cur_si).si_eoe_pos;
             (*cur_si).si_h_endpos = (*cur_si).si_eoe_pos;
-            (*cur_si).si_flags |= HL_MATCH as ::core::ffi::c_int;
+            (*cur_si).si_flags |= HL_MATCH;
             let c2rust_fresh0 = next_seqnr.get();
             next_seqnr.set(next_seqnr.get() + 1);
             (*cur_si).si_seqnr = c2rust_fresh0;
-            if (*cur_si).si_flags & HL_CONCEALENDS as ::core::ffi::c_int != 0 {
-                (*cur_si).si_flags |= HL_CONCEAL as ::core::ffi::c_int;
+            if (*cur_si).si_flags & HL_CONCEALENDS != 0 {
+                (*cur_si).si_flags |= HL_CONCEAL;
             }
             update_si_attr((*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int);
             current_next_list.set(::core::ptr::null_mut::<int16_t>());
@@ -2110,14 +2085,12 @@ unsafe extern "C" fn check_state_ends() {
         } else {
             current_next_list.set((*cur_si).si_next_list);
             current_next_flags.set((*cur_si).si_flags);
-            if current_next_flags.get()
-                & (HL_SKIPNL as ::core::ffi::c_int | HL_SKIPEMPTY as ::core::ffi::c_int)
-                == 0
+            if current_next_flags.get() & (HL_SKIPNL | HL_SKIPEMPTY) == 0
                 && *syn_getcurline().offset(current_col.get() as isize) as ::core::ffi::c_int == NUL
             {
                 current_next_list.set(::core::ptr::null_mut::<int16_t>());
             }
-            had_extend = (*cur_si).si_flags & HL_EXTEND as ::core::ffi::c_int;
+            had_extend = (*cur_si).si_flags & HL_EXTEND;
             pop_current_state();
             if (*current_state.ptr()).ga_len <= 0 as ::core::ffi::c_int {
                 break;
@@ -2135,15 +2108,13 @@ unsafe extern "C" fn check_state_ends() {
                     .offset((*cur_si).si_idx as isize))
                 .sp_type as ::core::ffi::c_int
                     == SPTYPE_START
-                && (*cur_si).si_flags
-                    & (HL_MATCH as ::core::ffi::c_int | HL_KEEPEND as ::core::ffi::c_int)
-                    == 0)
+                && (*cur_si).si_flags & (HL_MATCH | HL_KEEPEND) == 0)
             {
                 continue;
             }
             update_si_end(cur_si, current_col.get(), true_0 != 0);
             check_keepend();
-            if current_next_flags.get() & HL_HAS_EOL as ::core::ffi::c_int != 0
+            if current_next_flags.get() & HL_HAS_EOL != 0
                 && keepend_level.get() < 0 as ::core::ffi::c_int
                 && *syn_getcurline().offset(current_col.get() as isize) as ::core::ffi::c_int == NUL
             {
@@ -2161,21 +2132,19 @@ unsafe extern "C" fn update_si_attr(mut idx: ::core::ffi::c_int) {
     }
     spp =
         ((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T).offset((*sip).si_idx as isize);
-    if (*sip).si_flags & HL_MATCH as ::core::ffi::c_int != 0 {
+    if (*sip).si_flags & HL_MATCH != 0 {
         (*sip).si_id = (*spp).sp_syn_match_id as ::core::ffi::c_int;
     } else {
         (*sip).si_id = (*spp).sp_syn.id as ::core::ffi::c_int;
     }
     (*sip).si_attr = syn_id2attr((*sip).si_id);
     (*sip).si_trans_id = (*sip).si_id;
-    if (*sip).si_flags & HL_MATCH as ::core::ffi::c_int != 0 {
+    if (*sip).si_flags & HL_MATCH != 0 {
         (*sip).si_cont_list = ::core::ptr::null_mut::<int16_t>();
     } else {
         (*sip).si_cont_list = (*spp).sp_cont_list;
     }
-    if (*spp).sp_flags & HL_TRANSP as ::core::ffi::c_int != 0
-        && (*sip).si_flags & HL_MATCH as ::core::ffi::c_int == 0
-    {
+    if (*spp).sp_flags & HL_TRANSP != 0 && (*sip).si_flags & HL_MATCH == 0 {
         if idx == 0 as ::core::ffi::c_int {
             (*sip).si_attr = 0 as ::core::ffi::c_int;
             (*sip).si_trans_id = 0 as ::core::ffi::c_int;
@@ -2190,7 +2159,7 @@ unsafe extern "C" fn update_si_attr(mut idx: ::core::ffi::c_int) {
                 .offset((idx - 1 as ::core::ffi::c_int) as isize))
             .si_trans_id;
             if (*sip).si_cont_list.is_null() {
-                (*sip).si_flags |= HL_TRANS_CONT as ::core::ffi::c_int;
+                (*sip).si_flags |= HL_TRANS_CONT;
                 (*sip).si_cont_list = (*((*current_state.ptr()).ga_data as *mut stateitem_T)
                     .offset((idx - 1 as ::core::ffi::c_int) as isize))
                 .si_cont_list;
@@ -2209,7 +2178,7 @@ unsafe extern "C" fn check_keepend() {
     i = (*current_state.ptr()).ga_len - 1 as ::core::ffi::c_int;
     while i > keepend_level.get() {
         if (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_flags
-            & HL_EXTEND as ::core::ffi::c_int
+            & HL_EXTEND
             != 0
         {
             break;
@@ -2228,7 +2197,7 @@ unsafe extern "C" fn check_keepend() {
             limit_pos_zero(&raw mut (*sip).si_eoe_pos, &raw mut maxpos);
             (*sip).si_ends = true_0;
         }
-        if (*sip).si_ends != 0 && (*sip).si_flags & HL_KEEPEND as ::core::ffi::c_int != 0 {
+        if (*sip).si_ends != 0 && (*sip).si_flags & HL_KEEPEND != 0 {
             if maxpos.lnum == 0 as linenr_T
                 || maxpos.lnum > (*sip).si_m_endpos.lnum
                 || maxpos.lnum == (*sip).si_m_endpos.lnum && maxpos.col > (*sip).si_m_endpos.col
@@ -2281,7 +2250,7 @@ unsafe extern "C" fn update_si_end(
         if (*((*syn_block.get()).b_syn_patterns.ga_data as *mut synpat_T)
             .offset((*sip).si_idx as isize))
         .sp_flags
-            & HL_ONELINE as ::core::ffi::c_int
+            & HL_ONELINE
             != 0
         {
             (*sip).si_ends = true_0;
@@ -2786,7 +2755,7 @@ unsafe extern "C" fn match_keyword(
                     0 as ::core::ffi::c_int,
                 )
             } else if cur_si.is_null() {
-                ((*kp).flags & HL_CONTAINED as ::core::ffi::c_int == 0) as ::core::ffi::c_int
+                ((*kp).flags & HL_CONTAINED == 0) as ::core::ffi::c_int
             } else {
                 in_id_list(
                     cur_si,
@@ -3152,7 +3121,7 @@ unsafe extern "C" fn syntax_sync_clear() {
 unsafe extern "C" fn syn_remove_pattern(mut block: *mut synblock_T, mut idx: ::core::ffi::c_int) {
     let mut spp: *mut synpat_T = ::core::ptr::null_mut::<synpat_T>();
     spp = ((*block).b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize);
-    if (*spp).sp_flags & HL_FOLD as ::core::ffi::c_int != 0 {
+    if (*spp).sp_flags & HL_FOLD != 0 {
         (*block).b_syn_folditems -= 1;
     }
     syn_clear_pattern(block, idx);
@@ -3666,11 +3635,8 @@ unsafe extern "C" fn syn_list_one(id: ::core::ffi::c_int, syncing: bool, link_on
                     hl_id,
                 );
             }
-            if (*spp).sp_flags
-                & (HL_SYNC_HERE as ::core::ffi::c_int | HL_SYNC_THERE as ::core::ffi::c_int)
-                != 0
-            {
-                if (*spp).sp_flags & HL_SYNC_HERE as ::core::ffi::c_int != 0 {
+            if (*spp).sp_flags & (HL_SYNC_HERE | HL_SYNC_THERE) != 0 {
+                if (*spp).sp_flags & HL_SYNC_HERE != 0 {
                     msg_puts_hl(
                         b"grouphere\0".as_ptr() as *const ::core::ffi::c_char,
                         hl_id,
@@ -3933,10 +3899,10 @@ unsafe extern "C" fn syn_list_keywords(
                 if (*kp).k_syn.id as ::core::ffi::c_int == id {
                     let mut outlen: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
                     let mut force_newline: bool = false_0 != 0;
-                    if prev_contained != (*kp).flags & HL_CONTAINED as ::core::ffi::c_int
-                        || prev_skipnl != (*kp).flags & HL_SKIPNL as ::core::ffi::c_int
-                        || prev_skipwhite != (*kp).flags & HL_SKIPWHITE as ::core::ffi::c_int
-                        || prev_skipempty != (*kp).flags & HL_SKIPEMPTY as ::core::ffi::c_int
+                    if prev_contained != (*kp).flags & HL_CONTAINED
+                        || prev_skipnl != (*kp).flags & HL_SKIPNL
+                        || prev_skipwhite != (*kp).flags & HL_SKIPWHITE
+                        || prev_skipempty != (*kp).flags & HL_SKIPEMPTY
                         || prev_cont_in_list != (*kp).k_syn.cont_in_list as *const int16_t
                         || prev_next_list != (*kp).next_list as *const int16_t
                     {
@@ -3954,14 +3920,14 @@ unsafe extern "C" fn syn_list_keywords(
                         prev_skipempty = 0 as ::core::ffi::c_int;
                     }
                     did_header = true_0 != 0;
-                    if prev_contained != (*kp).flags & HL_CONTAINED as ::core::ffi::c_int {
+                    if prev_contained != (*kp).flags & HL_CONTAINED {
                         msg_puts_hl(
                             b"contained\0".as_ptr() as *const ::core::ffi::c_char,
                             hl_id,
                             false_0 != 0,
                         );
                         msg_putchar(' ' as ::core::ffi::c_int);
-                        prev_contained = (*kp).flags & HL_CONTAINED as ::core::ffi::c_int;
+                        prev_contained = (*kp).flags & HL_CONTAINED;
                     }
                     if (*kp).k_syn.cont_in_list != prev_cont_in_list as *mut int16_t {
                         put_id_list(
@@ -3980,32 +3946,32 @@ unsafe extern "C" fn syn_list_keywords(
                         );
                         msg_putchar(' ' as ::core::ffi::c_int);
                         prev_next_list = (*kp).next_list;
-                        if (*kp).flags & HL_SKIPNL as ::core::ffi::c_int != 0 {
+                        if (*kp).flags & HL_SKIPNL != 0 {
                             msg_puts_hl(
                                 b"skipnl\0".as_ptr() as *const ::core::ffi::c_char,
                                 hl_id,
                                 false_0 != 0,
                             );
                             msg_putchar(' ' as ::core::ffi::c_int);
-                            prev_skipnl = (*kp).flags & HL_SKIPNL as ::core::ffi::c_int;
+                            prev_skipnl = (*kp).flags & HL_SKIPNL;
                         }
-                        if (*kp).flags & HL_SKIPWHITE as ::core::ffi::c_int != 0 {
+                        if (*kp).flags & HL_SKIPWHITE != 0 {
                             msg_puts_hl(
                                 b"skipwhite\0".as_ptr() as *const ::core::ffi::c_char,
                                 hl_id,
                                 false_0 != 0,
                             );
                             msg_putchar(' ' as ::core::ffi::c_int);
-                            prev_skipwhite = (*kp).flags & HL_SKIPWHITE as ::core::ffi::c_int;
+                            prev_skipwhite = (*kp).flags & HL_SKIPWHITE;
                         }
-                        if (*kp).flags & HL_SKIPEMPTY as ::core::ffi::c_int != 0 {
+                        if (*kp).flags & HL_SKIPEMPTY != 0 {
                             msg_puts_hl(
                                 b"skipempty\0".as_ptr() as *const ::core::ffi::c_char,
                                 hl_id,
                                 false_0 != 0,
                             );
                             msg_putchar(' ' as ::core::ffi::c_int);
-                            prev_skipempty = (*kp).flags & HL_SKIPEMPTY as ::core::ffi::c_int;
+                            prev_skipempty = (*kp).flags & HL_SKIPEMPTY;
                         }
                     }
                     msg_outtrans(
@@ -4184,90 +4150,90 @@ unsafe extern "C" fn get_syn_options(
             name: b"cCoOnNtTaAiInNeEdD\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_CONTAINED as ::core::ffi::c_int,
+            flags: HL_CONTAINED,
         },
         flag {
             name: b"oOnNeElLiInNeE\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_ONELINE as ::core::ffi::c_int,
+            flags: HL_ONELINE,
         },
         flag {
             name: b"kKeEeEpPeEnNdD\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_KEEPEND as ::core::ffi::c_int,
+            flags: HL_KEEPEND,
         },
         flag {
             name: b"eExXtTeEnNdD\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_EXTEND as ::core::ffi::c_int,
+            flags: HL_EXTEND,
         },
         flag {
             name: b"eExXcClLuUdDeEnNlL\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_EXCLUDENL as ::core::ffi::c_int,
+            flags: HL_EXCLUDENL,
         },
         flag {
             name: b"tTrRaAnNsSpPaArReEnNtT\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_TRANSP as ::core::ffi::c_int,
+            flags: HL_TRANSP,
         },
         flag {
             name: b"sSkKiIpPnNlL\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_SKIPNL as ::core::ffi::c_int,
+            flags: HL_SKIPNL,
         },
         flag {
             name: b"sSkKiIpPwWhHiItTeE\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_SKIPWHITE as ::core::ffi::c_int,
+            flags: HL_SKIPWHITE,
         },
         flag {
             name: b"sSkKiIpPeEmMpPtTyY\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_SKIPEMPTY as ::core::ffi::c_int,
+            flags: HL_SKIPEMPTY,
         },
         flag {
             name: b"gGrRoOuUpPhHeErReE\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_SYNC_HERE as ::core::ffi::c_int,
+            flags: HL_SYNC_HERE,
         },
         flag {
             name: b"gGrRoOuUpPtThHeErReE\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_SYNC_THERE as ::core::ffi::c_int,
+            flags: HL_SYNC_THERE,
         },
         flag {
             name: b"dDiIsSpPlLaAyY\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_DISPLAY as ::core::ffi::c_int,
+            flags: HL_DISPLAY,
         },
         flag {
             name: b"fFoOlLdD\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_FOLD as ::core::ffi::c_int,
+            flags: HL_FOLD,
         },
         flag {
             name: b"cCoOnNcCeEaAlL\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_CONCEAL as ::core::ffi::c_int,
+            flags: HL_CONCEAL,
         },
         flag {
             name: b"cCoOnNcCeEaAlLeEnNdDsS\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             argtype: 0 as ::core::ffi::c_int,
-            flags: HL_CONCEALENDS as ::core::ffi::c_int,
+            flags: HL_CONCEALENDS,
         },
         flag {
             name: b"cCcChHaArR\0".as_ptr() as *const ::core::ffi::c_char
@@ -4300,7 +4266,7 @@ unsafe extern "C" fn get_syn_options(
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     if (*(*curwin.get()).w_s).b_syn_conceal != 0 {
-        (*opt).flags |= HL_CONCEAL as ::core::ffi::c_int;
+        (*opt).flags |= HL_CONCEAL;
     }
     while !strchr(first_letters.get(), *arg as ::core::ffi::c_int).is_null() {
         fidx = ::core::mem::size_of::<[flag; 19]>()
@@ -4344,9 +4310,9 @@ unsafe extern "C" fn get_syn_options(
                 continue;
             }
             if (*opt).keyword as ::core::ffi::c_int != 0
-                && ((*flagtab.ptr())[fidx as usize].flags == HL_DISPLAY as ::core::ffi::c_int
-                    || (*flagtab.ptr())[fidx as usize].flags == HL_FOLD as ::core::ffi::c_int
-                    || (*flagtab.ptr())[fidx as usize].flags == HL_EXTEND as ::core::ffi::c_int)
+                && ((*flagtab.ptr())[fidx as usize].flags == HL_DISPLAY
+                    || (*flagtab.ptr())[fidx as usize].flags == HL_FOLD
+                    || (*flagtab.ptr())[fidx as usize].flags == HL_EXTEND)
             {
                 fidx = -1 as ::core::ffi::c_int;
             }
@@ -4411,8 +4377,8 @@ unsafe extern "C" fn get_syn_options(
         } else {
             (*opt).flags |= (*flagtab.ptr())[fidx as usize].flags;
             arg = skipwhite(arg.offset(len as isize));
-            if (*flagtab.ptr())[fidx as usize].flags == HL_SYNC_HERE as ::core::ffi::c_int
-                || (*flagtab.ptr())[fidx as usize].flags == HL_SYNC_THERE as ::core::ffi::c_int
+            if (*flagtab.ptr())[fidx as usize].flags == HL_SYNC_HERE
+                || (*flagtab.ptr())[fidx as usize].flags == HL_SYNC_THERE
             {
                 if (*opt).sync_idx.is_null() {
                     emsg(gettext(b"E393: group[t]here not accepted here\0".as_ptr()
@@ -4466,7 +4432,7 @@ unsafe extern "C" fn get_syn_options(
                 }
                 xfree(gname as *mut ::core::ffi::c_void);
                 arg = skipwhite(arg);
-            } else if (*flagtab.ptr())[fidx as usize].flags == HL_FOLD as ::core::ffi::c_int
+            } else if (*flagtab.ptr())[fidx as usize].flags == HL_FOLD
                 && foldmethodIsSyntax(curwin.get()) as ::core::ffi::c_int != 0
             {
                 foldUpdateAll(curwin.get());
@@ -4479,12 +4445,11 @@ unsafe extern "C" fn syn_incl_toplevel(
     mut id: ::core::ffi::c_int,
     mut flagsp: *mut ::core::ffi::c_int,
 ) {
-    if *flagsp & HL_CONTAINED as ::core::ffi::c_int != 0
-        || (*(*curwin.get()).w_s).b_syn_topgrp == 0 as ::core::ffi::c_int
+    if *flagsp & HL_CONTAINED != 0 || (*(*curwin.get()).w_s).b_syn_topgrp == 0 as ::core::ffi::c_int
     {
         return;
     }
-    *flagsp |= HL_CONTAINED as ::core::ffi::c_int | HL_INCLUDED_TOPLEVEL as ::core::ffi::c_int;
+    *flagsp |= HL_CONTAINED | HL_INCLUDED_TOPLEVEL;
     if (*(*curwin.get()).w_s).b_syn_topgrp >= SYNID_CLUSTER {
         let mut grp_list: *mut int16_t =
             xmalloc((2 as size_t).wrapping_mul(::core::mem::size_of::<int16_t>())) as *mut int16_t;
@@ -4800,8 +4765,8 @@ unsafe extern "C" fn syn_cmd_match(mut eap: *mut exarg_T, mut syncing: ::core::f
         ::core::mem::size_of::<synpat_T>(),
     );
     rest = get_syn_pattern(rest, &raw mut item);
-    if vim_regcomp_had_eol() != 0 && syn_opt_arg.flags & HL_EXCLUDENL as ::core::ffi::c_int == 0 {
-        syn_opt_arg.flags |= HL_HAS_EOL as ::core::ffi::c_int;
+    if vim_regcomp_had_eol() != 0 && syn_opt_arg.flags & HL_EXCLUDENL == 0 {
+        syn_opt_arg.flags |= HL_HAS_EOL;
     }
     rest = get_syn_options(
         rest,
@@ -4835,13 +4800,10 @@ unsafe extern "C" fn syn_cmd_match(mut eap: *mut exarg_T, mut syncing: ::core::f
                     (*(*curwin.get()).w_s).b_syn_containedin = true_0;
                 }
                 (*spp).sp_next_list = syn_opt_arg.next_list;
-                if syn_opt_arg.flags
-                    & (HL_SYNC_HERE as ::core::ffi::c_int | HL_SYNC_THERE as ::core::ffi::c_int)
-                    != 0
-                {
+                if syn_opt_arg.flags & (HL_SYNC_HERE | HL_SYNC_THERE) != 0 {
                     (*(*curwin.get()).w_s).b_syn_sync_flags |= SF_MATCH;
                 }
-                if syn_opt_arg.flags & HL_FOLD as ::core::ffi::c_int != 0 {
+                if syn_opt_arg.flags & HL_FOLD != 0 {
                     (*(*curwin.get()).w_s).b_syn_folditems += 1;
                 }
                 redraw_curbuf_later(UPD_SOME_VALID);
@@ -5005,9 +4967,9 @@ unsafe extern "C" fn syn_cmd_region(mut eap: *mut exarg_T, mut syncing: ::core::
                 reg_do_extmatch.set(0 as ::core::ffi::c_int);
                 if item == ITEM_END
                     && vim_regcomp_had_eol() != 0
-                    && syn_opt_arg.flags & HL_EXCLUDENL as ::core::ffi::c_int == 0
+                    && syn_opt_arg.flags & HL_EXCLUDENL == 0
                 {
-                    (*(*ppp).pp_synp).sp_flags |= HL_HAS_EOL as ::core::ffi::c_int;
+                    (*(*ppp).pp_synp).sp_flags |= HL_HAS_EOL;
                 }
                 (*ppp).pp_matchgroup_id = matchgroup_id;
                 pat_count += 1;
@@ -5086,7 +5048,7 @@ unsafe extern "C" fn syn_cmd_region(mut eap: *mut exarg_T, mut syncing: ::core::
                         }
                         (*(*curwin.get()).w_s).b_syn_patterns.ga_len += 1;
                         idx += 1;
-                        if syn_opt_arg.flags & HL_FOLD as ::core::ffi::c_int != 0 {
+                        if syn_opt_arg.flags & HL_FOLD != 0 {
                             (*(*curwin.get()).w_s).b_syn_folditems += 1;
                         }
                         ppp = (*ppp).pp_next;
@@ -6037,11 +5999,8 @@ unsafe extern "C" fn in_id_list(
     let mut retval: ::core::ffi::c_int = 0;
     let mut id: int16_t = (*ssp).id;
     static depth: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-    if !cur_si.is_null()
-        && !(*ssp).cont_in_list.is_null()
-        && (*cur_si).si_flags & HL_MATCH as ::core::ffi::c_int == 0
-    {
-        while (*cur_si).si_flags & HL_TRANS_CONT as ::core::ffi::c_int != 0
+    if !cur_si.is_null() && !(*ssp).cont_in_list.is_null() && (*cur_si).si_flags & HL_MATCH == 0 {
+        while (*cur_si).si_flags & HL_TRANS_CONT != 0
             && cur_si > (*current_state.ptr()).ga_data as *mut stateitem_T
         {
             cur_si = cur_si.offset(-1);
@@ -6065,10 +6024,9 @@ unsafe extern "C" fn in_id_list(
         return false_0;
     }
     if list == ID_LIST_ALL {
-        return (flags & HL_CONTAINED as ::core::ffi::c_int == 0) as ::core::ffi::c_int;
+        return (flags & HL_CONTAINED == 0) as ::core::ffi::c_int;
     }
-    let mut toplevel: bool = flags & HL_CONTAINED as ::core::ffi::c_int == 0
-        || flags & HL_INCLUDED_TOPLEVEL as ::core::ffi::c_int != 0;
+    let mut toplevel: bool = flags & HL_CONTAINED == 0 || flags & HL_INCLUDED_TOPLEVEL != 0;
     let mut item: int16_t = *list;
     if item as ::core::ffi::c_int >= MAX_HL_ID as ::core::ffi::c_int
         && (item as ::core::ffi::c_int) < SYNID_CLUSTER
@@ -6513,7 +6471,7 @@ unsafe extern "C" fn syn_cur_foldlevel() -> ::core::ffi::c_int {
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < (*current_state.ptr()).ga_len {
         if (*((*current_state.ptr()).ga_data as *mut stateitem_T).offset(i as isize)).si_flags
-            & HL_FOLD as ::core::ffi::c_int
+            & HL_FOLD
             != 0
         {
             level += 1;
@@ -6755,55 +6713,55 @@ pub const REX_USE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 unsafe extern "C" fn c2rust_run_static_initializers() {
     namelist1.set([
         keyvalue_T {
-            key: HL_DISPLAY as ::core::ffi::c_int,
+            key: HL_DISPLAY,
             value: b"display\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
         },
         keyvalue_T {
-            key: HL_CONTAINED as ::core::ffi::c_int,
+            key: HL_CONTAINED,
             value: b"contained\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
         },
         keyvalue_T {
-            key: HL_ONELINE as ::core::ffi::c_int,
+            key: HL_ONELINE,
             value: b"oneline\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
         },
         keyvalue_T {
-            key: HL_KEEPEND as ::core::ffi::c_int,
+            key: HL_KEEPEND,
             value: b"keepend\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
         },
         keyvalue_T {
-            key: HL_EXTEND as ::core::ffi::c_int,
+            key: HL_EXTEND,
             value: b"extend\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
         },
         keyvalue_T {
-            key: HL_EXCLUDENL as ::core::ffi::c_int,
+            key: HL_EXCLUDENL,
             value: b"excludenl\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
         },
         keyvalue_T {
-            key: HL_TRANSP as ::core::ffi::c_int,
+            key: HL_TRANSP,
             value: b"transparent\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
         },
         keyvalue_T {
-            key: HL_FOLD as ::core::ffi::c_int,
+            key: HL_FOLD,
             value: b"fold\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 5]>().wrapping_sub(1 as size_t),
         },
         keyvalue_T {
-            key: HL_CONCEAL as ::core::ffi::c_int,
+            key: HL_CONCEAL,
             value: b"conceal\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 8]>().wrapping_sub(1 as size_t),
         },
         keyvalue_T {
-            key: HL_CONCEALENDS as ::core::ffi::c_int,
+            key: HL_CONCEALENDS,
             value: b"concealends\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 12]>().wrapping_sub(1 as size_t),
@@ -6811,18 +6769,18 @@ unsafe extern "C" fn c2rust_run_static_initializers() {
     ]);
     namelist2.set([
         keyvalue_T {
-            key: HL_SKIPWHITE as ::core::ffi::c_int,
+            key: HL_SKIPWHITE,
             value: b"skipwhite\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),
         },
         keyvalue_T {
-            key: HL_SKIPNL as ::core::ffi::c_int,
+            key: HL_SKIPNL,
             value: b"skipnl\0".as_ptr() as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 7]>().wrapping_sub(1 as size_t),
         },
         keyvalue_T {
-            key: HL_SKIPEMPTY as ::core::ffi::c_int,
+            key: HL_SKIPEMPTY,
             value: b"skipempty\0".as_ptr() as *const ::core::ffi::c_char
                 as *mut ::core::ffi::c_char,
             length: ::core::mem::size_of::<[::core::ffi::c_char; 10]>().wrapping_sub(1 as size_t),

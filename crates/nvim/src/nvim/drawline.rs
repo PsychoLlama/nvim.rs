@@ -3539,17 +3539,15 @@ pub unsafe extern "C" fn win_line(
                         && (wp != curwin.get()
                             || lnum != (*wp).w_cursor.lnum
                             || conceal_cursor_line(wp) as ::core::ffi::c_int != 0)
-                        && (syntax_flags & HL_CONCEAL as ::core::ffi::c_int
-                            != 0 as ::core::ffi::c_int
+                        && (syntax_flags & HL_CONCEAL != 0 as ::core::ffi::c_int
                             || has_match_conc > 0 as ::core::ffi::c_int
                             || decor_conceal > 0 as ::core::ffi::c_int)
                         && !(lnum_in_visual_area as ::core::ffi::c_int != 0
                             && vim_strchr((*wp).w_onebuf_opt.wo_cocu, 'v' as ::core::ffi::c_int)
                                 .is_null())
                     {
-                        let mut syntax_conceal: bool = syntax_flags
-                            & HL_CONCEAL as ::core::ffi::c_int
-                            != 0 as ::core::ffi::c_int;
+                        let mut syntax_conceal: bool =
+                            syntax_flags & HL_CONCEAL != 0 as ::core::ffi::c_int;
                         wlv.char_attr = conceal_attr;
                         if (prev_syntax_id != syntax_seqnr
                             && syntax_conceal as ::core::ffi::c_int != 0
